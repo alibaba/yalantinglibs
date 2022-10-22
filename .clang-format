@@ -1,0 +1,7 @@
+BasedOnStyle: Google
+# Should be declared this way:
+BreakBeforeBraces: Custom
+BraceWrapping:
+  BeforeElse: true
+AllowShortLambdasOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
