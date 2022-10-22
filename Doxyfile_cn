@@ -22,4 +22,4 @@ IMAGE_PATH             = src/coro_rpc/doc/images src/struct_pack/doc/images
 EXAMPLE_PATH           = src/coro_rpc/examples
 EXAMPLE_RECURSIVE      = YES
 OUTPUT_LANGUAGE        = Chinese
-OUTPUT_DIRECTORY       = html/cn
+OUTPUT_DIRECTORY       = docs/cn
