@@ -21,9 +21,17 @@ See [async_simple](https://github.com/alibaba/async_simple)
 
 Very easy-to-use, coroutine-based, high performance rpc framework with C++20. coro_rpc is a header only library.
 
+English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/基于协程和编译期反射的高性能rpc库--coro_rpc.md)  
+
+English API(TODO) | [中文API](./src/coro_rpc/doc/coro_rpc_doc.hpp)
+
 ## struct_pack
 
 Based on compile-time reflection, very easy to use, high performance serialization library, struct_pack is a header only library, it is used by coro_rpc now.
+
+English Introduction(TODO) | [中文简介](./src//struct_pack/doc/struct_pack%EF%BC%9A%E4%B8%80%E4%B8%AA%E6%9B%B4%E5%BF%AB%E6%9B%B4%E5%A5%BD%E7%94%A8%E7%9A%84%E5%BA%8F%E5%88%97%E5%8C%96%E5%BA%93.md)
+
+English API(TODO) | [中文API](./src/struct_pack/doc/struct_pack_doc.hpp)
 
 ## Quick Start of coro_rpc
 
@@ -75,6 +83,13 @@ options:
 
 Currently, asio and spdlog are put in thirdparty folder.
 doctest is put in tests folder.
+
+# How to Contribute
+1. Create an issue in the issue template.
+2. Run tests and `git-clang-format HEAD^` locally for the change.
+3. Create a PR, fill in the PR template.
+4. Choose one or more reviewers from contributors: (e.g., qicosmos, poor-circle, PikachuHyA).
+5. Get approved and merged.
 
 # License
 
