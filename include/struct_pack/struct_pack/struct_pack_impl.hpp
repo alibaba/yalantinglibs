@@ -52,30 +52,6 @@ constexpr uint16_t MAX_SIZE = UINT16_MAX;
 using size_type = uint32_t;
 constexpr uint32_t MAX_SIZE = UINT32_MAX;
 #endif
-/*!
- * \ingroup struct_pack
- * \brief return type of struct_pack deserialization
- *
- * We recommend using struct binding to get deserialize_result#errc and deserialize_result#value.
- *
- * For example,
- *
- * ```cpp
- * person p{20, "tom"};
- * auto buffer = struct_pack::serialize(p);
- * auto [ec, p2] = struct_pack::deserialize<person>(buffer.data(),
- * buffer.size());
- * assert(ec == std::errc{});
- * assert(p == p2);
- * ```
- *
- * @tparam T deserialization object type
- */
-template <typename T>
-struct deserialize_result {
-  std::errc errc; //!< error code
-  T value;        //!< deserialization object
-};
 
 /*!
  * \ingroup struct_pack
@@ -116,7 +92,8 @@ struct deserialize_result {
  * compile error
  *
  * ```
- * error: static_assert failed, "The position of compatible<T> in struct is not allowed!"
+ * error: static_assert failed, "The position of compatible<T> in struct is not
+ * allowed!"
  * ```
  *
  * The value of compatible can be empty.
@@ -966,40 +943,34 @@ class unpacker {
   }
 
   template <typename U, size_t I>
-  STRUCT_PACK_INLINE
-      deserialize_result<std::remove_cvref_t<std::tuple_element_t<
-          I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>>>
-      get_field() {
+  STRUCT_PACK_INLINE std::errc get_field(
+      std::tuple_element_t<
+          I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>
+          &field) {
     using T = std::remove_cvref_t<U>;
 
-    T t{};
-    using types = decltype(get_types(t));
-    using Filed = std::remove_cvref_t<std::tuple_element_t<I, types>>;
-
-    std::errc code{};
-    Filed field{};
+    static T t;
     if (auto [code, _] = check_types(t); code != std::errc{}) [[unlikely]] {
-      return {code, field};
+      return code;
     }
-
+    std::errc err_code;
     if constexpr (tuple<T>) {
-      std::apply(
+      err_code = std::apply(
           [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             static_assert(I < sizeof...(items), "out of range");
-            code = for_each<I>(field, items...);
+            return for_each<I>(field, items...);
           },
           t);
     }
     else if constexpr (std::is_class_v<T>) {
       static_assert(std::is_aggregate_v<T>);
-      visit_members(t, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+      err_code = visit_members(t, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
         static_assert(I < sizeof...(items), "out of range");
-        code = for_each<I>(field, items...);
+        return for_each<I>(field, items...);
       });
     }
-
     pos_ = 0;
-    return {code, std::move(field)};
+    return err_code;
   }
 
  private:

@@ -28,11 +28,10 @@ std::vector<char> result = serialize(person1);
 ## 反序列化
 
 ```c++
-person person2;
 // 1行代码反序列化
-auto ec = deserialize_to<person>(person2, buffer.data(), buffer.size());
-assert(ec == std::errc{});
-assert(p1 == p2);
+auto person2 = deserialize<person>(buffer);
+assert(person2); //person2.has_value()==true
+assert(person2.value()==person1);
 ```
 
 ## 部分反序列化
@@ -41,9 +40,9 @@ assert(p1 == p2);
 
 ```c++
 // 只反序列化person的第2个字段
-auto [err, name] = get_field<person, 1>(buffer.data(), buffer.size());
-
-assert(name == "hello struct pack");
+auto name = get_field<person, 1>(buffer.data(), buffer.size());
+assert(name); //name.has_value()==true
+assert(name.value() == "hello struct pack");
 ```
 
 ## 支持序列化所有的STL容器、自定义容器和optional
@@ -81,8 +80,9 @@ struct nested_object {
 
 nested_object nested{.id = 2, .name = "tom", .p = {20, "tom"}, .o = {}};
 auto buffer = serialize(nested);
-auto [err, nested1] = deserialize(buffer.data(), buffer.size());
-assert(nested==nested1);
+auto nested2 = deserialize(buffer.data(), buffer.size());
+assert(nested2)
+assert(nested2==nested1);
 ```
 
 自定义容器的序列化

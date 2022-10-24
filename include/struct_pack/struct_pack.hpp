@@ -14,7 +14,18 @@
  * limitations under the License.
  */
 #pragma once
+
 #include "struct_pack/struct_pack_impl.hpp"
+
+#if __has_include(<expected>) && __cplusplus > 202002L
+#include <expected>
+#if __cpp_lib_expected >= 202202L
+#else
+#include "util/expected.hpp"
+#endif
+#else
+#include "util/expected.hpp"
+#endif
 
 /*! \defgroup struct_pack struct_pack
  *  \brief yaLanTingLibs Serialization Library
@@ -49,7 +60,8 @@
  * For container concept (e.g string, stl container),
  * the element size is placed first, then all elements are wrote one by one.
  *
- * \subsection struct_pack_speed How to optimize serialization or deserialization
+ * \subsection struct_pack_speed How to optimize serialization or
+ * deserialization
  *
  * 1. using fixed-length string as far as possible
  * 2. encapsulating memory contiguous fields into a single object
@@ -69,13 +81,34 @@
  * \subsection struct_pack_limitation Limitation
  *
  * 1. the element size must less than UINT32_MAX.
- * 2. no pointer or reference allowed in object, otherwise compile-time error reported.
+ * 2. no pointer or reference allowed in object, otherwise compile-time error
+ * reported.
  * 3. the object must be
  * [aggregate](https://en.cppreference.com/w/cpp/language/aggregate_initialization),
  * otherwise compile-time error reported.
  *
  */
 namespace struct_pack {
+
+#if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
+template <class T, class E>
+using expected = std::expected<T, E>;
+
+template <class T>
+using unexpected = std::unexpected<T>;
+
+using unexpect_t = std::unexpect_t;
+
+#else
+template <class T, class E>
+using expected = tl::expected<T, E>;
+
+template <class T>
+using unexpected = tl::unexpected<T>;
+
+using unexpect_t = tl::unexpect_t;
+#endif
+
 /*!
  * \ingroup struct_pack
  * Get the error message corresponding to the error code `err`.
@@ -244,66 +277,120 @@ template <typename T, detail::struct_pack_byte Byte>
   return ret;
 }
 
-
-
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
     const View &v) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to(ret.value, v);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), v); errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
 }
 
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
     const Byte *data, size_t size) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to(ret.value, data, size);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), data, size);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
 }
 
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
     const View &v, size_t &consume_len) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to(ret.value, v, consume_len);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), v, consume_len);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
 }
 
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
     const Byte *data, size_t size, size_t &consume_len) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to(ret.value, data, size, consume_len);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
 }
 
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize_with_offset(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize_with_offset(
     const View &v, size_t &offset) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to(ret.value, v, offset);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
 }
 
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize_with_offset(
+[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize_with_offset(
     const Byte *data, size_t size, size_t &offset) {
-  deserialize_result<T> ret;
-  ret.errc = deserialize_to_with_offset(ret.value, data, size, offset);
+  expected<T, std::errc> ret;
+  if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
+  }
   return ret;
+}
+
+template <typename T, size_t I, typename Field, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc get_field_to(Field &dst,
+                                                        const View &v) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  static_assert(std::is_same_v<Field, T_Field>,
+                "The dst's type is not correct. It should be as same as the "
+                "T's Ith field's type");
+  detail::unpacker in(v.data(), v.size());
+  return in.template get_field<T, I>(dst);
+}
+
+template <typename T, size_t I, typename Field, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc get_field_to(Field &dst,
+                                                        const Byte *data,
+                                                        size_t size) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  static_assert(std::is_same_v<Field, T_Field>,
+                "The dst's type is not correct. It should be as same as the "
+                "T's Ith field's type");
+  detail::unpacker in(data, size);
+  return in.template get_field<T, I>(dst);
 }
 
 template <typename T, size_t I, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE decltype(auto) get_field(const View &v) {
+[[nodiscard]] STRUCT_PACK_INLINE auto get_field(const View &v) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
   detail::unpacker in(v.data(), v.size());
-  return in.template get_field<T, I>();
+  expected<T_Field, std::errc> ret;
+
+  if (auto ec = get_field_to<T, I>(ret.value(), v); ec != std::errc{}) {
+    ret = unexpected<std::errc>{ec};
+  }
+  return ret;
 }
 
 template <typename T, size_t I, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE decltype(auto) get_field(const Byte *data,
-                                                          size_t size) {
+[[nodiscard]] STRUCT_PACK_INLINE auto get_field(const Byte *data, size_t size) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
   detail::unpacker in(data, size);
-  return in.template get_field<T, I>();
+  expected<T_Field, std::errc> ret;
+
+  if (auto ec = get_field_to<T, I>(ret.value(), data, size);
+      ec != std::errc{}) {
+    ret = unexpected<std::errc>{ec};
+  }
+  return ret;
 }
 }  // namespace struct_pack
