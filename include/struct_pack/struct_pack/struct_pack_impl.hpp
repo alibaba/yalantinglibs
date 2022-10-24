@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-#include <bit>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
