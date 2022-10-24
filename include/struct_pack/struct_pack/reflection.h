@@ -30,7 +30,7 @@
 #define STRUCT_PACK_INLINE __attribute__((always_inline)) inline
 #define CONSTEXPR_INLINE_LAMBDA __attribute__((always_inline)) constexpr
 #elif defined _MSC_VER
-#define STRUCT_PACK_INLINE __forceinline inline
+#define STRUCT_PACK_INLINE __forceinline
 #define CONSTEXPR_INLINE_LAMBDA constexpr
 #else
 #define STRUCT_PACK_INLINE __attribute__((always_inline)) inline
