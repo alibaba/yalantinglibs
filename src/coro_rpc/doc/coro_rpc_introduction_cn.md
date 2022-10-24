@@ -1,7 +1,28 @@
+# 目录
+- [目录](#目录)
+- [coro_rpc简介](#coro_rpc简介)
+- [coro_rpc的易用性](#coro_rpc的易用性)
+  - [rpc_server端](#rpc_server端)
+  - [rpc函数支持任意参数](#rpc函数支持任意参数)
+- [和grpc、brpc比较易用性](#和grpcbrpc比较易用性)
+  - [rpc易用性比较](#rpc易用性比较)
+  - [异步编程模型比较](#异步编程模型比较)
+- [coro_rpc更多特色](#coro_rpc更多特色)
+  - [同时支持实时任务和延时任务](#同时支持实时任务和延时任务)
+  - [服务端同时支持协程和异步回调](#服务端同时支持协程和异步回调)
+- [benchmark](#benchmark)
+  - [测试环境](#测试环境)
+  - [测试case](#测试case)
+    - [极限qps测试](#极限qps测试)
+    - [ping-pong测试](#ping-pong测试)
+    - [长尾测试](#长尾测试)
+  - [benchmark备注](#benchmark备注)
+- [使用约束](#使用约束)
+
 # coro_rpc简介
 
 coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分)
-，性能远高于grpc、brpc和srpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
+，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
 
 coro_rpc的设计理念是：以易用性为核心，回归rpc本质，让用户专注于业务逻辑而不是rpc框架细节，几行代码就可以完成rpc开发。
 rpc的本质是什么？rpc的本质就是一个远程函数，除了rpc底层的网络IO之外，其它的就和普通函数一样。用户不需要关注rpc底层的网络IO、路由、序列化等细节，用户只需要专注于rpc函数的业务逻辑即可，这就是coro_rpc的设计理念,
@@ -374,9 +395,8 @@ OS: Linux version 4.9.151-015.ali3000.alios7.x86_64
 ## benchmark备注
 
 1. grpc的qps始终不会超过10万，故没有放进来做性能比较；
-2. pipeline测试qps极限的case里，由于srpc不支持pipeline，无法测试pipeline模式，采用的数据是srpc ping-pong测试的qps；
-3. 测试客户端统一用coro_rpc的压测客户端测试，压测效果较好，基本能把cpu打满。没有使用brpc个srpc的测试客户端原因是：如果用brpc和srpc的客户端压测，brpc和srpc的qps会降低一倍。
-4. brpc由于采用了连接复用，实际上的socket连接数并没有那么多(实际连接数为96)，coro_rpc和srpc的连接数是实际的连接数。
+2. 测试客户端统一用coro_rpc的压测客户端测试，压测效果较好，基本能把cpu打满。没有使用brpc测试客户端原因是：如果用brpc客户端压测，brpc的qps会降低一倍。
+3. brpc由于采用了连接复用，实际上的socket连接数并没有那么多(实际连接数为96)，coro_rpc的连接数是实际的连接数。
 
 # 使用约束
 
