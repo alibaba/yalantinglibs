@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <asm-generic/errno.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <ratio>
@@ -97,21 +99,21 @@ TEST_CASE("testing deserialize_view") {
   auto ret = serialize(p);
   {
     auto res = deserialize<person>(ret);
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == p);
+    CHECK(res);
+    CHECK(res.value() == p);
   }
   {
     size_t len = 114514;
     auto res = deserialize<person>(ret, len);
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == p);
+    CHECK(res);
+    CHECK(res.value() == p);
     CHECK(len == ret.size());
   }
   {
     size_t offset = 0;
     auto res = deserialize_with_offset<person>(ret, offset);
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == p);
+    CHECK(res);
+    CHECK(res.value() == p);
     CHECK(offset == ret.size());
   }
   {
@@ -139,8 +141,8 @@ TEST_CASE("testing deserialize_view") {
   {
     person p2;
     auto res = get_field<person, 1>(ret);
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == p.name);
+    CHECK(res);
+    CHECK(res.value() == p.name);
   }
 }
 
@@ -153,11 +155,11 @@ TEST_CASE("testing api") {
     // TODO: CHECK offset
     CHECK(ret1.size() == ret2.size() - offset);
     auto p1 = deserialize<person>(ret1.data(), ret1.size());
-    CHECK(p1.errc == std::errc{});
+    CHECK(p1);
     auto p2 = deserialize<person>(ret2.data() + offset, ret1.size() - offset);
-    CHECK(p1.errc == std::errc{});
-    CHECK(p == p1.value);
-    CHECK(p == p2.value);
+    CHECK(p2);
+    CHECK(p == p1.value());
+    CHECK(p == p2.value());
   }
   SUBCASE("serialize to") {
     auto need_size = get_needed_size(p);
@@ -183,19 +185,19 @@ TEST_CASE("testing api") {
     serialize_to_with_offset(my_buffer2, offset, p);
     CHECK(my_buffer.size() == my_buffer2.size() - offset);
     auto ret1 = get_field<person, 0>(my_buffer.data(), my_buffer.size());
-    CHECK(ret1.errc == std::errc{});
+    CHECK(ret1);
     auto ret2 = get_field<person, 0>(my_buffer2.data() + offset,
                                      my_buffer2.size() - offset);
-    CHECK(ret2.errc == std::errc{});
-    CHECK(ret1.value == p.age);
-    CHECK(ret2.value == p.age);
+    CHECK(ret2);
+    CHECK(ret1.value() == p.age);
+    CHECK(ret2.value() == p.age);
     auto ret3 = get_field<person, 1>(my_buffer.data(), my_buffer.size());
-    CHECK(ret3.errc == std::errc{});
+    CHECK(ret3);
     auto ret4 = get_field<person, 1>(my_buffer2.data() + offset,
                                      my_buffer2.size() - offset);
-    CHECK(ret4.errc == std::errc{});
-    CHECK(ret3.value == p.name);
-    CHECK(ret4.value == p.name);
+    CHECK(ret4);
+    CHECK(ret3.value() == p.name);
+    CHECK(ret4.value() == p.name);
   }
 }
 
@@ -260,14 +262,14 @@ TEST_CASE("testing long long") {
   if constexpr (sizeof(long long) == 8) {
     auto ret = serialize(-1ll);
     auto res = deserialize<long long>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == -1ll);
+    CHECK(res);
+    CHECK(res.value() == -1ll);
   }
   if constexpr (sizeof(unsigned long long) == 8) {
     auto ret = serialize(1ull);
     auto res = deserialize<unsigned long long>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == 1ull);
+    CHECK(res);
+    CHECK(res.value() == 1ull);
   }
 }
 
@@ -504,7 +506,10 @@ TEST_CASE("testing enum") {
     enum_i8 e{enum_i8::hi};
     auto ret = serialize(e);
     auto ec = deserialize<enum_i32>(ret.data(), ret.size());
-    CHECK(ec.errc == std::errc::invalid_argument);
+    CHECK(!ec);
+    if (!ec) {
+      CHECK(ec.error() == std::errc::invalid_argument);
+    }
   }
   {
     constexpr auto code_enum_i8 = get_type_code<enum_i8>();
@@ -585,8 +590,8 @@ TEST_CASE("test variant") {
         var = {1, 2.0, 3.0, 42, 5.0};
     auto ret = struct_pack::serialize(var);
     auto res = struct_pack::get_field<decltype(var), 3>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == std::variant<int, double>(42));
+    CHECK(res);
+    CHECK(res.value() == std::variant<int, double>(42));
   }
   { auto ret = struct_pack::serialize(std::tuple<std::monostate>{}); }
   {
@@ -691,16 +696,47 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
     CHECK(nested.o.o == nested1.o.o);
   }
 
-  SUBCASE("test partial deserialize_to") {
+  SUBCASE("test get_field") {
     auto pair = get_field<complicated_object, 2>(ret.data(), ret.size());
-    CHECK(pair.errc == std::errc{});
-    CHECK(pair.value == "hello");
+    CHECK(pair);
+    CHECK(pair.value() == "hello");
+    pair = get_field<complicated_object, 2>(ret);
+    CHECK(pair);
+    CHECK(pair.value() == "hello");
     auto pair1 = get_field<complicated_object, 14>(ret.data(), ret.size());
-    CHECK(pair1.errc == std::errc{});
-    CHECK(pair1.value == v.o);
+    CHECK(pair1);
+    CHECK(pair1.value() == v.o);
+    pair1 = get_field<complicated_object, 14>(ret);
+    CHECK(pair1);
+    CHECK(pair1.value() == v.o);
 
-    CHECK(get_field<complicated_object, 14>(ret.data(), 24).errc ==
-          std::errc::no_buffer_space);
+    auto res = get_field<complicated_object, 14>(ret.data(), 24);
+    CHECK(!res);
+    if (!res) {
+      CHECK(res.error() == std::errc::no_buffer_space);
+    }
+  }
+  SUBCASE("test get_field_to") {
+    std::string res1;
+    auto ec = get_field_to<complicated_object, 2>(res1, ret.data(), ret.size());
+    CHECK(ec == std::errc{});
+    CHECK(res1 == "hello");
+    ec = get_field_to<complicated_object, 2>(res1, ret);
+    CHECK(ec == std::errc{});
+    CHECK(res1 == "hello");
+    std::pair<std::string, person> res2;
+    ec = get_field_to<complicated_object, 14>(res2, ret.data(), ret.size());
+    CHECK(ec == std::errc{});
+    CHECK(res2 == v.o);
+    ec = get_field_to<complicated_object, 14>(res2, ret);
+    CHECK(ec == std::errc{});
+    CHECK(res2 == v.o);
+
+    auto res = get_field_to<complicated_object, 14>(res2, ret.data(), 24);
+    CHECK(ec == std::errc{});
+    if (ec != std::errc{}) {
+      CHECK(ec == std::errc::no_buffer_space);
+    }
   }
 }
 
@@ -747,8 +783,10 @@ TEST_CASE("testing exceptions") {
   serialize_to(my_byte_buffer2, bool_opt);
   auto ret3 = deserialize<std::optional<bool>>(my_byte_buffer2.data(),
                                                my_byte_buffer2.size() - 1);
-  CHECK(ret3.errc == std::errc::no_buffer_space);
-  CHECK(ret3.value == bool_opt);
+  CHECK(!ret3);
+  if (!ret3) {
+    CHECK(ret3.error() == std::errc::no_buffer_space);
+  }
 }
 
 TEST_CASE("testing serialize varadic params") {
@@ -756,12 +794,12 @@ TEST_CASE("testing serialize varadic params") {
     auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
     auto res = struct_pack::deserialize<std::tuple<int, int, int, int, int>>(
         ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(std::get<0>(res.value) == 1);
-    CHECK(std::get<1>(res.value) == 2);
-    CHECK(std::get<2>(res.value) == 3);
-    CHECK(std::get<3>(res.value) == 4);
-    CHECK(std::get<4>(res.value) == 5);
+    CHECK(res);
+    CHECK(std::get<0>(res.value()) == 1);
+    CHECK(std::get<1>(res.value()) == 2);
+    CHECK(std::get<2>(res.value()) == 3);
+    CHECK(std::get<3>(res.value()) == 4);
+    CHECK(std::get<4>(res.value()) == 5);
   }
   {
     auto ret = struct_pack::serialize(
@@ -774,8 +812,8 @@ TEST_CASE("testing serialize varadic params") {
         int, float, double, int, unsigned long long, std::string,
         std::array<std::vector<int>, 3>, std::variant<int, float, double>>>(
         ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    auto &values = res.value;
+    CHECK(res);
+    auto &values = res.value();
     CHECK(std::get<0>(values) == 42);
     CHECK(std::get<1>(values) == 2.71828f);
     CHECK(std::get<2>(values) == 3.1415926);
@@ -792,8 +830,8 @@ TEST_CASE("testing serialize varadic params") {
     struct_pack::serialize_to(ret, 1, 2, 3, 4, 5);
     auto res = struct_pack::deserialize<std::tuple<int, int, int, int, int>>(
         ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    auto &values = res.value;
+    CHECK(res);
+    auto &values = res.value();
     CHECK(std::get<0>(values) == 1);
     CHECK(std::get<1>(values) == 2);
     CHECK(std::get<2>(values) == 3);
@@ -812,8 +850,8 @@ TEST_CASE("testing serialize varadic params") {
         int, float, double, int, unsigned long long, std::string,
         std::array<std::vector<int>, 3>, std::variant<int, float, double>>>(
         ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    auto &values = res.value;
+    CHECK(res);
+    auto &values = res.value();
     CHECK(std::get<0>(values) == 42);
     CHECK(std::get<1>(values) == 2.71828f);
     CHECK(std::get<2>(values) == 3.1415926);
@@ -832,56 +870,56 @@ TEST_CASE("testing string_view deserialize") {
   {
     auto ret = serialize("hello"sv);
     auto res = deserialize<string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == "hello"sv);
+    CHECK(res);
+    CHECK(res.value() == "hello"sv);
   }
   {
     std::u32string_view sv = U"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u32string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
   {
     std::u16string_view sv = u"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u16string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
   {
     std::u8string_view sv = u8"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
   {
     auto ret = serialize("hello"s);
     auto res = deserialize<string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == "hello"sv);
+    CHECK(res);
+    CHECK(res.value() == "hello"sv);
   }
   {
     std::u32string sv = U"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u32string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
   {
     std::u16string sv = u"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u16string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
   {
     std::u8string sv = u8"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
-    CHECK(res.errc == std::errc{});
-    CHECK(res.value == sv);
+    CHECK(res);
+    CHECK(res.value() == sv);
   }
 }
 
@@ -981,11 +1019,13 @@ TEST_CASE("testing partial deserialization with index") {
   auto ret = serialize(p);
 
   auto pair = get_field<person, 1>(ret.data(), ret.size());
-  CHECK(pair.value == "tom");
+  CHECK(pair);
+  CHECK(pair.value() == "tom");
 
   auto pair1 =
       get_field<std::tuple<int, std::string>, 0>(ret.data(), ret.size());
-  CHECK(pair1.value == 20);
+  CHECK(pair);
+  CHECK(pair1.value() == 20);
 }
 
 TEST_CASE("test use wide string") {
@@ -1146,10 +1186,16 @@ TEST_CASE("test get field exceptions") {
   auto ret = serialize(p);
 
   auto pair = get_field<int, 0>(ret.data(), ret.size());
-  CHECK(pair.errc == std::errc::invalid_argument);
+  CHECK(!pair);
+  if (!pair) {
+    CHECK(pair.error() == std::errc::invalid_argument);
+  }
 
   auto pair1 = get_field<person, 0>(ret.data(), 3);
-  CHECK(pair1.errc == std::errc::no_buffer_space);
+  CHECK(!pair1);
+  if (!pair1) {
+    CHECK(pair1.error() == std::errc::no_buffer_space);
+  }
 }
 
 TEST_CASE("test set_value") {
@@ -1191,12 +1237,12 @@ TEST_CASE("test free functions") {
   CHECK(deserialize_to(op2, buf2.data(), 1) == std::errc::no_buffer_space);
 
   auto pair = get_field<person, 0>(buffer.data(), buffer.size());
-  CHECK(pair.errc == std::errc{});
-  CHECK(pair.value == 20);
+  CHECK(pair);
+  CHECK(pair.value() == 20);
 
   auto pair1 = get_field<person, 1>(buffer.data(), buffer.size());
-  CHECK(pair1.errc == std::errc{});
-  CHECK(pair1.value == "tom");
+  CHECK(pair1);
+  CHECK(pair1.value() == "tom");
 }
 
 struct bug_struct {
@@ -1212,7 +1258,7 @@ TEST_CASE("test members_count_t") {
   bug_struct b{0, {1}, 2.0};
   auto res = struct_pack::serialize(b);
   auto ret = struct_pack::deserialize<bug_struct>(res.data(), res.size());
-  CHECK(ret.errc == std::errc{});
+  CHECK(ret);
 };
 
 struct dummy {
@@ -1312,14 +1358,27 @@ TEST_CASE("test de_serialize offset") {
   for (size_t i = 0, offset = 0; i < 100; ++i) {
     auto ret = struct_pack::deserialize_with_offset<std::string>(
         ho.data(), ho.size(), offset);
-    CHECK(ret.errc == std::errc{});
-    CHECK(ret.value == hi + std::to_string(i));
+    CHECK(ret);
+    CHECK(ret.value() == hi + std::to_string(i));
+    CHECK(offset == sizes[i]);
+  }
+  for (size_t i = 0, offset = 0; i < 100; ++i) {
+    auto ret = struct_pack::deserialize_with_offset<std::string>(ho, offset);
+    CHECK(ret);
+    CHECK(ret.value() == hi + std::to_string(i));
     CHECK(offset == sizes[i]);
   }
   for (size_t i = 0, offset = 0; i < 100; ++i) {
     std::string res;
     auto ec = struct_pack::deserialize_to_with_offset(res, ho.data(), ho.size(),
                                                       offset);
+    CHECK(ec == std::errc{});
+    CHECK(res == hi + std::to_string(i));
+    CHECK(offset == sizes[i]);
+  }
+  for (size_t i = 0, offset = 0; i < 100; ++i) {
+    std::string res;
+    auto ec = struct_pack::deserialize_to_with_offset(res, ho, offset);
     CHECK(ec == std::errc{});
     CHECK(res == hi + std::to_string(i));
     CHECK(offset == sizes[i]);
@@ -1392,7 +1451,8 @@ struct type_calculate_test_3 {
 };
 
 TEST_CASE("type calculate") {
-  static_assert(std::is_trivially_copyable<struct_pack::compatible<int>>::value, "must be true");
+  static_assert(std::is_trivially_copyable<struct_pack::compatible<int>>::value,
+                "must be true");
 
   static_assert(
       get_type_code<std::vector<int>>() != get_type_code<std::vector<float>>(),

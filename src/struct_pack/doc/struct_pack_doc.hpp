@@ -92,16 +92,16 @@ namespace struct_pack {
 
 /*!
  * \ingroup struct_pack
- * \struct deserialize_result
+ * \struct expected
  * \brief deserialize的返回值
  *
- * 使用时，通常建议使用struct_binding来直接获取errc和value。
+ * 当启用C++23标准且标准库已实现std::expected时，该类是std::expected的别名。否则该类将使用内部的实现代码。
  * 例如：
  * ```cpp
  * person p{20, "tom"};
  * auto buffer = struct_pack::serialize(p);
- * auto [ec, p2] = struct_pack::deserialize<person>(buffer.data(),
- * buffer.size()); assert(ec == std::errc{}); assert(p == p2);
+ * auto p2 = struct_pack::deserialize<person>(buffer.data(),
+ * buffer.size()); assert(p2); assert(p == p2.value());
  * ```
  */
 
@@ -109,7 +109,7 @@ namespace struct_pack {
  * \ingroup struct_pack
  * \struct compatible
  * \brief
- * 这个类使用上类似于std::optional<T>，但其语义是添加一个能够向前兼容的字段。
+ * 这个类使用上类似于std::optional<T>，但其语义是添加一个能够保持向前兼容的字段。
  *
  * 例如：
  *
@@ -122,7 +122,7 @@ namespace struct_pack {
  * struct person_v2 {
  *   int age;
  *   std::string name;
- *   struct_pack::compatible<bool> id;
+ *   struct_pack::compatible<std::size_t> id;
  * };
  * ```
  *
@@ -133,9 +133,9 @@ namespace struct_pack {
  *   int age;
  *   struct_pack::compatible<int32_t> id;
  *   std::string name;
- *   struct_pack::compatible<bool> maybe;
+ *   struct_pack::compatible<std::size_t> id2;
  * };
- * person2 p = {.age=1,.id=1,.name="Hello",.maybe=false};
+ * person2 p = {.id=1,.age=1,.name="Hello",.id2=514};
  * auto data = struct_pack::serialize(p);
  * ```
  *
@@ -157,13 +157,13 @@ namespace struct_pack {
  *
  * person_v1 p1;
  * // person_v2按person_v1反序列化
- * auto [ec, len] = struct_pack::deserialize_to(p1, buf.data(), buf.size());
+ * auto ec = struct_pack::deserialize_to(p1, buf.data(), buf.size());
  * CHECK(ec == std::errc{});
  *
  * auto buf1 = struct_pack::serialize(p1);
  * person_v1 p3;
  * // person_v1按照person_v2反序列化
- * auto [ec, len] = struct_pack::deserialize_to(p3, buf1.data(), buf1.size());
+ * auto ec = struct_pack::deserialize_to(p3, buf1.data(), buf1.size());
  * CHECK(ec == std::errc{});
  * ```
  *
@@ -434,9 +434,9 @@ void STRUCT_PACK_INLINE serialize_to(Buffer &buffer, const Args &...args);
  *
  * @tparam Buffer
  * @tparam Args
- * @param buffer
- * @param offset
- * @param args
+ * @param buffer 保存序列化结果的容器
+ * @param offset 序列化结果的头部预留的空字节数。
+ * @param args 待序列化的对象
  */
 template <detail::struct_pack_buffer Buffer, typename... Args>
 void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
@@ -449,32 +449,34 @@ void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
  *
  * ```cpp
  * person p{20, "tom"};
- * auto buffer=struct_pack::serialize(p);
- * auto [ec, p2] = struct_pack::deserialize<person>(buffer);
- * assert(ec == std::errc{});
- * assert(p == p2);
+ * std::string buffer;
+ * auto
+ * buffer=struct_pack::serialize_to_with_offset(buffer,sizeof(std::size_t),p);
+ * std::size_t sz=buffer.size()-sizeof(std::size_t);
+ * memcpy(buffer.data(),&sz,sizeof(std::size_t));
+ * //then send it to tcp data flow
  * ```
  *
  * @tparam T
  * @tparam Byte
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 内存的长度
- * @return 一个结构体，包含错误码和反序列化结果。
+ * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
  */
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
-    const Byte *data, size_t size);
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
+deserialize(const Byte *data, size_t size);
 
 /*!
  * \ingroup struct_pack
  * @tparam T
  * @tparam View
  * @param v 待反序列化的数据，其包含成员函数data()和size()。
- * @return 一个结构体，包含错误码和反序列化结果。
+ * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
  */
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize(
-    const View &v);
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
+deserialize(const View &v);
 
 /*!
  * \ingroup struct_pack
@@ -498,13 +500,13 @@ template <typename T, detail::deserialize_view View>
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 该段内存的长度
  * @param offset 反序列化起始位置的偏移量
- * @return 一个结构体，包含错误码和反序列化结果。
+ * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
  *         另外，offset作为出参，会被更新该反序列化对象尾部相对于data的offset。
  *         特别的，当有错误发生时，offset不会被修改。
  */
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize_with_offset(
-    const Byte *data, size_t size, size_t &offset);
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
+    <T> deserialize_with_offset(const Byte *data, size_t size, size_t &offset);
 
 /*!
  * \ingroup struct_pack
@@ -512,13 +514,13 @@ template <typename T, detail::struct_pack_byte Byte>
  * @tparam View
  * @param v 待反序列化的数据，其包含成员函数data()和size()
  * @param offset 反序列化起始位置的偏移量。
- * @return 一个结构体，包含错误码和反序列化结果。
+ * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
  *         另外，offset作为出参，会被更新该反序列化对象尾部相对于data的offset。
  *         特别的，当有错误发生时，offset不会被修改。
  */
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE deserialize_result<T> deserialize_with_offset(
-    const View &v, size_t &offset);
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
+    <T> deserialize_with_offset(const View &v, size_t &offset);
 
 /*!
  * \ingroup struct_pack
@@ -537,7 +539,8 @@ template <typename T, detail::deserialize_view View>
  * @param t 保存反序列化的结果。
  * @param data 待反序列化的数据，其包含成员函数data()和size()
  * @param size
- * @return 错误码。当有错误发生时，t的值是未定义的。
+ * @return
+ * std::errc类型的错误码。另外，t作为出参保存序列化结果。当有错误发生时，t的值是未定义的。
  */
 template <typename T, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t,
@@ -578,7 +581,7 @@ template <typename T, detail::deserialize_view View>
  * @param size 内存的长度。
  * @param offset 反序列化起始位置的偏移量。
  * @return
- * 错误码。另外，offset作为出参，会被更新为反序列化对象尾部相对于data的offset。
+ * std::errc类型的错误码。另外，t作为出参，保存序列化结果。offset作为出参，会被更新为反序列化对象尾部相对于data的offset。
  *                当有错误发生时，t的值是未定义的，而offset则不会被更新。
  */
 template <typename T, detail::struct_pack_byte Byte>
@@ -607,10 +610,41 @@ template <typename T, detail::struct_pack_byte Byte>
  * @tparam Byte
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 内存的长度
- * @return deserialize_result，包含std::errc和反序列化的结果
+ * @return
+ * expected类型，包含反序列化的结果（T的第I个字段）或std::errc类型的错误码。
  */
 template <typename T, size_t I, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE decltype(auto) get_field(const Byte *data,
-                                                          size_t size);
+[[nodiscard]] STRUCT_PACK_INLINE auto get_field(const Byte *data, size_t size);
+
+/*!
+ * \ingroup struct_pack
+ * 样例代码：
+ *
+ * ```cpp
+ * person p{20, "tom"};
+ * auto buffer = serialize(p);
+ *
+ * auto [ec, age] = get_field<person, 0>(buffer);
+ * CHECK(ec == std::errc{});
+ * CHECK(age == 20);
+ *
+ * auto [ec, name] = get_field<person, 1>(buffer.data(), buffer.size());
+ * CHECK(ec == std::errc{});
+ * CHECK(name == "tom");
+ * ```
+ *
+ * @tparam T
+ * @tparam I
+ * @tparam Field
+ * @tparam Byte
+ * @param data 指向保存序列化结果的内存首地址。
+ * @param size 内存的长度
+ * @return
+ * std::errc类型的错误码。另外，t作为出参，返回反序列化的结果。当有错误发生时，t的值是未定义的。
+ */
+template <typename T, size_t I, typename Field, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc get_field_to(Field &t,
+                                                        const Byte *data,
+                                                        size_t size);
 
 }  // namespace struct_pack

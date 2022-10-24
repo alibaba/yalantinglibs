@@ -66,23 +66,23 @@ void basic_usage() {
   auto buffer = struct_pack::serialize(p);
   // api 1. deserialize object to return value
   {
-    auto [ec, p2] =
-        struct_pack::deserialize<person>(buffer.data(), buffer.size());
-    assert(ec == std::errc{});
-    assert(p == p2);
+    auto p2 = struct_pack::deserialize<person>(buffer.data(), buffer.size());
+    assert(p2);  // no error
+    assert(p2.value() == p2);
   }
   // api 2. deserialize object to reference
   {
     person p2;
-    [[maybe_unused]] auto ec = struct_pack::deserialize_to(p2, buffer.data(), buffer.size());
+    [[maybe_unused]] auto ec =
+        struct_pack::deserialize_to(p2, buffer.data(), buffer.size());
     assert(ec == std::errc{});
     assert(p == p2);
   }
   // api 3. partial deserialize
   {
-    auto [err, name] =
-        struct_pack::get_field<person, 1>(buffer.data(), buffer.size());
-    assert(p.name == name);
+    auto name = struct_pack::get_field<person, 1>(buffer.data(), buffer.size());
+    assert(name);  // no error
+    assert(p.name == name.value());
   }
 }
 }
