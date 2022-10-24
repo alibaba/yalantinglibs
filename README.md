@@ -21,7 +21,7 @@ See [async_simple](https://github.com/alibaba/async_simple)
 
 Very easy-to-use, coroutine-based, high performance rpc framework with C++20. coro_rpc is a header only library.
 
-English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/基于协程和编译期反射的高性能rpc库--coro_rpc.md)  
+English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduction_cn.md)  
 
 English API(TODO) | [中文API](./src/coro_rpc/doc/coro_rpc_doc.hpp)
 
