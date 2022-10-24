@@ -17,10 +17,14 @@
 #include <optional>
 #include <string>
 #include <system_error>
-#if __has_include(<expected>)
+#if __has_include(<expected>) && __cplusplus > 202002L
 #include <expected>
+#if __cpp_lib_expected >= 202202L
 #else
-#include <util/expected.hpp>
+#include "util/expected.hpp"
+#endif
+#else
+#include "util/expected.hpp"
 #endif
 
 namespace coro_rpc {
@@ -47,7 +51,7 @@ struct rpc_header {
 };
 #pragma pack()
 
-#if __cpp_lib_expected >= 202202L
+#if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
 template <class T, class E>
 using expected = std::expected<T, E>;
 
