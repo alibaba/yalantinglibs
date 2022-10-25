@@ -545,27 +545,38 @@ template <typename T, detail::deserialize_view View>
  * assert(p == p2);
  * ```
  * @tparam T
+ * @tparam Args
  * @tparam Byte
  * @param t 保存反序列化的结果。
- * @param data 待反序列化的数据，其包含成员函数data()和size()
- * @param size
+ * @param data 指向序列化buffer的指针
+ * @param size buffer的长度
+ * @param args
+ * 函数允许填入多个引用，然后按std::tuple<T,args...>类型解析数据并反序列化。
+ * 受C++推导规则限制，args置于参数末尾。
  * @return
  * std::errc类型的错误码。另外，t作为出参保存序列化结果。当有错误发生时，t的值是未定义的。
  */
-template <typename T, detail::struct_pack_byte Byte>
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t,
                                                           const Byte *data,
-                                                          size_t size);
+                                                          size_t size,
+                                                          Args... args);
 /*!
  * \ingroup struct_pack
  * @tparam T
+ * @tparam Args
  * @tparam View
- * @param t
- * @param v
+ * @param t 保存反序列化的结果。
+ * @param v 待反序列化的数据，其包含成员函数data()和size()
+ * @param args
+ * 函数允许填入多个引用，然后按std::tuple<T,args...>类型解析数据并反序列化。
+ * 受C++推导规则限制，args置于参数末尾。
  * @return
+ * std::errc类型的错误码。另外，t作为出参保存序列化结果。当有错误发生时，t的值是未定义的。
  */
-template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t, const View &v);
+template <typename T, typename... Args, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t, const View &v,
+                                                          Args... args);
 
 /*!
  * \ingroup struct_pack
@@ -585,18 +596,22 @@ template <typename T, detail::deserialize_view View>
  * }
  * ```
  * @tparam T
+ * @tparam Args
  * @tparam Byte
  * @param t 保存反序列化的结果。
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 内存的长度。
  * @param offset 反序列化起始位置的偏移量。
+ * @param args
+ * 函数允许填入多个引用，然后按std::tuple<T,args...>类型解析数据并反序列化。
+ * 受C++推导规则限制，args置于参数末尾。
  * @return
  * std::errc类型的错误码。另外，t作为出参，保存序列化结果。offset作为出参，会被更新为反序列化对象尾部相对于data的offset。
  *                当有错误发生时，t的值是未定义的，而offset则不会被更新。
  */
-template <typename T, detail::struct_pack_byte Byte>
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to_with_offset(
-    T &t, const Byte *data, size_t size, size_t &offset);
+    T &t, const Byte *data, size_t size, size_t &offset, Args... args);
 
 /*!
  * \ingroup struct_pack
