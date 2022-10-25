@@ -277,69 +277,99 @@ template <typename T, detail::struct_pack_byte Byte>
   return ret;
 }
 
-template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
-    const View &v) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v); errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(v);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to(ret.value(), v); errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
-template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
-    const Byte *data, size_t size) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), data, size);
-      errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data,
+                                                  size_t size) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(data, size);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to(ret.value(), data, size);
+        errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
-template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
-    const View &v, size_t &consume_len) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v, consume_len);
-      errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v,
+                                                  size_t &consume_len) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(v, consume_len);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to(ret.value(), v, consume_len);
+        errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
-template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize(
-    const Byte *data, size_t size, size_t &consume_len) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
-      errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data, size_t size,
+                                                  size_t &consume_len) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(data, size, consume_len);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
+        errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
-template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize_with_offset(
-    const View &v, size_t &offset) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
-      errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const View &v,
+                                                              size_t &offset) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(v, offset);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
+        errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
-template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE expected<T, std::errc> deserialize_with_offset(
-    const Byte *data, size_t size, size_t &offset) {
-  expected<T, std::errc> ret;
-  if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
-      errc != std::errc{}) {
-    ret = unexpected<std::errc>{errc};
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const Byte *data,
+                                                              size_t size,
+                                                              size_t &offset) {
+  if constexpr (sizeof...(Args) > 0) {
+    return deserialize<std::tuple<T, Args...>>(data, size, offset);
   }
-  return ret;
+  else {
+    expected<T, std::errc> ret;
+    if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
+        errc != std::errc{}) {
+      ret = unexpected<std::errc>{errc};
+    }
+    return ret;
+  }
 }
 
 template <typename T, size_t I, typename Field, detail::deserialize_view View>
