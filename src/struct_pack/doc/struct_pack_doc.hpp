@@ -340,7 +340,7 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal();
  * 3. 容器的内存布局是连续的
  * @tparam Args
  * @param args args为需要序列化的对象。
- *             当传入多个序列化对象时，函数会将其打包合并。
+ *             当传入多个序列化对象时，函数会将其打包合并，按std::tuple类型的格式序列化。
  * @return
  * 返回保存在容器中的序列化结果，容器类型为模板参数中的buffer，默认为std::vector<char>。
  *         也支持std::string或者自定义容器
@@ -372,7 +372,7 @@ template <detail::struct_pack_buffer Buffer = std::vector<char>,
  * @tparam Args
  * @param offset 序列化结果的头部预留的空字节数。
  * @param args args为需要序列化的对象。
- *             当传入多个序列化对象时，函数会将其打包合并。
+ *             当传入多个序列化对象时，函数会将其打包合并，按std::tuple类型的格式序列化。
  * @return
  * 返回保存在容器中的序列化结果，容器类型为模板参数中的buffer，默认为std::vector<char>。
  *         也支持std::string或者自定义容器。
@@ -385,7 +385,8 @@ serialize_with_offset(std::size_t offset, const Args &...args);
 /*!
  * \ingroup struct_pack
  * @tparam Byte
- * @tparam Args
+ * @tparam Args args为需要序列化的对象。
+ *             当传入多个序列化对象时，函数会将其打包合并，按std::tuple类型的格式序列化。
  * @param buffer 内存首地址
  * @param len 该段内存的长度
  * @param args 待序列化的对象
@@ -421,7 +422,8 @@ std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len,
  * }
  * ```
  * @tparam Buffer
- * @tparam Args
+ * @tparam Args args为需要序列化的对象。
+ *             当传入多个序列化对象时，函数会将其打包合并，按std::tuple类型的格式序列化。
  * @param buffer 保存序列化结果的容器
  * @param args 待序列化的对象
  */
@@ -457,26 +459,31 @@ void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
  * //then send it to tcp data flow
  * ```
  *
- * @tparam T
+ * @tparam T 反序列化的类型，需要用户手动填写
+ * @tparam Args 函数允许填入多个类型参数，然后按std::tuple类型反序列化
  * @tparam Byte
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 内存的长度
- * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
+ * @return 当用户只填入一个类型参数时，返回struct_pack::expected<T,
+ * std::errc>类型，该expected类型包含反序列化结果T或std::errc类型的错误码。
+ * 否则当用户填入多个类型参数时，返回struct_pack::expected<std::tuple<T,Args...>,std::errc>类型
  */
-template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
-deserialize(const Byte *data, size_t size);
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data,
+                                                  size_t size);
 
 /*!
  * \ingroup struct_pack
- * @tparam T
+ * @tparam T 反序列化的类型，需要用户手动填写
+ * @tparam Args 函数允许填入多个类型参数，然后按std::tuple类型反序列化
  * @tparam View
  * @param v 待反序列化的数据，其包含成员函数data()和size()。
- * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
+ * @return 当用户只填入一个类型参数时，返回struct_pack::expected<T,
+ * std::errc>类型，该expected类型包含反序列化结果T或std::errc类型的错误码。
+ * 否则当用户填入多个类型参数时，返回struct_pack::expected<std::tuple<T,Args...>,std::errc>类型
  */
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
-deserialize(const View &v);
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v);
 
 /*!
  * \ingroup struct_pack
@@ -495,32 +502,35 @@ deserialize(const View &v);
  * }
  * ```
  *
- * @tparam T
+ * @tparam T 反序列化的类型，需要用户手动填写
+ * @tparam Args 函数允许填入多个类型参数，然后按std::tuple类型反序列化
  * @tparam Byte
  * @param data 指向保存序列化结果的内存首地址。
  * @param size 该段内存的长度
  * @param offset 反序列化起始位置的偏移量
- * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
- *         另外，offset作为出参，会被更新该反序列化对象尾部相对于data的offset。
- *         特别的，当有错误发生时，offset不会被修改。
+ * @return 当用户只填入一个类型参数时，返回struct_pack::expected<T,
+ * std::errc>类型，该expected类型包含反序列化结果T或std::errc类型的错误码。
+ * 否则当用户填入多个类型参数时，返回struct_pack::expected<std::tuple<T,Args...>,std::errc>类型
  */
 template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
-    <T> deserialize_with_offset(const Byte *data, size_t size, size_t &offset);
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const Byte *data,
+                                                              size_t size,
+                                                              size_t &offset);
 
 /*!
  * \ingroup struct_pack
- * @tparam T
+ * @tparam T 反序列化的类型，需要用户手动填写
+ * @tparam Args 函数允许填入多个类型参数，然后按std::tuple类型反序列化
  * @tparam View
  * @param v 待反序列化的数据，其包含成员函数data()和size()
  * @param offset 反序列化起始位置的偏移量。
- * @return expected类型，包含反序列化结果T或std::errc类型的错误码。
- *         另外，offset作为出参，会被更新该反序列化对象尾部相对于data的offset。
- *         特别的，当有错误发生时，offset不会被修改。
+ * @return 当用户只填入一个类型参数时，返回struct_pack::expected<T,
+ * std::errc>类型，该expected类型包含反序列化结果T或std::errc类型的错误码。
+ * 否则，当用户填入多个类型参数时，返回struct_pack::expected<std::tuple<T,Args...>,std::errc>类型
  */
 template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::expected<T, std::errc>
-    <T> deserialize_with_offset(const View &v, size_t &offset);
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const View &v,
+                                                              size_t &offset);
 
 /*!
  * \ingroup struct_pack
