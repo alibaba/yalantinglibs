@@ -792,6 +792,28 @@ TEST_CASE("testing exceptions") {
 TEST_CASE("testing serialize/deserialize varadic params") {
   {
     auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
+    auto res = struct_pack::deserialize<std::tuple<int, int, int, int, int>>(
+        ret.data(), ret.size());
+    CHECK(res);
+    CHECK(std::get<0>(res.value()) == 1);
+    CHECK(std::get<1>(res.value()) == 2);
+    CHECK(std::get<2>(res.value()) == 3);
+    CHECK(std::get<3>(res.value()) == 4);
+    CHECK(std::get<4>(res.value()) == 5);
+  }
+  {
+    auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
+    auto res =
+        struct_pack::deserialize<std::tuple<int, int, int, int, int>>(ret);
+    CHECK(res);
+    CHECK(std::get<0>(res.value()) == 1);
+    CHECK(std::get<1>(res.value()) == 2);
+    CHECK(std::get<2>(res.value()) == 3);
+    CHECK(std::get<3>(res.value()) == 4);
+    CHECK(std::get<4>(res.value()) == 5);
+  }
+  {
+    auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
     auto res = struct_pack::deserialize<int, int, int, int, int>(ret.data(),
                                                                  ret.size());
     CHECK(res);
@@ -812,55 +834,6 @@ TEST_CASE("testing serialize/deserialize varadic params") {
     CHECK(std::get<4>(res.value()) == 5);
   }
   {
-    auto ret = struct_pack::serialize(
-        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
-        std::string{"Hello"},
-        std::array<std::vector<int>, 3>{
-            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
-        std::variant<int, float, double>{1.4});
-    auto res =
-        struct_pack::deserialize<int, float, double, int, unsigned long long,
-                                 std::string, std::array<std::vector<int>, 3>,
-                                 std::variant<int, float, double>>(ret.data(),
-                                                                   ret.size());
-    CHECK(res);
-    auto &values = res.value();
-    CHECK(std::get<0>(values) == 42);
-    CHECK(std::get<1>(values) == 2.71828f);
-    CHECK(std::get<2>(values) == 3.1415926);
-    CHECK(std::get<3>(values) == 71086291);
-    CHECK(std::get<4>(values) == 1145141919810Ull);
-    CHECK(std::get<5>(values) == std::string{"Hello"});
-    CHECK(std::get<6>(values) ==
-          std::array<std::vector<int>, 3>{
-              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
-    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
-  }
-  {
-    auto ret = struct_pack::serialize(
-        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
-        std::string{"Hello"},
-        std::array<std::vector<int>, 3>{
-            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
-        std::variant<int, float, double>{1.4});
-    auto res =
-        struct_pack::deserialize<int, float, double, int, unsigned long long,
-                                 std::string, std::array<std::vector<int>, 3>,
-                                 std::variant<int, float, double>>(ret);
-    CHECK(res);
-    auto &values = res.value();
-    CHECK(std::get<0>(values) == 42);
-    CHECK(std::get<1>(values) == 2.71828f);
-    CHECK(std::get<2>(values) == 3.1415926);
-    CHECK(std::get<3>(values) == 71086291);
-    CHECK(std::get<4>(values) == 1145141919810Ull);
-    CHECK(std::get<5>(values) == std::string{"Hello"});
-    CHECK(std::get<6>(values) ==
-          std::array<std::vector<int>, 3>{
-              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
-    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
-  }
-  {
     std::vector<char> ret;
     struct_pack::serialize_to(ret, 1, 2, 3, 4, 5);
     auto res = struct_pack::deserialize<int, int, int, int, int>(ret.data(),
@@ -886,6 +859,126 @@ TEST_CASE("testing serialize/deserialize varadic params") {
     CHECK(std::get<4>(values) == 5);
   }
   {
+    auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
+    int a[5];
+    auto res = struct_pack::deserialize_to(a[0], ret.data(), ret.size(), a[1],
+                                           a[2], a[3], a[4]);
+    CHECK(res == std::errc{});
+    CHECK(a[0] == 1);
+    CHECK(a[1] == 2);
+    CHECK(a[2] == 3);
+    CHECK(a[3] == 4);
+    CHECK(a[4] == 5);
+  }
+  {
+    auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
+    int a[5];
+    auto res = struct_pack::deserialize_to(a[0], ret, a[1], a[2], a[3], a[4]);
+    CHECK(res == std::errc{});
+    CHECK(a[0] == 1);
+    CHECK(a[1] == 2);
+    CHECK(a[2] == 3);
+    CHECK(a[3] == 4);
+    CHECK(a[4] == 5);
+  }
+  {
+    auto ret = struct_pack::serialize(
+        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    auto res = struct_pack::deserialize<std::tuple<
+        int, float, double, int, unsigned long long, std::string,
+        std::array<std::vector<int>, 3>, std::variant<int, float, double>>>(
+        ret.data(), ret.size());
+    CHECK(res);
+    auto &values = res.value();
+    CHECK(std::get<0>(values) == 42);
+    CHECK(std::get<1>(values) == 2.71828f);
+    CHECK(std::get<2>(values) == 3.1415926);
+    CHECK(std::get<3>(values) == 71086291);
+    CHECK(std::get<4>(values) == 1145141919810Ull);
+    CHECK(std::get<5>(values) == std::string{"Hello"});
+    CHECK(std::get<6>(values) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
+  }
+  {
+    auto ret = struct_pack::serialize(
+        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    auto res = struct_pack::deserialize<std::tuple<
+        int, float, double, int, unsigned long long, std::string,
+        std::array<std::vector<int>, 3>, std::variant<int, float, double>>>(
+        ret);
+    CHECK(res);
+    auto &values = res.value();
+    CHECK(std::get<0>(values) == 42);
+    CHECK(std::get<1>(values) == 2.71828f);
+    CHECK(std::get<2>(values) == 3.1415926);
+    CHECK(std::get<3>(values) == 71086291);
+    CHECK(std::get<4>(values) == 1145141919810Ull);
+    CHECK(std::get<5>(values) == std::string{"Hello"});
+    CHECK(std::get<6>(values) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
+  }
+  {
+    auto ret = struct_pack::serialize(
+        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    auto res =
+        struct_pack::deserialize<int, float, double, int, unsigned long long,
+                                 std::string, std::array<std::vector<int>, 3>,
+                                 std::variant<int, float, double>>(ret.data(),
+                                                                   ret.size());
+    CHECK(res);
+    auto &values = res.value();
+    CHECK(std::get<0>(values) == 42);
+    CHECK(std::get<1>(values) == 2.71828f);
+    CHECK(std::get<2>(values) == 3.1415926);
+    CHECK(std::get<3>(values) == 71086291);
+    CHECK(std::get<4>(values) == 1145141919810Ull);
+    CHECK(std::get<5>(values) == std::string{"Hello"});
+    CHECK(std::get<6>(values) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
+  }
+  {
+    auto ret = struct_pack::serialize(
+        42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    auto res =
+        struct_pack::deserialize<int, float, double, int, unsigned long long,
+                                 std::string, std::array<std::vector<int>, 3>,
+                                 std::variant<int, float, double>>(ret);
+    CHECK(res);
+    auto &values = res.value();
+    CHECK(std::get<0>(values) == 42);
+    CHECK(std::get<1>(values) == 2.71828f);
+    CHECK(std::get<2>(values) == 3.1415926);
+    CHECK(std::get<3>(values) == 71086291);
+    CHECK(std::get<4>(values) == 1145141919810Ull);
+    CHECK(std::get<5>(values) == std::string{"Hello"});
+    CHECK(std::get<6>(values) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
+  }
+  {
     std::vector<char> ret;
     struct_pack::serialize_to(
         ret, 42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
@@ -935,6 +1028,61 @@ TEST_CASE("testing serialize/deserialize varadic params") {
           std::array<std::vector<int>, 3>{
               {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
     CHECK(std::get<7>(values) == std::variant<int, float, double>{1.4});
+  }
+  {
+    std::vector<char> ret;
+    struct_pack::serialize_to(
+        ret, 42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    std::tuple<int, float, double, int, unsigned long long, std::string,
+               std::array<std::vector<int>, 3>,
+               std::variant<int, float, double>>
+        t;
+    auto res = struct_pack::deserialize_to(
+        std::get<0>(t), ret.data(), ret.size(), std::get<1>(t), std::get<2>(t),
+        std::get<3>(t), std::get<4>(t), std::get<5>(t), std::get<6>(t),
+        std::get<7>(t));
+    CHECK(res == std::errc{});
+    CHECK(std::get<0>(t) == 42);
+    CHECK(std::get<1>(t) == 2.71828f);
+    CHECK(std::get<2>(t) == 3.1415926);
+    CHECK(std::get<3>(t) == 71086291);
+    CHECK(std::get<4>(t) == 1145141919810Ull);
+    CHECK(std::get<5>(t) == std::string{"Hello"});
+    CHECK(std::get<6>(t) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(t) == std::variant<int, float, double>{1.4});
+  }
+  {
+    std::vector<char> ret;
+    struct_pack::serialize_to(
+        ret, 42, 2.71828f, 3.1415926, 71086291, 1145141919810Ull,
+        std::string{"Hello"},
+        std::array<std::vector<int>, 3>{
+            {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}},
+        std::variant<int, float, double>{1.4});
+    std::tuple<int, float, double, int, unsigned long long, std::string,
+               std::array<std::vector<int>, 3>,
+               std::variant<int, float, double>>
+        t;
+    auto res = struct_pack::deserialize_to(
+        std::get<0>(t), ret, std::get<1>(t), std::get<2>(t), std::get<3>(t),
+        std::get<4>(t), std::get<5>(t), std::get<6>(t), std::get<7>(t));
+    CHECK(res == std::errc{});
+    CHECK(std::get<0>(t) == 42);
+    CHECK(std::get<1>(t) == 2.71828f);
+    CHECK(std::get<2>(t) == 3.1415926);
+    CHECK(std::get<3>(t) == 71086291);
+    CHECK(std::get<4>(t) == 1145141919810Ull);
+    CHECK(std::get<5>(t) == std::string{"Hello"});
+    CHECK(std::get<6>(t) ==
+          std::array<std::vector<int>, 3>{
+              {{1, 1, 4, 5, 1, 4}, {1919, 810}, {710862, 91}}});
+    CHECK(std::get<7>(t) == std::variant<int, float, double>{1.4});
   }
 }
 

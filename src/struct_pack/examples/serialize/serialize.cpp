@@ -32,6 +32,8 @@ struct person {
 void basic_usage() {
   person p{20, "tom"};
 
+  person p2{.age = 21, .name = "Betty"};
+
   // serialize api
   {// api 1. return default container
    {auto buffer = struct_pack::serialize(p);
@@ -59,6 +61,11 @@ void basic_usage() {
   auto buffer = struct_pack::serialize_with_offset(2, p);
   assert(buffer[0] == '\0' && buffer[1] == '\0');
 }
+// api 6. serialize varadic param
+{
+  person p2{.age = 21, .name = "Betty"};
+  auto buffer = struct_pack::serialize(p.age, p2.name);
+}
 }
 
 // deserialize api
@@ -66,23 +73,40 @@ void basic_usage() {
   auto buffer = struct_pack::serialize(p);
   // api 1. deserialize object to return value
   {
-    auto p2 = struct_pack::deserialize<person>(buffer.data(), buffer.size());
+    auto p2 = struct_pack::deserialize<person>(buffer);
     assert(p2);  // no error
     assert(p2.value() == p2);
   }
   // api 2. deserialize object to reference
   {
     person p2;
-    [[maybe_unused]] auto ec =
-        struct_pack::deserialize_to(p2, buffer.data(), buffer.size());
+    [[maybe_unused]] auto ec = struct_pack::deserialize_to(p2, buffer);
     assert(ec == std::errc{});
     assert(p == p2);
   }
   // api 3. partial deserialize
   {
-    auto name = struct_pack::get_field<person, 1>(buffer.data(), buffer.size());
+    auto name = struct_pack::get_field<person, 1>(buffer);
     assert(name);  // no error
     assert(p.name == name.value());
+  }
+  // api 4. varadic deserialize
+  {
+    auto buffer = struct_pack::serialize(p.age, p2.name);
+    auto result = struct_pack::deserialize<int, std::string>(buffer);
+    assert(result);  // no error
+    auto &&[age, name] = result.value();
+    assert(age == p.age);
+    assert(name == p2.name);
+  }
+  // api 4. varadic deserialize_to
+  {
+    person p3;
+    auto buffer = struct_pack::serialize(p.age, p2.name);
+    auto result = struct_pack::deserialize_to(p3.age, buffer, p3.name);
+    assert(result == std::errc{});
+    assert(p3.age == p.age);
+    assert(p3.name == p2.name);
   }
 }
 }
