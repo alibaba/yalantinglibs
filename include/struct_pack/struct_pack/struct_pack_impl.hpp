@@ -922,24 +922,45 @@ class unpacker {
   STRUCT_PACK_INLINE unpacker(const Byte *data, std::size_t size)
       : data_{data}, size_(size) {}
 
-  template <class T>
-  STRUCT_PACK_INLINE std::errc deserialize(T &t) {
-    auto &&[err_code, data_len] = check_types(t);
-    if (err_code != std::errc{}) [[unlikely]] {
-      return err_code;
+  template <typename T, typename... Args>
+  STRUCT_PACK_INLINE std::errc deserialize(T &t, Args &...args) {
+    if constexpr (sizeof...(Args) == 0) {
+      auto &&[err_code, data_len] = check_types(t);
+      if (err_code != std::errc{}) [[unlikely]] {
+        return err_code;
+      }
+      return deserialize_one(t);
     }
-    return deserialize_one(t);
+    else {
+      auto &&[err_code, data_len] = check_types(std::tuple<T, Args...>{});
+      if (err_code != std::errc{}) [[unlikely]] {
+        return err_code;
+      }
+      return deserialize_many(t, args...);
+    }
   }
 
-  template <class T>
-  STRUCT_PACK_INLINE std::errc deserialize(T &t, std::size_t &len) {
-    auto &&[err_code, data_len] = check_types(t);
-    if (err_code != std::errc{}) [[unlikely]] {
-      return err_code;
+  template <typename T, typename... Args>
+  STRUCT_PACK_INLINE std::errc deserialize(std::size_t &len, T &t,
+                                           Args &...args) {
+    if constexpr (sizeof...(Args) == 0) {
+      auto &&[err_code, data_len] = check_types(t);
+      if (err_code != std::errc{}) [[unlikely]] {
+        return err_code;
+      }
+      auto ret = deserialize_one(t);
+      len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
+      return ret;
     }
-    auto ret = deserialize_one(t);
-    len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
-    return ret;
+    else {
+      auto &&[err_code, data_len] = check_types(std::tuple<T, Args...>{});
+      if (err_code != std::errc{}) [[unlikely]] {
+        return err_code;
+      }
+      auto ret = deserialize_many(t, args...);
+      len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
+      return ret;
+    }
   }
 
   template <typename U, size_t I>
@@ -1001,7 +1022,7 @@ class unpacker {
   };
 
   template <class T>
-  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> check_types(T &t) {
+  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> check_types(const T &t) {
     if (size_ < sizeof(uint32_t)) [[unlikely]] {
       return {std::errc::no_buffer_space, 0};
     }

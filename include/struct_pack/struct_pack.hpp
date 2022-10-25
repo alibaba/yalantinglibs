@@ -227,52 +227,53 @@ serialize_with_offset(std::size_t offset, const Args &...args) {
   return buffer;
 }
 
-template <typename T, detail::deserialize_view View>
-[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t, const View &v) {
-  detail::unpacker in(v.data(), v.size());
-  return in.deserialize(t);
-}
-
-template <typename T, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t,
-                                                          const Byte *data,
-                                                          size_t size) {
-  detail::unpacker in(data, size);
-  return in.deserialize(t);
-}
-
-template <typename T, detail::deserialize_view View>
+template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t, const View &v,
-                                                          size_t &consume_len) {
+                                                          Args &...args) {
   detail::unpacker in(v.data(), v.size());
-  return in.deserialize(t, consume_len);
+  return in.deserialize(t, args...);
 }
 
-template <typename T, detail::struct_pack_byte Byte>
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t,
                                                           const Byte *data,
                                                           size_t size,
-                                                          size_t &consume_len) {
+                                                          Args &...args) {
   detail::unpacker in(data, size);
-  return in.deserialize(t, consume_len);
+  return in.deserialize(t, args...);
 }
 
-template <typename T, detail::deserialize_view View>
+template <typename T, typename... Args, detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(T &t, const View &v,
+                                                          size_t &consume_len,
+                                                          Args &...args) {
+  detail::unpacker in(v.data(), v.size());
+  return in.deserialize(consume_len, t, args...);
+}
+
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
+[[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to(
+    T &t, const Byte *data, size_t size, size_t &consume_len, Args &...args) {
+  detail::unpacker in(data, size);
+  return in.deserialize(consume_len, t, args...);
+}
+
+template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to_with_offset(
-    T &t, const View &v, size_t &offset) {
+    T &t, const View &v, size_t &offset, Args &...args) {
   detail::unpacker in(v.data() + offset, v.size() - offset);
   size_t sz;
-  auto ret = in.deserialize(t, sz);
+  auto ret = in.deserialize(sz, t, args...);
   offset += sz;
   return ret;
 }
 
-template <typename T, detail::struct_pack_byte Byte>
+template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_to_with_offset(
-    T &t, const Byte *data, size_t size, size_t &offset) {
+    T &t, const Byte *data, size_t size, size_t &offset, Args &...args) {
   detail::unpacker in(data + offset, size - offset);
   size_t sz;
-  auto ret = in.deserialize(t, sz);
+  auto ret = in.deserialize(sz, t, args...);
   offset += sz;
   return ret;
 }
