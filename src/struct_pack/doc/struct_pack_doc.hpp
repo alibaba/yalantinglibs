@@ -218,29 +218,23 @@ namespace struct_pack {
 
 /*!
  * \ingroup struct_pack
- * \struct members_count_t
+ * \struct members_count
  * \brief
  * 某些特殊情况下，struct_pack可能无法正确计算结构体内的元素个数并导致编译期错误。
- * 此时请用 `struct_pack::member_cnt_t`手动在结构体内标明结构体内元素的个数。
+ * 此时请特化模板`struct_pack::members_count`，并手动标明结构体内元素的个数。
  *
  * 样例代码：
- *
  * ```cpp
- * struct bug_struct {
- *   using members_count_t = struct_pack::members_count_t<3>;
- *   int i;
- *   struct hello {
- *     std::optional<int> j;
- *   } hi;
- *   double k = 3;
+ * struct bug_member_count_struct1 {
+ *  int i;
+ *  std::string j;
+ *  double k = 3;
  * };
  *
- * TEST_CASE("test members_count_t") {
- *   bug_struct b{0, 1, 2.0};
- *   auto res = struct_pack::serialize(b);
- *   auto ret = struct_pack::deserialize<bug_struct>(res.data(), res.size());
- *   CHECK(ret.errc == std::errc{});
- * };
+ * struct bug_member_count_struct2 : bug_member_count_struct1 {};
+ *
+ * template <>
+ * constexpr size_t struct_pack::members_count<bug_member_count_struct2> = 3;
  * ```
  *
  */
