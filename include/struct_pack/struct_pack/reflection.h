@@ -37,8 +37,11 @@
 #define CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
 #endif
 
-namespace struct_pack::detail {
+namespace struct_pack {
 
+template <typename T>
+constexpr std::size_t members_count = 0;
+namespace detail {
 template <typename Type>
 concept deserialize_view = requires(Type container) {
   container.size();
@@ -137,11 +140,6 @@ concept array = requires(Type arr) {
   std::tuple_size<std::remove_cvref_t<Type>>{};
 };
 
-template <typename Type>
-concept has_members_count = requires(Type container) {
-  typename std::remove_cvref_t<Type>::members_count_t;
-};
-
 // this version not work, can't checkout the is_xx_v in ```require(Type){...}```
 template <typename Type>
 concept c_array1 = requires(Type arr) {
@@ -196,18 +194,33 @@ struct UniversalType {
   operator T();
 };
 
+struct UniversalOptionalType {
+  template <optional U>
+  operator U();
+};
+
 template <typename T, typename... Args>
-consteval auto member_count() {
-  if constexpr (has_members_count<T>) {
-    return T::members_count_t::value;
+consteval std::size_t member_count_impl() {
+  if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
+    return member_count_impl<T, Args..., UniversalType>();
+  }
+  else if constexpr (requires {
+                       T{{Args{}}..., {UniversalOptionalType{}}};
+                     } == true) {
+    return member_count_impl<T, Args..., UniversalOptionalType>();
   }
   else {
-    if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == false) {
-      return sizeof...(Args);
-    }
-    else {
-      return member_count<T, Args..., UniversalType>();
-    }
+    return sizeof...(Args);
+  }
+}
+
+template <typename T>
+consteval std::size_t member_count() {
+  if constexpr (struct_pack::members_count < T >> 0) {
+    return struct_pack::members_count<T>;
+  }
+  else {
+    return member_count_impl<T>();
   }
 }
 
@@ -222,6 +235,18 @@ constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(auto &&object,
     static_assert(!sizeof(type), "empty struct/class is not allowed!");
   }
   static_assert(Count <= MaxVisitMembers, "exceed max visit members");
+  // If you see any structured binding error in the follow line, it
+  // means struct_pack can't calculate your struct's members count
+  // correctly. You need to mark it manually.
+  //
+  // For example, there is a struct named Hello,
+  // and it has 3 members.
+  //
+  // You can mark it as:
+  //
+  // template <>
+  // constexpr size_t struct_pack::members_count<Hello> = 3;
+
   if constexpr (Count == 0) {
     return visitor();
   }
@@ -1259,4 +1284,5 @@ constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
       // index shouldn't bigger than 256
   }
 }
-}  // namespace struct_pack::detail
+}  // namespace detail
+}  // namespace struct_pack
