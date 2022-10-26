@@ -1466,8 +1466,7 @@ TEST_CASE("test free functions") {
   CHECK(pair1.value() == "tom");
 }
 
-struct bug_struct {
-  using members_count_t = struct_pack::members_count_t<3>;
+struct bug_member_count_struct1 {
   int i;
   struct hello {
     std::optional<int> j;
@@ -1475,23 +1474,29 @@ struct bug_struct {
   double k = 3;
 };
 
-TEST_CASE("test members_count_t") {
-  bug_struct b{0, {1}, 2.0};
-  auto res = struct_pack::serialize(b);
-  auto ret = struct_pack::deserialize<bug_struct>(res.data(), res.size());
-  CHECK(ret);
-};
+struct bug_member_count_struct2 : bug_member_count_struct1 {};
 
-struct dummy {
-  using members_count_t = struct_pack::members_count_t<2>;
-  int32_t id;
-  std::string name;
-  int32_t age;
-};
+template <>
+constexpr std::size_t struct_pack::members_count<bug_member_count_struct2> = 3;
+
+TEST_CASE("test members_count") {
+  {
+    using t = bug_member_count_struct1;
+    t b;
+    auto res = struct_pack::serialize(b);
+    auto ret = struct_pack::deserialize<t>(res.data(), res.size());
+    CHECK(ret);
+  }
+  {
+    using t = bug_member_count_struct2;
+    t b;
+    auto res = struct_pack::serialize(b);
+    auto ret = struct_pack::deserialize<t>(res.data(), res.size());
+    CHECK(ret);
+  }
+}
 
 TEST_CASE("test compatible") {
-  constexpr auto c = detail::member_count<dummy>();
-  static_assert(c == 2);
   constexpr auto code = get_type_code<std::tuple<int, char>>();
   static_assert(code % 2 == 0);
   constexpr auto code1 =
