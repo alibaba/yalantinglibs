@@ -76,8 +76,8 @@ auto result = struct_pack::serialize_to(array.get(),sz,person1);
 ### 多参数序列化
 
 ```c++
-auto result=struct_pack::serialize(person1.id,person1.name,person1.age,person1.salary);
-//serialize as std::tuple<int,std::string,double>
+auto result=struct_pack::serialize(person1.id, person1.name, person1.age, person1.salary);
+//serialize as std::tuple<int64_t, std::string, int, double>
 ```
 
 ## 反序列化
@@ -87,7 +87,7 @@ auto result=struct_pack::serialize(person1.id,person1.name,person1.age,person1.s
 ```c++
 // 1行代码反序列化
 auto person2 = deserialize<person>(buffer);
-assert(person2); //person2.has_value()==true
+assert(person2); // person2.has_value() == true
 assert(person2.value()==person1);
 ```
 
@@ -96,7 +96,7 @@ assert(person2.value()==person1);
 ```c++
 // 1行代码反序列化
 auto person2 = deserialize<person>(buffer.data(),buffer.size());
-assert(person2); //person2.has_value()==true
+assert(person2); //person2.has_value() == true
 assert(person2.value()==person1);
 ```
 
@@ -106,7 +106,7 @@ assert(person2.value()==person1);
 // 1行代码反序列化
 person person2;
 std::errc ec = deserialize_to(person2, buffer);
-assert(ec==std::errc{}); //person2.has_value()==true
+assert(ec==std::errc{}); // person2.has_value() == true
 assert(person2==person1);
 ```
 
@@ -114,7 +114,7 @@ assert(person2==person1);
 
 ```c++
 auto person2 = deserialize<int64_t,std::string,int,double>(buffer);
-assert(person2);//person2.has_value()==true
+assert(person2); // person2.has_value() == true
 auto &&[id,name,age,salary]=person2.value();
 assert(person1.id==id);
 assert(person1.name==name);
@@ -130,7 +130,7 @@ assert(person1.salary==salary);
 ```c++
 // 只反序列化person的第2个字段
 auto name = get_field<person, 1>(buffer.data(), buffer.size());
-assert(name); //name.has_value()==true
+assert(name); // name.has_value() == true
 assert(name.value() == "hello struct pack");
 ```
 
