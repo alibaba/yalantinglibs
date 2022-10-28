@@ -25,13 +25,21 @@ English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduc
 
 English API(TODO) | [中文API](./src/coro_rpc/doc/coro_rpc_doc.hpp)
 
+[Talk](./src/coro_rpc/doc/coro_rpc_introduction_purecpp_talk.pdf) about coro_rpc
+
+[Vedio](http://t.csdn.cn/uBRwn) start from 04:55:08 of the vedio record.
+
 ## struct_pack
 
 Based on compile-time reflection, very easy to use, high performance serialization library, struct_pack is a header only library, it is used by coro_rpc now.
 
-English Introduction(TODO) | [中文简介](./src//struct_pack/doc/Introduction_CN.md)
+English Introduction(TODO) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
 
 English API(TODO) | [中文API](./src/struct_pack/doc/struct_pack_doc.hpp)
+
+[Talk](./src/struct_pack/doc/struct_pack_introduce_CN.pdf) about struct_pack
+
+[Vedio](http://t.csdn.cn/uBRwn) start from 01:32:20 of the vedio record.
 
 ## Quick Start of coro_rpc
 
@@ -90,6 +98,14 @@ doctest is put in tests folder.
 3. Create a PR, fill in the PR template.
 4. Choose one or more reviewers from contributors: (e.g., qicosmos, poor-circle, PikachuHyA).
 5. Get approved and merged.
+
+# Discussion group
+
+DingTalk group
+
+<center>
+<img src="./src/coro_rpc/doc/images/yalantinglibs_ding_talk_group.png" alt="dingtalk" width="200" height="200" align="bottom" />
+</center>
 
 # License
 
