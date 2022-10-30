@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <any>
 #include <atomic>
 #include <cstdint>
 #include <future>
@@ -263,6 +264,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     conn_id_ = conn_id;
   }
 
+  template<typename T>
+  void set_tag(T &&tag){
+    tag_ = std::forward<T>(tag);
+  }
+
+  std::any get_tag() {
+    return tag_;
+  }
+
  private:
   async_simple::coro::Lazy<void> response(std::vector<char> buf,
                                           auto self) noexcept {
@@ -406,6 +416,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   QuitCallback quit_callback_ = nullptr;
   uint64_t conn_id_ = 0;
+
+  std::any tag_;
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;

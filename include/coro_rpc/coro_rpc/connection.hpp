@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <any>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -79,7 +80,7 @@ class connection {
    * @param args
    */
   template <typename... Args>
-  void response_msg(Args&&... args) {
+  void response_msg(Args &&...args) {
     auto old_flag = has_response_->exchange(true);
     if (old_flag != false) {
       easylog::error("response message more than one time");
@@ -119,6 +120,13 @@ class connection {
    * @return true if closed, otherwise false
    */
   bool has_closed() const { return conn_->has_close(); }
+
+  template <typename T>
+  void set_tag(T &&tag) {
+    conn_->set_tag(std::forward<T>(tag));
+  }
+
+  std::any get_tag() { return conn_->get_tag(); }
 };
 
 template <typename T>
