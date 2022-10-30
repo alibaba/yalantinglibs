@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <any>
 #include <asio.hpp>
 #include <atomic>
 #include <deque>
@@ -130,6 +131,13 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   void set_delay(bool b) { delay_ = b; }
 
   bool has_closed() const { return has_closed_; }
+
+  template <typename T>
+  void set_tag(T &&tag) {
+    tag_ = std::forward<T>(tag);
+  }
+
+  std::any get_tag() { return tag_; }
 
  private:
   void read_head() {
@@ -368,6 +376,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::promise<void> quit_promise_;
   std::atomic_bool has_closed_ = false;
   std::once_flag flag_{};
+  std::any tag_;
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
