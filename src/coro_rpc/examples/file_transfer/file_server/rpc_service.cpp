@@ -29,6 +29,37 @@ void upload_file(coro_rpc::connection<std::errc> conn, file_part part) {
   conn.response_msg(std::errc{});
 }
 
+void download_file(coro_rpc::connection<response_part> conn,
+                   std::string filename) {
+  std::shared_ptr<std::ifstream> stream = nullptr;
+  if (!conn.get_tag().has_value()) {
+    std::string actual_filename =
+        std::filesystem::path(filename).filename().string();
+    if (!std::filesystem::is_regular_file(actual_filename) ||
+        !std::filesystem::exists(actual_filename)) {
+      conn.response_msg(response_part{std::errc::invalid_argument});
+      return;
+    }
+
+    stream = std::make_shared<std::ifstream>(actual_filename, std::ios::binary);
+    conn.set_tag(stream);
+  }
+  else {
+    stream = std::any_cast<std::shared_ptr<std::ifstream>>(conn.get_tag());
+  }
+
+  char buf[1024];
+
+  size_t real_size = stream->read(buf, 1024).gcount();
+  conn.response_msg(
+      response_part{{}, std::string(buf, real_size), stream->eof()});
+
+  if (stream->eof()) {
+    stream->close();
+    conn.set_tag(std::any{});
+  }
+}
+
 std::string g_real_file = "";
 std::ofstream g_file;
 
