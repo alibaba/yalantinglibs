@@ -20,3 +20,12 @@ std::errc upload(file_part part);
 
 // support arbitrary clients to upload file.
 void upload_file(coro_rpc::connection<std::errc> conn, file_part part);
+
+struct response_part {
+  std::errc ec;
+  std::string content;
+  bool eof;
+};
+
+void download_file(coro_rpc::connection<response_part> conn,
+                   std::string filename);
