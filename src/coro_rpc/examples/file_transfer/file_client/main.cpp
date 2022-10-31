@@ -34,6 +34,8 @@ async_simple::coro::Lazy<void> test(coro_rpc::coro_rpc_client &client,
     co_return;
   }
 
+  std::cout << "begin to upload file " << filename << "\n";
+
   char buf[1024];
   file_part part{.filename = filename, .content = "", .eof = false};
 
@@ -56,6 +58,36 @@ async_simple::coro::Lazy<void> test(coro_rpc::coro_rpc_client &client,
   co_await client.call<upload_file>(part);
 
   std::cout << "upload finished\n";
+
+  // download file
+  std::string download_filename =
+      std::filesystem::path(filename).filename().string();
+  std::cout << "begin to download file " << download_filename << "\n";
+  std::string saved_filename =
+      "temp" + std::filesystem::path(filename).extension().string();
+
+  std::ofstream out(saved_filename, std::ios::binary | std::ios::app);
+  while (true) {
+    auto dresult = co_await client.call<download_file>(download_filename);
+    if (dresult) {
+      response_part download_part = dresult.value();
+      if (download_part.ec != std::errc{}) {
+        std::cout << "download failed\n";
+        co_return;
+      }
+
+      out.write(download_part.content.data(), download_part.content.size());
+      if (download_part.eof) {
+        out.close();
+        std::cout << "download " << download_filename << " finished\n";
+        break;
+      }
+    }
+    else {
+      std::cout << "download failed " << dresult.error().msg << "\n";
+      co_return;
+    }
+  }
 }
 
 int main() {
