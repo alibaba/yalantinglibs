@@ -91,27 +91,27 @@ inline void log(spdlog::level::level_enum level, source_location location,
 
   switch (level) {
     case spdlog::level::trace:
-      spdlog::trace("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::trace("{}:{}: {}", p.filename().string(), location.line(),
                     fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::debug:
-      spdlog::debug("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::debug("{}:{}: {}", p.filename().string(), location.line(),
                     fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::info:
-      spdlog::info("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::info("{}:{}: {}", p.filename().string(), location.line(),
                    fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::warn:
-      spdlog::warn("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::warn("{}:{}: {}", p.filename().string(), location.line(),
                    fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::err:
-      spdlog::error("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::error("{}:{}: {}", p.filename().string(), location.line(),
                     fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::critical:
-      spdlog::critical("{}:{}: {}", p.filename().c_str(), location.line(),
+      spdlog::critical("{}:{}: {}", p.filename().string(), location.line(),
                        fmt::format(fmt, std::forward<Args>(args)...));
       break;
     case spdlog::level::off:
