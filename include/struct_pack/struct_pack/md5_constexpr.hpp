@@ -325,15 +325,6 @@ constexpr uint32_t MD5Hash32Constexpr(const char *string, uint32_t length) {
   return MD5CE::Hash32(string, length);
 }
 
-template <string_literal String>
-constexpr auto operator""_sl() {
-  return String;
-}
-
-template <string_literal String>
-constexpr auto operator""_md5_int() {
-  return MD5Hash32Constexpr(String.data(), String.size());
-}
 }  // namespace MD5
 
 }  // namespace struct_pack
