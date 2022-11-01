@@ -45,3 +45,6 @@ doxygen-awesome-css
 html
 CMakeUserPresets.json
 .DS_Store
+.vs/
+out/
+build/

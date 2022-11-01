@@ -3,7 +3,7 @@ target_link_libraries(benchmark_client PRIVATE libcoro_rpc)
 target_include_directories(benchmark_client PRIVATE . ..)
 
 add_executable(benchmark_data_gen data_gen.cpp)
-target_link_libraries(benchmark_data_gen PRIVATE libcoro_rpc)
+target_link_libraries(benchmark_data_gen PRIVATE libcoro_rpc Threads::Threads)
 target_include_directories(benchmark_data_gen PRIVATE . ..)
 
 message(STATUS "GENERATE_BENCHMARK_DATA")

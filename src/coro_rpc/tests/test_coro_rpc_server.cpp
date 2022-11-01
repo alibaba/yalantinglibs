@@ -40,13 +40,27 @@ struct CoroServerTester : ServerTester {
     }
 #endif
     if (async_start) {
-      server.async_start().template start([](auto &&) {
+      // https://timsong-cpp.github.io/cppwp/n4861/temp.names#5.example-1
+      // https://developercommunity.visualstudio.com/t/c2059-syntax-error-template-for-valid-template-mem/1632142
+      /*
+        template <class T> struct A {
+          void f(int);
+          template <class U> void f(U);
+        };
+
+        template <class T> void f(T t) {
+          A<T> a;
+          a.template f<>(t);                    // OK: calls template
+          a.template f(t);                      // error: not a template-id
+        }
+      */
+      server.async_start().template start<>([](auto &&) {
       });
     }
     else {
       thd = std::thread([&] {
-        auto ec=server.start();
-        REQUIRE(ec==std::errc{});
+        auto ec = server.start();
+        REQUIRE(ec == std::errc{});
       });
     }
 
@@ -134,7 +148,7 @@ struct CoroServerTester : ServerTester {
       ec = new_server.start();
     }
     REQUIRE_MESSAGE(ec == std::errc::address_in_use,
-                  make_error_code(ec).message());
+                    make_error_code(ec).message());
   }
   void test_server_send_bad_rpc_result() {
     easylog::info("run {}", __func__);

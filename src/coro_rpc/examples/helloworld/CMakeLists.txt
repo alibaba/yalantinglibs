@@ -1,5 +1,4 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 #########################################################################################
 # Example: Use coro_rpc with CMake target libcoro_rpc
 # After CMake 3.15, all dependencies handled automatically when linking CMake target
@@ -40,8 +39,8 @@ target_include_directories(helloworld_client_manually PRIVATE
         ${CMAKE_SOURCE_DIR}/thirdparty/async_simple
         ${CMAKE_SOURCE_DIR}/thirdparty/spdlog
 )
-target_link_libraries(helloworld_server_manually -lpthread)
-target_link_libraries(helloworld_client_manually -lpthread)
+target_link_libraries(helloworld_server_manually Threads::Threads)
+target_link_libraries(helloworld_client_manually Threads::Threads)
 # workaround
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # When using coro_rpc_client, only remote function declarations are required.

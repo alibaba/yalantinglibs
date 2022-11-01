@@ -28,6 +28,10 @@ if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         endif()
     endif ()
 endif ()
+
+# Resolves C1128 complained by MSVC: number of sections exceeded object file format limit: compile with /bigobj.
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/bigobj>")
+
 option(COVERAGE_TEST "Build with unit test coverage" OFF)
 if (COVERAGE_TEST)
     message(STATUS "add coverage flags")
@@ -54,7 +58,8 @@ if (USE_CONAN)
 else ()
     add_subdirectory(thirdparty)
 endif ()
-set(yaLanTingLibs_ALL_PROJECTS "struct_pack;coro_rpc")
+find_package(Threads REQUIRED)
+set(yaLanTingLibs_ALL_PROJECTS "struct_pack;coro_rpc;util")
 set(yaLanTingLibs_ENABLE_PROJECTS "all" CACHE STRING
         "Semicolon-separated list of projects to build (${yaLanTingLibs_ALL_PROJECTS}), or \"all\".")
 if (yaLanTingLibs_ENABLE_PROJECTS STREQUAL "all")
@@ -87,6 +92,7 @@ foreach (proj ${yaLanTingLibs_ENABLE_PROJECTS})
                 message(STATUS "Build benchmark: src/${proj}/benchmark")
                 add_subdirectory(src/${proj}/benchmark)
             endif()
+        # The util project does not contain a benchmark.
         else()
             message(STATUS "Build benchmark: src/${proj}/benchmark")
             add_subdirectory(src/${proj}/benchmark)
