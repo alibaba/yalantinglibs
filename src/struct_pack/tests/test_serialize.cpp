@@ -461,6 +461,52 @@ TEST_CASE("testing std::array") {
   test_tuple_like(v3);
 }
 
+TEST_CASE("test_trivial_copy_tuple") {
+  tuplet::tuple tp = tuplet::make_tuple(1, 2);
+
+  constexpr auto count = detail::member_count<decltype(tp)>();
+  static_assert(count == 2);
+
+  static_assert(std::is_same_v<decltype(tp), tuplet::tuple<int, int>>);
+  static_assert(!std::is_same_v<decltype(tp), std::tuple<int, int>>);
+
+  static_assert(
+      std::is_same_v<decltype(detail::get_types(tp)), tuplet::tuple<int, int>>);
+  static_assert(
+      !std::is_same_v<decltype(detail::get_types(tp)), std::tuple<int, int>>);
+
+  static_assert(get_type_code<decltype(tp)>() !=
+                get_type_code<std::tuple<int, int>>());
+
+  auto buf = serialize(tp);
+
+  std::tuple<int, int> v{};
+  auto ec = deserialize_to(v, buf);
+  CHECK(ec != std::errc{});
+
+  decltype(tp) tp1;
+  auto ec2 = deserialize_to(tp1, buf);
+  CHECK(ec2 == std::errc{});
+  CHECK(tp == tp1);
+}
+
+struct test_obj {
+  int id;
+  std::string str;
+  tuplet::tuple<int, std::string> tp;
+  int d;
+};
+
+TEST_CASE("test_trivial_copy_tuple in an object") {
+  test_obj obj{1, "hello", {2, "tuple"}, 3};
+  auto buf = serialize(obj);
+
+  test_obj obj1;
+  auto ec = deserialize_to(obj1, buf);
+  CHECK(ec == std::errc{});
+  CHECK(obj.tp == obj1.tp);
+}
+
 void test_c_array(auto &v) {
   auto ret = serialize(v);
 
