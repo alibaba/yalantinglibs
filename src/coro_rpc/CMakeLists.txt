@@ -4,7 +4,7 @@ target_include_directories(libcoro_rpc INTERFACE
         $<BUILD_INTERFACE:${yaLanTingLibs_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
         )
-find_package(Threads REQUIRED)
+
 target_link_libraries(libcoro_rpc INTERFACE
         Threads::Threads
         asio::asio
