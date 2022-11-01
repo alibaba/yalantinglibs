@@ -8,7 +8,7 @@ project(yaLanTingLibs
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fcoroutines")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 else ()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

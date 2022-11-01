@@ -229,8 +229,7 @@ class SSLClientTester {
       CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
     }
     else if constexpr (std::is_same_v<Server, async_rpc_server>) {
-      auto ec = server.async_start();
-      REQUIRE(ec == std::errc{});
+      server.async_start();
       CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
     }
 
