@@ -1,0 +1,42 @@
+name: macOS Monterey 12
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        #mode: [Release, Debug]
+        mode: [Debug] # remove Release to reduce ci time
+        ssl: [ON, OFF]
+
+    runs-on: macos-12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: SetUp HomeBrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install Dependencies
+        run: brew install openssl
+
+      - name: Configure CMake
+        run: OPENSSL_ROOT_DIR=/usr/local/Cellar/openssl@3/3.0.5 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j `nproc` -V
