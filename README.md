@@ -8,38 +8,106 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains [async_simple](https://github.com/alibaba/async_simple), struct_pack and coro_rpc.
+yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, coro_rpc and [async_simple](https://github.com/alibaba/async_simple).
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
-## async_simple
-
-A library offering simple, light-weight and easy-to-use components to write asynchronous codes.
-See [async_simple](https://github.com/alibaba/async_simple)
-
 ## coro_rpc
 
-Very easy-to-use, coroutine-based, high performance rpc framework with C++20. coro_rpc is a header only library.
+Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene. coro_rpc is a header only library.
+
+You can finish a rpc server and rpc client in 5 minutes!
 
 English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduction_cn.md)  
 
 English API(TODO) | [中文API](./src/coro_rpc/doc/coro_rpc_doc.hpp)
 
-[Talk](./src/coro_rpc/doc/coro_rpc_introduction_purecpp_talk.pdf) about coro_rpc
+[Talk](./src/coro_rpc/doc/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
 
-[Vedio](http://t.csdn.cn/uBRwn) start from 04:55:08 of the vedio record.
+[Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 04:55:08 of the vedio record.
+
+### quick example
+
+1.define a rpc function as a local normal function.
+
+```c++
+// rpc_service.hpp
+inline std::string echo(std::string str) { return str; }
+```
+
+2.register rpc function and start a server
+
+```c++
+#include "rpc_service.hpp"
+#include <coro_rpc/coro_rpc_server.hpp>
+
+int main() {
+  register_handler<echo>();
+
+  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.start();
+}
+```
+
+3.rpc client call rpc service
+
+```c++
+#include "rpc_service.hpp"
+#include <coro_rpc/coro_rpc_client.hpp>
+
+Lazy<void> test_client() {
+  coro_rpc_client client;
+  co_await client.connect("localhost", /*port =*/9000);
+
+  auto r = co_await client.call<echo>("hello coro_rpc"); //传参数调用rpc函数
+  std::cout << r.result.value() << "\n"; //will print "hello coro_rpc"
+}
+
+int main() {
+  syncAwait(test_client());
+}
+```
+More examples [here](src/coro_rpc/examples/).
 
 ## struct_pack
 
 Based on compile-time reflection, very easy to use, high performance serialization library, struct_pack is a header only library, it is used by coro_rpc now.
 
+Only one line code to finish serialization and deserialization, 10-50x faster than protobuf.
+
 English Introduction(TODO) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
 
 English API(TODO) | [中文API](./src/struct_pack/doc/struct_pack_doc.hpp)
 
-[Talk](./src/struct_pack/doc/struct_pack_introduce_CN.pdf) about struct_pack
+[Talk](./src/struct_pack/doc/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
-[Vedio](http://t.csdn.cn/uBRwn) start from 01:32:20 of the vedio record.
+[Talk](./src/struct_pack/doc/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
+
+[Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 01:32:20 of the vedio record.
+
+### quick exampe
+```c++
+struct person {
+  int64_t id;
+  std::string name;
+  int age;
+  double salary;
+};
+
+person person1{.id = 1, .name = "hello struct pack", .age = 20, .salary = 1024.42};
+
+// one line code serialize
+std::vector<char> buffer = struct_pack::serialize(person1);
+
+// one line code deserialization
+auto person2 = deserialize<person>(buffer);
+```
+More example [here](./src/struct_pack/examples/).
+
+## async_simple
+
+A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
+See [async_simple](https://github.com/alibaba/async_simple)
 
 ## Quick Start of coro_rpc
 
