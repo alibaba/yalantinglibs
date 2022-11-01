@@ -1,4 +1,3 @@
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 set(TEST_SRCS
@@ -21,7 +20,7 @@ add_executable(test_rpc
         ${TEST_SRCS}
         ${TEST_COMMON}
         )
-target_link_libraries(test_rpc PRIVATE libcoro_rpc doctest)
+target_link_libraries(test_rpc PRIVATE libcoro_rpc doctest Threads::Threads)
 target_compile_definitions(test_rpc PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(test_rpc PRIVATE STRUCT_PACK_USE_INT16_SIZE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 add_custom_command(
