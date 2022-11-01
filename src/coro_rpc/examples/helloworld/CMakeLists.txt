@@ -1,5 +1,4 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 #########################################################################################
 # Example: Use coro_rpc with CMake target libcoro_rpc
 # After CMake 3.15, all dependencies handled automatically when linking CMake target
