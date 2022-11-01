@@ -316,7 +316,7 @@ void task(std::string_view input, std::string_view output) {
   /*---start task ---*/
   for (size_t i = 0; i < config.thread_cnt; ++i) {
     thrds.emplace_back([&iocs, i] {
-      asio::executor_work_guard guard(iocs[i].get_executor());
+      asio::io_context::work work(iocs[i]);
       iocs[i].run();
     });
   }
