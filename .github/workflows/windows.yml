@@ -1,0 +1,47 @@
+name: Windows Server 2022
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        mode: [ Release, Debug ]
+        #arch: [ Win32, x64, ARM, ARM64 ]
+        arch: [ Win32, x64 ]
+        ssl: [ON, OFF]
+
+    env:
+      CXX: cl.exe
+      CC: cl.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: SetUp Vcpkg
+        uses: friendlyanon/setup-vcpkg@v1
+        with: { committish: 63aa65e65b9d2c08772ea15d25fb8fdb0d32e557 }
+
+      - name: test env
+        run: echo $VCPKG_ROOT
+
+      - name: Generate Project
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=struct_pack -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build struct_pack
+        run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
+
+      - name: Test struct_pack
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 2
