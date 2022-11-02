@@ -135,6 +135,11 @@ concept tuple = requires(Type tuple) {
 };
 
 template <typename Type>
+concept tuple_size = requires(Type tuple) {
+  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+};
+
+template <typename Type>
 concept array = requires(Type arr) {
   arr.size();
   std::tuple_size<std::remove_cvref_t<Type>>{};
@@ -218,6 +223,9 @@ template <typename T>
 consteval std::size_t member_count() {
   if constexpr (struct_pack::members_count < T >> 0) {
     return struct_pack::members_count<T>;
+  }
+  else if constexpr (tuple_size<T>) {
+    return std::tuple_size<T>::value;
   }
   else {
     return member_count_impl<T>();
