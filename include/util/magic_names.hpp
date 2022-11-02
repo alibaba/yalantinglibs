@@ -23,7 +23,6 @@
 
 #include <array>
 #include <cstddef>
-#include <ranges>
 #include <span>
 #include <string_view>
 #include <type_traits>

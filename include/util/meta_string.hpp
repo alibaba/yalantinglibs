@@ -95,8 +95,7 @@ struct meta_string {
 
   constexpr bool contains(std::string_view str) const noexcept {
     return str.size() <= size()
-               ? !std::ranges::search(begin(), end(), str.begin(), str.end())
-                      .empty()
+               ? std::search(begin(), end(), str.begin(), str.end()) != end()
                : false;
   }
 };
@@ -131,12 +130,11 @@ template <meta_string S, meta_string Delim>
 struct split_of {
   static constexpr auto value = [] {
     constexpr std::string_view view{S};
-    constexpr auto group_count =
-        std::ranges::count_if(S,
-                              [](char c) {
-                                return Delim.contains(c);
-                              }) +
-        1;
+    constexpr auto group_count = std::count_if(S.begin(), S.end(),
+                                               [](char c) {
+                                                 return Delim.contains(c);
+                                               }) +
+                                 1;
     std::array<std::string_view, group_count> result{};
 
     auto iter = result.begin();
@@ -204,11 +202,11 @@ struct remove_char {
 
     constexpr auto metadata = [] {
       auto result = S;
-      auto removal_range = std::ranges::remove(result, C);
+      auto removal_end = std::remove(result.begin(), result.end(), C);
 
-      return removal_metadata{.result{std::move(result)},
-                              .actual_size{static_cast<std::size_t>(
-                                  removal_range.begin() - result.begin())}};
+      return removal_metadata{
+          .result{std::move(result)},
+          .actual_size{static_cast<std::size_t>(removal_end - result.begin())}};
     }();
 
     meta_string<metadata.actual_size> result;
