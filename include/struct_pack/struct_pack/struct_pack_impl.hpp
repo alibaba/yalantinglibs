@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "md5_constexpr.hpp"
+#include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
               "only support little endian now");
@@ -129,6 +130,12 @@ concept struct_pack_buffer = trivially_copyable_container<T>
                              && struct_pack_byte<typename T::value_type>;
 // clang-format on
 
+template <typename Type>
+concept trivial_copy_tuple = requires(Type tuple) {
+  tuplet::get<0>(tuple);
+  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+};
+
 template <class U>
 constexpr auto get_types(U &&t) {
   using T = std::remove_cvref_t<U>;
@@ -139,6 +146,9 @@ constexpr auto get_types(U &&t) {
     return std::tuple<T>{};
   }
   else if constexpr (tuple<T>) {
+    return T{};
+  }
+  else if constexpr (trivial_copy_tuple<T>) {
     return T{};
   }
   else if constexpr (pair<T>) {
@@ -191,7 +201,8 @@ enum class type_id {
   variant_t,
   expected_t,
   // monostate, or void
-  monostate_t = 253,
+  monostate_t = 250,
+  trivial_class_t = 253,
   // struct type
   aggregate_class_t = 254,
   // end helper
@@ -387,6 +398,9 @@ consteval type_id get_type_id() {
   else if constexpr (tuple<T> || pair<T>) {
     return type_id::aggregate_class_t;
   }
+  else if constexpr (trivial_copy_tuple<T>) {
+    return type_id::trivial_class_t;
+  }
   else if constexpr (std::is_class_v<T>) {
     static_assert(std::is_aggregate_v<std::remove_cvref_t<T>>);
     return type_id::aggregate_class_t;
@@ -432,7 +446,8 @@ consteval decltype(auto) get_type_literal() {
                     "variant or in expected's value_type");
     }
   }
-  if constexpr (id == type_id::aggregate_class_t) {
+  if constexpr (id == type_id::aggregate_class_t ||
+                id == type_id::trivial_class_t) {
     using Args = decltype(get_types(Arg{}));
     constexpr auto body = get_type_literal<Args, Arg>(
         std::make_index_sequence<std::tuple_size_v<Args>>());
@@ -567,9 +582,13 @@ consteval int check_if_compatible_element_exist() {
   return ret;
 }
 
-template <typename... Args>
+template <typename T, typename... Args>
 consteval uint32_t get_types_code_impl() {
-  constexpr auto str = get_types_literal<std::remove_cvref_t<Args>...>();
+  constexpr auto id = get_type_id<T>();
+  constexpr auto id_of_T_str = string_literal<char, 1>{{static_cast<char>(id)}};
+
+  constexpr auto str =
+      id_of_T_str + get_types_literal<std::remove_cvref_t<Args>...>();
   constexpr auto ret =
       check_if_compatible_element_exist<0, std::remove_cvref_t<Args>...>();
   // ret == 0 -> unexist_compatible_element
@@ -590,7 +609,8 @@ consteval int check_if_compatible_element_exist(std::index_sequence<I...>) {
 
 template <typename T, size_t... I>
 consteval uint32_t get_types_code(std::index_sequence<I...>) {
-  return get_types_code_impl<std::tuple_element_t<I, T>...>();
+  return get_types_code_impl<std::remove_cvref_t<T>,
+                             std::tuple_element_t<I, T>...>();
 }
 
 [[noreturn]] STRUCT_PACK_INLINE void exit_container_size() {
