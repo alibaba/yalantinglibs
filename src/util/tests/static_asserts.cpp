@@ -64,10 +64,8 @@ constexpr void meta_string_tests() {
 
   constexpr meta_string str_by_char_sequence{'C', 'H', 'A', 'R'};
   constexpr std::string_view fragment1{"This meta_string object"};
-  constexpr std::string_view fragment2{
-      "Tis constructed by several spans"};
-  constexpr std::string_view fragment3{
-      "which are concatenated together."};
+  constexpr std::string_view fragment2{"Tis constructed by several spans"};
+  constexpr std::string_view fragment3{"which are concatenated together."};
   constexpr meta_string str_by_spans{
       std::span<const char, fragment1.size()>{fragment1},
       std::span<const char, fragment2.size()>{fragment2},
