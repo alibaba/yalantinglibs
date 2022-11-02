@@ -611,4 +611,12 @@ struct tuple_element<I, tuplet::pair<A, B>> {
   using type = std::conditional_t<I == 0, A, B>;
 };
 }  // namespace std
+
+namespace tuplet {
+template <class T>
+constexpr size_t tuple_size_v = std::tuple_size<T>::value;
+
+template <size_t I, class T>
+using tuple_element_t = typename std::tuple_element<I, T>::type;
+}  // namespace tuplet
 #endif
