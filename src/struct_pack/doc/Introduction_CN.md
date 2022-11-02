@@ -1,5 +1,7 @@
 # struct_pack简介
 
+[TOC]
+
 - [struct_pack简介](#struct_pack简介)
   - [序列化](#序列化)
     - [基本用法](#基本用法)
