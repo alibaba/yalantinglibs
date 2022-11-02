@@ -30,14 +30,12 @@ TEST_CASE("test varadic param") {
   using namespace coro_rpc;
   using namespace std;
 
-  bool started = true;
-  std::thread thrd([&started] {
+  std::thread thrd([] {
     coro_rpc::register_handler<test_func>();
     try {
       auto ec = server->start();
       REQUIRE(ec == std::errc{});
     } catch (const std::exception& e) {
-      started = false;
       std::cerr << "test varadic param Exception: " << e.what() << "\n";
     }
   });
