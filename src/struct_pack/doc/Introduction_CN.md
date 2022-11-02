@@ -1,5 +1,5 @@
-# 目录
-- [目录](#目录)
+# struct_pack简介
+
 - [struct_pack简介](#struct_pack简介)
   - [序列化](#序列化)
     - [基本用法](#基本用法)
@@ -23,8 +23,6 @@
   - [为什么struct_pack更快？](#为什么struct_pack更快)
   - [附录](#附录)
     - [测试代码](#测试代码)
-
-# struct_pack简介
 
 struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。用户无需定义任何DSL，宏或模板代码，struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。
 
