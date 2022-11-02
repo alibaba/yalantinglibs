@@ -16,6 +16,7 @@
 #pragma once
 
 #include "function_name.h"
+#include "magic_names.hpp"
 #include "struct_pack/struct_pack/md5_constexpr.hpp"
 
 namespace coro_rpc {

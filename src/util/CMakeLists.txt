@@ -1,1 +1,1 @@
-message("The \"util\" project does not need a main project.")
+message(STATUS "The \"util\" project does not need a main project.")

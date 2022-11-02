@@ -1,1 +1,1 @@
-message("The \"util\" project does not need a benchmark.")
+message(STATUS "The \"util\" project does not need a benchmark.")
