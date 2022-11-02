@@ -21,7 +21,7 @@ constexpr void meta_string_tests() {
   static_assert(meta_string{""}.empty());
   static_assert(str1.front() == 'H');
   static_assert(str1.back() == '!');
-  static_assert(std::string_view{str1.begin(), str1.end()} == "Hello world!");
+  static_assert(std::string_view{str1.c_str(), str1.size()} == "Hello world!");
   static_assert(std::string_view{str1.c_str()} == "Hello world!");
   static_assert(meta_string{"nice to meet you!"}.contains("meet"));
 
@@ -54,10 +54,10 @@ constexpr void meta_string_tests() {
   static_assert(no_123456_nop == meta_string{"null"});
 
   // Tests of arbitrary constructions.
-  constexpr meta_string str_by_subobjects{
-      meta_string{"This meta_string object"},
-      meta_string{"is constructed by several subobjects"},
-      meta_string{"which are concatenated together."}};
+  constexpr meta_string subobject1{"This meta_string object"};
+  constexpr meta_string subobject2{"is constructed by several subobjects"};
+  constexpr meta_string subobject3{"which are concatenated together."};
+  constexpr meta_string str_by_subobjects{subobject1, subobject2, subobject3};
 
   constexpr meta_string str_by_literal{
       "This meta_string object is constructed by a string literal."};
@@ -114,7 +114,7 @@ constexpr void magic_names_tests() {
   static_assert(
       qualified_name_of_v<&func_template<int, double>> ==
       meta_string{"refvalue::tests::ns1::ns2::ns3::func_template<int,double>"});
-#else
+#elif !defined(__APPLE__)
   static_assert(
       qualified_name_of_v<&func_template<int, double>> ==
       meta_string{
@@ -131,7 +131,7 @@ constexpr void magic_names_tests() {
 #ifdef _MSC_VER
   static_assert(name_of_v<&func_template<int, double>> ==
                 meta_string{"func_template<int,double>"});
-#else
+#elif !defined(__APPLE__)
   static_assert(name_of_v<&func_template<int, double>> ==
                 meta_string{"func_template<int, double>"});
 #endif
