@@ -518,14 +518,18 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 }
 TEST_CASE("testing read body timeout") {
   register_handler<hello>();
+  std::promise<void> server_p;
   std::promise<void> p;
-  std::thread thd = std::thread([&p]() {
+  std::thread thd = std::thread([&server_p, &p]() {
     asio::io_context io_context;
     tcp::acceptor acceptor(io_context);
     tcp::socket socket(io_context);
-    init_acceptor(acceptor, 8801);
-    auto ec = accept(acceptor, socket);
-    REQUIRE(!ec);
+    auto ec = init_acceptor(acceptor, 8801);
+    REQUIRE(ec == std::errc{});
+    easylog::info("server started");
+    server_p.set_value();
+    auto ec2 = accept(acceptor, socket);
+    REQUIRE(!ec2);
     std::array<std::byte, RPC_HEAD_LEN> head;
     read(socket, asio::buffer(head, RPC_HEAD_LEN));
     rpc_header header;
@@ -544,6 +548,9 @@ TEST_CASE("testing read body timeout") {
                                buf.size() - RESPONSE_HEADER_LEN));
     p.set_value();
   });
+  easylog::info("wait for server start");
+  server_p.get_future().wait();
+  easylog::info("custom server started");
   coro_rpc_client client;
   auto ec_lazy = client.connect("127.0.0.1", "8801"s, 5ms);
   auto ec = syncAwait(ec_lazy);

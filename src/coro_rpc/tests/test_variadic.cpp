@@ -30,26 +30,16 @@ TEST_CASE("test varadic param") {
   using namespace coro_rpc;
   using namespace std;
 
-  bool started = true;
-  std::thread thrd([&started] {
+  std::thread thrd([] {
     coro_rpc::register_handler<test_func>();
     try {
       auto ec = server->start();
       REQUIRE(ec == std::errc{});
     } catch (const std::exception& e) {
-      started = false;
       std::cerr << "test varadic param Exception: " << e.what() << "\n";
     }
   });
-  if (!started) {
-    coro_rpc::easylog::error("test varadic param server failed");
-    // TODO: will check why exception happened.
-    thrd.join();
-    return;
-  }
-  REQUIRE(started);
-  // while (server->port() == 0) std::this_thread::yield();
-  // int i = 0;
+  REQUIRE_MESSAGE(server->wait_for_start(3s), "server start timeout");
   coro_rpc_client client;
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
