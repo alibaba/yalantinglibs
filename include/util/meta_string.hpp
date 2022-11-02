@@ -115,8 +115,8 @@ meta_string(Ts...) -> meta_string<sizeof...(Ts)>;
 template <std::size_t M, std::size_t N>
 constexpr auto operator<=>(const meta_string<M>& left,
                            const meta_string<N>& right) noexcept {
-  return static_cast<std::string_view>(left) <=>
-         static_cast<std::string_view>(right);
+  return static_cast<std::string_view>(left).compare(
+             std::string_view{right}) <=> 0;
 }
 
 template <std::size_t M, std::size_t N>

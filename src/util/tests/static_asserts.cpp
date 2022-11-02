@@ -2,11 +2,11 @@
 #include <util/meta_string.hpp>
 
 namespace refvalue::tests {
-void meta_string_tests() {
+constexpr void meta_string_tests() {
   // Fundamental tests.
-  static constexpr meta_string str1{"Hello world!"};
-  static constexpr meta_string str2{"Hello world!"};
-  static constexpr meta_string str3{"Hello WORLD!"};
+  constexpr meta_string str1{"Hello world!"};
+  constexpr meta_string str2{"Hello world!"};
+  constexpr meta_string str3{"Hello WORLD!"};
 
   static_assert(str1 == str2);
   static_assert(str2 != str3);
@@ -26,16 +26,16 @@ void meta_string_tests() {
   static_assert(meta_string{"nice to meet you!"}.contains("meet"));
 
   // Tests of remove_char, remove, split_of and split.
-  static constexpr meta_string str4{"Poor guy,eligible,incognito"};
-  static constexpr meta_string str5{"Poor guy{abc}eligible{abc}incognito"};
-  static constexpr meta_string str6{
+  constexpr meta_string str4{"Poor guy,eligible,incognito"};
+  constexpr meta_string str5{"Poor guy{abc}eligible{abc}incognito"};
+  constexpr meta_string str6{
       "12345, Mean, Bad, 12345, Naughty, 12345, Possy, Fancy"};
-  static constexpr meta_string str7{"null"};
-  static constexpr auto no_letter_o = remove_char_v<str4, 'o'>;
-  static constexpr auto no_12345 = remove_v<str6, "12345">;
-  static constexpr auto split_of_space_and_comma = split_of_v<str4, ", ">;
-  static constexpr auto split_by_string = split_v<str5, "{abc}">;
-  static constexpr auto no_123456_nop = remove_v<str7, "123456">;
+  constexpr meta_string str7{"null"};
+  constexpr auto no_letter_o = remove_char_v<str4, 'o'>;
+  constexpr auto no_12345 = remove_v<str6, "12345">;
+  constexpr auto split_of_space_and_comma = split_of_v<str4, ", ">;
+  constexpr auto split_by_string = split_v<str5, "{abc}">;
+  constexpr auto no_123456_nop = remove_v<str7, "123456">;
 
   static_assert(no_letter_o == meta_string{"Pr guy,eligible,incgnit"});
   static_assert(no_12345 ==
@@ -54,21 +54,21 @@ void meta_string_tests() {
   static_assert(no_123456_nop == meta_string{"null"});
 
   // Tests of arbitrary constructions.
-  static constexpr meta_string str_by_subobjects{
+  constexpr meta_string str_by_subobjects{
       meta_string{"This meta_string object"},
       meta_string{"is constructed by several subobjects"},
       meta_string{"which are concatenated together."}};
 
-  static constexpr meta_string str_by_literal{
+  constexpr meta_string str_by_literal{
       "This meta_string object is constructed by a string literal."};
 
-  static constexpr meta_string str_by_char_sequence{'C', 'H', 'A', 'R'};
-  static constexpr std::string_view fragment1{"This meta_string object"};
-  static constexpr std::string_view fragment2{
+  constexpr meta_string str_by_char_sequence{'C', 'H', 'A', 'R'};
+  constexpr std::string_view fragment1{"This meta_string object"};
+  constexpr std::string_view fragment2{
       "Tis constructed by several spans"};
-  static constexpr std::string_view fragment3{
+  constexpr std::string_view fragment3{
       "which are concatenated together."};
-  static constexpr meta_string str_by_spans{
+  constexpr meta_string str_by_spans{
       std::span<const char, fragment1.size()>{fragment1},
       std::span<const char, fragment2.size()>{fragment2},
       std::span<const char, fragment3.size()>{fragment3}};
@@ -97,7 +97,7 @@ static int func_template(T, signed char, float*, U) {
   return {};
 }
 
-void magic_names_tests() {
+constexpr void magic_names_tests() {
   // Fundamental tests.
   static_assert(qualified_name_of_v<&top_fun_1> ==
                 meta_string{"refvalue::tests::top_fun_1"});
