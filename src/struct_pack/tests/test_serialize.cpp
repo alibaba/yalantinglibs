@@ -464,6 +464,9 @@ TEST_CASE("testing std::array") {
 TEST_CASE("test_trivial_copy_tuple") {
   tuplet::tuple tp = tuplet::make_tuple(1, 2);
 
+  constexpr auto count = detail::member_count<decltype(tp)>();
+  static_assert(count == 2);
+
   static_assert(std::is_same_v<decltype(tp), tuplet::tuple<int, int>>);
   static_assert(!std::is_same_v<decltype(tp), std::tuple<int, int>>);
 
@@ -485,6 +488,23 @@ TEST_CASE("test_trivial_copy_tuple") {
   auto ec2 = deserialize_to(tp1, buf);
   CHECK(ec2 == std::errc{});
   CHECK(tp == tp1);
+}
+
+struct test_obj {
+  int id;
+  std::string str;
+  tuplet::tuple<int, std::string> tp;
+  int d;
+};
+
+TEST_CASE("test_trivial_copy_tuple in an object") {
+  test_obj obj{1, "hello", {2, "tuple"}, 3};
+  auto buf = serialize(obj);
+
+  test_obj obj1;
+  auto ec = deserialize_to(obj1, buf);
+  CHECK(ec == std::errc{});
+  CHECK(obj.tp == obj1.tp);
 }
 
 void test_c_array(auto &v) {

@@ -7,8 +7,8 @@
 #include <type_traits>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 #include "struct_pack/struct_pack/reflection.h"
+#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 
 using namespace std::string_view_literals;
 
@@ -196,7 +196,8 @@ TEST_CASE("Check tuplet::apply with tuplet::tie") {
 TEST_CASE("Test that for_each works") {
   std::string str;
 
-  tuplet::tuple tup{"Hello world!", std::string("This is a test..."), 10, 20, 3.141592};
+  tuplet::tuple tup{"Hello world!", std::string("This is a test..."), 10, 20,
+                    3.141592};
   static_assert(struct_pack::detail::trivial_copy_tuple<decltype(tup)>);
   static_assert(std::is_aggregate_v<decltype(tup)>);
   static_assert(std::is_trivially_copyable_v<tuplet::tuple<int, double>>);
@@ -204,7 +205,8 @@ TEST_CASE("Test that for_each works") {
   static_assert(!std::is_trivially_copyable_v<std::tuple<int, double>>);
   static_assert(!struct_pack::detail::tuple<decltype(tup)>);
   static_assert(tuplet::tuple_size_v<decltype(tup)>);
-  static_assert(std::is_same_v<tuplet::tuple_element_t<1, decltype(tup)>, std::string>);
+  static_assert(
+      std::is_same_v<tuplet::tuple_element_t<1, decltype(tup)>, std::string>);
 
   tup.for_each([&]<typename T>(T& value) {
     if constexpr (std::is_fundamental_v<T>) {
