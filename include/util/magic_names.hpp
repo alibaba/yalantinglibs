@@ -39,7 +39,8 @@ struct parse_qualified_function_name {
 #if defined(_MSC_VER) && defined(_WIN64)
   static constexpr std::array calling_conventions{"__cdecl", "__vectorcall"};
 #elif defined(_MSC_VER) && defined(_WIN32)
-  static constexpr std::array calling_conventions{"__cdecl", "__stdcall", "__fastcall", "__vectorcall", "__thiscall"};
+  static constexpr std::array calling_conventions{
+      "__cdecl", "__stdcall", "__fastcall", "__vectorcall", "__thiscall"};
 #elif defined(__clang__) || defined(__GNUC__)
   static constexpr std::array<const char*, 0> calling_conventions{};
 #else
