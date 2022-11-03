@@ -15,7 +15,7 @@ using namespace std::string_view_literals;
 template <typename Tuple, size_t... Indexes, typename Fn>
 constexpr decltype(auto) tuple_for_each_impl(
     Tuple&& tuple, std::integer_sequence<size_t, Indexes...>, Fn&& fn) {
-  (fn(get<Indexes>(std::forward<Tuple>(tuple))), ...);
+  (fn(tuplet::get<Indexes>(std::forward<Tuple>(tuple))), ...);
 
   return std::forward<Fn>(fn);
 }
