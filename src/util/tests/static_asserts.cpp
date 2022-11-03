@@ -113,12 +113,12 @@ constexpr void magic_names_tests() {
 #ifdef _MSC_VER
   static_assert(
       qualified_name_of_v<&func_template<int, double>> ==
-      meta_string{"refvalue::tests::ns1::ns2::ns3::func_template<int,double>"});
+      meta_string{"refvalue::tests::ns1::ns2::ns3::func_template"});
 #elif !defined(__APPLE__)
   static_assert(
       qualified_name_of_v<&func_template<int, double>> ==
       meta_string{
-          "refvalue::tests::ns1::ns2::ns3::func_template<int, double>"});
+          "refvalue::tests::ns1::ns2::ns3::func_template"});
 #endif
 
   static_assert(name_of_v<&top_fun_1> == meta_string{"top_fun_1"});
@@ -130,10 +130,10 @@ constexpr void magic_names_tests() {
 
 #ifdef _MSC_VER
   static_assert(name_of_v<&func_template<int, double>> ==
-                meta_string{"func_template<int,double>"});
+                meta_string{"func_template"});
 #elif !defined(__APPLE__)
   static_assert(name_of_v<&func_template<int, double>> ==
-                meta_string{"func_template<int, double>"});
+                meta_string{"func_template"});
 #endif
 }
 }  // namespace ns1::ns2::ns3

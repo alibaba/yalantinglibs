@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <span>
@@ -29,17 +30,19 @@
 #include <utility>
 
 #include "meta_string.hpp"
+#include "string_finder.hpp"
 
 namespace refvalue {
 namespace detail {
-#ifdef _MSC_VER
 template <meta_string Signature>
-struct parse_msvc_qualified_function_name {
-#ifdef _WIN64
+struct parse_qualified_function_name {
+#if defined(_MSC_VER) && defined(_WIN64)
   static constexpr std::array calling_conventions{"__cdecl", "__vectorcall"};
-#elif _WIN32
+#elif defined(_MSC_VER) && defined(_WIN32)
   static constexpr std::array calling_conventions{"__cdecl", "__stdcall",
                                                   "__fastcall", "__vectorcall"};
+#elif defined(__clang__) || defined(__GNUC__)
+  static constexpr std::array<const char*, 0> calling_conventions{};
 #else
 #error "Unsupported platform."
 #endif
@@ -65,13 +68,15 @@ struct parse_msvc_qualified_function_name {
     return result;
   }();
 
-  static constexpr std::size_t find_significant_index(std::string_view keyword,
-                                                      std::size_t index = 0,
-                                                      std::size_t depth = 0) {
-    for (auto i = view.find(keyword, index); i < view.size();
-         i = view.find(keyword, i + keyword.size())) {
+  template <find_mode_type Mode>
+  static constexpr std::size_t find_significant_index(
+      std::string_view keyword, std::size_t depth = 0,
+      std::size_t index = string_finder_traits<Mode>::default_index) {
+    for (auto i = uniform_find_string<Mode>(view, keyword, index);
+         i < view.size(); i = uniform_find_string<Mode>(
+                              view, keyword, skip_keyword<Mode>(i, keyword))) {
       if (depths[i] == depth) {
-        return i + keyword.size();
+        return skip_keyword<Mode>(i, keyword);
       }
     }
 
@@ -79,14 +84,21 @@ struct parse_msvc_qualified_function_name {
   }
 
   static constexpr auto value = [] {
-    // Finds the start index of the function name past the top-level calling
-    // convention token (e.g. __cdecl/__vectorcall for x64,
-    // __stdcall/__cdecl/__fastcall/__vectorcall for x86)
+    // When using MSVC, Finds the start index of the function name past the
+    // top-level calling convention token (e.g. __cdecl/__vectorcall for x64,
+    // __stdcall/__cdecl/__fastcall/__vectorcall for x86).
+    // When using GCC or Clang, returns zero immediately.
     constexpr auto start_index = []() -> std::size_t {
-      for (auto&& item : calling_conventions) {
-        if (auto index = find_significant_index(item);
-            index != std::string_view::npos) {
-          return index + 1;
+      // Workaround for failing compilation on x86-64 Clang assertions trunk.
+      // std::array<T, 0>::begin() and std::array<T, 0>::end() are not
+      // odr-usable.
+      if constexpr (!calling_conventions.empty()) {
+        for (auto&& item : calling_conventions) {
+          if (auto index =
+                  find_significant_index<find_mode_type::full_match>(item);
+              index != std::string_view::npos) {
+            return index + 1;
+          }
         }
       }
 
@@ -94,11 +106,20 @@ struct parse_msvc_qualified_function_name {
     }();
 
     // Finds the end index of the function name before the top-level left
-    // brace indicating the start of the arguments.
-    constexpr auto end_index = find_significant_index("(", start_index, 1);
+    // "<" or "(" indicating the start of the template or function arguments.
+    constexpr auto function_name_start_index = std::max(
+        start_index,
+        find_significant_index<find_mode_type::full_match_reverse>("::"));
+
+    constexpr auto end_index = find_significant_index<find_mode_type::any_of>(
+        "<(", 1,
+        function_name_start_index != std::string_view::npos
+            ? function_name_start_index
+            : start_index);
+
     constexpr auto final_size = end_index != std::string_view::npos
-                                    ? end_index - 1 - start_index
-                                    : std::string_view::npos;
+                                    ? (end_index - 1 - start_index)
+                                    : (view.size() - start_index);
 
     return meta_string{std::span<const char, final_size>{
         view.data() + start_index, final_size}};
@@ -106,14 +127,13 @@ struct parse_msvc_qualified_function_name {
 };
 
 template <meta_string Signature>
-inline constexpr auto&& parse_msvc_qualified_function_name_v =
-    parse_msvc_qualified_function_name<Signature>::value;
-#endif
+inline constexpr auto&& parse_qualified_function_name_v =
+    parse_qualified_function_name<Signature>::value;
 
 template <auto Func>
 consteval auto qualified_name_of_impl() noexcept {
 #ifdef _MSC_VER
-  constexpr std::size_t suffix_size{0};
+  constexpr std::size_t suffix_size{16};
   constexpr std::string_view keyword{
       "refvalue::detail::qualified_name_of_impl<"};
   constexpr std::string_view signature{__FUNCSIG__};
@@ -141,12 +161,8 @@ consteval auto qualified_name_of_impl() noexcept {
   constexpr meta_string result{std::span<const char, intermediate.size()>{
       intermediate.data(), intermediate.size()}};
 
-#ifdef _MSC_VER
-  return remove_v<detail::parse_msvc_qualified_function_name_v<result>,
+  return remove_v<detail::parse_qualified_function_name_v<result>,
                   anonymous_namespace>;
-#else
-  return remove_v<result, anonymous_namespace>;
-#endif
 }
 }  // namespace detail
 
