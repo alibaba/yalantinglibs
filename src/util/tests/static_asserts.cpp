@@ -110,33 +110,12 @@ constexpr void magic_names_tests() {
       meta_string{
           "refvalue::tests::ns1::ns2::ns3::some_class<int>::class_fun2"});
 
-  //Workaround: we don't supported template function's rpc now.
-  //#ifdef _MSC_VER
-  //  static_assert(
-  //      qualified_name_of_v<&func_template<int, double>> ==
-  //      meta_string{"refvalue::tests::ns1::ns2::ns3::func_template<int,double>"});
-  //#elif !defined(__APPLE__)
-  //  static_assert(
-  //      qualified_name_of_v<&func_template<int, double>> ==
-  //      meta_string{
-  //          "refvalue::tests::ns1::ns2::ns3::func_template<int, double>"});
-  //#endif
-
   static_assert(name_of_v<&top_fun_1> == meta_string{"top_fun_1"});
   static_assert(name_of_v<&ns1::ns2::ns3::fun1> == meta_string{"fun1"});
   static_assert(name_of_v<&some_class<int>::class_fun1> ==
                 meta_string{"some_class<int>::class_fun1"});
   static_assert(name_of_v<&some_class<int>::class_fun2> ==
                 meta_string{"some_class<int>::class_fun2"});
-                
-  //Workaround: we don't supported template function's rpc now.
-  //#ifdef _MSC_VER
-  //  static_assert(name_of_v<&func_template<int, double>> ==
-  //                meta_string{"func_template<int,double>"});
-  //#elif !defined(__APPLE__)
-  //  static_assert(name_of_v<&func_template<int, double>> ==
-  //                meta_string{"func_template<int, double>"});
-  //#endif
 }
 }  // namespace ns1::ns2::ns3
 }  // namespace refvalue::tests
