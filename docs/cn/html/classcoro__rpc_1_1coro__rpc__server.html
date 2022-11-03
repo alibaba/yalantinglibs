@@ -1,0 +1,358 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=9"/>
+    <meta name="generator" content="Doxygen 1.9.6"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- BEGIN opengraph metadata -->
+    <meta property="og:title" content="Doxygen Awesome"/>
+    <meta property="og:image"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta property="og:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/"/>
+    <!-- END opengraph metadata -->
+    <!-- BEGIN twitter metadata -->
+    <meta name="twitter:image:src"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta name="twitter:title" content="Doxygen Awesome"/>
+    <meta name="twitter:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <!-- END twitter metadata -->
+    <title>yaLanTingLibs: coro_rpc::coro_rpc_server类 参考</title>
+    <link href="tabs.css" rel="stylesheet" type="text/css"/>
+    <link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+    <script type="text/javascript" src="jquery.js"></script>
+    <script type="text/javascript" src="dynsections.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-interactive-toc.js"></script>
+    <script type="text/javascript" src="toggle-alternative-theme.js"></script>
+    <script type="text/javascript">
+        DoxygenAwesomeFragmentCopyButton.init()
+        DoxygenAwesomeDarkModeToggle.init()
+        DoxygenAwesomeParagraphLink.init()
+        DoxygenAwesomeInteractiveToc.init()
+    </script>
+    <link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+    <link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+    <link href="doxygen.css" rel="stylesheet" type="text/css"/>
+    <link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/alibaba/yalantinglibs" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40"
+         style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2"
+              fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z"
+              fill="currentColor" class="octo-body"></path>
+    </svg>
+</a>
+<style>.github-corner:hover .octo-arm {
+    animation: octocat-wave 560ms ease-in-out
+}
+@keyframes octocat-wave {
+    0%, 100% {
+        transform: rotate(0)
+    }
+    20%, 60% {
+        transform: rotate(-25deg)
+    }
+    40%, 80% {
+        transform: rotate(10deg)
+    }
+}
+@media (max-width: 500px) {
+    .github-corner:hover .octo-arm {
+        animation: none
+    }
+    .github-corner .octo-arm {
+        animation: octocat-wave 560ms ease-in-out
+    }
+}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+    <div id="titlearea">
+        <table cellspacing="0" cellpadding="0">
+            <tbody>
+            <tr style="height: 56px;">
+                <td id="projectalign" style="padding-left: 0.5em;">
+                    <div id="projectname">yaLanTingLibs
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- end header part -->
+<!-- 制作者 Doxygen 1.9.6 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+var searchBox = new SearchBox("searchBox", "search/",'.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(function() {
+  initMenu('',true,false,'search.php','搜索');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */
+</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(document).ready(function(){initNavTree('classcoro__rpc_1_1coro__rpc__server.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<div id="MSearchResults">
+<div class="SRPage">
+<div id="SRIndex">
+<div id="SRResults"></div>
+<div class="SRStatus" id="Loading">载入中...</div>
+<div class="SRStatus" id="Searching">搜索中...</div>
+<div class="SRStatus" id="NoMatches">未找到</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public 成员函数</a> &#124;
+<a href="classcoro__rpc_1_1coro__rpc__server-members.html">所有成员列表</a>  </div>
+  <div class="headertitle"><div class="title">coro_rpc::coro_rpc_server类 参考<div class="ingroups"><a class="el" href="group__coro__rpc.html">coro_rpc</a></div></div></div>
+</div><!--header-->
+<div class="contents">
+
+<p><code>#include &lt;<a class="el" href="coro__rpc__doc_8hpp_source.html">coro_rpc_doc.hpp</a>&gt;</code></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
+Public 成员函数</h2></td></tr>
+<tr class="memitem:a239cfff96a74f7a116e13488c96ca04e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#a239cfff96a74f7a116e13488c96ca04e">coro_rpc_server</a> (size_t thread_num, unsigned short <a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#aaab3b690174ae7b41527390fea1b9fdd">port</a>, size_t conn_timeout_seconds=0)</td></tr>
+<tr class="separator:a239cfff96a74f7a116e13488c96ca04e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a53b27b1f85d037598380c341a94d4258"><td class="memItemLeft" align="right" valign="top">async_simple::coro::Lazy&lt; std::errc &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#a53b27b1f85d037598380c341a94d4258">async_start</a> () noexcept</td></tr>
+<tr class="separator:a53b27b1f85d037598380c341a94d4258"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a67045fe885161a847f11f632f5f43b04"><td class="memItemLeft" align="right" valign="top">std::errc&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#a67045fe885161a847f11f632f5f43b04">start</a> ()</td></tr>
+<tr class="separator:a67045fe885161a847f11f632f5f43b04"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6d91727edc8e384abc7447fdf05ce4ef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#a6d91727edc8e384abc7447fdf05ce4ef">stop</a> ()</td></tr>
+<tr class="separator:a6d91727edc8e384abc7447fdf05ce4ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaab3b690174ae7b41527390fea1b9fdd"><td class="memItemLeft" align="right" valign="top">uint16_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#aaab3b690174ae7b41527390fea1b9fdd">port</a> ()</td></tr>
+<tr class="separator:aaab3b690174ae7b41527390fea1b9fdd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a933c1f054a4108b91d863a4d42fb3475"><td class="memItemLeft" align="right" valign="top">auto &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html#a933c1f054a4108b91d863a4d42fb3475">get_executor</a> ()</td></tr>
+<tr class="separator:a933c1f054a4108b91d863a4d42fb3475"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga92c5157b4aa930d8445cc9b2d8b87a98"><td class="memTemplParams" colspan="2">template&lt;auto first, auto... func&gt; </td></tr>
+<tr class="memitem:ga92c5157b4aa930d8445cc9b2d8b87a98"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="group__coro__rpc.html#ga92c5157b4aa930d8445cc9b2d8b87a98">register_handler</a> ()</td></tr>
+<tr class="separator:ga92c5157b4aa930d8445cc9b2d8b87a98"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gae821b3d1ebbd3c090ff8566afb5fe31c"><td class="memTemplParams" colspan="2">template&lt;auto first, auto... func&gt; </td></tr>
+<tr class="memitem:gae821b3d1ebbd3c090ff8566afb5fe31c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="group__coro__rpc.html#gae821b3d1ebbd3c090ff8566afb5fe31c">register_handler</a> (class_type_t&lt; decltype(first)&gt; *self)</td></tr>
+<tr class="separator:gae821b3d1ebbd3c090ff8566afb5fe31c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">详细描述</h2>
+<div class="textblock"><p>RPC Server 服务端使用示例</p>
+<div class="fragment"><div class="line"> {c++}</div>
+<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">inline</span> std::string hello_coro_rpc() { <span class="keywordflow">return</span> <span class="stringliteral">&quot;hello coro_rpc&quot;</span>; }</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main(){</div>
+<div class="line">  coro_rpc_server server(std::thread::hardware_concurrency(), 9000);</div>
+<div class="line">  server.register_handler&lt;hello_coro_rpc&gt;();</div>
+<div class="line">  server.start();</div>
+<div class="line">}</div>
+</div><!-- fragment --> </div><h2 class="groupheader">构造及析构函数说明</h2>
+<a id="a239cfff96a74f7a116e13488c96ca04e" name="a239cfff96a74f7a116e13488c96ca04e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a239cfff96a74f7a116e13488c96ca04e">&#9670;&#160;</a></span>coro_rpc_server()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">coro_rpc::coro_rpc_server::coro_rpc_server </td>
+          <td>(</td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>thread_num</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned short&#160;</td>
+          <td class="paramname"><em>port</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>conn_timeout_seconds</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>构造coro_rpc_server，需要传入线程数、端口和连接超时时间。服务端会根据线程数启动 io_context以充分利用多核的能力。 服务端在启动的时候会监听该端口 如果conn_timeout_seconds大于0的时候，服务端会启动心跳检查，默认不开启。 当超过conn_timeout_seconds时间内没有收到来自客户端的消息时，服务端会主动关闭客户端连接。</p>
+<dl class="params"><dt>参数</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">thread_num</td><td></td></tr>
+    <tr><td class="paramname">port</td><td></td></tr>
+    <tr><td class="paramname">conn_timeout_seconds</td><td></td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<h2 class="groupheader">成员函数说明</h2>
+<a id="a53b27b1f85d037598380c341a94d4258" name="a53b27b1f85d037598380c341a94d4258"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53b27b1f85d037598380c341a94d4258">&#9670;&#160;</a></span>async_start()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">async_simple::coro::Lazy&lt; std::errc &gt; coro_rpc::coro_rpc_server::async_start </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>启动server(协程)，server启动后会监听端口等待连接到来，如果端口被占用会返回错误码； 如果accept失败也会返回错误码；客户端连接到来之后启动会话。</p>
+<dl class="section return"><dt>返回</dt><dd>正常启动返回空，否则返回错误码 </dd></dl>
+
+</div>
+</div>
+<a id="a933c1f054a4108b91d863a4d42fb3475" name="a933c1f054a4108b91d863a4d42fb3475"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a933c1f054a4108b91d863a4d42fb3475">&#9670;&#160;</a></span>get_executor()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">auto &amp; coro_rpc::coro_rpc_server::get_executor </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>获取内部的调度器 </p><dl class="section return"><dt>返回</dt><dd></dd></dl>
+
+</div>
+</div>
+<a id="aaab3b690174ae7b41527390fea1b9fdd" name="aaab3b690174ae7b41527390fea1b9fdd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaab3b690174ae7b41527390fea1b9fdd">&#9670;&#160;</a></span>port()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t coro_rpc::coro_rpc_server::port </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>获取监听的端口 </p><dl class="section return"><dt>返回</dt><dd>端口号 </dd></dl>
+
+</div>
+</div>
+<a id="a67045fe885161a847f11f632f5f43b04" name="a67045fe885161a847f11f632f5f43b04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a67045fe885161a847f11f632f5f43b04">&#9670;&#160;</a></span>start()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::errc coro_rpc::coro_rpc_server::start </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>阻塞方式启动server, 如果端口被占用将会返回非空的错误码</p>
+<dl class="section return"><dt>返回</dt><dd>正常启动返回空，否则返回错误码 </dd></dl>
+
+</div>
+</div>
+<a id="a6d91727edc8e384abc7447fdf05ce4ef" name="a6d91727edc8e384abc7447fdf05ce4ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d91727edc8e384abc7447fdf05ce4ef">&#9670;&#160;</a></span>stop()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void coro_rpc::coro_rpc_server::stop </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>停止server，阻塞等待直到server停止； </p>
+
+</div>
+</div>
+<hr/>该类的文档由以下文件生成:<ul>
+<li>src/coro_rpc/doc/<a class="el" href="coro__rpc__doc_8hpp_source.html">coro_rpc_doc.hpp</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>coro_rpc</b></li><li class="navelem"><a class="el" href="classcoro__rpc_1_1coro__rpc__server.html">coro_rpc_server</a></li>
+    <li class="footer">制作者 <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.6 </li>
+  </ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=9"/>
+    <meta name="generator" content="Doxygen 1.9.6"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- BEGIN opengraph metadata -->
+    <meta property="og:title" content="Doxygen Awesome"/>
+    <meta property="og:image"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta property="og:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/"/>
+    <!-- END opengraph metadata -->
+    <!-- BEGIN twitter metadata -->
+    <meta name="twitter:image:src"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta name="twitter:title" content="Doxygen Awesome"/>
+    <meta name="twitter:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <!-- END twitter metadata -->
+    <title>yaLanTingLibs: struct_pack简介</title>
+    <link href="tabs.css" rel="stylesheet" type="text/css"/>
+    <link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+    <script type="text/javascript" src="jquery.js"></script>
+    <script type="text/javascript" src="dynsections.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-interactive-toc.js"></script>
+    <script type="text/javascript" src="toggle-alternative-theme.js"></script>
+    <script type="text/javascript">
+        DoxygenAwesomeFragmentCopyButton.init()
+        DoxygenAwesomeDarkModeToggle.init()
+        DoxygenAwesomeParagraphLink.init()
+        DoxygenAwesomeInteractiveToc.init()
+    </script>
+    <link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+    <link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+    <link href="doxygen.css" rel="stylesheet" type="text/css"/>
+    <link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/alibaba/yalantinglibs" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40"
+         style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2"
+              fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z"
+              fill="currentColor" class="octo-body"></path>
+    </svg>
+</a>
+<style>.github-corner:hover .octo-arm {
+    animation: octocat-wave 560ms ease-in-out
+}
+@keyframes octocat-wave {
+    0%, 100% {
+        transform: rotate(0)
+    }
+    20%, 60% {
+        transform: rotate(-25deg)
+    }
+    40%, 80% {
+        transform: rotate(10deg)
+    }
+}
+@media (max-width: 500px) {
+    .github-corner:hover .octo-arm {
+        animation: none
+    }
+    .github-corner .octo-arm {
+        animation: octocat-wave 560ms ease-in-out
+    }
+}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+    <div id="titlearea">
+        <table cellspacing="0" cellpadding="0">
+            <tbody>
+            <tr style="height: 56px;">
+                <td id="projectalign" style="padding-left: 0.5em;">
+                    <div id="projectname">yaLanTingLibs
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- end header part -->
+<!-- 制作者 Doxygen 1.9.6 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+var searchBox = new SearchBox("searchBox", "search/",'.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(function() {
+  initMenu('',true,false,'search.php','搜索');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */
+</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(document).ready(function(){initNavTree('md_src_struct_pack_doc__introduction__c_n.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<div id="MSearchResults">
+<div class="SRPage">
+<div id="SRIndex">
+<div id="SRResults"></div>
+<div class="SRStatus" id="Loading">载入中...</div>
+<div class="SRStatus" id="Searching">搜索中...</div>
+<div class="SRStatus" id="NoMatches">未找到</div>
+</div>
+</div>
+</div>
+</div>
+
+<div><div class="header">
+  <div class="headertitle"><div class="title">struct_pack简介 </div></div>
+</div><!--header-->
+<div class="contents">
+<div class="textblock"><p>struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。用户无需定义任何DSL，宏或模板代码，struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。</p>
+<p>下面，我们以一个简单的对象为例展示struc_pack的基本用法。</p>
+<div class="fragment"><div class="line"><span class="keyword">struct </span>person {</div>
+<div class="line">  int64_t id;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  <span class="keywordtype">int</span> age;</div>
+<div class="line">  <span class="keywordtype">double</span> salary;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line">person person1{.id = 1, .name = <span class="stringliteral">&quot;hello struct pack&quot;</span>, .age = 20, .salary = 1024.42};</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md19"></a>
+序列化</h1>
+<h2><a class="anchor" id="autotoc_md20"></a>
+基本用法</h2>
+<div class="fragment"><div class="line"><span class="comment">// 1行代码序列化</span></div>
+<div class="line">std::vector&lt;char&gt; result = <a class="code hl_function" href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">struct_pack::serialize</a>(person1);</div>
+<div class="ttc" id="agroup__struct__pack_html_gad34a823ffadd0838074f98740575fde1"><div class="ttname"><a href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">struct_pack::serialize</a></div><div class="ttdeci">STRUCT_PACK_INLINE Buffer serialize(const Args &amp;...args)</div></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md21"></a>
+指定序列化返回的容器类型</h2>
+<div class="fragment"><div class="line"><span class="keyword">auto</span> result = struct_pack::serialize&lt;std::string&gt;(person1);</div>
+<div class="line"><span class="comment">//指定使用std::string而不是std::vector&lt;char&gt;</span></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md22"></a>
+将序列化结果保存到已有的容器尾部</h2>
+<div class="fragment"><div class="line">std::string result=<span class="stringliteral">&quot;The next line is struct_pack serialize result.\n&quot;</span>;</div>
+<div class="line"><span class="keyword">auto</span> result = <a class="code hl_function" href="group__struct__pack.html#ga92624d7e3ef856ab2b39c5e028fb2843">struct_pack::serialize_to</a>(result,person1);</div>
+<div class="line"><span class="comment">//将结果保存到已有的容器尾部。</span></div>
+<div class="ttc" id="agroup__struct__pack_html_ga92624d7e3ef856ab2b39c5e028fb2843"><div class="ttname"><a href="group__struct__pack.html#ga92624d7e3ef856ab2b39c5e028fb2843">struct_pack::serialize_to</a></div><div class="ttdeci">std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len, const Args &amp;...args) noexcept</div></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md23"></a>
+将序列化结果保存到指针指向的内存中。</h2>
+<div class="fragment"><div class="line"><span class="keyword">auto</span> sz=struct_pack::get_needed_siarray(person1);</div>
+<div class="line">std::unique_ptr array=std::make_unique&lt;char[]&gt;(sz);</div>
+<div class="line"><span class="keyword">auto</span> result = <a class="code hl_function" href="group__struct__pack.html#ga92624d7e3ef856ab2b39c5e028fb2843">struct_pack::serialize_to</a>(array.get(),sz,person1);</div>
+<div class="line"><span class="comment">//将结果保存指针指向的内存中。</span></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md24"></a>
+多参数序列化</h2>
+<div class="fragment"><div class="line"><span class="keyword">auto</span> result=<a class="code hl_function" href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">struct_pack::serialize</a>(person1.id, person1.name, person1.age, person1.salary);</div>
+<div class="line"><span class="comment">//serialize as std::tuple&lt;int64_t, std::string, int, double&gt;</span></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md25"></a>
+将序列化结果保存到输出流</h2>
+<div class="fragment"><div class="line">std::ofstream writer(<span class="stringliteral">&quot;struct_pack_demo.data&quot;</span>,</div>
+<div class="line">                      std::ofstream::out | std::ofstream::binary);</div>
+<div class="line"><a class="code hl_function" href="group__struct__pack.html#ga92624d7e3ef856ab2b39c5e028fb2843">struct_pack::serialize_to</a>(writer, person1);</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md26"></a>
+反序列化</h1>
+<h2><a class="anchor" id="autotoc_md27"></a>
+基本用法</h2>
+<div class="fragment"><div class="line"><span class="comment">// 1行代码反序列化</span></div>
+<div class="line"><span class="keyword">auto</span> person2 = deserialize&lt;person&gt;(buffer);</div>
+<div class="line">assert(person2); <span class="comment">// person2.has_value() == true</span></div>
+<div class="line">assert(person2.value()==person1);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md28"></a>
+从指针指向的内存中反序列化</h2>
+<div class="fragment"><div class="line"><span class="comment">// 从指针指向的内存中反序列化</span></div>
+<div class="line"><span class="keyword">auto</span> person2 = deserialize&lt;person&gt;(buffer.data(),buffer.size());</div>
+<div class="line">assert(person2); <span class="comment">//person2.has_value() == true</span></div>
+<div class="line">assert(person2.value()==person1);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md29"></a>
+反序列化（将结果保存到已有的对象中）</h2>
+<div class="fragment"><div class="line"><span class="comment">// 将结果保存到已有的对象中</span></div>
+<div class="line">person person2;</div>
+<div class="line">std::errc ec = deserialize_to(person2, buffer);</div>
+<div class="line">assert(ec==std::errc{}); <span class="comment">// person2.has_value() == true</span></div>
+<div class="line">assert(person2==person1);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md30"></a>
+多参数反序列化</h2>
+<div class="fragment"><div class="line"><span class="keyword">auto</span> person2 = deserialize&lt;int64_t,std::string,int,double&gt;(buffer);</div>
+<div class="line">assert(person2); <span class="comment">// person2.has_value() == true</span></div>
+<div class="line"><span class="keyword">auto</span> &amp;&amp;[id,name,age,salary]=person2.value();</div>
+<div class="line">assert(person1.id==<span class="keywordtype">id</span>);</div>
+<div class="line">assert(person1.name==name);</div>
+<div class="line">assert(person1.age==age);</div>
+<div class="line">assert(person1.salary==salary);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md31"></a>
+从输入流中反序列化</h2>
+<div class="fragment"><div class="line">std::ifstream ifs(<span class="stringliteral">&quot;struct_pack_demo.data&quot;</span>,</div>
+<div class="line">                  std::ofstream::in | std::ofstream::binary);</div>
+<div class="line"><span class="keyword">auto</span> person2 = struct_pack::deserialize&lt;person&gt;(ifs);</div>
+<div class="line">assert(person2 == person1);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md32"></a>
+部分反序列化</h2>
+<p>有时候只想反序列化对象的某个特定的字段而不是全部，这时候就可以用部分反序列化功能了，这样可以避免全部反序列化，大幅提升效率。</p>
+<div class="fragment"><div class="line"><span class="comment">// 只反序列化person的第2个字段</span></div>
+<div class="line"><span class="keyword">auto</span> name = get_field&lt;person, 1&gt;(buffer.data(), buffer.size());</div>
+<div class="line">assert(name); <span class="comment">// name.has_value() == true</span></div>
+<div class="line">assert(name.value() == <span class="stringliteral">&quot;hello struct pack&quot;</span>);</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md33"></a>
+支持序列化所有的STL容器、自定义容器和optional</h1>
+<p>含各种容器的对象序列化</p>
+<div class="fragment"><div class="line"><span class="keyword">enum class</span> Color { red, black, white };</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>complicated_object {</div>
+<div class="line">  Color color;</div>
+<div class="line">  <span class="keywordtype">int</span> a;</div>
+<div class="line">  std::string b;</div>
+<div class="line">  std::vector&lt;person&gt; c;</div>
+<div class="line">  std::list&lt;std::string&gt; d;</div>
+<div class="line">  std::deque&lt;int&gt; e;</div>
+<div class="line">  std::map&lt;int, person&gt; f;</div>
+<div class="line">  std::multimap&lt;int, person&gt; g;</div>
+<div class="line">  std::set&lt;std::string&gt; h;</div>
+<div class="line">  std::multiset&lt;int&gt; i;</div>
+<div class="line">  std::unordered_map&lt;int, person&gt; j;</div>
+<div class="line">  std::unordered_multimap&lt;int, int&gt; k;</div>
+<div class="line">  std::array&lt;person, 2&gt; m;</div>
+<div class="line">  person n[2];</div>
+<div class="line">  std::pair&lt;std::string, person&gt; o;</div>
+<div class="line">  std::optional&lt;int&gt; p;</div>
+<div class="line">  std::unique_ptr&lt;int&gt; q;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>nested_object {</div>
+<div class="line">  <span class="keywordtype">int</span> id;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  person p;</div>
+<div class="line">  complicated_object o;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line">nested_object nested{.id = 2, .name = <span class="stringliteral">&quot;tom&quot;</span>, .p = {20, <span class="stringliteral">&quot;tom&quot;</span>}, .o = {}};</div>
+<div class="line"><span class="keyword">auto</span> buffer = <a class="code hl_function" href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">serialize</a>(nested);</div>
+<div class="line"><span class="keyword">auto</span> nested2 = deserialize(buffer.data(), buffer.size());</div>
+<div class="line">assert(nested2)</div>
+<div class="line">assert(nested2==nested1);</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md34"></a>
+自定义功能支持</h1>
+<h2><a class="anchor" id="autotoc_md35"></a>
+自定义类型的序列化</h2>
+<p>struct_pack支持序列化自定义类型。</p>
+<div class="fragment"><div class="line"><span class="comment">// We should not inherit from stl container, this case just for testing.</span></div>
+<div class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Key, <span class="keyword">typename</span> Value&gt;</div>
+<div class="line"><span class="keyword">struct </span>my_map : <span class="keyword">public</span> std::map&lt;Key, Value&gt; {};</div>
+<div class="line"> </div>
+<div class="line">my_map&lt;int, std::string&gt; map1;</div>
+<div class="line">map1.emplace(1, <span class="stringliteral">&quot;tom&quot;</span>);</div>
+<div class="line">map1.emplace(2, <span class="stringliteral">&quot;jerry&quot;</span>);</div>
+<div class="line"> </div>
+<div class="line">absl::flat_hash_map&lt;int, std::string&gt; map2 =</div>
+<div class="line">    {{1, <span class="stringliteral">&quot;huey&quot;</span>}, {2, <span class="stringliteral">&quot;dewey&quot;</span>}, {3, <span class="stringliteral">&quot;louie&quot;</span>},};</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">auto</span> buffer1 = <a class="code hl_function" href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">serialize</a>(map1);</div>
+<div class="line"><span class="keyword">auto</span> buffer2 = <a class="code hl_function" href="group__struct__pack.html#gad34a823ffadd0838074f98740575fde1">serialize</a>(map2);</div>
+</div><!-- fragment --><p>关于自定义类型的更多细节，请见：</p>
+<p><a href="https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html">struct_pack的类型系统</a></p>
+<h2><a class="anchor" id="autotoc_md36"></a>
+序列化到自定义的输出流</h2>
+<p>该流需要满足以下约束条件：</p>
+<div class="fragment"><div class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</div>
+<div class="line"><span class="keyword">concept </span>writer_t = <span class="keyword">requires</span>(T t) {</div>
+<div class="line">  t.write((<span class="keyword">const</span> <span class="keywordtype">char</span> *)<span class="keyword">nullptr</span>, std::size_t{}); <span class="comment">//向流输出一段数据。返回值应能隐式转换为bool值，出错时应返回false。</span></div>
+<div class="line">};</div>
+</div><!-- fragment --><p>例如：</p>
+<div class="fragment"><div class="line"><span class="comment">//一个简单的输出流，对fwrite函数进行封装。</span></div>
+<div class="line"><span class="keyword">struct </span>fwrite_stream {</div>
+<div class="line">  FILE* file;</div>
+<div class="line">  <span class="keywordtype">bool</span> write(<span class="keyword">const</span> <span class="keywordtype">char</span>* data, std::size_t sz) {</div>
+<div class="line">    <span class="keywordflow">return</span> fwrite(data, sz, 1, file) == 1;</div>
+<div class="line">  }</div>
+<div class="line">  fwrite_stream(<span class="keyword">const</span> <span class="keywordtype">char</span>* file_name) : file(fopen(file_name, <span class="stringliteral">&quot;wb&quot;</span>)) {}</div>
+<div class="line">  ~fwrite_stream() { fclose(file); }</div>
+<div class="line">};</div>
+<div class="line"><span class="comment">// ...</span></div>
+<div class="line">fwrite_stream writer(<span class="stringliteral">&quot;struct_pack_demo.data&quot;</span>);</div>
+<div class="line"><a class="code hl_function" href="group__struct__pack.html#ga92624d7e3ef856ab2b39c5e028fb2843">struct_pack::serialize_to</a>(writer, person);</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md37"></a>
+从自定义的输入流中反序列化</h2>
+<p>该流需要满足以下约束条件：</p>
+<div class="fragment"><div class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</div>
+<div class="line"><span class="keyword">concept </span>reader_t = <span class="keyword">requires</span>(T t) {</div>
+<div class="line">  t.read((<span class="keywordtype">char</span> *)<span class="keyword">nullptr</span>, std::size_t{}); <span class="comment">//从流中读取一段数据。返回值应能隐式转换为bool值，出错时应返回false。</span></div>
+<div class="line">  t.ignore(std::size_t{}); <span class="comment">//从流中跳过一段数据。返回值应能隐式转换为bool值，出错时应返回false。</span></div>
+<div class="line">  t.tellg(); <span class="comment">//返回一个无符号整数，代表当前的绝对读取位置</span></div>
+<div class="line">};</div>
+</div><!-- fragment --><p>此外，如果该流还额外支持<code>read_view</code>函数，则支持对string_view的零拷贝优化。 </p><div class="fragment"><div class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</div>
+<div class="line"><span class="keyword">concept </span>view_reader_t = reader_t&lt;T&gt; &amp;&amp; <span class="keyword">requires</span>(T t) {</div>
+<div class="line">  { t.read_view(std::size_t{}) } -&gt; std::convertible_to&lt;const char *&gt;;</div>
+<div class="line">  <span class="comment">//从流中读取一段视图（零拷贝读取），返回值为该视图指向的起始位置，出错时应返回空指针。</span></div>
+<div class="line">};</div>
+</div><!-- fragment --><p>示例代码如下所示：</p>
+<div class="fragment"><div class="line"><span class="comment">//一个简单的输入流，对fread函数进行封装。</span></div>
+<div class="line"><span class="keyword">struct </span>fread_stream {</div>
+<div class="line">  FILE* file;</div>
+<div class="line">  <span class="keywordtype">bool</span> read(<span class="keywordtype">char</span>* data, std::size_t sz) {</div>
+<div class="line">    <span class="keywordflow">return</span> fread(data, sz, 1, file) == 1;</div>
+<div class="line">  }</div>
+<div class="line">  <span class="keywordtype">bool</span> ignore(std::size_t sz) { <span class="keywordflow">return</span> fseek(file, sz, SEEK_CUR) == 0; }</div>
+<div class="line">  std::size_t tellg() {</div>
+<div class="line">    <span class="comment">//if you worry about ftell performance, just use an variable to record it.</span></div>
+<div class="line">    <span class="keywordflow">return</span> ftell(file);</div>
+<div class="line">  }</div>
+<div class="line">  fread_stream(<span class="keyword">const</span> <span class="keywordtype">char</span>* file_name) : file(fopen(file_name, <span class="stringliteral">&quot;rb&quot;</span>)) {}</div>
+<div class="line">  ~fread_stream() { fclose(file); }</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">//...</span></div>
+<div class="line"> </div>
+<div class="line">fread_stream ifs(<span class="stringliteral">&quot;struct_pack_demo.data&quot;</span>);</div>
+<div class="line"><span class="keyword">auto</span> person2 = struct_pack::deserialize&lt;person&gt;(ifs);</div>
+<div class="line">assert(person2 == person);</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md38"></a>
+支持可变长编码：</h1>
+<div class="fragment"><div class="line">{</div>
+<div class="line">  std::vector&lt;struct_pack::var_int32_t&gt; vec={-1,0,1,2,3,4,5,6,7};</div>
+<div class="line">  <span class="keyword">auto</span> buffer = std::serialize(vec); <span class="comment">//zigzag+varint编码</span></div>
+<div class="line">}</div>
+<div class="line">{</div>
+<div class="line">  std::vector&lt;struct_pack::uint64_t&gt; vec={1,2,3,4,5,6,7,UINT64_MAX};</div>
+<div class="line">  <span class="keyword">auto</span> buffer = std::serialize(vec); <span class="comment">//varint编码</span></div>
+<div class="line">}</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md39"></a>
+benchmark</h1>
+<h2><a class="anchor" id="autotoc_md40"></a>
+测试方法</h2>
+<p>待序列化的对象已经预先初始化，存储序列化结果的内存已经预先分配。对每个测试用例。我们运行一百万次序列化/反序列化，对结果取平均值。</p>
+<h2><a class="anchor" id="autotoc_md41"></a>
+测试对象</h2>
+<ol type="1">
+<li>含有整形、浮点型和字符串类型person对象</li>
+</ol>
+<div class="fragment"><div class="line"><span class="keyword">struct </span>person {</div>
+<div class="line">  int64_t id;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  <span class="keywordtype">int</span> age;</div>
+<div class="line">  <span class="keywordtype">double</span> salary;</div>
+<div class="line">};</div>
+</div><!-- fragment --><ol type="1">
+<li>含有十几个字段包括嵌套对象的复杂对象monster</li>
+</ol>
+<div class="fragment"><div class="line"><span class="keyword">enum</span> Color : uint8_t { Red, Green, Blue };</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>Vec3 {</div>
+<div class="line">  <span class="keywordtype">float</span> x;</div>
+<div class="line">  <span class="keywordtype">float</span> y;</div>
+<div class="line">  <span class="keywordtype">float</span> z;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>Weapon {</div>
+<div class="line">  std::string name;</div>
+<div class="line">  int16_t damage;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>Monster {</div>
+<div class="line">  Vec3 pos;</div>
+<div class="line">  int16_t mana;</div>
+<div class="line">  int16_t hp;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  std::vector&lt;uint8_t&gt; inventory;</div>
+<div class="line">  Color color;</div>
+<div class="line">  std::vector&lt;Weapon&gt; weapons;</div>
+<div class="line">  Weapon equipped;</div>
+<div class="line">  std::vector&lt;Vec3&gt; path;</div>
+<div class="line">};</div>
+</div><!-- fragment --><ol type="1">
+<li>含有4个int32的rect对象</li>
+</ol>
+<div class="fragment"><div class="line"><span class="keyword">struct </span>rect {</div>
+<div class="line">  int32_t x;</div>
+<div class="line">  int32_t y;</div>
+<div class="line">  int32_t width;</div>
+<div class="line">  int32_t height;</div>
+<div class="line">};</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md42"></a>
+测试环境</h2>
+<p>Compiler: Alibaba Clang 13</p>
+<p>CPU: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)</p>
+<h2><a class="anchor" id="autotoc_md43"></a>
+测试结果</h2>
+<div class="image">
+<img src="struct_pack_bench.png" alt=""/>
+</div>
+    <h1><a class="anchor" id="autotoc_md44"></a>
+向前/向后兼容性</h1>
+<p>当对象增加新的字段时，怎么保证兼容新旧对象的解析呢？当用户需要添加字段时，只需要在**新对象末尾** 增加新的 <code>struct_pack::compatible&lt;T&gt;</code> 字段即可。<br  />
+以person对象为例：</p>
+<div class="fragment"><div class="line"><span class="keyword">struct </span>person {</div>
+<div class="line">  <span class="keywordtype">int</span> age;</div>
+<div class="line">  std::string name;</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>person1 {</div>
+<div class="line">  <span class="keywordtype">int</span> age;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  struct_pack::compatible&lt;int32_t&gt; id;</div>
+<div class="line">  struct_pack::compatible&lt;bool&gt; maybe;</div>
+<div class="line">};</div>
+</div><!-- fragment --><p>struct_pack保证这两个类可以通过序列化和反序列化实现安全的相互转换，从而实现了向前/向后的兼容性。</p>
+<h1><a class="anchor" id="autotoc_md45"></a>
+为什么struct_pack更快？</h1>
+<ol type="1">
+<li>精简的类型信息，高效的类型校验。MD5计算在编译期完成，运行时只需要比较32bit的hash值是否相同即可。</li>
+<li>struct_pack是一个模板库，鼓励编译器积极的内联函数。</li>
+<li>0成本抽象，不会为用不到的特性付出运行时代价。</li>
+<li>struct_pack的内存布局更接近于C++结构体原始的内存布局，减少了序列化反序列化的工作量。</li>
+<li>编译期类型计算允许struct_pack根据不同的类型生成不同的代码。因此我们可以根据不同的类型的特点做优化。例如对于连续容器可以直接memcpy，对于string_view反序列化时可以采用零拷贝优化。</li>
+</ol>
+<h1><a class="anchor" id="autotoc_md46"></a>
+附录</h1>
+<h2><a class="anchor" id="autotoc_md47"></a>
+关于struct_pack类型系统</h2>
+<p><a href="https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html">struct_pack的类型系统</a></p>
+<h2><a class="anchor" id="autotoc_md48"></a>
+关于struct_pack的编码与布局</h2>
+<p><a href="https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-layout.html">struct_pack的编码与布局</a></p>
+<h2><a class="anchor" id="autotoc_md49"></a>
+测试代码</h2>
+<p>请见 <a href="https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/benchmark">benchmark.cpp</a> </p>
+</div></div><!-- contents -->
+</div><!-- PageDoc -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="footer">制作者 <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.6 </li>
+  </ul>
+</div>
+</body>
+</html>

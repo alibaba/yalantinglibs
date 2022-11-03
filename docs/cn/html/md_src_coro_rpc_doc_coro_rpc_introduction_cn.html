@@ -1,0 +1,496 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=9"/>
+    <meta name="generator" content="Doxygen 1.9.6"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- BEGIN opengraph metadata -->
+    <meta property="og:title" content="Doxygen Awesome"/>
+    <meta property="og:image"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta property="og:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/"/>
+    <!-- END opengraph metadata -->
+    <!-- BEGIN twitter metadata -->
+    <meta name="twitter:image:src"
+          content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452"/>
+    <meta name="twitter:title" content="Doxygen Awesome"/>
+    <meta name="twitter:description"
+          content="Custom CSS theme for doxygen html-documentation with lots of customization parameters."/>
+    <!-- END twitter metadata -->
+    <title>yaLanTingLibs: coro_rpc简介</title>
+    <link href="tabs.css" rel="stylesheet" type="text/css"/>
+    <link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+    <script type="text/javascript" src="jquery.js"></script>
+    <script type="text/javascript" src="dynsections.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+    <script type="text/javascript" src="doxygen-awesome-interactive-toc.js"></script>
+    <script type="text/javascript" src="toggle-alternative-theme.js"></script>
+    <script type="text/javascript">
+        DoxygenAwesomeFragmentCopyButton.init()
+        DoxygenAwesomeDarkModeToggle.init()
+        DoxygenAwesomeParagraphLink.init()
+        DoxygenAwesomeInteractiveToc.init()
+    </script>
+    <link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+    <link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+    <link href="doxygen.css" rel="stylesheet" type="text/css"/>
+    <link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/alibaba/yalantinglibs" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40"
+         style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2"
+              fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z"
+              fill="currentColor" class="octo-body"></path>
+    </svg>
+</a>
+<style>.github-corner:hover .octo-arm {
+    animation: octocat-wave 560ms ease-in-out
+}
+@keyframes octocat-wave {
+    0%, 100% {
+        transform: rotate(0)
+    }
+    20%, 60% {
+        transform: rotate(-25deg)
+    }
+    40%, 80% {
+        transform: rotate(10deg)
+    }
+}
+@media (max-width: 500px) {
+    .github-corner:hover .octo-arm {
+        animation: none
+    }
+    .github-corner .octo-arm {
+        animation: octocat-wave 560ms ease-in-out
+    }
+}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+    <div id="titlearea">
+        <table cellspacing="0" cellpadding="0">
+            <tbody>
+            <tr style="height: 56px;">
+                <td id="projectalign" style="padding-left: 0.5em;">
+                    <div id="projectname">yaLanTingLibs
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- end header part -->
+<!-- 制作者 Doxygen 1.9.6 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+var searchBox = new SearchBox("searchBox", "search/",'.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(function() {
+  initMenu('',true,false,'search.php','搜索');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */
+</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
+$(document).ready(function(){initNavTree('md_src_coro_rpc_doc_coro_rpc_introduction_cn.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<div id="MSearchResults">
+<div class="SRPage">
+<div id="SRIndex">
+<div id="SRResults"></div>
+<div class="SRStatus" id="Loading">载入中...</div>
+<div class="SRStatus" id="Searching">搜索中...</div>
+<div class="SRStatus" id="NoMatches">未找到</div>
+</div>
+</div>
+</div>
+</div>
+
+<div><div class="header">
+  <div class="headertitle"><div class="title">coro_rpc简介 </div></div>
+</div><!--header-->
+<div class="contents">
+<div class="textblock"><p>coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分) ，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。</p>
+<p>coro_rpc的设计理念是：以易用性为核心，回归rpc本质，让用户专注于业务逻辑而不是rpc框架细节，几行代码就可以完成rpc开发。 rpc的本质是什么？rpc的本质就是一个远程函数，除了rpc底层的网络IO之外，其它的就和普通函数一样。用户不需要关注rpc底层的网络IO、路由、序列化等细节，用户只需要专注于rpc函数的业务逻辑即可，这就是coro_rpc的设计理念, 正是基于这一设计理念，coro_rpc提供了非常简单易用的API给用户使用。通过一个例子来看看coro_rpc的易用性如何。</p>
+<h1><a class="anchor" id="autotoc_md1"></a>
+coro_rpc的易用性</h1>
+<h2><a class="anchor" id="autotoc_md2"></a>
+rpc_server端</h2>
+<p>1.定义rpc函数</p>
+<div class="fragment"><div class="line"><span class="comment">// rpc_service.hpp</span></div>
+<div class="line"><span class="keyword">inline</span> std::string echo(std::string str) { <span class="keywordflow">return</span> str; }</div>
+</div><!-- fragment --><p>2.注册rpc函数和启动server</p>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &quot;rpc_service.hpp&quot;</span></div>
+<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line"> </div>
+<div class="line">  <span class="comment">// 初始化服务器</span></div>
+<div class="line">  coro_rpc_server server(<span class="comment">/*thread_num =*/</span>10, <span class="comment">/*port =*/</span>9000);</div>
+<div class="line"> </div>
+<div class="line">  server.register_handler&lt;echo&gt;(); <span class="comment">// 注册rpc函数</span></div>
+<div class="line"> </div>
+<div class="line">  server.start(); <span class="comment">// 启动server并阻塞等待</span></div>
+<div class="line">}</div>
+</div><!-- fragment --><p>对于rpc服务端来说，用户只需要定义rpc函数再启动server即可，不需要关注其它细节，5，6行代码就可以提供一个rpc服务了，是不是很简单！再来看看client是怎么调用hello这个rpc服务的。 rpc_client端</p>
+<ol type="1">
+<li>连接服务端</li>
+<li>rpc调用</li>
+</ol>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &quot;rpc_service.hpp&quot;</span></div>
+<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_client.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line">Lazy&lt;void&gt; test_client() {</div>
+<div class="line">  coro_rpc_client client;</div>
+<div class="line">  <span class="keyword">co_await</span> client.connect(<span class="stringliteral">&quot;localhost&quot;</span>, <span class="comment">/*port =*/</span><span class="stringliteral">&quot;9000&quot;</span>);</div>
+<div class="line"> </div>
+<div class="line">  <span class="keyword">auto</span> r = <span class="keyword">co_await</span> client.call&lt;echo&gt;(<span class="stringliteral">&quot;hello coro_rpc&quot;</span>); <span class="comment">//传参数调用rpc函数</span></div>
+<div class="line">  std::cout &lt;&lt; r.result.value() &lt;&lt; <span class="stringliteral">&quot;\n&quot;</span>; <span class="comment">//will print &quot;hello coro_rpc&quot;</span></div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line">  syncAwait(test_client());</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>client调用rpc函数也同样简单，5，6行代码就可以实现rpc调用了。 就像调用本地函数一样调用远程rpc函数，在call里面输入函数名字和参数就可以实现远程调用了，非常简单。</p>
+<p>相信上面的这个简单的例子已经充分展示了coro_rpc的易用性和特点了，也体现了rpc的本质，即用户可以像调用本地函数那样调用远程函数，用户只需要关注rpc函数的业务逻辑即可。</p>
+<p>coro_rpc的接口易用性还体现在rpc函数几乎没有任何限制，你可以定义任意个数和任意类型参数的rpc函数, 参数的序列化和反序列化由rpc库自动完成，用户无需关心。</p>
+<h2><a class="anchor" id="autotoc_md3"></a>
+rpc函数支持任意参数</h2>
+<div class="fragment"><div class="line"><span class="comment">// rpc_service.h</span></div>
+<div class="line"><span class="comment">// 客户端只需要包含这个头文件即可，无需把rpc的定义暴露给客户端。</span></div>
+<div class="line"><span class="keywordtype">void</span> hello(){};</div>
+<div class="line"><span class="keywordtype">int</span> get_value(<span class="keywordtype">int</span> a, <span class="keywordtype">int</span> b){<span class="keywordflow">return</span> a + b;}</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>person {</div>
+<div class="line">  <span class="keywordtype">int</span> id;</div>
+<div class="line">  std::string name;</div>
+<div class="line">  <span class="keywordtype">int</span> age;</div>
+<div class="line">};</div>
+<div class="line">person get_person(person p, <span class="keywordtype">int</span> <span class="keywordtype">id</span>);</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span>dummy {</div>
+<div class="line">  std::string echo(std::string str) { <span class="keywordflow">return</span> str; }</div>
+<div class="line">};</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// rpc_service.cpp</span></div>
+<div class="line"><span class="preprocessor">#include &quot;rpc_service.h&quot;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> get_value(<span class="keywordtype">int</span> a, <span class="keywordtype">int</span> b){<span class="keywordflow">return</span> a + b;}</div>
+<div class="line"> </div>
+<div class="line">person get_person(person p, <span class="keywordtype">int</span> <span class="keywordtype">id</span>) {</div>
+<div class="line">  p.id = id;</div>
+<div class="line">  <span class="keywordflow">return</span> p;</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>server端</p>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &quot;rpc_service.h&quot;</span></div>
+<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line"> </div>
+<div class="line">  coro_rpc_server server(<span class="comment">/*thread_num =*/</span>10, <span class="comment">/*port =*/</span>9000);</div>
+<div class="line"> </div>
+<div class="line">  server.register_handler&lt;hello, get_value, get_person&gt;();<span class="comment">//注册任意参数类型的普通函数</span></div>
+<div class="line"> </div>
+<div class="line">  dummy d{};</div>
+<div class="line">  server.register_handler&lt;&amp;dummy::echo&gt;(&amp;d); <span class="comment">//注册成员函数</span></div>
+<div class="line"> </div>
+<div class="line">  server.start(); <span class="comment">// 启动server</span></div>
+<div class="line">}</div>
+</div><!-- fragment --><p>client端</p>
+<div class="fragment"><div class="line"><span class="preprocessor"># include &quot;rpc_service.h&quot;</span></div>
+<div class="line"><span class="preprocessor"># include &lt;coro_rpc/coro_rpc_client.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line">Lazy&lt;void&gt; test_client() {</div>
+<div class="line">  coro_rpc_client client;</div>
+<div class="line">  <span class="keyword">co_await</span> client.connect(<span class="stringliteral">&quot;localhost&quot;</span>, <span class="comment">/*port =*/</span><span class="stringliteral">&quot;9000&quot;</span>);</div>
+<div class="line"> </div>
+<div class="line">  <span class="comment">//RPC调用</span></div>
+<div class="line">  <span class="keyword">co_await</span> client.call&lt;hello&gt;();</div>
+<div class="line">  <span class="keyword">co_await</span> client.call&lt;get_value&gt;(1, 2);</div>
+<div class="line"> </div>
+<div class="line">  person p{};</div>
+<div class="line">  <span class="keyword">co_await</span> client.call&lt;get_person&gt;(p, <span class="comment">/*id =*/</span>1);</div>
+<div class="line"> </div>
+<div class="line">  <span class="keyword">auto</span> r = <span class="keyword">co_await</span> client.call&lt;&amp;dummy::echo&gt;(<span class="stringliteral">&quot;hello coro_rpc&quot;</span>);</div>
+<div class="line">  std::cout &lt;&lt; r.result.value() &lt;&lt; <span class="stringliteral">&quot;\n&quot;</span>; <span class="comment">//will print &quot;hello coro_rpc&quot;</span></div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line">  syncAwait(test_client());</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库<a href="https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html">struct_pack</a>实现自动的序列化和反序列化，用户无感知，省心省力。</p>
+<h1><a class="anchor" id="autotoc_md4"></a>
+和grpc、brpc比较易用性</h1>
+<h2><a class="anchor" id="autotoc_md5"></a>
+rpc易用性比较</h2>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">RPC   </th><th class="markdownTableHeadNone">是否需要定义DSL   </th><th class="markdownTableHeadNone">是否支持协程   </th><th class="markdownTableHeadNone">hello world例子代码行数   </th><th class="markdownTableHeadNone">依赖库   </th><th class="markdownTableHeadNone">是否header only    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">grpc   </td><td class="markdownTableBodyNone">Yes   </td><td class="markdownTableBodyNone">No   </td><td class="markdownTableBodyNone">70+ <a href="https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld">helloworld</a>   </td><td class="markdownTableBodyNone">16   </td><td class="markdownTableBodyNone">No    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">brpc   </td><td class="markdownTableBodyNone">Yes   </td><td class="markdownTableBodyNone">No   </td><td class="markdownTableBodyNone">40+ <a href="https://github.com/apache/incubator-brpc/tree/master/example/asynchronous_echo_c%2B%2B">helloworld</a>   </td><td class="markdownTableBodyNone">6   </td><td class="markdownTableBodyNone">No    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">coro_rpc   </td><td class="markdownTableBodyNone">No   </td><td class="markdownTableBodyNone">Yes   </td><td class="markdownTableBodyNone">9   </td><td class="markdownTableBodyNone">3   </td><td class="markdownTableBodyNone">Yes   </td></tr>
+</table>
+<h2><a class="anchor" id="autotoc_md6"></a>
+异步编程模型比较</h2>
+<p>异步回调 vs 协程 grpc异步回调</p>
+<div class="fragment"><div class="line"><span class="comment">//&lt;https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_callback_client.cc&gt;</span></div>
+<div class="line">std::string SayHello(<span class="keyword">const</span> std::string&amp; user) {</div>
+<div class="line">    <span class="comment">// Data we are sending to the server.</span></div>
+<div class="line">    HelloRequest request;</div>
+<div class="line">    request.set_name(user);</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Container for the data we expect from the server.</span></div>
+<div class="line">    HelloReply reply;</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Context for the client. It could be used to convey extra information to</span></div>
+<div class="line">    <span class="comment">// the server and/or tweak certain RPC behaviors.</span></div>
+<div class="line">    ClientContext context;</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// The actual RPC.</span></div>
+<div class="line">    std::mutex mu;</div>
+<div class="line">    std::condition_variable cv;</div>
+<div class="line">    <span class="keywordtype">bool</span> done = <span class="keyword">false</span>;</div>
+<div class="line">    Status status;</div>
+<div class="line">    stub_-&gt;async()-&gt;SayHello(&amp;context, &amp;request, &amp;reply,</div>
+<div class="line">                             [&amp;mu, &amp;cv, &amp;done, &amp;status](Status s) {</div>
+<div class="line">                               status = std::move(s);</div>
+<div class="line">                               std::lock_guard&lt;std::mutex&gt; lock(mu);</div>
+<div class="line">                               done = <span class="keyword">true</span>;</div>
+<div class="line">                               cv.notify_one();</div>
+<div class="line">                             });</div>
+<div class="line"> </div>
+<div class="line">    std::unique_lock&lt;std::mutex&gt; lock(mu);</div>
+<div class="line">    <span class="keywordflow">while</span> (!done) {</div>
+<div class="line">      cv.wait(lock);</div>
+<div class="line">    }</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Act upon its status.</span></div>
+<div class="line">    <span class="keywordflow">if</span> (status.ok()) {</div>
+<div class="line">      <span class="keywordflow">return</span> reply.message();</div>
+<div class="line">    } <span class="keywordflow">else</span> {</div>
+<div class="line">      std::cout &lt;&lt; status.error_code() &lt;&lt; <span class="stringliteral">&quot;: &quot;</span> &lt;&lt; status.error_message()</div>
+<div class="line">                &lt;&lt; std::endl;</div>
+<div class="line">      <span class="keywordflow">return</span> <span class="stringliteral">&quot;RPC failed&quot;</span>;</div>
+<div class="line">    }</div>
+<div class="line">  }</div>
+</div><!-- fragment --><div class="fragment"><div class="line">brpc异步回调</div>
+<div class="line"><span class="comment">// &lt;https://github.com/apache/incubator-brpc/blob/master/example/asynchronous_echo_c%2B%2B/client.cpp&gt;</span></div>
+<div class="line"><span class="keywordtype">void</span> HandleEchoResponse(</div>
+<div class="line">        brpc::Controller*cntl,</div>
+<div class="line">        example::EchoResponse* response) {</div>
+<div class="line">    <span class="comment">// std::unique_ptr makes sure cntl/response will be deleted before returning.</span></div>
+<div class="line">    std::unique_ptr&lt;brpc::Controller&gt; cntl_guard(cntl);</div>
+<div class="line">    std::unique_ptr&lt;example::EchoResponse&gt; response_guard(response);</div>
+<div class="line"> </div>
+<div class="line">    <span class="keywordflow">if</span> (cntl-&gt;Failed()) {</div>
+<div class="line">        LOG(WARNING) &lt;&lt; <span class="stringliteral">&quot;Fail to send EchoRequest, &quot;</span> &lt;&lt; cntl-&gt;ErrorText();</div>
+<div class="line">        <span class="keywordflow">return</span>;</div>
+<div class="line">    }</div>
+<div class="line">    LOG(INFO) &lt;&lt; <span class="stringliteral">&quot;Received response from &quot;</span> &lt;&lt; cntl-&gt;remote_side()</div>
+<div class="line">        &lt;&lt; <span class="stringliteral">&quot;: &quot;</span> &lt;&lt; response-&gt;message() &lt;&lt; <span class="stringliteral">&quot; (attached=&quot;</span></div>
+<div class="line">        &lt;&lt; cntl-&gt;response_attachment() &lt;&lt; <span class="stringliteral">&quot;)&quot;</span></div>
+<div class="line">        &lt;&lt; <span class="stringliteral">&quot; latency=&quot;</span> &lt;&lt; cntl-&gt;latency_us() &lt;&lt; <span class="stringliteral">&quot;us&quot;</span>;</div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line">example::EchoService_Stub stub(&amp;channel);</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Send a request and wait for the response every 1 second.</span></div>
+<div class="line">    <span class="keywordtype">int</span> log_id = 0;</div>
+<div class="line">    <span class="keywordflow">while</span> (!brpc::IsAskedToQuit()) {</div>
+<div class="line">        <span class="comment">// Since we are sending asynchronous RPC (`done&#39; is not NULL),</span></div>
+<div class="line">        <span class="comment">// these objects MUST remain valid until `done&#39; is called.</span></div>
+<div class="line">        <span class="comment">// As a result, we allocate these objects on heap</span></div>
+<div class="line">        example::EchoResponse* response = <span class="keyword">new</span> example::EchoResponse();</div>
+<div class="line">        brpc::Controller* cntl = <span class="keyword">new</span> brpc::Controller();</div>
+<div class="line"> </div>
+<div class="line">        <span class="comment">// Notice that you don&#39;t have to new request, which can be modified</span></div>
+<div class="line">        <span class="comment">// or destroyed just after stub.Echo is called.</span></div>
+<div class="line">        example::EchoRequest request;</div>
+<div class="line">        request.set_message(<span class="stringliteral">&quot;hello world&quot;</span>);</div>
+<div class="line"> </div>
+<div class="line">        cntl-&gt;set_log_id(log_id ++);  <span class="comment">// set by user</span></div>
+<div class="line">        <span class="keywordflow">if</span> (FLAGS_send_attachment) {</div>
+<div class="line">            <span class="comment">// Set attachment which is wired to network directly instead of </span></div>
+<div class="line">            <span class="comment">// being serialized into protobuf messages.</span></div>
+<div class="line">            cntl-&gt;request_attachment().append(<span class="stringliteral">&quot;foo&quot;</span>);</div>
+<div class="line">        }</div>
+<div class="line"> </div>
+<div class="line">        <span class="comment">// We use protobuf utility `NewCallback&#39; to create a closure object</span></div>
+<div class="line">        <span class="comment">// that will call our callback `HandleEchoResponse&#39;. This closure</span></div>
+<div class="line">        <span class="comment">// will automatically delete itself after being called once</span></div>
+<div class="line">        google::protobuf::Closure* done = brpc::NewCallback(</div>
+<div class="line">            &amp;HandleEchoResponse, cntl, response);</div>
+<div class="line">        stub.Echo(cntl, &amp;request, response, done);</div>
+<div class="line"> </div>
+<div class="line">        <span class="comment">// This is an asynchronous RPC, so we can only fetch the result</span></div>
+<div class="line">        <span class="comment">// inside the callback</span></div>
+<div class="line">        sleep(1);</div>
+<div class="line">    }</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>coro_rpc协程</p>
+<div class="fragment"><div class="line"><span class="preprocessor"># include &lt;coro_rpc/coro_rpc_client.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line">Lazy&lt;void&gt; say_hello(){</div>
+<div class="line">  coro_rpc_client client;</div>
+<div class="line">    <span class="keyword">co_await</span> client.connect(<span class="stringliteral">&quot;localhost&quot;</span>, <span class="comment">/*port =*/</span><span class="stringliteral">&quot;9000&quot;</span>);</div>
+<div class="line">  <span class="keywordflow">while</span> (<span class="keyword">true</span>){</div>
+<div class="line">    <span class="keyword">auto</span> r = <span class="keyword">co_await</span> client.call&lt;echo&gt;(<span class="stringliteral">&quot;hello coro_rpc&quot;</span>);</div>
+<div class="line">    assert(r.result.value() == <span class="stringliteral">&quot;hello coro_rpc&quot;</span>);</div>
+<div class="line">  }</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>coro_rpc的一大特色就是支持无栈协程，让用户以同步方式编写异步代码，简洁易懂！</p>
+<h1><a class="anchor" id="autotoc_md7"></a>
+coro_rpc更多特色</h1>
+<h2><a class="anchor" id="autotoc_md8"></a>
+同时支持实时任务和延时任务</h2>
+<p>前面展示的例子里没有看到如何将rpc函数的结果response到客户端，因为默认情况下coro_rpc框架会帮助用户自动的将rpc函数的结果自动序列化并发送到客户端，让用户完全无感知，只需要专注于业务逻辑。需要说明的是这种场景下，rpc函数的业务逻辑是在io线程中执行的，这适合对于实时性要求较高的场景下使用，缺点是会阻塞IO线程。如果用户不希望在io线程中去执行业务逻辑，而是放到线程或线程池中去执行并延迟发送消息该怎么做呢？</p>
+<p>coro_rpc已经考虑到了这个问题，coro_rpc认为rpc任务分为实时任务和延时的任务，实时任务在io线程中执行完成后立即发送给客户端，实时性最好，延时最低；延时任务则可以放到独立线程中执行，延时处理，在未来某个时刻再将结果发送给客户端；coro_rpc同时支持这两种任务。</p>
+<p>将之前实时任务改成延时任务</p>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;coro_rpc/connection.hpp&gt;</span></div>
+<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="comment">//实时任务，io线程中实时处理和发送结果</span></div>
+<div class="line">std::string echo(std::string str) { <span class="keywordflow">return</span> str; }</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">//延时任务，在另外的独立线程中处理并发送结果</span></div>
+<div class="line"><span class="keywordtype">void</span> delay_echo(coro_connection&lt;std::string&gt; conn, std::string str) {</div>
+<div class="line">  std::thread([conn, str]{</div>
+<div class="line">    conn.response_msg(str); <span class="comment">//在独立线程中发送rpc结果</span></div>
+<div class="line">  }).detach();</div>
+<div class="line">}</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md9"></a>
+服务端同时支持协程和异步回调</h2>
+<p>coro_rpc server推荐使用协程去开发，但同时也支持异步回调模式，用户如果不希望使用协程，则可以使用经典的异步回调模式。</p>
+<p>基于协程的rpc server</p>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="line">std::string hello() { <span class="keywordflow">return</span> <span class="stringliteral">&quot;hello coro_rpc&quot;</span>; }</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line">  coro_rpc_server server(<span class="comment">/*thread_num =*/</span>10, <span class="comment">/*port =*/</span>9000);</div>
+<div class="line">  server.register_handler&lt;hello&gt;();</div>
+<div class="line"> </div>
+<div class="line">  server.start();</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>基于异步回调的rpc server</p>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;coro_rpc/async_rpc_server.hpp&gt;</span></div>
+<div class="line">std::string hello() { <span class="keywordflow">return</span> <span class="stringliteral">&quot;hello coro_rpc&quot;</span>; }</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main() {</div>
+<div class="line">  async_rpc_server server(<span class="comment">/*thread_num =*/</span>10, <span class="comment">/*port =*/</span>9000);</div>
+<div class="line">  server.register_handler&lt;hello&gt;();</div>
+<div class="line">  server.start();</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>rpc调用编译期安全检查 coro_rpc会在调用的时候对参数的合法性做编译期检查，比如:</p>
+<div class="fragment"><div class="line"><span class="keyword">inline</span> std::string echo(std::string str) { <span class="keywordflow">return</span> str; }</div>
+</div><!-- fragment --><p>client调用rpc</p>
+<div class="fragment"><div class="line">client.call&lt;echo&gt;(42);<span class="comment">//参数不匹配，编译报错</span></div>
+<div class="line">client.call&lt;echo&gt;();<span class="comment">//缺少参数，编译报错</span></div>
+<div class="line">client.call&lt;echo&gt;(<span class="stringliteral">&quot;&quot;</span>, 0);<span class="comment">//多了参数，编译报错</span></div>
+<div class="line">client.call&lt;echo&gt;(<span class="stringliteral">&quot;hello, coro_rpc&quot;</span>);<span class="comment">//参数匹配，ok</span></div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md10"></a>
+benchmark</h1>
+<h2><a class="anchor" id="autotoc_md11"></a>
+测试环境</h2>
+<p>硬件： Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz 96核</p>
+<p>OS: Linux version 4.9.151-015.ali3000.alios7.x86_64</p>
+<p>编译器：Alibaba Clang13 C++20</p>
+<h2><a class="anchor" id="autotoc_md12"></a>
+测试case</h2>
+<p>客户端和服务端都在同一台机器上，使用不同连接数发送请求做echo测试。</p>
+<h3><a class="anchor" id="autotoc_md13"></a>
+极限qps测试</h3>
+<ol type="1">
+<li>通过pipline发送数据和接收数据，把cpu打满后得到最高qps <br  />
+ <img src="max_qps.png" alt="" class="inline" title="max_qps"/>    </li>
+</ol>
+<h3><a class="anchor" id="autotoc_md14"></a>
+ping-pong测试</h3>
+<ol type="1">
+<li>请求和响应完成之后再发下一次请求，测试该场景下的qps；</li>
+<li>测试连接数不断增多时qps的变化；</li>
+<li>测量ping-pong的平均延时 <br  />
+ <img src="pingpong_qps.png" alt="" class="inline" title="ping_pong_qps"/>     <img src="pingpong_time.png" alt="" class="inline" title="pingpong_time"/>    </li>
+</ol>
+<h3><a class="anchor" id="autotoc_md15"></a>
+长尾测试</h3>
+<ol type="1">
+<li>1慢请求(异步等待50ms)下qps和延时 <br  />
+ <img src="long_tail_qps.png" alt="" class="inline" title="long_tail_qps"/>     <img src="long_tail_time.png" alt="" class="inline" title="long_tail_time"/>    </li>
+</ol>
+<h2><a class="anchor" id="autotoc_md16"></a>
+benchmark备注</h2>
+<ol type="1">
+<li>grpc的qps始终不会超过10万，故没有放进来做性能比较；</li>
+<li>测试客户端统一用coro_rpc的压测客户端测试，压测效果较好，基本能把cpu打满。没有使用brpc测试客户端原因是：如果用brpc客户端压测，brpc的qps会降低一倍。</li>
+<li>brpc由于采用了连接复用，实际上的socket连接数并没有那么多(实际连接数为96)，coro_rpc的连接数是实际的连接数。</li>
+</ol>
+<h1><a class="anchor" id="autotoc_md17"></a>
+使用约束</h1>
+<ol type="1">
+<li>目前只支持小端，兼容大端的工作正在做；</li>
+<li>目前只支持C++，暂时还不支持跨语言；编译器要求能支持C++20(clang13, gcc10.2, msvc2022)；</li>
+<li>gcc如果在O3下出现链接失败，请开启选项-fno-tree-slp-vectorize以禁用该优化选项。 </li>
+</ol>
+</div></div><!-- contents -->
+</div><!-- PageDoc -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="footer">制作者 <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.6 </li>
+  </ul>
+</div>
+</body>
+</html>

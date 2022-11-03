@@ -1,0 +1,1 @@
+import{_ as s,c as n,o as e,a}from"./app.8a8ca21b.js";const y=JSON.parse('{"title":"Build Website","description":"","frontmatter":{},"headers":[],"relativePath":"README.md","lastUpdated":1676888337000}'),l={name:"README.md"},p=a("",19),o=[p];function c(t,i,d,r,C,A){return e(),n("div",null,o)}const g=s(l,[["render",c]]);export{y as __pageData,g as default};
