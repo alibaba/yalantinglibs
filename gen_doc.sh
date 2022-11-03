@@ -40,29 +40,8 @@ cp ../../../src/coro_rpc/doc/coro_rpc_introduction_cn.md coro-rpc-intro.md
 cp -r ../../guide/images .
 cp -r ../../guide/src .
 
-# cd "$ROOT_DIR" || exit 1
-cd "$ROOT_DIR"
+cd "$ROOT_DIR" || exit 1
 yarn docs:build
 doxygen Doxyfile
 doxygen Doxyfile_cn
 echo 'Generate Done!'
-
-function handle_style(){
-    echo "handle folder $1"
-    for file in `ls $1`
-    do
-        # fix bad flag in substitute command: '/'
-        fname="$1/$file"
-        echo "handle file $fname"
-        if [ -d $fname ]
-        then
-            handle_style "$1/$file"
-        else
-            if [[ $file = *.html ]];then
-                sed -i.bak 's/class="VPContent" id="VPContent"/class="VPContent has-sidebar" id="VPContent"/g' "$fname"
-            fi
-        fi
-    done
-}
-handle_style "$(pwd)/docs/zh"
-echo "Fix Style Done!"
