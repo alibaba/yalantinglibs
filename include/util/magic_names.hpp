@@ -39,8 +39,7 @@ struct parse_qualified_function_name {
 #if defined(_MSC_VER) && defined(_WIN64)
   static constexpr std::array calling_conventions{"__cdecl", "__vectorcall"};
 #elif defined(_MSC_VER) && defined(_WIN32)
-  static constexpr std::array calling_conventions{"__cdecl", "__stdcall",
-                                                  "__fastcall", "__vectorcall"};
+  static constexpr std::array calling_conventions{"__cdecl", "__stdcall", "__fastcall", "__vectorcall", "__thiscall"};
 #elif defined(__clang__) || defined(__GNUC__)
   static constexpr std::array<const char*, 0> calling_conventions{};
 #else
@@ -86,7 +85,7 @@ struct parse_qualified_function_name {
   static constexpr auto value = [] {
     // When using MSVC, Finds the start index of the function name past the
     // top-level calling convention token (e.g. __cdecl/__vectorcall for x64,
-    // __stdcall/__cdecl/__fastcall/__vectorcall for x86).
+    // __stdcall/__cdecl/__fastcall/__vectorcall/__thiscall for x86).
     // When using GCC or Clang, returns zero immediately.
     constexpr auto start_index = []() -> std::size_t {
       // Workaround for failing compilation on x86-64 Clang assertions trunk.
