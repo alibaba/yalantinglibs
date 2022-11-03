@@ -39,7 +39,7 @@ jobs:
         run: echo $VCPKG_ROOT
 
       - name: Generate Project
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=struct_pack -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=all -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build struct_pack
         run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
