@@ -2,8 +2,8 @@
 // experimental/impl/coro.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2021 Klemens D. Morgenstern
-//                    (klemens dot morgenstern at gmx dot net)
+// Copyright (c) 2021-2022 Klemens D. Morgenstern
+//                         (klemens dot morgenstern at gmx dot net)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -212,7 +212,7 @@ struct coro_with_arg
 
           void operator()(cancellation_type ct)
           {
-            asio::dispatch(e, [ct, p = coro_, st = st]() mutable
+            asio::dispatch(e, [ct, st = st]() mutable
             {
               auto & [sig, state] = *st;
               sig.emit(ct);
@@ -1011,7 +1011,6 @@ struct coro<Yield, Return, Executor>::initiate_async_resume
 
       auto ch = detail::coroutine_handle<promise_type>::from_promise(*coro);
       assert(ch && !ch.done());
-      assert(coro->awaited_from == detail::noop_coroutine());
 
       coro->awaited_from = post_coroutine(std::move(exec), std::move(h));
       coro->reset_error();
@@ -1033,7 +1032,6 @@ struct coro<Yield, Return, Executor>::initiate_async_resume
 
       auto ch = detail::coroutine_handle<promise_type>::from_promise(*coro);
       assert(ch && !ch.done());
-      assert(coro->awaited_from == detail::noop_coroutine());
 
       coro->awaited_from = detail::post_coroutine(exec,
           [coro, h = std::move(h)]() mutable
@@ -1083,7 +1081,6 @@ struct coro<Yield, Return, Executor>::initiate_async_resume
       }
       else
       {
-        assert(coro->awaited_from == detail::noop_coroutine());
         coro->awaited_from =
           detail::post_coroutine(exec,
               [coro, h = std::move(h)]() mutable
@@ -1135,7 +1132,6 @@ struct coro<Yield, Return, Executor>::initiate_async_resume
       }
       else
       {
-        assert(coro->awaited_from == detail::noop_coroutine());
         coro->awaited_from =
           detail::post_coroutine(exec,
               [h = std::move(h), coro]() mutable
