@@ -23,7 +23,11 @@ constexpr void meta_string_tests() {
   static_assert(str1.back() == '!');
   static_assert(std::string_view{str1.c_str(), str1.size()} == "Hello world!");
   static_assert(std::string_view{str1.c_str()} == "Hello world!");
+  static_assert(std::string_view{str1.data(), str1.size()} == "Hello world!");
+  static_assert(std::string_view{str1.data()} == "Hello world!");
+  static_assert(meta_string{"nice to meet you!"}.contains('!'));
   static_assert(meta_string{"nice to meet you!"}.contains("meet"));
+  static_assert(str1 + str2 == meta_string{"Hello world!Hello world!"});
 
   // Tests of remove_char, remove, split_of and split.
   constexpr meta_string str4{"Poor guy,eligible,incognito"};
@@ -111,14 +115,11 @@ constexpr void magic_names_tests() {
           "refvalue::tests::ns1::ns2::ns3::some_class<int>::class_fun2"});
 
 #ifdef _MSC_VER
-  static_assert(
-      qualified_name_of_v<&func_template<int, double>> ==
-      meta_string{"refvalue::tests::ns1::ns2::ns3::func_template"});
+  static_assert(qualified_name_of_v<&func_template<int, double>> ==
+                meta_string{"refvalue::tests::ns1::ns2::ns3::func_template"});
 #elif !defined(__APPLE__)
-  static_assert(
-      qualified_name_of_v<&func_template<int, double>> ==
-      meta_string{
-          "refvalue::tests::ns1::ns2::ns3::func_template"});
+  static_assert(qualified_name_of_v<&func_template<int, double>> ==
+                meta_string{"refvalue::tests::ns1::ns2::ns3::func_template"});
 #endif
 
   static_assert(name_of_v<&top_fun_1> == meta_string{"top_fun_1"});

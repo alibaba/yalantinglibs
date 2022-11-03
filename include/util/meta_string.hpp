@@ -32,62 +32,69 @@
 namespace refvalue {
 template <std::size_t N>
 struct meta_string {
-  std::array<char, N + 1> data;
+  std::array<char, N + 1> elements;
 
-  consteval meta_string() noexcept : data{} {}
+  consteval meta_string() noexcept : elements{} {}
 
   consteval meta_string(const char (&data)[N + 1]) noexcept
-      : data{std::to_array(data)} {}
+      : elements{std::to_array(data)} {}
 
   template <std::size_t... Ns>
-  consteval meta_string(std::span<const char, Ns>... data) noexcept : data{} {
-    auto iter = this->data.begin();
+  consteval meta_string(std::span<const char, Ns>... data) noexcept
+      : elements{} {
+    auto iter = elements.begin();
 
     ((iter = std::copy(data.begin(), data.end(), iter)), ...);
   }
 
   template <std::size_t... Ns>
-  consteval meta_string(const meta_string<Ns>&... data) noexcept : data{} {
-    auto iter = this->data.begin();
+  consteval meta_string(const meta_string<Ns>&... data) noexcept : elements{} {
+    auto iter = elements.begin();
 
     ((iter = std::copy(data.begin(), data.end(), iter)), ...);
   }
 
   template <std::same_as<char>... Ts>
   consteval meta_string(Ts... chars) noexcept requires(sizeof...(Ts) == N)
-      : data{chars...} {}
+      : elements{chars...} {}
 
-  constexpr char& operator[](std::size_t index) noexcept { return data[index]; }
+  constexpr char& operator[](std::size_t index) noexcept {
+    return elements[index];
+  }
 
   constexpr const char& operator[](std::size_t index) const noexcept {
-    return data[index];
+    return elements[index];
   }
 
   constexpr operator std::string_view() const noexcept {
-    return std::string_view{data.data(), size()};
+    return std::string_view{elements.data(), size()};
   }
 
   constexpr bool empty() const noexcept { return size() == 0; }
 
   constexpr std::size_t size() const noexcept { return N; }
 
-  constexpr char& front() noexcept { return data.front(); }
+  constexpr char& front() noexcept { return elements.front(); }
 
-  constexpr const char& front() const noexcept { return data.front(); }
+  constexpr const char& front() const noexcept { return elements.front(); }
 
-  constexpr char& back() noexcept { return data[size() - 1]; }
+  constexpr char& back() noexcept { return elements[size() - 1]; }
 
-  constexpr const char& back() const noexcept { return data[size() - 1]; }
+  constexpr const char& back() const noexcept { return elements[size() - 1]; }
 
-  constexpr auto begin() noexcept { return data.begin(); }
+  constexpr auto begin() noexcept { return elements.begin(); }
 
-  constexpr auto begin() const noexcept { return data.begin(); }
+  constexpr auto begin() const noexcept { return elements.begin(); }
 
-  constexpr auto end() noexcept { return data.begin() + size(); }
+  constexpr auto end() noexcept { return elements.begin() + size(); }
 
-  constexpr auto end() const noexcept { return data.begin() + size(); }
+  constexpr auto end() const noexcept { return elements.begin() + size(); }
 
-  constexpr const char* c_str() const noexcept { return data.data(); }
+  constexpr char* data() noexcept { return elements.data(); }
+
+  constexpr const char* data() const noexcept { return elements.data(); };
+
+  constexpr const char* c_str() const noexcept { return elements.data(); }
 
   constexpr bool contains(char c) const noexcept {
     return std::find(begin(), end(), c) != end();
@@ -116,7 +123,7 @@ template <std::size_t M, std::size_t N>
 constexpr auto operator<=>(const meta_string<M>& left,
                            const meta_string<N>& right) noexcept {
   return static_cast<std::string_view>(left).compare(
-             std::string_view{right}) <=> 0;
+             static_cast<std::string_view>(right)) <=> 0;
 }
 
 template <std::size_t M, std::size_t N>
@@ -124,6 +131,12 @@ constexpr bool operator==(const meta_string<M>& left,
                           const meta_string<N>& right) noexcept {
   return static_cast<std::string_view>(left) ==
          static_cast<std::string_view>(right);
+}
+
+template <std::size_t M, std::size_t N>
+consteval auto operator+(const meta_string<M>& left,
+                         const meta_string<N>& right) noexcept {
+  return meta_string{left, right};
 }
 
 template <meta_string S, meta_string Delim>
