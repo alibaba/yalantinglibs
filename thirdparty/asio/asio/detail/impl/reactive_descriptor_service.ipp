@@ -2,7 +2,7 @@
 // detail/impl/reactive_descriptor_service.ipp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2021 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -47,6 +47,7 @@ void reactive_descriptor_service::construct(
 {
   impl.descriptor_ = -1;
   impl.state_ = 0;
+  impl.reactor_data_ = reactor::per_descriptor_data();
 }
 
 void reactive_descriptor_service::move_construct(
@@ -106,6 +107,7 @@ asio::error_code reactive_descriptor_service::assign(
   if (is_open(impl))
   {
     ec = asio::error::already_open;
+    ASIO_ERROR_LOCATION(ec);
     return ec;
   }
 
@@ -114,6 +116,7 @@ asio::error_code reactive_descriptor_service::assign(
   {
     ec = asio::error_code(err,
         asio::error::get_system_category());
+    ASIO_ERROR_LOCATION(ec);
     return ec;
   }
 
@@ -152,6 +155,7 @@ asio::error_code reactive_descriptor_service::close(
   // We'll just have to assume that other OSes follow the same behaviour.)
   construct(impl);
 
+  ASIO_ERROR_LOCATION(ec);
   return ec;
 }
 
@@ -181,6 +185,7 @@ asio::error_code reactive_descriptor_service::cancel(
   if (!is_open(impl))
   {
     ec = asio::error::bad_descriptor;
+    ASIO_ERROR_LOCATION(ec);
     return ec;
   }
 
