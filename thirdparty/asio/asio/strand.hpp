@@ -2,7 +2,7 @@
 // strand.hpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2021 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -441,6 +441,11 @@ private:
 /*@{*/
 
 /// Create a @ref strand object for an executor.
+/**
+ * @param ex An executor.
+ *
+ * @returns A strand constructed with the specified executor.
+ */
 template <typename Executor>
 inline strand<Executor> make_strand(const Executor& ex,
     typename constraint<
@@ -451,6 +456,12 @@ inline strand<Executor> make_strand(const Executor& ex,
 }
 
 /// Create a @ref strand object for an execution context.
+/**
+ * @param ctx An execution context, from which an executor will be obtained.
+ *
+ * @returns A strand constructed with the execution context's executor, obtained
+ * by performing <tt>ctx.get_executor()</tt>.
+ */
 template <typename ExecutionContext>
 inline strand<typename ExecutionContext::executor_type>
 make_strand(ExecutionContext& ctx,

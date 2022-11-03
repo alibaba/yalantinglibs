@@ -2,7 +2,7 @@
 // asio.hpp
 // ~~~~~~~~
 //
-// Copyright (c) 2003-2021 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -15,6 +15,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
+#include "asio/append.hpp"
+#include "asio/as_tuple.hpp"
 #include "asio/associated_allocator.hpp"
 #include "asio/associated_executor.hpp"
 #include "asio/associated_cancellation_slot.hpp"
@@ -40,6 +42,7 @@
 #include "asio/basic_streambuf.hpp"
 #include "asio/basic_waitable_timer.hpp"
 #include "asio/basic_writable_pipe.hpp"
+#include "asio/bind_allocator.hpp"
 #include "asio/bind_cancellation_slot.hpp"
 #include "asio/bind_executor.hpp"
 #include "asio/buffer.hpp"
@@ -62,6 +65,7 @@
 #include "asio/coroutine.hpp"
 #include "asio/deadline_timer.hpp"
 #include "asio/defer.hpp"
+#include "asio/deferred.hpp"
 #include "asio/detached.hpp"
 #include "asio/dispatch.hpp"
 #include "asio/error.hpp"
@@ -136,6 +140,7 @@
 #include "asio/ip/unicast.hpp"
 #include "asio/ip/v6_only.hpp"
 #include "asio/is_applicable_property.hpp"
+#include "asio/is_contiguous_iterator.hpp"
 #include "asio/is_executor.hpp"
 #include "asio/is_read_buffered.hpp"
 #include "asio/is_write_buffered.hpp"
@@ -153,12 +158,14 @@
 #include "asio/posix/stream_descriptor.hpp"
 #include "asio/post.hpp"
 #include "asio/prefer.hpp"
+#include "asio/prepend.hpp"
 #include "asio/query.hpp"
 #include "asio/random_access_file.hpp"
 #include "asio/read.hpp"
 #include "asio/read_at.hpp"
 #include "asio/read_until.hpp"
 #include "asio/readable_pipe.hpp"
+#include "asio/recycling_allocator.hpp"
 #include "asio/redirect_error.hpp"
 #include "asio/registered_buffer.hpp"
 #include "asio/require.hpp"
