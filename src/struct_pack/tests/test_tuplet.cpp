@@ -198,7 +198,7 @@ TEST_CASE("Test that for_each works") {
 
   tuplet::tuple tup{"Hello world!", std::string("This is a test..."), 10, 20,
                     3.141592};
-  static_assert(struct_pack::detail::trivial_copy_tuple<decltype(tup)>);
+  static_assert(struct_pack::detail::is_trivial_tuple<decltype(tup)>);
   static_assert(std::is_aggregate_v<decltype(tup)>);
   static_assert(std::is_trivially_copyable_v<tuplet::tuple<int, double>>);
   static_assert(!std::is_trivially_copyable_v<decltype(tup)>);

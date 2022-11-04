@@ -474,9 +474,11 @@ TEST_CASE("test_trivial_copy_tuple") {
       std::is_same_v<decltype(detail::get_types(tp)), tuplet::tuple<int, int>>);
   static_assert(
       !std::is_same_v<decltype(detail::get_types(tp)), std::tuple<int, int>>);
-
   static_assert(get_type_code<decltype(tp)>() !=
                 get_type_code<std::tuple<int, int>>());
+  constexpr auto i = get_type_literal<decltype(tp)>();
+  static_assert(get_type_literal<decltype(tp)>() !=
+                get_type_literal<std::tuple<int, int>>());
 
   auto buf = serialize(tp);
 
@@ -1242,38 +1244,39 @@ TEST_CASE("test get type code") {
     nested_object nested;
     using namespace struct_pack::detail;
     auto t = get_types(p);
-    CHECK(std::is_same_v<std::tuple<int, std::string>, decltype(t)>);
+    static_assert(std::is_same_v<std::tuple<int, std::string>, decltype(t)>);
 
     auto t1 = get_types(std::tuple<int, std::string>{});
-    CHECK(std::is_same_v<std::tuple<int, std::string>, decltype(t1)>);
+    static_assert(std::is_same_v<std::tuple<int, std::string>, decltype(t1)>);
 
     auto t2 = get_types(int(1));
-    CHECK(std::is_same_v<std::tuple<int>, decltype(t2)>);
+    static_assert(std::is_same_v<std::tuple<int>, decltype(t2)>);
 
     auto t3 = get_types(std::vector<int>{});
-    CHECK(std::is_same_v<std::tuple<std::vector<int>>, decltype(t3)>);
+    static_assert(std::is_same_v<std::tuple<std::vector<int>>, decltype(t3)>);
 
-    CHECK(std::is_same_v<decltype(get_types(p)), std::tuple<int, std::string>>);
-    CHECK(std::is_same_v<
-          decltype(get_types(nested)),
-          std::tuple<int, std::string, person, complicated_object>>);
+    static_assert(
+        std::is_same_v<decltype(get_types(p)), std::tuple<int, std::string>>);
+    static_assert(std::is_same_v<
+                  decltype(get_types(nested)),
+                  std::tuple<int, std::string, person, complicated_object>>);
   }
 
   SUBCASE("test get_type_literal") {
     auto str = get_type_literal<int, int, short>();
-    CHECK(str.size() == 5);
+    static_assert(str.size() == 5);
     string_literal<char, 5> val{
         {(char)-2, 1, 1, 7, (char)-1}};  //{'1','1','7'};
     CHECK(str == val);
 
     auto str1 = get_type_literal<int64_t, uint64_t>();
-    CHECK(str1.size() == 4);
+    static_assert(str1.size() == 4);
     string_literal<char, 4> val1{{(char)-2, 3, 4, (char)-1}};  //{'3','4'};
     CHECK(str1 == val1);
 
     auto str2 =
         get_type_literal<int64_t, uint64_t, struct_pack::compatible<int32_t>>();
-    CHECK(str2.size() == 4);
+    static_assert(str2.size() == 4);
     string_literal<char, 4> val2{{(char)-2, 3, 4, (char)-1}};
     CHECK(str2 == val2);
   }
@@ -1285,12 +1288,12 @@ TEST_CASE("testing partial deserialization with index") {
   auto ret = serialize(p);
 
   auto pair = get_field<person, 1>(ret.data(), ret.size());
-  CHECK(pair);
+  REQUIRE(pair);
   CHECK(pair.value() == "tom");
 
   auto pair1 =
-      get_field<std::tuple<int, std::string>, 0>(ret.data(), ret.size());
-  CHECK(pair);
+      get_field<tuplet::tuple<int, std::string>, 0>(ret.data(), ret.size());
+  REQUIRE(pair);
   CHECK(pair1.value() == 20);
 }
 
@@ -1695,14 +1698,15 @@ TEST_CASE("compatible not in the end of struct") {
 }
 
 struct type_calculate_test_1 {
-  std::tuple<std::pair<std::map<int, std::string>, std::vector<std::list<int>>>,
-             std::set<int>, std::array<int64_t, 64>, std::optional<int>>
+  tuplet::tuple<
+      std::pair<std::map<int, std::string>, std::vector<std::list<int>>>,
+      std::set<int>, std::array<int64_t, 64>, std::optional<int>>
       a;
 };
 struct type_calculate_test_2 {
   struct {
-    std::tuple<std::unordered_map<int, std::string>,
-               std::deque<std::vector<int>>>
+    tuplet::tuple<std::unordered_map<int, std::string>,
+                  std::deque<std::vector<int>>>
         a;
     std::multiset<int> b;
     int64_t c[64];
@@ -1712,8 +1716,8 @@ struct type_calculate_test_2 {
 
 struct type_calculate_test_3 {
   struct {
-    std::tuple<std::unordered_map<int, std::string>,
-               std::deque<std::vector<double>>>
+    std::pair<std::unordered_map<int, std::string>,
+              std::deque<std::vector<double>>>
         a;
     std::multiset<int> b;
     int64_t c[64];
@@ -1725,117 +1729,265 @@ TEST_CASE("type calculate") {
   static_assert(std::is_trivially_copyable<struct_pack::compatible<int>>::value,
                 "must be true");
 
-  static_assert(
-      get_type_code<std::vector<int>>() != get_type_code<std::vector<float>>(),
-      "vector<T> with different T should get different MD5");
-  static_assert(
-      get_type_code<std::deque<int>>() != get_type_code<std::deque<float>>(),
-      "deque<T> with different T should get different MD5");
-  static_assert(
-      get_type_code<std::list<int>>() != get_type_code<std::list<float>>(),
-      "list<T> with different T should get different MD5");
-  static_assert(
-      get_type_code<std::set<int>>() != get_type_code<std::set<float>>(),
-      "set<T> with different T should get different MD5");
-  static_assert(get_type_code<std::map<int, std::string>>() !=
-                    get_type_code<std::set<float, std::string>>(),
-                "map<T1,T2> with different T1 should get different MD5");
-  static_assert(get_type_code<std::map<std::string, int>>() !=
-                    get_type_code<std::map<std::string, float>>(),
-                "map<T1,T2> with different T2 should get different MD5");
-  static_assert(
-      get_type_code<std::unordered_map<int, std::string>>() !=
-          get_type_code<std::unordered_map<float, std::string>>(),
-      "unordered_map<T1,T2> with different T1 should get different MD5");
-  static_assert(
-      get_type_code<std::unordered_map<std::string, int>>() !=
-          get_type_code<std::unordered_map<std::string, float>>(),
-      "unordered_map<T1,T2> with different T2 should get different MD5");
-  static_assert(get_type_code<std::unordered_set<int>>() !=
-                    get_type_code<std::unordered_set<float>>(),
-                "unordered_set<T> with different T should get different MD5");
-  static_assert(get_type_code<std::array<int, 5>>() !=
-                    get_type_code<std::array<float, 5>>(),
-                "array<T,sz> with different T should get different MD5");
-  static_assert(get_type_code<std::array<int, 5>>() !=
-                    get_type_code<std::array<int, 6>>(),
-                "array<T,sz> with different sz should get different MD5");
-  static_assert(get_type_code<int[5]>() != get_type_code<float[5]>(),
-                "T[sz] with different T should get different MD5");
-  static_assert(get_type_code<int[5]>() != get_type_code<int[6]>(),
-                "T[sz] with different sz should get different MD5");
-  static_assert(get_type_code<std::optional<int>>() !=
-                    get_type_code<std::optional<float>>(),
-                "optional<T> with different T should get different MD5");
-  static_assert(
-      get_type_code<int, float, int>() != get_type_code<int, int, int>(),
-      "T... with different T... should get different MD5");
-  static_assert(get_type_code<std::tuple<int, float, int>>() !=
-                    get_type_code<std::tuple<int, int, int>>(),
-                "tuple<T...> with different T... should get different MD5");
-  static_assert(get_type_code<std::tuple<int, float, int>>() ==
-                    get_type_code<int, float, int>(),
-                "tuple<T...> and T... should get same MD5");
-  static_assert(get_type_code<std::pair<int, int>>() !=
-                    get_type_code<std::pair<float, int>>(),
-                "pair<T1,T2> with different T1 should get different MD5");
-  static_assert(get_type_code<std::pair<int, float>>() !=
-                    get_type_code<std::pair<int, int>>(),
-                "pair<T1,T2> with different T2 should get different MD5");
-  static_assert(get_type_code<complicated_object>() != get_type_code<person>(),
-                "class{T...} with different T... should get different MD5");
+  {
+    static_assert(get_type_code<std::vector<int>>() !=
+                      get_type_code<std::vector<float>>(),
+                  "vector<T> with different T should get different MD5");
+    CHECK(!deserialize<std::vector<int>>(serialize(std::vector<float>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::deque<int>>() != get_type_code<std::deque<float>>(),
+        "deque<T> with different T should get different MD5");
+    CHECK(!deserialize<std::deque<int>>(serialize(std::deque<float>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::list<int>>() != get_type_code<std::list<float>>(),
+        "list<T> with different T should get different MD5");
+    CHECK(!deserialize<std::list<int>>(serialize(std::list<float>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::set<int>>() != get_type_code<std::set<float>>(),
+        "set<T> with different T should get different MD5");
+    CHECK(!deserialize<std::set<int>>(serialize(std::set<float>{})));
+  }
+  {
+    static_assert(get_type_code<std::map<int, std::string>>() !=
+                      get_type_code<std::map<float, std::string>>(),
+                  "map<T1,T2> with different T1 should get different MD5");
+    CHECK(!deserialize<std::map<int, std::string>>(
+        serialize(std::map<float, std::string>{})));
+  }
 
-  static_assert(
-      get_type_code<compatible<int>>() == get_type_code<compatible<float>>(),
-      "compatible<T> with different T should get same MD5");
-  static_assert(
-      get_type_code<std::list<int>>() == get_type_code<std::vector<int>>(),
-      "different class accord with container concept should get same MD5");
-  static_assert(
-      get_type_code<std::deque<int>>() == get_type_code<std::vector<int>>(),
-      "different class accord with container concept should get same MD5");
-  static_assert(
-      get_type_code<std::deque<int>>() == get_type_code<std::list<int>>(),
-      "different class accord with container concept should get same MD5");
-  static_assert(
-      get_type_code<std::array<int, 5>>() == get_type_code<int[5]>(),
-      "different class accord with array concept should get same MD5");
-  static_assert(get_type_code<std::map<int, int>>() ==
-                    get_type_code<std::unordered_map<int, int>>(),
-                "different class accord with map concept should get same MD5");
-  static_assert(get_type_code<std::set<int>>() ==
-                    get_type_code<std::unordered_set<int>>(),
-                "different class accord with set concept should get same MD5");
-  static_assert(
-      get_type_code<std::pair<int, std::string>>() == get_type_code<person>(),
-      "different class accord with aggregate_class concept should "
-      "get same MD5");
-  static_assert(
-      get_type_code<std::tuple<int, std::string>>() == get_type_code<person>(),
-      "different class accord with aggregate_class concept should "
-      "get same MD5");
-  static_assert(get_type_code<std::pair<int, std::string>>() ==
-                    get_type_code<std::tuple<int, std::string>>(),
-                "different class accord with aggregate_class concept should "
-                "get same MD5");
+  {
+    static_assert(get_type_code<std::map<std::string, int>>() !=
+                      get_type_code<std::map<std::string, float>>(),
+                  "map<T1,T2> with different T2 should get different MD5");
+    CHECK(!deserialize<std::map<std::string, int>>(
+        serialize(std::map<std::string, float>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::unordered_map<int, std::string>>() !=
+            get_type_code<std::unordered_map<float, std::string>>(),
+        "unordered_map<T1,T2> with different T1 should get different MD5");
+    CHECK(!deserialize<std::unordered_map<int, std::string>>(
+        serialize(std::unordered_map<float, std::string>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::unordered_map<std::string, int>>() !=
+            get_type_code<std::unordered_map<std::string, float>>(),
+        "unordered_map<T1,T2> with different T2 should get different MD5");
+    CHECK(!deserialize<std::unordered_map<std::string, int>>(
+        serialize(std::unordered_map<std::string, float>{})));
+  }
+  {
+    static_assert(get_type_code<std::unordered_set<int>>() !=
+                      get_type_code<std::unordered_set<float>>(),
+                  "unordered_set<T> with different T should get different MD5");
+    CHECK(!deserialize<std::unordered_set<int>>(
+        serialize(std::unordered_set<float>{})));
+  }
+  {
+    static_assert(get_type_code<std::array<int, 5>>() !=
+                      get_type_code<std::array<float, 5>>(),
+                  "array<T,sz> with different T should get different MD5");
+    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<float, 5>{})));
+  }
+  {
+    static_assert(get_type_code<std::array<int, 5>>() !=
+                      get_type_code<std::array<int, 6>>(),
+                  "array<T,sz> with different sz should get different MD5");
+    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<int, 6>{})));
+  }
+  {
+    static_assert(get_type_code<int[5]>() != get_type_code<float[5]>(),
+                  "T[sz] with different T should get different MD5");
+    int ar[5] = {};
+    float ar2[5] = {};
+    CHECK(deserialize_to(ar2, serialize(ar)) != std::errc{});
+  }
+  {
+    static_assert(get_type_code<int[5]>() != get_type_code<int[6]>(),
+                  "T[sz] with different sz should get different MD5");
+    int ar[5] = {};
+    int ar2[6] = {};
+    CHECK(deserialize_to(ar2, serialize(ar)) != std::errc{});
+  }
+  {
+    static_assert(get_type_code<std::optional<int>>() !=
+                      get_type_code<std::optional<float>>(),
+                  "optional<T> with different T should get different MD5");
+    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<int, 6>{})));
+  }
+  {
+    static_assert(
+        get_type_code<int, float, int>() != get_type_code<int, int, int>(),
+        "T... with different T... should get different MD5");
+    CHECK(!deserialize<int, int>(serialize(1, 2, 3)));
+  }
+  {
+    static_assert(get_type_code<std::tuple<int, float, int>>() !=
+                      get_type_code<std::tuple<int, int, int>>(),
+                  "tuple<T...> with different T... should get different MD5");
+    CHECK(!deserialize<int, int>(serialize(1, 2, 3)));
+  }
+  {
+    static_assert(get_type_code<std::tuple<int, float, int>>() ==
+                      get_type_code<int, float, int>(),
+                  "tuple<T...> and T... should get same MD5");
+    CHECK(deserialize<std::tuple<int, float, int>>(serialize(1, 2.0f, 3)));
+  }
+  {
+    static_assert(get_type_code<std::pair<int, int>>() !=
+                      get_type_code<std::pair<float, int>>(),
+                  "pair<T1,T2> with different T1 should get different MD5");
+    CHECK(!deserialize<std::pair<int, int>>(serialize(std::pair{1.3f, 1})));
+  }
+  {
+    static_assert(get_type_code<std::pair<int, float>>() !=
+                      get_type_code<std::pair<int, int>>(),
+                  "pair<T1,T2> with different T2 should get different MD5");
+    CHECK(!deserialize<std::pair<int, float>>(serialize(std::pair{1, 1})));
+  }
+  {
+    static_assert(
+        get_type_code<complicated_object>() != get_type_code<person>(),
+        "class{T...} with different T... should get different MD5");
+    CHECK(!deserialize<complicated_object>(serialize(person{})));
+  }
+  {
+    static_assert(
+        get_type_code<compatible<int>>() == get_type_code<compatible<float>>(),
+        "compatible<T> with different T should get same MD5");
+    CHECK(deserialize<compatible<int>>(serialize(compatible<float>{1})));
+  }
+  {
+    static_assert(
+        get_type_code<std::list<int>>() == get_type_code<std::vector<int>>(),
+        "different class accord with container concept should get same MD5");
+    CHECK(deserialize<std::list<int>>(serialize(std::vector<int>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::deque<int>>() == get_type_code<std::vector<int>>(),
+        "different class accord with container concept should get same MD5");
+    CHECK(deserialize<std::deque<int>>(serialize(std::vector<int>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::deque<int>>() == get_type_code<std::list<int>>(),
+        "different class accord with container concept should get same MD5");
+    CHECK(deserialize<std::deque<int>>(serialize(std::list<int>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::array<int, 5>>() == get_type_code<int[5]>(),
+        "different class accord with array concept should get same MD5");
+    int ar[5] = {};
+    CHECK(deserialize<std::array<int, 5>>(serialize(ar)));
+  }
+  {
+    static_assert(
+        get_type_code<std::map<int, int>>() ==
+            get_type_code<std::unordered_map<int, int>>(),
+        "different class accord with map concept should get same MD5");
+    CHECK(deserialize<std::map<int, int>>(
+        serialize(std::unordered_map<int, int>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::set<int>>() ==
+            get_type_code<std::unordered_set<int>>(),
+        "different class accord with set concept should get same MD5");
+    CHECK(deserialize<std::set<int>>(serialize(std::unordered_set<int>{})));
+  }
+  {
+    static_assert(
+        get_type_code<std::pair<int, std::string>>() == get_type_code<person>(),
+        "different class accord with trival_class concept should "
+        "get same MD5");
+    CHECK(deserialize<std::pair<int, std::string>>(serialize(person{})));
+  }
+  {
+    static_assert(get_type_code<tuplet::tuple<int, std::string>>() ==
+                      get_type_code<person>(),
+                  "different class accord with trival_class concept should "
+                  "get same MD5");
+    CHECK(deserialize<tuplet::tuple<int, std::string>>(serialize(person{})));
+  }
+  {
+    static_assert(get_type_code<std::pair<int, std::string>>() ==
+                      get_type_code<tuplet::tuple<int, std::string>>(),
+                  "different class accord with trival_class concept should "
+                  "get same MD5");
+    CHECK(deserialize<std::pair<int, std::string>>(
+        serialize(tuplet::tuple<int, std::string>{})));
+  }
+  {
+    static_assert(get_type_code<std::tuple<int, std::string>>() !=
+                      get_type_code<person>(),
+                  "different class accord and trival_class"
+                  "concept should get different MD5");
+    CHECK(!deserialize<std::tuple<int, std::string>>(serialize(person{})));
+  }
+  {
+    static_assert(get_type_code<std::pair<int, std::string>>() !=
+                      get_type_code<std::tuple<int, std::string>>(),
+                  "different class accord and trival_class concept should "
+                  "get different MD5");
+    CHECK(!deserialize<std::pair<int, std::string>>(
+        serialize(std::tuple<int, std::string>{})));
+  }
+  {
+    static_assert(
+        get_type_code<type_calculate_test_1>() ==
+            get_type_code<type_calculate_test_2>(),
+        "struct type_calculate_test_1 && type_calculate_test_2 should get the "
+        "same MD5");
+    CHECK(
+        deserialize<type_calculate_test_1>(serialize(type_calculate_test_2{})));
+  }
 
-  static_assert(
-      get_type_code<type_calculate_test_1>() ==
-          get_type_code<type_calculate_test_2>(),
-      "struct type_calculate_test_1 && type_calculate_test_2 should get the "
-      "same MD5");
+  {
+    static_assert(
+        get_type_code<type_calculate_test_1>() !=
+            get_type_code<type_calculate_test_3>(),
+        "struct type_calculate_test_1 && type_calculate_test_3 should get the "
+        "different MD5");
+    CHECK(!deserialize<type_calculate_test_1>(
+        serialize(type_calculate_test_3{})));
+  }
 
-  static_assert(
-      get_type_code<type_calculate_test_1>() !=
-          get_type_code<type_calculate_test_3>(),
-      "struct type_calculate_test_1 && type_calculate_test_3 should get the "
-      "different MD5");
+  {
+    static_assert(get_type_code<int>() != get_type_code<std::tuple<int>>(),
+                  "T & tuple<T> should get different MD5");
+    CHECK(!deserialize<int>(serialize(std::tuple<int>{})));
+  }
 
-  static_assert(get_type_code<std::tuple<int>>() !=
-                    get_type_code<std::tuple<std::tuple<int>>>(),
-                "T & tuple<T> should get different MD5");
+  {
+    static_assert(get_type_code<int>() != get_type_code<tuplet::tuple<int>>(),
+                  "T & tuple_::tuple<T> should get different MD5");
+    CHECK(!deserialize<int>(serialize(tuplet::tuple<int>{})));
+  }
 
-  static_assert(get_type_code<std::tuple<std::tuple<int>, int>>() !=
-                    get_type_code<std::tuple<std::tuple<int, int>>>(),
-                "{tuple<T1>,T2} & tuple<T1,T2> should get different MD5");
+  {
+    static_assert(get_type_code<std::tuple<int>>() !=
+                      get_type_code<std::tuple<std::tuple<int>>>(),
+                  "tuple<T> & tuple<tuple<T>> should get different MD5");
+    CHECK(!deserialize<std::tuple<int>>(
+        serialize(std::tuple<std::tuple<int>>{})));
+  }
+
+  {
+    static_assert(
+        get_type_code<std::tuple<int>, int>() !=
+            get_type_code<std::tuple<int, int>>(),
+        "tuple<tuple<T1>,T2> & tuple<tuple<T1,T2>> should get different MD5");
+    CHECK(!deserialize<std::tuple<std::tuple<int>, int>>(
+        serialize(std::tuple<std::tuple<int, int>>{})));
+  }
 }

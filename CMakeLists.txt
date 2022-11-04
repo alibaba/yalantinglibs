@@ -32,6 +32,8 @@ if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         endif ()
     endif ()
 endif ()
+# Resolves C1128 complained by MSVC: number of sections exceeded object file format limit: compile with /bigobj.
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/bigobj>")
 option(COVERAGE_TEST "Build with unit test coverage" OFF)
 if (COVERAGE_TEST)
     message(STATUS "add coverage flags")
