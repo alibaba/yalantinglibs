@@ -155,6 +155,7 @@ options:
 | BUILD_WITH_LIBCXX | Build with libc++                                | OFF     |
 | USE_CONAN         | Use conan package manager to handle dependencies | OFF     |
 | ENABLE_SSL        | Enable ssl support                               | OFF     |
+| ENABLE_IO_URING   | Enable io_uring support                          | OFF     |
 
 ## Dependencies
 
