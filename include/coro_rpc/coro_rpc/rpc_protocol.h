@@ -40,7 +40,6 @@ namespace coro_rpc {
  * └────────┴───────────┴────────────────┴──────────┴─────────┴─────────┘
  * ```
  */
-#pragma pack(1)
 struct rpc_header {
   uint8_t magic;           //!< magic number
   uint8_t version;         //!< rpc protocol version
@@ -49,7 +48,6 @@ struct rpc_header {
   uint32_t seq_num;        //!< sequence number
   uint32_t length;         //!< length of RPC body
 };
-#pragma pack()
 
 #if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
 template <class T, class E>
