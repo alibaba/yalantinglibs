@@ -83,6 +83,13 @@ concept indexable = stateless<T> || requires(T t) {
   t[tag<0>()];
 };
 
+template <size_t I, indexable Tup>
+constexpr decltype(auto) get(Tup&& tup);
+
+template <class T, class U>
+concept other_than_tuple =
+    !std::is_same_v<std::decay_t<T>, U> && (requires(U u) { get<U>(); });
+
 template <class U, class T>
 concept assignable_to = requires(U u, T t) {
   t = u;
@@ -216,10 +223,10 @@ struct tuple : tuple_base_t<T...> {
   using element_list = type_list<T...>;
   using super::decl_elem;
 
-  template <other_than<tuple> U>  // Preserves default assignments
+  template <other_than_tuple<tuple> U>  // Preserves default assignments
   constexpr auto& operator=(U&& tup) {
     using tuple2 = std::decay_t<U>;
-    if (base_list_tuple<tuple2>) {
+    if constexpr (base_list_tuple<tuple2>) {
       eq_impl(static_cast<U&&>(tup), base_list(), typename tuple2::base_list());
     }
     else {

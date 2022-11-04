@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <utility>
+
 #include "struct_pack/struct_pack_impl.hpp"
 
 #if __has_include(<expected>) && __cplusplus > 202002L
@@ -135,11 +137,13 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval std::size_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_code<decltype(detail::get_types(
-        std::declval<Args...>()))>();
+    return detail::get_types_code<detail::get_type_id<Args...>(),
+                                  decltype(detail::get_types(
+                                      std::declval<Args...>()))>();
   }
   else {
-    return detail::get_types_code<std::tuple<Args...>>();
+    return detail::get_types_code<detail::type_id::non_trivial_class_t,
+                                  std::tuple<Args...>>();
   }
 }
 
@@ -147,10 +151,13 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_literal<Args...>();
+    using Types = decltype(detail::get_types(Args{}...));
+    return detail::get_types_literal<detail::get_type_id<Args...>(), Types>(
+        std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    return detail::get_types_literal<std::tuple<Args...>>();
+    return detail::get_types_literal<detail::type_id::non_trivial_class_t,
+                                     Args...>();
   }
 }
 
@@ -194,7 +201,7 @@ void STRUCT_PACK_INLINE serialize_to(Buffer &buffer, const Args &...args) {
     o.serialize(args...);
   }
   else {
-    o.serialize(need_size, args...);
+    o.serialize_with_size(need_size, args...);
   }
 }
 
