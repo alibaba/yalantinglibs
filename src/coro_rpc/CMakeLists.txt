@@ -11,6 +11,12 @@ target_link_libraries(libcoro_rpc INTERFACE
         spdlog::spdlog
         async_simple::async_simple_header_only
         )
+option(ENABLE_IO_URING "Enable io_uring" OFF)
+if (ENABLE_IO_URING) 
+    message(STATUS "Use IO_URING for I/O in linux")
+    target_compile_definitions(libcoro_rpc INTERFACE ASIO_HAS_IO_URING)
+    target_compile_definitions(libcoro_rpc INTERFACE ASIO_DISABLE_EPOLL)
+endif()
 option(ENABLE_SSL "Enable ssl support" OFF)
 if (ENABLE_SSL)
     message(STATUS "Use SSL")
