@@ -83,6 +83,13 @@ concept indexable = stateless<T> || requires(T t) {
   t[tag<0>()];
 };
 
+template <size_t I, indexable Tup>
+constexpr decltype(auto) get(Tup&& tup);
+
+template <class T, class U>
+concept other_than_tuple =
+    !std::is_same_v<std::decay_t<T>, U> && (requires(U u) { get<U>(); });
+
 template <class U, class T>
 concept assignable_to = requires(U u, T t) {
   t = u;
@@ -508,10 +515,6 @@ template <size_t I, indexable Tup>
 constexpr decltype(auto) get(Tup&& tup) {
   return static_cast<Tup&&>(tup)[tag<I>()];
 }
-
-template <class T, class U>
-concept other_than_tuple = !std::is_same_v<std::decay_t<T>, U> &&
-                           (requires(U u) { tuplet::get<U>(); });
 
 template <class... T>
 constexpr tuple<T&...> tie(T&... t) {
