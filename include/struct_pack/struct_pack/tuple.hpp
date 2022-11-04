@@ -74,9 +74,6 @@ template <class Tuple>
 concept base_list_tuple = requires() {
   typename std::decay_t<Tuple>::base_list;
 };
-template <class T, class U>
-concept other_than_tuple =
-    !std::is_same_v<std::decay_t<T>, U> && (requires(U u) { get<U>(); });
 
 template <class T>
 concept stateless = std::is_empty_v<std::decay_t<T>>;
@@ -511,6 +508,10 @@ template <size_t I, indexable Tup>
 constexpr decltype(auto) get(Tup&& tup) {
   return static_cast<Tup&&>(tup)[tag<I>()];
 }
+
+template <class T, class U>
+concept other_than_tuple = !std::is_same_v<std::decay_t<T>, U> &&
+                           (requires(U u) { tuplet::get<U>(); });
 
 template <class... T>
 constexpr tuple<T&...> tie(T&... t) {
