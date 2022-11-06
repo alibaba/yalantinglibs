@@ -113,7 +113,7 @@ template <typename Conn>
 void fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void, Conn> conn) {
   std::thread([conn]() mutable {
-    std::this_thread::sleep_for(60ms);
+    std::this_thread::sleep_for(120ms);
     conn.response_msg();
   }).detach();
 }

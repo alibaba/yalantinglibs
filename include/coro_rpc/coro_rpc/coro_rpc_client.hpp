@@ -215,19 +215,27 @@ class coro_rpc_client {
 
   ~coro_rpc_client() { sync_close(); }
 
-  /*!
-   * Call RPC function with default timeout (5 second)
-   *
-   * @tparam func the address of RPC function
-   * @tparam Args the type of arguments
-   * @param args RPC function arguments
-   * @return RPC call result
-   */
+/*!
+ * Call RPC function with default timeout (5 second)
+ *
+ * @tparam func the address of RPC function
+ * @tparam Args the type of arguments
+ * @param args RPC function arguments
+ * @return RPC call result
+ */
+#ifdef _MSC_VER
+  template <auto func, typename... Args>
+  async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
+      Args... args) {
+    return call_for<func>(std::chrono::seconds(5), std::move(args)...);
+  }
+#else
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
     return call_for<func>(std::chrono::seconds(5), std::forward<Args>(args)...);
   }
+#endif
 
   /*!
    * Call RPC function
@@ -242,7 +250,11 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
+#ifdef _MSC_VER
+  call_for(auto duration, Args... args) {
+#else
   call_for(auto duration, Args &&...args) {
+#endif
     using R = decltype(get_return_type<func>());
     rpc_result<R> ret;
 #ifdef ENABLE_SSL
@@ -264,11 +276,19 @@ class coro_rpc_client {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
+#ifdef _MSC_VER
+      ret = co_await call_impl<func>(*ssl_stream_, std::move(args)...);
+#else
       ret = co_await call_impl<func>(*ssl_stream_, std::forward<Args>(args)...);
+#endif
     }
     else {
 #endif
-      ret = co_await call_impl<func>(socket_, std::forward<Args>(args)...);
+#ifdef _MSC_VER
+      ret = co_await call_impl<func>(socket_, std::move(args)...);
+#else
+    ret = co_await call_impl<func>(socket_, std::forward<Args>(args)...);
+#endif
 #ifdef ENABLE_SSL
     }
 #endif
@@ -444,7 +464,8 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     }
 #endif
-    [[maybe_unused]] auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
+    [[maybe_unused]] auto sz =
+        struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
     assert(sz == RPC_HEAD_LEN);
     return buffer;
   }
