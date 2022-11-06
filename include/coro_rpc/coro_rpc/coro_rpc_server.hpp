@@ -272,8 +272,8 @@ class coro_rpc_server {
 
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
-      auto &io_context = pool_.get_io_context();
-      asio::ip::tcp::socket socket(io_context);
+      auto io_context = pool_.get_io_context_ptr();
+      asio::ip::tcp::socket socket(*io_context);
       auto error = co_await async_accept(acceptor_, socket);
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_server_accept_error) {

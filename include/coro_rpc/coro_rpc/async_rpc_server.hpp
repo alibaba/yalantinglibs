@@ -182,7 +182,7 @@ class async_rpc_server {
 
  private:
   void do_accept() {
-    auto conn = std::make_shared<async_connection>(pool_.get_io_context(),
+    auto conn = std::make_shared<async_connection>(pool_.get_io_context_ptr(),
                                                    conn_timeout_duration_);
 #ifdef ENABLE_SSL
     if (use_ssl_) {
