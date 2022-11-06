@@ -42,13 +42,13 @@ namespace coro_rpc {
  */
 class async_connection : public std::enable_shared_from_this<async_connection> {
  public:
-  async_connection(asio::io_context &io_context)
+  async_connection(std::shared_ptr<asio::io_context> io_context)
       : io_context_(io_context),
-        socket_(io_context),
+        socket_(*io_context),
         body_(body_size_),
-        timer_(io_context) {}
+        timer_(*io_context) {}
 
-  async_connection(asio::io_context &io_context,
+  async_connection(std::shared_ptr<asio::io_context> io_context,
                    std::chrono::steady_clock::duration timeout_duration)
       : async_connection(io_context) {
     if (timeout_duration == std::chrono::seconds(0)) {
@@ -104,6 +104,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   void quit() {
     cancel_timer();
     close();
+
+    std::error_code ec;
+    io_context_->poll(ec);
     quit_promise_.get_future().wait();
   }
 
@@ -117,7 +120,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
     *((uint32_t *)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
 
-    io_context_.post([this, buf = std::move(buf), self = shared_from_this()] {
+    io_context_->post([this, buf = std::move(buf), self = shared_from_this()] {
       if (has_closed()) [[unlikely]] {
         easylog::info("response_msg failed: connection has been closed");
         return;
@@ -291,7 +294,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   }
 
   void close(bool close_ssl = true) {
-    io_context_.post([this, close_ssl, self = shared_from_this()] {
+    io_context_->post([this, close_ssl, self = shared_from_this()] {
       sync_close(close_ssl);
     });
   }
@@ -355,7 +358,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     timer_.cancel(ec);
   }
 
-  asio::io_context &io_context_;
+  std::shared_ptr<asio::io_context> io_context_;
   tcp::socket socket_;
   char head_[RPC_HEAD_LEN];
 
