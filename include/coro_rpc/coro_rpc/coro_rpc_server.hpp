@@ -297,6 +297,12 @@ class coro_rpc_server {
         }
         continue;
       }
+
+      if (io_context->stopped()) {
+        easylog::warn("io_context has been stopped");
+        co_return std::errc::io_error;
+      }
+
       easylog::info("new client coming");
 
       int64_t conn_id = ++conn_id_;
