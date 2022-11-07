@@ -317,6 +317,7 @@ TEST_CASE("testing basic rpc register and route") {
   test_route_and_check<foo>(coro_conn, 42);
   test_route_and_check<foo1>(coro_conn, 42);
   test_route_and_check<foo2>(coro_conn);
+  test_route_and_check<foo2>(coro_conn);
 
   SUBCASE("test static functions") {
     register_handler<plus_two>();
