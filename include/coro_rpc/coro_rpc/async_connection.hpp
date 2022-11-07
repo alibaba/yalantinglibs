@@ -125,6 +125,12 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         easylog::info("response_msg failed: connection has been closed");
         return;
       }
+
+      if (io_context_->stopped()) {
+        easylog::warn("io_context has been stopped!");
+        return;
+      }
+
       write(std::move(buf));
     });
   }
