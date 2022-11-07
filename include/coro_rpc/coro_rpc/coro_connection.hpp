@@ -217,6 +217,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return;
     }
 
+    if (io_context_->stopped()) {
+      easylog::warn("io_context has been closed");
+      return;
+    }
+
     auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
     *((uint32_t *)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
 
