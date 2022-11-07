@@ -117,6 +117,7 @@ class coro_rpc_server {
           pool_.run();
         });
         acceptor_thd_ = std::thread([this] {
+          asio::io_context::work work(acceptor_ioc_);
           acceptor_ioc_.run();
         });
 
@@ -162,6 +163,7 @@ class coro_rpc_server {
           pool_.run();
         });
         acceptor_thd_ = std::thread([this] {
+          asio::io_context::work work(acceptor_ioc_);
           acceptor_ioc_.run();
         });
         flag_ = stat::started;
