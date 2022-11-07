@@ -273,7 +273,7 @@ class coro_rpc_server {
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
       auto io_context = pool_.get_io_context_ptr();
-      if (io_context->stopped()) {
+      if (io_context->stopped() || acceptor_ioc_.stopped()) {
         easylog::warn("io_context has been stopped");
         co_return std::errc::io_error;
       }
@@ -298,7 +298,7 @@ class coro_rpc_server {
         continue;
       }
 
-      if (io_context->stopped()) {
+      if (io_context->stopped() || acceptor_ioc_.stopped()) {
         easylog::warn("io_context has been stopped");
         co_return std::errc::io_error;
       }
