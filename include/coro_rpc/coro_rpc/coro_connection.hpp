@@ -278,9 +278,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> response(std::vector<char> buf,
                                           auto self) noexcept {
     if (has_closed()) [[unlikely]] {
-      easylog::debug("response_msg failed: connection has been closed");
+      easylog::info("response_msg failed: connection has been closed");
       co_return;
     }
+
+    if (io_context_->stopped()) {
+      easylog::warn("io_context has been stopped!");
+      co_return;
+    }
+
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
       easylog::warn("inject action: close_socket_after_send_length");
