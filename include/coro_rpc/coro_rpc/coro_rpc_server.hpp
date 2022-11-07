@@ -273,6 +273,10 @@ class coro_rpc_server {
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
       auto io_context = pool_.get_io_context_ptr();
+      if (io_context->stopped()) {
+        easylog::warn("io_context has been stopped");
+        co_return std::errc::io_error;
+      }
       asio::ip::tcp::socket socket(*io_context);
       auto error = co_await async_accept(acceptor_, socket);
 #ifdef UNIT_TEST_INJECT
