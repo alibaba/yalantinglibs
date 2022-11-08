@@ -375,20 +375,20 @@ OS: Linux version 4.9.151-015.ali3000.alios7.x86_64
 
 ### 极限qps测试
 
-1. 通过pipline发送数据和接收数据，把cpu打满后得到最高qps
+1. 通过pipline发送数据和接收数据，把cpu打满后得到最高qps  
 ![max_qps](images/max_qps.png)
 
 ### ping-pong测试
 
 1. 请求和响应完成之后再发下一次请求，测试该场景下的qps；
 2. 测试连接数不断增多时qps的变化；
-3. 测量ping-pong的平均延时
+3. 测量ping-pong的平均延时  
 ![ping_pong_qps](images/pingpong_qps.png)
 ![pingpong_time](images/pingpong_time.png)
 
 ### 长尾测试
 
-1. 1%慢请求(异步等待50ms)下qps和延时
+1. 1%慢请求(异步等待50ms)下qps和延时  
 ![long_tail_qps](images/long_tail_qps.png)
 ![long_tail_time](images/long_tail_time.png)
 

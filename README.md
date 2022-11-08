@@ -12,6 +12,13 @@ yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, c
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
+| OS (Compiler Version)                          | Status                                                                                                   |
+|------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
+| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
+| Ubuntu 20.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_gcc.yml/badge.svg?branch=main)   |
+| Ubuntu 20.04 (clang 14.0.0)                    | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_clang.yml/badge.svg?branch=main) |
+
 ## coro_rpc
 
 Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene. coro_rpc is a header only library.
@@ -20,7 +27,7 @@ You can finish a rpc server and rpc client in 5 minutes!
 
 English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduction_cn.md)  
 
-English API(TODO) | [中文API](./src/coro_rpc/doc/coro_rpc_doc.hpp)
+English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
 
 [Talk](./src/coro_rpc/doc/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
 
@@ -77,7 +84,7 @@ Only one line code to finish serialization and deserialization, 10-50x faster th
 
 English Introduction(TODO) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
 
-English API(TODO) | [中文API](./src/struct_pack/doc/struct_pack_doc.hpp)
+[English API](https://alibaba.github.io/yalantinglibs/en/html/group__struct__pack.html) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
 
 [Talk](./src/struct_pack/doc/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
@@ -148,6 +155,7 @@ options:
 | BUILD_WITH_LIBCXX | Build with libc++                                | OFF     |
 | USE_CONAN         | Use conan package manager to handle dependencies | OFF     |
 | ENABLE_SSL        | Enable ssl support                               | OFF     |
+| ENABLE_IO_URING   | Enable io_uring support                          | OFF     |
 
 ## Dependencies
 
@@ -159,6 +167,22 @@ options:
 
 Currently, asio and spdlog are put in thirdparty folder.
 doctest is put in tests folder.
+
+# How to generate document
+
+For English document, run
+
+```shell
+doxygen Doxyfile
+```
+All files generated in `docs/en`.
+
+For Chinese document, run
+
+```shell
+doxygen Doxyfile_cn
+```
+All files generated in `docs/cn`.
 
 # How to Contribute
 1. Create an issue in the issue template.

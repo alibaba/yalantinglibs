@@ -264,14 +264,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     conn_id_ = conn_id;
   }
 
-  template<typename T>
-  void set_tag(T &&tag){
+  template <typename T>
+  void set_tag(T &&tag) {
     tag_ = std::forward<T>(tag);
   }
 
-  std::any get_tag() {
-    return tag_;
-  }
+  std::any get_tag() { return tag_; }
 
  private:
   async_simple::coro::Lazy<void> response(std::vector<char> buf,

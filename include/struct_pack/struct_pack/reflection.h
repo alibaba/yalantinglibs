@@ -41,6 +41,8 @@ namespace struct_pack {
 
 template <typename T>
 constexpr std::size_t members_count = 0;
+template <typename T>
+constexpr std::size_t min_alignment = 0;
 namespace detail {
 template <typename Type>
 concept deserialize_view = requires(Type container) {
@@ -135,6 +137,11 @@ concept tuple = requires(Type tuple) {
 };
 
 template <typename Type>
+concept tuple_size = requires(Type tuple) {
+  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+};
+
+template <typename Type>
 concept array = requires(Type arr) {
   arr.size();
   std::tuple_size<std::remove_cvref_t<Type>>{};
@@ -219,9 +226,31 @@ consteval std::size_t member_count() {
   if constexpr (struct_pack::members_count < T >> 0) {
     return struct_pack::members_count<T>;
   }
+  else if constexpr (tuple_size<T>) {
+    return std::tuple_size<T>::value;
+  }
   else {
     return member_count_impl<T>();
   }
+}
+// add extension like `members_count`
+template <typename T>
+consteval std::size_t min_align() {
+  if constexpr (struct_pack::min_alignment < T >> 0) {
+    return struct_pack::min_alignment<T>;
+  }
+  else {
+    // don't use \0 as 0
+    // due to \0 is a special flag for struct_pack
+    // '0' ascii code is 48
+    return '0';
+  }
+}
+// similar to `min_align`
+template <typename T>
+consteval std::size_t max_align() {
+  static_assert(std::alignment_of_v<T> > 0);
+  return std::alignment_of_v<T>;
 }
 
 constexpr static auto MaxVisitMembers = 64;

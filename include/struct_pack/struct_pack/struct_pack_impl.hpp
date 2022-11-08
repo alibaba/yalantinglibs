@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "md5_constexpr.hpp"
+#include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
               "only support little endian now");
@@ -129,6 +130,12 @@ concept struct_pack_buffer = trivially_copyable_container<T>
                              && struct_pack_byte<typename T::value_type>;
 // clang-format on
 
+template <typename T>
+constexpr inline bool is_trivial_tuple = false;
+
+template <typename... T>
+constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
+
 template <class U>
 constexpr auto get_types(U &&t) {
   using T = std::remove_cvref_t<U>;
@@ -139,6 +146,9 @@ constexpr auto get_types(U &&t) {
     return std::tuple<T>{};
   }
   else if constexpr (tuple<T>) {
+    return T{};
+  }
+  else if constexpr (is_trivial_tuple<T>) {
     return T{};
   }
   else if constexpr (pair<T>) {
@@ -191,9 +201,10 @@ enum class type_id {
   variant_t,
   expected_t,
   // monostate, or void
-  monostate_t = 253,
+  monostate_t = 250,
+  trivial_class_t = 253,
   // struct type
-  aggregate_class_t = 254,
+  non_trivial_class_t = 254,
   // end helper
   type_end_flag = 255,
 };
@@ -384,12 +395,15 @@ consteval type_id get_type_id() {
   else if constexpr (expected<T>) {
     return type_id::expected_t;
   }
-  else if constexpr (tuple<T> || pair<T>) {
-    return type_id::aggregate_class_t;
+  else if constexpr (is_trivial_tuple<T> || pair<T>) {
+    return type_id::trivial_class_t;
+  }
+  else if constexpr (tuple<T>) {
+    return type_id::non_trivial_class_t;
   }
   else if constexpr (std::is_class_v<T>) {
     static_assert(std::is_aggregate_v<std::remove_cvref_t<T>>);
-    return type_id::aggregate_class_t;
+    return type_id::trivial_class_t;
   }
   else {
     static_assert(!sizeof(T), "not supported type");
@@ -432,13 +446,27 @@ consteval decltype(auto) get_type_literal() {
                     "variant or in expected's value_type");
     }
   }
-  if constexpr (id == type_id::aggregate_class_t) {
+  if constexpr (id == type_id::non_trivial_class_t ||
+                id == type_id::trivial_class_t) {
     using Args = decltype(get_types(Arg{}));
     constexpr auto body = get_type_literal<Args, Arg>(
         std::make_index_sequence<std::tuple_size_v<Args>>());
-    constexpr auto end =
-        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
-    return ret + body + end;
+    if constexpr (id == type_id::trivial_class_t) {
+      static_assert(
+          min_align<Arg>() == '0' || min_align<Arg>() <= max_align<Arg>(),
+          "#pragma pack may decrease the alignment of a class, however, "
+          "it cannot make a class over aligned.");
+      constexpr auto end =
+          string_literal<char, 3>{{static_cast<char>(min_align<Arg>()),
+                                   static_cast<char>(max_align<Arg>()),
+                                   static_cast<char>(type_id::type_end_flag)}};
+      return body + end;
+    }
+    else {
+      constexpr auto end =
+          string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
+      return body + end;
+    }
   }
   else if constexpr (id == type_id::variant_t) {
     constexpr auto sz = std::variant_size_v<Arg>;
@@ -507,8 +535,41 @@ consteval decltype(auto) get_variant_literal(std::index_sequence<I...>) {
 }
 
 template <typename... Args>
-consteval decltype(auto) get_types_literal() {
+consteval decltype(auto) get_types_literal_impl() {
   return (get_type_literal<Args, void>() + ...);
+}
+
+template <type_id root_id, typename T, typename... Args>
+consteval decltype(auto) get_types_literal() {
+  if constexpr (root_id == type_id::non_trivial_class_t ||
+                root_id == type_id::trivial_class_t) {
+    constexpr auto begin =
+        string_literal<char, 1>{{static_cast<char>(root_id)}};
+    constexpr auto body = get_types_literal_impl<Args...>();
+    if constexpr (root_id == type_id::trivial_class_t) {
+      static_assert(min_align<T>() == '0' || min_align<T>() <= max_align<T>(),
+                    "#pragma pack may decrease the alignment of a class, "
+                    "however, it cannot make a class over aligned.");
+      constexpr auto end = string_literal<char, 3>{
+          {static_cast<char>(min_align<T>()), static_cast<char>(max_align<T>()),
+           static_cast<char>(type_id::type_end_flag)}};
+      return begin + body + end;
+    }
+    else {
+      constexpr auto end =
+          string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
+      return begin + body + end;
+    }
+  }
+  else {
+    return get_types_literal_impl<Args...>();
+  }
+}
+
+template <type_id root_id, typename T, typename Tuple, std::size_t... I>
+consteval decltype(auto) get_types_literal(std::index_sequence<I...>) {
+  return get_types_literal<
+      root_id, T, std::remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
 }
 
 // the compatible<T> should in the end of the struct, and it shouldn't in the
@@ -537,7 +598,8 @@ constexpr int check_if_compatible_element_exist_helper(bool &flag) {
   else {
     if (!flag)
       return -1;
-    if constexpr (id == type_id::aggregate_class_t) {
+    if constexpr (id == type_id::non_trivial_class_t ||
+                  id == type_id::trivial_class_t) {
       using subArgs = decltype(get_types(Arg{}));
       return check_if_compatible_element_exist_help_coverage<depth, subArgs>(
           std::make_index_sequence<std::tuple_size_v<subArgs>>());
@@ -567,9 +629,10 @@ consteval int check_if_compatible_element_exist() {
   return ret;
 }
 
-template <typename... Args>
+template <type_id root_id, typename T, typename... Args>
 consteval uint32_t get_types_code_impl() {
-  constexpr auto str = get_types_literal<std::remove_cvref_t<Args>...>();
+  constexpr auto str =
+      get_types_literal<root_id, T, std::remove_cvref_t<Args>...>();
   constexpr auto ret =
       check_if_compatible_element_exist<0, std::remove_cvref_t<Args>...>();
   // ret == 0 -> unexist_compatible_element
@@ -588,9 +651,9 @@ consteval int check_if_compatible_element_exist(std::index_sequence<I...>) {
   return check_if_compatible_element_exist<0, std::tuple_element_t<I, T>...>();
 }
 
-template <typename T, size_t... I>
+template <type_id root_id, typename T, typename Tuple, size_t... I>
 consteval uint32_t get_types_code(std::index_sequence<I...>) {
-  return get_types_code_impl<std::tuple_element_t<I, T>...>();
+  return get_types_code_impl<root_id, T, std::tuple_element_t<I, Tuple>...>();
 }
 
 [[noreturn]] STRUCT_PACK_INLINE void exit_container_size() {
@@ -716,10 +779,10 @@ calculate_needed_size(const T &item, const Args &...items) {
   return sz + calculate_needed_size(items...);
 }
 
-template <typename T>
+template <type_id root_id, typename T, typename Tuple>
 consteval uint32_t get_types_code() {
-  return detail::get_types_code<T>(
-      std::make_index_sequence<std::tuple_size_v<T>>{});
+  return detail::get_types_code<root_id, T, Tuple>(
+      std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename T>
@@ -748,13 +811,17 @@ class packer {
   template <typename T, typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
     if constexpr (sizeof...(args) == 0) {
-      constexpr uint32_t types_code = get_types_code<decltype(get_types(t))>();
+      constexpr uint32_t types_code =
+          get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       pos_ += sizeof(uint32_t);
       serialize_one(t);
     }
     else {
+      // for variadic args, using void as inner type
+      // void just a placeholder here
       constexpr uint32_t types_code = get_types_code<
+          type_id::non_trivial_class_t, void,
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       pos_ += sizeof(uint32_t);
@@ -766,14 +833,18 @@ class packer {
   STRUCT_PACK_INLINE void serialize_with_size(uint64_t sz, const T &t,
                                               const Args &...args) {
     if constexpr (sizeof...(args) == 0) {
-      constexpr uint32_t types_code = get_types_code<decltype(get_types(t))>();
+      constexpr uint32_t types_code =
+          get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
       pos_ += sizeof(uint32_t) + sizeof(uint64_t);
       serialize_one(t);
     }
     else {
+      // for variadic args, using void as inner type
+      // void just a placeholder here
       constexpr uint32_t types_code = get_types_code<
+          type_id::non_trivial_class_t, void,
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
@@ -1027,8 +1098,9 @@ class unpacker {
       return {std::errc::no_buffer_space, 0};
     }
 
-    constexpr uint32_t types_code = get_types_code<decltype(get_types(t))>();
-    uint32_t current_types_code{};
+    constexpr uint32_t types_code =
+        get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
+    uint32_t current_types_code;
     std::memcpy(&current_types_code, data_ + pos_, sizeof(uint32_t));
     if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
       return {std::errc::invalid_argument, 0};
