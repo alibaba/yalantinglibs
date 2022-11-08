@@ -27,6 +27,7 @@
 #include <variant>
 
 #include "asio_util/asio_coro_util.hpp"
+#include "async_simple/coro/SyncAwait.h"
 #include "common_service.hpp"
 #include "coro_rpc/coro_rpc/connection.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
@@ -365,9 +366,58 @@ class coro_rpc_client {
     file << std::string_view{(char *)buffer.data(), buffer.size()};
     file.close();
 #endif
-    auto ret = co_await async_write(socket,
-                                    asio::buffer(buffer.data(), buffer.size()));
+    std::pair<std::error_code, size_t> ret;
+#ifdef UNIT_TEST_INJECT
+    if (g_action == inject_action::client_send_bad_header) {
+      buffer[0] = (std::byte)(uint8_t(buffer[0]) + 1);
+    }
+    if (g_action == inject_action::client_close_socket_after_send_header) {
+      ret = co_await async_write(socket,
+                                 asio::buffer(buffer.data(), RPC_HEAD_LEN));
+      easylog::info("close socket");
+      co_await close();
+      r = rpc_result<R>{unexpect_t{},
+                        rpc_error{std::errc::io_error, ret.first.message()}};
+      co_return r;
+    }
+    else if (g_action ==
+             inject_action::client_close_socket_after_send_partial_header) {
+      ret = co_await async_write(socket,
+                                 asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
+      easylog::info("close socket");
+      co_await close();
+      r = rpc_result<R>{unexpect_t{},
+                        rpc_error{std::errc::io_error, ret.first.message()}};
+      co_return r;
+    }
+    else if (g_action ==
+             inject_action::client_shutdown_socket_after_send_header) {
+      ret = co_await async_write(socket,
+                                 asio::buffer(buffer.data(), RPC_HEAD_LEN));
+      easylog::info("shutdown");
+      socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
+      r = rpc_result<R>{unexpect_t{},
+                        rpc_error{std::errc::io_error, ret.first.message()}};
+      co_return r;
+    }
+    else {
+      ret = co_await async_write(socket,
+                                 asio::buffer(buffer.data(), buffer.size()));
+    }
+#else
+    ret = co_await async_write(socket,
+                               asio::buffer(buffer.data(), buffer.size()));
+#endif
     if (!ret.first) {
+#ifdef UNIT_TEST_INJECT
+      if (g_action == inject_action::client_close_socket_after_send_payload) {
+        easylog::info("client_close_socket_after_send_payload");
+        r = rpc_result<R>{unexpect_t{},
+                          rpc_error{std::errc::io_error, ret.first.message()}};
+        co_await close();
+        co_return r;
+      }
+#endif
       char head[RESPONSE_HEADER_LEN];
       ret =
           co_await async_read(socket, asio::buffer(head, RESPONSE_HEADER_LEN));
@@ -444,7 +494,8 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     }
 #endif
-    [[maybe_unused]] auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
+    [[maybe_unused]] auto sz =
+        struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
     assert(sz == RPC_HEAD_LEN);
     return buffer;
   }
@@ -574,109 +625,13 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
  public:
   std::errc sync_connect(const std::string &host, const std::string &port) {
-    auto ec = ::connect(get_io_context(), socket_, host, port);
-#ifdef ENABLE_SSL
-    if (ec) {
-      return std::errc::not_connected;
-    }
-    if (use_ssl_) {
-      ssl_stream_->handshake(asio::ssl::stream_base::client, ec);
-    }
-#endif
-    if (ec) {
-      return std::errc::not_connected;
-    }
-    return err_ok;
+    return async_simple::coro::syncAwait(connect(host, port));
   }
+
   template <auto func, typename... Args>
   rpc_result<decltype(get_return_type<func>())> sync_call(Args &&...args) {
-#ifdef ENABLE_SSL
-    if (use_ssl_) {
-      assert(ssl_stream_);
-      return sync_call_impl<func>(*ssl_stream_, std::forward<Args>(args)...);
-    }
-    else {
-#endif
-      return sync_call_impl<func>(socket_, std::forward<Args>(args)...);
-#ifdef ENABLE_SSL
-    }
-#endif
-  }
-  template <auto func, typename Socket, typename... Args>
-  rpc_result<decltype(get_return_type<func>())> sync_call_impl(Socket &socket,
-                                                               Args &&...args) {
-    using R = decltype(get_return_type<func>());
-    auto buffer = prepare_buffer<func>(std::forward<Args>(args)...);
-    if (g_action == inject_action::client_send_bad_header) {
-      buffer[0] = (std::byte)(uint8_t(buffer[0]) + 1);
-    }
-    rpc_result<R> r;
-    std::pair<std::error_code, size_t> ret;
-    if (g_action == inject_action::client_close_socket_after_send_header) {
-      ret = write(socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("close socket");
-      sync_close();
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      return r;
-    }
-    else if (g_action ==
-             inject_action::client_close_socket_after_send_partial_header) {
-      ret = write(socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
-      easylog::info("close socket");
-      sync_close();
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      return r;
-    }
-    else if (g_action ==
-             inject_action::client_shutdown_socket_after_send_header) {
-      ret = write(socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("shutdown");
-      socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      return r;
-    }
-    else {
-      ret = write(socket, asio::buffer(buffer.data(), buffer.size()));
-    }
-    if (ret.first) {
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      sync_close();
-      return r;
-    }
-    if (g_action == inject_action::client_close_socket_after_send_payload) {
-      easylog::info("client_close_socket_after_send_payload");
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      sync_close();
-      return r;
-    }
-
-    char head[RESPONSE_HEADER_LEN];
-    ret = read(socket, asio::buffer(head, RESPONSE_HEADER_LEN));
-    if (ret.first) {
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      sync_close();
-      return r;
-    }
-    uint32_t body_len = *(uint32_t *)head;
-    if (body_len > read_buf_.size()) {
-      read_buf_.resize(body_len);
-    }
-    ret = read(socket, asio::buffer(read_buf_.data(), body_len));
-    if (ret.first) {
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      sync_close();
-      return r;
-    }
-    r = handle_response_buffer<R>(read_buf_.data(), ret.second);
-
-    return r;
+    return async_simple::coro::syncAwait(
+        call<func>(std::forward<Args>(args)...));
   }
 #endif
  private:
