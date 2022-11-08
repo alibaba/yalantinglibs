@@ -214,7 +214,9 @@ class async_rpc_server {
     using asio::ip::tcp;
     auto endpoint = tcp::endpoint(tcp::v4(), port_);
     acceptor_.open(endpoint.protocol());
+#ifdef __GNUC__
     acceptor_.set_option(tcp::acceptor::reuse_address(true));
+#endif
 
     asio::error_code ec;
     acceptor_.bind(endpoint, ec);
@@ -224,6 +226,9 @@ class async_rpc_server {
       acceptor_.close(ec);
       return std::errc::address_in_use;
     }
+#ifdef _MSC_VER
+    acceptor_.set_option(tcp::acceptor::reuse_address(true));
+#endif
     acceptor_.listen();
 
     auto end_point = acceptor_.local_endpoint(ec);

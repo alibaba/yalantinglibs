@@ -11,6 +11,11 @@ target_link_libraries(libcoro_rpc INTERFACE
         spdlog::spdlog
         async_simple::async_simple_header_only
         )
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")        
+    add_definitions(-DASIO_DISABLE_IOCP)
+endif()
+
 option(ENABLE_IO_URING "Enable io_uring" OFF)
 if (ENABLE_IO_URING) 
     message(STATUS "Use IO_URING for I/O in linux")
