@@ -19,7 +19,6 @@
 #include <cstdint>
 #include <future>
 #include <memory>
-#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -47,15 +46,14 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param socket
    * @param timeout_duration
    */
-  coro_connection(std::shared_ptr<asio::io_context> io_context,
-                  asio::ip::tcp::socket socket,
+  coro_connection(asio::io_context &io_context, asio::ip::tcp::socket socket,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
       : io_context_(io_context),
-        executor_(*io_context),
+        executor_(io_context),
         socket_(std::move(socket)),
         rsp_err(std::errc{}),
-        timer_(*io_context) {
+        timer_(io_context) {
     body_.resize(body_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
@@ -255,10 +253,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     close().via(&executor_).start([&](auto &&) {
       promise.set_value();
     });
-
-    std::error_code ec;
-    io_context_->poll(ec);
     promise.get_future().wait();
+
+    io_context_.poll();
   }
 
   using QuitCallback = std::function<void(const uint64_t &conn_id)>;
@@ -267,12 +264,14 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     conn_id_ = conn_id;
   }
 
-  template <typename T>
-  void set_tag(T &&tag) {
+  template<typename T>
+  void set_tag(T &&tag){
     tag_ = std::forward<T>(tag);
   }
 
-  std::any get_tag() { return tag_; }
+  std::any get_tag() {
+    return tag_;
+  }
 
  private:
   async_simple::coro::Lazy<void> response(std::vector<char> buf,
@@ -397,7 +396,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
 
-  std::shared_ptr<asio::io_context> io_context_;
+  asio::io_context &io_context_;
   AsioExecutor executor_;
   asio::ip::tcp::socket socket_;
   size_t body_size_ = 256;
