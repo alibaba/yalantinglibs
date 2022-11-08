@@ -19,8 +19,6 @@
 
 #include "doctest.h"
 using namespace coro_rpc;
-auto server = std::make_unique<coro_rpc::coro_rpc_server>(
-    std::thread::hardware_concurrency(), 8808);
 
 inline std::string test_func(int64_t v1, double v2, std::string v3,
                              const std::array<std::string, 3>& v4) {
@@ -30,7 +28,9 @@ TEST_CASE("test varadic param") {
   using namespace coro_rpc;
   using namespace std;
 
-  std::thread thrd([] {
+  auto server = std::make_unique<coro_rpc::coro_rpc_server>(
+      std::thread::hardware_concurrency(), 8808);
+  std::thread thrd([&] {
     coro_rpc::register_handler<test_func>();
     try {
       auto ec = server->start();
