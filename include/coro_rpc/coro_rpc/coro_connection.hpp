@@ -67,7 +67,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   ~coro_connection() {
     if (!has_closed_) {
-      sync_close();
+      async_simple::coro::syncAwait(close());
     }
   }
 
