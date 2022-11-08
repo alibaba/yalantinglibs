@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <type_traits>
 #include <utility>
 
 #include "struct_pack/struct_pack_impl.hpp"
@@ -117,10 +118,6 @@ using unexpect_t = tl::unexpect_t;
  * @param err error code.
  * @return error message.
  */
-
-template <size_t N>
-struct members_count_t : public std::integral_constant<size_t, N> {};
-
 STRUCT_PACK_INLINE std::string error_message(std::errc err) {
   return std::make_error_code(err).message();
 }
@@ -137,12 +134,14 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval std::size_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_code<detail::get_type_id<Args...>(),
+    return detail::get_types_code<detail::get_type_id<Args...>(), Args...,
                                   decltype(detail::get_types(
                                       std::declval<Args...>()))>();
   }
   else {
-    return detail::get_types_code<detail::type_id::non_trivial_class_t,
+    // for variadic args, using void as inner type
+    // void just a placeholder here
+    return detail::get_types_code<detail::type_id::non_trivial_class_t, void,
                                   std::tuple<Args...>>();
   }
 }
@@ -152,11 +151,14 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
     using Types = decltype(detail::get_types(Args{}...));
-    return detail::get_types_literal<detail::get_type_id<Args...>(), Types>(
+    return detail::get_types_literal<detail::get_type_id<Args...>(), Args...,
+                                     Types>(
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    return detail::get_types_literal<detail::type_id::non_trivial_class_t,
+    // for variadic args, using void as inner type
+    // void just a placeholder here
+    return detail::get_types_literal<detail::type_id::non_trivial_class_t, void,
                                      Args...>();
   }
 }
