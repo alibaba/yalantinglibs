@@ -11,6 +11,7 @@ target_link_libraries(libcoro_rpc INTERFACE
         spdlog::spdlog
         async_simple::async_simple_header_only
         )
+add_definitions(-DASIO_DISABLE_IOCP)
 option(ENABLE_IO_URING "Enable io_uring" OFF)
 if (ENABLE_IO_URING) 
     message(STATUS "Use IO_URING for I/O in linux")
