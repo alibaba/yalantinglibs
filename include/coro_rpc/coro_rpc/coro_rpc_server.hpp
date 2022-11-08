@@ -273,7 +273,7 @@ class coro_rpc_server {
     for (;;) {
       auto &io_context = pool_.get_io_context();
       asio::ip::tcp::socket socket(io_context);
-      auto error = co_await async_accept(acceptor_, socket);
+      auto error = co_await asio_util::async_accept(acceptor_, socket);
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_server_accept_error) {
         asio::error_code ignored_ec;
@@ -336,7 +336,7 @@ class coro_rpc_server {
   asio::io_context acceptor_ioc_;
   asio::ip::tcp::acceptor acceptor_;
   std::atomic<uint16_t> port_;
-  AsioExecutor executor_;
+  asio_util::AsioExecutor executor_;
   std::chrono::steady_clock::duration conn_timeout_duration_;
 
   std::thread thd_;

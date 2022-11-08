@@ -21,9 +21,14 @@
 #include <asio.hpp>
 #include <chrono>
 
+#include "async_simple/Future.h"
+#include "async_simple/coro/FutureAwaiter.h"
+
 #ifdef ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
+
+namespace asio_util {
 
 class AsioExecutor : public async_simple::Executor {
  public:
@@ -42,294 +47,186 @@ class AsioExecutor : public async_simple::Executor {
   asio::io_context &io_context_;
 };
 
-class AcceptorAwaiter {
+template <typename Arg>
+class callback_promise;
+
+template <typename Arg>
+class await_future {
  public:
-  AcceptorAwaiter(asio::ip::tcp::acceptor &acceptor,
-                  asio::ip::tcp::socket &socket)
-      : acceptor_(acceptor), socket_(socket) {}
-  bool await_ready() const noexcept { return false; }
-  void await_suspend(std::coroutine_handle<> handle) {
-    acceptor_.async_accept(socket_, [this, handle](auto ec) mutable {
-      ec_ = ec;
-      handle.resume();
-    });
+  await_future(callback_promise<Arg> &promise) : promise(promise) {}
+  bool await_ready() const noexcept;
+  void await_suspend(std::coroutine_handle<> handle) noexcept;
+  auto coAwait(async_simple::Executor *executor) const noexcept {
+    return *this;
   }
-  auto await_resume() noexcept { return ec_; }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
+  decltype(auto) await_resume() noexcept;
 
  private:
-  asio::ip::tcp::acceptor &acceptor_;
-  asio::ip::tcp::socket &socket_;
-  std::error_code ec_{};
+  callback_promise<Arg> &promise;
 };
+
+template <typename Arg, typename Derived>
+class callback_promise_base {
+ public:
+  callback_promise_base() : future(static_cast<Derived &>(*this)) {}
+  template <typename... Args>
+  void set_value_then_resume(Args &&...args) {
+    set_value(std::forward<Args>(args)...);
+    resume();
+  }
+  template <typename... Args>
+  void set_value(Args &&...args) {
+    static_cast<Derived &>(*this).set_value(std::forward<Args>(args)...);
+  }
+  // warning: this function is not thread-safe when running in different threads
+  // with co_await promise.get_future();
+  void resume() {
+    if (coro_ == nullptr) [[unlikely]] {
+      is_ready_ = true;
+    }
+    else {
+      coro_.resume();
+    }
+  }
+  const await_future<Arg> &get_future() const noexcept { return future; }
+
+  friend class await_future<Arg>;
+
+ private:
+  bool is_ready_ = false;
+  std::coroutine_handle<> coro_;
+  await_future<Arg> future;
+};
+
+template <typename Arg>
+class callback_promise
+    : public callback_promise_base<Arg, callback_promise<Arg>> {
+ public:
+  template <typename... Args>
+  void set_value(Args &&...args) {
+    arg_ = {std::forward<Args>(args)...};
+  }
+  friend class await_future<Arg>;
+
+ private:
+  Arg arg_;
+};
+
+template <>
+class callback_promise<void>
+    : public callback_promise_base<void, callback_promise<void>> {
+ public:
+  void set_value(){};
+};
+
+template <typename Arg>
+void inline await_future<Arg>::await_suspend(
+    std::coroutine_handle<> handle) noexcept {
+  promise.coro_ = handle;
+}
+
+template <typename Arg>
+decltype(auto) inline await_future<Arg>::await_resume() noexcept {
+  return std::move(promise.arg_);
+}
+template <>
+decltype(auto) inline await_future<void>::await_resume() noexcept {
+  return;
+}
+template <typename Arg>
+bool await_future<Arg>::await_ready() const noexcept {
+  return promise.is_ready_;
+}
 
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor &acceptor, asio::ip::tcp::socket &socket) noexcept {
-  co_return co_await AcceptorAwaiter{acceptor, socket};
+  callback_promise<std::error_code> promise;
+  acceptor.async_accept(socket, [&](const auto &ec) {
+    promise.set_value_then_resume(ec);
+  });
+  co_return co_await promise.get_future();
 }
-
-template <typename Socket, typename AsioBuffer>
-struct ReadSomeAwaiter {
- public:
-  ReadSomeAwaiter(Socket &socket, AsioBuffer &&buffer)
-      : socket_(socket), buffer_(std::forward<AsioBuffer>(buffer)) {}
-  bool await_ready() { return false; }
-  auto await_resume() { return std::make_pair(ec_, size_); }
-  void await_suspend(std::coroutine_handle<> handle) {
-    socket_.async_read_some(std::move(buffer_),
-                            [this, handle](auto ec, auto size) mutable {
-                              ec_ = ec;
-                              size_ = size;
-                              handle.resume();
-                            });
-  }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Socket &socket_;
-  AsioBuffer buffer_;
-
-  std::error_code ec_{};
-  size_t size_{0};
-};
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
-  co_return co_await ReadSomeAwaiter{socket, std::move(buffer)};
+  callback_promise<std::pair<std::error_code, size_t>> promise;
+  socket.async_read_some(buffer, [&](const auto &ec, auto size) {
+    promise.set_value_then_resume(ec, size);
+  });
+  co_return co_await promise.get_future();
 }
-
-template <typename Socket, typename AsioBuffer>
-struct ReadAwaiter {
- public:
-  ReadAwaiter(Socket &socket, AsioBuffer &&buffer)
-      : socket_(socket), buffer_(std::forward<AsioBuffer>(buffer)) {}
-  bool await_ready() { return false; }
-  auto await_resume() { return std::make_pair(ec_, size_); }
-  void await_suspend(std::coroutine_handle<> handle) {
-    asio::async_read(socket_, std::move(buffer_),
-                     [this, handle](auto ec, auto size) mutable {
-                       ec_ = ec;
-                       size_ = size;
-                       handle.resume();
-                     });
-  }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Socket &socket_;
-  AsioBuffer &&buffer_;
-
-  std::error_code ec_{};
-  size_t size_{0};
-};
-
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
-  co_return co_await ReadAwaiter{socket, std::forward<AsioBuffer>(buffer)};
+  callback_promise<std::pair<std::error_code, size_t>> promise;
+  asio::async_read(socket, buffer, [&](const auto &ec, auto size) {
+    promise.set_value_then_resume(ec, size);
+  });
+  co_return co_await promise.get_future();
 }
-
-template <typename Socket, typename AsioBuffer>
-struct ReadUntilAwaiter {
- public:
-  ReadUntilAwaiter(Socket &socket, AsioBuffer &buffer, asio::string_view delim)
-      : socket_(socket), buffer_(buffer), delim_(delim) {}
-  bool await_ready() { return false; }
-  auto await_resume() { return std::make_pair(ec_, size_); }
-  void await_suspend(std::coroutine_handle<> handle) {
-    asio::async_read_until(socket_, buffer_, delim_,
-                           [this, handle](auto ec, auto size) mutable {
-                             ec_ = ec;
-                             size_ = size;
-                             handle.resume();
-                           });
-  }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Socket &socket_;
-  AsioBuffer &buffer_;
-  asio::string_view delim_;
-
-  std::error_code ec_{};
-  size_t size_{0};
-};
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_until(Socket &socket, AsioBuffer &buffer,
                  asio::string_view delim) noexcept {
-  co_return co_await ReadUntilAwaiter{socket, buffer, delim};
+  callback_promise<std::pair<std::error_code, size_t>> promise;
+  asio::async_read_until(socket, buffer, delim, [&](const auto &ec, auto size) {
+    promise.set_value_then_resume(ec, size);
+  });
+  co_return co_await promise.get_future();
 }
-
-template <typename Socket, typename AsioBuffer>
-struct WriteAwaiter {
- public:
-  WriteAwaiter(Socket &socket, AsioBuffer &&buffer)
-      : socket_(socket), buffer_(std::move(buffer)) {}
-  bool await_ready() { return false; }
-  auto await_resume() { return std::make_pair(ec_, size_); }
-  void await_suspend(std::coroutine_handle<> handle) {
-    asio::async_write(socket_, std::move(buffer_),
-                      [this, handle](auto ec, auto size) mutable {
-                        ec_ = ec;
-                        size_ = size;
-                        handle.resume();
-                      });
-  }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Socket &socket_;
-  AsioBuffer buffer_;
-
-  std::error_code ec_{};
-  size_t size_{0};
-};
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
     Socket &socket, AsioBuffer &&buffer) noexcept {
-  co_return co_await WriteAwaiter{socket, std::move(buffer)};
+  callback_promise<std::pair<std::error_code, size_t>> promise;
+  asio::async_write(socket, buffer, [&](const auto &ec, auto size) {
+    promise.set_value_then_resume(ec, size);
+  });
+  co_return co_await promise.get_future();
 }
-
-class ConnectAwaiter {
- public:
-  ConnectAwaiter(asio::io_context &io_context, asio::ip::tcp::socket &socket,
-                 const std::string &host, const std::string &port)
-      : io_context_(io_context), socket_(socket), host_(host), port_(port) {}
-  bool await_ready() const noexcept { return false; }
-  void await_suspend(std::coroutine_handle<> handle) {
-    asio::ip::tcp::resolver resolver(io_context_);
-    auto endpoints = resolver.resolve(host_, port_);
-    asio::async_connect(
-        socket_, endpoints,
-        [this, handle](std::error_code ec, asio::ip::tcp::endpoint) mutable {
-          ec_ = ec;
-          handle.resume();
-        });
-  }
-  auto await_resume() noexcept { return ec_; }
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  asio::io_context &io_context_;
-  asio::ip::tcp::socket &socket_;
-  std::string host_;
-  std::string port_;
-  std::error_code ec_{};
-};
 
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     asio::io_context &io_context, asio::ip::tcp::socket &socket,
     const std::string &host, const std::string &port) noexcept {
-  co_return co_await ConnectAwaiter{io_context, socket, host, port};
+  callback_promise<std::error_code> promise;
+  asio::ip::tcp::resolver resolver(io_context);
+  auto endpoints = resolver.resolve(host, port);
+  asio::async_connect(socket, endpoints,
+                      [&](const auto &ec, const auto &) mutable {
+                        promise.set_value_then_resume(ec);
+                      });
+  co_return co_await promise.get_future();
 }
-
-template <typename Socket>
-struct CloseAwaiter {
- public:
-  CloseAwaiter(Socket &socket) : socket_(socket) {}
-  bool await_ready() { return false; }
-  void await_resume() {}
-  void await_suspend(std::coroutine_handle<> handle) {
-    asio::io_context &io_context =
-        static_cast<asio::io_context &>(socket_.get_executor().context());
-    io_context.post([this, handle]() mutable {
-      asio::error_code ignored_ec;
-      socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-      socket_.close(ignored_ec);
-      handle.resume();
-    });
-  }
-
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Socket &socket_;
-};
 
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
-  co_return co_await CloseAwaiter{socket};
+  async_simple::Promise<std::monostate> promise;
+  asio::io_context &io_context =
+      static_cast<asio::io_context &>(socket.get_executor().context());
+  asio::post(io_context, [&]() {
+    asio::error_code ignored_ec;
+    socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+    socket.close(ignored_ec);
+    promise.setValue(std::monostate{});
+  });
+  co_await promise.getFuture();
+  co_return;
 }
 
 #ifdef ENABLE_SSL
-template <typename Stream>
-struct HandshakeAwaiter {
- public:
-  HandshakeAwaiter(Stream &ssl_stream,
-                   asio::ssl::stream_base::handshake_type type)
-      : ssl_stream_(ssl_stream), type_(type) {}
-  bool await_ready() { return false; }
-  auto await_resume() { return ec_; }
-  void await_suspend(std::coroutine_handle<> handle) {
-    ssl_stream_->async_handshake(
-        type_, [this, handle](const asio::error_code &error) mutable {
-          ec_ = error;
-          handle.resume();
-        });
-  }
-
-  auto coAwait(async_simple::Executor *executor) noexcept {
-    return std::move(*this);
-  }
-
- private:
-  Stream &ssl_stream_;
-  asio::ssl::stream_base::handshake_type type_;
-  std::error_code ec_{};
-};
-
 inline async_simple::coro::Lazy<std::error_code> async_handshake(
     auto &ssl_stream, asio::ssl::stream_base::handshake_type type) noexcept {
-  co_return co_await HandshakeAwaiter{ssl_stream, type};
+  callback_promise<std::error_code> promise;
+  ssl_stream->async_handshake(type, [&](const auto &ec) {
+    promise.set_value_then_resume(ec);
+  });
+  co_return co_await promise.get_future();
 }
 #endif
 
 class period_timer : public asio::steady_timer {
-  struct TimerAwaiter {
-   public:
-    TimerAwaiter(period_timer &timer) : timer_(timer) {}
-    bool await_ready() { return false; }
-    bool await_resume() { return is_timeout_; }
-    void await_suspend(std::coroutine_handle<> handle) {
-      timer_.async_wait([this, handle](const asio::error_code &ec) mutable {
-        if (ec) {
-          is_timeout_ = false;
-          handle.resume();
-          return;
-        }
-
-        is_timeout_ = true;
-        handle.resume();
-      });
-    }
-
-    auto coAwait(async_simple::Executor *executor) noexcept {
-      return std::move(*this);
-    }
-
-   private:
-    period_timer &timer_;
-    bool is_timeout_ = false;
-  };
-
  public:
   period_timer(asio::io_context &ctx) : asio::steady_timer(ctx) {}
   template <class Rep, class Period>
@@ -337,21 +234,12 @@ class period_timer : public asio::steady_timer {
                const std::chrono::duration<Rep, Period> &timeout_duration)
       : asio::steady_timer(ctx, timeout_duration) {}
   async_simple::coro::Lazy<bool> async_await() noexcept {
-    co_return co_await TimerAwaiter{*this};
+    callback_promise<bool> promise;
+    this->async_wait([&](const asio::error_code &ec) {
+      promise.set_value_then_resume(!ec);
+    });
+    co_return co_await promise.get_future();
   }
 };
 
-struct sync_task {
-  struct promise_type {
-    sync_task get_return_object() {
-      return {
-          std::coroutine_handle<sync_task::promise_type>::from_promise(*this)};
-    }
-    std::suspend_never initial_suspend() { return {}; }
-    std::suspend_never final_suspend() noexcept { return {}; }
-    void return_void() {}
-    void unhandled_exception() {}
-  };
-
-  std::coroutine_handle<sync_task::promise_type> handle_;
-};
+}  // namespace asio_util

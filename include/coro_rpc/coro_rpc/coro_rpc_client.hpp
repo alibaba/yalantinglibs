@@ -144,13 +144,13 @@ class coro_rpc_client {
 #endif
 
     async_simple::Promise<async_simple::Unit> promise;
-    period_timer timer(get_io_context());
+    asio_util::period_timer timer(get_io_context());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
         .via(&executor_)
         .detach();
 
-    std::error_code ec =
-        co_await async_connect(get_io_context(), socket_, host, port);
+    std::error_code ec = co_await asio_util::async_connect(get_io_context(),
+                                                           socket_, host, port);
     if (!is_timeout_) {
       std::error_code err_code;
       timer.cancel(err_code);
@@ -167,8 +167,8 @@ class coro_rpc_client {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
-      auto shake_ec =
-          co_await async_handshake(ssl_stream_, asio::ssl::stream_base::client);
+      auto shake_ec = co_await asio_util::async_handshake(
+          ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
         easylog::warn("handshake failed:{}", shake_ec.message());
         co_return std::errc::not_connected;
@@ -257,7 +257,7 @@ class coro_rpc_client {
     static_check<func, Args...>();
 
     async_simple::Promise<async_simple::Unit> promise;
-    period_timer timer(get_io_context());
+    asio_util::period_timer timer(get_io_context());
     timeout(timer, duration, promise, "rpc call timer canceled")
         .via(&executor_)
         .detach();
@@ -372,8 +372,8 @@ class coro_rpc_client {
       buffer[0] = (std::byte)(uint8_t(buffer[0]) + 1);
     }
     if (g_action == inject_action::client_close_socket_after_send_header) {
-      ret = co_await async_write(socket,
-                                 asio::buffer(buffer.data(), RPC_HEAD_LEN));
+      ret = co_await asio_util::async_write(
+          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
       easylog::info("close socket");
       co_await close();
       r = rpc_result<R>{unexpect_t{},
@@ -382,8 +382,8 @@ class coro_rpc_client {
     }
     else if (g_action ==
              inject_action::client_close_socket_after_send_partial_header) {
-      ret = co_await async_write(socket,
-                                 asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
+      ret = co_await asio_util::async_write(
+          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
       easylog::info("close socket");
       co_await close();
       r = rpc_result<R>{unexpect_t{},
@@ -392,8 +392,8 @@ class coro_rpc_client {
     }
     else if (g_action ==
              inject_action::client_shutdown_socket_after_send_header) {
-      ret = co_await async_write(socket,
-                                 asio::buffer(buffer.data(), RPC_HEAD_LEN));
+      ret = co_await asio_util::async_write(
+          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
       easylog::info("shutdown");
       socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R>{unexpect_t{},
@@ -401,12 +401,12 @@ class coro_rpc_client {
       co_return r;
     }
     else {
-      ret = co_await async_write(socket,
-                                 asio::buffer(buffer.data(), buffer.size()));
+      ret = co_await asio_util::async_write(
+          socket, asio::buffer(buffer.data(), buffer.size()));
     }
 #else
-    ret = co_await async_write(socket,
-                               asio::buffer(buffer.data(), buffer.size()));
+    ret = co_await asio_util::async_write(
+        socket, asio::buffer(buffer.data(), buffer.size()));
 #endif
     if (!ret.first) {
 #ifdef UNIT_TEST_INJECT
@@ -419,15 +419,15 @@ class coro_rpc_client {
       }
 #endif
       char head[RESPONSE_HEADER_LEN];
-      ret =
-          co_await async_read(socket, asio::buffer(head, RESPONSE_HEADER_LEN));
+      ret = co_await asio_util::async_read(
+          socket, asio::buffer(head, RESPONSE_HEADER_LEN));
       if (!ret.first) {
         uint32_t body_len = *(uint32_t *)head;
         if (body_len > read_buf_.size()) {
           read_buf_.resize(body_len);
         }
-        ret = co_await async_read(socket,
-                                  asio::buffer(read_buf_.data(), body_len));
+        ret = co_await asio_util::async_read(
+            socket, asio::buffer(read_buf_.data(), body_len));
         if (!ret.first) {
 #ifdef GENERATE_BENCHMARK_DATA
           std::ofstream file(
@@ -563,7 +563,7 @@ class coro_rpc_client {
       co_return;
     }
 
-    co_await async_close(socket_);
+    co_await asio_util::async_close(socket_);
   }
 
 #ifdef ENABLE_SSL
@@ -639,7 +639,7 @@ class coro_rpc_client {
       std::make_shared<asio::io_context>();
   asio::io_context *io_context_ptr_ = nullptr;
   std::thread thd_;
-  AsioExecutor executor_;
+  asio_util::AsioExecutor executor_;
   asio::ip::tcp::socket socket_;
   std::vector<std::byte> read_buf_;
   std::size_t default_read_buf_size_ = 256;
