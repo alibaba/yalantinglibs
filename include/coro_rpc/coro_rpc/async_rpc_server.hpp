@@ -190,7 +190,7 @@ class async_rpc_server {
     }
 #endif
     if (!promise_) [[unlikely]] {
-      promise_=std::promise<void>{};
+      promise_ = std::promise<void>{};
     }
     acceptor_.async_accept(
         conn->socket(), [this, conn](asio::error_code ec) mutable {
