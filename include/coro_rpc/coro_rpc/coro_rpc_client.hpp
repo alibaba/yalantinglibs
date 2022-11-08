@@ -375,7 +375,7 @@ class coro_rpc_client {
       ret = co_await async_write(socket,
                                  asio::buffer(buffer.data(), RPC_HEAD_LEN));
       easylog::info("close socket");
-      sync_close();
+      co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
       co_return r;
@@ -385,7 +385,7 @@ class coro_rpc_client {
       ret = co_await async_write(socket,
                                  asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
       easylog::info("close socket");
-      sync_close();
+      co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
       co_return r;
@@ -414,7 +414,7 @@ class coro_rpc_client {
         easylog::info("client_close_socket_after_send_payload");
         r = rpc_result<R>{unexpect_t{},
                           rpc_error{std::errc::io_error, ret.first.message()}};
-        sync_close();
+        co_await close();
         co_return r;
       }
 #endif
