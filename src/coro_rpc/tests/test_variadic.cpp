@@ -44,7 +44,7 @@ TEST_CASE("test varadic param") {
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
 
-  auto ret = syncAwait(client.call<test_func>(114514, 2.0f, "Hello coro_rpc!",
+  auto ret = syncAwait(client.call<test_func>(114514, 2.0f, "Hello coro_rpc!"s,
                                               std::array{
                                                   "hello"s,
                                                   "hi"s,
