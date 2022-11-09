@@ -43,6 +43,8 @@ inline std::unordered_map<
     g_coro_handlers;
 inline std::unordered_map<std::string, uint32_t> g_address2id;
 
+inline std::unordered_map<uint32_t, std::string> g_id2name;
+
 inline auto pack_result(std::errc err, std::string_view err_msg) {
   return std::make_pair(err, struct_pack::serialize_with_offset(
                                  /*offset = */ RESPONSE_HEADER_LEN,
@@ -87,6 +89,12 @@ route_coro(auto handler, std::string_view data, rpc_conn conn) {
   uint32_t id = *(uint32_t *)data.data();
   if (handler) [[likely]] {
     try {
+#ifndef NDEBUG
+      if (auto it = internal::g_id2name.find(id);
+          it != internal::g_id2name.end()) {
+        easylog::info("route coro function name {}", it->second);
+      }
+#endif
       co_return co_await (*handler)(data, conn);
     } catch (const std::exception &e) {
       easylog::error("the rpc function has exception {}, function id {}",
@@ -111,6 +119,12 @@ inline std::pair<std::errc, std::vector<char>> route(auto handler,
   uint32_t id = *(uint32_t *)data.data();
   if (handler) [[likely]] {
     try {
+#ifndef NDEBUG
+      if (auto it = internal::g_id2name.find(id);
+          it != internal::g_id2name.end()) {
+        easylog::info("route function name {}", it->second);
+      }
+#endif
       return (*handler)(data, conn);
     } catch (const std::exception &e) {
       easylog::error("the rpc function has exception {}, function id {}",
