@@ -281,6 +281,7 @@ struct ServerTester : TesterConfig {
   }
 
   void test_connect_timeout() {
+    easylog::info("run {}", __func__);
     if (sync_client) {
       return;
     }
