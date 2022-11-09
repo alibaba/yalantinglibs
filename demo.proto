@@ -1,0 +1,21 @@
+syntax = "proto3";
+message MyTestFixed64 {
+  fixed64 a = 1;
+  repeated fixed64 b = 2;
+}
+
+message OneofDemo {
+  int32 a = 1;
+  oneof bb {
+    int64 b = 2;
+    string c = 3;
+  }
+  bytes d = 4;
+  oneof cc {
+    int64 bb3 = 22;
+    string cc3 = 33;
+  }
+}
+// fn <OneofDemo> = {1, 2, 3, 4, 22, 33}
+//
+//
