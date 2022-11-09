@@ -14,10 +14,10 @@ The target of yaLanTingLibs: provide very easy and high performance C++20 librar
 
 | OS (Compiler Version)                          | Status                                                                                                   |
 |------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
-| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
-| Ubuntu 20.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_gcc.yml/badge.svg?branch=main)   |
 | Ubuntu 20.04 (clang 14.0.0)                    | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_clang.yml/badge.svg?branch=main) |
+| Ubuntu 20.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_gcc.yml/badge.svg?branch=main)   |
+| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
+| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
 
 ## coro_rpc
 
