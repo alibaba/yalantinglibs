@@ -52,6 +52,8 @@ inline void register_one_handler(Self *self) {
       easylog::critical("duplication function {} register!", name);
     }
   }
+
+  internal::g_id2name.emplace(id, name);
 }
 
 template <auto func>
@@ -84,6 +86,7 @@ inline void register_one_handler() {
       easylog::critical("duplication function {} register!", name);
     }
   }
+  internal::g_id2name.emplace(id, name);
 }
 }  // namespace
 /*!
@@ -108,6 +111,8 @@ inline bool remove_handler() {
 
     return false;
   }
+
+  internal::g_id2name.erase(id);
 }
 
 /*!
@@ -176,5 +181,6 @@ inline void register_handler() {
 inline void clear_handlers() {
   internal::g_handlers.clear();
   internal::g_coro_handlers.clear();
+  internal::g_id2name.clear();
 }
 }  // namespace coro_rpc
