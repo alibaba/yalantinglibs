@@ -38,6 +38,9 @@ foreach (_test_file ${TEST_SRCS})
             libcoro_rpc
             doctest
             )
+if  (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    target_compile_definitions(${_test_name} PRIVATE ASIO_DISABLE_IOCP)
+endif()
     target_compile_definitions(${_test_name} PRIVATE UNIT_TEST_INJECT)
     add_test(${_test_name} ${_test_name})
     set_tests_properties(${_test_name} PROPERTIES

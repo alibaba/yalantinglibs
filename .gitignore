@@ -36,6 +36,8 @@
 cmake-*
 *build*
 .fleet
+.vs
+out
 .vscode
 .cache
 .coverage

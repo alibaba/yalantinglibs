@@ -25,6 +25,13 @@
 #include "doctest.h"
 #include "inject_action.hpp"
 #include "rpc_api.hpp"
+
+#ifdef _MSC_VER
+#define CORO_RPC_FUNCTION_SIGNATURE __FUNCSIG__
+#else
+#define CORO_RPC_FUNCTION_SIGNATURE __PRETTY_FUNCTION__
+#endif
+
 using namespace std::string_literals;
 using namespace async_simple::coro;
 using namespace coro_rpc;
@@ -319,7 +326,7 @@ struct ServerTester : TesterConfig {
 
   template <auto func, typename... Args>
   void test_call_with_delay_func_client_read_length_error(Args... args) {
-    easylog::info("run {}", __PRETTY_FUNCTION__);
+    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
     g_action = inject_action::close_socket_after_read_header;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
@@ -328,7 +335,7 @@ struct ServerTester : TesterConfig {
 
   template <auto func, typename... Args>
   void test_call_with_delay_func_client_read_body_error(Args... args) {
-    easylog::info("run {}", __PRETTY_FUNCTION__);
+    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
     g_action = inject_action::close_socket_after_send_length;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
@@ -337,7 +344,7 @@ struct ServerTester : TesterConfig {
 
   template <auto func, typename... Args>
   void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
-    easylog::info("run {}", __PRETTY_FUNCTION__);
+    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);

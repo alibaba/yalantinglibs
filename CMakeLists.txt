@@ -60,7 +60,7 @@ if (USE_CONAN)
 else ()
     add_subdirectory(thirdparty)
 endif ()
-set(yaLanTingLibs_ALL_PROJECTS "struct_pack;coro_rpc")
+set(yaLanTingLibs_ALL_PROJECTS "struct_pack;coro_rpc;util")
 set(yaLanTingLibs_ENABLE_PROJECTS "all" CACHE STRING
         "Semicolon-separated list of projects to build (${yaLanTingLibs_ALL_PROJECTS}), or \"all\".")
 if (yaLanTingLibs_ENABLE_PROJECTS STREQUAL "all")

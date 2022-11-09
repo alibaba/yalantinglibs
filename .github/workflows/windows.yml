@@ -19,9 +19,10 @@ jobs:
         #mode: [ Release, Debug ]
         mode: [ Debug ]
         #arch: [ Win32, x64, ARM, ARM64 ]
-        arch: [ Win32, x64 ]
+        #TODO: support Win32
+        arch: [ x64 ]
         #ssl: [ON, OFF]
-        ssl: [OFF]
+        ssl: [ OFF ]
 
     env:
       CXX: cl.exe
@@ -39,7 +40,7 @@ jobs:
         run: echo $VCPKG_ROOT
 
       - name: Generate Project
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=struct_pack -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=all -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build struct_pack
         run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
