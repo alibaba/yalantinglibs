@@ -76,35 +76,35 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
            asio::ssl::context_base::password_purpose purpose) {
           return "test";
         });
-    auto cert_file = fs::path(conf.base_path).append(conf.cert_file);
-    auto key_file = fs::path(conf.base_path).append(conf.key_file);
-    auto dh_file = fs::path(conf.base_path).append(conf.dh_file);
+    auto cert_file = fs::path(conf.base_path).append(conf.cert_file).string();
+    auto key_file = fs::path(conf.base_path).append(conf.key_file).string();
+    auto dh_file = fs::path(conf.base_path).append(conf.dh_file).string();
 
     easylog::info("current path {}", fs::current_path().string());
     if (file_exists(cert_file)) {
-      easylog::info("load {}", cert_file.string());
+      easylog::info("load {}", cert_file);
       context.use_certificate_chain_file(cert_file);
     }
     else {
-      easylog::error("no certificate file {}", cert_file.string());
+      easylog::error("no certificate file {}", cert_file);
       return false;
     }
 
     if (file_exists(key_file)) {
-      easylog::info("load {}", key_file.string());
+      easylog::info("load {}", key_file);
       context.use_private_key_file(key_file, asio::ssl::context::pem);
     }
     else {
-      easylog::error("no private key file {}", key_file.string());
+      easylog::error("no private key file {}", key_file);
       return false;
     }
 
     if (file_exists(dh_file)) {
-      easylog::info("load {}", dh_file.string());
+      easylog::info("load {}", dh_file);
       context.use_tmp_dh_file(dh_file);
     }
     else {
-      easylog::info("no temp dh file {}", dh_file.string());
+      easylog::info("no temp dh file {}", dh_file);
     }
 
     return true;

@@ -20,6 +20,7 @@
     - [长尾测试](#长尾测试)
   - [benchmark备注](#benchmark备注)
 - [使用约束](#使用约束)
+- [注意](#注意)
 
 coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分)
 ，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
@@ -402,3 +403,7 @@ OS: Linux version 4.9.151-015.ali3000.alios7.x86_64
 
 1. 目前只支持小端，兼容大端的工作正在做；
 2. 目前只支持C++，暂时还不支持跨语言；编译器要求能支持C++20(clang13, gcc10.2,  msvc2022)；
+
+# 注意
+
+1. msvc下开启了ASIO_DISABLE_IOCP预编译宏禁用了iocp，这会导致windows上coro_rpc的性能降低。禁用iocp的原因是socket如果在io_context析构之后析构会导致crash，因为socket析构的时候会去访问io_context，但这个io_context已经析构了，从而引起crash，而这在linux下是没有问题的。禁用iocp之后socket析构函数的逻辑就和linux保持一致了，不会crash，等asio的这个问题fix之后再去掉这个预编译宏。

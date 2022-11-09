@@ -22,7 +22,7 @@ jobs:
         #TODO: support Win32
         arch: [ x64 ]
         #ssl: [ON, OFF]
-        ssl: [ OFF ]
+        ssl: [ OFF, ON ]
 
     env:
       CXX: cl.exe

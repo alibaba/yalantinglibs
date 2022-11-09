@@ -185,15 +185,16 @@ class coro_rpc_client {
     try {
       ssl_init_ret_ = false;
       easylog::info("init ssl: {}", domain);
-      auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
+      auto full_cert_file =
+          std::filesystem::path(base_path).append(cert_file).string();
       easylog::info("current path {}",
                     std::filesystem::current_path().string());
       if (file_exists(full_cert_file)) {
-        easylog::info("load {}", full_cert_file.string());
+        easylog::info("load {}", full_cert_file);
         ssl_ctx_.load_verify_file(full_cert_file);
       }
       else {
-        easylog::info("no certificate file {}", full_cert_file.string());
+        easylog::info("no certificate file {}", full_cert_file);
         return ssl_init_ret_;
       }
 

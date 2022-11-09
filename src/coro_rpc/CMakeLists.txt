@@ -12,10 +12,6 @@ target_link_libraries(libcoro_rpc INTERFACE
         async_simple::async_simple_header_only
         )
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")        
-    add_definitions(-DASIO_DISABLE_IOCP)
-endif()
-
 option(ENABLE_IO_URING "Enable io_uring" OFF)
 if (ENABLE_IO_URING) 
     message(STATUS "Use IO_URING for I/O in linux")
@@ -23,7 +19,7 @@ if (ENABLE_IO_URING)
     target_compile_definitions(libcoro_rpc INTERFACE ASIO_DISABLE_EPOLL)
     target_link_libraries(libcoro_rpc INTERFACE -luring)
 endif()
-option(ENABLE_SSL "Enable ssl support" OFF)
+option(ENABLE_SSL "Enable ssl support" ON)
 if (ENABLE_SSL)
     message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
