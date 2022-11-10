@@ -81,8 +81,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
-      auto shake_ec =
-          co_await async_handshake(ssl_stream_, asio::ssl::stream_base::server);
+      auto shake_ec = co_await asio_util::async_handshake(
+          ssl_stream_, asio::ssl::stream_base::server);
       if (shake_ec) {
         easylog::error("handshake failed:{}", shake_ec.message());
         co_await close();
@@ -108,7 +108,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     auto self = shared_from_this();
     while (true) {
       reset_timer();
-      auto ret = co_await async_read(socket, asio::buffer(head_, RPC_HEAD_LEN));
+      auto ret = co_await asio_util::async_read(
+          socket, asio::buffer(head_, RPC_HEAD_LEN));
       cancel_timer();
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
@@ -148,8 +149,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         body_.resize(body_size_);
       }
 
-      ret = co_await async_read(socket,
-                                asio::buffer(body_.data(), header.length));
+      ret = co_await asio_util::async_read(
+          socket, asio::buffer(body_.data(), header.length));
       if (ret.first) [[unlikely]] {
         easylog::info("read error:{}", ret.first.message());
         co_await close();
@@ -177,8 +178,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
         easylog::warn("inject action: close_socket_after_send_length");
-        co_await async_write(socket,
-                             asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
+        co_await asio_util::async_write(
+            socket, asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
         co_await close();
         co_return;
       }
@@ -304,11 +305,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
-        ret = co_await async_write(*ssl_stream_, asio::buffer(msg));
+        ret = co_await asio_util::async_write(*ssl_stream_, asio::buffer(msg));
       }
       else {
 #endif
-        ret = co_await async_write(socket_, asio::buffer(msg));
+        ret = co_await asio_util::async_write(socket_, asio::buffer(msg));
 #ifdef ENABLE_SSL
       }
 #endif
@@ -395,7 +396,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   asio::io_context &io_context_;
-  AsioExecutor executor_;
+  asio_util::AsioExecutor executor_;
   asio::ip::tcp::socket socket_;
   size_t body_size_ = 256;
   std::vector<char> body_;

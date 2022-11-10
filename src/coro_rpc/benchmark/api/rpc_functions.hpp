@@ -81,7 +81,7 @@ inline void async_io(coro_rpc::connection<int> conn, int a) {
   using namespace std::chrono;
   [&ioc = pool.get_io_context()](
       int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
-    auto timer = period_timer(ioc);
+    auto timer = asio_util::period_timer(ioc);
     timer.expires_after(10ms);
     co_await timer.async_await();
     conn.response_msg(a);
