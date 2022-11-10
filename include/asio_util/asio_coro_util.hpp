@@ -55,7 +55,7 @@ class callback_awaitor_base {
     constexpr bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> handle) noexcept {
       awaitor.coro_ = handle;
-      op();
+      op(awaitor_handler{awaitor});
     }
     auto coAwait(async_simple::Executor *executor) const noexcept {
       return *this;
@@ -75,16 +75,25 @@ class callback_awaitor_base {
   };
 
  public:
-  template <typename... Args>
-  void set_value_then_resume(Args &&...args) {
-    set_value(std::forward<Args>(args)...);
-    resume();
-  }
-  template <typename... Args>
-  void set_value(Args &&...args) {
-    static_cast<Derived &>(*this).set_value(std::forward<Args>(args)...);
-  }
-  void resume() { coro_.resume(); }
+  class awaitor_handler {
+   public:
+    awaitor_handler(Derived &obj) : obj(obj) {}
+    template <typename... Args>
+    void set_value_then_resume(Args &&...args) const {
+      set_value(std::forward<Args>(args)...);
+      resume();
+    }
+    template <typename... Args>
+    void set_value(Args &&...args) const {
+      if constexpr (!std::is_void_v<Arg>) {
+        obj.arg_ = {std::forward<Args>(args)...};
+      }
+    }
+    void resume() const { obj.coro_.resume(); }
+
+   private:
+    Derived &obj;
+  };
   template <typename Op>
   callback_awaitor_impl<Op> await_resume(const Op &op) noexcept {
     return callback_awaitor_impl<Op>{static_cast<Derived &>(*this), op};
@@ -97,11 +106,6 @@ class callback_awaitor_base {
 template <typename Arg>
 class callback_awaitor
     : public callback_awaitor_base<Arg, callback_awaitor<Arg>> {
- public:
-  template <typename... Args>
-  void set_value(Args &&...args) {
-    arg_ = {std::forward<Args>(args)...};
-  }
   friend class callback_awaitor_base<Arg, callback_awaitor<Arg>>;
 
  private:
@@ -110,18 +114,15 @@ class callback_awaitor
 
 template <>
 class callback_awaitor<void>
-    : public callback_awaitor_base<void, callback_awaitor<void>> {
- public:
-  void set_value() noexcept {};
-};
+    : public callback_awaitor_base<void, callback_awaitor<void>> {};
 
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor &acceptor, asio::ip::tcp::socket &socket) noexcept {
   callback_awaitor<std::error_code> awaitor;
 
-  co_return co_await awaitor.await_resume([&] {
-    acceptor.async_accept(socket, [&](const auto &ec) {
-      awaitor.set_value_then_resume(ec);
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    acceptor.async_accept(socket, [&, handler](const auto &ec) mutable {
+      handler.set_value_then_resume(ec);
     });
   });
 }
@@ -130,9 +131,9 @@ template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-  co_return co_await awaitor.await_resume([&] {
-    socket.async_read_some(buffer, [&](const auto &ec, auto size) {
-      awaitor.set_value_then_resume(ec, size);
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    socket.async_read_some(buffer, [&, handler](const auto &ec, auto size) {
+      handler.set_value_then_resume(ec, size);
     });
   });
 }
@@ -140,9 +141,9 @@ template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-  co_return co_await awaitor.await_resume([&] {
-    asio::async_read(socket, buffer, [&](const auto &ec, auto size) {
-      awaitor.set_value_then_resume(ec, size);
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_read(socket, buffer, [&, handler](const auto &ec, auto size) {
+      handler.set_value_then_resume(ec, size);
     });
   });
 }
@@ -152,10 +153,10 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_until(Socket &socket, AsioBuffer &buffer,
                  asio::string_view delim) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-  co_return co_await awaitor.await_resume([&] {
+  co_return co_await awaitor.await_resume([&](auto handler) {
     asio::async_read_until(socket, buffer, delim,
-                           [&](const auto &ec, auto size) {
-                             awaitor.set_value_then_resume(ec, size);
+                           [&, handler](const auto &ec, auto size) {
+                             handler.set_value_then_resume(ec, size);
                            });
   });
 }
@@ -164,9 +165,9 @@ template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
     Socket &socket, AsioBuffer &&buffer) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-  co_return co_await awaitor.await_resume([&] {
-    asio::async_write(socket, buffer, [&](const auto &ec, auto size) {
-      awaitor.set_value_then_resume(ec, size);
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_write(socket, buffer, [&, handler](const auto &ec, auto size) {
+      handler.set_value_then_resume(ec, size);
     });
   });
 }
@@ -177,10 +178,10 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
   callback_awaitor<std::error_code> awaitor;
   asio::ip::tcp::resolver resolver(io_context);
   auto endpoints = resolver.resolve(host, port);
-  co_return co_await awaitor.await_resume([&] {
+  co_return co_await awaitor.await_resume([&](auto handler) {
     asio::async_connect(socket, endpoints,
-                        [&](const auto &ec, const auto &) mutable {
-                          awaitor.set_value_then_resume(ec);
+                        [&, handler](const auto &ec, const auto &) mutable {
+                          handler.set_value_then_resume(ec);
                         });
   });
 }
@@ -190,12 +191,12 @@ inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
   asio::io_context &io_context =
       static_cast<asio::io_context &>(socket.get_executor().context());
-  co_return co_await awaitor.await_resume([&] {
-    asio::post(io_context, [&]() {
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::post(io_context, [&, handler]() {
       asio::error_code ignored_ec;
       socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket.close(ignored_ec);
-      awaitor.resume();
+      handler.resume();
     });
   });
 }
@@ -204,9 +205,9 @@ inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
 inline async_simple::coro::Lazy<std::error_code> async_handshake(
     auto &ssl_stream, asio::ssl::stream_base::handshake_type type) noexcept {
   callback_awaitor<std::error_code> awaitor;
-  co_return co_await awaitor.await_resume([&] {
-    ssl_stream->async_handshake(type, [&](const auto &ec) {
-      awaitor.set_value_then_resume(ec);
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    ssl_stream->async_handshake(type, [&, handler](const auto &ec) {
+      handler.set_value_then_resume(ec);
     });
   });
 }
@@ -221,9 +222,9 @@ class period_timer : public asio::steady_timer {
       : asio::steady_timer(ctx, timeout_duration) {}
   async_simple::coro::Lazy<bool> async_await() noexcept {
     callback_awaitor<bool> awaitor;
-    co_return co_await awaitor.await_resume([&] {
-      this->async_wait([&](const asio::error_code &ec) {
-        awaitor.set_value_then_resume(!ec);
+    co_return co_await awaitor.await_resume([&](auto handler) {
+      this->async_wait([&, handler](const auto &ec) {
+        handler.set_value_then_resume(!ec);
       });
     });
   }
