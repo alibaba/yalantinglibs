@@ -13,4 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-void no_op();
+#pragma once
+
+static constexpr int OBJECT_COUNT = 20;
+static constexpr int SAMPLES_COUNT = 100000;
