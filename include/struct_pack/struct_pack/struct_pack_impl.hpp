@@ -413,9 +413,83 @@ consteval type_id get_type_id() {
 template <size_t size>
 consteval decltype(auto) get_size_literal() {
   static_assert(sizeof(size_t) <= 8);
-  return string_literal<char, 8>{
-      {size >> 56, (size >> 48) % 256, (size >> 40) % 256, (size >> 32) % 256,
-       (size >> 24) % 256, (size >> 16) % 256, (size >> 8) % 256, size % 256}};
+  if constexpr (size < 1ull * 127) {
+    return string_literal<char, 1>{{static_cast<char>(size + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127) {
+    return string_literal<char, 2>{
+        {static_cast<char>(size % 127 + 1), static_cast<char>(size / 127 + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127 * 127) {
+    return string_literal<char, 3>{{static_cast<char>(size % 127 + 1),
+                                    static_cast<char>(size / 127 % 127 + 1),
+                                    static_cast<char>(size / (127 * 127) + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127 * 127 * 127) {
+    return string_literal<char, 4>{
+        {static_cast<char>(size % 127 + 1),
+         static_cast<char>(size / 127 % 127 + 1),
+         static_cast<char>(size / (127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127) + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127) {
+    return string_literal<char, 5>{
+        {static_cast<char>(size % 127 + 1),
+         static_cast<char>(size / 127 % 127 + 1),
+         static_cast<char>(size / (127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127) + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127) {
+    return string_literal<char, 6>{
+        {static_cast<char>(size % 127 + 1),
+         static_cast<char>(size / 127 % 127 + 1),
+         static_cast<char>(size / (127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) + 1)}};
+  }
+  else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
+    return string_literal<char, 7>{
+        {static_cast<char>(size % 127 + 1),
+         static_cast<char>(size / 127 % 127 + 1),
+         static_cast<char>(size / (127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) + 1)}};
+  }
+  else if constexpr (size <
+                     1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
+    return string_literal<char, 8>{{
+        static_cast<char>(size % 127 + 1),
+        static_cast<char>(size / 127 % 127 + 1),
+        static_cast<char>(size / (127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127 * 127) + 1),
+    }};
+  }
+  else {
+    static_assert(
+        size >= 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127,
+        "The array is too large.");
+    return string_literal<char, 9>{{
+        static_cast<char>(size % 127 + 1),
+        static_cast<char>(size / 127 % 127 + 1),
+        static_cast<char>(size / (127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(
+            size / (127 * 127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(
+            size / (127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) + 1),
+    }};
+  }
 }
 
 // This help function is just to improve unit test coverage. :)
