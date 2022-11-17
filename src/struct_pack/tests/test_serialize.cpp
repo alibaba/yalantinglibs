@@ -1441,7 +1441,9 @@ std::array<std::string, 1> ar0;
 std::array<std::string, 126> ar1;
 std::array<std::string, 127> ar2;
 std::array<std::string, 127 * 127 - 1> ar3;
+std::array<std::string, 127 * 127 - 1> ar3_1;
 std::array<std::string, 127 * 127> ar4;
+std::array<std::string, 127 * 127> ar4_1;
 }  // namespace array_test
 
 TEST_CASE("array test") {
@@ -1467,15 +1469,15 @@ TEST_CASE("array test") {
   }
   {
     ar3[117] = test_str;
-    auto ret = deserialize<decltype(ar3)>(serialize(ar3));
-    assert(ret);
-    assert(ret.value()[117] == test_str);
+    auto ret = deserialize_to(ar3_1, serialize(ar3));
+    assert(ret == std::errc{});
+    assert(ar3_1[117] == test_str);
   }
   {
     ar4[15472] = test_str;
-    auto ret = deserialize<decltype(ar4)>(serialize(ar4));
-    assert(ret);
-    assert(ret.value()[15472] == test_str);
+    auto ret = deserialize_to(ar4_1, serialize(ar4));
+    assert(ret == std::errc{});
+    assert(ar4_1[15472] == test_str);
   }
 }
 
