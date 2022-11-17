@@ -1437,6 +1437,49 @@ TEST_CASE("char test") {
   }
 }
 
+namespace array_test {
+std::array<std::string, 1> ar0;
+std::array<std::string, 126> ar1;
+std::array<std::string, 127> ar2;
+std::array<std::string, 127 * 127 - 1> ar3;
+std::array<std::string, 127 * 127> ar4;
+}  // namespace array_test
+
+TEST_CASE("array test") {
+  std::string test_str = "Hello Hi Hello Hi Hello Hi Hello Hi Hello Hi";
+  using namespace array_test;
+  {
+    ar0[0] = test_str;
+    auto ret = deserialize<decltype(ar0)>(serialize(ar0));
+    assert(ret);
+    assert(ret.value()[0] == test_str);
+  }
+  {
+    ar1[7] = test_str;
+    auto ret = deserialize<decltype(ar1)>(serialize(ar1));
+    assert(ret);
+    assert(ret.value()[7] == test_str);
+  }
+  {
+    ar2[56] = test_str;
+    auto ret = deserialize<decltype(ar2)>(serialize(ar2));
+    assert(ret);
+    assert(ret.value()[56] == test_str);
+  }
+  {
+    ar3[117] = test_str;
+    auto ret = deserialize<decltype(ar3)>(serialize(ar3));
+    assert(ret);
+    assert(ret.value()[117] == test_str);
+  }
+  {
+    ar4[15472] = test_str;
+    auto ret = deserialize<decltype(ar4)>(serialize(ar4));
+    assert(ret);
+    assert(ret.value()[15472] == test_str);
+  }
+}
+
 template <typename T>
 void test_no_buffer_space(T &t, std::vector<int> size_list) {
   auto ret = serialize(t);
@@ -1952,21 +1995,21 @@ TEST_CASE("type calculate") {
         serialize(std::tuple<int, std::string>{})));
   }
   {
-    static_assert(
-        get_type_code<type_calculate_test_1>() ==
-            get_type_code<type_calculate_test_2>(),
-        "struct type_calculate_test_1 && type_calculate_test_2 should get the "
-        "same MD5");
+    static_assert(get_type_code<type_calculate_test_1>() ==
+                      get_type_code<type_calculate_test_2>(),
+                  "struct type_calculate_test_1 && type_calculate_test_2 "
+                  "should get the "
+                  "same MD5");
     CHECK(
         deserialize<type_calculate_test_1>(serialize(type_calculate_test_2{})));
   }
 
   {
-    static_assert(
-        get_type_code<type_calculate_test_1>() !=
-            get_type_code<type_calculate_test_3>(),
-        "struct type_calculate_test_1 && type_calculate_test_3 should get the "
-        "different MD5");
+    static_assert(get_type_code<type_calculate_test_1>() !=
+                      get_type_code<type_calculate_test_3>(),
+                  "struct type_calculate_test_1 && type_calculate_test_3 "
+                  "should get the "
+                  "different MD5");
     CHECK(!deserialize<type_calculate_test_1>(
         serialize(type_calculate_test_3{})));
   }
