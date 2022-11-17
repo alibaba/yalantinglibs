@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "md5_constexpr.hpp"
+#include "struct_pack/struct_pack.hpp"
 #include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
@@ -707,22 +708,20 @@ consteval int check_if_compatible_element_exist() {
 template <typename T, typename... Args>
 consteval uint32_t get_types_code_impl() {
   constexpr auto str = get_types_literal<T, std::remove_cvref_t<Args>...>();
+  return MD5::MD5Hash32Constexpr(str.data(), str.size());
+}
+
+template <typename T, size_t... I>
+consteval int check_if_compatible_element_exist(std::index_sequence<I...>) {
   constexpr auto ret =
-      check_if_compatible_element_exist<0, std::remove_cvref_t<Args>...>();
+      check_if_compatible_element_exist<0, std::tuple_element_t<I, T>...>();
   // ret == 0 -> unexist_compatible_element
   // ret == 1 -> legal_compatible_element
   // ret == -1 -> illegal_compatible_element
   static_assert(
       ret == 0 || ret == 1,
       "The relative position of compatible<T> in struct is not allowed!");
-  auto md5 = MD5::MD5Hash32Constexpr(str.data(), str.size());
-  auto types_code = md5 - (md5 % 2) + ret;  // set lowest bit as ret
-  return types_code;
-}
-
-template <typename T, size_t... I>
-consteval int check_if_compatible_element_exist(std::index_sequence<I...>) {
-  return check_if_compatible_element_exist<0, std::tuple_element_t<I, T>...>();
+  return ret;
 }
 
 template <typename T, typename Tuple, size_t... I>
@@ -742,9 +741,9 @@ consteval uint32_t get_types_code(std::index_sequence<I...>) {
 
 template <typename T, typename... Args>
 constexpr std::size_t STRUCT_PACK_INLINE
-calculate_needed_size(const T &item, const Args &...items);
+calculate_payload_size(const T &item, const Args &...items);
 
-constexpr std::size_t STRUCT_PACK_INLINE calculate_needed_size() { return 0; }
+constexpr std::size_t STRUCT_PACK_INLINE calculate_payload_size() { return 0; }
 
 template <typename T>
 constexpr std::size_t STRUCT_PACK_INLINE calculate_one_size(const T &item) {
@@ -788,7 +787,7 @@ constexpr std::size_t STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   else if constexpr (tuple<type>) {
     std::apply(
         [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-          total += calculate_needed_size(items...);
+          total += calculate_payload_size(items...);
         },
         item);
   }
@@ -827,7 +826,7 @@ constexpr std::size_t STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     }
     else {
       visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-        total += calculate_needed_size(items...);
+        total += calculate_payload_size(items...);
       });
     }
   }
@@ -848,9 +847,9 @@ calculate_one_size(const std::pair<Key, Value> &item) {
 
 template <typename T, typename... Args>
 constexpr std::size_t STRUCT_PACK_INLINE
-calculate_needed_size(const T &item, const Args &...items) {
+calculate_payload_size(const T &item, const Args &...items) {
   auto sz = calculate_one_size(item);
-  return sz + calculate_needed_size(items...);
+  return sz + calculate_payload_size(items...);
 }
 
 template <typename T, typename Tuple>
@@ -875,61 +874,113 @@ concept unexist_compatible_member = check_if_compatible_element_exist<
     decltype(get_types(std::remove_cvref_t<T>{}))>()
 == 0;
 
-template <struct_pack_byte Byte>
+template <typename T>
+struct serialize_static_config {
+  static constexpr bool has_compatible = exist_compatible_member<T>;
+#ifdef NDEBUG
+  static constexpr bool include_type_literal = false;
+#else
+  static constexpr bool include_type_literal = true;
+#endif
+};
+
+struct serialize_runtime_info {
+  std::size_t len;
+  char metainfo;
+};
+
+template <typename... Args>
+using get_args_type =
+    typename std::conditional<sizeof...(Args) == 1,
+                              std::tuple_element_t<0, std::tuple<Args...>>,
+                              std::tuple<Args...>>::type;
+
+template <typename... Args>
+[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
+get_serialize_runtime_info(const Args &...args) {
+  auto payload_sz = calculate_payload_size(args...);
+
+  if constexpr ((detail::unexist_compatible_member<Args> && ...)) {
+    std::size_t metainfo_size = sizeof(uint32_t);
+    size_t total_sz = payload_sz + metainfo_size;
+    return {.len = total_sz, .metainfo = 0};
+  }
+  else {
+    std::size_t metainfo_size = sizeof(uint32_t) + sizeof(char);
+    size_t total_sz = payload_sz + metainfo_size;
+    if (total_sz < (1ull << 16) - 2) [[likely]] {
+      return {.len = total_sz + 2, .metainfo = 1};
+    }
+    else if (total_sz < (1ull << 32) - 4) {
+      return {.len = total_sz + 4, .metainfo = 2};
+    }
+    else {
+      return {.len = total_sz + 8, .metainfo = 3};
+    }
+  }
+}
+
+template <struct_pack_byte Byte, typename serialize_type>
 class packer {
  public:
-  packer(Byte *data) : data_(data) {}
+  packer(Byte *data, const serialize_runtime_info &info)
+      : data_(data), pos_(0), info(info) {}
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
   template <typename T, typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
-    if constexpr (sizeof...(args) == 0) {
-      constexpr uint32_t types_code =
-          get_types_code<T, decltype(get_types(t))>();
-      std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
-      pos_ += sizeof(uint32_t);
-      serialize_one(t);
-    }
-    else {
-      // for variadic args, using void as inner type
-      // void just a placeholder here
-      constexpr uint32_t types_code = get_types_code<
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
-      std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
-      pos_ += sizeof(uint32_t);
-      serialize_many(t, args...);
-    }
-  }
-
-  template <typename T, typename... Args>
-  STRUCT_PACK_INLINE void serialize_with_size(uint64_t sz, const T &t,
-                                              const Args &...args) {
-    if constexpr (sizeof...(args) == 0) {
-      constexpr uint32_t types_code =
-          get_types_code<T, decltype(get_types(t))>();
-      std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
-      std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
-      pos_ += sizeof(uint32_t) + sizeof(uint64_t);
-      serialize_one(t);
-    }
-    else {
-      // for variadic args, using void as inner type
-      // void just a placeholder here
-      constexpr uint32_t types_code = get_types_code<
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
-      std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
-      std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
-      pos_ += sizeof(uint32_t) + sizeof(uint64_t);
-      serialize_many(t, args...);
-    }
+    serialize_metainfo(t, args...);
+    serialize_many(t, args...);
   }
 
   STRUCT_PACK_INLINE const Byte *data() { return data_; }
 
   STRUCT_PACK_INLINE size_t size() { return pos_; }
+
+ private:
+  template <typename T, typename... Args>
+  static consteval uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
+    if constexpr (sizeof...(Args) == 0) {
+      return get_types_code<
+          std::remove_cvref_t<T>,
+          std::remove_cvref_t<decltype(get_types(std::declval<T>()))>>();
+    }
+    else {
+      return get_types_code<
+          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
+          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
+    }
+  }
+  template <typename T, typename... Args>
+  static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
+    constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
+    if constexpr (serialize_static_config<serialize_type>::has_compatible) {
+      return raw_types_code - raw_types_code % 2 + 1;
+    }
+    // TODO: size_type & debug_info
+    else {  // default case, only has hash_code
+      return raw_types_code - raw_types_code % 2;
+    }
+  }
+  template <typename T, typename... Args>
+  constexpr void STRUCT_PACK_INLINE serialize_metainfo(const T &t,
+                                                       const Args &...args) {
+    constexpr auto hash_head = calculate_hash_head<T, Args...>();
+    std::memcpy(data_ + pos_, &hash_head, sizeof(uint32_t));
+    pos_ += sizeof(uint32_t);
+    if constexpr (hash_head % 2) {  // has more metainfo
+      std::memcpy(data_ + pos_, &info.metainfo, sizeof(char));
+      pos_ += sizeof(char);
+      if constexpr (serialize_static_config<serialize_type>::has_compatible) {
+        constexpr std::size_t sz[] = {0, 2, 4, 8};
+        auto len_size = sz[info.metainfo & 0b11];
+        std::memcpy(data_ + pos_, &info.len, len_size);
+        pos_ += len_size;
+      }
+      // TODO:size_type & debug_info
+    }
+  }
 
  private:
   constexpr void STRUCT_PACK_INLINE serialize_many() { return; }
@@ -1054,7 +1105,8 @@ class packer {
   template <typename T>
   friend constexpr size_t get_needed_size(const T &t);
   Byte *data_;
-  std::size_t pos_{};
+  std::size_t pos_;
+  const serialize_runtime_info &info;
 };
 
 template <struct_pack_byte Byte>
@@ -1069,43 +1121,26 @@ class unpacker {
 
   template <typename T, typename... Args>
   STRUCT_PACK_INLINE std::errc deserialize(T &t, Args &...args) {
-    if constexpr (sizeof...(Args) == 0) {
-      auto &&[err_code, data_len] = check_types(t);
-      if (err_code != std::errc{}) [[unlikely]] {
-        return err_code;
-      }
-      return deserialize_one(t);
+    auto &&[err_code, data_len] =
+        deserialize_metainfo<get_args_type<T, Args...>>();
+    if (err_code != std::errc{}) [[unlikely]] {
+      return err_code;
     }
-    else {
-      auto &&[err_code, data_len] = check_types(std::tuple<T, Args...>{});
-      if (err_code != std::errc{}) [[unlikely]] {
-        return err_code;
-      }
-      return deserialize_many(t, args...);
-    }
+    auto ret = deserialize_many(t, args...);
+    return ret;
   }
 
   template <typename T, typename... Args>
   STRUCT_PACK_INLINE std::errc deserialize(std::size_t &len, T &t,
                                            Args &...args) {
-    if constexpr (sizeof...(Args) == 0) {
-      auto &&[err_code, data_len] = check_types(t);
-      if (err_code != std::errc{}) [[unlikely]] {
-        return err_code;
-      }
-      auto ret = deserialize_one(t);
-      len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
-      return ret;
+    auto &&[err_code, data_len] =
+        deserialize_metainfo<get_args_type<T, Args...>>();
+    if (err_code != std::errc{}) [[unlikely]] {
+      return err_code;
     }
-    else {
-      auto &&[err_code, data_len] = check_types(std::tuple<T, Args...>{});
-      if (err_code != std::errc{}) [[unlikely]] {
-        return err_code;
-      }
-      auto ret = deserialize_many(t, args...);
-      len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
-      return ret;
-    }
+    auto ret = deserialize_many(t, args...);
+    len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
+    return ret;
   }
 
   template <typename U, size_t I>
@@ -1116,7 +1151,8 @@ class unpacker {
     using T = std::remove_cvref_t<U>;
 
     static T t;
-    if (auto [code, _] = check_types(t); code != std::errc{}) [[unlikely]] {
+    if (auto [code, _] = deserialize_metainfo<T>(); code != std::errc{})
+        [[unlikely]] {
       return code;
     }
     std::errc err_code;
@@ -1166,32 +1202,51 @@ class unpacker {
     };
   };
 
+  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> deserialize_compatible(
+      char metainfo) {
+    char compatible_sz_len = metainfo & 0b11;
+    constexpr std::size_t sz[] = {0, 2, 4, 8};
+    if (compatible_sz_len == 0) {
+      return {};
+    }
+    else {
+      auto len_sz = sz[compatible_sz_len];
+      uint64_t data_len = 0;
+      if (size_ < sizeof(uint32_t) + sizeof(char) + len_sz) [[unlikely]] {
+        return {std::errc::no_buffer_space, 0};
+      }
+      std::memcpy(&data_len, data_ + pos_, len_sz);
+      pos_ += len_sz;
+      return {std::errc{}, data_len};
+    }
+  }
+
   template <class T>
-  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> check_types(const T &t) {
+  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> deserialize_metainfo() {
     if (size_ < sizeof(uint32_t)) [[unlikely]] {
       return {std::errc::no_buffer_space, 0};
     }
-    constexpr uint32_t types_code = get_types_code<T, decltype(get_types(t))>();
+    constexpr uint32_t types_code =
+        get_types_code<T, decltype(get_types(std::declval<T>()))>();
     uint32_t current_types_code;
     std::memcpy(&current_types_code, data_ + pos_, sizeof(uint32_t));
     if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
       return {std::errc::invalid_argument, 0};
     }
     pos_ += sizeof(uint32_t);
-    if (current_types_code % 2)  // exist compatible element
+    if (current_types_code % 2 == 0) [[likely]]  // unexist extended metainfo
     {
-      if (size_ < sizeof(uint64_t) + sizeof(uint32_t)) [[unlikely]] {
-        return {std::errc::no_buffer_space, 0};
-      }
-      uint64_t data_len;
-      std::memcpy(&data_len, data_ + pos_, sizeof(uint64_t));
-      if (data_len > size_) [[unlikely]] {
-        return {std::errc::no_buffer_space, 0};
-      }
-      pos_ += sizeof(uint64_t);
-      return {std::errc{}, data_len};
+      return {};
     }
-    return {};
+    if (size_ < sizeof(char) + sizeof(uint32_t)) [[unlikely]] {
+      return {std::errc::no_buffer_space, 0};
+    }
+    char metainfo;
+    std::memcpy(&metainfo, data_ + pos_, sizeof(char));
+    pos_ += sizeof(char);
+    // TODO: deserialize size_type & debug info
+    auto ret = deserialize_compatible(metainfo);
+    return ret;
   }
 
   template <bool NotSkip = true>

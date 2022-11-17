@@ -7,8 +7,7 @@
 #include <type_traits>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack/reflection.h"
-#include "struct_pack/struct_pack/struct_pack_impl.hpp"
+#include "struct_pack/struct_pack.hpp"
 
 using namespace std::string_view_literals;
 
