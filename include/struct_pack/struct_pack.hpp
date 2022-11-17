@@ -134,14 +134,13 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval std::size_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_code<detail::get_type_id<Args...>(), Args...,
-                                  decltype(detail::get_types(
-                                      std::declval<Args...>()))>();
+    return detail::get_types_code<Args..., decltype(detail::get_types(
+                                               std::declval<Args...>()))>();
   }
   else {
     // for variadic args, using void as inner type
     // void just a placeholder here
-    return detail::get_types_code<detail::type_id::non_trivial_class_t, void,
+    return detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
                                   std::tuple<Args...>>();
   }
 }
@@ -151,15 +150,12 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
     using Types = decltype(detail::get_types(Args{}...));
-    return detail::get_types_literal<detail::get_type_id<Args...>(), Args...,
-                                     Types>(
+    return detail::get_types_literal<Args..., Types>(
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    // for variadic args, using void as inner type
-    // void just a placeholder here
-    return detail::get_types_literal<detail::type_id::non_trivial_class_t, void,
-                                     Args...>();
+    return detail::get_types_literal<std::tuple<std::remove_cvref_t<Args>...>,
+                                     std::remove_cvref_t<Args>...>();
   }
 }
 

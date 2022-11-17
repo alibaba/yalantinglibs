@@ -613,8 +613,9 @@ consteval decltype(auto) get_types_literal_impl() {
   return (get_type_literal<Args, void>() + ...);
 }
 
-template <type_id root_id, typename T, typename... Args>
+template <typename T, typename... Args>
 consteval decltype(auto) get_types_literal() {
+  constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
   if constexpr (root_id == type_id::non_trivial_class_t ||
                 root_id == type_id::trivial_class_t) {
     constexpr auto begin =
@@ -640,10 +641,10 @@ consteval decltype(auto) get_types_literal() {
   }
 }
 
-template <type_id root_id, typename T, typename Tuple, std::size_t... I>
+template <typename T, typename Tuple, std::size_t... I>
 consteval decltype(auto) get_types_literal(std::index_sequence<I...>) {
   return get_types_literal<
-      root_id, T, std::remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
+      T, std::remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
 }
 
 // the compatible<T> should in the end of the struct, and it shouldn't in the
@@ -703,10 +704,9 @@ consteval int check_if_compatible_element_exist() {
   return ret;
 }
 
-template <type_id root_id, typename T, typename... Args>
+template <typename T, typename... Args>
 consteval uint32_t get_types_code_impl() {
-  constexpr auto str =
-      get_types_literal<root_id, T, std::remove_cvref_t<Args>...>();
+  constexpr auto str = get_types_literal<T, std::remove_cvref_t<Args>...>();
   constexpr auto ret =
       check_if_compatible_element_exist<0, std::remove_cvref_t<Args>...>();
   // ret == 0 -> unexist_compatible_element
@@ -725,9 +725,9 @@ consteval int check_if_compatible_element_exist(std::index_sequence<I...>) {
   return check_if_compatible_element_exist<0, std::tuple_element_t<I, T>...>();
 }
 
-template <type_id root_id, typename T, typename Tuple, size_t... I>
+template <typename T, typename Tuple, size_t... I>
 consteval uint32_t get_types_code(std::index_sequence<I...>) {
-  return get_types_code_impl<root_id, T, std::tuple_element_t<I, Tuple>...>();
+  return get_types_code_impl<T, std::tuple_element_t<I, Tuple>...>();
 }
 
 [[noreturn]] STRUCT_PACK_INLINE void exit_container_size() {
@@ -853,9 +853,9 @@ calculate_needed_size(const T &item, const Args &...items) {
   return sz + calculate_needed_size(items...);
 }
 
-template <type_id root_id, typename T, typename Tuple>
+template <typename T, typename Tuple>
 consteval uint32_t get_types_code() {
-  return detail::get_types_code<root_id, T, Tuple>(
+  return detail::get_types_code<T, Tuple>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
@@ -886,7 +886,7 @@ class packer {
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
     if constexpr (sizeof...(args) == 0) {
       constexpr uint32_t types_code =
-          get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
+          get_types_code<T, decltype(get_types(t))>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       pos_ += sizeof(uint32_t);
       serialize_one(t);
@@ -895,7 +895,7 @@ class packer {
       // for variadic args, using void as inner type
       // void just a placeholder here
       constexpr uint32_t types_code = get_types_code<
-          type_id::non_trivial_class_t, void,
+          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       pos_ += sizeof(uint32_t);
@@ -908,7 +908,7 @@ class packer {
                                               const Args &...args) {
     if constexpr (sizeof...(args) == 0) {
       constexpr uint32_t types_code =
-          get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
+          get_types_code<T, decltype(get_types(t))>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
       pos_ += sizeof(uint32_t) + sizeof(uint64_t);
@@ -918,7 +918,7 @@ class packer {
       // for variadic args, using void as inner type
       // void just a placeholder here
       constexpr uint32_t types_code = get_types_code<
-          type_id::non_trivial_class_t, void,
+          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
       std::memcpy(data_ + pos_, &types_code, sizeof(uint32_t));
       std::memcpy(data_ + pos_ + sizeof(uint32_t), &sz, sizeof(uint64_t));
@@ -1171,9 +1171,7 @@ class unpacker {
     if (size_ < sizeof(uint32_t)) [[unlikely]] {
       return {std::errc::no_buffer_space, 0};
     }
-
-    constexpr uint32_t types_code =
-        get_types_code<get_type_id<T>(), T, decltype(get_types(t))>();
+    constexpr uint32_t types_code = get_types_code<T, decltype(get_types(t))>();
     uint32_t current_types_code;
     std::memcpy(&current_types_code, data_ + pos_, sizeof(uint32_t));
     if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
