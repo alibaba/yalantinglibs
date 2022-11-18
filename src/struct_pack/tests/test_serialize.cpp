@@ -24,7 +24,6 @@
 #include <utility>
 #include <variant>
 
-#include "struct_pack/struct_pack/reflection.h"
 #define private public
 #include "struct_pack/struct_pack.hpp"
 #undef private
@@ -1437,6 +1436,51 @@ TEST_CASE("char test") {
   }
 }
 
+namespace array_test {
+std::array<std::string, 1> ar0;
+std::array<std::string, 126> ar1;
+std::array<std::string, 127> ar2;
+std::array<std::string, 127 * 127 - 1> ar3;
+std::array<std::string, 127 * 127 - 1> ar3_1;
+std::array<std::string, 127 * 127> ar4;
+std::array<std::string, 127 * 127> ar4_1;
+}  // namespace array_test
+
+TEST_CASE("array test") {
+  std::string test_str = "Hello Hi Hello Hi Hello Hi Hello Hi Hello Hi";
+  using namespace array_test;
+  {
+    ar0[0] = test_str;
+    auto ret = deserialize<decltype(ar0)>(serialize(ar0));
+    assert(ret);
+    assert(ret.value()[0] == test_str);
+  }
+  {
+    ar1[7] = test_str;
+    auto ret = deserialize<decltype(ar1)>(serialize(ar1));
+    assert(ret);
+    assert(ret.value()[7] == test_str);
+  }
+  {
+    ar2[56] = test_str;
+    auto ret = deserialize<decltype(ar2)>(serialize(ar2));
+    assert(ret);
+    assert(ret.value()[56] == test_str);
+  }
+  {
+    ar3[117] = test_str;
+    auto ret = deserialize_to(ar3_1, serialize(ar3));
+    assert(ret == std::errc{});
+    assert(ar3_1[117] == test_str);
+  }
+  {
+    ar4[15472] = test_str;
+    auto ret = deserialize_to(ar4_1, serialize(ar4));
+    assert(ret == std::errc{});
+    assert(ar4_1[15472] == test_str);
+  }
+}
+
 template <typename T>
 void test_no_buffer_space(T &t, std::vector<int> size_list) {
   auto ret = serialize(t);
@@ -1554,47 +1598,100 @@ TEST_CASE("test members_count") {
 }
 
 TEST_CASE("test compatible") {
-  constexpr auto code = get_type_code<std::tuple<int, char>>();
-  static_assert(code % 2 == 0);
-  constexpr auto code1 =
-      get_type_code<std::tuple<int, char, compatible<bool>>>();
-  static_assert(code1 % 2 == 1);
-  static_assert((code | 1) == (code1 | 1));
-  constexpr auto code2 = get_type_code<
-      std::tuple<int, char, compatible<bool>, compatible<int32_t>>>();
-  static_assert((code | 1) == (code2 | 1));
-  static_assert(code1 == code2);
+  SUBCASE("serialize person") {
+    person1 p1{20, "tom", 1, false};
+    std::vector<char> buffer;
+    buffer.resize(get_needed_size(p1));
 
-  person1 p1{20, "tom", 1, false};
-  std::vector<char> buffer;
-  buffer.resize(get_needed_size(p1));
+    auto ret = serialize_to(buffer.data(), buffer.size(), p1);
+    CHECK(ret != 0);
 
-  auto ret = serialize_to(buffer.data(), buffer.size(), p1);
-  CHECK(ret != 0);
+    person p;
+    auto res = deserialize_to(p, buffer.data(), buffer.size());
+    CHECK(res == std::errc{});
+    CHECK(p.name == p1.name);
+    CHECK(p.age == p1.age);
 
-  person p;
-  auto res = deserialize_to(p, buffer.data(), buffer.size());
-  CHECK(res == std::errc{});
-  CHECK(p.name == p1.name);
-  CHECK(p.age == p1.age);
+    // short data
+    for (int i = 0, lim = get_needed_size(p); i < lim; ++i)
+      CHECK(deserialize_to(p, buffer.data(), i) == std::errc::no_buffer_space);
 
-  // short data
-  for (int i = 0; i < buffer.size(); ++i)
-    CHECK(deserialize_to(p, buffer.data(), i) == std::errc::no_buffer_space);
+    ret = serialize_to(buffer.data(), buffer.size(), p);
+    CHECK(ret != 0);
 
-  // broken size
-  uint64_t sz = 1000000;
-  memcpy(buffer.data() + 4, &sz, sizeof(sz));
-  CHECK(deserialize_to(p, buffer.data(), buffer.size()) ==
-        std::errc::no_buffer_space);
-
-  ret = serialize_to(buffer.data(), buffer.size(), p);
-  CHECK(ret != 0);
-
-  person1 p2;
-  CHECK(deserialize_to(p2, buffer.data(), buffer.size()) == std::errc{});
-
-  // CHECK(p2 == p1);
+    person1 p2;
+    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) == std::errc{});
+    CHECK((p2.age == p.age && p2.name == p.name));
+  }
+  SUBCASE("big compatible metainfo") {
+    {
+      std::tuple<compatible<std::array<char, 247>>> big =
+          std::array<char, 247>{'A', 'E', 'I', 'O', 'U'};
+      auto sz = get_needed_size(big);
+      CHECK(sz == 255);
+      auto buffer = serialize(big);
+      CHECK(sz == buffer.size());
+      CHECK(buffer[0] % 2 == 1);
+      CHECK((buffer[4] & 0b11) == 1);
+      std::size_t r_sz = 0;
+      memcpy(&r_sz, &buffer[5], 2);
+      CHECK(r_sz == sz);
+      auto big2 =
+          deserialize<std::tuple<compatible<std::array<char, 247>>>>(buffer);
+      CHECK(big2);
+      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
+    }
+    {
+      std::tuple<compatible<std::array<char, 248>>> big =
+          std::array<char, 248>{'A', 'E', 'I', 'O', 'U'};
+      auto sz = get_needed_size(big);
+      CHECK(sz == 256);
+      auto buffer = serialize(big);
+      CHECK(sz == buffer.size());
+      CHECK(buffer[0] % 2 == 1);
+      CHECK((buffer[4] & 0b11) == 1);
+      std::size_t r_sz = 0;
+      memcpy(&r_sz, &buffer[5], 2);
+      CHECK(r_sz == sz);
+      auto big2 =
+          deserialize<std::tuple<compatible<std::array<char, 248>>>>(buffer);
+      CHECK(big2);
+      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
+    }
+    {
+      std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
+      std::get<0>(big).value().resize(65523);
+      auto sz = get_needed_size(big);
+      CHECK(sz == 65535);
+      auto buffer = serialize(big);
+      CHECK(sz == buffer.size());
+      CHECK(buffer[0] % 2 == 1);
+      CHECK((buffer[4] & 0b11) == 1);
+      std::size_t r_sz = 0;
+      memcpy(&r_sz, &buffer[5], 2);
+      CHECK(r_sz == sz);
+      auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
+      CHECK(big2);
+      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
+    }
+    {
+      std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
+      std::get<0>(big).value().resize(65524);
+      auto sz = get_needed_size(big);
+      CHECK(sz == 65538);
+      auto buffer = serialize(big);
+      CHECK(sz == buffer.size());
+      CHECK(buffer[0] % 2 == 1);
+      CHECK((buffer[4] & 0b11) == 2);
+      std::size_t r_sz = 0;
+      memcpy(&r_sz, &buffer[5], 4);
+      CHECK(r_sz == sz);
+      auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
+      CHECK(big2);
+      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
+    }
+    // TODO: test 8byte-len compatible object
+  }
 }
 // c++98
 template <typename T>
@@ -1952,21 +2049,21 @@ TEST_CASE("type calculate") {
         serialize(std::tuple<int, std::string>{})));
   }
   {
-    static_assert(
-        get_type_code<type_calculate_test_1>() ==
-            get_type_code<type_calculate_test_2>(),
-        "struct type_calculate_test_1 && type_calculate_test_2 should get the "
-        "same MD5");
+    static_assert(get_type_code<type_calculate_test_1>() ==
+                      get_type_code<type_calculate_test_2>(),
+                  "struct type_calculate_test_1 && type_calculate_test_2 "
+                  "should get the "
+                  "same MD5");
     CHECK(
         deserialize<type_calculate_test_1>(serialize(type_calculate_test_2{})));
   }
 
   {
-    static_assert(
-        get_type_code<type_calculate_test_1>() !=
-            get_type_code<type_calculate_test_3>(),
-        "struct type_calculate_test_1 && type_calculate_test_3 should get the "
-        "different MD5");
+    static_assert(get_type_code<type_calculate_test_1>() !=
+                      get_type_code<type_calculate_test_3>(),
+                  "struct type_calculate_test_1 && type_calculate_test_3 "
+                  "should get the "
+                  "different MD5");
     CHECK(!deserialize<type_calculate_test_1>(
         serialize(type_calculate_test_3{})));
   }

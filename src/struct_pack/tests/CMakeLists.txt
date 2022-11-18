@@ -8,5 +8,5 @@ add_executable(test_serialize
         main.cpp
         )
 add_test(NAME test_serialize COMMAND test_serialize)
-target_compile_definitions(test_serialize PRIVATE STRUCT_PACK_USE_INT16_SIZE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
+target_compile_definitions(test_serialize PRIVATE STRUCT_PACK_USE_INT32_SIZE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 target_link_libraries(test_serialize PRIVATE libstruct_pack doctest)

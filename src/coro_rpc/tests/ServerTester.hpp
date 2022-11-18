@@ -210,7 +210,7 @@ struct ServerTester : TesterConfig {
       CHECK(ret.value() == "hello"s);
     }
     {
-      auto ret = call<&ns_login::LoginService::login>(client, "foo", "bar");
+      auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       CHECK(ret.value() == true);
     }
   }

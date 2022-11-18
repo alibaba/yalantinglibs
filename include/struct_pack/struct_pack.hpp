@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -134,14 +135,11 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval std::size_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_code<detail::get_type_id<Args...>(), Args...,
-                                  decltype(detail::get_types(
-                                      std::declval<Args...>()))>();
+    return detail::get_types_code<Args..., decltype(detail::get_types(
+                                               std::declval<Args...>()))>();
   }
   else {
-    // for variadic args, using void as inner type
-    // void just a placeholder here
-    return detail::get_types_code<detail::type_id::non_trivial_class_t, void,
+    return detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
                                   std::tuple<Args...>>();
   }
 }
@@ -151,60 +149,45 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
     using Types = decltype(detail::get_types(Args{}...));
-    return detail::get_types_literal<detail::get_type_id<Args...>(), Args...,
-                                     Types>(
+    return detail::get_types_literal<Args..., Types>(
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    // for variadic args, using void as inner type
-    // void just a placeholder here
-    return detail::get_types_literal<detail::type_id::non_trivial_class_t, void,
-                                     Args...>();
+    return detail::get_types_literal<std::tuple<std::remove_cvref_t<Args>...>,
+                                     std::remove_cvref_t<Args>...>();
   }
 }
 
 template <typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE constexpr size_t get_needed_size(
     const Args &...args) {
-  if constexpr ((detail::unexist_compatible_member<Args> && ...))
-    return detail::calculate_needed_size(args...) + sizeof(uint32_t);
-  else
-    return detail::calculate_needed_size(args...) + sizeof(uint32_t) +
-           sizeof(uint64_t);
+  return detail::get_serialize_runtime_info(args...).len;
 }
 
 template <detail::struct_pack_byte Byte, typename... Args>
 std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len,
                                             const Args &...args) noexcept {
   static_assert(sizeof...(args) > 0);
-  auto size = get_needed_size(args...);
-  if (size > len) [[unlikely]] {
+  auto config = detail::get_serialize_runtime_info(args...);
+  if (config.len > len) [[unlikely]] {
     return 0;
   }
-  detail::packer o(buffer);
-  if constexpr ((detail::unexist_compatible_member<Args> && ...)) {
-    o.serialize(args...);
-  }
-  else {
-    o.serialize_with_size(size, args...);
-  }
-  return size;
+  detail::packer<Byte, detail::get_args_type<Args...>> o(buffer, config);
+  o.serialize(args...);
+  return config.len;
 }
 
 template <detail::struct_pack_buffer Buffer, typename... Args>
-void STRUCT_PACK_INLINE serialize_to(Buffer &buffer, const Args &...args) {
+STRUCT_PACK_INLINE void serialize_to(Buffer &buffer, const Args &...args) {
   static_assert(sizeof...(args) > 0);
   auto data_offset = buffer.size();
-  auto need_size = get_needed_size(args...);
-  auto total = data_offset + need_size;
+  auto config = detail::get_serialize_runtime_info(args...);
+  auto total = data_offset + config.len;
   buffer.resize(total);
-  detail::packer o(buffer.data() + data_offset);
-  if constexpr ((detail::unexist_compatible_member<Args> && ...)) {
-    o.serialize(args...);
-  }
-  else {
-    o.serialize_with_size(need_size, args...);
-  }
+  detail::packer<std::remove_reference_t<decltype(*buffer.data())>,
+                 detail::get_args_type<Args...>>
+      o(buffer.data() + data_offset, config);
+  o.serialize(args...);
 }
 
 template <detail::struct_pack_buffer Buffer, typename... Args>
@@ -289,97 +272,67 @@ template <typename T, typename... Args, detail::struct_pack_byte Byte>
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(v);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), v); errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to(ret.value(), v); errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data,
                                                   size_t size) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(data, size);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), data, size);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to(ret.value(), data, size);
-        errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v,
                                                   size_t &consume_len) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(v, consume_len);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), v, consume_len);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to(ret.value(), v, consume_len);
-        errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data, size_t size,
                                                   size_t &consume_len) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(data, size, consume_len);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
-        errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const View &v,
                                                               size_t &offset) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(v, offset);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
-        errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::struct_pack_byte Byte>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const Byte *data,
                                                               size_t size,
                                                               size_t &offset) {
-  if constexpr (sizeof...(Args) > 0) {
-    return deserialize<std::tuple<T, Args...>>(data, size, offset);
+  expected<detail::get_args_type<T, Args...>, std::errc> ret;
+  if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
+      errc != std::errc{}) {
+    ret = unexpected<std::errc>{errc};
   }
-  else {
-    expected<T, std::errc> ret;
-    if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
-        errc != std::errc{}) {
-      ret = unexpected<std::errc>{errc};
-    }
-    return ret;
-  }
+  return ret;
 }
 
 template <typename T, size_t I, typename Field, detail::deserialize_view View>
