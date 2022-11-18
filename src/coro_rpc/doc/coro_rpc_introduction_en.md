@@ -374,5 +374,5 @@ Both the client and server are on the same machine, sending requests using diffe
 # Known Limitations
 
 1. Only little-endian is supported for now. Big-endian is working in progress
-2. Only C++ is supported and could not work across languages; Compiler should support C++20(clang13, gcc10.2, msvc2022)
+2. Only C++ is supported and could not work across languages now, will support other languages later; Compiler should support C++20(clang13, gcc10.2, msvc2022)
 3. If any compile issue with `gcc -O3`, please try option `-fno-tree-slp-vectorize`
