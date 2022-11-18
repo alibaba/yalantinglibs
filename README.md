@@ -25,7 +25,7 @@ Very easy-to-use, coroutine-based, high performance rpc framework with C++20, mo
 
 You can finish a rpc server and rpc client in 5 minutes!
 
-English Introduction(TODO) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduction_cn.md)  
+[English Introduction](./src/coro_rpc/doc/coro_rpc_introduction_en.md) | [中文简介](./src/coro_rpc/doc/coro_rpc_introduction_cn.md)  
 
 English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
 
