@@ -82,7 +82,7 @@ Based on compile-time reflection, very easy to use, high performance serializati
 
 Only one line code to finish serialization and deserialization, 10-50x faster than protobuf.
 
-English Introduction(TODO) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
+[English Introduction](./src/struct_pack/doc/Introduction_en.md) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
 
 [English API](https://alibaba.github.io/yalantinglibs/en/html/group__struct__pack.html) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
 
@@ -92,7 +92,7 @@ English Introduction(TODO) | [中文简介](./src/struct_pack/doc/Introduction_C
 
 [Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 01:32:20 of the vedio record.
 
-### quick exampe
+### quick example
 ```c++
 struct person {
   int64_t id;
@@ -109,7 +109,7 @@ std::vector<char> buffer = struct_pack::serialize(person1);
 // one line code deserialization
 auto person2 = deserialize<person>(buffer);
 ```
-More example [here](./src/struct_pack/examples/).
+See more examples [here](./src/struct_pack/examples/).
 
 ## async_simple
 
@@ -202,5 +202,5 @@ DingTalk group
 # License
 
 yaLanTingLibs is distributed under the Apache License (Version 2.0)
-This product contains various third-party components under other open source licenses.
+This product contains various third-party components under other open-source licenses.
 See the NOTICE file for more information.
