@@ -94,7 +94,7 @@ assert(person2.value()==person1);
 ### 从指针指向的内存中反序列化
 
 ```c++
-// 1行代码反序列化
+// 从指针指向的内存中反序列化
 auto person2 = deserialize<person>(buffer.data(),buffer.size());
 assert(person2); //person2.has_value() == true
 assert(person2.value()==person1);
@@ -103,7 +103,7 @@ assert(person2.value()==person1);
 ### 反序列化（将结果保存到已有的对象中）
 
 ```c++
-// 1行代码反序列化
+// 将结果保存到已有的对象中
 person person2;
 std::errc ec = deserialize_to(person2, buffer);
 assert(ec==std::errc{}); // person2.has_value() == true
