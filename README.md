@@ -84,7 +84,7 @@ Only one line code to finish serialization and deserialization, 10-50x faster th
 
 [English Introduction](./src/struct_pack/doc/Introduction_en.md) | [中文简介](./src/struct_pack/doc/Introduction_CN.md)
 
-[English API](TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
+English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
 
 [Talk](./src/struct_pack/doc/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
