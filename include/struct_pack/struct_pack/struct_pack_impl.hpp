@@ -157,8 +157,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t), [&]<typename... Args>(Args &&
-                                                  ...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t),
+        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
@@ -1505,7 +1505,9 @@ class unpacker {
     bool stop = false;
     std::errc code{};
     [&]<std::size_t... I>(std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
-      ((!stop && (stop = set_value<I, FiledIndex>(code, field, get_nth<I>(items...)))), ...);
+      ((!stop &&
+        (stop = set_value<I, FiledIndex>(code, field, get_nth<I>(items...)))),
+       ...);
     }
     (std::make_index_sequence<sizeof...(Args)>{});
     return code;
