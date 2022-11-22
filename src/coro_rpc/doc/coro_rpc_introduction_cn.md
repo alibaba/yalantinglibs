@@ -65,7 +65,7 @@ rpc_client端
 
 Lazy<void> test_client() {
   coro_rpc_client client;
-  co_await client.connect("localhost", /*port =*/9000);
+  co_await client.connect("localhost", /*port =*/"9000");
 
   auto r = co_await client.call<echo>("hello coro_rpc"); //传参数调用rpc函数
   std::cout << r.result.value() << "\n"; //will print "hello coro_rpc"
@@ -138,7 +138,7 @@ client端
 
 Lazy<void> test_client() {
   coro_rpc_client client;
-  co_await client.connect("localhost", /*port =*/9000);
+  co_await client.connect("localhost", /*port =*/"9000");
 
   //RPC调用
   co_await client.call<hello>();
@@ -281,7 +281,7 @@ coro_rpc协程
 
 Lazy<void> say_hello(){
   coro_rpc_client client;
-    co_await client.connect("localhost", /*port =*/9000);
+    co_await client.connect("localhost", /*port =*/"9000");
   while (true){
     auto r = co_await client.call<echo>("hello coro_rpc");
     assert(r.result.value() == "hello coro_rpc");
