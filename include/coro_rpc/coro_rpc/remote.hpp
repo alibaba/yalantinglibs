@@ -99,6 +99,9 @@ inline bool remove_handler() {
   constexpr auto name = get_func_name<func>();
   constexpr auto id =
       struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
+
+  internal::g_id2name.erase(id);
+
   auto it = internal::g_handlers.find(id);
   if (it != internal::g_handlers.end()) {
     return internal::g_handlers.erase(id);
@@ -111,8 +114,6 @@ inline bool remove_handler() {
 
     return false;
   }
-
-  internal::g_id2name.erase(id);
 }
 
 /*!
