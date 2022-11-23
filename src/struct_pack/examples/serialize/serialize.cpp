@@ -81,7 +81,7 @@ void basic_usage() {
   {
     person p2;
     [[maybe_unused]] auto ec = struct_pack::deserialize_to(p2, buffer);
-    assert(ec == std::errc{});
+    assert(ec == struct_pack::errc{});
     assert(p == p2);
   }
   // api 3. partial deserialize
@@ -104,7 +104,7 @@ void basic_usage() {
     person p3;
     auto buffer = struct_pack::serialize(p.age, p2.name);
     auto result = struct_pack::deserialize_to(p3.age, buffer, p3.name);
-    assert(result == std::errc{});
+    assert(result == struct_pack::errc{});
     assert(p3.age == p.age);
     assert(p3.name == p2.name);
   }
