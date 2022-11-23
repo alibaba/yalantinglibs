@@ -121,7 +121,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       assert(ret.second == RPC_HEAD_LEN);
       auto errc = struct_pack::deserialize_to(header, head_, RPC_HEAD_LEN);
-      if (errc != err_ok) [[unlikely]] {
+      if (errc != struct_pack::errc::ok) [[unlikely]] {
         easylog::info("bad head:{}", struct_pack::error_message(errc));
         co_await close();
         co_return;

@@ -33,6 +33,7 @@
 #include <variant>
 #include <vector>
 
+#include "error_code.h"
 #include "md5_constexpr.hpp"
 #include "struct_pack/struct_pack.hpp"
 #include "tuple.hpp"
@@ -1120,10 +1121,10 @@ class unpacker {
       : data_{data}, size_(size) {}
 
   template <typename T, typename... Args>
-  STRUCT_PACK_INLINE std::errc deserialize(T &t, Args &...args) {
+  STRUCT_PACK_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
     auto &&[err_code, data_len] =
         deserialize_metainfo<get_args_type<T, Args...>>();
-    if (err_code != std::errc{}) [[unlikely]] {
+    if (err_code != struct_pack::errc{}) [[unlikely]] {
       return err_code;
     }
     auto ret = deserialize_many(t, args...);
@@ -1131,31 +1132,31 @@ class unpacker {
   }
 
   template <typename T, typename... Args>
-  STRUCT_PACK_INLINE std::errc deserialize(std::size_t &len, T &t,
-                                           Args &...args) {
+  STRUCT_PACK_INLINE struct_pack::errc deserialize(std::size_t &len, T &t,
+                                                   Args &...args) {
     auto &&[err_code, data_len] =
         deserialize_metainfo<get_args_type<T, Args...>>();
-    if (err_code != std::errc{}) [[unlikely]] {
+    if (err_code != struct_pack::errc{}) [[unlikely]] {
       return err_code;
     }
     auto ret = deserialize_many(t, args...);
-    len = (ret == std::errc{} ? std::max(pos_, data_len) : 0);
+    len = (ret == struct_pack::errc{} ? std::max(pos_, data_len) : 0);
     return ret;
   }
 
   template <typename U, size_t I>
-  STRUCT_PACK_INLINE std::errc get_field(
+  STRUCT_PACK_INLINE struct_pack::errc get_field(
       std::tuple_element_t<
           I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>
           &field) {
     using T = std::remove_cvref_t<U>;
 
     static T t;
-    if (auto [code, _] = deserialize_metainfo<T>(); code != std::errc{})
+    if (auto [code, _] = deserialize_metainfo<T>(); code != struct_pack::errc{})
         [[unlikely]] {
       return code;
     }
-    std::errc err_code;
+    struct_pack::errc err_code;
     if constexpr (tuple<T>) {
       err_code = std::apply(
           [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -1202,8 +1203,8 @@ class unpacker {
     };
   };
 
-  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> deserialize_compatible(
-      char metainfo) {
+  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
+  deserialize_compatible(char metainfo) {
     char compatible_sz_len = metainfo & 0b11;
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     if (compatible_sz_len == 0) {
@@ -1213,25 +1214,26 @@ class unpacker {
       auto len_sz = sz[compatible_sz_len];
       uint64_t data_len = 0;
       if (size_ < sizeof(uint32_t) + sizeof(char) + len_sz) [[unlikely]] {
-        return {std::errc::no_buffer_space, 0};
+        return {struct_pack::errc::no_buffer_space, 0};
       }
       std::memcpy(&data_len, data_ + pos_, len_sz);
       pos_ += len_sz;
-      return {std::errc{}, data_len};
+      return {struct_pack::errc{}, data_len};
     }
   }
 
   template <class T>
-  STRUCT_PACK_INLINE std::pair<std::errc, std::size_t> deserialize_metainfo() {
+  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
+  deserialize_metainfo() {
     if (size_ < sizeof(uint32_t)) [[unlikely]] {
-      return {std::errc::no_buffer_space, 0};
+      return {struct_pack::errc::no_buffer_space, 0};
     }
     constexpr uint32_t types_code =
         get_types_code<T, decltype(get_types(std::declval<T>()))>();
     uint32_t current_types_code;
     std::memcpy(&current_types_code, data_ + pos_, sizeof(uint32_t));
     if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
-      return {std::errc::invalid_argument, 0};
+      return {struct_pack::errc::invalid_argument, 0};
     }
     pos_ += sizeof(uint32_t);
     if (current_types_code % 2 == 0) [[likely]]  // unexist extended metainfo
@@ -1239,7 +1241,7 @@ class unpacker {
       return {};
     }
     if (size_ < sizeof(char) + sizeof(uint32_t)) [[unlikely]] {
-      return {std::errc::no_buffer_space, 0};
+      return {struct_pack::errc::no_buffer_space, 0};
     }
     char metainfo;
     std::memcpy(&metainfo, data_ + pos_, sizeof(char));
@@ -1250,30 +1252,30 @@ class unpacker {
   }
 
   template <bool NotSkip = true>
-  constexpr std::errc STRUCT_PACK_INLINE deserialize_many() {
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_many() {
     return {};
   }
 
   template <bool NotSkip = true>
-  constexpr std::errc STRUCT_PACK_INLINE deserialize_many(auto &&first_item,
-                                                          auto &&...items) {
+  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  deserialize_many(auto &&first_item, auto &&...items) {
     auto code = deserialize_one<NotSkip>(first_item);
-    if (code != std::errc{}) [[unlikely]] {
+    if (code != struct_pack::errc{}) [[unlikely]] {
       return code;
     }
     return deserialize_many<NotSkip>(items...);
   }
 
   template <bool NotSkip = true>
-  constexpr std::errc STRUCT_PACK_INLINE deserialize_one(auto &item) {
-    std::errc code{};
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one(auto &item) {
+    struct_pack::errc code{};
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     if constexpr (std::is_same_v<type, std::monostate>) {
     }
     else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
       if (pos_ + sizeof(type) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       if constexpr (NotSkip) {
         std::memcpy(&item, data_ + pos_, sizeof(type));
@@ -1290,7 +1292,7 @@ class unpacker {
       else {
         for (auto &i : item) {
           code = deserialize_one<NotSkip>(i);
-          if (code != std::errc{}) [[unlikely]] {
+          if (code != struct_pack::errc{}) [[unlikely]] {
             return code;
           }
         }
@@ -1299,7 +1301,7 @@ class unpacker {
     else if constexpr (map_container<type>) {
       size_type size = 0;
       if (pos_ + sizeof(size_type) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       std::memcpy(&size, data_ + pos_, sizeof(size_type));
       pos_ += sizeof(size_type);
@@ -1312,7 +1314,7 @@ class unpacker {
       std::pair<key_type, value_type> pair{};
       for (int i = 0; i < size; ++i) {
         code = deserialize_one<NotSkip>(pair);
-        if (code != std::errc{}) [[unlikely]] {
+        if (code != struct_pack::errc{}) [[unlikely]] {
           return code;
         }
         if constexpr (NotSkip) {
@@ -1323,7 +1325,7 @@ class unpacker {
     else if constexpr (container<type>) {
       size_type size = 0;
       if (pos_ + sizeof(size_type) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       std::memcpy(&size, data_ + pos_, sizeof(size_type));
       pos_ += sizeof(size_type);
@@ -1335,7 +1337,7 @@ class unpacker {
         typename type::value_type value;
         for (int i = 0; i < size; ++i) {
           code = deserialize_one<NotSkip>(value);
-          if (code != std::errc{}) [[unlikely]] {
+          if (code != struct_pack::errc{}) [[unlikely]] {
             return code;
           }
           if constexpr (NotSkip) {
@@ -1349,7 +1351,7 @@ class unpacker {
         if constexpr (trivially_copyable_container<type>) {
           if constexpr (NotSkip) {
             if (pos_ + mem_sz > size_) [[unlikely]] {
-              return std::errc::no_buffer_space;
+              return struct_pack::errc::no_buffer_space;
             }
             if constexpr (string_view<type>) {
               item = {(value_type *)(data_ + pos_), size};
@@ -1366,7 +1368,7 @@ class unpacker {
             item.resize(size);
             for (auto &i : item) {
               code = deserialize_one<NotSkip>(i);
-              if (code != std::errc{}) [[unlikely]] {
+              if (code != struct_pack::errc{}) [[unlikely]] {
                 return code;
               }
             }
@@ -1375,7 +1377,7 @@ class unpacker {
             value_type useless;
             for (size_t i = 0; i < size; ++i) {
               code = deserialize_one<NotSkip>(useless);
-              if (code != std::errc{}) [[unlikely]] {
+              if (code != struct_pack::errc{}) [[unlikely]] {
                 return code;
               }
             }
@@ -1396,7 +1398,7 @@ class unpacker {
     }
     else if constexpr (optional<type>) {
       if (pos_ + sizeof(bool) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       bool has_value{};
       std::memcpy(&has_value, data_ + pos_, sizeof(bool));
@@ -1409,13 +1411,13 @@ class unpacker {
     }
     else if constexpr (variant<type>) {
       if (pos_ + sizeof(uint32_t) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       uint32_t index;
       std::memcpy(&index, data_ + pos_, sizeof(index));
       pos_ += sizeof(index);
       if (index >= std::variant_size_v<type>) [[unlikely]] {
-        return std::errc::invalid_argument;
+        return struct_pack::errc::invalid_argument;
       }
       else {
         if constexpr (NotSkip) {
@@ -1429,7 +1431,7 @@ class unpacker {
     }
     else if constexpr (expected<type>) {
       if (pos_ + sizeof(bool) > size_) [[unlikely]] {
-        return std::errc::no_buffer_space;
+        return struct_pack::errc::no_buffer_space;
       }
       bool has_value{};
       std::memcpy(&has_value, data_ + pos_, sizeof(bool));
@@ -1450,7 +1452,7 @@ class unpacker {
       static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
       if constexpr (std::is_trivially_copyable_v<type>) {
         if (pos_ + sizeof(type) > size_) [[unlikely]] {
-          return std::errc::no_buffer_space;
+          return struct_pack::errc::no_buffer_space;
         }
         if constexpr (NotSkip) {
           std::memcpy(&item, data_ + pos_, sizeof(type));
@@ -1471,10 +1473,10 @@ class unpacker {
   }
 
   template <bool NotSkip = true, typename Key, typename Value>
-  constexpr std::errc STRUCT_PACK_INLINE
+  constexpr struct_pack::errc STRUCT_PACK_INLINE
   deserialize_one(std::pair<Key, Value> &item) {
     auto code = deserialize_one<NotSkip>(item.first);
-    if (code != std::errc{}) [[unlikely]] {
+    if (code != struct_pack::errc{}) [[unlikely]] {
       return code;
     }
     return deserialize_one<NotSkip>(item.second);
@@ -1482,8 +1484,8 @@ class unpacker {
 
   // partial deserialize_to
   template <size_t I, size_t FiledIndex, typename FiledType, typename T>
-  STRUCT_PACK_INLINE bool set_value(std::errc &err_code, FiledType &field,
-                                    T &&t) {
+  STRUCT_PACK_INLINE bool set_value(struct_pack::errc &err_code,
+                                    FiledType &field, T &&t) {
     if constexpr (FiledIndex == I) {
       static_assert(std::is_same_v<std::remove_cvref_t<FiledType>,
                                    std::remove_cvref_t<T>>);
@@ -1498,7 +1500,7 @@ class unpacker {
   STRUCT_PACK_INLINE constexpr decltype(auto) for_each(FiledType &field,
                                                        Args &&...items) {
     bool stop = false;
-    std::errc code{};
+    struct_pack::errc code{};
     [&]<std::size_t... I>(std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
       ((!stop && (stop = set_value<I, FiledIndex>(code, field, items))), ...);
     }

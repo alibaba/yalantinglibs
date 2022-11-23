@@ -147,7 +147,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         assert(length == RPC_HEAD_LEN);
         rpc_header header{};
         auto errc = struct_pack::deserialize_to(header, head_, RPC_HEAD_LEN);
-        if (errc != err_ok) [[unlikely]] {
+        if (errc != struct_pack::errc::ok) [[unlikely]] {
           easylog::info("bad head:{}", struct_pack::error_message(errc));
           close();
           return;
