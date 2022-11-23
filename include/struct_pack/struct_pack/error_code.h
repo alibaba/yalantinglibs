@@ -7,7 +7,6 @@ enum class errc {
   ok = 0,
   no_buffer_space,
   invalid_argument,
-  address_in_use,
   hash_conflict,
 };
 
@@ -25,8 +24,6 @@ class struct_pack_category : public std::error_category {
         return "no buffer space";
       case errc::invalid_argument:
         return "invalid argument";
-      case errc::address_in_use:
-        return "address in use";
       case errc::hash_conflict:
         return "hash conflict";
 
