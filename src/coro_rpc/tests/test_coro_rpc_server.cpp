@@ -59,8 +59,8 @@ struct CoroServerTester : ServerTester {
     }
     else {
       thd = std::thread([&] {
-        auto ec=server.start();
-        REQUIRE(ec==std::errc{});
+        auto ec = server.start();
+        REQUIRE(ec == std::errc{});
       });
     }
 
@@ -148,7 +148,7 @@ struct CoroServerTester : ServerTester {
       ec = new_server.start();
     }
     REQUIRE_MESSAGE(ec == std::errc::address_in_use,
-                  make_error_code(ec).message());
+                    make_error_code(ec).message());
   }
   void test_server_send_bad_rpc_result() {
     easylog::info("run {}", __func__);
@@ -297,7 +297,7 @@ TEST_CASE("test server write queue") {
     std::size_t sz;
     auto ret =
         struct_pack::deserialize_to(r2, buffer_read.data(), body_len, sz);
-    CHECK(ret == std::errc{});
+    CHECK(ret == struct_pack::errc::ok);
     CHECK(sz == body_len);
     CHECK(r2 == r);
   }
