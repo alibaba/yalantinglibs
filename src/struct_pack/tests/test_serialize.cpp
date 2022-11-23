@@ -698,8 +698,8 @@ TEST_CASE("test expected") {
     CHECK(exp2 == exp);
   }
   {
-    tl::expected<std::vector<int>, struct_pack::errc> exp{
-        tl::unexpected{struct_pack::errc::address_in_use}},
+    tl::expected<std::vector<int>, std::errc> exp{
+        tl::unexpected{std::errc::address_in_use}},
         exp2;
 
     auto ret = serialize(exp);
