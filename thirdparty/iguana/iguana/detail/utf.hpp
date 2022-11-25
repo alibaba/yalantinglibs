@@ -34,11 +34,13 @@ inline void encode_utf8(OutputStream &os, unsigned codepoint) {
   else if (codepoint <= 0x7FF) {
     os.push_back(static_cast<Ch>(0xC0 | ((codepoint >> 6) & 0xFF)));
     os.push_back(static_cast<Ch>(0x80 | ((codepoint & 0x3F))));
-  } else if (codepoint <= 0xFFFF) {
+  }
+  else if (codepoint <= 0xFFFF) {
     os.push_back(static_cast<Ch>(0xE0 | ((codepoint >> 12) & 0xFF)));
     os.push_back(static_cast<Ch>(0x80 | ((codepoint >> 6) & 0x3F)));
     os.push_back(static_cast<Ch>(0x80 | (codepoint & 0x3F)));
-  } else {
+  }
+  else {
     assert(codepoint <= 0x10FFFF);
     os.push_back(static_cast<Ch>(0xF0 | ((codepoint >> 18) & 0xFF)));
     os.push_back(static_cast<Ch>(0x80 | ((codepoint >> 12) & 0x3F)));
@@ -46,4 +48,4 @@ inline void encode_utf8(OutputStream &os, unsigned codepoint) {
     os.push_back(static_cast<Ch>(0x80 | (codepoint & 0x3F)));
   }
 }
-} // namespace iguana
+}  // namespace iguana

@@ -23,10 +23,10 @@
 #ifndef FROZEN_LETITGO_BITS_ALGORITHMS_H
 #define FROZEN_LETITGO_BITS_ALGORITHMS_H
 
-#include "frozen/bits/basic_types.h"
-
 #include <limits>
 #include <tuple>
+
+#include "frozen/bits/basic_types.h"
 
 namespace frozen {
 
@@ -36,13 +36,12 @@ auto constexpr next_highest_power_of_two(std::size_t v) {
   // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
   constexpr auto trip_count = std::numeric_limits<decltype(v)>::digits;
   v--;
-  for(std::size_t i = 1; i < trip_count; i <<= 1)
-    v |= v >> i;
+  for (std::size_t i = 1; i < trip_count; i <<= 1) v |= v >> i;
   v++;
   return v;
 }
 
-template<class T>
+template <class T>
 auto constexpr log(T v) {
   std::size_t n = 0;
   while (v > 1) {
@@ -53,28 +52,25 @@ auto constexpr log(T v) {
 }
 
 constexpr std::size_t bit_weight(std::size_t n) {
-  return (n <= 8*sizeof(unsigned int))
-    + (n <= 8*sizeof(unsigned long))
-    + (n <= 8*sizeof(unsigned long long))
-    + (n <= 128);
+  return (n <= 8 * sizeof(unsigned int)) + (n <= 8 * sizeof(unsigned long)) +
+         (n <= 8 * sizeof(unsigned long long)) + (n <= 128);
 }
 
 unsigned int select_uint_least(std::integral_constant<std::size_t, 4>);
 unsigned long select_uint_least(std::integral_constant<std::size_t, 3>);
 unsigned long long select_uint_least(std::integral_constant<std::size_t, 2>);
-template<std::size_t N>
+template <std::size_t N>
 unsigned long long select_uint_least(std::integral_constant<std::size_t, N>) {
   static_assert(N < 2, "unsupported type size");
   return {};
 }
 
-
-template<std::size_t N>
-using select_uint_least_t = decltype(select_uint_least(std::integral_constant<std::size_t, bit_weight(N)>()));
+template <std::size_t N>
+using select_uint_least_t = decltype(select_uint_least(
+    std::integral_constant<std::size_t, bit_weight(N)>()));
 
 template <typename Iter, typename Compare>
-constexpr auto min_element(Iter begin, const Iter end,
-                           Compare const &compare) {
+constexpr auto min_element(Iter begin, const Iter end, Compare const &compare) {
   auto result = begin;
   while (begin != end) {
     if (compare(*begin, *result)) {
@@ -93,15 +89,16 @@ constexpr void cswap(T &a, T &b) {
 }
 
 template <class T, class U>
-constexpr void cswap(std::pair<T, U> & a, std::pair<T, U> & b) {
+constexpr void cswap(std::pair<T, U> &a, std::pair<T, U> &b) {
   cswap(a.first, b.first);
   cswap(a.second, b.second);
 }
 
 template <class... Tys, std::size_t... Is>
-constexpr void cswap(std::tuple<Tys...> &a, std::tuple<Tys...> &b, std::index_sequence<Is...>) {
+constexpr void cswap(std::tuple<Tys...> &a, std::tuple<Tys...> &b,
+                     std::index_sequence<Is...>) {
   using swallow = int[];
-  (void) swallow{(cswap(std::get<Is>(a), std::get<Is>(b)), 0)...};
+  (void)swallow{(cswap(std::get<Is>(a), std::get<Is>(b)), 0)...};
 }
 
 template <class... Tys>
@@ -110,7 +107,8 @@ constexpr void cswap(std::tuple<Tys...> &a, std::tuple<Tys...> &b) {
 }
 
 template <typename Iterator, class Compare>
-constexpr Iterator partition(Iterator left, Iterator right, Compare const &compare) {
+constexpr Iterator partition(Iterator left, Iterator right,
+                             Compare const &compare) {
   auto pivot = left + (right - left) / 2;
   auto value = *pivot;
   cswap(*right, *pivot);
@@ -125,7 +123,8 @@ constexpr Iterator partition(Iterator left, Iterator right, Compare const &compa
 }
 
 template <typename Iterator, class Compare>
-constexpr void quicksort(Iterator left, Iterator right, Compare const &compare) {
+constexpr void quicksort(Iterator left, Iterator right,
+                         Compare const &compare) {
   while (0 < right - left) {
     auto new_pivot = bits::partition(left, right, compare);
     quicksort(left, new_pivot, compare);
@@ -135,13 +134,14 @@ constexpr void quicksort(Iterator left, Iterator right, Compare const &compare) 
 
 template <typename T, std::size_t N, class Compare>
 constexpr bits::carray<T, N> quicksort(bits::carray<T, N> const &array,
-                                     Compare const &compare) {
+                                       Compare const &compare) {
   bits::carray<T, N> res = array;
   quicksort(res.begin(), res.end() - 1, compare);
   return res;
 }
 
-template <class T, class Compare> struct LowerBound {
+template <class T, class Compare>
+struct LowerBound {
   T const &value_;
   Compare const &compare_;
   constexpr LowerBound(T const &value, Compare const &compare)
@@ -149,47 +149,60 @@ template <class T, class Compare> struct LowerBound {
 
   template <class ForwardIt>
   inline constexpr ForwardIt doit_fast(ForwardIt first,
-                                  std::integral_constant<std::size_t, 0>) {
+                                       std::integral_constant<std::size_t, 0>) {
     return first;
   }
 
   template <class ForwardIt, std::size_t N>
   inline constexpr ForwardIt doit_fast(ForwardIt first,
-                                  std::integral_constant<std::size_t, N>) {
+                                       std::integral_constant<std::size_t, N>) {
     auto constexpr step = N / 2;
-    static_assert(N/2 == N - N / 2 - 1, "power of two minus 1");
+    static_assert(N / 2 == N - N / 2 - 1, "power of two minus 1");
     auto it = first + step;
     auto next_it = compare_(*it, value_) ? it + 1 : first;
     return doit_fast(next_it, std::integral_constant<std::size_t, N / 2>{});
   }
 
   template <class ForwardIt, std::size_t N>
-  inline constexpr ForwardIt doitfirst(ForwardIt first, std::integral_constant<std::size_t, N>, std::integral_constant<bool, true>) {
+  inline constexpr ForwardIt doitfirst(ForwardIt first,
+                                       std::integral_constant<std::size_t, N>,
+                                       std::integral_constant<bool, true>) {
     return doit_fast(first, std::integral_constant<std::size_t, N>{});
   }
 
   template <class ForwardIt, std::size_t N>
-  inline constexpr ForwardIt doitfirst(ForwardIt first, std::integral_constant<std::size_t, N>, std::integral_constant<bool, false>) {
+  inline constexpr ForwardIt doitfirst(ForwardIt first,
+                                       std::integral_constant<std::size_t, N>,
+                                       std::integral_constant<bool, false>) {
     auto constexpr next_power = next_highest_power_of_two(N);
     auto constexpr next_start = next_power / 2 - 1;
     auto it = first + next_start;
     if (compare_(*it, value_)) {
       auto constexpr next = N - next_start - 1;
-      return doitfirst(it + 1, std::integral_constant<std::size_t, next>{}, std::integral_constant<bool, next_highest_power_of_two(next) - 1 == next>{});
+      return doitfirst(
+          it + 1, std::integral_constant<std::size_t, next>{},
+          std::integral_constant<bool, next_highest_power_of_two(next) - 1 ==
+                                           next>{});
     }
     else
-      return doit_fast(first, std::integral_constant<std::size_t, next_start>{});
+      return doit_fast(first,
+                       std::integral_constant<std::size_t, next_start>{});
   }
 
   template <class ForwardIt>
-  inline constexpr ForwardIt doitfirst(ForwardIt first, std::integral_constant<std::size_t, 1>, std::integral_constant<bool, false>) {
+  inline constexpr ForwardIt doitfirst(ForwardIt first,
+                                       std::integral_constant<std::size_t, 1>,
+                                       std::integral_constant<bool, false>) {
     return doit_fast(first, std::integral_constant<std::size_t, 1>{});
   }
 };
 
 template <std::size_t N, class ForwardIt, class T, class Compare>
-constexpr ForwardIt lower_bound(ForwardIt first, const T &value, Compare const &compare) {
-  return LowerBound<T, Compare>{value, compare}.doitfirst(first, std::integral_constant<std::size_t, N>{}, std::integral_constant<bool, next_highest_power_of_two(N) - 1 == N>{});
+constexpr ForwardIt lower_bound(ForwardIt first, const T &value,
+                                Compare const &compare) {
+  return LowerBound<T, Compare>{value, compare}.doitfirst(
+      first, std::integral_constant<std::size_t, N>{},
+      std::integral_constant<bool, next_highest_power_of_two(N) - 1 == N>{});
 }
 
 template <std::size_t N, class Compare, class ForwardIt, class T>
@@ -199,10 +212,8 @@ constexpr bool binary_search(ForwardIt first, const T &value,
   return (!(where == first + N) && !(compare(value, *where)));
 }
 
-
-template<class InputIt1, class InputIt2>
-constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2)
-{
+template <class InputIt1, class InputIt2>
+constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2) {
   for (; first1 != last1; ++first1, ++first2) {
     if (!(*first1 == *first2)) {
       return false;
@@ -211,9 +222,9 @@ constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2)
   return true;
 }
 
-template<class InputIt1, class InputIt2>
-constexpr bool lexicographical_compare(InputIt1 first1, InputIt1 last1, InputIt2 first2, InputIt2 last2)
-{
+template <class InputIt1, class InputIt2>
+constexpr bool lexicographical_compare(InputIt1 first1, InputIt1 last1,
+                                       InputIt2 first2, InputIt2 last2) {
   for (; (first1 != last1) && (first2 != last2); ++first1, ++first2) {
     if (*first1 < *first2)
       return true;
@@ -223,7 +234,7 @@ constexpr bool lexicographical_compare(InputIt1 first1, InputIt1 last1, InputIt2
   return (first1 == last1) && (first2 != last2);
 }
 
-} // namespace bits
-} // namespace frozen
+}  // namespace bits
+}  // namespace frozen
 
 #endif

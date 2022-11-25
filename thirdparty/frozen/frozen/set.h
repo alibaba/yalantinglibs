@@ -23,22 +23,23 @@
 #ifndef FROZEN_SET_H
 #define FROZEN_SET_H
 
+#include <utility>
+
 #include "frozen/bits/algorithms.h"
 #include "frozen/bits/basic_types.h"
 #include "frozen/bits/constexpr_assert.h"
-#include "frozen/bits/version.h"
 #include "frozen/bits/defines.h"
-
-#include <utility>
+#include "frozen/bits/version.h"
 
 namespace frozen {
 
-template <class Key, std::size_t N, class Compare = std::less<Key>> class set {
+template <class Key, std::size_t N, class Compare = std::less<Key>>
+class set {
   using container_type = bits::carray<Key, N>;
   Compare less_than_;
   container_type keys_;
 
-public:
+ public:
   /* container typedefs*/
   using key_type = Key;
   using value_type = Key;
@@ -55,27 +56,25 @@ public:
   using const_iterator = iterator;
   using const_reverse_iterator = reverse_iterator;
 
-public:
+ public:
   /* constructors */
   constexpr set(const set &other) = default;
 
-  constexpr set(container_type keys, Compare const & comp)
-      : less_than_{comp}
-      , keys_(bits::quicksort(keys, less_than_)) {
-      }
+  constexpr set(container_type keys, Compare const &comp)
+      : less_than_{comp}, keys_(bits::quicksort(keys, less_than_)) {}
 
-  explicit constexpr set(container_type keys)
-      : set{keys, Compare{}} {}
+  explicit constexpr set(container_type keys) : set{keys, Compare{}} {}
 
-  constexpr set(std::initializer_list<Key> keys, Compare const & comp)
+  constexpr set(std::initializer_list<Key> keys, Compare const &comp)
       : set{container_type{keys}, comp} {
-        constexpr_assert(keys.size() == N, "Inconsistent initializer_list size and type size argument");
-      }
+    constexpr_assert(
+        keys.size() == N,
+        "Inconsistent initializer_list size and type size argument");
+  }
 
-  constexpr set(std::initializer_list<Key> keys)
-      : set{keys, Compare{}} {}
+  constexpr set(std::initializer_list<Key> keys) : set{keys, Compare{}} {}
 
-  constexpr set& operator=(const set &other) = default;
+  constexpr set &operator=(const set &other) = default;
 
   /* capacity */
   constexpr bool empty() const { return !N; }
@@ -98,7 +97,8 @@ public:
   }
 
   template <class KeyType>
-  constexpr std::pair<const_iterator, const_iterator> equal_range(KeyType const &key) const {
+  constexpr std::pair<const_iterator, const_iterator> equal_range(
+      KeyType const &key) const {
     auto const lower = lower_bound(key);
     if (lower == end())
       return {lower, lower};
@@ -125,8 +125,8 @@ public:
   }
 
   /* observers */
-  constexpr const key_compare& key_comp() const { return less_than_; }
-  constexpr const key_compare& value_comp() const { return less_than_; }
+  constexpr const key_compare &key_comp() const { return less_than_; }
+  constexpr const key_compare &value_comp() const { return less_than_; }
 
   /* iterators */
   constexpr const_iterator begin() const { return keys_.begin(); }
@@ -140,19 +140,32 @@ public:
   constexpr const_reverse_iterator crend() const { return keys_.crend(); }
 
   /* comparison */
-  constexpr bool operator==(set const& rhs) const { return bits::equal(begin(), end(), rhs.begin()); }
-  constexpr bool operator!=(set const& rhs) const { return !(*this == rhs); }
-  constexpr bool operator<(set const& rhs) const { return bits::lexicographical_compare(begin(), end(), rhs.begin(), rhs.end()); }
-  constexpr bool operator<=(set const& rhs) const { return (*this < rhs) || (*this == rhs); }
-  constexpr bool operator>(set const& rhs) const { return bits::lexicographical_compare(rhs.begin(), rhs.end(), begin(), end()); }
-  constexpr bool operator>=(set const& rhs) const { return (*this > rhs) || (*this == rhs); }
+  constexpr bool operator==(set const &rhs) const {
+    return bits::equal(begin(), end(), rhs.begin());
+  }
+  constexpr bool operator!=(set const &rhs) const { return !(*this == rhs); }
+  constexpr bool operator<(set const &rhs) const {
+    return bits::lexicographical_compare(begin(), end(), rhs.begin(),
+                                         rhs.end());
+  }
+  constexpr bool operator<=(set const &rhs) const {
+    return (*this < rhs) || (*this == rhs);
+  }
+  constexpr bool operator>(set const &rhs) const {
+    return bits::lexicographical_compare(rhs.begin(), rhs.end(), begin(),
+                                         end());
+  }
+  constexpr bool operator>=(set const &rhs) const {
+    return (*this > rhs) || (*this == rhs);
+  }
 };
 
-template <class Key, class Compare> class set<Key, 0, Compare> {
-  using container_type = bits::carray<Key, 0>; // just for the type definitions
+template <class Key, class Compare>
+class set<Key, 0, Compare> {
+  using container_type = bits::carray<Key, 0>;  // just for the type definitions
   Compare less_than_;
 
-public:
+ public:
   /* container typedefs*/
   using key_type = Key;
   using value_type = Key;
@@ -169,7 +182,7 @@ public:
   using const_iterator = const_pointer;
   using const_reverse_iterator = const_pointer;
 
-public:
+ public:
   /* constructors */
   constexpr set(const set &other) = default;
   constexpr set(bits::carray<Key, 0>, Compare const &) {}
@@ -179,7 +192,7 @@ public:
       : less_than_{comp} {}
   constexpr set(std::initializer_list<Key> keys) : set{keys, Compare{}} {}
 
-  constexpr set& operator=(const set &other) = default;
+  constexpr set &operator=(const set &other) = default;
 
   /* capacity */
   constexpr bool empty() const { return true; }
@@ -188,20 +201,30 @@ public:
 
   /* lookup */
   template <class KeyType>
-  constexpr std::size_t count(KeyType const &) const { return 0; }
+  constexpr std::size_t count(KeyType const &) const {
+    return 0;
+  }
 
   template <class KeyType>
-  constexpr const_iterator find(KeyType const &) const { return end(); }
+  constexpr const_iterator find(KeyType const &) const {
+    return end();
+  }
 
   template <class KeyType>
-  constexpr std::pair<const_iterator, const_iterator>
-  equal_range(KeyType const &) const { return {end(), end()}; }
+  constexpr std::pair<const_iterator, const_iterator> equal_range(
+      KeyType const &) const {
+    return {end(), end()};
+  }
 
   template <class KeyType>
-  constexpr const_iterator lower_bound(KeyType const &) const { return end(); }
+  constexpr const_iterator lower_bound(KeyType const &) const {
+    return end();
+  }
 
   template <class KeyType>
-  constexpr const_iterator upper_bound(KeyType const &) const { return end(); }
+  constexpr const_iterator upper_bound(KeyType const &) const {
+    return end();
+  }
 
   /* observers */
   constexpr key_compare key_comp() const { return less_than_; }
@@ -220,7 +243,9 @@ public:
 };
 
 template <typename T>
-constexpr auto make_set(bits::ignored_arg = {}/* for consistency with the initializer below for N = 0*/) {
+constexpr auto make_set(
+    bits::ignored_arg =
+        {} /* for consistency with the initializer below for N = 0*/) {
   return set<T, 0>{};
 }
 
@@ -235,22 +260,24 @@ constexpr auto make_set(std::array<T, N> const &args) {
 }
 
 template <typename T, typename Compare, std::size_t N>
-constexpr auto make_set(const T (&args)[N], Compare const& compare = Compare{}) {
+constexpr auto make_set(const T (&args)[N],
+                        Compare const &compare = Compare{}) {
   return set<T, N, Compare>(args, compare);
 }
 
 template <typename T, typename Compare, std::size_t N>
-constexpr auto make_set(std::array<T, N> const &args, Compare const& compare = Compare{}) {
+constexpr auto make_set(std::array<T, N> const &args,
+                        Compare const &compare = Compare{}) {
   return set<T, N, Compare>(args, compare);
 }
 
 #ifdef FROZEN_LETITGO_HAS_DEDUCTION_GUIDES
 
-template<class T, class... Args>
+template <class T, class... Args>
 set(T, Args...) -> set<T, sizeof...(Args) + 1>;
 
-#endif // FROZEN_LETITGO_HAS_DEDUCTION_GUIDES
+#endif  // FROZEN_LETITGO_HAS_DEDUCTION_GUIDES
 
-} // namespace frozen
+}  // namespace frozen
 
 #endif

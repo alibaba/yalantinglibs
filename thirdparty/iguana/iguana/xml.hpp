@@ -4,37 +4,39 @@
 
 #ifndef IGUANA_XML17_HPP
 #define IGUANA_XML17_HPP
-#include "reflection.hpp"
+#include <string.h>
+
 #include <algorithm>
 #include <cctype>
 #include <functional>
-#include <string.h>
 
-#define IGUANA_XML_READER_CHECK_FORWARD                                        \
-  if (l > length)                                                              \
-    return 0;                                                                  \
-  work_ptr += l;                                                               \
+#include "reflection.hpp"
+
+#define IGUANA_XML_READER_CHECK_FORWARD \
+  if (l > length)                       \
+    return 0;                           \
+  work_ptr += l;                        \
   length -= l
-#define IGUANA_XML_READER_CHECK_FORWARD_CHAR                                   \
-  if (length < 1)                                                              \
-    return 0;                                                                  \
-  work_ptr += 1;                                                               \
+#define IGUANA_XML_READER_CHECK_FORWARD_CHAR \
+  if (length < 1)                            \
+    return 0;                                \
+  work_ptr += 1;                             \
   length -= 1
 #define IGUANA_XML_HEADER "<?xml version = \"1.0\" encoding=\"UTF-8\">"
 
 namespace iguana::xml {
 namespace detail {
 struct char_const {
-  static constexpr char angle_bracket = 0x3c;      // '<'
-  static constexpr char anti_angle_bracket = 0x3e; // '>'
-  static constexpr char slash = 0x2f;              // '/'
-  static constexpr char space = 0x20;              // ' '
-  static constexpr char horizental_tab = 0x09;     // '/t'
-  static constexpr char line_feed = 0x0a;          // '/n'
-  static constexpr char enter = 0x0d;              // '/r'
-  static constexpr char quote = 0x22;              // '"'
-  static constexpr char underline = 0x5f;          // '_'
-  static constexpr char question_mark = 0x3f;      // '?'
+  static constexpr char angle_bracket = 0x3c;       // '<'
+  static constexpr char anti_angle_bracket = 0x3e;  // '>'
+  static constexpr char slash = 0x2f;               // '/'
+  static constexpr char space = 0x20;               // ' '
+  static constexpr char horizental_tab = 0x09;      // '/t'
+  static constexpr char line_feed = 0x0a;           // '/n'
+  static constexpr char enter = 0x0d;               // '/r'
+  static constexpr char quote = 0x22;               // '"'
+  static constexpr char underline = 0x5f;           // '_'
+  static constexpr char question_mark = 0x3f;       // '?'
 };
 
 inline bool expected_char(char const *str, char character) {
@@ -50,7 +52,8 @@ inline size_t forward(char const *begin, size_t length, Pred p) {
     char work = *work_ptr;
     if (!p(work)) {
       ++work_ptr;
-    } else {
+    }
+    else {
       return traversed;
     }
   }
@@ -59,8 +62,9 @@ inline size_t forward(char const *begin, size_t length, Pred p) {
 }
 
 inline size_t ignore_blank_ctrl(char const *begin, size_t length) {
-  return forward(begin, length,
-                 [](auto c) { return !std::isblank(c) && !std::iscntrl(c); });
+  return forward(begin, length, [](auto c) {
+    return !std::isblank(c) && !std::iscntrl(c);
+  });
 }
 
 inline size_t get_token(char const *str, size_t length) {
@@ -83,7 +87,9 @@ inline bool expected_token(char const *str, size_t length, char const *expected,
 }
 
 inline size_t forward_until(char const *str, size_t length, char until_c) {
-  return forward(str, length, [until_c](auto c) { return until_c == c; });
+  return forward(str, length, [until_c](auto c) {
+    return until_c == c;
+  });
 }
 
 inline size_t forward_after(char const *str, size_t length, char after_c) {
@@ -103,11 +109,14 @@ inline auto get_value(char const *str, size_t length, T &value)
   using U = std::remove_const_t<std::remove_reference_t<T>>;
   if constexpr (std::is_integral_v<U> && !detail::is_64_v<U>) {
     value = std::atoi(str);
-  } else if constexpr (std::is_floating_point_v<U>) {
+  }
+  else if constexpr (std::is_floating_point_v<U>) {
     value = std::atof(str);
-  } else if constexpr (detail::is_64_v<U>) {
+  }
+  else if constexpr (detail::is_64_v<U>) {
     value = std::atoll(str);
-  } else {
+  }
+  else {
     std::cout << "don't support the type now" << std::endl;
     throw(std::invalid_argument("don't support the type now"));
   }
@@ -117,12 +126,16 @@ void get_value(char const *str, size_t length, std::string &value) {
   value.assign(str, length);
 }
 
-template <typename T> struct array_size { static constexpr size_t value = 0; };
+template <typename T>
+struct array_size {
+  static constexpr size_t value = 0;
+};
 
-template <typename T, size_t Size> struct array_size<T const (&)[Size]> {
+template <typename T, size_t Size>
+struct array_size<T const (&)[Size]> {
   static constexpr size_t value = Size;
 };
-} // namespace detail
+}  // namespace detail
 
 class xml_reader_t {
   enum object_status {
@@ -131,7 +144,7 @@ class xml_reader_t {
     NORMAL = 1,
   };
 
-public:
+ public:
   xml_reader_t(char const *buffer, size_t length)
       : buffer_(buffer), length_(length) {}
 
@@ -193,7 +206,8 @@ public:
     return object_status::NORMAL;
   }
 
-  template <typename T> bool get_value(T &t) {
+  template <typename T>
+  bool get_value(T &t) {
     auto work_ptr = buffer_;
     auto length = length_;
 
@@ -248,7 +262,7 @@ public:
   static const size_t xml_header_length =
       detail::array_size<decltype(IGUANA_XML_HEADER)>::value - 1;
 
-private:
+ private:
   char const *buffer_;
   size_t length_;
 };
@@ -277,7 +291,8 @@ void render_xml_value(Stream &ss, const std::string &s) {
   ss.append(s.c_str(), s.size());
 }
 
-template <typename Stream> void render_xml_value(Stream &ss, const char *s) {
+template <typename Stream>
+void render_xml_value(Stream &ss, const char *s) {
   ss.append(s, strlen(s));
 }
 
@@ -288,22 +303,26 @@ std::enable_if_t<std::is_arithmetic<T>::value> render_key(Stream &ss, T t) {
   ss.push_back('>');
 }
 
-template <typename Stream> void render_key(Stream &ss, const std::string &s) {
+template <typename Stream>
+void render_key(Stream &ss, const std::string &s) {
   render_xml_value(ss, s);
 }
 
-template <typename Stream> void render_key(Stream &ss, const char *s) {
+template <typename Stream>
+void render_key(Stream &ss, const char *s) {
   render_xml_value(ss, s);
 }
 
-template <typename Stream> void render_tail(Stream &ss, const char *s) {
+template <typename Stream>
+void render_tail(Stream &ss, const char *s) {
   ss.push_back('<');
   ss.push_back('/');
   ss.append(s, strlen(s));
   ss.push_back('>');
 }
 
-template <typename Stream> void render_head(Stream &ss, const char *s) {
+template <typename Stream>
+void render_head(Stream &ss, const char *s) {
   ss.push_back('<');
   ss.append(s, strlen(s));
   ss.push_back('>');
@@ -323,7 +342,8 @@ void to_xml_impl(Stream &s, T &&t) {
       render_head(s, get_name<T, Idx>().data());
       render_xml_value(s, t.*v);
       render_tail(s, get_name<T, Idx>().data());
-    } else {
+    }
+    else {
       render_head(s, get_name<T, Idx>().data());
       to_xml_impl(s, t.*v);
       render_tail(s, get_name<T, Idx>().data());
@@ -354,7 +374,8 @@ constexpr void do_read(xml_reader_t &rd, T &&t) {
         rd.get_value(t.*v);
         rd.end_object(get_name<T, Idx>().data());
       }
-    } else {
+    }
+    else {
       if (rd.begin_object(get_name<T, Idx>().data()) == 1) {
         do_read(rd, t.*v);
         rd.end_object(get_name<T, Idx>().data());
@@ -370,5 +391,5 @@ void from_xml(T &&t, const char *buf, size_t len = -1) {
     do_read(rd, t);
   }
 }
-} // namespace iguana::xml
-#endif // IGUANA_XML17_HPP
+}  // namespace iguana::xml
+#endif  // IGUANA_XML17_HPP

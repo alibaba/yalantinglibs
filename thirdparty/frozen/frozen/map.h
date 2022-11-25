@@ -23,23 +23,23 @@
 #ifndef FROZEN_LETITGO_MAP_H
 #define FROZEN_LETITGO_MAP_H
 
+#include <utility>
+
 #include "frozen/bits/algorithms.h"
 #include "frozen/bits/basic_types.h"
 #include "frozen/bits/constexpr_assert.h"
 #include "frozen/bits/exceptions.h"
 #include "frozen/bits/version.h"
 
-#include <utility>
-
 namespace frozen {
 
 namespace impl {
 
-template <class Comparator> class CompareKey {
-
+template <class Comparator>
+class CompareKey {
   Comparator const comparator_;
 
-public:
+ public:
   constexpr CompareKey(Comparator const &comparator)
       : comparator_(comparator) {}
 
@@ -67,7 +67,7 @@ public:
   }
 };
 
-} // namespace impl
+}  // namespace impl
 
 template <class Key, class Value, std::size_t N, class Compare = std::less<Key>>
 class map {
@@ -75,7 +75,7 @@ class map {
   impl::CompareKey<Compare> less_than_;
   container_type items_;
 
-public:
+ public:
   using key_type = Key;
   using mapped_type = Value;
   using value_type = typename container_type::value_type;
@@ -92,30 +92,28 @@ public:
   using const_reverse_iterator =
       typename container_type::const_reverse_iterator;
 
-public:
+ public:
   /* constructors */
   constexpr map(container_type items, Compare const &compare)
-      : less_than_{compare}
-      , items_{bits::quicksort(items, less_than_)} {}
+      : less_than_{compare}, items_{bits::quicksort(items, less_than_)} {}
 
-  explicit constexpr map(container_type items)
-      : map{items, Compare{}} {}
+  explicit constexpr map(container_type items) : map{items, Compare{}} {}
 
   constexpr map(std::initializer_list<value_type> items, Compare const &compare)
-      : map{container_type {items}, compare} {
-        constexpr_assert(items.size() == N, "Inconsistent initializer_list size and type size argument");
-      }
+      : map{container_type{items}, compare} {
+    constexpr_assert(
+        items.size() == N,
+        "Inconsistent initializer_list size and type size argument");
+  }
 
   constexpr map(std::initializer_list<value_type> items)
       : map{items, Compare{}} {}
 
   /* element access */
-  constexpr Value const& at(Key const &key) const {
+  constexpr Value const &at(Key const &key) const {
     return at_impl(*this, key);
   }
-  constexpr Value& at(Key const &key) {
-    return at_impl(*this, key);
-  }
+  constexpr Value &at(Key const &key) { return at_impl(*this, key); }
 
   /* iterators */
   constexpr iterator begin() { return items_.begin(); }
@@ -138,12 +136,12 @@ public:
   constexpr size_type max_size() const { return N; }
 
   /* lookup */
-  
+
   template <class KeyType>
   constexpr std::size_t count(KeyType const &key) const {
     return bits::binary_search<N>(items_.begin(), key, less_than_);
   }
-  
+
   template <class KeyType>
   constexpr const_iterator find(KeyType const &key) const {
     return map::find_impl(*this, key);
@@ -152,17 +150,17 @@ public:
   constexpr iterator find(KeyType const &key) {
     return map::find_impl(*this, key);
   }
-  
+
   template <class KeyType>
-  constexpr std::pair<const_iterator, const_iterator>
-  equal_range(KeyType const &key) const {
+  constexpr std::pair<const_iterator, const_iterator> equal_range(
+      KeyType const &key) const {
     return equal_range_impl(*this, key);
   }
   template <class KeyType>
   constexpr std::pair<iterator, iterator> equal_range(KeyType const &key) {
     return equal_range_impl(*this, key);
   }
-  
+
   template <class KeyType>
   constexpr const_iterator lower_bound(KeyType const &key) const {
     return lower_bound_impl(*this, key);
@@ -171,7 +169,7 @@ public:
   constexpr iterator lower_bound(KeyType const &key) {
     return lower_bound_impl(*this, key);
   }
-  
+
   template <class KeyType>
   constexpr const_iterator upper_bound(KeyType const &key) const {
     return upper_bound_impl(*this, key);
@@ -182,12 +180,12 @@ public:
   }
 
   /* observers */
-  constexpr const key_compare& key_comp() const { return less_than_; }
-  constexpr const key_compare& value_comp() const { return less_than_; }
+  constexpr const key_compare &key_comp() const { return less_than_; }
+  constexpr const key_compare &value_comp() const { return less_than_; }
 
  private:
   template <class This, class KeyType>
-  static inline constexpr auto& at_impl(This&& self, KeyType const &key) {
+  static inline constexpr auto &at_impl(This &&self, KeyType const &key) {
     auto where = self.lower_bound(key);
     if (where != self.end())
       return where->second;
@@ -196,7 +194,7 @@ public:
   }
 
   template <class This, class KeyType>
-  static inline constexpr auto find_impl(This&& self, KeyType const &key) {
+  static inline constexpr auto find_impl(This &&self, KeyType const &key) {
     auto where = self.lower_bound(key);
     if ((where != self.end()) && !self.less_than_(key, *where))
       return where;
@@ -205,7 +203,8 @@ public:
   }
 
   template <class This, class KeyType>
-  static inline constexpr auto equal_range_impl(This&& self, KeyType const &key) {
+  static inline constexpr auto equal_range_impl(This &&self,
+                                                KeyType const &key) {
     auto lower = self.lower_bound(key);
     using lower_t = decltype(lower);
     if (lower == self.end())
@@ -215,8 +214,10 @@ public:
   }
 
   template <class This, class KeyType>
-  static inline constexpr auto lower_bound_impl(This&& self, KeyType const &key) -> decltype(self.end()) {
-    auto where = bits::lower_bound<N>(self.items_.begin(), key, self.less_than_);
+  static inline constexpr auto lower_bound_impl(This &&self, KeyType const &key)
+      -> decltype(self.end()) {
+    auto where =
+        bits::lower_bound<N>(self.items_.begin(), key, self.less_than_);
     if ((where != self.end()) && !self.less_than_(key, *where))
       return where;
     else
@@ -224,8 +225,10 @@ public:
   }
 
   template <class This, class KeyType>
-  static inline constexpr auto upper_bound_impl(This&& self, KeyType const &key) -> decltype(self.end()) {
-    auto where = bits::lower_bound<N>(self.items_.begin(), key, self.less_than_);
+  static inline constexpr auto upper_bound_impl(This &&self, KeyType const &key)
+      -> decltype(self.end()) {
+    auto where =
+        bits::lower_bound<N>(self.items_.begin(), key, self.less_than_);
     if ((where != self.end()) && !self.less_than_(key, *where))
       return where + 1;
     else
@@ -238,7 +241,7 @@ class map<Key, Value, 0, Compare> {
   using container_type = bits::carray<std::pair<Key, Value>, 0>;
   impl::CompareKey<Compare> less_than_;
 
-public:
+ public:
   using key_type = Key;
   using mapped_type = Value;
   using value_type = typename container_type::value_type;
@@ -254,7 +257,7 @@ public:
   using reverse_iterator = pointer;
   using const_reverse_iterator = const_pointer;
 
-public:
+ public:
   /* constructors */
   constexpr map(const map &other) = default;
   constexpr map(std::initializer_list<value_type>, Compare const &compare)
@@ -295,37 +298,56 @@ public:
   /* lookup */
 
   template <class KeyType>
-  constexpr std::size_t count(KeyType const &) const { return 0; }
+  constexpr std::size_t count(KeyType const &) const {
+    return 0;
+  }
 
   template <class KeyType>
-  constexpr const_iterator find(KeyType const &) const { return end(); }
+  constexpr const_iterator find(KeyType const &) const {
+    return end();
+  }
   template <class KeyType>
-  constexpr iterator find(KeyType const &) { return end(); }
+  constexpr iterator find(KeyType const &) {
+    return end();
+  }
 
   template <class KeyType>
-  constexpr std::pair<const_iterator, const_iterator>
-  equal_range(KeyType const &) const { return {end(), end()}; }
+  constexpr std::pair<const_iterator, const_iterator> equal_range(
+      KeyType const &) const {
+    return {end(), end()};
+  }
   template <class KeyType>
-  constexpr std::pair<iterator, iterator>
-  equal_range(KeyType const &) { return {end(), end()}; }
+  constexpr std::pair<iterator, iterator> equal_range(KeyType const &) {
+    return {end(), end()};
+  }
 
   template <class KeyType>
-  constexpr const_iterator lower_bound(KeyType const &) const { return end(); }
+  constexpr const_iterator lower_bound(KeyType const &) const {
+    return end();
+  }
   template <class KeyType>
-  constexpr iterator lower_bound(KeyType const &) { return end(); }
+  constexpr iterator lower_bound(KeyType const &) {
+    return end();
+  }
 
   template <class KeyType>
-  constexpr const_iterator upper_bound(KeyType const &) const { return end(); }
+  constexpr const_iterator upper_bound(KeyType const &) const {
+    return end();
+  }
   template <class KeyType>
-  constexpr iterator upper_bound(KeyType const &) { return end(); }
+  constexpr iterator upper_bound(KeyType const &) {
+    return end();
+  }
 
-/* observers */
-  constexpr key_compare const& key_comp() const { return less_than_; }
-  constexpr key_compare const& value_comp() const { return less_than_; }
+  /* observers */
+  constexpr key_compare const &key_comp() const { return less_than_; }
+  constexpr key_compare const &value_comp() const { return less_than_; }
 };
 
 template <typename T, typename U, typename Compare = std::less<T>>
-constexpr auto make_map(bits::ignored_arg = {}/* for consistency with the initializer below for N = 0*/) {
+constexpr auto make_map(
+    bits::ignored_arg =
+        {} /* for consistency with the initializer below for N = 0*/) {
   return map<T, U, 0, Compare>{};
 }
 
@@ -340,15 +362,17 @@ constexpr auto make_map(std::array<std::pair<T, U>, N> const &items) {
 }
 
 template <typename T, typename U, typename Compare, std::size_t N>
-constexpr auto make_map(std::pair<T, U> const (&items)[N], Compare const& compare = Compare{}) {
+constexpr auto make_map(std::pair<T, U> const (&items)[N],
+                        Compare const &compare = Compare{}) {
   return map<T, U, N, Compare>{items, compare};
 }
 
 template <typename T, typename U, typename Compare, std::size_t N>
-constexpr auto make_map(std::array<std::pair<T, U>, N> const &items, Compare const& compare = Compare{}) {
+constexpr auto make_map(std::array<std::pair<T, U>, N> const &items,
+                        Compare const &compare = Compare{}) {
   return map<T, U, N, Compare>{items, compare};
 }
 
-} // namespace frozen
+}  // namespace frozen
 
 #endif
