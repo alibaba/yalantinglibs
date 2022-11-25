@@ -17,6 +17,8 @@
 #include <optional>
 #include <string>
 #include <system_error>
+
+#include "struct_pack/struct_pack.hpp"
 #if __has_include(<expected>) && __cplusplus > 202002L
 #include <expected>
 #if __cpp_lib_expected >= 202202L
@@ -68,8 +70,7 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
-constexpr int SIZE_OF_TYPES_CODE = 4;
-constexpr int RPC_HEAD_LEN = sizeof(rpc_header) + SIZE_OF_TYPES_CODE;
+constexpr int RPC_HEAD_LEN = struct_pack::get_needed_size(rpc_header{});
 constexpr int RESPONSE_HEADER_LEN = 4;
 constexpr int FUNCTION_ID_LEN = 4;
 
