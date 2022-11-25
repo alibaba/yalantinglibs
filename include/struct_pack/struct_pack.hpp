@@ -132,16 +132,19 @@ STRUCT_PACK_INLINE std::string error_message(struct_pack::errc err) {
  */
 
 template <typename... Args>
-STRUCT_PACK_INLINE consteval std::size_t get_type_code() {
+STRUCT_PACK_INLINE consteval std::uint32_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
+  std::uint32_t ret;
   if constexpr (sizeof...(Args) == 1) {
-    return detail::get_types_code<Args..., decltype(detail::get_types(
-                                               std::declval<Args...>()))>();
+    ret = detail::get_types_code<Args..., decltype(detail::get_types(
+                                              std::declval<Args...>()))>();
   }
   else {
-    return detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
-                                  std::tuple<Args...>>();
+    ret = detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
+                                 std::tuple<Args...>>();
   }
+  ret = ret - ret % 2;
+  return ret;
 }
 
 template <typename... Args>

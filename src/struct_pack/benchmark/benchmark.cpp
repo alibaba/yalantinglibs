@@ -211,7 +211,7 @@ void bench(T &t, PB &p, std::string tag) {
       std::size_t len = 0;
       for (size_t j = 0; j < SAMPLES_COUNT; j++) {
         auto ec = struct_pack::deserialize_to_with_offset(t, buffer1, len);
-        if (ec != std::errc{}) [[unlikely]] {
+        if (ec != struct_pack::errc{}) [[unlikely]] {
           exit(1);
         }
         no_op();
