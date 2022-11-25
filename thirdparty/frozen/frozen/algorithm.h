@@ -31,21 +31,22 @@ namespace frozen {
 
 // 'search' implementation if C++17 is not available
 // https://en.cppreference.com/w/cpp/algorithm/search
-template<class ForwardIterator, class Searcher>
-ForwardIterator search(ForwardIterator first, ForwardIterator last, const Searcher & searcher)
-{
+template <class ForwardIterator, class Searcher>
+ForwardIterator search(ForwardIterator first, ForwardIterator last,
+                       const Searcher& searcher) {
   return searcher(first, last).first;
 }
 
 // text book implementation from
 // https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
 
-template <std::size_t size> class knuth_morris_pratt_searcher {
+template <std::size_t size>
+class knuth_morris_pratt_searcher {
   bits::carray<std::ptrdiff_t, size> step_;
   bits::carray<char, size> needle_;
 
-  static constexpr bits::carray<std::ptrdiff_t, size>
-  build_kmp_cache(char const (&needle)[size + 1]) {
+  static constexpr bits::carray<std::ptrdiff_t, size> build_kmp_cache(
+      char const (&needle)[size + 1]) {
     std::ptrdiff_t cnd = 0;
     bits::carray<std::ptrdiff_t, size> cache;
 
@@ -54,53 +55,58 @@ template <std::size_t size> class knuth_morris_pratt_searcher {
       if (needle[pos] == needle[cnd]) {
         cache[pos] = cache[cnd];
         cnd += 1;
-      } else {
+      }
+      else {
         cache[pos] = cnd;
         cnd = cache[cnd];
-        while (cnd >= 0 && needle[pos] != needle[cnd])
-          cnd = cache[cnd];
+        while (cnd >= 0 && needle[pos] != needle[cnd]) cnd = cache[cnd];
         cnd += 1;
       }
     }
     return cache;
   }
 
-public:
+ public:
   constexpr knuth_morris_pratt_searcher(char const (&needle)[size + 1])
-    : step_{build_kmp_cache(needle)}, needle_(needle) {}
+      : step_{build_kmp_cache(needle)}, needle_(needle) {}
 
   template <class ForwardIterator>
-  constexpr std::pair<ForwardIterator, ForwardIterator> operator()(ForwardIterator first, ForwardIterator last) const {
+  constexpr std::pair<ForwardIterator, ForwardIterator> operator()(
+      ForwardIterator first, ForwardIterator last) const {
     std::size_t i = 0;
     ForwardIterator iter = first;
     while (iter != last) {
       if (needle_[i] == *iter) {
         if (i == (size - 1))
-          return { iter - i, iter - i + size };
+          return {iter - i, iter - i + size};
         ++i;
         ++iter;
-      } else {
+      }
+      else {
         if (step_[i] > -1) {
           i = step_[i];
-        } else {
+        }
+        else {
           ++iter;
           i = 0;
         }
       }
     }
-    return { last, last };
+    return {last, last};
   }
 };
 
 template <std::size_t N>
-constexpr knuth_morris_pratt_searcher<N - 1> make_knuth_morris_pratt_searcher(char const (&needle)[N]) {
+constexpr knuth_morris_pratt_searcher<N - 1> make_knuth_morris_pratt_searcher(
+    char const (&needle)[N]) {
   return {needle};
 }
 
 // text book implementation from
 // https://en.wikipedia.org/wiki/Boyer%E2%80%93Moore%E2%80%93Horspool_algorithm
 
-template <std::size_t size> class boyer_moore_searcher {
+template <std::size_t size>
+class boyer_moore_searcher {
   using skip_table_type = bits::carray<std::ptrdiff_t, sizeof(char) << 8>;
   using suffix_table_type = bits::carray<std::ptrdiff_t, size>;
 
@@ -112,14 +118,13 @@ template <std::size_t size> class boyer_moore_searcher {
     skip_table_type skip_table;
 
     skip_table.fill(size);
-    for (std::size_t i = 0; i < size - 1; ++i)
-      skip_table[needle[i]] -= i + 1;
+    for (std::size_t i = 0; i < size - 1; ++i) skip_table[needle[i]] -= i + 1;
     return skip_table;
   }
 
   constexpr bool is_prefix(char const (&needle)[size + 1], std::size_t pos) {
     std::size_t suffixlen = size - pos;
-    
+
     for (std::size_t i = 0; i < suffixlen; i++) {
       if (needle[i] != needle[pos + i])
         return false;
@@ -131,7 +136,7 @@ template <std::size_t size> class boyer_moore_searcher {
                                       std::size_t pos) {
     // increment suffix length slen to the first mismatch or beginning
     // of the word
-    for (std::size_t slen = 0; slen < pos ; slen++)
+    for (std::size_t slen = 0; slen < pos; slen++)
       if (needle[pos - slen] != needle[size - 1 - slen])
         return slen;
 
@@ -155,21 +160,21 @@ template <std::size_t size> class boyer_moore_searcher {
       auto slen = suffix_length(needle, p);
       if (needle[p - slen] != needle[size - 1 - slen])
         suffix[size - 1 - slen] = size - 1 - p + slen;
-
     }
     return suffix;
   }
 
-public:
+ public:
   constexpr boyer_moore_searcher(char const (&needle)[size + 1])
-    : skip_table_{build_skip_table(needle)},
-      suffix_table_{build_suffix_table(needle)},
-      needle_(needle) {}
+      : skip_table_{build_skip_table(needle)},
+        suffix_table_{build_suffix_table(needle)},
+        needle_(needle) {}
 
   template <class ForwardIterator>
-  constexpr std::pair<ForwardIterator, ForwardIterator> operator()(ForwardIterator first, ForwardIterator last) const {
+  constexpr std::pair<ForwardIterator, ForwardIterator> operator()(
+      ForwardIterator first, ForwardIterator last) const {
     if (size == 0)
-      return { first, first + size };
+      return {first, first + size};
 
     ForwardIterator iter = first + size - 1;
     while (iter < last) {
@@ -179,19 +184,20 @@ public:
         --j;
       }
       if (*iter == needle_[0])
-        return { iter, iter + size};
+        return {iter, iter + size};
 
       iter += std::max(skip_table_[*iter], suffix_table_[j]);
     }
-    return { last, last + size};
+    return {last, last + size};
   }
 };
 
 template <std::size_t N>
-constexpr boyer_moore_searcher<N - 1> make_boyer_moore_searcher(char const (&needle)[N]) {
+constexpr boyer_moore_searcher<N - 1> make_boyer_moore_searcher(
+    char const (&needle)[N]) {
   return {needle};
 }
 
-} // namespace frozen
+}  // namespace frozen
 
 #endif
