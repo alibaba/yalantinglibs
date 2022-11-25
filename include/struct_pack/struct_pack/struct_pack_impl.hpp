@@ -1240,8 +1240,7 @@ class unpacker {
     constexpr auto literal = struct_pack::get_type_literal<T>();
     if (std::string_view{(char *)(data_ + pos_), literal.size() + 1} !=
         std::string_view{literal.data(), literal.size() + 1}) [[unlikely]] {
-      // hash conflict!
-      return errc::invalid_argument;
+      return errc::hash_conflict;
     }
     pos_ += literal.size() + 1;
     return errc{};

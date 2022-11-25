@@ -1734,7 +1734,7 @@ TEST_CASE("test hash confliet detected") {
   memcpy(ret.data(), &fake_hash, sizeof(fake_hash));
   auto res = deserialize<float>(ret);
   CHECK(!res);
-  CHECK(res.error() == struct_pack::errc::invalid_argument);
+  CHECK(res.error() == struct_pack::errc::hash_conflict);
 }
 #endif
 
