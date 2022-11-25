@@ -158,8 +158,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t), [&]<typename... Args>(Args &&
-                                                  ...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t),
+        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
@@ -1496,13 +1496,20 @@ class unpacker {
     return /*don't skip=*/false;
   }
 
+  template <int I, class... Ts>
+  decltype(auto) get_nth(Ts &&...ts) {
+    return std::get<I>(std::forward_as_tuple(ts...));
+  }
+
   template <size_t FiledIndex, typename FiledType, typename... Args>
   STRUCT_PACK_INLINE constexpr decltype(auto) for_each(FiledType &field,
                                                        Args &&...items) {
     bool stop = false;
     struct_pack::errc code{};
     [&]<std::size_t... I>(std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
-      ((!stop && (stop = set_value<I, FiledIndex>(code, field, items))), ...);
+      ((!stop &&
+        (stop = set_value<I, FiledIndex>(code, field, get_nth<I>(items...)))),
+       ...);
     }
     (std::make_index_sequence<sizeof...(Args)>{});
     return code;
