@@ -253,7 +253,7 @@ TEST_CASE("test server write queue") {
     std::size_t sz;
     auto ret =
         struct_pack::deserialize_to(r2, buffer_read.data(), body_len, sz);
-    CHECK(ret == std::errc{});
+    CHECK(ret == struct_pack::errc::ok);
     CHECK(sz == body_len);
     CHECK(r2 == r);
   }

@@ -126,14 +126,14 @@ TEST_CASE("testing deserialize_view") {
   {
     person p2;
     auto res = deserialize_to(p2, ret);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(p2 == p);
   }
   {
     size_t len = 114514;
     person p2;
     auto res = deserialize_to(p2, ret, len);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(p2 == p);
     CHECK(len == ret.size());
   }
@@ -141,7 +141,7 @@ TEST_CASE("testing deserialize_view") {
     size_t offset = 0;
     person p2;
     auto res = deserialize_to(p2, ret, offset);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(p2 == p);
     CHECK(offset == ret.size());
   }
@@ -179,10 +179,10 @@ TEST_CASE("testing api") {
     CHECK(ret2 == need_size);
     person p1, p2;
     auto ec1 = deserialize_to(p1, my_buffer.data(), my_buffer.size());
-    CHECK(ec1 == std::errc{});
+    CHECK(ec1 == struct_pack::errc{});
     auto ec2 = deserialize_to(p2, my_buffer2.data() + offset,
                               my_buffer2.size() - offset);
-    CHECK(ec2 == std::errc{});
+    CHECK(ec2 == struct_pack::errc{});
     CHECK(p == p1);
     CHECK(p == p2);
   }
@@ -214,17 +214,18 @@ TEST_CASE("testing pack object") {
 
   person p1{};
   auto ec = deserialize_to(p1, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(p == p1);
 
-  CHECK(deserialize_to(p1, ret.data(), 4) == std::errc::no_buffer_space);
+  CHECK(deserialize_to(p1, ret.data(), 4) ==
+        struct_pack::errc::no_buffer_space);
 
   SUBCASE("test empty string") {
     p.name = "";
     ret = serialize(p);
     person p2{};
     ec = deserialize_to(p2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(p == p2);
   }
 }
@@ -253,14 +254,14 @@ void test_container(auto &v) {
   using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(v == v1);
 
   v.clear();
   v1.clear();
   ret = serialize(v);
   ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(v1.empty());
   CHECK(v == v1);
 }
@@ -429,7 +430,7 @@ void test_tuple_like(auto &v) {
   using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(v == v1);
 }
 
@@ -492,11 +493,11 @@ TEST_CASE("test_trivial_copy_tuple") {
 
   std::tuple<int, int> v{};
   auto ec = deserialize_to(v, buf);
-  CHECK(ec != std::errc{});
+  CHECK(ec != struct_pack::errc{});
 
   decltype(tp) tp1;
   auto ec2 = deserialize_to(tp1, buf);
-  CHECK(ec2 == std::errc{});
+  CHECK(ec2 == struct_pack::errc{});
   CHECK(tp == tp1);
 }
 
@@ -513,7 +514,7 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
 
   test_obj obj1;
   auto ec = deserialize_to(obj1, buf);
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(obj.tp == obj1.tp);
 }
 
@@ -523,7 +524,7 @@ void test_c_array(auto &v) {
   using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  REQUIRE(ec == std::errc{});
+  REQUIRE(ec == struct_pack::errc{});
 
   auto size = std::extent_v<T>;
   for (int i = 0; i < size; ++i) {
@@ -553,7 +554,7 @@ TEST_CASE("testing enum") {
     auto ret = serialize(e);
     std::size_t sz;
     auto ec = deserialize_to(e2, ret.data(), ret.size(), sz);
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(sz == ret.size());
     CHECK(e == e2);
   }
@@ -563,7 +564,7 @@ TEST_CASE("testing enum") {
     auto ec = deserialize<enum_i32>(ret.data(), ret.size());
     CHECK(!ec);
     if (!ec) {
-      CHECK(ec.error() == std::errc::invalid_argument);
+      CHECK(ec.error() == struct_pack::errc::invalid_argument);
     }
   }
   {
@@ -612,14 +613,14 @@ TEST_CASE("test variant") {
     std::variant<int, double> var = 1.4, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(var2 == var);
   }
   {
     std::variant<int, std::monostate> var = std::monostate{}, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(var2 == var);
   }
   {
@@ -628,7 +629,7 @@ TEST_CASE("test variant") {
         var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(var2 == var);
     CHECK(var2.index() == 1);
   }
@@ -636,7 +637,7 @@ TEST_CASE("test variant") {
     std::variant<std::monostate, std::string> var{"hello"}, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(var2 == var);
   }
   {
@@ -663,7 +664,7 @@ TEST_CASE("test variant") {
         big_variant2;
     auto ret = struct_pack::serialize(big_variant);
     auto ec = struct_pack::deserialize_to(big_variant2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(big_variant2 == big_variant);
   }
 }
@@ -674,25 +675,26 @@ TEST_CASE("test monostate") {
     static_assert(struct_pack::get_needed_size(std::monostate{}) == 4);
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(var2 == var);
   }
 }
 
 TEST_CASE("test expected") {
   {
-    tl::expected<int, std::errc> exp{42}, exp2;
+    tl::expected<int, struct_pack::errc> exp{42}, exp2;
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(exp2 == exp);
   }
   {
-    tl::expected<std::vector<int>, std::errc> exp{std::vector{41, 42, 43}},
+    tl::expected<std::vector<int>, struct_pack::errc> exp{
+        std::vector{41, 42, 43}},
         exp2;
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(exp2 == exp);
   }
   {
@@ -702,7 +704,7 @@ TEST_CASE("test expected") {
 
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(exp2 == exp);
   }
 }
@@ -729,7 +731,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
 
   complicated_object v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(v.g == v1.g);
   CHECK(v.h == v1.h);
   CHECK(v.i == v1.i);
@@ -744,7 +746,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
 
     nested_object nested1{};
     auto ec = deserialize_to(nested1, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(nested.p == nested1.p);
     CHECK(nested.name == nested1.name);
     CHECK(nested.o.m == nested1.o.m);
@@ -768,29 +770,29 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
     auto res = get_field<complicated_object, 14>(ret.data(), 24);
     CHECK(!res);
     if (!res) {
-      CHECK(res.error() == std::errc::no_buffer_space);
+      CHECK(res.error() == struct_pack::errc::no_buffer_space);
     }
   }
   SUBCASE("test get_field_to") {
     std::string res1;
     auto ec = get_field_to<complicated_object, 2>(res1, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res1 == "hello");
     ec = get_field_to<complicated_object, 2>(res1, ret);
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res1 == "hello");
     std::pair<std::string, person> res2;
     ec = get_field_to<complicated_object, 14>(res2, ret.data(), ret.size());
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res2 == v.o);
     ec = get_field_to<complicated_object, 14>(res2, ret);
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res2 == v.o);
 
     auto res = get_field_to<complicated_object, 14>(res2, ret.data(), 24);
-    CHECK(ec == std::errc{});
-    if (ec != std::errc{}) {
-      CHECK(ec == std::errc::no_buffer_space);
+    CHECK(ec == struct_pack::errc{});
+    if (ec != struct_pack::errc{}) {
+      CHECK(ec == struct_pack::errc::no_buffer_space);
     }
   }
 }
@@ -828,10 +830,10 @@ TEST_CASE("testing exceptions") {
   serialize_to(my_byte_buffer, data_list);
   std::vector<int> data_list2;
   auto ec = deserialize_to(data_list2, my_byte_buffer.data(), 0);
-  CHECK(ec == std::errc::no_buffer_space);
+  CHECK(ec == struct_pack::errc::no_buffer_space);
   ec = deserialize_to(data_list2, my_byte_buffer.data(),
                       my_byte_buffer.size() - 1);
-  CHECK(ec == std::errc::no_buffer_space);
+  CHECK(ec == struct_pack::errc::no_buffer_space);
 
   std::vector<std::byte> my_byte_buffer2;
   std::optional<bool> bool_opt;
@@ -840,7 +842,7 @@ TEST_CASE("testing exceptions") {
                                                my_byte_buffer2.size() - 1);
   CHECK(!ret3);
   if (!ret3) {
-    CHECK(ret3.error() == std::errc::no_buffer_space);
+    CHECK(ret3.error() == struct_pack::errc::no_buffer_space);
   }
 }
 
@@ -918,7 +920,7 @@ TEST_CASE("testing serialize/deserialize varadic params") {
     int a[5];
     auto res = struct_pack::deserialize_to(a[0], ret.data(), ret.size(), a[1],
                                            a[2], a[3], a[4]);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(a[0] == 1);
     CHECK(a[1] == 2);
     CHECK(a[2] == 3);
@@ -929,7 +931,7 @@ TEST_CASE("testing serialize/deserialize varadic params") {
     auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
     int a[5];
     auto res = struct_pack::deserialize_to(a[0], ret, a[1], a[2], a[3], a[4]);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(a[0] == 1);
     CHECK(a[1] == 2);
     CHECK(a[2] == 3);
@@ -1100,7 +1102,7 @@ TEST_CASE("testing serialize/deserialize varadic params") {
         std::get<0>(t), ret.data(), ret.size(), std::get<1>(t), std::get<2>(t),
         std::get<3>(t), std::get<4>(t), std::get<5>(t), std::get<6>(t),
         std::get<7>(t));
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(std::get<0>(t) == 42);
     CHECK(std::get<1>(t) == 2.71828f);
     CHECK(std::get<2>(t) == 3.1415926);
@@ -1127,7 +1129,7 @@ TEST_CASE("testing serialize/deserialize varadic params") {
     auto res = struct_pack::deserialize_to(
         std::get<0>(t), ret, std::get<1>(t), std::get<2>(t), std::get<3>(t),
         std::get<4>(t), std::get<5>(t), std::get<6>(t), std::get<7>(t));
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(std::get<0>(t) == 42);
     CHECK(std::get<1>(t) == 2.71828f);
     CHECK(std::get<2>(t) == 3.1415926);
@@ -1204,7 +1206,7 @@ TEST_CASE("testing deserialization") {
   auto ret = serialize(p);
 
   person p1{};
-  CHECK(deserialize_to(p1, ret.data(), ret.size()) == std::errc{});
+  CHECK(deserialize_to(p1, ret.data(), ret.size()) == struct_pack::errc{});
 }
 
 TEST_CASE("testing deserialization with invalid data") {
@@ -1212,17 +1214,17 @@ TEST_CASE("testing deserialization with invalid data") {
 
   std::string str{};
   auto ret2 = deserialize_to(str, ret.data(), ret.size());
-  CHECK(ret2 == std::errc::invalid_argument);
+  CHECK(ret2 == struct_pack::errc::invalid_argument);
 
   ret2 = deserialize_to(str, ret.data(), INT32_MAX);
-  CHECK(ret2 == std::errc::invalid_argument);
+  CHECK(ret2 == struct_pack::errc::invalid_argument);
 
   SUBCASE("test invalid int") {
     ret = serialize(std::string("hello"));
 
     std::tuple<int, int> tp{};
     auto ret3 = deserialize_to(tp, ret.data(), ret.size());
-    CHECK(ret3 == std::errc::invalid_argument);
+    CHECK(ret3 == struct_pack::errc::invalid_argument);
   }
 }
 
@@ -1312,7 +1314,7 @@ TEST_CASE("test use wide string") {
     auto ret = serialize(sv);
     std::wstring str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1320,7 +1322,7 @@ TEST_CASE("test use wide string") {
     auto ret = serialize(sv);
     std::u8string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1328,7 +1330,7 @@ TEST_CASE("test use wide string") {
     auto ret = serialize(sv);
     std::u16string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1336,7 +1338,7 @@ TEST_CASE("test use wide string") {
     auto ret = serialize(sv);
     std::u32string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
 }
@@ -1347,7 +1349,7 @@ TEST_CASE("test use string_view") {
     auto ret = serialize("hello struct pack"sv);
     std::string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == "hello struct pack"sv);
   }
   {
@@ -1355,7 +1357,7 @@ TEST_CASE("test use string_view") {
     auto ret = serialize(sv);
     std::wstring str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1363,7 +1365,7 @@ TEST_CASE("test use string_view") {
     auto ret = serialize(sv);
     std::u8string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1371,7 +1373,7 @@ TEST_CASE("test use string_view") {
     auto ret = serialize(sv);
     std::u16string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
   {
@@ -1379,7 +1381,7 @@ TEST_CASE("test use string_view") {
     auto ret = serialize(sv);
     std::u32string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
 }
@@ -1389,49 +1391,49 @@ TEST_CASE("char test") {
     char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     signed char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     unsigned char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     wchar_t ch = L'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     char8_t ch = u8'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     char16_t ch = u'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
   {
     char32_t ch = U'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == std::errc{});
+    REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
 }
@@ -1470,13 +1472,13 @@ TEST_CASE("array test") {
   {
     ar3[117] = test_str;
     auto ret = deserialize_to(ar3_1, serialize(ar3));
-    assert(ret == std::errc{});
+    assert(ret == struct_pack::errc{});
     assert(ar3_1[117] == test_str);
   }
   {
     ar4[15472] = test_str;
     auto ret = deserialize_to(ar4_1, serialize(ar4));
-    assert(ret == std::errc{});
+    assert(ret == struct_pack::errc{});
     assert(ar4_1[15472] == test_str);
   }
 }
@@ -1486,7 +1488,8 @@ void test_no_buffer_space(T &t, std::vector<int> size_list) {
   auto ret = serialize(t);
   T t1{};
   for (auto size : size_list) {
-    CHECK(deserialize_to(t1, ret.data(), size) == std::errc::no_buffer_space);
+    CHECK(deserialize_to(t1, ret.data(), size) ==
+          struct_pack::errc::no_buffer_space);
   }
 }
 
@@ -1510,13 +1513,13 @@ TEST_CASE("test get field exceptions") {
   auto pair = get_field<int, 0>(ret.data(), ret.size());
   CHECK(!pair);
   if (!pair) {
-    CHECK(pair.error() == std::errc::invalid_argument);
+    CHECK(pair.error() == struct_pack::errc::invalid_argument);
   }
 
   auto pair1 = get_field<person, 0>(ret.data(), 3);
   CHECK(!pair1);
   if (!pair1) {
-    CHECK(pair1.error() == std::errc::no_buffer_space);
+    CHECK(pair1.error() == struct_pack::errc::no_buffer_space);
   }
 }
 
@@ -1525,7 +1528,7 @@ TEST_CASE("test set_value") {
   auto ret = serialize(p);
   detail::unpacker in(ret.data(), ret.size());
   person p2;
-  std::errc ec;
+  struct_pack::errc ec;
   std::string s;
   int v;
   int v2 = -1;
@@ -1542,21 +1545,23 @@ TEST_CASE("test free functions") {
   CHECK(!buffer.empty());
 
   person p1{};
-  CHECK(deserialize_to(p1, buffer.data(), buffer.size()) == std::errc{});
+  CHECK(deserialize_to(p1, buffer.data(), buffer.size()) ==
+        struct_pack::errc{});
 
   std::optional<int> op1{};
   auto buf1 = serialize(op1);
   std::optional<int> op2{};
-  CHECK(deserialize_to(op2, buf1.data(), buf1.size()) == std::errc{});
+  CHECK(deserialize_to(op2, buf1.data(), buf1.size()) == struct_pack::errc{});
   CHECK(!op2.has_value());
 
   op1 = 42;
   auto buf2 = serialize(op1);
-  CHECK(deserialize_to(op2, buf2.data(), buf2.size()) == std::errc{});
+  CHECK(deserialize_to(op2, buf2.data(), buf2.size()) == struct_pack::errc{});
   CHECK(op2.has_value());
   CHECK(op2.value() == 42);
 
-  CHECK(deserialize_to(op2, buf2.data(), 1) == std::errc::no_buffer_space);
+  CHECK(deserialize_to(op2, buf2.data(), 1) ==
+        struct_pack::errc::no_buffer_space);
 
   auto pair = get_field<person, 0>(buffer.data(), buffer.size());
   CHECK(pair);
@@ -1608,19 +1613,21 @@ TEST_CASE("test compatible") {
 
     person p;
     auto res = deserialize_to(p, buffer.data(), buffer.size());
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
     CHECK(p.name == p1.name);
     CHECK(p.age == p1.age);
 
     // short data
     for (int i = 0, lim = get_needed_size(p); i < lim; ++i)
-      CHECK(deserialize_to(p, buffer.data(), i) == std::errc::no_buffer_space);
+      CHECK(deserialize_to(p, buffer.data(), i) ==
+            struct_pack::errc::no_buffer_space);
 
     ret = serialize_to(buffer.data(), buffer.size(), p);
     CHECK(ret != 0);
 
     person1 p2;
-    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) == std::errc{});
+    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) ==
+          struct_pack::errc{});
     CHECK((p2.age == p.age && p2.name == p.name));
   }
   SUBCASE("big compatible metainfo") {
@@ -1712,7 +1719,7 @@ TEST_CASE("test serialize offset") {
   auto ret = serialize_to(buffer.data() + offset, buffer.size(), p);
   CHECK(ret != 0);
   person p2;
-  CHECK(deserialize_to(p2, buffer.data() + offset, ret) == std::errc{});
+  CHECK(deserialize_to(p2, buffer.data() + offset, ret) == struct_pack::errc{});
   CHECK(p2 == p);
 
   std::vector<char> buffer2;
@@ -1723,7 +1730,7 @@ TEST_CASE("test serialize offset") {
   CHECK(data_offset + need_size == buffer2.size());
   person p3;
   CHECK(deserialize_to(p3, buffer2.data() + data_offset, need_size) ==
-        std::errc{});
+        struct_pack::errc{});
   CHECK(p3 == p);
 }
 
@@ -1752,14 +1759,14 @@ TEST_CASE("test de_serialize offset") {
     std::string res;
     auto ec = struct_pack::deserialize_to_with_offset(res, ho.data(), ho.size(),
                                                       offset);
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res == hi + std::to_string(i));
     CHECK(offset == sizes[i]);
   }
   for (size_t i = 0, offset = 0; i < 100; ++i) {
     std::string res;
     auto ec = struct_pack::deserialize_to_with_offset(res, ho, offset);
-    CHECK(ec == std::errc{});
+    CHECK(ec == struct_pack::errc{});
     CHECK(res == hi + std::to_string(i));
     CHECK(offset == sizes[i]);
   }
@@ -1770,7 +1777,7 @@ TEST_CASE("deque") {
   auto ret = struct_pack::serialize(raw);
   std::deque<int> res;
   auto ec = struct_pack::deserialize_to(res, ret.data(), ret.size());
-  CHECK(ec == std::errc{});
+  CHECK(ec == struct_pack::errc{});
   CHECK(raw == res);
 }
 TEST_CASE("compatible convert to optional") {
@@ -1914,14 +1921,14 @@ TEST_CASE("type calculate") {
                   "T[sz] with different T should get different MD5");
     int ar[5] = {};
     float ar2[5] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != std::errc{});
+    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
   }
   {
     static_assert(get_type_code<int[5]>() != get_type_code<int[6]>(),
                   "T[sz] with different sz should get different MD5");
     int ar[5] = {};
     int ar2[6] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != std::errc{});
+    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
   }
   {
     static_assert(get_type_code<std::optional<int>>() !=

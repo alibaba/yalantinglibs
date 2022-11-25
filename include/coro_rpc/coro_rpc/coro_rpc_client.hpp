@@ -505,7 +505,7 @@ class coro_rpc_client {
                                        std::size_t len) {
     rpc_return_type_t<T> ret;
     auto ec = struct_pack::deserialize_to(ret, buffer, len);
-    if (ec == err_ok) {
+    if (ec == struct_pack::errc::ok) {
       if constexpr (std::is_same_v<T, void>) {
         return {};
       }
@@ -516,10 +516,10 @@ class coro_rpc_client {
     else {
       rpc_error err;
       auto ec = struct_pack::deserialize_to(err, buffer, len);
-      if (ec != err_ok) {
+      if (ec != struct_pack::errc::ok) {
         // if deserialize failed again,
         // we can do nothing but give an error code.
-        err.code = ec;
+        err.code = std::errc::invalid_argument;
       }
       return rpc_result<T>{unexpect_t{}, std::move(err)};
     }

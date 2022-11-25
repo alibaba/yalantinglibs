@@ -181,7 +181,7 @@ inline auto execute(std::string_view data, rpc_conn &conn,
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
     auto args = get_args < has_async_conn_v || has_coro_conn_v, param_type > ();
 
-    std::errc err{};
+    struct_pack::errc err{};
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
       data = data.substr(FUNCTION_ID_LEN);
@@ -194,7 +194,7 @@ inline auto execute(std::string_view data, rpc_conn &conn,
       }
     }
 
-    if (err != err_ok) [[unlikely]] {
+    if (err != struct_pack::errc::ok) [[unlikely]] {
       return pack_result(std::errc::invalid_argument, "invalid arguments");
     }
 
@@ -309,7 +309,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
     auto args = get_args < has_async_conn_v || has_coro_conn_v, param_type > ();
 
-    std::errc err{};
+    struct_pack::errc err{};
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
       data = data.substr(FUNCTION_ID_LEN);
@@ -322,7 +322,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
       }
     }
 
-    if (err != err_ok) [[unlikely]] {
+    if (err != struct_pack::errc::ok) [[unlikely]] {
       co_return pack_result(std::errc::invalid_argument, "invalid arguments");
     }
 

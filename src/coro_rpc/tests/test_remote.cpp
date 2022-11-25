@@ -39,7 +39,7 @@ rpc_result<function_return_type_t<decltype(func)>> get_result(
   using R = function_return_type_t<decltype(func)>;
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
-  if (res == std::errc{}) {
+  if (res == struct_pack::errc{}) {
     if constexpr (std::is_same_v<R, void>) {
       return {};
     }
@@ -49,7 +49,7 @@ rpc_result<function_return_type_t<decltype(func)>> get_result(
   }
   rpc_error err;
   res = struct_pack::deserialize_to(err, data);
-  CHECK(res == std::errc{});
+  CHECK(res == struct_pack::errc{});
   return rpc_result<R>{unexpect_t{}, std::move(err)};
 }
 
@@ -60,10 +60,10 @@ void check_result(const auto &pair, size_t offset = 0) {
   std::string_view data(buffer.data() + offset, buffer.size() - offset);
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
-  if (res != std::errc{}) {
+  if (res != struct_pack::errc{}) {
     rpc_error r;
     auto res = struct_pack::deserialize_to(r, data);
-    CHECK(res == std::errc{});
+    CHECK(res == struct_pack::errc{});
   }
 }
 
@@ -295,7 +295,7 @@ TEST_CASE("testing object arguments") {
   auto buf = struct_pack::serialize(p);
   person p1;
   auto ec = struct_pack::deserialize_to(p1, buf);
-  REQUIRE(ec == std::errc{});
+  REQUIRE(ec == struct_pack::errc{});
   test_route_and_check<get_person>(async_conn, p);
 
   register_handler<get_person1>();
