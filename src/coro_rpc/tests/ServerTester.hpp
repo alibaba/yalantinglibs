@@ -24,6 +24,7 @@
 
 #include "doctest.h"
 #include "inject_action.hpp"
+#include "logging/easylog.hpp"
 #include "rpc_api.hpp"
 
 #ifdef _MSC_VER
@@ -199,18 +200,30 @@ struct ServerTester : TesterConfig {
     auto client = create_client();
     {
       auto ret = call<async_hi>(client);
+      if (!ret) {
+        easylog::warn("{}", ret.error().msg);
+      }
       CHECK(ret.value() == "async hi"s);
     }
     {
       auto ret = call<hello>(client);
+      if (!ret) {
+        easylog::warn("{}", ret.error().msg);
+      }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&HelloService::hello>(client);
+      if (!ret) {
+        easylog::warn("{}", ret.error().msg);
+      }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
+      if (!ret) {
+        easylog::warn("{}", ret.error().msg);
+      }
       CHECK(ret.value() == true);
     }
   }
