@@ -136,6 +136,10 @@ struct function_traits<Return (This::*)() const noexcept> {
   using class_type = This;
 };
 
+// Support function object and lambda expression
+template <class Function>
+struct function_traits : function_traits<decltype(&Function::operator())> {};
+
 template <typename Function>
 using function_parameters_t =
     typename function_traits<std::remove_cvref_t<Function>>::parameters_type;
