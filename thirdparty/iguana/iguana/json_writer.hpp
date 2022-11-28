@@ -4,11 +4,11 @@
 
 #ifndef SERIALIZE_JSON_HPP
 #define SERIALIZE_JSON_HPP
-#include <math.h>
-
 #include "define.h"
 #include "detail/dragonbox_to_chars.h"
 #include "reflection.hpp"
+#include <math.h>
+#include <optional>
 
 namespace iguana {
 
@@ -69,18 +69,30 @@ IGUANA_INLINE void render_json_value(Stream &ss, T value) {
 }
 
 template <typename Stream>
-IGUANA_INLINE void render_json_value(Stream &ss, int64_t &value) {
+IGUANA_INLINE void render_json_value(Stream &ss, int64_t value) {
   char temp[65];
   auto p = xtoa(value, temp, 10, 1);
   ss.append(temp, p - temp);
 }
 
 template <typename Stream>
-IGUANA_INLINE void render_json_value(Stream &ss, uint64_t &value) {
+IGUANA_INLINE void render_json_value(Stream &ss, uint64_t value) {
   char temp[65];
   auto p = xtoa(value, temp, 10, 0);
   ss.append(temp, p - temp);
 }
+
+#if defined __APPLE__
+template <typename Stream>
+IGUANA_INLINE void render_json_value(Stream &ss, long value) {
+  render_json_value(ss, (int64_t)value);
+}
+
+template <typename Stream>
+IGUANA_INLINE void render_json_value(Stream &ss, unsigned long value) {
+  render_json_value(ss, (uint64_t)value);
+}
+#endif
 
 template <typename Stream, float_t T>
 IGUANA_INLINE void render_json_value(Stream &ss, T &value) {
@@ -114,8 +126,7 @@ IGUANA_INLINE void render_key(Stream &ss, const std::string &s) {
   render_json_value(ss, s);
 }
 
-template <typename Stream, refletable T>
-void to_json(T &&t, Stream &ss);
+template <typename Stream, refletable T> void to_json(T &&t, Stream &ss);
 
 template <typename Stream, refletable T>
 IGUANA_INLINE void render_json_value(Stream &ss, T &&t) {
@@ -131,8 +142,7 @@ template <typename Stream, optional T>
 IGUANA_INLINE void render_json_value(Stream &ss, T &val) {
   if (!val) {
     render_json_value(ss, std::string("null"));
-  }
-  else {
+  } else {
     render_json_value(ss, *val);
   }
 }
@@ -141,9 +151,8 @@ template <typename Stream, typename T>
 IGUANA_INLINE void render_array(Stream &ss, const T &v) {
   ss.push_back('[');
   join(ss, std::begin(v), std::end(v), ',',
-       [&ss](const auto &jsv) IGUANA__INLINE_LAMBDA {
-         render_json_value(ss, jsv);
-       });
+       [&ss](const auto &jsv)
+           IGUANA__INLINE_LAMBDA { render_json_value(ss, jsv); });
   ss.push_back(']');
 }
 
@@ -173,9 +182,8 @@ template <typename Stream, sequence_container_t T>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v) {
   ss.push_back('[');
   join(ss, v.cbegin(), v.cend(), ',',
-       [&ss](const auto &jsv) IGUANA__INLINE_LAMBDA {
-         render_json_value(ss, jsv);
-       });
+       [&ss](const auto &jsv)
+           IGUANA__INLINE_LAMBDA { render_json_value(ss, jsv); });
   ss.push_back(']');
 }
 
@@ -184,7 +192,7 @@ constexpr auto write_json_key = [](auto &s, auto i,
   s.push_back('"');
   constexpr auto name =
       get_name<decltype(t),
-               decltype(i)::value>();  // will be replaced by string_view later
+               decltype(i)::value>(); // will be replaced by string_view later
   s.append(name.data(), name.size());
   s.push_back('"');
 };
@@ -197,8 +205,7 @@ IGUANA_INLINE void to_json(T &&v, Stream &s) {
   for (size_t i = 0; i < size; i++) {
     if constexpr (is_reflection_v<U>) {
       to_json(v[i], s);
-    }
-    else {
+    } else {
       render_json_value(s, v[i]);
     }
 
@@ -243,8 +250,7 @@ IGUANA_INLINE void to_json(T &&t, Stream &s) {
 
              if constexpr (!is_reflection<decltype(v)>::value) {
                render_json_value(s, t.*v);
-             }
-             else {
+             } else {
                to_json(t.*v, s);
              }
 
@@ -254,5 +260,5 @@ IGUANA_INLINE void to_json(T &&t, Stream &s) {
   s.push_back('}');
 }
 
-}  // namespace iguana
-#endif  // SERIALIZE_JSON_HPP
+} // namespace iguana
+#endif // SERIALIZE_JSON_HPP
