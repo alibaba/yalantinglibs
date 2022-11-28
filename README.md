@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">A Collection of C++20 libraries, include async_simple, coro_rpc and struct_pack </h6>
+<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, coro_rpc and async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -8,7 +8,7 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, coro_rpc and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http, json etc.) in the future.
+yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, coro_rpc and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
@@ -111,6 +111,29 @@ auto person2 = deserialize<person>(buffer);
 ```
 See more examples [here](./src/struct_pack/examples/).
 
+## struct_json
+reflection-based json lib, very easy to do struct to json and json to struct.
+
+### quick example
+```c++
+#include "struct_json/json_reader.h"
+#include "struct_json/json_writer.h"
+
+struct person {
+  std::string name;
+  int age;
+};
+REFLECTION(person, name, age);
+
+int main() {
+  person p{.name = "tom", .age = 20};
+  std::string str;
+  struct_json::to_json(p, str); // {"name":"tom","age":20}
+
+  person p1;
+  struct_json::from_json(p1, str);
+}
+```
 ## async_simple
 
 A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
@@ -164,6 +187,7 @@ options:
 - [asio](https://github.com/chriskohlhoff/asio)
 - openssl (optional)
 - [async_simple](https://github.com/alibaba/async_simple)
+- [iguana](https://github.com/qicosmos/iguana)
 
 Currently, asio and spdlog are put in thirdparty folder.
 doctest is put in tests folder.

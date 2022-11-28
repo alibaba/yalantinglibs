@@ -32,3 +32,15 @@ endif ()
 #############################
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE doctest)
+
+#############################
+# frozen
+#############################
+add_library(frozen INTERFACE)
+target_include_directories(frozen INTERFACE frozen)
+
+#############################
+# iguana
+#############################
+add_library(iguana INTERFACE)
+target_include_directories(iguana INTERFACE frozen iguana)
