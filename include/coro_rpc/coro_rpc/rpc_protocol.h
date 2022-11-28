@@ -50,7 +50,13 @@ struct rpc_header {
   uint32_t seq_num;        //!< sequence number
   uint32_t length;         //!< length of RPC body
 };
-
+}  // namespace coro_rpc
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<coro_rpc::rpc_header> =
+    type_info_config::disable;
+};
+namespace coro_rpc {
 #if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
 template <class T, class E>
 using expected = std::expected<T, E>;
@@ -71,6 +77,8 @@ using unexpect_t = tl::unexpect_t;
 #endif
 
 constexpr int RPC_HEAD_LEN = struct_pack::get_needed_size(rpc_header{});
+static_assert(RPC_HEAD_LEN == 16);
+
 constexpr int RESPONSE_HEADER_LEN = 4;
 constexpr int FUNCTION_ID_LEN = 4;
 

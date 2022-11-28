@@ -35,7 +35,6 @@
 
 #include "error_code.h"
 #include "md5_constexpr.hpp"
-#include "struct_pack/struct_pack.hpp"
 #include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
@@ -119,6 +118,16 @@ struct compatible : public std::optional<T> {
   using base = std::optional<T>;
   using base::base;
 };
+
+enum class type_info_config { automatic, disable, enable };
+
+struct serialize_config {
+  type_info_config add_type_info = type_info_config::automatic;
+};
+
+template <typename T>
+constexpr inline type_info_config enable_type_info =
+    type_info_config::automatic;
 
 template <typename... Args>
 STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal();
@@ -898,22 +907,37 @@ using get_args_type =
     typename std::conditional<sizeof...(Args) == 1,
                               std::tuple_element_t<0, std::tuple<Args...>>,
                               std::tuple<Args...>>::type;
+template <serialize_config conf, typename T>
+constexpr bool check_if_add_type_literal() {
+  if constexpr (conf.add_type_info == type_info_config::automatic) {
+    if constexpr (enable_type_info<T> == type_info_config::automatic) {
+      return serialize_static_config<T>::has_type_literal;
+    }
+    else {
+      return enable_type_info<T> == type_info_config::enable;
+    }
+  }
+  else {
+    return conf.add_type_info == type_info_config::enable;
+  }
+}
 
-template <typename... Args>
+template <serialize_config conf, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
 get_serialize_runtime_info(const Args &...args) {
+  using Type = get_args_type<Args...>;
   serialize_runtime_info ret = {
       .len = sizeof(uint32_t) + calculate_payload_size(args...), .metainfo = 0};
-  constexpr bool has_compatible =
-      serialize_static_config<get_args_type<Args...>>::has_compatible;
-  constexpr bool has_type_literal =
-      serialize_static_config<get_args_type<Args...>>::has_type_literal;
+  constexpr bool has_compatible = serialize_static_config<Type>::has_compatible;
+  constexpr bool has_type_literal = check_if_add_type_literal<conf, Type>();
   constexpr bool has_meta_info = has_compatible || has_type_literal;
   if constexpr (has_meta_info) {
     ret.len += sizeof(char);
   }
   if constexpr (has_type_literal) {
-    ret.len += struct_pack::get_type_literal<Args...>().size() + 1;
+    constexpr auto type_literal = struct_pack::get_type_literal<Args...>();
+    // struct_pack::get_type_literal<Args...>().size() crash in clang13. Bug?
+    ret.len += type_literal.size() + 1;
     ret.metainfo |= 0b100;
   }
   if constexpr (has_compatible) {  // calculate bytes count of serialize length
@@ -941,9 +965,9 @@ class packer {
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
-    serialize_metainfo(t, args...);
+    serialize_metainfo<conf>(t, args...);
     serialize_many(t, args...);
   }
 
@@ -965,11 +989,11 @@ class packer {
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
     }
   }
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
     if constexpr (serialize_static_config<serialize_type>::has_compatible ||
-                  serialize_static_config<serialize_type>::has_type_literal) {
+                  check_if_add_type_literal<conf, serialize_type>()) {
       return raw_types_code - raw_types_code % 2 + 1;
     }
     // TODO: size_type
@@ -977,10 +1001,10 @@ class packer {
       return raw_types_code - raw_types_code % 2;
     }
   }
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   constexpr void STRUCT_PACK_INLINE serialize_metainfo(const T &t,
                                                        const Args &...args) {
-    constexpr auto hash_head = calculate_hash_head<T, Args...>();
+    constexpr auto hash_head = calculate_hash_head<conf, T, Args...>();
     std::memcpy(data_ + pos_, &hash_head, sizeof(uint32_t));
     pos_ += sizeof(uint32_t);
     if constexpr (hash_head % 2) {  // has more metainfo
@@ -992,7 +1016,7 @@ class packer {
         std::memcpy(data_ + pos_, &info.len, len_size);
         pos_ += len_size;
       }
-      if constexpr (serialize_static_config<serialize_type>::has_type_literal) {
+      if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
         constexpr auto type_literal =
             struct_pack::get_type_literal<T, Args...>();
         std::memcpy(data_ + pos_, type_literal.data(), type_literal.size() + 1);

@@ -113,6 +113,11 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
+inline std::error_code make_error_code(struct_pack::errc err) {
+  return std::error_code((std::underlying_type_t<errc> &)err,
+                         struct_pack::detail::category());
+}
+
 /*!
  * \ingroup struct_pack
  * Get the error message corresponding to the error code `err`.
@@ -122,6 +127,7 @@ using unexpect_t = tl::unexpect_t;
 STRUCT_PACK_INLINE std::string error_message(struct_pack::errc err) {
   return struct_pack::make_error_code(err).message();
 }
+
 /*!
  * \ingroup struct_pack
  * Get the byte size of the packing objects.
@@ -161,64 +167,67 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   }
 }
 
-template <typename... Args>
+template <serialize_config conf = serialize_config{}, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE constexpr size_t get_needed_size(
     const Args &...args) {
-  return detail::get_serialize_runtime_info(args...).len;
+  return detail::get_serialize_runtime_info<conf>(args...).len;
 }
 
-template <detail::struct_pack_byte Byte, typename... Args>
+template <serialize_config conf = serialize_config{},
+          detail::struct_pack_byte Byte, typename... Args>
 std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len,
                                             const Args &...args) noexcept {
   static_assert(sizeof...(args) > 0);
-  auto config = detail::get_serialize_runtime_info(args...);
+  auto config = detail::get_serialize_runtime_info<conf>(args...);
   if (config.len > len) [[unlikely]] {
     return 0;
   }
   detail::packer<Byte, detail::get_args_type<Args...>> o(buffer, config);
-  o.serialize(args...);
+  o.template serialize<conf>(args...);
   return config.len;
 }
 
-template <detail::struct_pack_buffer Buffer, typename... Args>
+template <serialize_config conf = serialize_config{},
+          detail::struct_pack_buffer Buffer, typename... Args>
 STRUCT_PACK_INLINE void serialize_to(Buffer &buffer, const Args &...args) {
   static_assert(sizeof...(args) > 0);
   auto data_offset = buffer.size();
-  auto config = detail::get_serialize_runtime_info(args...);
+  auto config = detail::get_serialize_runtime_info<conf>(args...);
   auto total = data_offset + config.len;
   buffer.resize(total);
   detail::packer<std::remove_reference_t<decltype(*buffer.data())>,
                  detail::get_args_type<Args...>>
       o(buffer.data() + data_offset, config);
-  o.serialize(args...);
+  o.template serialize<conf>(args...);
 }
 
-template <detail::struct_pack_buffer Buffer, typename... Args>
+template <serialize_config conf = serialize_config{},
+          detail::struct_pack_buffer Buffer, typename... Args>
 void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
                                                  std::size_t offset,
                                                  const Args &...args) {
   static_assert(sizeof...(args) > 0);
   buffer.resize(buffer.size() + offset);
-  serialize_to(buffer, args...);
+  serialize_to<conf>(buffer, args...);
 }
 
 template <detail::struct_pack_buffer Buffer = std::vector<char>,
-          typename... Args>
+          serialize_config conf = serialize_config{}, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer serialize(const Args &...args) {
   static_assert(sizeof...(args) > 0);
   Buffer buffer;
-  serialize_to(buffer, args...);
+  serialize_to<conf>(buffer, args...);
   return buffer;
 }
 
 template <detail::struct_pack_buffer Buffer = std::vector<char>,
-          typename... Args>
+          serialize_config conf = serialize_config{}, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer
 serialize_with_offset(std::size_t offset, const Args &...args) {
   static_assert(sizeof...(args) > 0);
   Buffer buffer;
   buffer.resize(offset);
-  serialize_to(buffer, args...);
+  serialize_to<conf>(buffer, args...);
   return buffer;
 }
 

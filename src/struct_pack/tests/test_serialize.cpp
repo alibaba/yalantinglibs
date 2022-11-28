@@ -27,6 +27,7 @@
 #define private public
 #include "struct_pack/struct_pack.hpp"
 #undef private
+
 #include <array>
 #include <deque>
 #include <iostream>
@@ -1487,6 +1488,153 @@ TEST_CASE("array test") {
   }
 }
 
+struct person_with_type_info {
+  int age;
+  std::string name;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<person_with_type_info> =
+    type_info_config::enable;
+};
+
+struct person_with_no_type_info {
+  int age;
+  std::string name;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<person_with_no_type_info> =
+    type_info_config::disable;
+};
+
+TEST_CASE("test type info config") {
+  SUBCASE("test_person") {
+#ifdef NDEBUG
+    {
+      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{}, person>() ==
+          false);
+    }
+#else
+    {
+      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{}, person>() ==
+          true);
+    }
+#endif
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<
+              serialize_config{type_info_config::disable}, person>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable}, person>() ==
+                    true);
+    }
+  }
+  SUBCASE("test_person_with_type_info") {
+    {
+      auto size =
+          get_needed_size(person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer =
+          serialize(person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{},
+                                            person_with_type_info>() == true);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::disable},
+                        person_with_type_info>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable},
+                        person_with_type_info>() == true);
+    }
+  }
+  SUBCASE("test_person_with_no_type_info") {
+    {
+      auto size =
+          get_needed_size(person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer =
+          serialize(person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{},
+                                            person_with_no_type_info>() ==
+          false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::disable},
+                        person_with_no_type_info>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable},
+                        person_with_no_type_info>() == true);
+    }
+  }
+}
+
 template <typename T>
 void test_no_buffer_space(T &t, std::vector<int> size_list) {
   auto ret = serialize(t);
@@ -1538,7 +1686,6 @@ TEST_CASE("test set_value") {
   int v2 = -1;
   auto ret1 = in.set_value<0, 0, int, int>(ec, v, std::move(v2));
   CHECK(ret1 == true);
-  //
   auto ret2 = in.set_value<0, 1, int, int>(ec, v, std::move(v2));
   CHECK(ret2 == false);
 }
