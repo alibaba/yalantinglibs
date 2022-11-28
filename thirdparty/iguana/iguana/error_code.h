@@ -7,7 +7,7 @@
 namespace iguana {
 
 class iguana_category : public std::error_category {
-public:
+ public:
   virtual const char *name() const noexcept override {
     return "iguna::category";
   }
@@ -24,7 +24,8 @@ public:
   int add_message(const std::string &msg) {
     if (auto it = err_map_.find(msg); it != err_map_.end()) {
       return it->second;
-    } else {
+    }
+    else {
       err_++;
       err_map_.emplace(msg, err_);
       return err_;
@@ -46,4 +47,4 @@ inline std::error_code make_error_code(const std::string data = "") {
   auto err = iguana::category().add_message(data);
   return std::error_code(err, iguana::category());
 }
-} // namespace iguana
+}  // namespace iguana
