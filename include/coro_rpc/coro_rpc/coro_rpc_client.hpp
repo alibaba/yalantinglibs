@@ -144,6 +144,7 @@ class coro_rpc_client {
     }
 #endif
 
+    has_closed_ = false;
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
@@ -565,6 +566,7 @@ class coro_rpc_client {
     }
 
     co_await asio_util::async_close(socket_);
+    has_closed_ = true;
   }
 
 #ifdef ENABLE_SSL
