@@ -17,6 +17,7 @@
 #include <async_simple/Future.h>
 #include <async_simple/coro/FutureAwaiter.h>
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <system_error>
@@ -120,7 +121,7 @@ class coro_rpc_client {
    *
    * @return true if client closed, otherwise false.
    */
-  [[nodiscard]] bool has_closed() { return !socket_.is_open(); }
+  [[nodiscard]] bool has_closed() { return has_closed_; }
 
   /*!
    * Connect server
@@ -559,7 +560,7 @@ class coro_rpc_client {
       close_ssl_stream();
     }
 #endif
-    if (!socket_.is_open()) {
+    if (has_closed_) {
       co_return;
     }
 
@@ -583,7 +584,7 @@ class coro_rpc_client {
       stop_inner_io_context();
     }
 #endif
-    if (close_ssl && !socket_.is_open()) {
+    if (close_ssl && !has_closed_) {
       stop_inner_io_context();
       return;
     }
@@ -591,6 +592,8 @@ class coro_rpc_client {
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     socket_.close(ignored_ec);
+
+    has_closed_ = true;
 
     if (close_ssl) {
       stop_inner_io_context();
@@ -651,5 +654,6 @@ class coro_rpc_client {
   bool use_ssl_ = false;
 #endif
   bool is_timeout_ = false;
+  std::atomic<bool> has_closed_ = false;
 };
 }  // namespace coro_rpc

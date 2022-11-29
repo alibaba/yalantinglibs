@@ -178,6 +178,11 @@ class coro_rpc_server {
     co_return ec;
   }
 
+  stat get_state() {
+    std::unique_lock lock(start_mtx_);
+    return flag_;
+  }
+
   /*!
    * Stop server
    *

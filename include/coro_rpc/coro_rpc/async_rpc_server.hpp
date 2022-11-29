@@ -176,6 +176,11 @@ class async_rpc_server {
     flag_ = stat::stop;
   }
 
+  stat get_state() {
+    std::unique_lock lock(start_mtx_);
+    return flag_;
+  }
+
   uint16_t port() const { return port_; };
 
   ~async_rpc_server() { stop(); }

@@ -77,6 +77,22 @@ struct CoroServerTester : ServerTester {
 
   async_simple::coro::Lazy<int> get_value(int val) { co_return val; }
 
+  std::string get_server_state() override {
+    int state = (int)server.get_state();
+    if (state == 0) {
+      return "init";
+    }
+    else if (state == 1) {
+      return "star";
+    }
+    else if (state == 2) {
+      return "stop";
+    }
+    else {
+      return "known stat " + std::to_string(state);
+    }
+  }
+
   void test_all() override {
     easylog::info("run {}", __func__);
     test_coro_handler();

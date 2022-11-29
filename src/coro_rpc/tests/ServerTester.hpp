@@ -20,6 +20,7 @@
 #include <coro_rpc/coro_rpc_client.hpp>
 #include <future>
 #include <ostream>
+#include <sstream>
 #include <string>
 
 #include "doctest.h"
@@ -159,6 +160,8 @@ struct ServerTester : TesterConfig {
     }
   }
 
+  virtual std::string get_server_state() { return "unknown"; }
+
   void test_function_not_registered() {
     remove_handler<async_hi>();
     easylog::info("run {}", __func__);
@@ -198,31 +201,35 @@ struct ServerTester : TesterConfig {
   void test_function_registered() {
     easylog::info("run {}", __func__);
     auto client = create_client();
+    std::stringstream ss;
+    ss << *this;
     {
       auto ret = call<async_hi>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn("error: {}, closed {}, config {}, server state {}",
+                      ret.error().msg, client->has_closed(), ss.str(),
+                      get_server_state());
       }
       CHECK(ret.value() == "async hi"s);
     }
     {
       auto ret = call<hello>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&HelloService::hello>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
       }
       CHECK(ret.value() == true);
     }

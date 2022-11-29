@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <coro_rpc/coro_rpc/async_rpc_server.hpp>
+#include <string>
 #include <variant>
 
 #include "ServerTester.hpp"
@@ -52,6 +53,23 @@ struct AsyncServerTester : public ServerTester {
     }
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   }
+
+  std::string get_server_state() override {
+    int state = (int)server.get_state();
+    if (state == 0) {
+      return "init";
+    }
+    else if (state == 1) {
+      return "star";
+    }
+    else if (state == 2) {
+      return "stop";
+    }
+    else {
+      return "known stat " + std::to_string(state);
+    }
+  }
+
   ~AsyncServerTester() {
     if (async_start) {
     }
