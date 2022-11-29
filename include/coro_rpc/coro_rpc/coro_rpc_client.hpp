@@ -300,10 +300,14 @@ class coro_rpc_client {
     bool is_timeout = co_await timer.async_await();
 
     if (!is_timeout) {
-      easylog::info("{}, timeout {}", err_msg, duration.count());
+      easylog::info("{}, timeout {}, duration {}", err_msg, is_timeout,
+                    duration.count());
       promise.setValue(async_simple::Unit());
       co_return false;
     }
+
+    easylog::info("{}, timeout {}, duration {}", err_msg, is_timeout,
+                  duration.count());
 
     is_timeout_ = is_timeout;
     sync_close(false);
