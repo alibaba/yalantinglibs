@@ -177,7 +177,7 @@ struct CoroServerTester : ServerTester {
   void test_server_send_no_body() {
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(ret.error().code != std::errc{}, ret.error().msg);
   }
 
   void test_coro_handler() {
