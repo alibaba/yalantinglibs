@@ -83,7 +83,7 @@ struct CoroServerTester : ServerTester {
       return "init";
     }
     else if (state == 1) {
-      return "star";
+      return "start";
     }
     else if (state == 2) {
       return "stop";

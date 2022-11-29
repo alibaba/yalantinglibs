@@ -371,6 +371,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             return;
           }
 
+          easylog::info("close timeout connection");
           close_socket(false);
         });
   }

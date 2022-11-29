@@ -200,10 +200,13 @@ struct ServerTester : TesterConfig {
   }
   void test_function_registered() {
     easylog::info("run {}", __func__);
-    auto client = create_client();
     std::stringstream ss;
     ss << *this;
+
+    auto client = create_client();
+
     {
+      easylog::info("begin to call async_hi");
       auto ret = call<async_hi>(client);
       if (!ret) {
         easylog::warn("error: {}, closed {}, config {}, server state {}",
@@ -215,21 +218,27 @@ struct ServerTester : TesterConfig {
     {
       auto ret = call<hello>(client);
       if (!ret) {
-        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
+        easylog::warn("error: {}, closed {}, config {}, server state {}",
+                      ret.error().msg, client->has_closed(), ss.str(),
+                      get_server_state());
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&HelloService::hello>(client);
       if (!ret) {
-        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
+        easylog::warn("error: {}, closed {}, config {}, server state {}",
+                      ret.error().msg, client->has_closed(), ss.str(),
+                      get_server_state());
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       if (!ret) {
-        easylog::warn("{} closed {}", ret.error().msg, client->has_closed());
+        easylog::warn("error: {}, closed {}, config {}, server state {}",
+                      ret.error().msg, client->has_closed(), ss.str(),
+                      get_server_state());
       }
       CHECK(ret.value() == true);
     }
