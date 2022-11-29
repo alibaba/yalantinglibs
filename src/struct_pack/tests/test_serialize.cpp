@@ -27,6 +27,7 @@
 #define private public
 #include "struct_pack/struct_pack.hpp"
 #undef private
+
 #include <array>
 #include <deque>
 #include <iostream>
@@ -163,7 +164,7 @@ TEST_CASE("testing api") {
     CHECK(ret1.size() == ret2.size() - offset);
     auto p1 = deserialize<person>(ret1.data(), ret1.size());
     CHECK(p1);
-    auto p2 = deserialize<person>(ret2.data() + offset, ret1.size() - offset);
+    auto p2 = deserialize<person>(ret2.data() + offset, ret2.size() - offset);
     CHECK(p2);
     CHECK(p == p1.value());
     CHECK(p == p2.value());
@@ -672,7 +673,11 @@ TEST_CASE("test variant") {
 TEST_CASE("test monostate") {
   {
     std::monostate var, var2;
+#ifdef NDEBUG
     static_assert(struct_pack::get_needed_size(std::monostate{}) == 4);
+#else
+    static_assert(struct_pack::get_needed_size(std::monostate{}) == 7);
+#endif
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
     CHECK(ec == struct_pack::errc{});
@@ -1483,6 +1488,153 @@ TEST_CASE("array test") {
   }
 }
 
+struct person_with_type_info {
+  int age;
+  std::string name;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<person_with_type_info> =
+    type_info_config::enable;
+};
+
+struct person_with_no_type_info {
+  int age;
+  std::string name;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<person_with_no_type_info> =
+    type_info_config::disable;
+};
+
+TEST_CASE("test type info config") {
+  SUBCASE("test_person") {
+#ifdef NDEBUG
+    {
+      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{}, person>() ==
+          false);
+    }
+#else
+    {
+      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{}, person>() ==
+          true);
+    }
+#endif
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<
+              serialize_config{type_info_config::disable}, person>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable}, person>() ==
+                    true);
+    }
+  }
+  SUBCASE("test_person_with_type_info") {
+    {
+      auto size =
+          get_needed_size(person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer =
+          serialize(person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{},
+                                            person_with_type_info>() == true);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::disable},
+                        person_with_type_info>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person_with_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable},
+                        person_with_type_info>() == true);
+    }
+  }
+  SUBCASE("test_person_with_no_type_info") {
+    {
+      auto size =
+          get_needed_size(person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer =
+          serialize(person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(
+          detail::check_if_add_type_literal<serialize_config{},
+                                            person_with_no_type_info>() ==
+          false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::disable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 17);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::disable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::disable},
+                        person_with_no_type_info>() == false);
+    }
+    {
+      auto size = get_needed_size<serialize_config{type_info_config::enable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(size == 26);
+      auto buffer = serialize<std::vector<char>,
+                              serialize_config{type_info_config::enable}>(
+          person_with_no_type_info{.age = 24, .name = "Betty"});
+      CHECK(buffer.size() == size);
+      static_assert(detail::check_if_add_type_literal<
+                        serialize_config{type_info_config::enable},
+                        person_with_no_type_info>() == true);
+    }
+  }
+}
+
 template <typename T>
 void test_no_buffer_space(T &t, std::vector<int> size_list) {
   auto ret = serialize(t);
@@ -1534,7 +1686,6 @@ TEST_CASE("test set_value") {
   int v2 = -1;
   auto ret1 = in.set_value<0, 0, int, int>(ec, v, std::move(v2));
   CHECK(ret1 == true);
-  //
   auto ret2 = in.set_value<0, 1, int, int>(ec, v, std::move(v2));
   CHECK(ret2 == false);
 }
@@ -1632,8 +1783,13 @@ TEST_CASE("test compatible") {
   }
   SUBCASE("big compatible metainfo") {
     {
-      std::tuple<compatible<std::array<char, 247>>> big =
-          std::array<char, 247>{'A', 'E', 'I', 'O', 'U'};
+#ifdef NDEBUG
+      constexpr size_t array_sz = 247;
+#else
+      constexpr size_t array_sz = 244;
+#endif
+      std::tuple<compatible<std::array<char, array_sz>>> big =
+          std::array<char, array_sz>{'A', 'E', 'I', 'O', 'U'};
       auto sz = get_needed_size(big);
       CHECK(sz == 255);
       auto buffer = serialize(big);
@@ -1644,13 +1800,19 @@ TEST_CASE("test compatible") {
       memcpy(&r_sz, &buffer[5], 2);
       CHECK(r_sz == sz);
       auto big2 =
-          deserialize<std::tuple<compatible<std::array<char, 247>>>>(buffer);
+          deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
+              buffer);
       CHECK(big2);
       CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
     }
     {
-      std::tuple<compatible<std::array<char, 248>>> big =
-          std::array<char, 248>{'A', 'E', 'I', 'O', 'U'};
+#ifdef NDEBUG
+      constexpr size_t array_sz = 248;
+#else
+      constexpr size_t array_sz = 245;
+#endif
+      std::tuple<compatible<std::array<char, array_sz>>> big =
+          std::array<char, array_sz>{'A', 'E', 'I', 'O', 'U'};
       auto sz = get_needed_size(big);
       CHECK(sz == 256);
       auto buffer = serialize(big);
@@ -1661,13 +1823,19 @@ TEST_CASE("test compatible") {
       memcpy(&r_sz, &buffer[5], 2);
       CHECK(r_sz == sz);
       auto big2 =
-          deserialize<std::tuple<compatible<std::array<char, 248>>>>(buffer);
+          deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
+              buffer);
       CHECK(big2);
       CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
     }
     {
+#ifdef NDEBUG
+      constexpr size_t array_sz = 65523;
+#else
+      constexpr size_t array_sz = 65520;
+#endif
       std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
-      std::get<0>(big).value().resize(65523);
+      std::get<0>(big).value().resize(array_sz);
       auto sz = get_needed_size(big);
       CHECK(sz == 65535);
       auto buffer = serialize(big);
@@ -1682,8 +1850,13 @@ TEST_CASE("test compatible") {
       CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
     }
     {
+#ifdef NDEBUG
+      constexpr size_t array_sz = 65524;
+#else
+      constexpr size_t array_sz = 65521;
+#endif
       std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
-      std::get<0>(big).value().resize(65524);
+      std::get<0>(big).value().resize(array_sz);
       auto sz = get_needed_size(big);
       CHECK(sz == 65538);
       auto buffer = serialize(big);
@@ -1700,14 +1873,17 @@ TEST_CASE("test compatible") {
     // TODO: test 8byte-len compatible object
   }
 }
-// c++98
-template <typename T>
-void f1(T &&t);
-
-// c++20
-void f1(auto t);
-
-void f2(auto &&t);
+#ifndef NDEBUG
+TEST_CASE("test hash confliet detected") {
+  int32_t value = 42;
+  auto ret = serialize(value);
+  auto fake_hash = struct_pack::get_type_code<float>() | 0b1;
+  memcpy(ret.data(), &fake_hash, sizeof(fake_hash));
+  auto res = deserialize<float>(ret);
+  CHECK(!res);
+  CHECK(res.error() == struct_pack::errc::hash_conflict);
+}
+#endif
 
 TEST_CASE("test serialize offset") {
   uint32_t offset = 4;

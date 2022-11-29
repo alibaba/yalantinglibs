@@ -43,6 +43,7 @@ template <typename T>
 constexpr std::size_t members_count = 0;
 template <typename T>
 constexpr std::size_t min_alignment = 0;
+
 namespace detail {
 template <typename Type>
 concept deserialize_view = requires(Type container) {

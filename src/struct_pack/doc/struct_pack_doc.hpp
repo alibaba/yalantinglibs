@@ -270,7 +270,7 @@ template <typename... Args>
 
 /*!
  * \ingroup struct_pack
- * 当传入的参数多于一个时，返回类型`std::tuple<T...>`的校验码
+ * 返回一个31位的类型T的MD5校验码。当传入的参数多于一个时，返回类型`std::tuple<Args...>`的校验码
  *
  * 样例代码：
  *
@@ -285,7 +285,7 @@ template <typename... Args>
  * @return 编译期计算出的类型的哈希校验码。
  */
 template <typename... Args>
-STRUCT_PACK_INLINE consteval std::size_t get_type_code();
+STRUCT_PACK_INLINE consteval std::uint32_t get_type_code();
 
 /*!
  * \ingroup struct_pack

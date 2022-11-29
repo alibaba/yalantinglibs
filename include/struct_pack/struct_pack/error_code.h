@@ -10,6 +10,8 @@ enum class errc {
   hash_conflict,
 };
 
+namespace detail {
+
 class struct_pack_category : public std::error_category {
  public:
   virtual const char *name() const noexcept override {
@@ -34,12 +36,9 @@ class struct_pack_category : public std::error_category {
 };
 
 inline const std::error_category &category() {
-  static struct_pack::struct_pack_category instance;
+  static struct_pack::detail::struct_pack_category instance;
   return instance;
 }
+}  // namespace detail
 
-inline std::error_code make_error_code(struct_pack::errc err) {
-  return std::error_code((std::underlying_type_t<errc> &)err,
-                         struct_pack::category());
-}
 }  // namespace struct_pack

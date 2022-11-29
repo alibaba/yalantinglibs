@@ -35,7 +35,6 @@
 
 #include "error_code.h"
 #include "md5_constexpr.hpp"
-#include "struct_pack/struct_pack.hpp"
 #include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
@@ -119,6 +118,19 @@ struct compatible : public std::optional<T> {
   using base = std::optional<T>;
   using base::base;
 };
+
+enum class type_info_config { automatic, disable, enable };
+
+struct serialize_config {
+  type_info_config add_type_info = type_info_config::automatic;
+};
+
+template <typename T>
+constexpr inline type_info_config enable_type_info =
+    type_info_config::automatic;
+
+template <typename... Args>
+STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal();
 
 namespace detail {
 // clang-format off
@@ -879,9 +891,9 @@ template <typename T>
 struct serialize_static_config {
   static constexpr bool has_compatible = exist_compatible_member<T>;
 #ifdef NDEBUG
-  static constexpr bool include_type_literal = false;
+  static constexpr bool has_type_literal = false;
 #else
-  static constexpr bool include_type_literal = true;
+  static constexpr bool has_type_literal = true;
 #endif
 };
 
@@ -895,30 +907,54 @@ using get_args_type =
     typename std::conditional<sizeof...(Args) == 1,
                               std::tuple_element_t<0, std::tuple<Args...>>,
                               std::tuple<Args...>>::type;
-
-template <typename... Args>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
-get_serialize_runtime_info(const Args &...args) {
-  auto payload_sz = calculate_payload_size(args...);
-
-  if constexpr ((detail::unexist_compatible_member<Args> && ...)) {
-    std::size_t metainfo_size = sizeof(uint32_t);
-    size_t total_sz = payload_sz + metainfo_size;
-    return {.len = total_sz, .metainfo = 0};
-  }
-  else {
-    std::size_t metainfo_size = sizeof(uint32_t) + sizeof(char);
-    size_t total_sz = payload_sz + metainfo_size;
-    if (total_sz < (1ull << 16) - 2) [[likely]] {
-      return {.len = total_sz + 2, .metainfo = 1};
-    }
-    else if (total_sz < (1ull << 32) - 4) {
-      return {.len = total_sz + 4, .metainfo = 2};
+template <serialize_config conf, typename T>
+constexpr bool check_if_add_type_literal() {
+  if constexpr (conf.add_type_info == type_info_config::automatic) {
+    if constexpr (enable_type_info<T> == type_info_config::automatic) {
+      return serialize_static_config<T>::has_type_literal;
     }
     else {
-      return {.len = total_sz + 8, .metainfo = 3};
+      return enable_type_info<T> == type_info_config::enable;
     }
   }
+  else {
+    return conf.add_type_info == type_info_config::enable;
+  }
+}
+
+template <serialize_config conf, typename... Args>
+[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
+get_serialize_runtime_info(const Args &...args) {
+  using Type = get_args_type<Args...>;
+  serialize_runtime_info ret = {
+      .len = sizeof(uint32_t) + calculate_payload_size(args...), .metainfo = 0};
+  constexpr bool has_compatible = serialize_static_config<Type>::has_compatible;
+  constexpr bool has_type_literal = check_if_add_type_literal<conf, Type>();
+  constexpr bool has_meta_info = has_compatible || has_type_literal;
+  if constexpr (has_meta_info) {
+    ret.len += sizeof(char);
+  }
+  if constexpr (has_type_literal) {
+    constexpr auto type_literal = struct_pack::get_type_literal<Args...>();
+    // struct_pack::get_type_literal<Args...>().size() crash in clang13. Bug?
+    ret.len += type_literal.size() + 1;
+    ret.metainfo |= 0b100;
+  }
+  if constexpr (has_compatible) {  // calculate bytes count of serialize length
+    if (ret.len + 2 < (1ull << 16)) [[likely]] {
+      ret.len += 2;
+      ret.metainfo |= 0b01;
+    }
+    else if (ret.len + 4 < (1ull << 32)) {
+      ret.len += 4;
+      ret.metainfo |= 0b10;
+    }
+    else {
+      ret.len += 8;
+      ret.metainfo |= 0b11;
+    }
+  }
+  return ret;
 }
 
 template <struct_pack_byte Byte, typename serialize_type>
@@ -929,9 +965,9 @@ class packer {
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
-    serialize_metainfo(t, args...);
+    serialize_metainfo<conf>(t, args...);
     serialize_many(t, args...);
   }
 
@@ -953,21 +989,22 @@ class packer {
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
     }
   }
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
-    if constexpr (serialize_static_config<serialize_type>::has_compatible) {
+    if constexpr (serialize_static_config<serialize_type>::has_compatible ||
+                  check_if_add_type_literal<conf, serialize_type>()) {
       return raw_types_code - raw_types_code % 2 + 1;
     }
-    // TODO: size_type & debug_info
+    // TODO: size_type
     else {  // default case, only has hash_code
       return raw_types_code - raw_types_code % 2;
     }
   }
-  template <typename T, typename... Args>
+  template <serialize_config conf, typename T, typename... Args>
   constexpr void STRUCT_PACK_INLINE serialize_metainfo(const T &t,
                                                        const Args &...args) {
-    constexpr auto hash_head = calculate_hash_head<T, Args...>();
+    constexpr auto hash_head = calculate_hash_head<conf, T, Args...>();
     std::memcpy(data_ + pos_, &hash_head, sizeof(uint32_t));
     pos_ += sizeof(uint32_t);
     if constexpr (hash_head % 2) {  // has more metainfo
@@ -979,7 +1016,13 @@ class packer {
         std::memcpy(data_ + pos_, &info.len, len_size);
         pos_ += len_size;
       }
-      // TODO:size_type & debug_info
+      if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
+        constexpr auto type_literal =
+            struct_pack::get_type_literal<T, Args...>();
+        std::memcpy(data_ + pos_, type_literal.data(), type_literal.size() + 1);
+        pos_ += type_literal.size() + 1;
+      }
+      // TODO:size_type
     }
   }
 
@@ -1204,22 +1247,27 @@ class unpacker {
   };
 
   STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
-  deserialize_compatible(char metainfo) {
-    char compatible_sz_len = metainfo & 0b11;
+  deserialize_compatible(char compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
-    if (compatible_sz_len == 0) {
-      return {};
+    auto len_sz = sz[compatible_sz_len];
+    uint64_t data_len = 0;
+    if (size_ < sizeof(uint32_t) + sizeof(char) + len_sz) [[unlikely]] {
+      return {errc::no_buffer_space, 0};
     }
-    else {
-      auto len_sz = sz[compatible_sz_len];
-      uint64_t data_len = 0;
-      if (size_ < sizeof(uint32_t) + sizeof(char) + len_sz) [[unlikely]] {
-        return {struct_pack::errc::no_buffer_space, 0};
-      }
-      std::memcpy(&data_len, data_ + pos_, len_sz);
-      pos_ += len_sz;
-      return {struct_pack::errc{}, data_len};
+    std::memcpy(&data_len, data_ + pos_, len_sz);
+    pos_ += len_sz;
+    return {errc{}, data_len};
+  }
+
+  template <typename T>
+  STRUCT_PACK_INLINE struct_pack::errc deserialize_type_literal() {
+    constexpr auto literal = struct_pack::get_type_literal<T>();
+    if (std::string_view{(char *)(data_ + pos_), literal.size() + 1} !=
+        std::string_view{literal.data(), literal.size() + 1}) [[unlikely]] {
+      return errc::hash_conflict;
     }
+    pos_ += literal.size() + 1;
+    return errc{};
   }
 
   template <class T>
@@ -1246,8 +1294,21 @@ class unpacker {
     char metainfo;
     std::memcpy(&metainfo, data_ + pos_, sizeof(char));
     pos_ += sizeof(char);
-    // TODO: deserialize size_type & debug info
-    auto ret = deserialize_compatible(metainfo);
+    // TODO: deserialize size_type
+    std::pair<errc, std::size_t> ret;
+    char compatible_sz_len = metainfo & 0b11;
+    if (compatible_sz_len) {
+      if (ret = deserialize_compatible(compatible_sz_len); ret.first != errc{})
+          [[unlikely]] {
+        return ret;
+      }
+    }
+    char has_type_literal = metainfo & 0b100;
+    if (has_type_literal) {
+      if (auto ec = deserialize_type_literal<T>(); ec != errc{}) [[unlikely]] {
+        return {ec, 0};
+      }
+    }
     return ret;
   }
 
