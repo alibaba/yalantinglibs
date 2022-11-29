@@ -175,6 +175,7 @@ struct CoroServerTester : ServerTester {
   }
 
   void test_server_send_no_body() {
+    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(ret.error().code != std::errc{}, ret.error().msg);

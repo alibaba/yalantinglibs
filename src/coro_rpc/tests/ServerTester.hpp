@@ -143,8 +143,9 @@ struct ServerTester : TesterConfig {
 #endif
     g_action = action;
 
-    easylog::info("begin connect g_action {}, sync_client {}", (int)g_action,
-                  sync_client);
+    easylog::info(
+        "begin connect g_action {}, sync_client {} port {}, server state: {}",
+        (int)g_action, sync_client, port, get_server_state());
     std::errc ec;
     if (sync_client) {
       ec = client->sync_connect("127.0.0.1", port);
@@ -153,7 +154,9 @@ struct ServerTester : TesterConfig {
       ec = syncAwait(client->connect("127.0.0.1", port));
     }
 
-    REQUIRE_MESSAGE(ec == err_ok, config_str_);
+    REQUIRE_MESSAGE(
+        ec == err_ok,
+        config_str_.append(", server state").append(get_server_state()));
     return client;
   }
   template <auto func, typename... Args>
