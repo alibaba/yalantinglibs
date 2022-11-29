@@ -208,6 +208,7 @@ class async_rpc_server {
           }
           else {
             conns_.emplace(++conn_id_, conn);
+            easylog::info("new client coming");
             conn->start();
           }
 

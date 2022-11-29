@@ -153,17 +153,21 @@ class coro_rpc_client {
 
     std::error_code ec = co_await asio_util::async_connect(get_io_context(),
                                                            socket_, host, port);
-    if (!is_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-    }
+    std::error_code err_code;
+    timer.cancel(err_code);
 
     co_await promise.getFuture();
     if (ec) {
       if (is_timeout_) {
+        easylog::warn("connect timeout");
         co_return std::errc::timed_out;
       }
       co_return std::errc::not_connected;
+    }
+
+    if (is_timeout_) {
+      easylog::warn("connect timeout");
+      co_return std::errc::timed_out;
     }
 
 #ifdef ENABLE_SSL
@@ -661,7 +665,7 @@ class coro_rpc_client {
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
 #endif
-  bool is_timeout_ = false;
+  std::atomic<bool> is_timeout_ = false;
   std::atomic<bool> has_closed_ = false;
 };
 }  // namespace coro_rpc

@@ -204,14 +204,16 @@ struct ServerTester : TesterConfig {
     ss << *this;
 
     auto client = create_client();
+    g_action = coro_rpc::inject_action::nothing;
 
     {
       easylog::info("begin to call async_hi");
       auto ret = call<async_hi>(client);
       if (!ret) {
-        easylog::warn("error: {}, closed {}, config {}, server state {}",
-                      ret.error().msg, client->has_closed(), ss.str(),
-                      get_server_state());
+        easylog::warn(
+            "error: {}, closed {}, config {}, server state {}, g_action {}",
+            ret.error().msg, client->has_closed(), ss.str(), get_server_state(),
+            (int)g_action);
       }
       CHECK(ret.value() == "async hi"s);
     }
