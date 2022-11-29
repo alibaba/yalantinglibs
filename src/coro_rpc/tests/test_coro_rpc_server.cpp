@@ -202,7 +202,7 @@ struct CoroServerTester : ServerTester {
 };
 TEST_CASE("testing coro rpc server") {
   unsigned short server_port = 8810;
-  auto conn_timeout_duration = 50ms;
+  auto conn_timeout_duration = 1000ms;
   std::vector<bool> switch_list{true, false};
   for (auto async_start : switch_list) {
     for (auto enable_heartbeat : switch_list) {

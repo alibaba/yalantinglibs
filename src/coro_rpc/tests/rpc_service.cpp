@@ -25,7 +25,7 @@ using namespace std::string_literals;
 void hi() { easylog::info("call hi"); }
 std::string hello() { return "hello"; }
 std::string hello_timeout() {
-  std::this_thread::sleep_for(40ms);
+  std::this_thread::sleep_for(200ms);
   return "hello";
 }
 
@@ -41,10 +41,10 @@ std::string large_arg_fun(std::string data) {
 }
 
 int long_run_func(int val) {
-  std::this_thread::sleep_for(40ms);
+  std::this_thread::sleep_for(400ms);
   return val;
 }
-void timeout_due_to_heartbeat() { std::this_thread::sleep_for(100ms); }
+void timeout_due_to_heartbeat() { std::this_thread::sleep_for(3s); }
 
 template <typename Conn>
 void fun_with_delay_return_void(coro_rpc::connection<void, Conn> conn) {
@@ -113,7 +113,7 @@ template <typename Conn>
 void fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void, Conn> conn) {
   std::thread([conn]() mutable {
-    std::this_thread::sleep_for(60ms);
+    std::this_thread::sleep_for(1600ms);
     conn.response_msg();
   }).detach();
 }
