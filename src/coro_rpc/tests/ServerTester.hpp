@@ -91,6 +91,10 @@ struct ServerTester : TesterConfig {
       });
       future.wait();
     }
+
+    std::stringstream ss;
+    ss << *this;
+    config_str_ = ss.str();
   }
   ~ServerTester() {
     if (use_outer_io_context) {
@@ -138,6 +142,9 @@ struct ServerTester : TesterConfig {
     }
 #endif
     g_action = action;
+
+    easylog::info("begin connect g_action {}, sync_client {}", (int)g_action,
+                  sync_client);
     std::errc ec;
     if (sync_client) {
       ec = client->sync_connect("127.0.0.1", port);
@@ -146,7 +153,7 @@ struct ServerTester : TesterConfig {
       ec = syncAwait(client->connect("127.0.0.1", port));
     }
 
-    REQUIRE_MESSAGE(ec == err_ok, "not connected");
+    REQUIRE_MESSAGE(ec == err_ok, config_str_);
     return client;
   }
   template <auto func, typename... Args>
@@ -200,8 +207,6 @@ struct ServerTester : TesterConfig {
   }
   void test_function_registered() {
     easylog::info("run {}", __func__);
-    std::stringstream ss;
-    ss << *this;
 
     auto client = create_client();
     g_action = coro_rpc::inject_action::nothing;
@@ -212,8 +217,8 @@ struct ServerTester : TesterConfig {
       if (!ret) {
         easylog::warn(
             "error: {}, closed {}, config {}, server state {}, g_action {}",
-            ret.error().msg, client->has_closed(), ss.str(), get_server_state(),
-            (int)g_action);
+            ret.error().msg, client->has_closed(), config_str_,
+            get_server_state(), (int)g_action);
       }
       CHECK(ret.value() == "async hi"s);
     }
@@ -221,7 +226,7 @@ struct ServerTester : TesterConfig {
       auto ret = call<hello>(client);
       if (!ret) {
         easylog::warn("error: {}, closed {}, config {}, server state {}",
-                      ret.error().msg, client->has_closed(), ss.str(),
+                      ret.error().msg, client->has_closed(), config_str_,
                       get_server_state());
       }
       CHECK(ret.value() == "hello"s);
@@ -230,7 +235,7 @@ struct ServerTester : TesterConfig {
       auto ret = call<&HelloService::hello>(client);
       if (!ret) {
         easylog::warn("error: {}, closed {}, config {}, server state {}",
-                      ret.error().msg, client->has_closed(), ss.str(),
+                      ret.error().msg, client->has_closed(), config_str_,
                       get_server_state());
       }
       CHECK(ret.value() == "hello"s);
@@ -239,7 +244,7 @@ struct ServerTester : TesterConfig {
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       if (!ret) {
         easylog::warn("error: {}, closed {}, config {}, server state {}",
-                      ret.error().msg, client->has_closed(), ss.str(),
+                      ret.error().msg, client->has_closed(), config_str_,
                       get_server_state());
       }
       CHECK(ret.value() == true);
@@ -386,5 +391,6 @@ struct ServerTester : TesterConfig {
   std::thread thd;
   ns_login::LoginService login_service_;
   HelloService hello_service_;
+  std::string config_str_;
 };
 #endif  // CORO_RPC_SERVERTESTER_HPP
