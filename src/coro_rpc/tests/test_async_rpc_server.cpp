@@ -34,7 +34,7 @@ using namespace std::string_literals;
 struct AsyncServerTester : public ServerTester {
   AsyncServerTester(TesterConfig config)
       : ServerTester(config),
-        server(2, config.port, config.conn_timeout_duration) {
+        server(10, config.port, config.conn_timeout_duration) {
 #ifdef ENABLE_SSL
     if (use_ssl) {
       server.init_ssl_context(
