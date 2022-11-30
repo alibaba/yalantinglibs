@@ -18,6 +18,7 @@
 #include <async_simple/coro/FutureAwaiter.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <system_error>
 #include <thread>
@@ -92,20 +93,22 @@ class coro_rpc_client {
    * Create client with io_context
    * @param io_context asio io_context, async event handler
    */
-  coro_rpc_client(asio::io_context &io_context)
+  coro_rpc_client(asio::io_context &io_context, uint32_t client_id = 0)
       : io_context_ptr_(&io_context),
         executor_(io_context),
-        socket_(io_context) {
+        socket_(io_context),
+        client_id_(client_id) {
     read_buf_.resize(default_read_buf_size_);
   }
 
   /*!
    * Create client
    */
-  coro_rpc_client()
+  coro_rpc_client(uint32_t client_id = 0)
       : io_context_ptr_(inner_io_context_.get()),
         executor_(*inner_io_context_),
-        socket_(*inner_io_context_) {
+        socket_(*inner_io_context_),
+        client_id_(client_id) {
     std::promise<void> promise;
     thd_ = std::thread([this, &promise] {
       asio::io_context::work work(*inner_io_context_);
@@ -142,7 +145,7 @@ class coro_rpc_client {
       co_return std::errc::not_connected;
     }
 #endif
-    easylog::info("begin to connect {}", port);
+    easylog::info("client_id {} begin to connect {}", client_id_, port);
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
@@ -163,7 +166,7 @@ class coro_rpc_client {
     }
 
     if (is_timeout_) {
-      easylog::warn("connect timeout");
+      easylog::warn("client_id {} connect timeout", client_id_);
       co_return std::errc::timed_out;
     }
 
@@ -173,7 +176,8 @@ class coro_rpc_client {
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
-        easylog::warn("handshake failed:{}", shake_ec.message());
+        easylog::warn("client_id {} handshake failed:{}", client_id_,
+                      shake_ec.message());
         co_return std::errc::not_connected;
       }
     }
@@ -294,14 +298,17 @@ class coro_rpc_client {
    */
   auto &get_executor() { return executor_; }
 
+  uint32_t get_client_id() const { return client_id_; }
+
  private:
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto duration,
                                          auto &promise, std::string err_msg) {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
 
-    easylog::info("{}, is_timeout {}, timeout {}, duration {}", err_msg,
-                  is_timeout, is_timeout, duration.count());
+    easylog::info("client_id {} {}, is_timeout {}, timeout {}, duration {}",
+                  client_id_, err_msg, is_timeout, is_timeout,
+                  duration.count());
 
     if (!is_timeout) {
       promise.setValue(async_simple::Unit());
@@ -379,7 +386,7 @@ class coro_rpc_client {
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("close socket");
+      easylog::info("client_id {} close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -389,7 +396,7 @@ class coro_rpc_client {
              inject_action::client_close_socket_after_send_partial_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
-      easylog::info("close socket");
+      easylog::info("client_id {} close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -399,7 +406,7 @@ class coro_rpc_client {
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("shutdown");
+      easylog::info("client_id {} shutdown", client_id_);
       socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -416,7 +423,8 @@ class coro_rpc_client {
     if (!ret.first) {
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::client_close_socket_after_send_payload) {
-        easylog::info("client_close_socket_after_send_payload");
+        easylog::info("client_id {} client_close_socket_after_send_payload",
+                      client_id_);
         r = rpc_result<R>{unexpect_t{},
                           rpc_error{std::errc::io_error, ret.first.message()}};
         co_await close();
@@ -487,6 +495,7 @@ class coro_rpc_client {
 
     rpc_header header{magic_number};
 #ifdef UNIT_TEST_INJECT
+    header.seq_num = client_id_;
     if (g_action == inject_action::client_send_bad_magic_num) {
       header.magic = magic_number + 1;
     }
@@ -605,7 +614,7 @@ class coro_rpc_client {
   void stop_inner_io_context() {
     if (thd_.joinable()) {
       if (thd_.get_id() == std::this_thread::get_id()) {
-        easylog::warn("avoid join self");
+        easylog::warn("client_id {} avoid join self", client_id_);
         std::thread([thd = std::move(thd_),
                      io_ctx = std::move(inner_io_context_)]() mutable {
           io_ctx->stop();
@@ -656,5 +665,7 @@ class coro_rpc_client {
   bool use_ssl_ = false;
 #endif
   bool is_timeout_ = false;
+
+  uint32_t client_id_ = 0;
 };
 }  // namespace coro_rpc

@@ -38,5 +38,6 @@ enum class inject_action : uint8_t {
 
 };
 inline std::atomic<inject_action> g_action = inject_action::nothing;
+inline std::atomic<uint32_t> g_client_id = 1;
 }  // namespace coro_rpc
 #endif  // CORO_RPC_INJECT_ACTION_HPP

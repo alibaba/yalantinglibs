@@ -40,7 +40,7 @@ TEST_CASE("test varadic param") {
     }
   });
   REQUIRE_MESSAGE(server->wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
 

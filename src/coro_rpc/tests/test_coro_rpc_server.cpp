@@ -155,15 +155,18 @@ struct CoroServerTester : ServerTester {
     easylog::info("run {}", __func__);
     auto client = create_client(inject_action::server_send_bad_rpc_result);
     auto ret = this->call<hi>(client);
-    CHECK_MESSAGE(ret.error().code == std::errc::invalid_argument,
-                  ret.error().msg);
+    CHECK_MESSAGE(
+        ret.error().code == std::errc::invalid_argument,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }
 
   void test_server_send_no_body() {
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }
 
@@ -244,15 +247,19 @@ TEST_CASE("test server accept error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   auto ret = syncAwait(client.call<hi>());
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   ret = syncAwait(client.call<hi>());
   CHECK(ret.has_value());
   REQUIRE(client.has_closed() == false);
@@ -273,6 +280,7 @@ TEST_CASE("test server write queue") {
   buffer.resize(offset);
   std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
   rpc_header header{magic_number};
+  header.seq_num = g_client_id++;
   header.length = buffer.size() - RPC_HEAD_LEN;
   auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
   CHECK(sz == RPC_HEAD_LEN);
@@ -322,11 +330,15 @@ TEST_CASE("testing coro rpc write error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   auto ret = syncAwait(client.call<hi>());
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+  REQUIRE_MESSAGE(
+      ret.error().code == std::errc::io_error,
+      std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
   remove_handler<hi>();

@@ -125,10 +125,10 @@ struct ServerTester : TesterConfig {
       inject_action action = inject_action::nothing) {
     std::shared_ptr<coro_rpc_client> client;
     if (use_outer_io_context) {
-      client = std::make_shared<coro_rpc_client>(io_context);
+      client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
     }
     else {
-      client = std::make_shared<coro_rpc_client>();
+      client = std::make_shared<coro_rpc_client>(g_client_id++);
     }
 #ifdef ENABLE_SSL
     if (use_ssl) {
@@ -145,11 +145,16 @@ struct ServerTester : TesterConfig {
       ec = syncAwait(client->connect("127.0.0.1", port));
     }
 
-    REQUIRE_MESSAGE(ec == err_ok, "not connected");
+    REQUIRE_MESSAGE(
+        ec == err_ok,
+        std::to_string(client->get_client_id()).append(" not connected"));
     return client;
   }
   template <auto func, typename... Args>
   decltype(auto) call(std::shared_ptr<coro_rpc_client> client, Args &&...args) {
+    easylog::info("{} client_id {} call {}",
+                  sync_client ? "sync_client" : "async_client",
+                  client->get_client_id(), coro_rpc::get_func_name<func>());
     if (sync_client) {
       return client->sync_call<func>(std::forward<Args>(args)...);
     }
@@ -165,8 +170,9 @@ struct ServerTester : TesterConfig {
     easylog::info("run {}", __func__);
     auto client = create_client();
     auto ret = call<async_hi>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::function_not_supported,
-                    ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::function_not_supported,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
     if (!use_ssl) {
       CHECK(client->has_closed() == false);
       ret = call<async_hi>(client);
@@ -205,28 +211,32 @@ struct ServerTester : TesterConfig {
     {
       auto ret = call<async_hi>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn(
+            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
       }
       CHECK(ret.value() == "async hi"s);
     }
     {
       auto ret = call<hello>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn(
+            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&HelloService::hello>(client);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn(
+            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
       }
       CHECK(ret.value() == "hello"s);
     }
     {
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       if (!ret) {
-        easylog::warn("{}", ret.error().msg);
+        easylog::warn(
+            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
       }
       CHECK(ret.value() == true);
     }
@@ -236,21 +246,27 @@ struct ServerTester : TesterConfig {
     easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_bad_header);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_send_bad_magic_num() {
     g_action = {};
     easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_bad_magic_num);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_send_header_length_is_0() {
     g_action = {};
     easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_header_length_0);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_header() {
     g_action = {};
@@ -258,7 +274,9 @@ struct ServerTester : TesterConfig {
     auto client =
         create_client(inject_action::client_close_socket_after_send_header);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_partial_header() {
     g_action = {};
@@ -266,7 +284,9 @@ struct ServerTester : TesterConfig {
     auto client = create_client(
         inject_action::client_close_socket_after_send_partial_header);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_payload() {
     g_action = {};
@@ -274,7 +294,9 @@ struct ServerTester : TesterConfig {
     auto client =
         create_client(inject_action::client_close_socket_after_send_payload);
     auto ret = call<client_hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   }
 
   void test_heartbeat() {
@@ -288,7 +310,9 @@ struct ServerTester : TesterConfig {
 
     ret = call<async_hi>(client);
     if (enable_heartbeat) {
-      REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+      REQUIRE_MESSAGE(
+          ret.error().code == std::errc::io_error,
+          std::to_string(client->get_client_id()).append(ret.error().msg));
     }
     else {
       CHECK(ret.value() == "async hi"s);
@@ -319,10 +343,10 @@ struct ServerTester : TesterConfig {
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context);
+        client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
       }
       else {
-        client = std::make_shared<coro_rpc_client>();
+        client = std::make_shared<coro_rpc_client>(g_client_id++);
       }
 #ifdef ENABLE_SSL
       if (use_ssl) {
@@ -338,7 +362,9 @@ struct ServerTester : TesterConfig {
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port, 5ms));
-    CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
+    CHECK_MESSAGE(ec == std::errc::timed_out,
+                  std::to_string(client->get_client_id())
+                      .append(make_error_code(ec).message()));
   }
 
   template <auto func, typename... Args>
@@ -357,7 +383,9 @@ struct ServerTester : TesterConfig {
     auto client = this->create_client();
     g_action = inject_action::close_socket_after_read_header;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   };
 
   template <auto func, typename... Args>
@@ -367,7 +395,9 @@ struct ServerTester : TesterConfig {
     auto client = this->create_client();
     g_action = inject_action::close_socket_after_send_length;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   };
 
   template <auto func, typename... Args>
@@ -377,7 +407,9 @@ struct ServerTester : TesterConfig {
     auto client = this->create_client();
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   };
   asio::io_context io_context;
   std::string port;

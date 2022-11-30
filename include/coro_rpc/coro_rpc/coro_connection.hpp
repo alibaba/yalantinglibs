@@ -144,6 +144,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 
+#ifdef UNIT_TEST_INJECT
+      client_id_ = header.seq_num;
+      easylog::info("client_id {}", client_id_);
+#endif
+
       if (header.length > body_size_) {
         body_size_ = header.length;
         body_.resize(body_size_);
@@ -371,7 +376,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             return;
           }
 
-          easylog::info("close timeout connection");
+#ifdef UNIT_TEST_INJECT
+          easylog::info("close timeout client_id {}", client_id_);
+#else
+          easylog::info("close timeout client");
+#endif
 
           close_socket(false);
         });
@@ -423,6 +432,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;
   bool use_ssl_ = false;
+#endif
+#ifdef UNIT_TEST_INJECT
+  uint32_t client_id_ = 0;
 #endif
 };
 }  // namespace coro_rpc
