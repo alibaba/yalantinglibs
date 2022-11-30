@@ -128,25 +128,37 @@ struct ServerTester : TesterConfig {
   std::shared_ptr<coro_rpc_client> create_client(
       inject_action action = inject_action::nothing) {
     std::shared_ptr<coro_rpc_client> client;
-    if (use_outer_io_context) {
-      client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
-    }
-    else {
-      client = std::make_shared<coro_rpc_client>(g_client_id++);
-    }
-#ifdef ENABLE_SSL
-    if (use_ssl) {
-      bool ok = client->init_ssl("../openssl_files", "server.crt");
-      REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-    }
-#endif
-    g_action = action;
+    // sometimes, connect will take more than conn_timeout_duration(300ms), so
+    // retry 3 times to make sure connect ok.
     std::errc ec;
-    if (sync_client) {
-      ec = client->sync_connect("127.0.0.1", port_);
-    }
-    else {
-      ec = syncAwait(client->connect("127.0.0.1", port_));
+    int retry = 4;
+    for (int i = 0; i < retry; i++) {
+      if (use_outer_io_context) {
+        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+      }
+      else {
+        client = std::make_shared<coro_rpc_client>(g_client_id++);
+      }
+#ifdef ENABLE_SSL
+      if (use_ssl) {
+        bool ok = client->init_ssl("../openssl_files", "server.crt");
+        REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+      }
+#endif
+      g_action = action;
+
+      if (sync_client) {
+        ec = client->sync_connect("127.0.0.1", port_);
+      }
+      else {
+        ec = syncAwait(client->connect("127.0.0.1", port_));
+      }
+
+      if (ec == err_ok) {
+        break;
+      }
+
+      easylog::info("retry times {}", retry);
     }
 
     REQUIRE_MESSAGE(ec == err_ok, std::to_string(client->get_client_id())
