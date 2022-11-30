@@ -306,8 +306,8 @@ class coro_rpc_client {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
 
-    easylog::info("client_id {} {}, is_timeout {}, timeout {}, duration {}",
-                  client_id_, err_msg, is_timeout, is_timeout,
+    easylog::info("client_id {} {}, is_timeout_ {}, timeout {}, duration {}",
+                  client_id_, err_msg, is_timeout_, is_timeout,
                   duration.count());
 
     if (!is_timeout) {
