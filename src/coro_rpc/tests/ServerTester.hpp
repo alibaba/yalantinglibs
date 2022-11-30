@@ -310,7 +310,7 @@ struct ServerTester : TesterConfig {
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 
-    std::this_thread::sleep_for(60ms);
+    std::this_thread::sleep_for(400ms);
 
     ret = call<async_hi>(client);
     if (enable_heartbeat) {

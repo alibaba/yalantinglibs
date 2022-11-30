@@ -85,6 +85,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
 #ifdef ENABLE_SSL
   void async_handshake() {
+    easylog::info("begin to handshake");
     reset_timer();
     auto self = this->shared_from_this();
     auto callback = [this, self](const asio::error_code &error) {
@@ -94,6 +95,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         close();
         return;
       }
+      easylog::info("handshake ok");
       read_head();
     };
     ssl_stream_->async_handshake(asio::ssl::stream_base::server, callback);

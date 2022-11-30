@@ -81,6 +81,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
+      easylog::info("begin to handshake conn_id {}", conn_id_);
       reset_timer();
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::server);
@@ -91,6 +92,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_await close();
         co_return;
       }
+      easylog::info("handshake ok conn_id {}", conn_id_);
       co_await start_impl(*ssl_stream_);
     }
     else {

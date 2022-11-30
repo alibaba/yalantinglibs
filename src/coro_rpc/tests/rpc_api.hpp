@@ -25,7 +25,6 @@ std::string client_hello();
 std::string client_hello_not_reg();
 std::string large_arg_fun(std::string data);
 int long_run_func(int val);
-void timeout_due_to_heartbeat();
 std::string async_hi();
 void coro_fun_with_delay_return_void(
     coro_rpc::connection<void, coro_rpc::coro_connection> conn);

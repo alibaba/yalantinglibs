@@ -106,7 +106,7 @@ TEST_CASE("testing client") {
     g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
-      auto ret = co_await client->template call_for<hello_timeout>(30ms);
+      auto ret = co_await client->template call_for<hello_timeout>(20ms);
       CHECK_MESSAGE(ret.error().code == std::errc::timed_out, ret.error().msg);
       co_return;
     };
@@ -481,7 +481,6 @@ TEST_CASE("testing client sync connect, unit test inject only") {
 TEST_CASE("testing client call timeout") {
   g_action = {};
   register_handler<hello_timeout>();
-  register_handler<timeout_due_to_heartbeat>();
   register_handler<hi>();
   SUBCASE("write timeout") {
     g_action = inject_action::force_inject_client_write_data_timeout;
@@ -513,7 +512,6 @@ TEST_CASE("testing client call timeout") {
   }
   g_action = {};
   remove_handler<hello_timeout>();
-  remove_handler<timeout_due_to_heartbeat>();
   remove_handler<hi>();
 }
 std::errc init_acceptor(auto& acceptor_, auto port_) {
