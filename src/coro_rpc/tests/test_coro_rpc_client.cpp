@@ -479,6 +479,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
 }
 #endif
 TEST_CASE("testing client call timeout") {
+  g_action = {};
   register_handler<hello_timeout>();
   register_handler<timeout_due_to_heartbeat>();
   register_handler<hi>();

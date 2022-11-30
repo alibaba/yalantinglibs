@@ -142,7 +142,7 @@ class coro_rpc_client {
       co_return std::errc::not_connected;
     }
 #endif
-
+    easylog::info("begin to connect {}", port);
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
@@ -151,10 +151,8 @@ class coro_rpc_client {
 
     std::error_code ec = co_await asio_util::async_connect(get_io_context(),
                                                            socket_, host, port);
-    if (!is_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-    }
+    std::error_code err_code;
+    timer.cancel(err_code);
 
     co_await promise.getFuture();
     if (ec) {
@@ -162,6 +160,11 @@ class coro_rpc_client {
         co_return std::errc::timed_out;
       }
       co_return std::errc::not_connected;
+    }
+
+    if (is_timeout_) {
+      easylog::warn("connect timeout");
+      co_return std::errc::timed_out;
     }
 
 #ifdef ENABLE_SSL
@@ -297,8 +300,10 @@ class coro_rpc_client {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
 
+    easylog::info("{}, is_timeout {}, timeout {}, duration {}", err_msg,
+                  is_timeout, is_timeout, duration.count());
+
     if (!is_timeout) {
-      easylog::info("{}, timeout {}", err_msg, duration.count());
       promise.setValue(async_simple::Unit());
       co_return false;
     }

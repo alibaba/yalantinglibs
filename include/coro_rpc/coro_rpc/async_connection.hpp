@@ -342,6 +342,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
             return;
           }
 
+          easylog::info("close timeout connection");
+
           close(false);
         });
   }
