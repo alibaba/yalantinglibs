@@ -29,6 +29,7 @@
 #include "asio_util/asio_coro_util.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
+#include "inject_action.hpp"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
@@ -339,6 +340,7 @@ class SSLClientTester {
 };
 
 TEST_CASE("testing client with ssl server") {
+  g_action = {};
   std::vector<ssl_type> type_list{ssl_type::fake, ssl_type::no, ssl_type::_};
   std::string base_path = "../openssl_files";
   unsigned short port = 8809;
@@ -359,6 +361,7 @@ TEST_CASE("testing client with ssl server") {
 }
 #endif
 TEST_CASE("testing client with eof") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
@@ -380,9 +383,11 @@ TEST_CASE("testing client with eof") {
 
   remove_handler<hello>();
   remove_handler<client_hello>();
+  g_action = {};
 }
 
 TEST_CASE("testing client with shutdown") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
@@ -405,6 +410,7 @@ TEST_CASE("testing client with shutdown") {
 
   remove_handler<hello>();
   remove_handler<client_hello>();
+  g_action = {};
 }
 TEST_CASE("testing client timeout") {
   // SUBCASE("connect, 0ms timeout") {
@@ -417,6 +423,7 @@ TEST_CASE("testing client timeout") {
   // }
   SUBCASE("connect, ip timeout") {
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
+    g_action = {};
     coro_rpc_client client;
     auto ret = client.connect("10.255.255.1", "8801", 5ms);
     auto val = syncAwait(ret);
@@ -436,6 +443,7 @@ TEST_CASE("testing client timeout") {
   // }
 }
 TEST_CASE("testing client connect err") {
+  g_action = {};
   coro_rpc_client client;
   auto val = syncAwait(client.connect("127.0.0.1", "8801"));
   CHECK_MESSAGE(val == std::errc::not_connected,
@@ -443,12 +451,14 @@ TEST_CASE("testing client connect err") {
 }
 #ifdef UNIT_TEST_INJECT
 TEST_CASE("testing client sync connect, unit test inject only") {
+  g_action = {};
   coro_rpc_client client;
   auto val = client.sync_connect("127.0.0.1", "8801");
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
 #ifdef ENABLE_SSL
   SUBCASE("client use ssl but server don't use ssl") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });
@@ -464,18 +474,20 @@ TEST_CASE("testing client sync connect, unit test inject only") {
 }
 #endif
 TEST_CASE("testing client call timeout") {
+  g_action = {};
   register_handler<hello_timeout>();
   register_handler<timeout_due_to_heartbeat>();
   register_handler<hi>();
-  // SUBCASE("write timeout") {
-  //   g_action = inject_action::force_inject_client_write_data_timeout;
-  //   coro_rpc_client client;
-  //   auto ret = client.call_for<hi>(20s);
-  //   auto val = syncAwait(ret);
-  //   CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-  //   g_action = inject_action::nothing;
-  // }
+  SUBCASE("write timeout") {
+    g_action = inject_action::force_inject_client_write_data_timeout;
+    coro_rpc_client client;
+    auto ret = client.call_for<hi>(20s);
+    auto val = syncAwait(ret);
+    CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
+    g_action = inject_action::nothing;
+  }
   SUBCASE("read timeout") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });

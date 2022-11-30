@@ -95,6 +95,7 @@ struct CoroServerTester : ServerTester {
 
   void test_all() override {
     easylog::info("run {}", __func__);
+    g_action = {};
     test_coro_handler();
     ServerTester::test_all();
     test_start_new_server_with_same_port();
@@ -252,6 +253,7 @@ TEST_CASE("testing coro rpc server stop") {
 }
 
 TEST_CASE("test server accept error") {
+  g_action = {};
   register_handler<hi>();
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
@@ -271,9 +273,11 @@ TEST_CASE("test server accept error") {
   CHECK(ret.has_value());
   REQUIRE(client.has_closed() == false);
   remove_handler<hi>();
+  g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  g_action = {};
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {
@@ -325,9 +329,11 @@ TEST_CASE("test server write queue") {
   thd.join();
   server.stop();
   remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
+  g_action = {};
 }
 
 TEST_CASE("testing coro rpc write error") {
+  g_action = {};
   register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);
@@ -342,4 +348,5 @@ TEST_CASE("testing coro rpc write error") {
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
   remove_handler<hi>();
+  g_action = {};
 }
