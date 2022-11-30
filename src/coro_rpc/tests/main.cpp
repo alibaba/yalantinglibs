@@ -18,9 +18,6 @@
 
 #include "doctest.h"
 #include "inject_action.hpp"
-namespace coro_rpc {
-inject_action g_action = inject_action::nothing;
-}
 
 // doctest comments
 // 'function' : must be 'attribute' - see issue #182

@@ -15,6 +15,7 @@
  */
 #ifndef CORO_RPC_INJECT_ACTION_HPP
 #define CORO_RPC_INJECT_ACTION_HPP
+#include <atomic>
 #include <cstdint>
 namespace coro_rpc {
 enum class inject_action : uint8_t {
@@ -36,6 +37,6 @@ enum class inject_action : uint8_t {
   force_inject_client_write_data_timeout,
 
 };
-extern inject_action g_action;
+inline std::atomic<inject_action> g_action = inject_action::nothing;
 }  // namespace coro_rpc
 #endif  // CORO_RPC_INJECT_ACTION_HPP

@@ -63,7 +63,9 @@ struct AsyncServerTester : public ServerTester {
   void test_all() override {
     easylog::info("run {}", __func__);
     test_server_start_again();
+    g_action = {};
     ServerTester::test_all();
+    g_action = {};
     test_start_new_server_with_same_port();
     this->test_call_with_delay_func<async_fun_with_delay_return_void>();
     this->test_call_with_delay_func<async_fun_with_delay_return_void_twice>();
@@ -212,6 +214,7 @@ TEST_CASE("testing async rpc write error") {
 }
 
 TEST_CASE("test server write queue") {
+  g_action = {};
   register_handler<async_fun_with_delay_return_void_cost_long_time>();
   async_rpc_server server(2, 8820);
   auto ec = server.async_start();

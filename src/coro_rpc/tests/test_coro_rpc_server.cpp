@@ -78,6 +78,7 @@ struct CoroServerTester : ServerTester {
   async_simple::coro::Lazy<int> get_value(int val) { co_return val; }
 
   void test_all() override {
+    g_action = {};
     easylog::info("run {}", __func__);
     test_coro_handler();
     ServerTester::test_all();
@@ -156,12 +157,14 @@ struct CoroServerTester : ServerTester {
     auto ret = this->call<hi>(client);
     CHECK_MESSAGE(ret.error().code == std::errc::invalid_argument,
                   ret.error().msg);
+    g_action = {};
   }
 
   void test_server_send_no_body() {
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    g_action = {};
   }
 
   void test_coro_handler() {
@@ -254,9 +257,11 @@ TEST_CASE("test server accept error") {
   CHECK(ret.has_value());
   REQUIRE(client.has_closed() == false);
   remove_handler<hi>();
+  g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  g_action = {};
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {

@@ -273,11 +273,11 @@ class coro_rpc_client {
 #ifdef ENABLE_SSL
     }
 #endif
-    if (!is_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-    }
-    else {
+
+    std::error_code err_code;
+    timer.cancel(err_code);
+
+    if (is_timeout_) {
       ret = rpc_result<R>{
           unexpect_t{}, rpc_error{std::errc::timed_out, "rpc call timed out"}};
     }

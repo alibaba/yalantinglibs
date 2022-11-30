@@ -57,6 +57,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 }
 
 TEST_CASE("testing client") {
+  g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
   std::promise<void> promise;
@@ -79,6 +80,7 @@ TEST_CASE("testing client") {
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
 
   SUBCASE("call rpc, function not registered") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -89,6 +91,7 @@ TEST_CASE("testing client") {
     syncAwait(f());
   }
   SUBCASE("call rpc, function not registered 2") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hi>();
@@ -100,6 +103,7 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call rpc timeout") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call_for<hello_timeout>(30ms);
@@ -112,6 +116,7 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call rpc success") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -126,6 +131,7 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call with large buffer") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       std::string arg;
@@ -145,6 +151,7 @@ TEST_CASE("testing client") {
 }
 
 TEST_CASE("testing client with inject server") {
+  g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   easylog::info("inject server port: {}", port);
   asio::io_context io_context;
@@ -164,6 +171,7 @@ TEST_CASE("testing client with inject server") {
   register_handler<hello>();
 
   SUBCASE("server run ok") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -174,6 +182,7 @@ TEST_CASE("testing client with inject server") {
   }
 
   SUBCASE("client read length error") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_read_header;
@@ -183,6 +192,7 @@ TEST_CASE("testing client with inject server") {
     syncAwait(f());
   }
   SUBCASE("client read body error") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_send_length;
@@ -359,6 +369,7 @@ TEST_CASE("testing client with ssl server") {
 }
 #endif
 TEST_CASE("testing client with eof") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
@@ -383,6 +394,7 @@ TEST_CASE("testing client with eof") {
 }
 
 TEST_CASE("testing client with shutdown") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
@@ -403,6 +415,7 @@ TEST_CASE("testing client with shutdown") {
   ret = client.sync_call<hello>();
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
 
+  g_action = {};
   remove_handler<hello>();
   remove_handler<client_hello>();
 }
@@ -416,6 +429,7 @@ TEST_CASE("testing client timeout") {
   //   make_error_code(val).message());
   // }
   SUBCASE("connect, ip timeout") {
+    g_action = {};
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
     coro_rpc_client client;
     auto ret = client.connect("10.255.255.1", "8801", 5ms);
@@ -449,6 +463,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
                 make_error_code(val).message());
 #ifdef ENABLE_SSL
   SUBCASE("client use ssl but server don't use ssl") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });
@@ -482,6 +497,7 @@ TEST_CASE("testing client call timeout") {
     g_action = inject_action::nothing;
   }
   SUBCASE("read timeout") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });
@@ -494,6 +510,7 @@ TEST_CASE("testing client call timeout") {
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
   }
+  g_action = {};
   remove_handler<hello_timeout>();
   remove_handler<timeout_due_to_heartbeat>();
   remove_handler<hi>();
