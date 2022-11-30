@@ -467,14 +467,14 @@ TEST_CASE("testing client call timeout") {
   register_handler<hello_timeout>();
   register_handler<timeout_due_to_heartbeat>();
   register_handler<hi>();
-  SUBCASE("write timeout") {
-    g_action = inject_action::force_inject_client_write_data_timeout;
-    coro_rpc_client client;
-    auto ret = client.call_for<hi>(20s);
-    auto val = syncAwait(ret);
-    CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-    g_action = inject_action::nothing;
-  }
+  // SUBCASE("write timeout") {
+  //   g_action = inject_action::force_inject_client_write_data_timeout;
+  //   coro_rpc_client client;
+  //   auto ret = client.call_for<hi>(20s);
+  //   auto val = syncAwait(ret);
+  //   CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
+  //   g_action = inject_action::nothing;
+  // }
   SUBCASE("read timeout") {
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
