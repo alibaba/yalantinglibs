@@ -81,10 +81,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
+      reset_timer();
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::server);
+      cancel_timer();
       if (shake_ec) {
-        easylog::error("handshake failed:{}", shake_ec.message());
+        easylog::error("handshake failed:{} conn_id {}", shake_ec.message(),
+                       conn_id_);
         co_await close();
         co_return;
       }
@@ -378,9 +381,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           }
 
 #ifdef UNIT_TEST_INJECT
-          easylog::info("close timeout client_id {}", client_id_);
+          easylog::info("close timeout client_id {} conn_id {}", client_id_,
+                        conn_id_);
 #else
-          easylog::info("close timeout client");
+          easylog::info("close timeout client conn_id {}", conn_id_);
 #endif
 
           close_socket(false);

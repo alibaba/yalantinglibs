@@ -85,10 +85,12 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
 #ifdef ENABLE_SSL
   void async_handshake() {
+    reset_timer();
     auto self = this->shared_from_this();
     auto callback = [this, self](const asio::error_code &error) {
+      cancel_timer();
       if (error) {
-        easylog::error("handshake error: {}", error.message());
+        easylog::error("handshake failed:{}", error.message());
         close();
         return;
       }

@@ -219,6 +219,7 @@ TEST_CASE("testing async rpc write error") {
 
 TEST_CASE("test server write queue") {
   g_action = {};
+  remove_handler<async_fun_with_delay_return_void_cost_long_time>();
   register_handler<async_fun_with_delay_return_void_cost_long_time>();
   async_rpc_server server(2, 8820);
   auto ec = server.async_start();

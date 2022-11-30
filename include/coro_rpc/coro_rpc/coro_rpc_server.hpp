@@ -292,9 +292,9 @@ class coro_rpc_server {
         }
         continue;
       }
-      easylog::info("new client coming");
 
       int64_t conn_id = ++conn_id_;
+      easylog::info("new client conn_id {} coming", conn_id);
       auto conn = std::make_shared<coro_connection>(
           io_context, std::move(socket), conn_timeout_duration_);
       conn->set_quit_callback(
