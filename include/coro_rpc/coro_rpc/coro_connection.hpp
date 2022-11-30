@@ -126,6 +126,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_await close();
         co_return;
       }
+
+#ifdef UNIT_TEST_INJECT
+      client_id_ = header.seq_num;
+      easylog::info("client_id {}", client_id_);
+#endif
+
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_read_header) {
         easylog::warn("inject action: close_socket_after_read_header");
@@ -143,11 +149,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_await close();
         co_return;
       }
-
-#ifdef UNIT_TEST_INJECT
-      client_id_ = header.seq_num;
-      easylog::info("client_id {}", client_id_);
-#endif
 
       if (header.length > body_size_) {
         body_size_ = header.length;

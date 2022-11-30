@@ -79,22 +79,26 @@ struct TesterConfig {
 
 struct ServerTester : TesterConfig {
   ServerTester(TesterConfig config)
-      : TesterConfig(config), port(std::to_string(config.port)) {
+      : TesterConfig(config), port_(std::to_string(config.port)) {
     if (use_outer_io_context) {
       std::promise<void> promise;
       auto future = promise.get_future();
-      thd = std::thread([this, &promise]() {
-        asio::io_context::work work(io_context);
+      thd_ = std::thread([this, &promise]() {
+        asio::io_context::work work(io_context_);
         promise.set_value();
-        io_context.run();
+        io_context_.run();
       });
       future.wait();
     }
+
+    std::stringstream ss;
+    ss << config;
+    conf_str_ = ss.str();
   }
   ~ServerTester() {
     if (use_outer_io_context) {
-      io_context.stop();
-      thd.join();
+      io_context_.stop();
+      thd_.join();
     }
     g_action = coro_rpc::inject_action::nothing;
   }
@@ -125,7 +129,7 @@ struct ServerTester : TesterConfig {
       inject_action action = inject_action::nothing) {
     std::shared_ptr<coro_rpc_client> client;
     if (use_outer_io_context) {
-      client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
+      client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
     }
     else {
       client = std::make_shared<coro_rpc_client>(g_client_id++);
@@ -139,15 +143,15 @@ struct ServerTester : TesterConfig {
     g_action = action;
     std::errc ec;
     if (sync_client) {
-      ec = client->sync_connect("127.0.0.1", port);
+      ec = client->sync_connect("127.0.0.1", port_);
     }
     else {
-      ec = syncAwait(client->connect("127.0.0.1", port));
+      ec = syncAwait(client->connect("127.0.0.1", port_));
     }
 
-    REQUIRE_MESSAGE(
-        ec == err_ok,
-        std::to_string(client->get_client_id()).append(" not connected"));
+    REQUIRE_MESSAGE(ec == err_ok, std::to_string(client->get_client_id())
+                                      .append(" not connected ")
+                                      .append(conf_str_));
     return client;
   }
   template <auto func, typename... Args>
@@ -343,7 +347,7 @@ struct ServerTester : TesterConfig {
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
       }
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
@@ -361,7 +365,7 @@ struct ServerTester : TesterConfig {
     // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
-    ec = syncAwait(client2->connect("10.255.255.1", port, 5ms));
+    ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
     CHECK_MESSAGE(ec == std::errc::timed_out,
                   std::to_string(client->get_client_id())
                       .append(make_error_code(ec).message()));
@@ -411,10 +415,11 @@ struct ServerTester : TesterConfig {
         ret.error().code == std::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   };
-  asio::io_context io_context;
-  std::string port;
-  std::thread thd;
+  asio::io_context io_context_;
+  std::string port_;
+  std::thread thd_;
   ns_login::LoginService login_service_;
   HelloService hello_service_;
+  std::string conf_str_;
 };
 #endif  // CORO_RPC_SERVERTESTER_HPP

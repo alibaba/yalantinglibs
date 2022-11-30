@@ -154,6 +154,11 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
           return;
         }
 
+#ifdef UNIT_TEST_INJECT
+        client_id_ = header.seq_num;
+        easylog::info("client_id {}", client_id_);
+#endif
+
         if (header.magic != magic_number) [[unlikely]] {
           easylog::error("bad magic number");
           close();
@@ -165,11 +170,6 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
           close();
           return;
         }
-
-#ifdef UNIT_TEST_INJECT
-        client_id_ = header.seq_num;
-        easylog::info("client_id {}", client_id_);
-#endif
 
         if (header.length > body_size_) {
           body_size_ = header.length;

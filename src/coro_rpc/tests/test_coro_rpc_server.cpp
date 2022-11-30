@@ -140,7 +140,7 @@ struct CoroServerTester : ServerTester {
 
   void test_start_new_server_with_same_port() {
     easylog::info("run {}", __func__);
-    auto new_server = coro_rpc_server(2, std::stoi(this->port));
+    auto new_server = coro_rpc_server(2, std::stoi(this->port_));
     std::errc ec;
     if (async_start) {
       ec = syncAwait(new_server.async_start());
@@ -269,6 +269,7 @@ TEST_CASE("test server accept error") {
 
 TEST_CASE("test server write queue") {
   g_action = {};
+  remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {

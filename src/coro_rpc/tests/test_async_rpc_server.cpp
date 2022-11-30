@@ -109,7 +109,7 @@ struct AsyncServerTester : public ServerTester {
   }
   void test_start_new_server_with_same_port() {
     easylog::info("run {}", __func__);
-    auto new_server = async_rpc_server(2, std::stoi(this->port));
+    auto new_server = async_rpc_server(2, std::stoi(this->port_));
     std::errc ec;
     if (async_start) {
       ec = new_server.async_start();
