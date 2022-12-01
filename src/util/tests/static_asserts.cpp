@@ -1,3 +1,5 @@
+#include <util/type_traits.h>
+
 #include <util/magic_names.hpp>
 #include <util/meta_string.hpp>
 
@@ -137,6 +139,67 @@ constexpr void magic_names_tests() {
                 meta_string{"func_template"});
 #endif
 }
+
+void testSimpleFunction(const char*) {}
+
+template <class T>
+struct Plus {
+  T operator()(T a, T b) const noexcept { return a + b; }
+};
+
+constexpr void function_traits_test_return_type() {
+  using namespace coro_rpc;
+  static_assert(std::is_same_v<function_return_type_t<int(int)>, int>);
+  auto f1 = []() {
+  };
+  static_assert(std::is_same_v<function_return_type_t<decltype(f1)>, void>);
+  auto f2 = []() mutable {
+    return 42;
+  };
+  static_assert(std::is_same_v<function_return_type_t<decltype(f2)>, int>);
+  struct Add {
+    int operator()(int a, int b) { return a + b; }
+    constexpr std::string_view get() { return "Hello World"; }
+  };
+  Add a;
+  static_assert(std::is_same_v<function_return_type_t<Add>, int>);
+  static_assert(std::is_same_v<function_return_type_t<Add&>, int>);
+  static_assert(std::is_same_v<function_return_type_t<Add&&>, int>);
+  // Add&
+  static_assert(std::is_same_v<function_return_type_t<decltype((a))>, int>);
+  // Add&&
+  static_assert(
+      std::is_same_v<function_return_type_t<decltype(std::move(a))>, int>);
+
+  // void(&)(const char*)
+  static_assert(
+      std::is_same_v<function_return_type_t<decltype((testSimpleFunction))>,
+                     void>);
+  // void(const char*)
+  static_assert(
+      std::is_same_v<function_return_type_t<decltype(testSimpleFunction)>,
+                     void>);
+  // void(*)(const char*)
+  static_assert(
+      std::is_same_v<function_return_type_t<decltype(&testSimpleFunction)>,
+                     void>);
+  static_assert(std::is_same_v<function_return_type_t<Plus<double>>, double>);
+  static_assert(std::is_same_v<function_return_type_t<decltype(&Add::get)>,
+                               std::string_view>);
+}
+
+constexpr void function_traits_test_last_parameters_type() {
+  using namespace coro_rpc;
+  static_assert(std::is_same_v<last_parameters_type_t<int(int&&)>, int>);
+  auto f1 = [](int&) {
+  };
+  static_assert(std::is_same_v<last_parameters_type_t<decltype(f1)>, int>);
+  static_assert(
+      std::is_same_v<last_parameters_type_t<decltype(testSimpleFunction)>,
+                     const char*>);
+  static_assert(std::is_same_v<last_parameters_type_t<Plus<double>>, double>);
+}
+
 }  // namespace ns1::ns2::ns3
 }  // namespace refvalue::tests
 
