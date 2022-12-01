@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#define STRUCT_PACK_OPTIMIZE 1
+
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -183,7 +185,31 @@ std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len,
     return 0;
   }
   detail::packer<Byte, detail::get_args_type<Args...>> o(buffer, config);
-  o.template serialize<conf>(args...);
+  switch ((config.metainfo & 0b11000) >> 3) {
+    case 0:
+      o.template serialize<conf, 1>(args...);
+      break;
+#ifdef STRUCT_PACK_OPTIMIZE
+    case 1:
+      o.template serialize<conf, 2>(args...);
+      break;
+    case 2:
+      o.template serialize<conf, 4>(args...);
+      break;
+    case 3:
+      o.template serialize<conf, 8>(args...);
+      break;
+#else
+    case 1:
+    case 2:
+    case 3:
+      o.template serialize<conf, 2>(args...);
+      break;
+#endif
+    default:
+      detail::unreachable();
+      break;
+  };
   return config.len;
 }
 
@@ -195,10 +221,35 @@ STRUCT_PACK_INLINE void serialize_to(Buffer &buffer, const Args &...args) {
   auto config = detail::get_serialize_runtime_info<conf>(args...);
   auto total = data_offset + config.len;
   buffer.resize(total);
+
   detail::packer<std::remove_reference_t<decltype(*buffer.data())>,
                  detail::get_args_type<Args...>>
       o(buffer.data() + data_offset, config);
-  o.template serialize<conf>(args...);
+  switch ((config.metainfo & 0b11000) >> 3) {
+    case 0:
+      o.template serialize<conf, 1>(args...);
+      break;
+#ifdef STRUCT_PACK_OPTIMIZE
+    case 1:
+      o.template serialize<conf, 2>(args...);
+      break;
+    case 2:
+      o.template serialize<conf, 4>(args...);
+      break;
+    case 3:
+      o.template serialize<conf, 8>(args...);
+      break;
+#else
+    case 1:
+    case 2:
+    case 3:
+      o.template serialize<conf, 2>(args...);
+      break;
+#endif
+    default:
+      detail::unreachable();
+      break;
+  };
 }
 
 template <serialize_config conf = serialize_config{},

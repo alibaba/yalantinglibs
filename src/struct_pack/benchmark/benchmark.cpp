@@ -54,6 +54,17 @@ struct person {
   MSGPACK_DEFINE(id, name, age, salary);
 };
 
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<person> = type_info_config::disable;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<std::vector<person>> =
+    type_info_config::disable;
+};
+
 template <typename T>
 T get_max() {
   if constexpr (std::is_same_v<T, int8_t>) {
@@ -91,6 +102,18 @@ struct rect {
   T width = get_max<T>();
   T height = get_max<T>();
   MSGPACK_DEFINE(x, y, width, height);
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<rect<int32_t>> =
+    type_info_config::disable;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<std::vector<rect<int32_t>>> =
+    type_info_config::disable;
 };
 
 enum Color : uint8_t { Red, Green, Blue };
@@ -137,6 +160,17 @@ struct Monster {
   };
   MSGPACK_DEFINE(pos, mana, hp, name, inventory, (int &)color, weapons,
                  equipped, path);
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<Monster> = type_info_config::disable;
+};
+
+namespace struct_pack {
+template <>
+constexpr inline auto enable_type_info<std::vector<Monster>> =
+    type_info_config::disable;
 };
 
 static constexpr int OBJECT_COUNT = 20;
