@@ -81,13 +81,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
+      easylog::info("begin to handshake conn_id {}", conn_id_);
+      reset_timer();
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::server);
+      cancel_timer();
       if (shake_ec) {
-        easylog::error("handshake failed:{}", shake_ec.message());
+        easylog::error("handshake failed:{} conn_id {}", shake_ec.message(),
+                       conn_id_);
         co_await close();
         co_return;
       }
+      easylog::info("handshake ok conn_id {}", conn_id_);
       co_await start_impl(*ssl_stream_);
     }
     else {
@@ -126,6 +131,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_await close();
         co_return;
       }
+
+#ifdef UNIT_TEST_INJECT
+      client_id_ = header.seq_num;
+      easylog::info("client_id {}", client_id_);
+#endif
+
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_read_header) {
         easylog::warn("inject action: close_socket_after_read_header");
@@ -371,6 +382,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             return;
           }
 
+#ifdef UNIT_TEST_INJECT
+          easylog::info("close timeout client_id {} conn_id {}", client_id_,
+                        conn_id_);
+#else
+          easylog::info("close timeout client conn_id {}", conn_id_);
+#endif
+
           close_socket(false);
         });
   }
@@ -421,6 +439,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;
   bool use_ssl_ = false;
+#endif
+#ifdef UNIT_TEST_INJECT
+  uint32_t client_id_ = 0;
 #endif
 };
 }  // namespace coro_rpc

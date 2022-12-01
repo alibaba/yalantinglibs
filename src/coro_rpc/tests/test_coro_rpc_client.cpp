@@ -46,7 +46,7 @@ class ClientTester {
 static unsigned short coro_rpc_server_port = 8803;
 Lazy<std::shared_ptr<coro_rpc_client>> create_client(
     asio::io_context& io_context, std::string port) {
-  auto client = std::make_shared<coro_rpc_client>(io_context);
+  auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
 #ifdef ENABLE_SSL
   bool ok = client->init_ssl("../openssl_files", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
@@ -57,6 +57,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 }
 
 TEST_CASE("testing client") {
+  g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
   std::promise<void> promise;
@@ -79,6 +80,7 @@ TEST_CASE("testing client") {
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
 
   SUBCASE("call rpc, function not registered") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -89,6 +91,7 @@ TEST_CASE("testing client") {
     syncAwait(f());
   }
   SUBCASE("call rpc, function not registered 2") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hi>();
@@ -100,9 +103,10 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call rpc timeout") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
-      auto ret = co_await client->template call_for<hello_timeout>(30ms);
+      auto ret = co_await client->template call_for<hello_timeout>(20ms);
       CHECK_MESSAGE(ret.error().code == std::errc::timed_out, ret.error().msg);
       co_return;
     };
@@ -112,6 +116,7 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call rpc success") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -126,6 +131,7 @@ TEST_CASE("testing client") {
   }
 
   SUBCASE("call with large buffer") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       std::string arg;
@@ -145,6 +151,7 @@ TEST_CASE("testing client") {
 }
 
 TEST_CASE("testing client with inject server") {
+  g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   easylog::info("inject server port: {}", port);
   asio::io_context io_context;
@@ -164,6 +171,7 @@ TEST_CASE("testing client with inject server") {
   register_handler<hello>();
 
   SUBCASE("server run ok") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
@@ -174,6 +182,7 @@ TEST_CASE("testing client with inject server") {
   }
 
   SUBCASE("client read length error") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_read_header;
@@ -183,6 +192,7 @@ TEST_CASE("testing client with inject server") {
     syncAwait(f());
   }
   SUBCASE("client read body error") {
+    g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_send_length;
@@ -265,7 +275,7 @@ class SSLClientTester {
     easylog::info("{}: {}", msg, path);
   }
   void run() {
-    auto client = std::make_shared<coro_rpc_client>(io_context);
+    auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
     bool ok = client->init_ssl(base_path, client_crt_path);
     if (client_crt == ssl_type::fake || client_crt == ssl_type::no) {
       REQUIRE(ok == false);
@@ -359,11 +369,12 @@ TEST_CASE("testing client with ssl server") {
 }
 #endif
 TEST_CASE("testing client with eof") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
 
@@ -383,11 +394,12 @@ TEST_CASE("testing client with eof") {
 }
 
 TEST_CASE("testing client with shutdown") {
+  g_action = {};
   coro_rpc_server server(2, 8801);
   server.async_start().start([](auto&&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
   register_handler<hello, client_hello>();
@@ -403,6 +415,7 @@ TEST_CASE("testing client with shutdown") {
   ret = client.sync_call<hello>();
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
 
+  g_action = {};
   remove_handler<hello>();
   remove_handler<client_hello>();
 }
@@ -416,8 +429,9 @@ TEST_CASE("testing client timeout") {
   //   make_error_code(val).message());
   // }
   SUBCASE("connect, ip timeout") {
+    g_action = {};
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
-    coro_rpc_client client;
+    coro_rpc_client client(g_client_id++);
     auto ret = client.connect("10.255.255.1", "8801", 5ms);
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val == std::errc::timed_out, make_error_code(val).message());
@@ -436,24 +450,25 @@ TEST_CASE("testing client timeout") {
   // }
 }
 TEST_CASE("testing client connect err") {
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto val = syncAwait(client.connect("127.0.0.1", "8801"));
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
 }
 #ifdef UNIT_TEST_INJECT
 TEST_CASE("testing client sync connect, unit test inject only") {
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto val = client.sync_connect("127.0.0.1", "8801");
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
 #ifdef ENABLE_SSL
   SUBCASE("client use ssl but server don't use ssl") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-    coro_rpc_client client2;
+    coro_rpc_client client2(g_client_id++);
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
     val = client2.sync_connect("127.0.0.1", "8801");
@@ -464,15 +479,15 @@ TEST_CASE("testing client sync connect, unit test inject only") {
 }
 #endif
 TEST_CASE("testing client call timeout") {
+  g_action = {};
   register_handler<hello_timeout>();
-  register_handler<timeout_due_to_heartbeat>();
   register_handler<hi>();
   SUBCASE("write timeout") {
     g_action = inject_action::force_inject_client_write_data_timeout;
     //    coro_rpc_server server(2, 8801);
     //    server.async_start().start([](auto&&) {
     //    });
-    coro_rpc_client client;
+    coro_rpc_client client(g_client_id++);
     //    auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
     //    auto ec = syncAwait(ec_lazy);
     //    assert(ec == std::errc{});
@@ -482,11 +497,12 @@ TEST_CASE("testing client call timeout") {
     g_action = inject_action::nothing;
   }
   SUBCASE("read timeout") {
+    g_action = {};
     coro_rpc_server server(2, 8801);
     server.async_start().start([](auto&&) {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-    coro_rpc_client client;
+    coro_rpc_client client(g_client_id++);
     auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
     auto ec = syncAwait(ec_lazy);
     REQUIRE(ec == std::errc{});
@@ -494,8 +510,8 @@ TEST_CASE("testing client call timeout") {
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
   }
+  g_action = {};
   remove_handler<hello_timeout>();
-  remove_handler<timeout_due_to_heartbeat>();
   remove_handler<hi>();
 }
 std::errc init_acceptor(auto& acceptor_, auto port_) {

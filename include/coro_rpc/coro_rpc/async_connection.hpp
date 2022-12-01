@@ -17,6 +17,7 @@
 #include <any>
 #include <asio.hpp>
 #include <atomic>
+#include <cstdint>
 #include <deque>
 #include <future>
 #include <memory>
@@ -84,13 +85,17 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
 #ifdef ENABLE_SSL
   void async_handshake() {
+    easylog::info("begin to handshake");
+    reset_timer();
     auto self = this->shared_from_this();
     auto callback = [this, self](const asio::error_code &error) {
+      cancel_timer();
       if (error) {
-        easylog::error("handshake error: {}", error.message());
+        easylog::error("handshake failed:{}", error.message());
         close();
         return;
       }
+      easylog::info("handshake ok");
       read_head();
     };
     ssl_stream_->async_handshake(asio::ssl::stream_base::server, callback);
@@ -152,6 +157,11 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
           close();
           return;
         }
+
+#ifdef UNIT_TEST_INJECT
+        client_id_ = header.seq_num;
+        easylog::info("client_id {}", client_id_);
+#endif
 
         if (header.magic != magic_number) [[unlikely]] {
           easylog::error("bad magic number");
@@ -342,6 +352,12 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
             return;
           }
 
+#ifdef UNIT_TEST_INJECT
+          easylog::info("close timeout client_id {}", client_id_);
+#else
+          easylog::info("close timeout client");
+#endif
+
           close(false);
         });
   }
@@ -382,6 +398,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;
   bool use_ssl_ = false;
+#endif
+#ifdef UNIT_TEST_INJECT
+  uint32_t client_id_ = 0;
 #endif
 };
 }  // namespace coro_rpc

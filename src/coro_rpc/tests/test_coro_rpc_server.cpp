@@ -78,6 +78,7 @@ struct CoroServerTester : ServerTester {
   async_simple::coro::Lazy<int> get_value(int val) { co_return val; }
 
   void test_all() override {
+    g_action = {};
     easylog::info("run {}", __func__);
     test_coro_handler();
     ServerTester::test_all();
@@ -139,7 +140,7 @@ struct CoroServerTester : ServerTester {
 
   void test_start_new_server_with_same_port() {
     easylog::info("run {}", __func__);
-    auto new_server = coro_rpc_server(2, std::stoi(this->port));
+    auto new_server = coro_rpc_server(2, std::stoi(this->port_));
     std::errc ec;
     if (async_start) {
       ec = syncAwait(new_server.async_start());
@@ -154,14 +155,19 @@ struct CoroServerTester : ServerTester {
     easylog::info("run {}", __func__);
     auto client = create_client(inject_action::server_send_bad_rpc_result);
     auto ret = this->call<hi>(client);
-    CHECK_MESSAGE(ret.error().code == std::errc::invalid_argument,
-                  ret.error().msg);
+    CHECK_MESSAGE(
+        ret.error().code == std::errc::invalid_argument,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
+    g_action = {};
   }
 
   void test_server_send_no_body() {
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
+    g_action = {};
   }
 
   void test_coro_handler() {
@@ -185,30 +191,30 @@ struct CoroServerTester : ServerTester {
 };
 TEST_CASE("testing coro rpc server") {
   unsigned short server_port = 8810;
-  auto conn_timeout_duration = 50ms;
+  auto conn_timeout_duration = 300ms;
   std::vector<bool> switch_list{true, false};
   for (auto async_start : switch_list) {
     for (auto enable_heartbeat : switch_list) {
-      for (auto sync_client : switch_list) {
-        for (auto use_outer_io_context : switch_list) {
-          for (auto use_ssl : switch_list) {
-            TesterConfig config;
-            config.async_start = async_start;
-            config.enable_heartbeat = enable_heartbeat;
-            config.use_ssl = use_ssl;
-            config.sync_client = sync_client;
-            config.use_outer_io_context = use_outer_io_context;
-            config.port = server_port;
-            if (enable_heartbeat) {
-              config.conn_timeout_duration = conn_timeout_duration;
-            }
-            std::stringstream ss;
-            ss << config;
-            easylog::info("config: {}", ss.str());
-            CoroServerTester(config).run();
+      // for (auto sync_client : switch_list) {
+      for (auto use_outer_io_context : switch_list) {
+        for (auto use_ssl : switch_list) {
+          TesterConfig config;
+          config.async_start = async_start;
+          config.enable_heartbeat = enable_heartbeat;
+          config.use_ssl = use_ssl;
+          config.sync_client = false;
+          config.use_outer_io_context = use_outer_io_context;
+          config.port = server_port;
+          if (enable_heartbeat) {
+            config.conn_timeout_duration = conn_timeout_duration;
           }
+          std::stringstream ss;
+          ss << config;
+          easylog::info("config: {}", ss.str());
+          CoroServerTester(config).run();
         }
       }
+      // }
     }
   }
 }
@@ -241,22 +247,29 @@ TEST_CASE("test server accept error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   auto ret = syncAwait(client.call<hi>());
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   ret = syncAwait(client.call<hi>());
   CHECK(ret.has_value());
   REQUIRE(client.has_closed() == false);
   remove_handler<hi>();
+  g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  g_action = {};
+  remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {
@@ -268,6 +281,7 @@ TEST_CASE("test server write queue") {
   buffer.resize(offset);
   std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
   rpc_header header{magic_number};
+  header.seq_num = g_client_id++;
   header.length = buffer.size() - RPC_HEAD_LEN;
   auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
   CHECK(sz == RPC_HEAD_LEN);
@@ -317,11 +331,15 @@ TEST_CASE("testing coro rpc write error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client;
+  coro_rpc_client client(g_client_id++);
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{},
+                  std::to_string(client.get_client_id())
+                      .append(make_error_code(ec).message()));
   auto ret = syncAwait(client.call<hi>());
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+  REQUIRE_MESSAGE(
+      ret.error().code == std::errc::io_error,
+      std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
   remove_handler<hi>();

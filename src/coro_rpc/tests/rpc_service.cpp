@@ -44,7 +44,6 @@ int long_run_func(int val) {
   std::this_thread::sleep_for(40ms);
   return val;
 }
-void timeout_due_to_heartbeat() { std::this_thread::sleep_for(100ms); }
 
 template <typename Conn>
 void fun_with_delay_return_void(coro_rpc::connection<void, Conn> conn) {
@@ -113,7 +112,7 @@ template <typename Conn>
 void fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void, Conn> conn) {
   std::thread([conn]() mutable {
-    std::this_thread::sleep_for(60ms);
+    std::this_thread::sleep_for(400ms);
     conn.response_msg();
   }).detach();
 }
