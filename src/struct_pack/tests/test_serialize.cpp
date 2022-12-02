@@ -1104,7 +1104,8 @@ TEST_CASE("test varinat size_type") {
   //   std::string str((1ull << 32) - 1, 'A');
   //   auto ret =
   //       serialize<std::string,
-  //                 serialize_config{.add_type_info = type_info_config::disable}>(
+  //                 serialize_config{.add_type_info =
+  //                 type_info_config::disable}>(
   //           str);
   //   CHECK(ret[4] == 0b10000);
   //   CHECK(ret.size() == (1ull << 32) + 8);
@@ -1116,7 +1117,8 @@ TEST_CASE("test varinat size_type") {
   //   std::string str((1ull << 32), 'A');
   //   auto ret =
   //       serialize<std::string,
-  //                 serialize_config{.add_type_info = type_info_config::disable}>(
+  //                 serialize_config{.add_type_info =
+  //                 type_info_config::disable}>(
   //           str);
   //   CHECK(ret[4] == 0b11000);
   //   CHECK(ret.size() == (1ull << 32) + 13);
