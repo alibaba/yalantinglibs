@@ -258,11 +258,19 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
   call_for(auto duration, Args &&...args) {
-    easylog::error(
-        "a closed client is not allowed call again, please create a new "
-        "client");
-
     using R = decltype(get_return_type<func>());
+
+    if (has_closed_) [[unlikely]] {
+      easylog::error(
+          "a closed client is not allowed call again, please create a new "
+          "client");
+      auto ret = rpc_result<R>{
+          unexpect_t{},
+          rpc_error{std::errc::io_error,
+                    "client has been closed, please create a new client"}};
+      co_return ret;
+    }
+
     rpc_result<R> ret;
 #ifdef ENABLE_SSL
     if (!ssl_init_ret_) {
