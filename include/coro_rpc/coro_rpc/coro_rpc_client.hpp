@@ -290,6 +290,10 @@ class coro_rpc_client {
     }
 
     co_await promise.getFuture();
+#ifdef UNIT_TEST_INJECT
+    easylog::info("client_id {} call {} {}", client_id_, get_func_name<func>(),
+                  ret ? "ok" : "failed");
+#endif
     co_return ret;
   }
 
@@ -306,9 +310,11 @@ class coro_rpc_client {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
 
-    easylog::info("client_id {} {}, is_timeout_ {}, timeout {}, duration {}",
-                  client_id_, err_msg, is_timeout_, is_timeout,
-                  duration.count());
+    easylog::info(
+        "client_id {} {}, is_timeout_ {}, timeout {}, duration {} ms",
+        client_id_, err_msg, is_timeout_, is_timeout,
+        std::chrono::duration_cast<std::chrono::milliseconds>(duration)
+            .count());
 
     if (!is_timeout) {
       promise.setValue(async_simple::Unit());
@@ -577,6 +583,8 @@ class coro_rpc_client {
       co_return;
     }
 
+    easylog::info("client_id {} close", client_id_);
+
     co_await asio_util::async_close(socket_);
   }
 
@@ -601,6 +609,8 @@ class coro_rpc_client {
       stop_inner_io_context();
       return;
     }
+
+    easylog::info("client_id {} close", client_id_);
 
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
