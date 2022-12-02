@@ -68,6 +68,15 @@ struct string_literal : public std::array<CharType, Size + 1> {
   using base::rend;
 };
 
+template <typename Char, std::size_t Size1, std::size_t Size2>
+constexpr bool operator!=(const string_literal<Char, Size1> &s1,
+                          const string_literal<Char, Size2> &s2) {
+  if constexpr (Size1 == Size2) {
+    return s1 != s2;
+  }
+  return true;
+}
+
 template <typename CharType, std::size_t Size>
 string_literal(const CharType (&value)[Size])
     -> string_literal<CharType, Size - 1>;
