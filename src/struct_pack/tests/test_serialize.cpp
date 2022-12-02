@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <fstream>
 #include <ratio>
 #include <string_view>
 #include <system_error>
@@ -28,81 +29,11 @@
 #include "struct_pack/struct_pack.hpp"
 #undef private
 
-#include <array>
-#include <deque>
-#include <iostream>
-#include <list>
-#include <map>
-#include <memory>
-#include <set>
-#include <span>
-#include <stack>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <util/expected.hpp>
-#include <vector>
-
 #include "doctest.h"
+#include "test_struct.hpp"
 using namespace struct_pack;
-// the original <=> operator cannot handle different Size
-template <typename Char, std::size_t Size1, std::size_t Size2>
-constexpr bool operator!=(const string_literal<Char, Size1> &s1,
-                          const string_literal<Char, Size2> &s2) {
-  if constexpr (Size1 == Size2) {
-    return s1 != s2;
-  }
-  return true;
-}
 
-struct person {
-  int age;
-  std::string name;
-  auto operator==(const person &rhs) const {
-    return age == rhs.age && name == rhs.name;
-  }
-  bool operator<(person const &p) const {
-    return age < p.age || (age == p.age && name < p.name);
-  }
-};
-
-struct person1 {
-  int age;
-  std::string name;
-  struct_pack::compatible<int32_t> id;
-  struct_pack::compatible<bool> maybe;
-};
-
-struct empty {};
-
-enum class Color { red, black, white };
-
-struct complicated_object {
-  Color color;
-  int a;
-  std::string b;
-  std::vector<person> c;
-  std::list<std::string> d;
-  std::deque<int> e;
-  std::map<int, person> f;
-  std::multimap<int, person> g;
-  std::set<std::string> h;
-  std::multiset<int> i;
-  std::unordered_map<int, person> j;
-  std::unordered_multimap<int, int> k;
-  std::array<person, 2> m;
-  person n[2];
-  std::pair<std::string, person> o;
-};
-
-struct nested_object {
-  int id;
-  std::string name;
-  person p;
-  complicated_object o;
-};
-
-TEST_CASE("testing deserialize_view") {
+TEST_CASE("testing deserialize") {
   person p{.age = 32, .name = "tom"};
   auto ret = serialize(p);
   {
@@ -267,541 +198,6 @@ void test_container(auto &v) {
   CHECK(v == v1);
 }
 
-TEST_CASE("testing long long") {
-  if constexpr (sizeof(long long) == 8) {
-    auto ret = serialize(-1ll);
-    auto res = deserialize<long long>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == -1ll);
-  }
-  if constexpr (sizeof(unsigned long long) == 8) {
-    auto ret = serialize(1ull);
-    auto res = deserialize<unsigned long long>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == 1ull);
-  }
-}
-
-TEST_CASE("testing sequence containers") {
-  SUBCASE("test vector") {
-    std::vector<person> v{{20, "tom"}};
-    test_container(v);
-  }
-  SUBCASE("test list") {
-    std::list<person> v{{20, "tom"}};
-    test_container(v);
-  }
-  SUBCASE("test deque") {
-    std::deque<person> v{{20, "tom"}};
-    test_container(v);
-  }
-}
-
-TEST_CASE("testing associative containers") {
-  SUBCASE("test int map") {
-    std::map<int, person> v{{1, {20, "tom"}}, {2, {22, "jerry"}}};
-    test_container(v);
-  }
-
-  SUBCASE("test string map") {
-    std::map<std::string, person> v{{"aa", {20, "tom"}}, {"bb", {22, "jerry"}}};
-    test_container(v);
-  }
-
-  SUBCASE("test multimap") {
-    std::multimap<int, person> v{{1, {20, "tom"}}, {2, {22, "jerry"}}};
-    test_container(v);
-
-    std::multimap<int, person> v1{{1, {20, "tom"}}, {1, {22, "jerry"}}};
-    test_container(v1);
-
-    std::multimap<int, person> v2{
-        {1, {20, "tom"}}, {1, {22, "jerry"}}, {3, {22, "jack"}}};
-    test_container(v2);
-
-    std::multimap<std::string, person> v3{{"aa", {20, "tom"}},
-                                          {"bb", {22, "jerry"}}};
-    test_container(v3);
-
-    std::multimap<std::string, person> v4{
-        {"dd", {20, "tom"}}, {"aa", {22, "jerry"}}, {"aa", {20, "jack"}}};
-    test_container(v4);
-  }
-
-  SUBCASE("test set") {
-    std::set<int> v{1, 2};
-    test_container(v);
-
-    std::set<std::string> v2{"aa", "bb"};
-    test_container(v2);
-
-    std::set<person> v3{{20, "tom"}, {22, "jerry"}};
-    test_container(v3);
-  }
-
-  SUBCASE("test multiset") {
-    std::multiset<int> v{1, 2, 1, 2};
-    test_container(v);
-
-    std::multiset<std::string> v2{"aa", "bb", "aa"};
-    test_container(v2);
-
-    std::multiset<person> v3{{20, "tom"}, {22, "jerry"}, {20, "jack"}};
-    test_container(v3);
-  }
-}
-
-TEST_CASE("testing unordered associative containers") {
-  SUBCASE("test int map") {
-    std::unordered_map<int, person> v{{1, {20, "tom"}}, {2, {22, "jerry"}}};
-    test_container(v);
-  }
-
-  SUBCASE("test string map") {
-    std::unordered_map<std::string, person> v{{"aa", {20, "tom"}},
-                                              {"bb", {22, "jerry"}}};
-    test_container(v);
-  }
-
-  SUBCASE("test multimap") {
-    std::unordered_map<int, person> v{{1, {20, "tom"}}, {2, {22, "jerry"}}};
-    test_container(v);
-
-    std::unordered_map<int, person> v1{{1, {20, "tom"}}, {1, {22, "jerry"}}};
-    test_container(v1);
-
-    std::unordered_map<int, person> v2{
-        {1, {20, "tom"}}, {1, {22, "jerry"}}, {3, {22, "jack"}}};
-    test_container(v2);
-
-    std::unordered_map<std::string, person> v3{{"aa", {20, "tom"}},
-                                               {"bb", {22, "jerry"}}};
-    test_container(v3);
-
-    std::unordered_map<std::string, person> v4{
-        {"dd", {20, "tom"}}, {"aa", {22, "jerry"}}, {"aa", {20, "jack"}}};
-    test_container(v4);
-  }
-}
-
-TEST_CASE("testing don't support container adaptors") {
-  std::stack<int> s;
-  s.push(1);
-  s.push(2);
-
-  //  struct_pack::packer o{};
-  //  o.serialize(s); //will compile error
-}
-
-// We should not inherit from stl container, this case just for testing.
-template <typename T>
-struct my_vector : public std::vector<T> {};
-
-template <typename Key, typename Value>
-struct my_map : public std::map<Key, Value> {};
-
-TEST_CASE("testing nonstd containers") {
-  SUBCASE("test custom vector") {
-    my_vector<int> v;
-    v.push_back(1);
-    v.push_back(2);
-    test_container(v);
-
-    my_vector<std::string> v1;
-    v1.push_back("aa");
-    v1.push_back("bb");
-    test_container(v1);
-
-    my_vector<person> v2;
-    v2.push_back({20, "tom"});
-    test_container(v2);
-  }
-
-  SUBCASE("test custom map") {
-    my_map<int, person> v;
-    v.emplace(1, person{20, "tom"});
-    v.emplace(2, person{22, "jerry"});
-    test_container(v);
-  }
-}
-
-void test_tuple_like(auto &v) {
-  auto ret = serialize(v);
-
-  using T = std::remove_cvref_t<decltype(v)>;
-  T v1{};
-  auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
-  CHECK(v == v1);
-}
-
-TEST_CASE("testing tuple") {
-  std::tuple<int, std::string> v = std::make_tuple(1, "hello");
-  test_tuple_like(v);
-
-  std::tuple<int, std::string> v1{};
-  test_tuple_like(v1);
-
-  std::tuple<int, std::string, person> v2{1, "aa", {20, "tom"}};
-  test_tuple_like(v2);
-}
-
-TEST_CASE("test std::pair") {
-  std::pair<int, std::string> v{1, "hello"};
-  test_tuple_like(v);
-
-  std::pair<std::string, person> v1{"aa", {20, "tom"}};
-  test_tuple_like(v1);
-
-  std::pair<std::string, person> v2{};
-  test_tuple_like(v2);
-}
-
-TEST_CASE("testing std::array") {
-  std::array<int, 3> v{1, 2, 3};
-  test_tuple_like(v);
-
-  std::array<std::string, 2> v1{"tom", "jerry"};
-  test_tuple_like(v1);
-
-  std::array<person, 2> v2{person{20, "tom"}, {22, "jerry"}};
-  test_tuple_like(v2);
-
-  std::array<person, 2> v3{};
-  test_tuple_like(v3);
-}
-
-TEST_CASE("test_trivial_copy_tuple") {
-  tuplet::tuple tp = tuplet::make_tuple(1, 2);
-
-  constexpr auto count = detail::member_count<decltype(tp)>();
-  static_assert(count == 2);
-
-  static_assert(std::is_same_v<decltype(tp), tuplet::tuple<int, int>>);
-  static_assert(!std::is_same_v<decltype(tp), std::tuple<int, int>>);
-
-  static_assert(
-      std::is_same_v<decltype(detail::get_types(tp)), tuplet::tuple<int, int>>);
-  static_assert(
-      !std::is_same_v<decltype(detail::get_types(tp)), std::tuple<int, int>>);
-  static_assert(get_type_code<decltype(tp)>() !=
-                get_type_code<std::tuple<int, int>>());
-  constexpr auto i = get_type_literal<decltype(tp)>();
-  static_assert(get_type_literal<decltype(tp)>() !=
-                get_type_literal<std::tuple<int, int>>());
-
-  auto buf = serialize(tp);
-
-  std::tuple<int, int> v{};
-  auto ec = deserialize_to(v, buf);
-  CHECK(ec != struct_pack::errc{});
-
-  decltype(tp) tp1;
-  auto ec2 = deserialize_to(tp1, buf);
-  CHECK(ec2 == struct_pack::errc{});
-  CHECK(tp == tp1);
-}
-
-struct test_obj {
-  int id;
-  std::string str;
-  tuplet::tuple<int, std::string> tp;
-  int d;
-};
-
-TEST_CASE("test_trivial_copy_tuple in an object") {
-  test_obj obj{1, "hello", {2, "tuple"}, 3};
-  auto buf = serialize(obj);
-
-  test_obj obj1;
-  auto ec = deserialize_to(obj1, buf);
-  CHECK(ec == struct_pack::errc{});
-  CHECK(obj.tp == obj1.tp);
-}
-
-void test_c_array(auto &v) {
-  auto ret = serialize(v);
-
-  using T = std::remove_cvref_t<decltype(v)>;
-  T v1{};
-  auto ec = deserialize_to(v1, ret.data(), ret.size());
-  REQUIRE(ec == struct_pack::errc{});
-
-  auto size = std::extent_v<T>;
-  for (int i = 0; i < size; ++i) {
-    CHECK(v[i] == v1[i]);
-  }
-}
-
-TEST_CASE("testing c array") {
-  int v[3] = {1, 2, 3};
-  test_c_array(v);
-  int v1[2] = {};
-  test_c_array(v1);
-
-  std::string v3[2] = {"hello", "world"};
-  test_c_array(v3);
-
-  person v4[2] = {{20, "tom"}, {22, "jerry"}};
-  test_c_array(v4);
-}
-
-enum class enum_i8 : int8_t { hello, hi };
-enum class enum_i32 : int32_t { hello, hi };
-
-TEST_CASE("testing enum") {
-  {
-    enum_i8 e{enum_i8::hi}, e2;
-    auto ret = serialize(e);
-    std::size_t sz;
-    auto ec = deserialize_to(e2, ret.data(), ret.size(), sz);
-    CHECK(ec == struct_pack::errc{});
-    CHECK(sz == ret.size());
-    CHECK(e == e2);
-  }
-  {
-    enum_i8 e{enum_i8::hi};
-    auto ret = serialize(e);
-    auto ec = deserialize<enum_i32>(ret.data(), ret.size());
-    CHECK(!ec);
-    if (!ec) {
-      CHECK(ec.error() == struct_pack::errc::invalid_argument);
-    }
-  }
-  {
-    constexpr auto code_enum_i8 = get_type_code<enum_i8>();
-    constexpr auto code_enum_i32 = get_type_code<enum_i32>();
-    constexpr auto code_i8 = get_type_code<int8_t>();
-    constexpr auto code_i32 = get_type_code<int32_t>();
-    static_assert(code_enum_i8 != code_enum_i32);
-    static_assert(code_enum_i8 == code_i8);
-    static_assert(code_enum_i32 == code_i32);
-  }
-}
-
-TEST_CASE("testing fundamental types") {
-  {
-    std::array ar = {get_type_code<int8_t>(),   get_type_code<int16_t>(),
-                     get_type_code<int32_t>(),  get_type_code<int64_t>(),
-                     get_type_code<uint8_t>(),  get_type_code<uint16_t>(),
-                     get_type_code<uint32_t>(), get_type_code<uint64_t>(),
-                     get_type_code<char>(),     get_type_code<wchar_t>(),
-                     get_type_code<char16_t>(), get_type_code<char32_t>(),
-                     get_type_code<float>(),    get_type_code<double>()};
-    std::sort(ar.begin(), ar.end());
-    CHECK(std::unique(ar.begin(), ar.end()) == ar.end());
-  }
-  {
-    static_assert(get_type_literal<char>() == get_type_literal<char8_t>());
-    static_assert(get_type_literal<signed char>() ==
-                  get_type_literal<int8_t>());
-    static_assert(get_type_literal<unsigned char>() ==
-                  get_type_literal<uint8_t>());
-  }
-}
-
-TEST_CASE("test variant") {
-  {
-    constexpr auto variant_i = get_type_code<std::variant<int>>();
-    constexpr auto variant_i_f = get_type_code<std::variant<int, float>>();
-    constexpr auto i = get_type_code<int>();
-    constexpr auto tuple_i = get_type_code<std::tuple<int>>();
-    static_assert(variant_i != variant_i_f);
-    static_assert(variant_i != i);
-    static_assert(variant_i != tuple_i);
-  }
-  {
-    std::variant<int, double> var = 1.4, var2;
-    auto ret = struct_pack::serialize(var);
-    auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(var2 == var);
-  }
-  {
-    std::variant<int, std::monostate> var = std::monostate{}, var2;
-    auto ret = struct_pack::serialize(var);
-    auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(var2 == var);
-  }
-  {
-    std::variant<int, int, int, std::monostate, double, double, double> var{
-        std::in_place_index_t<1>{}, 2},
-        var2;
-    auto ret = struct_pack::serialize(var);
-    auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(var2 == var);
-    CHECK(var2.index() == 1);
-  }
-  {
-    std::variant<std::monostate, std::string> var{"hello"}, var2;
-    auto ret = struct_pack::serialize(var);
-    auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(var2 == var);
-  }
-  {
-    std::tuple<int, std::variant<int, double>, double,
-               std::variant<int, double>, double>
-        var = {1, 2.0, 3.0, 42, 5.0};
-    auto ret = struct_pack::serialize(var);
-    auto res = struct_pack::get_field<decltype(var), 3>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == std::variant<int, double>(42));
-  }
-  { auto ret = struct_pack::serialize(std::tuple<std::monostate>{}); }
-  {
-    std::variant<
-        int8_t, int8_t, int8_t, int8_t, int8_t, int8_t, int8_t, int8_t, int8_t,
-        int8_t, int16_t, int16_t, int16_t, int16_t, int16_t, int16_t, int16_t,
-        int16_t, int16_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-        int32_t, int32_t, int32_t, int64_t, int64_t, int64_t, int64_t, int64_t,
-        int64_t, int64_t, int64_t, int64_t, std::string, std::monostate,
-        std::unordered_map<int, std::variant<std::monostate, double, int>>>
-        big_variant =
-            {std::unordered_map<int, std::variant<std::monostate, double, int>>{
-                {1, 1}, {2, 0.2}, {-1, std::monostate{}}}},
-        big_variant2;
-    auto ret = struct_pack::serialize(big_variant);
-    auto ec = struct_pack::deserialize_to(big_variant2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(big_variant2 == big_variant);
-  }
-}
-
-TEST_CASE("test monostate") {
-  {
-    std::monostate var, var2;
-#ifdef NDEBUG
-    static_assert(struct_pack::get_needed_size(std::monostate{}) == 4);
-#else
-    static_assert(struct_pack::get_needed_size(std::monostate{}) == 7);
-#endif
-    auto ret = struct_pack::serialize(var);
-    auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(var2 == var);
-  }
-}
-
-TEST_CASE("test expected") {
-  {
-    tl::expected<int, struct_pack::errc> exp{42}, exp2;
-    auto ret = serialize(exp);
-    auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
-    CHECK(exp2 == exp);
-  }
-  {
-    tl::expected<std::vector<int>, struct_pack::errc> exp{
-        std::vector{41, 42, 43}},
-        exp2;
-    auto ret = serialize(exp);
-    auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
-    CHECK(exp2 == exp);
-  }
-  {
-    tl::expected<std::vector<int>, std::errc> exp{
-        tl::unexpected{std::errc::address_in_use}},
-        exp2;
-
-    auto ret = serialize(exp);
-    auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
-    CHECK(exp2 == exp);
-  }
-}
-
-TEST_CASE("testing object with containers, enum, tuple array, and pair") {
-  complicated_object v{
-      .color = Color::red,
-      .a = 42,
-      .b = "hello",
-      .c = {{20, "tom"}, {22, "jerry"}},
-      .d = {"hello", "world"},
-      .e = {1, 2},
-      .f = {{1, {20, "tom"}}},
-      .g = {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-      .h = {"aa", "bb"},
-      .i = {1, 2},
-      .j = {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-      .k = {{1, 2}, {1, 3}},
-      .m = {person{20, "tom"}, {22, "jerry"}},
-      .n = {person{20, "tom"}, {22, "jerry"}},
-      .o = std::make_pair("aa", person{20, "tom"}),
-  };
-  auto ret = serialize(v);
-
-  complicated_object v1{};
-  auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
-  CHECK(v.g == v1.g);
-  CHECK(v.h == v1.h);
-  CHECK(v.i == v1.i);
-  CHECK(v.j == v1.j);
-  CHECK(v.k == v1.k);
-  CHECK(v.m == v1.m);
-  CHECK(v.o == v1.o);
-
-  SUBCASE("test nested object") {
-    nested_object nested{.id = 2, .name = "tom", .p = {20, "tom"}, .o = v1};
-    ret = serialize(nested);
-
-    nested_object nested1{};
-    auto ec = deserialize_to(nested1, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(nested.p == nested1.p);
-    CHECK(nested.name == nested1.name);
-    CHECK(nested.o.m == nested1.o.m);
-    CHECK(nested.o.o == nested1.o.o);
-  }
-
-  SUBCASE("test get_field") {
-    auto pair = get_field<complicated_object, 2>(ret.data(), ret.size());
-    CHECK(pair);
-    CHECK(pair.value() == "hello");
-    pair = get_field<complicated_object, 2>(ret);
-    CHECK(pair);
-    CHECK(pair.value() == "hello");
-    auto pair1 = get_field<complicated_object, 14>(ret.data(), ret.size());
-    CHECK(pair1);
-    CHECK(pair1.value() == v.o);
-    pair1 = get_field<complicated_object, 14>(ret);
-    CHECK(pair1);
-    CHECK(pair1.value() == v.o);
-
-    auto res = get_field<complicated_object, 14>(ret.data(), 24);
-    CHECK(!res);
-    if (!res) {
-      CHECK(res.error() == struct_pack::errc::no_buffer_space);
-    }
-  }
-  SUBCASE("test get_field_to") {
-    std::string res1;
-    auto ec = get_field_to<complicated_object, 2>(res1, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(res1 == "hello");
-    ec = get_field_to<complicated_object, 2>(res1, ret);
-    CHECK(ec == struct_pack::errc{});
-    CHECK(res1 == "hello");
-    std::pair<std::string, person> res2;
-    ec = get_field_to<complicated_object, 14>(res2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
-    CHECK(res2 == v.o);
-    ec = get_field_to<complicated_object, 14>(res2, ret);
-    CHECK(ec == struct_pack::errc{});
-    CHECK(res2 == v.o);
-
-    auto res = get_field_to<complicated_object, 14>(res2, ret.data(), 24);
-    CHECK(ec == struct_pack::errc{});
-    if (ec != struct_pack::errc{}) {
-      CHECK(ec == struct_pack::errc::no_buffer_space);
-    }
-  }
-}
-
 TEST_CASE("testing exceptions") {
   std::string buffer;
   buffer.resize(2);
@@ -821,7 +217,7 @@ TEST_CASE("testing exceptions") {
   CHECK(ret == 0);
 
   std::map<int, std::string> map{{1, "hello"}};
-  size = get_needed_size(pair);
+  size = get_needed_size(map);
   buffer.resize(size);
   ret = serialize_to(buffer.data(), size - 1, map);
   CHECK(ret == 0);
@@ -1148,64 +544,6 @@ TEST_CASE("testing serialize/deserialize varadic params") {
   }
 }
 
-TEST_CASE("testing string_view deserialize") {
-  using namespace std;
-  {
-    auto ret = serialize("hello"sv);
-    auto res = deserialize<string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == "hello"sv);
-  }
-  {
-    std::u32string_view sv = U"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u32string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    std::u16string_view sv = u"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u16string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    std::u8string_view sv = u8"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    auto ret = serialize("hello"s);
-    auto res = deserialize<string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == "hello"sv);
-  }
-  {
-    std::u32string sv = U"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u32string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    std::u16string sv = u"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u16string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    std::u8string sv = u8"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-}
-
 TEST_CASE("testing deserialization") {
   person p{20, "tom"};
   auto ret = serialize(p);
@@ -1312,137 +650,6 @@ TEST_CASE("testing partial deserialization with index") {
   CHECK(pair1.value() == 20);
 }
 
-TEST_CASE("test use wide string") {
-  using namespace std;
-  {
-    auto sv = std::wstring(L"你好, struct pack");
-    auto ret = serialize(sv);
-    std::wstring str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u8string(u8"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u8string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u16string(u"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u16string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u32string(U"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u32string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-}
-
-TEST_CASE("test use string_view") {
-  using namespace std;
-  {
-    auto ret = serialize("hello struct pack"sv);
-    std::string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == "hello struct pack"sv);
-  }
-  {
-    auto sv = std::wstring_view(L"你好, struct pack");
-    auto ret = serialize(sv);
-    std::wstring str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u8string_view(u8"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u8string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u16string_view(u"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u16string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u32string_view(U"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u32string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-}
-
-TEST_CASE("char test") {
-  {
-    char ch = '1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    signed char ch = '1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    unsigned char ch = '1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    wchar_t ch = L'1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    char8_t ch = u8'1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    char16_t ch = u'1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-  {
-    char32_t ch = U'1', ch2;
-    auto ret = serialize(ch);
-    auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(ch == ch2);
-  }
-}
-
 namespace array_test {
 std::array<std::string, 1> ar0;
 std::array<std::string, 126> ar1;
@@ -1515,7 +722,7 @@ TEST_CASE("test type info config") {
 #ifdef NDEBUG
     {
       auto size = get_needed_size(person{.age = 24, .name = "Betty"});
-      CHECK(size == 17);
+      CHECK(size == 14);
       auto buffer = serialize(person{.age = 24, .name = "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
@@ -1525,7 +732,7 @@ TEST_CASE("test type info config") {
 #else
     {
       auto size = get_needed_size(person{.age = 24, .name = "Betty"});
-      CHECK(size == 26);
+      CHECK(size == 23);
       auto buffer = serialize(person{.age = 24, .name = "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
@@ -1536,7 +743,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::disable}>(
           person{.age = 24, .name = "Betty"});
-      CHECK(size == 17);
+      CHECK(size == 14);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::disable}>(
           person{.age = 24, .name = "Betty"});
@@ -1548,7 +755,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::enable}>(
           person{.age = 24, .name = "Betty"});
-      CHECK(size == 26);
+      CHECK(size == 23);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::enable}>(
           person{.age = 24, .name = "Betty"});
@@ -1562,7 +769,7 @@ TEST_CASE("test type info config") {
     {
       auto size =
           get_needed_size(person_with_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 26);
+      CHECK(size == 23);
       auto buffer =
           serialize(person_with_type_info{.age = 24, .name = "Betty"});
       CHECK(buffer.size() == size);
@@ -1573,7 +780,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::disable}>(
           person_with_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 17);
+      CHECK(size == 14);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::disable}>(
           person_with_type_info{.age = 24, .name = "Betty"});
@@ -1585,7 +792,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::enable}>(
           person_with_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 26);
+      CHECK(size == 23);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::enable}>(
           person_with_type_info{.age = 24, .name = "Betty"});
@@ -1599,7 +806,7 @@ TEST_CASE("test type info config") {
     {
       auto size =
           get_needed_size(person_with_no_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 17);
+      CHECK(size == 14);
       auto buffer =
           serialize(person_with_no_type_info{.age = 24, .name = "Betty"});
       CHECK(buffer.size() == size);
@@ -1611,7 +818,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::disable}>(
           person_with_no_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 17);
+      CHECK(size == 14);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::disable}>(
           person_with_no_type_info{.age = 24, .name = "Betty"});
@@ -1623,7 +830,7 @@ TEST_CASE("test type info config") {
     {
       auto size = get_needed_size<serialize_config{type_info_config::enable}>(
           person_with_no_type_info{.age = 24, .name = "Betty"});
-      CHECK(size == 26);
+      CHECK(size == 23);
       auto buffer = serialize<std::vector<char>,
                               serialize_config{type_info_config::enable}>(
           person_with_no_type_info{.age = 24, .name = "Betty"});
@@ -1662,7 +869,7 @@ TEST_CASE("test get field exceptions") {
   person p{20, "tom"};
   auto ret = serialize(p);
 
-  auto pair = get_field<int, 0>(ret.data(), ret.size());
+  auto pair = get_field<std::pair<int, int>, 0>(ret.data(), ret.size());
   CHECK(!pair);
   if (!pair) {
     CHECK(pair.error() == struct_pack::errc::invalid_argument);
@@ -1684,9 +891,9 @@ TEST_CASE("test set_value") {
   std::string s;
   int v;
   int v2 = -1;
-  auto ret1 = in.set_value<0, 0, int, int>(ec, v, std::move(v2));
+  auto ret1 = in.set_value<0, 0, 0, int, int>(ec, v, std::move(v2));
   CHECK(ret1 == true);
-  auto ret2 = in.set_value<0, 1, int, int>(ec, v, std::move(v2));
+  auto ret2 = in.set_value<0, 0, 1, int, int>(ec, v, std::move(v2));
   CHECK(ret2 == false);
 }
 
@@ -1721,36 +928,6 @@ TEST_CASE("test free functions") {
   auto pair1 = get_field<person, 1>(buffer.data(), buffer.size());
   CHECK(pair1);
   CHECK(pair1.value() == "tom");
-}
-
-struct bug_member_count_struct1 {
-  int i;
-  struct hello {
-    std::optional<int> j;
-  } hi;
-  double k = 3;
-};
-
-struct bug_member_count_struct2 : bug_member_count_struct1 {};
-
-template <>
-constexpr std::size_t struct_pack::members_count<bug_member_count_struct2> = 3;
-
-TEST_CASE("test members_count") {
-  {
-    using t = bug_member_count_struct1;
-    t b;
-    auto res = struct_pack::serialize(b);
-    auto ret = struct_pack::deserialize<t>(res.data(), res.size());
-    CHECK(ret);
-  }
-  {
-    using t = bug_member_count_struct2;
-    t b;
-    auto res = struct_pack::serialize(b);
-    auto ret = struct_pack::deserialize<t>(res.data(), res.size());
-    CHECK(ret);
-  }
 }
 
 TEST_CASE("test compatible") {
@@ -1830,9 +1007,9 @@ TEST_CASE("test compatible") {
     }
     {
 #ifdef NDEBUG
-      constexpr size_t array_sz = 65523;
+      constexpr size_t array_sz = 65525;
 #else
-      constexpr size_t array_sz = 65520;
+      constexpr size_t array_sz = 65522;
 #endif
       std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
       std::get<0>(big).value().resize(array_sz);
@@ -1851,9 +1028,9 @@ TEST_CASE("test compatible") {
     }
     {
 #ifdef NDEBUG
-      constexpr size_t array_sz = 65524;
+      constexpr size_t array_sz = 65526;
 #else
-      constexpr size_t array_sz = 65521;
+      constexpr size_t array_sz = 65523;
 #endif
       std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
       std::get<0>(big).value().resize(array_sz);
@@ -1873,17 +1050,83 @@ TEST_CASE("test compatible") {
     // TODO: test 8byte-len compatible object
   }
 }
-#ifndef NDEBUG
-TEST_CASE("test hash confliet detected") {
-  int32_t value = 42;
-  auto ret = serialize(value);
-  auto fake_hash = struct_pack::get_type_code<float>() | 0b1;
-  memcpy(ret.data(), &fake_hash, sizeof(fake_hash));
-  auto res = deserialize<float>(ret);
-  CHECK(!res);
-  CHECK(res.error() == struct_pack::errc::hash_conflict);
+
+TEST_CASE("test varinat size_type") {
+  {
+    std::string str(255, 'A');
+    auto ret =
+        serialize<std::string,
+                  serialize_config{.add_type_info = type_info_config::disable}>(
+            str);
+    CHECK(ret.size() == 260);
+    auto str2 = deserialize<std::string_view>(ret);
+    CHECK(str == str2);
+  }
+  {
+    std::string str(256, 'A');
+    auto ret =
+        serialize<std::string,
+                  serialize_config{.add_type_info = type_info_config::disable}>(
+            str);
+    CHECK(ret[4] == 0b01000);
+    CHECK(ret.size() == 263);
+    auto str2 = deserialize<std::string_view>(ret);
+    CHECK(str2);
+    CHECK(str == str2);
+  }
+  {
+    std::string str(65535, 'A');
+    auto ret =
+        serialize<std::string,
+                  serialize_config{.add_type_info = type_info_config::disable}>(
+            str);
+    CHECK(ret[4] == 0b01000);
+    CHECK(ret.size() == 65542);
+    auto str2 = deserialize<std::string_view>(ret);
+    CHECK(str2);
+    CHECK(str == str2);
+  }
+  {
+    std::string str(65536, 'A');
+    auto ret =
+        serialize<std::string,
+                  serialize_config{.add_type_info = type_info_config::disable}>(
+            str);
+    CHECK(ret[4] == 0b10000);
+    CHECK(ret.size() == 65545);
+    auto str2 = deserialize<std::string_view>(ret);
+    CHECK(str2);
+    CHECK(str.size() == str2->size());
+    CHECK(str == str2);
+  }
+  // test 8 bytes size_type need at least 4GB memory, so we don't test this case
+  // {
+  //   std::string str((1ull << 32) - 1, 'A');
+  //   auto ret =
+  //       serialize<std::string,
+  //                 serialize_config{.add_type_info =
+  //                 type_info_config::disable}>(
+  //           str);
+  //   CHECK(ret[4] == 0b10000);
+  //   CHECK(ret.size() == (1ull << 32) + 8);
+  //   auto str2 = deserialize<std::string_view>(ret);
+  //   CHECK(str2);
+  //   CHECK(str == str2);
+  // }
+  // {
+  //   std::string str((1ull << 32), 'A');
+  //   auto ret =
+  //       serialize<std::string,
+  //                 serialize_config{.add_type_info =
+  //                 type_info_config::disable}>(
+  //           str);
+  //   CHECK(ret[4] == 0b11000);
+  //   CHECK(ret.size() == (1ull << 32) + 13);
+  //   auto str2 = deserialize<std::string_view>(ret);
+  //   CHECK(str2);
+  //   CHECK(str == str2);
+  // }
 }
-#endif
 
 TEST_CASE("test serialize offset") {
   uint32_t offset = 4;
@@ -1948,335 +1191,10 @@ TEST_CASE("test de_serialize offset") {
   }
 }
 
-TEST_CASE("deque") {
-  auto raw = std::deque(1e4, 1);
-  auto ret = struct_pack::serialize(raw);
-  std::deque<int> res;
-  auto ec = struct_pack::deserialize_to(res, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
-  CHECK(raw == res);
-}
 TEST_CASE("compatible convert to optional") {
   std::optional<std::string> a = "hello world";
   struct_pack::compatible<std::string> b = a;
   a = b;
   CHECK(b.value() == "hello world");
   CHECK(a.value() == "hello world");
-}
-struct compatible_in_nested_class {
-  int a;
-  struct_pack::compatible<int> c;
-};
-
-TEST_CASE("compatible not in the end of struct") {
-  static_assert(
-      detail::check_if_compatible_element_exist<
-          0, int, struct_pack::compatible<short>, std::string>() == -1,
-      "compatible member not in the end is illegal!");
-  static_assert(detail::check_if_compatible_element_exist<
-                    0, int, compatible_in_nested_class>() == -1,
-                "compatible member in the nested class is illegal!");
-  static_assert(
-      detail::check_if_compatible_element_exist<0, compatible_in_nested_class,
-                                                double>() == -1,
-      "compatible member in the nested class is illegal!");
-  static_assert(
-      detail::check_if_compatible_element_exist<
-          0, double, std::tuple<int, double, compatible<std::string>>>() == -1,
-      "compatible member in the nested class is illegal!");
-}
-
-struct type_calculate_test_1 {
-  tuplet::tuple<
-      std::pair<std::map<int, std::string>, std::vector<std::list<int>>>,
-      std::set<int>, std::array<int64_t, 64>, std::optional<int>>
-      a;
-};
-struct type_calculate_test_2 {
-  struct {
-    tuplet::tuple<std::unordered_map<int, std::string>,
-                  std::deque<std::vector<int>>>
-        a;
-    std::multiset<int> b;
-    int64_t c[64];
-    std::optional<int> d;
-  } e;
-};
-
-struct type_calculate_test_3 {
-  struct {
-    std::pair<std::unordered_map<int, std::string>,
-              std::deque<std::vector<double>>>
-        a;
-    std::multiset<int> b;
-    int64_t c[64];
-    std::optional<int> d;
-  } e;
-};
-
-TEST_CASE("type calculate") {
-  static_assert(std::is_trivially_copyable<struct_pack::compatible<int>>::value,
-                "must be true");
-
-  {
-    static_assert(get_type_code<std::vector<int>>() !=
-                      get_type_code<std::vector<float>>(),
-                  "vector<T> with different T should get different MD5");
-    CHECK(!deserialize<std::vector<int>>(serialize(std::vector<float>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::deque<int>>() != get_type_code<std::deque<float>>(),
-        "deque<T> with different T should get different MD5");
-    CHECK(!deserialize<std::deque<int>>(serialize(std::deque<float>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::list<int>>() != get_type_code<std::list<float>>(),
-        "list<T> with different T should get different MD5");
-    CHECK(!deserialize<std::list<int>>(serialize(std::list<float>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::set<int>>() != get_type_code<std::set<float>>(),
-        "set<T> with different T should get different MD5");
-    CHECK(!deserialize<std::set<int>>(serialize(std::set<float>{})));
-  }
-  {
-    static_assert(get_type_code<std::map<int, std::string>>() !=
-                      get_type_code<std::map<float, std::string>>(),
-                  "map<T1,T2> with different T1 should get different MD5");
-    CHECK(!deserialize<std::map<int, std::string>>(
-        serialize(std::map<float, std::string>{})));
-  }
-
-  {
-    static_assert(get_type_code<std::map<std::string, int>>() !=
-                      get_type_code<std::map<std::string, float>>(),
-                  "map<T1,T2> with different T2 should get different MD5");
-    CHECK(!deserialize<std::map<std::string, int>>(
-        serialize(std::map<std::string, float>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::unordered_map<int, std::string>>() !=
-            get_type_code<std::unordered_map<float, std::string>>(),
-        "unordered_map<T1,T2> with different T1 should get different MD5");
-    CHECK(!deserialize<std::unordered_map<int, std::string>>(
-        serialize(std::unordered_map<float, std::string>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::unordered_map<std::string, int>>() !=
-            get_type_code<std::unordered_map<std::string, float>>(),
-        "unordered_map<T1,T2> with different T2 should get different MD5");
-    CHECK(!deserialize<std::unordered_map<std::string, int>>(
-        serialize(std::unordered_map<std::string, float>{})));
-  }
-  {
-    static_assert(get_type_code<std::unordered_set<int>>() !=
-                      get_type_code<std::unordered_set<float>>(),
-                  "unordered_set<T> with different T should get different MD5");
-    CHECK(!deserialize<std::unordered_set<int>>(
-        serialize(std::unordered_set<float>{})));
-  }
-  {
-    static_assert(get_type_code<std::array<int, 5>>() !=
-                      get_type_code<std::array<float, 5>>(),
-                  "array<T,sz> with different T should get different MD5");
-    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<float, 5>{})));
-  }
-  {
-    static_assert(get_type_code<std::array<int, 5>>() !=
-                      get_type_code<std::array<int, 6>>(),
-                  "array<T,sz> with different sz should get different MD5");
-    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<int, 6>{})));
-  }
-  {
-    static_assert(get_type_code<int[5]>() != get_type_code<float[5]>(),
-                  "T[sz] with different T should get different MD5");
-    int ar[5] = {};
-    float ar2[5] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
-  }
-  {
-    static_assert(get_type_code<int[5]>() != get_type_code<int[6]>(),
-                  "T[sz] with different sz should get different MD5");
-    int ar[5] = {};
-    int ar2[6] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
-  }
-  {
-    static_assert(get_type_code<std::optional<int>>() !=
-                      get_type_code<std::optional<float>>(),
-                  "optional<T> with different T should get different MD5");
-    CHECK(!deserialize<std::array<int, 5>>(serialize(std::array<int, 6>{})));
-  }
-  {
-    static_assert(
-        get_type_code<int, float, int>() != get_type_code<int, int, int>(),
-        "T... with different T... should get different MD5");
-    CHECK(!deserialize<int, int>(serialize(1, 2, 3)));
-  }
-  {
-    static_assert(get_type_code<std::tuple<int, float, int>>() !=
-                      get_type_code<std::tuple<int, int, int>>(),
-                  "tuple<T...> with different T... should get different MD5");
-    CHECK(!deserialize<int, int>(serialize(1, 2, 3)));
-  }
-  {
-    static_assert(get_type_code<std::tuple<int, float, int>>() ==
-                      get_type_code<int, float, int>(),
-                  "tuple<T...> and T... should get same MD5");
-    CHECK(deserialize<std::tuple<int, float, int>>(serialize(1, 2.0f, 3)));
-  }
-  {
-    static_assert(get_type_code<std::pair<int, int>>() !=
-                      get_type_code<std::pair<float, int>>(),
-                  "pair<T1,T2> with different T1 should get different MD5");
-    CHECK(!deserialize<std::pair<int, int>>(serialize(std::pair{1.3f, 1})));
-  }
-  {
-    static_assert(get_type_code<std::pair<int, float>>() !=
-                      get_type_code<std::pair<int, int>>(),
-                  "pair<T1,T2> with different T2 should get different MD5");
-    CHECK(!deserialize<std::pair<int, float>>(serialize(std::pair{1, 1})));
-  }
-  {
-    static_assert(
-        get_type_code<complicated_object>() != get_type_code<person>(),
-        "class{T...} with different T... should get different MD5");
-    CHECK(!deserialize<complicated_object>(serialize(person{})));
-  }
-  {
-    static_assert(
-        get_type_code<compatible<int>>() == get_type_code<compatible<float>>(),
-        "compatible<T> with different T should get same MD5");
-    CHECK(deserialize<compatible<int>>(serialize(compatible<float>{1})));
-  }
-  {
-    static_assert(
-        get_type_code<std::list<int>>() == get_type_code<std::vector<int>>(),
-        "different class accord with container concept should get same MD5");
-    CHECK(deserialize<std::list<int>>(serialize(std::vector<int>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::deque<int>>() == get_type_code<std::vector<int>>(),
-        "different class accord with container concept should get same MD5");
-    CHECK(deserialize<std::deque<int>>(serialize(std::vector<int>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::deque<int>>() == get_type_code<std::list<int>>(),
-        "different class accord with container concept should get same MD5");
-    CHECK(deserialize<std::deque<int>>(serialize(std::list<int>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::array<int, 5>>() == get_type_code<int[5]>(),
-        "different class accord with array concept should get same MD5");
-    int ar[5] = {};
-    CHECK(deserialize<std::array<int, 5>>(serialize(ar)));
-  }
-  {
-    static_assert(
-        get_type_code<std::map<int, int>>() ==
-            get_type_code<std::unordered_map<int, int>>(),
-        "different class accord with map concept should get same MD5");
-    CHECK(deserialize<std::map<int, int>>(
-        serialize(std::unordered_map<int, int>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::set<int>>() ==
-            get_type_code<std::unordered_set<int>>(),
-        "different class accord with set concept should get same MD5");
-    CHECK(deserialize<std::set<int>>(serialize(std::unordered_set<int>{})));
-  }
-  {
-    static_assert(
-        get_type_code<std::pair<int, std::string>>() == get_type_code<person>(),
-        "different class accord with trival_class concept should "
-        "get same MD5");
-    CHECK(deserialize<std::pair<int, std::string>>(serialize(person{})));
-  }
-  {
-    static_assert(get_type_code<tuplet::tuple<int, std::string>>() ==
-                      get_type_code<person>(),
-                  "different class accord with trival_class concept should "
-                  "get same MD5");
-    CHECK(deserialize<tuplet::tuple<int, std::string>>(serialize(person{})));
-  }
-  {
-    static_assert(get_type_code<std::pair<int, std::string>>() ==
-                      get_type_code<tuplet::tuple<int, std::string>>(),
-                  "different class accord with trival_class concept should "
-                  "get same MD5");
-    CHECK(deserialize<std::pair<int, std::string>>(
-        serialize(tuplet::tuple<int, std::string>{})));
-  }
-  {
-    static_assert(get_type_code<std::tuple<int, std::string>>() !=
-                      get_type_code<person>(),
-                  "different class accord and trival_class"
-                  "concept should get different MD5");
-    CHECK(!deserialize<std::tuple<int, std::string>>(serialize(person{})));
-  }
-  {
-    static_assert(get_type_code<std::pair<int, std::string>>() !=
-                      get_type_code<std::tuple<int, std::string>>(),
-                  "different class accord and trival_class concept should "
-                  "get different MD5");
-    CHECK(!deserialize<std::pair<int, std::string>>(
-        serialize(std::tuple<int, std::string>{})));
-  }
-  {
-    static_assert(get_type_code<type_calculate_test_1>() ==
-                      get_type_code<type_calculate_test_2>(),
-                  "struct type_calculate_test_1 && type_calculate_test_2 "
-                  "should get the "
-                  "same MD5");
-    CHECK(
-        deserialize<type_calculate_test_1>(serialize(type_calculate_test_2{})));
-  }
-
-  {
-    static_assert(get_type_code<type_calculate_test_1>() !=
-                      get_type_code<type_calculate_test_3>(),
-                  "struct type_calculate_test_1 && type_calculate_test_3 "
-                  "should get the "
-                  "different MD5");
-    CHECK(!deserialize<type_calculate_test_1>(
-        serialize(type_calculate_test_3{})));
-  }
-
-  {
-    static_assert(get_type_code<int>() != get_type_code<std::tuple<int>>(),
-                  "T & tuple<T> should get different MD5");
-    CHECK(!deserialize<int>(serialize(std::tuple<int>{})));
-  }
-
-  {
-    static_assert(get_type_code<int>() != get_type_code<tuplet::tuple<int>>(),
-                  "T & tuple_::tuple<T> should get different MD5");
-    CHECK(!deserialize<int>(serialize(tuplet::tuple<int>{})));
-  }
-
-  {
-    static_assert(get_type_code<std::tuple<int>>() !=
-                      get_type_code<std::tuple<std::tuple<int>>>(),
-                  "tuple<T> & tuple<tuple<T>> should get different MD5");
-    CHECK(!deserialize<std::tuple<int>>(
-        serialize(std::tuple<std::tuple<int>>{})));
-  }
-
-  {
-    static_assert(
-        get_type_code<std::tuple<int>, int>() !=
-            get_type_code<std::tuple<int, int>>(),
-        "tuple<tuple<T1>,T2> & tuple<tuple<T1,T2>> should get different MD5");
-    CHECK(!deserialize<std::tuple<std::tuple<int>, int>>(
-        serialize(std::tuple<std::tuple<int, int>>{})));
-  }
 }

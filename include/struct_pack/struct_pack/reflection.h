@@ -794,10 +794,9 @@ constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(auto &&object,
   }
 }
 
-template <template <size_t index, typename... Args> typename Func,
-          typename... Args>
+template <template <size_t index, typename...> typename Func, typename... Args>
 constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
-                                                            Args &...args) {
+                                                            auto &...args) {
   switch (index) {
     case 0:
       return Func<0, Args...>::run(args...);
