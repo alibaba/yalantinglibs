@@ -247,12 +247,14 @@ struct ServerTester : TesterConfig {
       CHECK(ret.value() == "hello"s);
     }
     {
+#ifdef __GNUC__
       auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
       if (!ret) {
         easylog::warn(
             "{}", std::to_string(client->get_client_id()) + ret.error().msg);
       }
       CHECK(ret.value() == true);
+#endif
     }
   }
   void test_client_send_bad_header() {
