@@ -7,4 +7,4 @@ execute_process(
 add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp ${CMAKE_BINARY_DIR}/benchmark/benchmark.pb.cc)
 target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benchmark/)
 target_link_libraries(struct_pack_benchmark ${Protobuf_LIBRARIES})
-target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
+target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST STRUCT_PACK_OPTIMIZE)

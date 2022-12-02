@@ -22,7 +22,7 @@ add_executable(test_rpc
         )
 target_link_libraries(test_rpc PRIVATE libcoro_rpc doctest)
 target_compile_definitions(test_rpc PRIVATE UNIT_TEST_INJECT)
-target_compile_definitions(test_rpc PRIVATE STRUCT_PACK_USE_INT16_SIZE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
+target_compile_definitions(test_rpc PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 add_custom_command(
         TARGET test_rpc POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
