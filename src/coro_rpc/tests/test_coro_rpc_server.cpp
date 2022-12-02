@@ -162,6 +162,7 @@ struct CoroServerTester : ServerTester {
   }
 
   void test_server_send_no_body() {
+    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(
@@ -190,6 +191,7 @@ struct CoroServerTester : ServerTester {
   HelloService hello_service_;
 };
 TEST_CASE("testing coro rpc server") {
+  easylog::info("run testing coro rpc server");
   unsigned short server_port = 8810;
   auto conn_timeout_duration = 300ms;
   std::vector<bool> switch_list{true, false};
@@ -220,6 +222,7 @@ TEST_CASE("testing coro rpc server") {
 }
 
 TEST_CASE("testing coro rpc server stop") {
+  easylog::info("run testing coro rpc server stop");
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {
   });
@@ -241,6 +244,7 @@ TEST_CASE("testing coro rpc server stop") {
 }
 
 TEST_CASE("test server accept error") {
+  easylog::info("run test server accept error");
   register_handler<hi>();
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
@@ -257,17 +261,18 @@ TEST_CASE("test server accept error") {
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{},
+  REQUIRE_MESSAGE(ec == std::errc::io_error,
                   std::to_string(client.get_client_id())
                       .append(make_error_code(ec).message()));
   ret = syncAwait(client.call<hi>());
-  CHECK(ret.has_value());
-  REQUIRE(client.has_closed() == false);
+  CHECK(!ret);
+  REQUIRE(client.has_closed() == true);
   remove_handler<hi>();
   g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  easylog::info("run server write queue");
   g_action = {};
   remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
@@ -330,6 +335,7 @@ TEST_CASE("test server write queue") {
 }
 
 TEST_CASE("testing coro rpc write error") {
+  easylog::info("run testing coro rpc write error");
   register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);

@@ -145,6 +145,13 @@ class coro_rpc_client {
       co_return std::errc::not_connected;
     }
 #endif
+    if (has_closed_) [[unlikely]] {
+      easylog::error(
+          "a closed client is not allowed connect again, please create a new "
+          "client");
+      co_return std::errc::io_error;
+    }
+
     easylog::info("client_id {} begin to connect {}", client_id_, port);
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
@@ -251,6 +258,10 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
   call_for(auto duration, Args &&...args) {
+    easylog::error(
+        "a closed client is not allowed call again, please create a new "
+        "client");
+
     using R = decltype(get_return_type<func>());
     rpc_result<R> ret;
 #ifdef ENABLE_SSL

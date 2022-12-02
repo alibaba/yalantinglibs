@@ -126,6 +126,7 @@ struct AsyncServerTester : public ServerTester {
 };
 
 TEST_CASE("testing async rpc server") {
+  easylog::info("run testing async rpc server");
   unsigned short server_port = 8820;
   auto conn_timeout_duration = 300ms;
   std::vector<bool> switch_list{true, false};
@@ -176,6 +177,7 @@ TEST_CASE("testing async rpc server") {
 // #endif
 
 TEST_CASE("testing async rpc server stop") {
+  easylog::info("run testing async rpc server stop");
   async_rpc_server server(2, 8820);
   auto ec = server.async_start();
   REQUIRE(ec == std::errc{});
@@ -197,6 +199,7 @@ TEST_CASE("testing async rpc server stop") {
 }
 
 TEST_CASE("testing async rpc write error") {
+  easylog::info("run testing async rpc write error");
   register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   async_rpc_server server(2, 8820);
@@ -218,6 +221,7 @@ TEST_CASE("testing async rpc write error") {
 }
 
 TEST_CASE("test server write queue") {
+  easylog::info("run test server write queue");
   g_action = {};
   remove_handler<async_fun_with_delay_return_void_cost_long_time>();
   register_handler<async_fun_with_delay_return_void_cost_long_time>();
