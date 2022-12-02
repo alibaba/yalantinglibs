@@ -172,8 +172,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t),
-        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t), [&]<typename... Args>(Args &&
+                                                  ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
@@ -944,27 +944,27 @@ get_serialize_runtime_info(const Args &...args) {
   if (sz_info.max_size < (1ull << 8)) [[likely]] {
     ret.len += sz_info.total + sz_info.size_cnt;
     ret.metainfo = 0b00000;
-  }
-  else if (sz_info.max_size < (1ull << 16)) {
-    ret.len += sz_info.total + sz_info.size_cnt * 2;
-    ret.metainfo = 0b01000;
-  }
-  else if (sz_info.max_size < (1ull << 32)) {
-    ret.len += sz_info.total + sz_info.size_cnt * 4;
-    ret.metainfo = 0b10000;
-  }
-  else {
-    ret.len += sz_info.total + sz_info.size_cnt * 8;
-    ret.metainfo = 0b11000;
-  }
-  constexpr bool has_meta_info = has_compatible || has_type_literal;
-  if constexpr (has_meta_info) {
-    ret.len += sizeof(unsigned char);
-  }
-  else {
-    if (ret.metainfo) {
+    constexpr bool has_compile_time_determined_meta_info =
+        has_compatible || has_type_literal;
+    if constexpr (has_compile_time_determined_meta_info) {
       ret.len += sizeof(unsigned char);
     }
+  }
+  else {
+    if (sz_info.max_size < (1ull << 16)) {
+      ret.len += sz_info.total + sz_info.size_cnt * 2;
+      ret.metainfo = 0b01000;
+    }
+    else if (sz_info.max_size < (1ull << 32)) {
+      ret.len += sz_info.total + sz_info.size_cnt * 4;
+      ret.metainfo = 0b10000;
+    }
+    else {
+      ret.len += sz_info.total + sz_info.size_cnt * 8;
+      ret.metainfo = 0b11000;
+    }
+    // size_type >= 1 , has metainfo
+    ret.len += sizeof(unsigned char);
   }
   if constexpr (has_type_literal) {
     constexpr auto type_literal = struct_pack::get_type_literal<Args...>();
@@ -1542,6 +1542,9 @@ class unpacker {
         return {};
       }
       if constexpr (map_container<type> || set_container<type>) {
+        // value is the element of map/set container.
+        // if the type is set, then value is set::value_type;
+        // if the type is map, then value is pair<key_type,mapped_type>
         decltype([]<typename T>(const T &t) {
           if constexpr (map_container<T>) {
             return std::pair<typename T::key_type, typename T::mapped_type>{};
@@ -1720,15 +1723,15 @@ class unpacker {
     return std::get<I>(std::forward_as_tuple(ts...));
   }
 
-  template <size_t size_type, size_t FieldIndex, typename FiledType,
+  template <size_t size_type, size_t FieldIndex, typename FieldType,
             typename... Args>
-  STRUCT_PACK_INLINE constexpr decltype(auto) for_each(FiledType &field,
+  STRUCT_PACK_INLINE constexpr decltype(auto) for_each(FieldType &field,
                                                        Args &&...items) {
     bool stop = false;
     struct_pack::errc code{};
     [&]<std::size_t... I>(std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
-      ((!stop &&
-        (stop = set_value<size_type, I, FieldIndex>(code, field, get_nth<I>(items...)))),
+      ((!stop && (stop = set_value<size_type, I, FieldIndex>(
+                      code, field, get_nth<I>(items...)))),
        ...);
     }
     (std::make_index_sequence<sizeof...(Args)>{});

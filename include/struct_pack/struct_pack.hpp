@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#define STRUCT_PACK_OPTIMIZE 1
-
 #include <cstdint>
 #include <type_traits>
 #include <utility>
