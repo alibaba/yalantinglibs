@@ -92,8 +92,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     auto callback = [this, self](const asio::error_code &error) {
       cancel_timer();
       if (error) {
-        easylog::error("handshake failed:{}, client_id {}", error.message(),
-                       client_id_);
+        easylog::error("handshake failed:{}", error.message());
         close();
         return;
       }
@@ -155,8 +154,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
  private:
   void log(std::errc err, const std::string err_prefix = "") {
 #ifdef UNIT_TEST_INJECT
-    easylog::info("{} {} client_id {}", err_prefix,
-                  std::make_error_code(err).message(), client_id_);
+    easylog::info("{} {} client_id {} write_queue size {}", err_prefix,
+                  std::make_error_code(err).message(), client_id_,
+                  write_queue_.size());
 #else
     easylog::info("{} {}", err_prefix, std::make_error_code(err).message());
 #endif
@@ -234,9 +234,12 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
     write(std::move(buf));
 
-    if (err != err_ok) [[unlikely]] {
-      log(err);
-      close(false);
+    if (rsp_err_ == err_ok) [[likely]] {
+      if (err != err_ok) [[unlikely]] {
+        rsp_err_ = err;
+      }
+
+      write(std::move(buf));
     }
   }
 
@@ -275,6 +278,13 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
                     if (!write_queue_.empty()) {
                       write();
+                    }
+                    else {
+                      if (rsp_err_ != err_ok) [[unlikely]] {
+                        log(rsp_err_);
+                        close(false);
+                        return;
+                      }
                     }
                   }
                 });
@@ -405,7 +415,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::vector<char> body_;
 
   std::deque<std::vector<char>> write_queue_;
-
+  std::errc rsp_err_ = std::errc{};
   bool delay_ = false;
 
   // if don't get any message in keep_alive_timeout_duration_, the connection

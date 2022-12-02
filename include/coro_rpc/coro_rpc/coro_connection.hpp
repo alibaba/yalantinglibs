@@ -53,7 +53,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       : io_context_(io_context),
         executor_(io_context),
         socket_(std::move(socket)),
-        rsp_err(std::errc{}),
+        rsp_err_(std::errc{}),
         timer_(io_context) {
     body_.resize(body_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
@@ -215,9 +215,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         buf[RESPONSE_HEADER_LEN + 1] = (buf[RESPONSE_HEADER_LEN + 1] + 1);
       }
 #endif
-      if (rsp_err == err_ok) [[likely]] {
+      if (rsp_err_ == err_ok) [[likely]] {
         if (err != err_ok) [[unlikely]] {
-          rsp_err = err;
+          rsp_err_ = err;
         }
         write_queue_.push_back(std::move(buf));
         if (write_queue_.size() == 1) {
@@ -366,8 +366,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       write_queue_.pop_front();
     }
-    if (rsp_err != err_ok) [[unlikely]] {
-      log(rsp_err);
+    if (rsp_err_ != err_ok) [[unlikely]] {
+      log(rsp_err_);
       co_await close(false);
       co_return;
     }
@@ -459,7 +459,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::vector<char> body_;
   // FIXME: queue's performance can be imporved.
   std::deque<std::vector<char>> write_queue_;
-  std::errc rsp_err;
+  std::errc rsp_err_;
   bool delay_ = false;
 
   // if don't get any message in keep_alive_timeout_duration_, the connection
