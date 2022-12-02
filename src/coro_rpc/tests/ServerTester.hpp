@@ -189,14 +189,12 @@ struct ServerTester : TesterConfig {
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
         std::to_string(client->get_client_id()).append(ret.error().msg));
-    if (!use_ssl) {
-      CHECK(client->has_closed() == false);
-      ret = call<async_hi>(client);
-      CHECK(client->has_closed() == true);
-      ret = call<async_hi>(client);
-      REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-      CHECK(client->has_closed() == true);
-    }
+    REQUIRE(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    CHECK(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    CHECK(client->has_closed() == true);
     register_handler<async_hi>();
   }
   virtual void register_all_function() {
