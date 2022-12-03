@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <array>
+#include <bitset>
 #include <coro_rpc/coro_rpc/async_rpc_server.hpp>
 #include <variant>
 
@@ -129,30 +131,28 @@ TEST_CASE("testing async rpc server") {
   easylog::info("run testing async rpc server");
   unsigned short server_port = 8820;
   auto conn_timeout_duration = 300ms;
-  std::vector<bool> switch_list{true, false};
-  for (auto async_start : switch_list) {
-    for (auto enable_heartbeat : switch_list) {
-      // for (auto sync_client : switch_list) {
-      for (auto use_outer_io_context : switch_list) {
-        for (auto use_ssl : switch_list) {
-          TesterConfig config;
-          config.async_start = async_start;
-          config.enable_heartbeat = enable_heartbeat;
-          config.use_ssl = use_ssl;
-          config.sync_client = false;
-          config.use_outer_io_context = use_outer_io_context;
-          config.port = server_port;
-          if (enable_heartbeat) {
-            config.conn_timeout_duration = conn_timeout_duration;
-          }
-          std::stringstream ss;
-          ss << config;
-          easylog::info("config: {}", ss.str());
-          AsyncServerTester(config).run();
-        }
-      }
-      // }
+
+  // 0:async_start, 1:enable_heartbeat,
+  // 2:use_outer_io_context, 3:use_ssl
+  std::array<std::bitset<4U>, 16U> switch_list{
+      0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111,
+      0b1000, 0b1001, 0b1010, 0b1011, 0b1100, 0b1101, 0b1110, 0b1111};
+
+  for (auto list : switch_list) {
+    TesterConfig config;
+    config.async_start = list[0];
+    config.enable_heartbeat = list[1];
+    config.use_outer_io_context = list[2];
+    config.use_ssl = list[3];
+    config.sync_client = false;
+    config.port = server_port;
+    if (config.enable_heartbeat) {
+      config.conn_timeout_duration = conn_timeout_duration;
     }
+    std::stringstream ss;
+    ss << config;
+    easylog::info("config: {}", ss.str());
+    AsyncServerTester(config).run();
   }
 }
 // #ifndef _MSC_VER
