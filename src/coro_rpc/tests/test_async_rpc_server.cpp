@@ -128,6 +128,7 @@ struct AsyncServerTester : public ServerTester {
 };
 
 TEST_CASE("testing async rpc server") {
+  easylog::info("run testing async rpc server");
   unsigned short server_port = 8820;
   auto conn_timeout_duration = 300ms;
 
@@ -176,6 +177,7 @@ TEST_CASE("testing async rpc server") {
 // #endif
 
 TEST_CASE("testing async rpc server stop") {
+  easylog::info("run testing async rpc server stop");
   async_rpc_server server(2, 8820);
   auto ec = server.async_start();
   REQUIRE(ec == std::errc{});
@@ -197,6 +199,7 @@ TEST_CASE("testing async rpc server stop") {
 }
 
 TEST_CASE("testing async rpc write error") {
+  easylog::info("run testing async rpc write error");
   register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   async_rpc_server server(2, 8820);
@@ -218,6 +221,7 @@ TEST_CASE("testing async rpc write error") {
 }
 
 TEST_CASE("test server write queue") {
+  easylog::info("run test server write queue");
   g_action = {};
   remove_handler<async_fun_with_delay_return_void_cost_long_time>();
   register_handler<async_fun_with_delay_return_void_cost_long_time>();
@@ -233,6 +237,7 @@ TEST_CASE("test server write queue") {
   std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
   rpc_header header{magic_number};
   header.seq_num = g_client_id++;
+  easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
   auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
   CHECK(sz == RPC_HEAD_LEN);
@@ -244,6 +249,8 @@ TEST_CASE("test server write queue") {
   asio::ip::tcp::socket socket(io_context);
   auto ret = connect(io_context, socket, "127.0.0.1", "8820");
   CHECK(!ret);
+  easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
+                "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
     auto err = write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
@@ -266,6 +273,8 @@ TEST_CASE("test server write queue") {
     CHECK(sz == body_len);
     CHECK(r2 == r);
   }
+
+  easylog::info("client_id {} close", header.seq_num);
   asio::error_code ignored_ec;
   socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
   socket.close(ignored_ec);

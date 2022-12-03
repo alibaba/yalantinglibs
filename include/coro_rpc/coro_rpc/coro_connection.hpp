@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -52,7 +53,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       : io_context_(io_context),
         executor_(io_context),
         socket_(std::move(socket)),
-        rsp_err(std::errc{}),
+        rsp_err_(std::errc{}),
         timer_(io_context) {
     body_.resize(body_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
@@ -65,6 +66,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   ~coro_connection() {
     if (!has_closed_) {
+#ifdef UNIT_TEST_INJECT
+      easylog::info("~async_connection conn_id {}, client_id {}", conn_id_,
+                    client_id_);
+#endif
       async_simple::coro::syncAwait(close());
     }
   }
@@ -121,36 +126,40 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
       // So, no special handling of eof is required.
       if (ret.first) {
+        log((std::errc)ret.first.value());
         co_await close();
         co_return;
       }
       assert(ret.second == RPC_HEAD_LEN);
       auto errc = struct_pack::deserialize_to(header, head_, RPC_HEAD_LEN);
       if (errc != struct_pack::errc::ok) [[unlikely]] {
-        easylog::info("bad head:{}", struct_pack::error_message(errc));
+        log(std::errc::protocol_error);
         co_await close();
         co_return;
       }
 
 #ifdef UNIT_TEST_INJECT
       client_id_ = header.seq_num;
-      easylog::info("client_id {}", client_id_);
+      easylog::info("conn_id {}, client_id {}", conn_id_, client_id_);
 #endif
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_read_header) {
-        easylog::warn("inject action: close_socket_after_read_header");
+        easylog::warn(
+            "inject action: close_socket_after_read_header, conn_id {}, "
+            "client_id {}",
+            conn_id_, client_id_);
         co_await close();
         co_return;
       }
 #endif
       if (header.magic != magic_number) [[unlikely]] {
-        easylog::error("bad magic number");
+        easylog::error("bad magic number, conn_id {}", conn_id_);
         co_await close();
         co_return;
       }
       if (header.length == 0) [[unlikely]] {
-        easylog::info("bad length:{}", header.length);
+        easylog::info("bad length:{}, conn_id {}", header.length, conn_id_);
         co_await close();
         co_return;
       }
@@ -163,7 +172,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       ret = co_await asio_util::async_read(
           socket, asio::buffer(body_.data(), header.length));
       if (ret.first) [[unlikely]] {
-        easylog::info("read error:{}", ret.first.message());
+        easylog::info("read error:{}, conn_id {}", ret.first.message(),
+                      conn_id_);
         co_await close();
         co_return;
       }
@@ -188,20 +198,26 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       *((uint32_t *)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
-        easylog::warn("inject action: close_socket_after_send_length");
+        easylog::warn(
+            "inject action: close_socket_after_send_length conn_id {}, "
+            "client_id {}",
+            conn_id_, client_id_);
         co_await asio_util::async_write(
             socket, asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
         co_await close();
         co_return;
       }
       if (g_action == inject_action::server_send_bad_rpc_result) {
-        easylog::warn("inject action: server_send_bad_rpc_result");
+        easylog::warn(
+            "inject action: server_send_bad_rpc_result conn_id {}, client_id "
+            "{}",
+            conn_id_, client_id_);
         buf[RESPONSE_HEADER_LEN + 1] = (buf[RESPONSE_HEADER_LEN + 1] + 1);
       }
 #endif
-      if (rsp_err == err_ok) [[likely]] {
+      if (rsp_err_ == err_ok) [[likely]] {
         if (err != err_ok) [[unlikely]] {
-          rsp_err = err;
+          rsp_err_ = err;
         }
         write_queue_.push_back(std::move(buf));
         if (write_queue_.size() == 1) {
@@ -261,6 +277,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return;
     }
 
+#ifdef UNIT_TEST_INJECT
+    easylog::info("sync_close conn_id {}, client_id {}", conn_id_, client_id_);
+#else
+    easylog::info("sync_close conn_id {}", conn_id_);
+#endif
     std::promise<void> promise;
     close().via(&executor_).start([&](auto &&) {
       promise.set_value();
@@ -303,12 +324,26 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     co_await send_data();
   }
 
+  void log(std::errc err) {
+#ifdef UNIT_TEST_INJECT
+    easylog::info("close conn_id {}, client_id {}, reason {}", conn_id_,
+                  client_id_, std::make_error_code(err).message());
+#else
+    easylog::info("close conn_id {}, reason {}", conn_id_,
+                  std::make_error_code(err).message());
+#endif
+  }
+
   async_simple::coro::Lazy<void> send_data(bool close_ssl = true) {
     std::pair<std::error_code, size_t> ret;
     while (!write_queue_.empty()) {
       auto &msg = write_queue_.front();
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_connection_close_socket) {
+        easylog::warn(
+            "inject action: force_inject_connection_close_socket, conn_id {}, "
+            "client_id {}",
+            conn_id_, client_id_);
         co_await close(false);
         co_return;
       }
@@ -325,19 +360,23 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 #endif
       if (ret.first) [[unlikely]] {
-        easylog::info("write error:{}", ret.first.message());
+        log((std::errc)ret.first.value());
         co_await close(close_ssl);
         co_return;
       }
       write_queue_.pop_front();
     }
-    if (rsp_err != err_ok) [[unlikely]] {
+    if (rsp_err_ != err_ok) [[unlikely]] {
+      log(rsp_err_);
       co_await close(false);
       co_return;
     }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
-      easylog::warn("inject action: close_socket_after_send_length");
+      easylog::warn(
+          "inject action: close_socket_after_send_length, conn_id {}, "
+          "client_id {}",
+          conn_id_, client_id_);
       // Attention: close ssl stream after read error
       // otherwise, server will crash
       co_await close(false);
@@ -420,7 +459,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::vector<char> body_;
   // FIXME: queue's performance can be imporved.
   std::deque<std::vector<char>> write_queue_;
-  std::errc rsp_err;
+  std::errc rsp_err_;
   bool delay_ = false;
 
   // if don't get any message in keep_alive_timeout_duration_, the connection

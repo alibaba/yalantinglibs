@@ -21,6 +21,7 @@
 #include <deque>
 #include <future>
 #include <memory>
+#include <system_error>
 #include <thread>
 #include <type_traits>
 #include <variant>
@@ -102,12 +103,18 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   }
 #endif
   ~async_connection() {
+#ifdef UNIT_TEST_INJECT
+    easylog::info("~async_connection client_id {}", client_id_);
+#endif
     cancel_timer();
     sync_close();
   }
 
   void quit() {
     cancel_timer();
+#ifdef UNIT_TEST_INJECT
+    easylog::info("quit client_id {}", client_id_);
+#endif
     close();
     quit_promise_.get_future().wait();
   }
@@ -145,6 +152,16 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::any get_tag() { return tag_; }
 
  private:
+  void log(std::errc err, const std::string err_prefix = "") {
+#ifdef UNIT_TEST_INJECT
+    easylog::info("{} {} client_id {} write_queue size {}", err_prefix,
+                  std::make_error_code(err).message(), client_id_,
+                  write_queue_.size());
+#else
+    easylog::info("{} {}", err_prefix, std::make_error_code(err).message());
+#endif
+  }
+
   void read_head() {
     async_read_head([this, self = shared_from_this()](asio::error_code ec,
                                                       std::size_t length) {
@@ -153,7 +170,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         rpc_header header{};
         auto errc = struct_pack::deserialize_to(header, head_, RPC_HEAD_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
-          easylog::info("bad head:{}", struct_pack::error_message(errc));
+          log(std::errc::protocol_error, "bad head");
           close();
           return;
         }
@@ -170,7 +187,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         }
 
         if (header.length == 0) [[unlikely]] {
-          easylog::info("bad body length:{}", header.length);
+          log(std::errc::protocol_error, "bad body length");
           close();
           return;
         }
@@ -182,6 +199,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         read_body(header.length);
       }
       else {
+        log((std::errc)ec.value());
         close();
       }
     });
@@ -197,6 +215,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         handle_body(length, self);
       }
       else {
+        log((std::errc)ec.value());
         close(false);
       }
     });
@@ -215,8 +234,12 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
     write(std::move(buf));
 
-    if (err != err_ok) [[unlikely]] {
-      close(false);
+    if (rsp_err_ == err_ok) [[likely]] {
+      if (err != err_ok) [[unlikely]] {
+        rsp_err_ = err;
+      }
+
+      write(std::move(buf));
     }
   }
 
@@ -233,6 +256,11 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     auto &msg = write_queue_.front();
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::force_inject_connection_close_socket) {
+      easylog::warn(
+          "inject action: force_inject_connection_close_socket, "
+          "client_id {}",
+          client_id_);
+
       asio::error_code ignored_ec;
       socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket_.close(ignored_ec);
@@ -242,6 +270,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
                 [this, self = shared_from_this()](asio::error_code ec,
                                                   std::size_t length) {
                   if (ec) {
+                    log((std::errc)ec.value());
                     close(false);
                   }
                   else {
@@ -249,6 +278,13 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
                     if (!write_queue_.empty()) {
                       write();
+                    }
+                    else {
+                      if (rsp_err_ != err_ok) [[unlikely]] {
+                        log(rsp_err_);
+                        close(false);
+                        return;
+                      }
                     }
                   }
                 });
@@ -379,7 +415,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::vector<char> body_;
 
   std::deque<std::vector<char>> write_queue_;
-
+  std::errc rsp_err_ = std::errc{};
   bool delay_ = false;
 
   // if don't get any message in keep_alive_timeout_duration_, the connection

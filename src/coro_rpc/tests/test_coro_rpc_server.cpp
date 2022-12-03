@@ -162,6 +162,7 @@ struct CoroServerTester : ServerTester {
   }
 
   void test_server_send_no_body() {
+    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::close_socket_after_send_length);
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(
@@ -190,6 +191,7 @@ struct CoroServerTester : ServerTester {
   HelloService hello_service_;
 };
 TEST_CASE("testing coro rpc server") {
+  easylog::info("run testing coro rpc server");
   unsigned short server_port = 8810;
   auto conn_timeout_duration = 300ms;
   std::vector<bool> switch_list{true, false};
@@ -220,6 +222,7 @@ TEST_CASE("testing coro rpc server") {
 }
 
 TEST_CASE("testing coro rpc server stop") {
+  easylog::info("run testing coro rpc server stop");
   coro_rpc_server server(2, 8810);
   server.async_start().start([](auto &&) {
   });
@@ -241,6 +244,7 @@ TEST_CASE("testing coro rpc server stop") {
 }
 
 TEST_CASE("test server accept error") {
+  easylog::info("run test server accept error");
   register_handler<hi>();
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
@@ -257,17 +261,18 @@ TEST_CASE("test server accept error") {
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{},
+  REQUIRE_MESSAGE(ec == std::errc::io_error,
                   std::to_string(client.get_client_id())
                       .append(make_error_code(ec).message()));
   ret = syncAwait(client.call<hi>());
-  CHECK(ret.has_value());
-  REQUIRE(client.has_closed() == false);
+  CHECK(!ret);
+  REQUIRE(client.has_closed() == true);
   remove_handler<hi>();
   g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  easylog::info("run server write queue");
   g_action = {};
   remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
   register_handler<coro_fun_with_delay_return_void_cost_long_time>();
@@ -282,6 +287,7 @@ TEST_CASE("test server write queue") {
   std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
   rpc_header header{magic_number};
   header.seq_num = g_client_id++;
+  easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
   auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
   CHECK(sz == RPC_HEAD_LEN);
@@ -293,6 +299,8 @@ TEST_CASE("test server write queue") {
   asio::ip::tcp::socket socket(io_context);
   auto ret = connect(io_context, socket, "127.0.0.1", "8810");
   CHECK(!ret);
+  easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
+                "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
     auto err = write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
@@ -315,6 +323,8 @@ TEST_CASE("test server write queue") {
     CHECK(sz == body_len);
     CHECK(r2 == r);
   }
+
+  easylog::info("client_id {} close", header.seq_num);
   asio::error_code ignored_ec;
   socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
   socket.close(ignored_ec);
@@ -325,6 +335,7 @@ TEST_CASE("test server write queue") {
 }
 
 TEST_CASE("testing coro rpc write error") {
+  easylog::info("run testing coro rpc write error");
   register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);

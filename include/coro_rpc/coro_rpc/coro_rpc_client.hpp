@@ -123,7 +123,7 @@ class coro_rpc_client {
    *
    * @return true if client closed, otherwise false.
    */
-  [[nodiscard]] bool has_closed() { return !socket_.is_open(); }
+  [[nodiscard]] bool has_closed() { return has_closed_; }
 
   /*!
    * Connect server
@@ -145,6 +145,13 @@ class coro_rpc_client {
       co_return std::errc::not_connected;
     }
 #endif
+    if (has_closed_) [[unlikely]] {
+      easylog::error(
+          "a closed client is not allowed connect again, please create a new "
+          "client");
+      co_return std::errc::io_error;
+    }
+
     easylog::info("client_id {} begin to connect {}", client_id_, port);
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
@@ -252,6 +259,18 @@ class coro_rpc_client {
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
   call_for(auto duration, Args &&...args) {
     using R = decltype(get_return_type<func>());
+
+    if (has_closed_) [[unlikely]] {
+      easylog::error(
+          "a closed client is not allowed call again, please create a new "
+          "client");
+      auto ret = rpc_result<R>{
+          unexpect_t{},
+          rpc_error{std::errc::io_error,
+                    "client has been closed, please create a new client"}};
+      co_return ret;
+    }
+
     rpc_result<R> ret;
 #ifdef ENABLE_SSL
     if (!ssl_init_ret_) {
@@ -290,6 +309,10 @@ class coro_rpc_client {
     }
 
     co_await promise.getFuture();
+#ifdef UNIT_TEST_INJECT
+    easylog::info("client_id {} call {} {}", client_id_, get_func_name<func>(),
+                  ret ? "ok" : "failed");
+#endif
     co_return ret;
   }
 
@@ -306,9 +329,11 @@ class coro_rpc_client {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
 
-    easylog::info("client_id {} {}, is_timeout_ {}, timeout {}, duration {}",
-                  client_id_, err_msg, is_timeout_, is_timeout,
-                  duration.count());
+    easylog::info(
+        "client_id {} {}, is_timeout_ {}, timeout {}, duration {} ms",
+        client_id_, err_msg, is_timeout_, is_timeout,
+        std::chrono::duration_cast<std::chrono::milliseconds>(duration)
+            .count());
 
     if (!is_timeout) {
       promise.setValue(async_simple::Unit());
@@ -451,6 +476,9 @@ class coro_rpc_client {
           file.close();
 #endif
           r = handle_response_buffer<R>(read_buf_.data(), ret.second);
+          if (!r) {
+            co_await close();
+          }
           co_return r;
         }
       }
@@ -573,11 +601,14 @@ class coro_rpc_client {
       close_ssl_stream();
     }
 #endif
-    if (!socket_.is_open()) {
+    if (has_closed_) {
       co_return;
     }
 
+    easylog::info("client_id {} close", client_id_);
+
     co_await asio_util::async_close(socket_);
+    has_closed_ = true;
   }
 
 #ifdef ENABLE_SSL
@@ -597,14 +628,18 @@ class coro_rpc_client {
       stop_inner_io_context();
     }
 #endif
-    if (close_ssl && !socket_.is_open()) {
+    if (close_ssl && has_closed_) {
       stop_inner_io_context();
       return;
     }
 
+    easylog::info("client_id {} close", client_id_);
+
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     socket_.close(ignored_ec);
+
+    has_closed_ = true;
 
     if (close_ssl) {
       stop_inner_io_context();
@@ -667,5 +702,6 @@ class coro_rpc_client {
   bool is_timeout_ = false;
 
   uint32_t client_id_ = 0;
+  std::atomic<bool> has_closed_ = false;
 };
 }  // namespace coro_rpc
