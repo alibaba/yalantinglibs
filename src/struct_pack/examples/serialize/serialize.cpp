@@ -103,7 +103,8 @@ void basic_usage() {
   {
     person p3;
     auto buffer = struct_pack::serialize(p.age, p2.name);
-    [[maybe_unused]] auto result = struct_pack::deserialize_to(p3.age, buffer, p3.name);
+    [[maybe_unused]] auto result =
+        struct_pack::deserialize_to(p3.age, buffer, p3.name);
     assert(result == struct_pack::errc{});
     assert(p3.age == p.age);
     assert(p3.name == p2.name);
