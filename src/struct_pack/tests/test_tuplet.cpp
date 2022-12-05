@@ -74,7 +74,7 @@ template <typename Tuple>
 void test_tuple_alignment() {
   Tuple t;
   const auto base_addr{reinterpret_cast<uintptr_t>(&t)};
-  size_t offset{0}, index{0};
+  size_t offset{0};
 
   tuple_for_each(t, [&](auto& element) {
     using element_type = std::decay_t<decltype(element)>;

@@ -38,7 +38,7 @@ inline int start_server(int port) {
     std::thread thrd{[] {
       pool.run();
     }};
-    auto ec = server->start();
+    [[maybe_unused]] auto ec = server->start();
     assert(ec == std::errc{});
     pool.stop();
     thrd.join();

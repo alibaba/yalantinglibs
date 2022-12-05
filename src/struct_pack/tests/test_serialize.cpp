@@ -666,32 +666,32 @@ TEST_CASE("array test") {
   {
     ar0[0] = test_str;
     auto ret = deserialize<decltype(ar0)>(serialize(ar0));
-    assert(ret);
-    assert(ret.value()[0] == test_str);
+    CHECK(ret);
+    CHECK(ret.value()[0] == test_str);
   }
   {
     ar1[7] = test_str;
     auto ret = deserialize<decltype(ar1)>(serialize(ar1));
-    assert(ret);
-    assert(ret.value()[7] == test_str);
+    CHECK(ret);
+    CHECK(ret.value()[7] == test_str);
   }
   {
     ar2[56] = test_str;
     auto ret = deserialize<decltype(ar2)>(serialize(ar2));
-    assert(ret);
-    assert(ret.value()[56] == test_str);
+    CHECK(ret);
+    CHECK(ret.value()[56] == test_str);
   }
   {
     ar3[117] = test_str;
-    auto ret = deserialize_to(ar3_1, serialize(ar3));
-    assert(ret == struct_pack::errc{});
-    assert(ar3_1[117] == test_str);
+    [[maybe_unused]] auto ret = deserialize_to(ar3_1, serialize(ar3));
+    CHECK(ret == struct_pack::errc{});
+    CHECK(ar3_1[117] == test_str);
   }
   {
     ar4[15472] = test_str;
     auto ret = deserialize_to(ar4_1, serialize(ar4));
-    assert(ret == struct_pack::errc{});
-    assert(ar4_1[15472] == test_str);
+    CHECK(ret == struct_pack::errc{});
+    CHECK(ar4_1[15472] == test_str);
   }
 }
 

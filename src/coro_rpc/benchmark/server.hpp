@@ -36,7 +36,7 @@ inline int start_server(coro_rpc::coro_rpc_server& server) {
     std::thread thrd{[] {
       pool.run();
     }};
-    auto ec = server.start();
+    [[maybe_unused]] auto ec = server.start();
     assert(ec == std::errc{});
     pool.stop();
     thrd.join();

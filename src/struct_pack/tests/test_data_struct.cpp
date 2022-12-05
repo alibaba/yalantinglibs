@@ -216,7 +216,7 @@ TEST_CASE("test_trivial_copy_tuple") {
       !std::is_same_v<decltype(detail::get_types(tp)), std::tuple<int, int>>);
   static_assert(get_type_code<decltype(tp)>() !=
                 get_type_code<std::tuple<int, int>>());
-  constexpr auto i = get_type_literal<decltype(tp)>();
+  [[maybe_unused]] constexpr auto i = get_type_literal<decltype(tp)>();
   static_assert(get_type_literal<decltype(tp)>() !=
                 get_type_literal<std::tuple<int, int>>());
 
