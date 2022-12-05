@@ -6,7 +6,7 @@
 
 async_simple::coro::Lazy<void> test(coro_rpc::coro_rpc_client &client,
                                     auto filename) {
-  auto ret = co_await client.connect("127.0.0.1", "9000");
+  [[maybe_unused]] auto ret = co_await client.connect("127.0.0.1", "9000");
   assert(ret == std::errc{});
 
   auto result = co_await client.call<echo>("hello lantinglibs");

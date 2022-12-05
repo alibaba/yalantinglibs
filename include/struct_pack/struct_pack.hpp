@@ -114,7 +114,7 @@ using unexpect_t = tl::unexpect_t;
 #endif
 
 inline std::error_code make_error_code(struct_pack::errc err) {
-  return std::error_code((std::underlying_type_t<errc> &)err,
+  return std::error_code(static_cast<int>(err),
                          struct_pack::detail::category());
 }
 

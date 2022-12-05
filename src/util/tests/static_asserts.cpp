@@ -63,16 +63,18 @@ constexpr void meta_string_tests() {
   constexpr meta_string subobject1{"This meta_string object"};
   constexpr meta_string subobject2{"is constructed by several subobjects"};
   constexpr meta_string subobject3{"which are concatenated together."};
-  constexpr meta_string str_by_subobjects{subobject1, subobject2, subobject3};
+  [[maybe_unused]] constexpr meta_string str_by_subobjects{
+      subobject1, subobject2, subobject3};
 
-  constexpr meta_string str_by_literal{
+  [[maybe_unused]] constexpr meta_string str_by_literal{
       "This meta_string object is constructed by a string literal."};
 
-  constexpr meta_string str_by_char_sequence{'C', 'H', 'A', 'R'};
+  [[maybe_unused]] constexpr meta_string str_by_char_sequence{'C', 'H', 'A',
+                                                              'R'};
   constexpr std::string_view fragment1{"This meta_string object"};
   constexpr std::string_view fragment2{"Tis constructed by several spans"};
   constexpr std::string_view fragment3{"which are concatenated together."};
-  constexpr meta_string str_by_spans{
+  [[maybe_unused]] constexpr meta_string str_by_spans{
       std::span<const char, fragment1.size()>{fragment1},
       std::span<const char, fragment2.size()>{fragment2},
       std::span<const char, fragment3.size()>{fragment3}};

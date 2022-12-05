@@ -95,7 +95,7 @@ void basic_usage() {
     auto buffer = struct_pack::serialize(p.age, p2.name);
     auto result = struct_pack::deserialize<int, std::string>(buffer);
     assert(result);  // no error
-    auto &&[age, name] = result.value();
+    [[maybe_unused]] auto &&[age, name] = result.value();
     assert(age == p.age);
     assert(name == p2.name);
   }
@@ -103,7 +103,8 @@ void basic_usage() {
   {
     person p3;
     auto buffer = struct_pack::serialize(p.age, p2.name);
-    auto result = struct_pack::deserialize_to(p3.age, buffer, p3.name);
+    [[maybe_unused]] auto result =
+        struct_pack::deserialize_to(p3.age, buffer, p3.name);
     assert(result == struct_pack::errc{});
     assert(p3.age == p.age);
     assert(p3.name == p2.name);

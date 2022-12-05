@@ -771,7 +771,8 @@ calculate_payload_size(const T &item, const Args &...items);
 
 template <typename T>
 constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
-  static_assert((get_type_id<std::remove_cvref_t<T>>(), true));
+  constexpr auto id = get_type_id<std::remove_cvref_t<T>>();
+  static_assert(id != detail::type_id::type_end_flag);
   using type = std::remove_cvref_t<decltype(item)>;
   static_assert(!std::is_pointer_v<type>);
   size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
@@ -1000,7 +1001,7 @@ class packer {
   template <serialize_config conf, std::size_t size_type, typename T,
             typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
-    serialize_metainfo<conf, size_type == 1>(t, args...);
+    serialize_metainfo<conf, size_type == 1, T, Args...>();
     serialize_many<size_type>(t, args...);
   }
 
@@ -1035,8 +1036,7 @@ class packer {
   }
   template <serialize_config conf, bool is_default_size_type, typename T,
             typename... Args>
-  constexpr void STRUCT_PACK_INLINE serialize_metainfo(const T &t,
-                                                       const Args &...args) {
+  constexpr void STRUCT_PACK_INLINE serialize_metainfo() {
     constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
                                (is_default_size_type ? 0 : 1);
     std::memcpy(data_ + pos_, &hash_head, sizeof(uint32_t));
@@ -1122,6 +1122,8 @@ class packer {
       if constexpr (trivially_copyable_container<type>) {
         using value_type = typename type::value_type;
         auto container_size = 1ull * size * sizeof(value_type);
+        if (container_size >= PTRDIFF_MAX)
+          unreachable();
         std::memcpy(data_ + pos_, item.data(), container_size);
         pos_ += container_size;
         return;
@@ -1545,7 +1547,7 @@ class unpacker {
         // value is the element of map/set container.
         // if the type is set, then value is set::value_type;
         // if the type is map, then value is pair<key_type,mapped_type>
-        decltype([]<typename T>(const T &t) {
+        decltype([]<typename T>(const T &) {
           if constexpr (map_container<T>) {
             return std::pair<typename T::key_type, typename T::mapped_type>{};
           }
@@ -1553,7 +1555,7 @@ class unpacker {
             return typename T::value_type{};
           }
         }(item)) value;
-        for (int i = 0; i < size; ++i) {
+        for (size_t i = 0; i < size; ++i) {
           code = deserialize_one<size_type, NotSkip>(value);
           if (code != struct_pack::errc{}) [[unlikely]] {
             return code;
@@ -1576,6 +1578,8 @@ class unpacker {
             }
             else {
               item.resize(size);
+              if (mem_sz >= PTRDIFF_MAX)
+                unreachable();
               std::memcpy(&item[0], data_ + pos_, mem_sz);
             }
           }
