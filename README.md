@@ -37,14 +37,14 @@ English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/
 
 1.define a rpc function as a local normal function.
 
-```c++
+```cpp
 // rpc_service.hpp
 inline std::string echo(std::string str) { return str; }
 ```
 
 2.register rpc function and start a server
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -58,7 +58,7 @@ int main() {
 
 3.rpc client call rpc service
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_client.hpp>
 
@@ -93,7 +93,7 @@ English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/
 [Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 01:32:20 of the vedio record.
 
 ### quick example
-```c++
+```cpp
 struct person {
   int64_t id;
   std::string name;
@@ -115,7 +115,7 @@ See more examples [here](./src/struct_pack/examples/).
 reflection-based json lib, very easy to do struct to json and json to struct.
 
 ### quick example
-```c++
+```cpp
 #include "struct_json/json_reader.h"
 #include "struct_json/json_writer.h"
 
