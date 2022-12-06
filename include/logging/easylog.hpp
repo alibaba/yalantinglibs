@@ -21,6 +21,8 @@
 
 #include <filesystem>
 
+#include "spdlog/common.h"
+
 namespace coro_rpc {
 struct easylog_options {
   spdlog::level::level_enum log_level = spdlog::level::debug;
@@ -40,15 +42,24 @@ struct source_location {
                             const char *function_name = __builtin_FUNCTION(),
                             unsigned int line = __builtin_LINE()) noexcept
       : file_name_(file_name), function_name_(function_name), line_(line) {}
-  constexpr const char *file_name() noexcept { return file_name_; }
-  constexpr const char *function_name() noexcept { return function_name_; }
-  constexpr unsigned int line() noexcept { return line_; }
+  constexpr const char *file_name() const noexcept { return file_name_; }
+  constexpr const char *function_name() const noexcept {
+    return function_name_;
+  }
+  constexpr unsigned int line() const noexcept { return line_; }
 
  private:
   const char *file_name_;
   const char *function_name_;
   const unsigned int line_;
 };
+
+[[nodiscard]] inline constexpr auto get_log_source_location(
+    const source_location &location) {
+  return spdlog::source_loc{location.file_name(),
+                            static_cast<std::int32_t>(location.line()),
+                            location.function_name()};
+}
 
 inline bool has_init_ = false;
 inline bool always_flush_ = false;
@@ -91,28 +102,34 @@ inline void log(spdlog::level::level_enum level, source_location location,
 
   switch (level) {
     case spdlog::level::trace:
-      spdlog::trace("{}:{}: {}", p.filename().string(), location.line(),
-                    fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::trace, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::debug:
-      spdlog::debug("{}:{}: {}", p.filename().string(), location.line(),
-                    fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::debug, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::info:
-      spdlog::info("{}:{}: {}", p.filename().string(), location.line(),
-                   fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::info, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::warn:
-      spdlog::warn("{}:{}: {}", p.filename().string(), location.line(),
-                   fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::warn, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::err:
-      spdlog::error("{}:{}: {}", p.filename().string(), location.line(),
-                    fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::err, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::critical:
-      spdlog::critical("{}:{}: {}", p.filename().string(), location.line(),
-                       fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::critical, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::off:
     case spdlog::level::n_levels:
