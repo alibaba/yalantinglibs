@@ -21,6 +21,8 @@
 
 #include <filesystem>
 
+#include "spdlog/common.h"
+
 namespace coro_rpc {
 struct easylog_options {
   spdlog::level::level_enum log_level = spdlog::level::debug;
@@ -105,8 +107,9 @@ inline void log(spdlog::level::level_enum level, source_location location,
                                         std::forward<Args>(args)...);
       break;
     case spdlog::level::debug:
-      spdlog::debug("{}:{}: {}", p.filename().string(), location.line(),
-                    fmt::format(fmt, std::forward<Args>(args)...));
+      spdlog::default_logger_raw()->log(get_log_source_location(location),
+                                        spdlog::level::debug, fmt,
+                                        std::forward<Args>(args)...);
       break;
     case spdlog::level::info:
       spdlog::default_logger_raw()->log(get_log_source_location(location),
