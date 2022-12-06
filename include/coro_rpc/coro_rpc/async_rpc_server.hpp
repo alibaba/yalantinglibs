@@ -25,7 +25,6 @@
 
 #include "asio_util/io_context_pool.hpp"
 #include "async_connection.hpp"
-#include "common_service.hpp"
 #include "coro_rpc/coro_rpc/coro_rpc_server.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "remote.hpp"

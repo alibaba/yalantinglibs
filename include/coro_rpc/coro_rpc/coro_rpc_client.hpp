@@ -29,7 +29,6 @@
 
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
-#include "common_service.hpp"
 #include "coro_rpc/coro_rpc/connection.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "logging/easylog.hpp"
@@ -87,37 +86,68 @@ using rpc_return_type_t = typename rpc_return_type<T>::type;
  * }
  * ```
  */
+
+struct client_options {
+  uint32_t client_id = 0;
+  std::shared_ptr<asio::io_context>
+      io_context;  // if nullptr, use internal io_context
+#ifdef ENABLE_SSL
+  std::shared_ptr<asio::ssl::context> ssl_context;  // ssl context
+#endif
+};
+
 class coro_rpc_client {
  public:
-  /*!
-   * Create client with io_context
-   * @param io_context asio io_context, async event handler
-   */
-  coro_rpc_client(asio::io_context &io_context, uint32_t client_id = 0)
-      : io_context_ptr_(&io_context),
-        executor_(io_context),
-        socket_(io_context),
-        client_id_(client_id) {
-    read_buf_.resize(default_read_buf_size_);
-  }
+  coro_rpc_client(uint32_t client_id = 0) {
+    client_id_ = client_id;
+    client_owns_io_context_ = true;
+    io_context_ = std::make_shared<asio::io_context>();
+    executor_ = std::make_unique<asio_util::AsioExecutor>(*io_context_);
+    socket_ = std::make_unique<asio::ip::tcp::socket>(*io_context_);
 
-  /*!
-   * Create client
-   */
-  coro_rpc_client(uint32_t client_id = 0)
-      : io_context_ptr_(inner_io_context_.get()),
-        executor_(*inner_io_context_),
-        socket_(*inner_io_context_),
-        client_id_(client_id) {
     std::promise<void> promise;
     thd_ = std::thread([this, &promise] {
-      asio::io_context::work work(*inner_io_context_);
+      asio::io_context::work work(*io_context_);
       promise.set_value();
-      inner_io_context_->run();
+      io_context_->run();
     });
     promise.get_future().wait();
   }
 
+  coro_rpc_client(const client_options &options)
+      : client_id_(options.client_id) {
+    if (options.io_context) {
+      client_owns_io_context_ = false;
+      io_context_ = options.io_context;
+      executor_ = std::make_unique<asio_util::AsioExecutor>(*io_context_);
+      socket_ = std::make_unique<asio::ip::tcp::socket>(*io_context_);
+
+      read_buf_.resize(default_read_buf_size_);
+    }
+    else {
+      client_owns_io_context_ = true;
+      io_context_ = std::make_shared<asio::io_context>();
+      executor_ = std::make_unique<asio_util::AsioExecutor>(*io_context_);
+      socket_ = std::make_unique<asio::ip::tcp::socket>(*io_context_);
+
+      std::promise<void> promise;
+      thd_ = std::thread([this, &promise] {
+        asio::io_context::work work(*io_context_);
+        promise.set_value();
+        io_context_->run();
+      });
+      promise.get_future().wait();
+    }
+
+#ifdef ENABLE_SSL
+    ssl_ctx_ = options.ssl_context;
+    if (ssl_ctx_) {
+      ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              *socket_, *ssl_ctx_);
+    }
+#endif
+  }
   /*!
    * Check the client closed or not
    *
@@ -140,11 +170,6 @@ class coro_rpc_client {
       std::string host, std::string port,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
-#ifdef ENABLE_SSL
-    if (!ssl_init_ret_) {
-      co_return std::errc::not_connected;
-    }
-#endif
     if (has_closed_) [[unlikely]] {
       easylog::error(
           "a closed client is not allowed connect again, please create a new "
@@ -154,13 +179,13 @@ class coro_rpc_client {
 
     easylog::info("client_id {} begin to connect {}", client_id_, port);
     async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(get_io_context());
+    asio_util::period_timer timer(*io_context_);
     timeout(timer, timeout_duration, promise, "connect timer canceled")
-        .via(&executor_)
+        .via(executor_.get())
         .detach();
 
-    std::error_code ec = co_await asio_util::async_connect(get_io_context(),
-                                                           socket_, host, port);
+    std::error_code ec =
+        co_await asio_util::async_connect(*io_context_, *socket_, host, port);
     std::error_code err_code;
     timer.cancel(err_code);
 
@@ -178,8 +203,7 @@ class coro_rpc_client {
     }
 
 #ifdef ENABLE_SSL
-    if (use_ssl_) {
-      assert(ssl_stream_);
+    if (ssl_stream_) {
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
@@ -192,41 +216,6 @@ class coro_rpc_client {
 
     co_return std::errc{};
   }
-#ifdef ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path,
-                              const std::string &cert_file,
-                              const std::string &domain = "localhost") {
-    try {
-      ssl_init_ret_ = false;
-      easylog::info("init ssl: {}", domain);
-      auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
-      easylog::info("current path {}",
-                    std::filesystem::current_path().string());
-      if (file_exists(full_cert_file)) {
-        easylog::info("load {}", full_cert_file.string());
-        ssl_ctx_.load_verify_file(full_cert_file);
-      }
-      else {
-        easylog::info("no certificate file {}", full_cert_file.string());
-        return ssl_init_ret_;
-      }
-
-      ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-
-      // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
-
-      ssl_ctx_.set_verify_callback(asio::ssl::host_name_verification(domain));
-      ssl_stream_ =
-          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_, ssl_ctx_);
-      use_ssl_ = true;
-      ssl_init_ret_ = true;
-    } catch (std::exception &e) {
-      easylog::error("init ssl failed: {}", e.what());
-    }
-    return ssl_init_ret_;
-  }
-#endif
 
   ~coro_rpc_client() { sync_close(); }
 
@@ -272,30 +261,22 @@ class coro_rpc_client {
     }
 
     rpc_result<R> ret;
-#ifdef ENABLE_SSL
-    if (!ssl_init_ret_) {
-      ret = rpc_result<R>{unexpect_t{},
-                          rpc_error{std::errc::not_connected, "not connected"}};
-      co_return ret;
-    }
-#endif
 
     static_check<func, Args...>();
 
     async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(get_io_context());
+    asio_util::period_timer timer(*io_context_);
     timeout(timer, duration, promise, "rpc call timer canceled")
-        .via(&executor_)
+        .via(executor_.get())
         .detach();
 
 #ifdef ENABLE_SSL
-    if (use_ssl_) {
-      assert(ssl_stream_);
+    if (ssl_stream_) {
       ret = co_await call_impl<func>(*ssl_stream_, std::forward<Args>(args)...);
     }
     else {
 #endif
-      ret = co_await call_impl<func>(socket_, std::forward<Args>(args)...);
+      ret = co_await call_impl<func>(*socket_, std::forward<Args>(args)...);
 #ifdef ENABLE_SSL
     }
 #endif
@@ -432,7 +413,7 @@ class coro_rpc_client {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
       easylog::info("client_id {} shutdown", client_id_);
-      socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
+      socket_->shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
       co_return r;
@@ -607,7 +588,7 @@ class coro_rpc_client {
 
     easylog::info("client_id {} close", client_id_);
 
-    co_await asio_util::async_close(socket_);
+    co_await asio_util::async_close(*socket_);
     has_closed_ = true;
   }
 
@@ -636,8 +617,8 @@ class coro_rpc_client {
     easylog::info("client_id {} close", client_id_);
 
     asio::error_code ignored_ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-    socket_.close(ignored_ec);
+    socket_->shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+    socket_->close(ignored_ec);
 
     has_closed_ = true;
 
@@ -647,28 +628,25 @@ class coro_rpc_client {
   }
 
   void stop_inner_io_context() {
+    if (!client_owns_io_context_)
+      return;
     if (thd_.joinable()) {
       if (thd_.get_id() == std::this_thread::get_id()) {
         easylog::warn("client_id {} avoid join self", client_id_);
         std::thread([thd = std::move(thd_),
-                     io_ctx = std::move(inner_io_context_)]() mutable {
+                     io_ctx = std::move(io_context_)]() mutable {
           io_ctx->stop();
           if (thd.joinable())
             thd.join();
         }).detach();
       }
       else {
-        inner_io_context_->stop();
+        io_context_->stop();
         thd_.join();
       }
     }
 
     return;
-  }
-
-  asio::io_context &get_io_context() {
-    assert(io_context_ptr_);
-    return *io_context_ptr_;
   }
 
 #ifdef UNIT_TEST_INJECT
@@ -684,24 +662,22 @@ class coro_rpc_client {
   }
 #endif
  private:
-  std::shared_ptr<asio::io_context> inner_io_context_ =
-      std::make_shared<asio::io_context>();
-  asio::io_context *io_context_ptr_ = nullptr;
+  uint32_t client_id_ = 0;
+  std::shared_ptr<asio::io_context> io_context_;
+  bool client_owns_io_context_ = false;
+
   std::thread thd_;
-  asio_util::AsioExecutor executor_;
-  asio::ip::tcp::socket socket_;
+  std::unique_ptr<asio_util::AsioExecutor> executor_;
+  std::unique_ptr<asio::ip::tcp::socket> socket_;
   std::vector<std::byte> read_buf_;
   std::size_t default_read_buf_size_ = 256;
 
 #ifdef ENABLE_SSL
-  asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
+  std::shared_ptr<asio::ssl::context> ssl_ctx_;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
-  bool ssl_init_ret_ = true;
-  bool use_ssl_ = false;
 #endif
-  bool is_timeout_ = false;
 
-  uint32_t client_id_ = 0;
+  bool is_timeout_ = false;
   std::atomic<bool> has_closed_ = false;
 };
 }  // namespace coro_rpc

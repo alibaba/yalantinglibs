@@ -33,7 +33,6 @@
 #include "asio_util/asio_util.hpp"
 #include "asio_util/io_context_pool.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "logging/easylog.hpp"
@@ -59,13 +58,20 @@ class coro_rpc_server {
     stop       // server is stopping/stopped
   };
 
+  struct server_options {
+    size_t thread_num;  // the number of io_context
+    uint16_t port;      // the server port to listen
+    uint32_t conn_timeout =
+        0;  // client connection timeout in s, 0 - no timeout
+#ifdef ENABLE_SSL
+    std::shared_ptr<asio::ssl::context> ssl_context;  // ssl context
+#endif
+  };
+
  public:
   /*!
    * TODO: add doc
-   * @param thread_num the number of io_context.
-   * @param port the server port to listen.
-   * @param conn_timeout_duration client connection timeout. 0 for no timeout.
-   *                              default no timeout.
+   * @param server_options server options
    */
   coro_rpc_server(size_t thread_num, unsigned short port,
                   std::chrono::steady_clock::duration conn_timeout_duration =
@@ -77,18 +83,23 @@ class coro_rpc_server {
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
+  coro_rpc_server(const server_options &options)
+      : pool_(options.thread_num)
+        ,acceptor_(pool_.get_io_context())
+        ,port_(options.port)
+        ,executor_(pool_.get_io_context())
+        ,conn_timeout_duration_(std::chrono::seconds(options.conn_timeout))
+#ifdef ENABLE_SSL
+        ,context_(options.ssl_context)
+#endif
+  ,flag_{stat::init} {}
+
   ~coro_rpc_server() {
     // FIXME: when coro_rpc_server is global variable, spdlog's log level may
     // destructe first, which cause crash.
     // easylog::info("coro_rpc_server will quit");
     stop();
   }
-
-#ifdef ENABLE_SSL
-  void init_ssl_context(const ssl_configure &conf) {
-    use_ssl_ = init_ssl_context_helper(context_, conf);
-  }
-#endif
 
   /*!
    * Start the server in blocking mode
@@ -315,8 +326,8 @@ class coro_rpc_server {
 
   async_simple::coro::Lazy<void> start_one(auto conn) noexcept {
 #ifdef ENABLE_SSL
-    if (use_ssl_) {
-      conn->init_ssl(context_);
+    if (context_) {
+      conn->init_ssl(*context_);
     }
 #endif
     co_await conn->start();
@@ -352,8 +363,7 @@ class coro_rpc_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex mtx_;
 #ifdef ENABLE_SSL
-  asio::ssl::context context_{asio::ssl::context::sslv23};
-  bool use_ssl_ = false;
+  std::shared_ptr<asio::ssl::context> context_;
 #endif
 };
 }  // namespace coro_rpc

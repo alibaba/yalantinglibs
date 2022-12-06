@@ -81,13 +81,14 @@ struct TesterConfig {
 struct ServerTester : TesterConfig {
   ServerTester(TesterConfig config)
       : TesterConfig(config), port_(std::to_string(config.port)) {
+    io_context_ = std::make_shared<asio::io_context>();
     if (use_outer_io_context) {
       std::promise<void> promise;
       auto future = promise.get_future();
       thd_ = std::thread([this, &promise]() {
-        asio::io_context::work work(io_context_);
+        asio::io_context::work work(*io_context_);
         promise.set_value();
-        io_context_.run();
+        io_context_->run();
       });
       future.wait();
     }
@@ -98,7 +99,7 @@ struct ServerTester : TesterConfig {
   }
   ~ServerTester() {
     if (use_outer_io_context) {
-      io_context_.stop();
+      io_context_->stop();
       thd_.join();
     }
     g_action = coro_rpc::inject_action::nothing;
@@ -134,20 +135,14 @@ struct ServerTester : TesterConfig {
     std::errc ec;
     int retry = 4;
     for (int i = 0; i < retry; i++) {
+      client_options opt;
+      opt.client_id = g_client_id++;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        opt.io_context = io_context_;
       }
-      else {
-        client = std::make_shared<coro_rpc_client>(g_client_id++);
-      }
-#ifdef ENABLE_SSL
-      if (use_ssl) {
-        bool ok = client->init_ssl("../openssl_files", "server.crt");
-        REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-      }
-#endif
-      g_action = action;
+      client = std::make_shared<coro_rpc_client>(opt);
 
+      g_action = action;
       if (sync_client) {
         ec = client->sync_connect("127.0.0.1", port_);
       }
@@ -361,18 +356,12 @@ struct ServerTester : TesterConfig {
     }
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
+      client_options opt;
+      opt.client_id = g_client_id++;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        opt.io_context = io_context_;
       }
-      else {
-        client = std::make_shared<coro_rpc_client>(g_client_id++);
-      }
-#ifdef ENABLE_SSL
-      if (use_ssl) {
-        bool ok = client->init_ssl("../openssl_files", "server.crt");
-        REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-      }
-#endif
+      client = std::make_shared<coro_rpc_client>(opt);
       return client;
     };
     auto client = init_client();
@@ -434,7 +423,7 @@ struct ServerTester : TesterConfig {
         ret.error().code == std::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   };
-  asio::io_context io_context_;
+  std::shared_ptr<asio::io_context> io_context_;
   std::string port_;
   std::thread thd_;
   ns_login::LoginService login_service_;

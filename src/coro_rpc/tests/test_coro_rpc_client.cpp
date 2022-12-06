@@ -45,12 +45,12 @@ class ClientTester {
 
 static unsigned short coro_rpc_server_port = 8803;
 Lazy<std::shared_ptr<coro_rpc_client>> create_client(
-    asio::io_context& io_context, std::string port) {
-  auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
-#ifdef ENABLE_SSL
-  bool ok = client->init_ssl("../openssl_files", "server.crt");
-  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-#endif
+    std::shared_ptr<asio::io_context> io_context, std::string port) {
+  client_options opt;
+  opt.client_id = g_client_id++;
+  opt.io_context = io_context;
+  auto client = std::make_shared<coro_rpc_client>(opt);
+
   auto ec = co_await client->connect("127.0.0.1", port);
   REQUIRE_MESSAGE(ec == err_ok, make_error_code(ec).message());
   co_return client;
@@ -59,13 +59,14 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 TEST_CASE("testing client") {
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
-  asio::io_context io_context;
+  std::shared_ptr<asio::io_context> io_context =
+      std::make_shared<asio::io_context>();
   std::promise<void> promise;
   auto future = promise.get_future();
   std::thread thd([&io_context, &promise] {
-    asio::io_context::work work(io_context);
+    asio::io_context::work work(*io_context);
     promise.set_value();
-    io_context.run();
+    io_context->run();
   });
 
   future.wait();
@@ -146,7 +147,7 @@ TEST_CASE("testing client") {
   }
 
   server.stop();
-  io_context.stop();
+  io_context->stop();
   thd.join();
 }
 
@@ -154,10 +155,10 @@ TEST_CASE("testing client with inject server") {
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   easylog::info("inject server port: {}", port);
-  asio::io_context io_context;
+  auto io_context = std::make_shared<asio::io_context>();
   std::thread thd([&io_context] {
-    asio::io_context::work work(io_context);
-    io_context.run();
+    asio::io_context::work work(*io_context);
+    io_context->run();
   });
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef ENABLE_SSL
@@ -205,7 +206,7 @@ TEST_CASE("testing client with inject server") {
   remove_handler<hello>();
 
   server.stop();
-  io_context.stop();
+  io_context->stop();
   thd.join();
   g_action = inject_action::nothing;
 }
