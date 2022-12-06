@@ -1122,9 +1122,10 @@ class packer {
       if constexpr (trivially_copyable_container<type>) {
         using value_type = typename type::value_type;
         auto container_size = 1ull * size * sizeof(value_type);
-        if (container_size >= PTRDIFF_MAX)
+        if (container_size >= PTRDIFF_MAX) [[unlikely]]
           unreachable();
-        std::memcpy(data_ + pos_, item.data(), container_size);
+        else
+          std::memcpy(data_ + pos_, item.data(), container_size);
         pos_ += container_size;
         return;
       }
@@ -1578,9 +1579,10 @@ class unpacker {
             }
             else {
               item.resize(size);
-              if (mem_sz >= PTRDIFF_MAX)
+              if (mem_sz >= PTRDIFF_MAX) [[unlikely]]
                 unreachable();
-              std::memcpy(&item[0], data_ + pos_, mem_sz);
+              else
+                std::memcpy(item.data(), data_ + pos_, mem_sz);
             }
           }
           pos_ += mem_sz;
