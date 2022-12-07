@@ -816,7 +816,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     }
   }
   else if constexpr (variant<type>) {
-    ret.total += sizeof(uint8_t);  // why is 32bit?
+    ret.total += sizeof(uint8_t);
     if (item.index() != std::variant_npos) [[likely]] {
       ret += std::visit(
           [](const auto &e) {
