@@ -1,3 +1,6 @@
+if(NOT BUILD_SP_BENCHMARK)
+    return()
+endif()
 option(MSGPACK_USE_BOOST OFF)
 find_package(Protobuf REQUIRED)
 execute_process(
