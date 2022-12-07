@@ -48,7 +48,7 @@ struct_pack支持以下约束类型：
 | variant       | variant类型                        | std::variant, boost::variant                                                                                                        |
 | expected      | expected类型，包含期望结果或错误码 | std::expected, tl::expected                                                                                                         |
 
-下面我们列出各类型的详细约束条件：
+下面我们列出各类型的详细约束条件, 用户可以根据约束条件来定义自己的数据结构：
 
 ## container类型
 
@@ -120,6 +120,7 @@ concept string =  requires(Type container) {
 ```
 
 如果该类型的内存布局是连续的，struct_pack会启用memcpy优化。
+如果序列化到string_view类型，struct_pack会启用零拷贝优化。
 
 ### array类型
 
@@ -223,11 +224,10 @@ struct person {
 和
 
 ```cpp
-struct person {
-  int age;
-  std::string name;
-};
+std::tuple<int,std::string>
 ```
+
+这两者是不同的类型，前者是平凡的结构体，而后者是非平凡的。
 
 ## 复合类型
 
