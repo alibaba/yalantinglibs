@@ -2,7 +2,7 @@
 
 [TOC]
 
-- [struct_pack简介](#struct_pack简介)
+- [struct\_pack简介](#struct_pack简介)
   - [序列化](#序列化)
     - [基本用法](#基本用法)
     - [指定序列化返回的容器类型](#指定序列化返回的容器类型)
@@ -22,8 +22,10 @@
     - [测试环境](#测试环境)
     - [测试结果](#测试结果)
   - [向前/向后兼容性](#向前向后兼容性)
-  - [为什么struct_pack更快？](#为什么struct_pack更快)
+  - [为什么struct\_pack更快？](#为什么struct_pack更快)
   - [附录](#附录)
+  - [关于struct\_pack类型系统](#关于struct_pack类型系统)
+  - [关于struct\_pack的编码与布局](#关于struct_pack的编码与布局)
     - [测试代码](#测试代码)
 
 struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。用户无需定义任何DSL，宏或模板代码，struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。
@@ -291,6 +293,14 @@ struct_pack保证这两个类可以通过序列化和反序列化实现安全的
 6. 编译期类型计算允许struct_pack根据不同的类型生成不同的代码。因此我们可以根据不同的类型的特点做优化。例如对于连续容器可以直接memcpy，对于string_view反序列化时可以采用零拷贝优化。
 
 ## 附录
+
+## 关于struct_pack类型系统
+
+[struct_pack的类型系统](./struct_pack_type_system_CN.md)
+
+## 关于struct_pack的编码与布局
+
+[struct_pack的编码与布局](./struct_pack_layout_CN.md)
 
 ### 测试代码
 
