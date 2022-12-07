@@ -17,7 +17,6 @@ message(STATUS "--------------yLT_ENABLE_PROJECTS: ${yLT_ENABLE_PROJECTS}")
 
 foreach(module ${yLT_ENABLE_PROJECTS})
     set(module_location ${CMAKE_SOURCE_DIR}/src/${module})
-    message(${module_location})
     if(EXISTS ${module_location})
         add_subdirectory(${module_location})
         if(BUILD_UNIT_TESTS AND EXISTS "${module_location}/tests")
