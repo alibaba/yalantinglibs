@@ -152,13 +152,15 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::any get_tag() { return tag_; }
 
  private:
-  void log(std::errc err, const std::string err_prefix = "") {
+  void log(std::errc err, const std::string err_prefix = "",
+           source_location loc = {}) {
 #ifdef UNIT_TEST_INJECT
-    easylog::info("{} {} client_id {} write_queue size {}", err_prefix,
+    easylog::info(loc, "{} {} client_id {} write_queue size {}", err_prefix,
                   std::make_error_code(err).message(), client_id_,
                   write_queue_.size());
 #else
-    easylog::info("{} {}", err_prefix, std::make_error_code(err).message());
+    easylog::info(loc, "{} {}", err_prefix,
+                  std::make_error_code(err).message());
 #endif
   }
 

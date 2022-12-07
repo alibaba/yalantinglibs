@@ -34,9 +34,6 @@ struct easylog_options {
   int max_files = 5;
 };
 
-namespace easylog {
-
-namespace {
 struct source_location {
   constexpr source_location(const char *file_name = __builtin_FILE(),
                             const char *function_name = __builtin_FUNCTION(),
@@ -53,14 +50,14 @@ struct source_location {
   const char *function_name_;
   const unsigned int line_;
 };
-
+namespace easylog {
 [[nodiscard]] inline constexpr auto get_log_source_location(
     const source_location &location) {
   return spdlog::source_loc{location.file_name(),
                             static_cast<std::int32_t>(location.line()),
                             location.function_name()};
 }
-
+namespace {
 inline bool has_init_ = false;
 inline bool always_flush_ = false;
 
@@ -201,10 +198,19 @@ struct info {
                  source_location location = {}) {
     log(spdlog::level::info, location, fmt, std::forward<Args>(args)...);
   }
+
+  constexpr info(source_location location, fmt::format_string<Args...> fmt,
+                 Args &&...args) {
+    log(spdlog::level::info, location, fmt, std::forward<Args>(args)...);
+  }
 };
 
 template <typename... Args>
 info(fmt::format_string<Args...> fmt, Args &&...args) -> info<Args...>;
+
+template <typename... Args>
+info(source_location location, fmt::format_string<Args...> fmt, Args &&...args)
+    -> info<Args...>;
 
 template <typename... Args>
 struct warn {
