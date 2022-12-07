@@ -1,4 +1,4 @@
-name: Ubuntu 20.04 (clang)
+name: Ubuntu 22.04 (clang)
 
 on:
   push:
