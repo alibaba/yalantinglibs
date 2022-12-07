@@ -37,16 +37,16 @@ struct_pack支持的类型主要包括：基本类型，约束类型，复合类
 
 struct_pack支持以下约束类型：
 
-| 类型名        | 含义                               | 例如                                                                                                              |
-| ------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| container     | 顺序容器类型，存储了若干个元素     | std::vector, std::list, std::deque, folly::flat_vector                                                            |
-| set_container | 集合类型，存储了若干个键           | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                          |
-| map_container | 映射类型，存储了若干键值对         | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                           |
-| string        | 字符串类型                         | std::string, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
-| array         | 数组类型，其长度编译期确定         | C语言内置数组类型，std::array                                                                                     |
-| optional      | optional类型                       | std::optional, boost::optional                                                                                    |
-| variant       | variant类型                        | std::variant, boost::variant                                                                                      |
-| expected      | expected类型，包含期望结果或错误码 | std::expected, tl::expected                                                                                       |
+| 类型名        | 含义                               | 例如                                                                                                                                |
+| ------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| container     | 顺序容器类型，存储了若干个元素     | std::vector, std::list, std::deque, folly::flat_vector                                                                              |
+| set_container | 集合类型，存储了若干个键           | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                                            |
+| map_container | 映射类型，存储了若干键值对         | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                                             |
+| string        | 字符串类型                         | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
+| array         | 数组类型，其长度编译期确定         | C语言内置数组类型，std::array                                                                                                       |
+| optional      | optional类型                       | std::optional, boost::optional                                                                                                      |
+| variant       | variant类型                        | std::variant, boost::variant                                                                                                        |
+| expected      | expected类型，包含期望结果或错误码 | std::expected, tl::expected                                                                                                         |
 
 下面我们列出各类型的详细约束条件：
 
