@@ -12,24 +12,25 @@ struct_pack支持的类型主要包括：基本类型，约束类型，复合类
 包括：有符号和无符号的定长整数，浮点数，字符，布尔类型和空类型。
 
 下列表格列出了struct_pack支持的所有基本类型：   
-| 类型名         | 含义                        | 编码                |
-| -------------- | --------------------------- | ------------------- |
-| int8_t         | 有符号定长8位整数           | 补码                |
-| int16_t        | 有符号定长16位整数          | 补码                |
-| int32_t        | 有符号定长32位整数          | 补码                |
-| int64_t        | 有符号定长64位整数          | 补码                |
-| uint8_t        | 无符号定长8位整数           | 原码                |
-| uint16_t       | 无符号定长16位整数          | 原码                |
-| uint32_t       | 无符号定长32位整数          | 原码                |
-| uint64_t       | 无符号定长64位整数          | 原码                |
-| float          | 定长32位浮点数              | IEEE-754 单精度编码 |
-| double         | 定长64位整数                | IEEE-754 双精度编码 |
-| char8_t        | 8位字符                     | 原码                |
-| char16_t       | 16位字符                    | 原码                |
-| char32_t       | 32位字符                    | 原码                |
-| wchar_t        | wchar字符（长度取决于平台） | 原码                |
-| bool           | 布尔类型                    | 原码                |
-| std::monostate | 空类型                      | N/A                 |
+| 类型名          | 含义                        | 编码                |
+| --------------- | --------------------------- | ------------------- |
+| int8_t          | 有符号定长8位整数           | 补码                |
+| int16_t         | 有符号定长16位整数          | 补码                |
+| int32_t         | 有符号定长32位整数          | 补码                |
+| int64_t         | 有符号定长64位整数          | 补码                |
+| uint8_t         | 无符号定长8位整数           | 原码                |
+| uint16_t        | 无符号定长16位整数          | 原码                |
+| uint32_t        | 无符号定长32位整数          | 原码                |
+| uint64_t        | 无符号定长64位整数          | 原码                |
+| float           | 定长32位浮点数              | IEEE-754 单精度编码 |
+| double          | 定长64位整数                | IEEE-754 双精度编码 |
+| char8_t         | 8位字符                     | 原码                |
+| char16_t        | 16位字符                    | 原码                |
+| char32_t        | 32位字符                    | 原码                |
+| wchar_t         | wchar字符（长度取决于平台） | 原码                |
+| bool            | 布尔类型                    | 原码                |
+| enum/enum class | 枚举类型                    | 原码                |
+| std::monostate  | 空类型                      | N/A                 |
 
 ### 约束类型
 
@@ -45,7 +46,7 @@ struct_pack支持以下约束类型：
 | string        | 字符串类型                         | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
 | array         | 数组类型，其长度编译期确定         | C语言内置数组类型，std::array                                                                                                       |
 | optional      | optional类型                       | std::optional, boost::optional                                                                                                      |
-| variant       | variant类型                        | std::variant, boost::variant                                                                                                        |
+| variant       | variant类型                        | std::variant                                                                                                                        |
 | expected      | expected类型，包含期望结果或错误码 | std::expected, tl::expected                                                                                                         |
 
 下面我们列出各类型的详细约束条件, 用户可以根据约束条件来定义自己的数据结构：
@@ -72,7 +73,7 @@ concept container = requires(Type container) {
 
 ```cpp
 template <typename Type>
-concept container = requires(Type container) {
+concept set_ontainer = requires(Type container) {
   typename std::remove_cvref_t<Type>::value_type;
   typename std::remove_cvref_t<Type>::key_type;
   container.size();
@@ -87,7 +88,7 @@ concept container = requires(Type container) {
 
 ```cpp
 template <typename Type>
-concept container = requires(Type container) {
+concept map_container = requires(Type container) {
   typename std::remove_cvref_t<Type>::value_type;
   typename std::remove_cvref_t<Type>::mapped_type;
   container.size();
@@ -138,6 +139,7 @@ concept array = std::is_array_v<T> || requires(Type arr) {
 
 ### variant类型
 
+该类型只能为std::variant类型，是一个类型安全的union。variant包含的类型必须也是合法的struct_pack类型。
 
 ### expected类型
 
