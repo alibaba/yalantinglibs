@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
+#include <exception>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -172,8 +172,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t),
-        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t), [&]<typename... Args>(Args &&
+                                                  ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
@@ -744,11 +744,6 @@ consteval uint32_t get_types_code(std::index_sequence<I...>) {
   return get_types_code_impl<T, std::tuple_element_t<I, Tuple>...>();
 }
 
-[[noreturn]] STRUCT_PACK_INLINE void exit_valueless_variant() {
-  std::cerr << "Serialize Error! The variant is valueless!" << std::endl;
-  std::exit(EXIT_FAILURE);
-}
-
 struct size_info {
   std::size_t total;
   std::size_t size_cnt;
@@ -821,7 +816,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     }
   }
   else if constexpr (variant<type>) {
-    ret.total += sizeof(uint32_t);  // why is 32bit?
+    ret.total += sizeof(uint8_t);  // why is 32bit?
     if (item.index() != std::variant_npos) [[likely]] {
       ret += std::visit(
           [](const auto &e) {
@@ -830,7 +825,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
           item);
     }
     else [[unlikely]] {
-      exit_valueless_variant();
+      throw std::bad_variant_access();
     }
   }
   else if constexpr (expected<type>) {
@@ -1157,10 +1152,11 @@ class packer {
     }
     else if constexpr (variant<type>) {
       if (item.index() == std::variant_npos) [[unlikely]] {
-        exit_valueless_variant();
+        throw std::bad_variant_access();
       }
       else {
-        uint32_t index = item.index();
+        static_assert(std::variant_size_v<type> < 256, "variant's size is too large");
+        uint8_t index = item.index();
         std::memcpy(data_ + pos_, &index, sizeof(index));
         pos_ += sizeof(index);
         std::visit(
@@ -1350,8 +1346,8 @@ class unpacker {
   }
 
  private:
-  template <size_t index, typename size_type>
-  struct variant_construct_helper_not_skipped {
+  template <size_t index, typename size_type, typename NotSkip>
+  struct variant_construct_helper {
     template <typename unpack, typename variant_t>
     static STRUCT_PACK_INLINE constexpr void run(unpack &unpacker,
                                                  variant_t &v) {
@@ -1360,26 +1356,10 @@ class unpacker {
       }
       else {
         v = variant_t{std::in_place_index_t<index>{}};
-        unpacker.template deserialize_one<size_type::value, true>(
+        unpacker.template deserialize_one<size_type::value, NotSkip::value>(
             std::get<index>(v));
       }
     }
-  };
-
-  template <size_t index, typename size_type>
-  struct variant_construct_helper_skipped {
-    template <typename unpack, typename variant_t>
-    static STRUCT_PACK_INLINE constexpr void run(unpack &unpacker,
-                                                 variant_t &v) {
-      if constexpr (index >= std::variant_size_v<variant_t>) {
-        return;
-      }
-      else {
-        v = variant_t{std::in_place_index_t<index>{}};
-        unpacker.template deserialize_one<size_type::value, false>(
-            std::get<index>(v));
-      }
-    };
   };
 
   STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
@@ -1634,26 +1614,20 @@ class unpacker {
       deserialize_one<size_type, NotSkip>(item.value());
     }
     else if constexpr (variant<type>) {
-      if (pos_ + sizeof(uint32_t) > size_) [[unlikely]] {
+      if (pos_ + sizeof(uint8_t) > size_) [[unlikely]] {
         return struct_pack::errc::no_buffer_space;
       }
-      uint32_t index;
+      uint8_t index;
       std::memcpy(&index, data_ + pos_, sizeof(index));
       pos_ += sizeof(index);
       if (index >= std::variant_size_v<type>) [[unlikely]] {
         return struct_pack::errc::invalid_argument;
       }
       else {
-        if constexpr (NotSkip) {
-          template_switch<variant_construct_helper_not_skipped,
-                          std::integral_constant<std::size_t, size_type>>(
-              index, *this, item);
-        }
-        else {
-          template_switch<variant_construct_helper_skipped,
-                          std::integral_constant<std::size_t, size_type>>(
-              index, *this, item);
-        }
+        template_switch<variant_construct_helper,
+                        std::integral_constant<std::size_t, size_type>,
+                        std::integral_constant<bool, NotSkip>>(index, *this,
+                                                               item);
       }
     }
     else if constexpr (expected<type>) {
