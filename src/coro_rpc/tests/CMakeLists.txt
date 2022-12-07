@@ -26,7 +26,7 @@ target_compile_definitions(test_rpc PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 add_custom_command(
         TARGET test_rpc POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/openssl_files
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
         ${CMAKE_BINARY_DIR}/openssl_files)
 foreach (_test_file ${TEST_SRCS})
     get_filename_component(_test_name ${_test_file} NAME_WE)
@@ -48,6 +48,7 @@ endif()
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
             )
 endforeach ()
+
 set(TEST_REGISTER_DUPLICATION_SRCS
         test_register_duplication_1.cpp
         test_register_duplication_2.cpp
