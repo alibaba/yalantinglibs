@@ -172,8 +172,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t), [&]<typename... Args>(Args &&
-                                                  ...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t),
+        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
