@@ -172,8 +172,8 @@ constexpr auto get_types(U &&t) {
   }
   else if constexpr (std::is_aggregate_v<T>) {
     return visit_members(
-        std::forward<U>(t),
-        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t), [&]<typename... Args>(Args &&
+                                                  ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
   }
@@ -817,16 +817,11 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   }
   else if constexpr (variant<type>) {
     ret.total += sizeof(uint8_t);
-    if (item.index() != std::variant_npos) [[likely]] {
-      ret += std::visit(
-          [](const auto &e) {
-            return calculate_one_size(e);
-          },
-          item);
-    }
-    else [[unlikely]] {
-      throw std::bad_variant_access();
-    }
+    ret += std::visit(
+        [](const auto &e) {
+          return calculate_one_size(e);
+        },
+        item);
   }
   else if constexpr (expected<type>) {
     ret.total += sizeof(bool);
@@ -1151,20 +1146,16 @@ class packer {
       }
     }
     else if constexpr (variant<type>) {
-      if (item.index() == std::variant_npos) [[unlikely]] {
-        throw std::bad_variant_access();
-      }
-      else {
-        static_assert(std::variant_size_v<type> < 256, "variant's size is too large");
-        uint8_t index = item.index();
-        std::memcpy(data_ + pos_, &index, sizeof(index));
-        pos_ += sizeof(index);
-        std::visit(
-            [this](auto &&e) {
-              this->serialize_one<size_type>(e);
-            },
-            item);
-      }
+      static_assert(std::variant_size_v<type> < 256,
+                    "variant's size is too large");
+      uint8_t index = item.index();
+      std::memcpy(data_ + pos_, &index, sizeof(index));
+      pos_ += sizeof(index);
+      std::visit(
+          [this](auto &&e) {
+            this->serialize_one<size_type>(e);
+          },
+          item);
     }
     else if constexpr (expected<type>) {
       bool has_value = item.has_value();
