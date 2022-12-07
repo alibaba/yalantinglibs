@@ -324,12 +324,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     co_await send_data();
   }
 
-  void log(std::errc err) {
+  void log(std::errc err, source_location loc = {}) {
 #ifdef UNIT_TEST_INJECT
-    easylog::info("close conn_id {}, client_id {}, reason {}", conn_id_,
+    easylog::info(loc, "close conn_id {}, client_id {}, reason {}", conn_id_,
                   client_id_, std::make_error_code(err).message());
 #else
-    easylog::info("close conn_id {}, reason {}", conn_id_,
+    easylog::info(loc, "close conn_id {}, reason {}", conn_id_,
                   std::make_error_code(err).message());
 #endif
   }
