@@ -155,7 +155,7 @@ void deserialize(std::vector<T>& ms, pbf_reader& reader) {
     }
   }
 }
-}  // namespace protozero_pb
+}  // namespace protozero_sample
 
 template <typename Data, typename Buffer>
 struct Sample<SampleName::PROTOZERO, Data, Buffer> : public SampleBase {
@@ -239,4 +239,4 @@ auto create_sample() {
     return sample_type;
   }
 }
-}  // namespace protozero_pb
+}  // namespace protozero_sample

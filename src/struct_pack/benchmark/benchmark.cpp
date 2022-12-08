@@ -14,8 +14,9 @@
 #include "protozero_sample.hpp"
 #endif
 
-#include "bench.hpp"
 #include <string>
+
+#include "bench.hpp"
 #include "config.hpp"
 using namespace std::string_literals;
 

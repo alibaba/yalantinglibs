@@ -93,7 +93,7 @@ auto create_monsters(std::size_t object_count) {
   }
   return monsters;
 }
-}  // namespace pp_pb
+}  // namespace protopuf_sample
 
 template <typename Data, typename Buffer>
 struct Sample<SampleName::PROTOPUF, Data, Buffer> : public SampleBase {
@@ -169,4 +169,4 @@ auto create_sample() {
     return sample_type;
   }
 }
-}  // namespace pp_pb
+}  // namespace protopuf_sample

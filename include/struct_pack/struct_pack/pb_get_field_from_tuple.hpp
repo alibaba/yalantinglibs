@@ -79,20 +79,22 @@ template <typename T, std::size_t FieldIndex>
   }
 }
 
-//template <typename T, std::size_t FieldIndex>
+// template <typename T, std::size_t FieldIndex>
 //[[nodiscard]] STRUCT_PACK_INLINE decltype(auto) get_field(T& t) {
-//  // auto fn = ;
-//  return detail::visit_members(t, []<typename ...Args>(Args&& ...args) {
-//    return std::get<FieldIndex>(std::forward_as_tuple(std::forward<Args>(args)...));
-//  });
-//}
-//template <typename T, std::size_t FieldIndex>
+//   // auto fn = ;
+//   return detail::visit_members(t, []<typename ...Args>(Args&& ...args) {
+//     return
+//     std::get<FieldIndex>(std::forward_as_tuple(std::forward<Args>(args)...));
+//   });
+// }
+// template <typename T, std::size_t FieldIndex>
 //[[nodiscard]] STRUCT_PACK_INLINE decltype(auto) get_field(const T& t) {
-//  // auto fn = ;
-//  return detail::visit_members(t, []<typename ...Args>(Args&& ...args) {
-//    return std::get<FieldIndex>(std::forward_as_tuple(std::forward<Args>(args)...));
-//  });
-//}
+//   // auto fn = ;
+//   return detail::visit_members(t, []<typename ...Args>(Args&& ...args) {
+//     return
+//     std::get<FieldIndex>(std::forward_as_tuple(std::forward<Args>(args)...));
+//   });
+// }
 template <typename T, std::size_t FieldIndex>
 [[nodiscard]] STRUCT_PACK_INLINE const auto& get_field(const T& t) {
   static_assert(!detail::optional<T>);

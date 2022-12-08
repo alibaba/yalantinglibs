@@ -1,14 +1,15 @@
 #pragma once
-#include "data_def.hpp"
-#include "ScopedTimer.hpp"
-#include "sample.hpp"
-#include <vector>
-#include <memory>
 #include <cstring>
+#include <memory>
+#include <vector>
+
+#include "ScopedTimer.hpp"
+#include "data_def.hpp"
 #include "no_op.h"
-template<typename Data, typename Buffer>
-struct Sample<SampleName::MSGPACK, Data, Buffer>: public SampleBase {
-  Sample(Data data): data_(std::move(data)) {
+#include "sample.hpp"
+template <typename Data, typename Buffer>
+struct Sample<SampleName::MSGPACK, Data, Buffer> : public SampleBase {
+  Sample(Data data) : data_(std::move(data)) {
     msgpack::pack(buffer_, data_);
     size_ = buffer_.size();
   }
@@ -17,16 +18,13 @@ struct Sample<SampleName::MSGPACK, Data, Buffer>: public SampleBase {
       data_.clear();
     }
   }
-  void clear_buffer() override {
-    buffer_.clear();
-  }
-  void reserve_buffer() override {
-    buffer_.reserve(size_ * SAMPLES_COUNT);
-  }
+  void clear_buffer() override { buffer_.clear(); }
+  void reserve_buffer() override { buffer_.reserve(size_ * SAMPLES_COUNT); }
   size_t buffer_size() const override { return buffer_.size(); }
   std::string name() const override { return "msgpack"; }
   void do_serialization(int run_idx) override {
-    ScopedTimer timer(("serialize " + name()).c_str(), serialize_cost_[run_idx]);
+    ScopedTimer timer(("serialize " + name()).c_str(),
+                      serialize_cost_[run_idx]);
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
       msgpack::pack(buffer_, data_);
     }
@@ -34,7 +32,8 @@ struct Sample<SampleName::MSGPACK, Data, Buffer>: public SampleBase {
   }
   void do_deserialization(int run_idx) override {
     msgpack::unpacked unpacked;
-    ScopedTimer timer(("deserialize " + name()).c_str(), deserialize_cost_[run_idx]);
+    ScopedTimer timer(("deserialize " + name()).c_str(),
+                      deserialize_cost_[run_idx]);
     std::size_t pos = 0;
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
       msgpack::unpack(unpacked, buffer_.data(), buffer_.size(), pos);
@@ -42,12 +41,12 @@ struct Sample<SampleName::MSGPACK, Data, Buffer>: public SampleBase {
     }
     no_op();
   }
+
  private:
   Data data_;
   Buffer buffer_;
   std::size_t size_;
 };
-
 
 struct tbuffer : public std::vector<char> {
   void write(const char *src, size_t sz) {
@@ -58,7 +57,7 @@ struct tbuffer : public std::vector<char> {
 };
 
 namespace msgpack_sample {
-template<SampleType sample_type>
+template <SampleType sample_type>
 auto create_sample() {
   using Buffer = tbuffer;
   if constexpr (sample_type == SampleType::RECT) {
@@ -97,4 +96,4 @@ auto create_sample() {
     return sample_type;
   }
 }
-}
+}  // namespace msgpack_sample

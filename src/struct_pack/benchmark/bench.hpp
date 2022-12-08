@@ -1,26 +1,34 @@
 #pragma once
-#include "config.hpp"
 #include <iostream>
 
-template<typename BaselineSample, typename ContenderSample>
-void report_cmp_serialize(const std::string& tag, const BaselineSample& baseline, const ContenderSample& contender) {
+#include "config.hpp"
+
+template <typename BaselineSample, typename ContenderSample>
+void report_cmp_serialize(const std::string& tag,
+                          const BaselineSample& baseline,
+                          const ContenderSample& contender) {
   std::cout << tag << " ";
   std::cout << pretty_name(baseline.name()) << "   serialize is ";
-  std::cout << pretty_float((double)get_avg(contender.serialize_cost_) / get_avg(baseline.serialize_cost_));
+  std::cout << pretty_float((double)get_avg(contender.serialize_cost_) /
+                            get_avg(baseline.serialize_cost_));
   std::cout << " times faster than " << pretty_name(contender.name());
   std::cout << std::endl;
 }
-template<typename BaselineSample, typename ContenderSample>
-void report_cmp_deserialize(const std::string& tag, const BaselineSample& baseline, const ContenderSample& contender) {
+template <typename BaselineSample, typename ContenderSample>
+void report_cmp_deserialize(const std::string& tag,
+                            const BaselineSample& baseline,
+                            const ContenderSample& contender) {
   std::cout << tag << " ";
   std::cout << pretty_name(baseline.name()) << " deserialize is ";
-  std::cout << pretty_float((double)get_avg(contender.deserialize_cost_) / get_avg(baseline.deserialize_cost_));
+  std::cout << pretty_float((double)get_avg(contender.deserialize_cost_) /
+                            get_avg(baseline.deserialize_cost_));
   std::cout << " times faster than " << pretty_name(contender.name());
   std::cout << std::endl;
 }
 
-template<typename BaselineSample, typename ...ContenderSamples>
-void bench(std::string tag, BaselineSample baseline, ContenderSamples ...contenders) {
+template <typename BaselineSample, typename... ContenderSamples>
+void bench(std::string tag, BaselineSample baseline,
+           ContenderSamples... contenders) {
   std::cout << "------- start benchmark " << tag << " -------" << std::endl;
   baseline.clear_buffer();
   (contenders.clear_buffer(), ...);

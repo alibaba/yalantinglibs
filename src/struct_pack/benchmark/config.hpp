@@ -2,7 +2,7 @@
 #include <cstdint>
 static constexpr int OBJECT_COUNT = 20;
 #ifdef NDEBUG
-static constexpr int SAMPLES_COUNT = 10000; //0;
+static constexpr int SAMPLES_COUNT = 10000;  // 0;
 #else
 static constexpr int SAMPLES_COUNT = 100;
 #endif

@@ -219,9 +219,10 @@ consteval wire_type_t get_wire_type() {
 //#include "pb_get_field_from_ifelse.hpp"
 #include "pb_get_field_from_tuple.hpp"
 
-
-template <std::size_t FieldIndex, std::size_t FieldNumber, typename T, typename Field>
-[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_one_size(const T& t, const Field& field);
+template <std::size_t FieldIndex, std::size_t FieldNumber, typename T,
+          typename Field>
+[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_one_size(
+    const T& t, const Field& field);
 
 template <typename T>
 consteval auto get_field_number_to_index_map();
@@ -305,8 +306,6 @@ consteval std::size_t calculate_tag_size() {
   return calculate_varint_size(tag);
 }
 
-
-
 template <typename T, std::size_t FieldIndex>
 struct oneof_field_number_array {
   using T_Field =
@@ -316,14 +315,16 @@ struct oneof_field_number_array {
   using array_type = std::array<std::size_t, std::variant_size_v<T_Field>>;
 };
 template <typename T, std::size_t FieldIndex>
-using oneof_field_number_array_t = typename oneof_field_number_array<T, FieldIndex>::array_type;
-template<typename T, std::size_t FieldIndex>
+using oneof_field_number_array_t =
+    typename oneof_field_number_array<T, FieldIndex>::array_type;
+template <typename T, std::size_t FieldIndex>
 constexpr oneof_field_number_array_t<T, FieldIndex> oneof_field_number_seq{};
 
-template<std::size_t FieldIndex>
+template <std::size_t FieldIndex>
 struct oneof_size_helper_with_field_index {
-  template<std::size_t VariantIndex, typename T, typename OneofField>
-  [[nodiscard]] STRUCT_PACK_INLINE std::size_t run(const T&t, const OneofField& field) {
+  template <std::size_t VariantIndex, typename T, typename OneofField>
+  [[nodiscard]] STRUCT_PACK_INLINE std::size_t run(const T& t,
+                                                   const OneofField& field) {
     constexpr auto seq = struct_pack::pb::oneof_field_number_seq<T, FieldIndex>;
     constexpr auto FieldNumber = std::get<VariantIndex>(seq);
     return calculate_one_size<FieldIndex, FieldNumber>(t, field);
@@ -332,8 +333,9 @@ struct oneof_size_helper_with_field_index {
 
 template <std::size_t VariantIndex>
 struct oneof_size_helper {
-  template<typename Helper, typename T, typename Variant>
-  [[nodiscard]] STRUCT_PACK_INLINE static std::size_t run(Helper& u, const T&t, const Variant& v) {
+  template <typename Helper, typename T, typename Variant>
+  [[nodiscard]] STRUCT_PACK_INLINE static std::size_t run(Helper& u, const T& t,
+                                                          const Variant& v) {
     if constexpr (VariantIndex < std::variant_size_v<Variant>) {
       assert(VariantIndex == v.index());
       return u.template run<VariantIndex>(t, std::get<VariantIndex>(v));
@@ -345,13 +347,16 @@ struct oneof_size_helper {
     }
   }
 };
-template<std::size_t FieldIndex, typename T, detail::variant Variant>
-[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_oneof_size(const T& t, const Variant& v) {
+template <std::size_t FieldIndex, typename T, detail::variant Variant>
+[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_oneof_size(
+    const T& t, const Variant& v) {
   oneof_size_helper_with_field_index<FieldIndex> helper;
   return detail::template_switch<oneof_size_helper>(v.index(), helper, t, v);
 }
-template <std::size_t FieldIndex, std::size_t FieldNumber, typename T, typename Field>
-[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_one_size(const T& t, const Field& field) {
+template <std::size_t FieldIndex, std::size_t FieldNumber, typename T,
+          typename Field>
+[[nodiscard]] STRUCT_PACK_INLINE std::size_t calculate_one_size(
+    const T& t, const Field& field) {
   if constexpr (detail::variant<Field>) {
     return calculate_oneof_size<FieldIndex>(t, field);
   }
@@ -411,8 +416,9 @@ template <std::size_t FieldIndex, std::size_t FieldNumber, typename T, typename 
             static_assert(
                 std::same_as<key_type, std::string> || std::integral<key_type>,
                 "the key_type must be integral or string type");
-            static_assert(!detail::map_container<mapped_type>,
-                          "the mapped_type can be any type except another map.");
+            static_assert(
+                !detail::map_container<mapped_type>,
+                "the mapped_type can be any type except another map.");
           }
           std::size_t total = 0;
           for (auto&& e : field) {
@@ -485,32 +491,39 @@ consteval bool has_duplicate_element() {
   }
   return false;
 }
-template<typename T>
+template <typename T>
 consteval bool check_oneof();
-template<typename T>
+template <typename T>
 consteval std::size_t field_number_count();
 
-template<typename T, std::size_t FieldIndex, std::size_t I>
-consteval void fill_ni_array_oneof_impl_sub(std::size_t&index, auto& n_array, auto& i_array) {
+template <typename T, std::size_t FieldIndex, std::size_t I>
+consteval void fill_ni_array_oneof_impl_sub(std::size_t& index, auto& n_array,
+                                            auto& i_array) {
   constexpr auto seq = struct_pack::pb::oneof_field_number_seq<T, FieldIndex>;
   n_array[index] = seq[I];
   i_array[index] = FieldIndex;
   index++;
 }
 
-template<typename T, std::size_t FieldIndex, detail::variant Variant, std::size_t ...I>
-consteval void fill_ni_array_oneof_impl(std::size_t&index, auto& n_array, auto& i_array, std::index_sequence<I...>) {
+template <typename T, std::size_t FieldIndex, detail::variant Variant,
+          std::size_t... I>
+consteval void fill_ni_array_oneof_impl(std::size_t& index, auto& n_array,
+                                        auto& i_array,
+                                        std::index_sequence<I...>) {
   // constexpr auto VariantCount = std::variant_size_v<Variant>;
-  (fill_ni_array_oneof_impl_sub<T, FieldIndex, I>(index, n_array, i_array), ...);
+  (fill_ni_array_oneof_impl_sub<T, FieldIndex, I>(index, n_array, i_array),
+   ...);
 }
-template<typename T, std::size_t FieldIndex, detail::variant Variant>
-consteval void fill_ni_array_oneof(std::size_t&index, auto& n_array, auto& i_array) {
+template <typename T, std::size_t FieldIndex, detail::variant Variant>
+consteval void fill_ni_array_oneof(std::size_t& index, auto& n_array,
+                                   auto& i_array) {
   constexpr auto VariantCount = std::variant_size_v<Variant>;
-  fill_ni_array_oneof_impl<T, FieldIndex, Variant>(index, n_array, i_array, std::make_index_sequence<VariantCount>());
+  fill_ni_array_oneof_impl<T, FieldIndex, Variant>(
+      index, n_array, i_array, std::make_index_sequence<VariantCount>());
 }
 
-template<typename T, std::size_t I>
-consteval void fill_ni_array(std::size_t&index, auto& n_array, auto& i_array) {
+template <typename T, std::size_t I>
+consteval void fill_ni_array(std::size_t& index, auto& n_array, auto& i_array) {
   using Tuple = decltype(detail::get_types(std::declval<T>()));
   using Field = std::tuple_element_t<I, Tuple>;
   if constexpr (detail::variant<Field>) {
@@ -523,27 +536,27 @@ consteval void fill_ni_array(std::size_t&index, auto& n_array, auto& i_array) {
   }
 }
 
-template<typename T, std::size_t FieldNumberCount, std::size_t ...I>
+template <typename T, std::size_t FieldNumberCount, std::size_t... I>
 consteval auto build_n2i_with_oneof_impl(std::index_sequence<I...>) {
   std::array<std::size_t, FieldNumberCount> n_array;
   std::array<std::size_t, FieldNumberCount> i_array;
   std::size_t index = 0;
-  (fill_ni_array<T, I>(index, n_array, i_array),...);
+  (fill_ni_array<T, I>(index, n_array, i_array), ...);
   return std::make_pair(n_array, i_array);
 }
 
-template<typename T, std::size_t FieldNumberCount>
+template <typename T, std::size_t FieldNumberCount>
 consteval auto build_n2i_with_oneof() {
   // has oneof
   constexpr auto Count = detail::member_count<T>();
-  return build_n2i_with_oneof_impl<T, FieldNumberCount>(std::make_index_sequence<Count>());
+  return build_n2i_with_oneof_impl<T, FieldNumberCount>(
+      std::make_index_sequence<Count>());
 }
-template<typename T, std::size_t FieldNumberCount, std::size_t ...I>
+template <typename T, std::size_t FieldNumberCount, std::size_t... I>
 consteval auto build_n2i_map_with_oneof(std::index_sequence<I...>) {
   constexpr auto ni_array = build_n2i_with_oneof<T, FieldNumberCount>();
-  return frozen::map<std::size_t, std::size_t, FieldNumberCount> {
-      {ni_array.first[I], ni_array.second[I]}...
-  };
+  return frozen::map<std::size_t, std::size_t, FieldNumberCount>{
+      {ni_array.first[I], ni_array.second[I]}...};
 }
 template <typename T, std::size_t Size, std::size_t... I>
 consteval auto get_field_number_to_index_map_impl(std::index_sequence<I...>) {
@@ -559,7 +572,8 @@ consteval auto get_field_number_to_index_map_impl(std::index_sequence<I...>) {
       return std::make_pair(n2i, i2n);
     }
     else {
-      constexpr auto n2i = build_n2i_map_with_oneof<T, FieldNumberCount>(std::make_index_sequence<FieldNumberCount>());
+      constexpr auto n2i = build_n2i_map_with_oneof<T, FieldNumberCount>(
+          std::make_index_sequence<FieldNumberCount>());
       frozen::map<std::size_t, std::size_t, Size> i2n{
           {I, first_field_number<T> + I}...};
       return std::make_pair(n2i, i2n);
@@ -599,9 +613,9 @@ consteval auto get_field_i2n_map() {
 template <typename T, std::size_t Size, std::size_t... I>
 consteval auto get_sorted_field_number_array_impl(std::index_sequence<I...>) {
   constexpr auto n2i_map = get_field_n2i_map<T>();
-  std::array<std::size_t, Size> array; //{i2n_map.at(I)...};
+  std::array<std::size_t, Size> array;  //{i2n_map.at(I)...};
   std::size_t i = 0;
-  for(auto [k, v]: n2i_map) {
+  for (auto [k, v] : n2i_map) {
     array[i++] = k;
   }
   std::sort(array.begin(), array.end());
@@ -615,11 +629,11 @@ consteval auto get_sorted_field_number_array() {
       std::make_index_sequence<Count>());
 }
 
-template<typename T, std::size_t FieldIndex, typename U>
+template <typename T, std::size_t FieldIndex, typename U>
 consteval bool check_oneof_field_number() {
   if constexpr (detail::variant<U>) {
     constexpr auto array = oneof_field_number_seq<T, FieldIndex>;
-    for(auto i: array) {
+    for (auto i : array) {
       if (i == 0) {
         return false;
       }
@@ -638,12 +652,13 @@ consteval bool check_oneof_field_number() {
   }
 }
 
-template<typename T, detail::tuple Tuple, std::size_t ...I>
+template <typename T, detail::tuple Tuple, std::size_t... I>
 consteval bool check_oneof_impl(std::index_sequence<I...>) {
-  return (... && check_oneof_field_number<T, I, std::tuple_element_t<I,Tuple>>());
+  return (... &&
+          check_oneof_field_number<T, I, std::tuple_element_t<I, Tuple>>());
 }
 
-template<typename T>
+template <typename T>
 consteval bool check_oneof() {
   constexpr auto Count = detail::member_count<T>();
   using Tuple = decltype(detail::get_types(std::declval<T>()));
@@ -656,7 +671,7 @@ struct FieldMap {
   std::array<std::pair<std::size_t, std::size_t>, n2i_Size> n2i;
 };
 
-template<typename T, typename Field>
+template <typename T, typename Field>
 consteval std::size_t one_field_number_count() {
   if constexpr (detail::variant<Field>) {
     return std::variant_size_v<Field>;
@@ -666,26 +681,25 @@ consteval std::size_t one_field_number_count() {
   }
 }
 
-template<typename T, std::size_t ...I>
+template <typename T, std::size_t... I>
 consteval std::size_t field_number_count_impl(std::index_sequence<I...>) {
   using Tuple = decltype(detail::get_types(std::declval<T>()));
-  return ( 0 + ... + one_field_number_count<T, std::tuple_element_t<I, Tuple>>());
-}
-template<typename T>
-consteval std::size_t field_number_count() {
-  constexpr auto Count = detail::member_count<T>();
-//  if constexpr (Count == 1) {
-//    using Tuple = decltype(detail::get_types(std::declval<T>()));
-//    return one_field_number_count<T, std::tuple_element_t<0, Tuple>>();
-//  }
-//  else {
-    return field_number_count_impl<T>(std::make_index_sequence<Count>());
-//  }
+  return (0 + ... +
+          one_field_number_count<T, std::tuple_element_t<I, Tuple>>());
 }
 template <typename T>
-consteval auto rebuild_n2i() {
-
+consteval std::size_t field_number_count() {
+  constexpr auto Count = detail::member_count<T>();
+  //  if constexpr (Count == 1) {
+  //    using Tuple = decltype(detail::get_types(std::declval<T>()));
+  //    return one_field_number_count<T, std::tuple_element_t<0, Tuple>>();
+  //  }
+  //  else {
+  return field_number_count_impl<T>(std::make_index_sequence<Count>());
+  //  }
 }
+template <typename T>
+consteval auto rebuild_n2i() {}
 
 template <typename T, std::size_t Size, std::size_t... I>
 consteval auto create_map_impl(std::index_sequence<I...>) {
@@ -695,25 +709,26 @@ consteval auto create_map_impl(std::index_sequence<I...>) {
   constexpr auto n2i_Size = field_number_count<T>();
   FieldMap<Size, n2i_Size> m{
       .i2n = {std::make_pair(I, i2n_map.at(I))...},
-//      .n2i = {std::make_pair(std::get<I>(n_array),
-//                             n2i_map.at(std::get<I>(n_array)))...}
+      //      .n2i = {std::make_pair(std::get<I>(n_array),
+      //                             n2i_map.at(std::get<I>(n_array)))...}
   };
   static_assert(n2i_map.size() == n_array.size());
-  for(int i=0;i<n_array.size();i++) {
+  for (int i = 0; i < n_array.size(); i++) {
     auto n = n_array[i];
     m.n2i[i] = std::make_pair(n, n2i_map.at(n));
   }
   return m;
 }
 
-template<typename T>
+template <typename T>
 consteval auto create_map() {
   constexpr auto Count = detail::member_count<T>();
   return create_map_impl<T, Count>(std::make_index_sequence<Count>());
 }
 
-template<typename T>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr std::size_t get_field_index(std::size_t FieldNumber) {
+template <typename T>
+[[nodiscard]] STRUCT_PACK_INLINE constexpr std::size_t get_field_index(
+    std::size_t FieldNumber) {
   constexpr auto Count = detail::member_count<T>();
   constexpr auto map = create_map<T>();
   // TODO: optimize with binary search
@@ -724,8 +739,9 @@ template<typename T>
   }
   return Count;
 }
-template<typename T>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr std::size_t get_field_number(std::size_t FieldIndex) {
+template <typename T>
+[[nodiscard]] STRUCT_PACK_INLINE constexpr std::size_t get_field_number(
+    std::size_t FieldIndex) {
   constexpr auto Count = detail::member_count<T>();
   constexpr auto map = create_map<T>();
   for (int i = 0; i < map.i2n.size(); ++i) {
@@ -735,31 +751,31 @@ template<typename T>
   }
   return 0;
 }
-template<typename T, std::size_t FieldIndex, std::size_t Size, std::size_t ...I>
-[[nodiscard]] STRUCT_PACK_INLINE consteval auto get_oneof_n2i_map_impl(std::index_sequence<I...>) {
+template <typename T, std::size_t FieldIndex, std::size_t Size,
+          std::size_t... I>
+[[nodiscard]] STRUCT_PACK_INLINE consteval auto get_oneof_n2i_map_impl(
+    std::index_sequence<I...>) {
   constexpr auto seq = struct_pack::pb::oneof_field_number_seq<T, FieldIndex>;
-  frozen::map<std::size_t, std::size_t, Size> map {
-    {seq[I], I}...
-  };
+  frozen::map<std::size_t, std::size_t, Size> map{{seq[I], I}...};
   return map;
 }
-template<typename T, std::size_t FieldIndex>
+template <typename T, std::size_t FieldIndex>
 [[nodiscard]] STRUCT_PACK_INLINE consteval auto get_oneof_n2i_map() {
   using Variant =
       std::tuple_element_t<FieldIndex,
                            decltype(detail::get_types(std::declval<T>()))>;
   static_assert(detail::variant<Variant>);
   constexpr auto VariantCount = std::variant_size_v<Variant>;
-  return get_oneof_n2i_map_impl<T, FieldIndex, VariantCount>(std::make_index_sequence<VariantCount>());
+  return get_oneof_n2i_map_impl<T, FieldIndex, VariantCount>(
+      std::make_index_sequence<VariantCount>());
 }
 
-template<typename T>
+template <typename T>
 [[nodiscard]] STRUCT_PACK_INLINE consteval auto get_max_field_number() {
   auto array = get_sorted_field_number_array<T>();
   static_assert(!array.empty());
   return array.back();
 }
-
 
 template <detail::struct_pack_byte Byte>
 class packer {
@@ -776,12 +792,12 @@ class packer {
   STRUCT_PACK_INLINE void serialize(const T& t, std::index_sequence<I...>) {
     constexpr auto FieldArray = get_sorted_field_number_array<T>();
     constexpr auto n2i_map = get_field_n2i_map<T>();
-    (serialize<n2i_map.at(std::get<I>(FieldArray)),
-               std::get<I>(FieldArray)
-               >(t, get_field<T, n2i_map.at(std::get<I>(FieldArray))>(t)),
+    (serialize<n2i_map.at(std::get<I>(FieldArray)), std::get<I>(FieldArray)>(
+         t, get_field<T, n2i_map.at(std::get<I>(FieldArray))>(t)),
      ...);
   }
-  template <std::size_t FieldIndex, std::size_t FieldNumber, typename T, typename Field>
+  template <std::size_t FieldIndex, std::size_t FieldNumber, typename T,
+            typename Field>
   STRUCT_PACK_INLINE void serialize(const T& t, const Field& field) {
     if constexpr (detail::optional<Field>) {
       if (field.has_value()) {
@@ -835,7 +851,8 @@ class packer {
           std::memcpy(data_ + pos_, field.data(), field.size());
           pos_ += field.size();
         }
-        else if constexpr (detail::map_container<Field> || detail::container<Field>) {
+        else if constexpr (detail::map_container<Field> ||
+                           detail::container<Field>) {
           if (field.empty()) {
             return;
           }
@@ -895,13 +912,17 @@ class packer {
   template <std::size_t FieldIndex, typename T, detail::variant Variant>
   STRUCT_PACK_INLINE void serialize_oneof(const T& t, const Variant& v) {
     oneof_packer_helper_with_field_index<FieldIndex> helper;
-    detail::template_switch<oneof_packer_helper>(v.index(), helper, *this, t, v);
+    detail::template_switch<oneof_packer_helper>(v.index(), helper, *this, t,
+                                                 v);
   }
-  template<std::size_t FieldIndex>
+  template <std::size_t FieldIndex>
   struct oneof_packer_helper_with_field_index {
-    template<std::size_t VariantIndex, typename Packer, typename T, typename OneofField>
-    STRUCT_PACK_INLINE void run(Packer& self, const T&t, const OneofField& field) {
-      constexpr auto seq = struct_pack::pb::oneof_field_number_seq<T, FieldIndex>;
+    template <std::size_t VariantIndex, typename Packer, typename T,
+              typename OneofField>
+    STRUCT_PACK_INLINE void run(Packer& self, const T& t,
+                                const OneofField& field) {
+      constexpr auto seq =
+          struct_pack::pb::oneof_field_number_seq<T, FieldIndex>;
       constexpr auto FieldNumber = std::get<VariantIndex>(seq);
       return self.template serialize<FieldIndex, FieldNumber>(t, field);
     }
@@ -910,7 +931,8 @@ class packer {
   template <std::size_t VariantIndex>
   struct oneof_packer_helper {
     template <typename Helper, typename Packer, typename T, typename Variant>
-    STRUCT_PACK_INLINE static void run(Helper& u, Packer& self, const T&t, const Variant& v) {
+    STRUCT_PACK_INLINE static void run(Helper& u, Packer& self, const T& t,
+                                       const Variant& v) {
       if constexpr (VariantIndex < std::variant_size_v<Variant>) {
         assert(VariantIndex == v.index());
         return u.template run<VariantIndex>(self, t, std::get<VariantIndex>(v));
@@ -958,7 +980,7 @@ class packer {
       encode_varint_v2(t);
     }
   }
-  template<std::size_t field_number, wire_type_t wire_type>
+  template <std::size_t field_number, wire_type_t wire_type>
   STRUCT_PACK_INLINE void write_tag() {
     constexpr auto tag = (field_number << 3) | uint8_t(wire_type);
     // https://developers.google.com/protocol-buffers/docs/proto3#assigning_field_numbers
@@ -989,11 +1011,11 @@ class unpacker {
       return std::errc{};
     }
     while (pos_ < size_) [[likely]] {
-      auto ec = deserialize_one(t);
-      if (ec != std::errc{}) {
-        return ec;
+        auto ec = deserialize_one(t);
+        if (ec != std::errc{}) {
+          return ec;
+        }
       }
-    }
     return std::errc{};
   }
   [[nodiscard]] STRUCT_PACK_INLINE std::size_t consume_len() const {
@@ -1012,11 +1034,13 @@ class unpacker {
     std::size_t field_number = tag >> 3;
     auto wire_type = static_cast<wire_type_t>(tag & 0b0000'0111);
     if constexpr (get_max_field_number<T>() < 256) {
-      return detail::template_switch<unpacker_helper_with_field_number>(field_number, *this, t, wire_type);
+      return detail::template_switch<unpacker_helper_with_field_number>(
+          field_number, *this, t, wire_type);
     }
     else {
       if (field_number < 256) {
-        return detail::template_switch<unpacker_helper_with_field_number>(field_number, *this, t, wire_type);
+        return detail::template_switch<unpacker_helper_with_field_number>(
+            field_number, *this, t, wire_type);
       }
       else {
         constexpr auto n2i_map = get_field_n2i_map<T>();
@@ -1025,7 +1049,8 @@ class unpacker {
           return std::errc::invalid_argument;
         }
         else {
-          return detail::template_switch<unpacker_helper>(it.second, *this, t, wire_type, field_number);
+          return detail::template_switch<unpacker_helper>(
+              it.second, *this, t, wire_type, field_number);
         }
       }
     }
@@ -1051,7 +1076,8 @@ class unpacker {
         else {
           auto&& f = get_field<T, FieldIndex>(t);
           oneof_unpacker_helper_with_field_index<FieldIndex> helper;
-          return detail::template_switch<oneof_unpacker_helper>(field_number, *this, t, f, wire_type, helper);
+          return detail::template_switch<oneof_unpacker_helper>(
+              field_number, *this, t, f, wire_type, helper);
         }
       }
       else {
@@ -1078,7 +1104,8 @@ class unpacker {
     return deserialize_one_impl<T, WireType>(t, f);
   }
   template <typename T, wire_type_t WireType>
-  [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_one_impl(T& t, auto& f) {
+  [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_one_impl(T& t,
+                                                                  auto& f) {
     static_assert(!std::is_const_v<std::remove_reference_t<decltype(f)>>);
     if constexpr (WireType == wire_type_t::varint) {
       using field_type = std::remove_reference_t<decltype(f)>;
@@ -1230,7 +1257,7 @@ class unpacker {
     if constexpr (detail::optional<Field>) {
       using value_type = typename Field::value_type;
       if (!f.has_value()) {
-          f = value_type{};
+        f = value_type{};
       }
       auto ec = deserialize_len(t, f.value());
       if (ec != std::errc{}) [[unlikely]] {
@@ -1259,13 +1286,13 @@ class unpacker {
       if constexpr (VARINT<value_type>) {
         auto max_pos = pos_ + sz;
         while (pos_ < max_pos) [[likely]] {
-          uint64_t val = 0;
-          ec = deserialize_varint(t, val);
-          if (ec != std::errc{}) [[unlikely]] {
-            return ec;
+            uint64_t val = 0;
+            ec = deserialize_varint(t, val);
+            if (ec != std::errc{}) [[unlikely]] {
+              return ec;
+            }
+            f.push_back(val);
           }
-          f.push_back(val);
-        }
         return ec;
       }
       else if constexpr (I64<value_type> || I32<value_type>) {
@@ -1316,24 +1343,24 @@ class unpacker {
           }
         }
         else {
-//          auto pos_bak = pos_;
-//          std::size_t container_size = 0;
-//          std::size_t message_size = sz;
-//          while (true) {
-//            pos_ += message_size;
-//            container_size++;
-//            uint32_t new_tag{};
-//            auto e = read_tag(t, new_tag);
-//            if (e != std::errc{} || new_tag != cur_tag_) {
-//              break ;
-//            }
-//            e = deserialize_varint(t, message_size);
-//            if (e != std::errc{}) {
-//              break ;
-//            }
-//          }
-//          f.reserve(f.size() + container_size);
-//          pos_ = pos_bak;
+          //          auto pos_bak = pos_;
+          //          std::size_t container_size = 0;
+          //          std::size_t message_size = sz;
+          //          while (true) {
+          //            pos_ += message_size;
+          //            container_size++;
+          //            uint32_t new_tag{};
+          //            auto e = read_tag(t, new_tag);
+          //            if (e != std::errc{} || new_tag != cur_tag_) {
+          //              break ;
+          //            }
+          //            e = deserialize_varint(t, message_size);
+          //            if (e != std::errc{}) {
+          //              break ;
+          //            }
+          //          }
+          //          f.reserve(f.size() + container_size);
+          //          pos_ = pos_bak;
           // huge performance effect
           // if (f.empty()) {
           //  f.reserve(32);
@@ -1364,11 +1391,14 @@ class unpacker {
     }
   }
 
-  template <typename T, std::size_t FieldIndex, std::size_t VariantIndex, detail::variant Variant>
-  [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_oneof(T& t, Variant& v) {
+  template <typename T, std::size_t FieldIndex, std::size_t VariantIndex,
+            detail::variant Variant>
+  [[nodiscard]] STRUCT_PACK_INLINE std::errc deserialize_oneof(T& t,
+                                                               Variant& v) {
     constexpr auto VariantCount = std::variant_size_v<Variant>;
     if constexpr (VariantIndex < VariantCount) {
-      using field_type = std::remove_cvref_t<decltype(std::get<VariantIndex>(v))>;
+      using field_type =
+          std::remove_cvref_t<decltype(std::get<VariantIndex>(v))>;
       field_type tmp{};
       constexpr auto wire_type = get_wire_type<field_type>();
       auto ec = deserialize_one_impl<T, wire_type>(t, tmp);
@@ -1412,8 +1442,8 @@ class unpacker {
   template <std::size_t FieldNumber>
   struct unpacker_helper_with_field_number {
     template <typename Unpacker, typename T, typename WireType>
-    [[nodiscard]] STRUCT_PACK_INLINE static constexpr std::errc run(Unpacker& o, T& t,
-                                                          WireType wire_type) {
+    [[nodiscard]] STRUCT_PACK_INLINE static constexpr std::errc run(
+        Unpacker& o, T& t, WireType wire_type) {
       static_assert(std::same_as<WireType, wire_type_t>);
       constexpr auto n2i_map = get_field_n2i_map<T>();
       if constexpr (FieldNumber == 256) {
@@ -1427,9 +1457,11 @@ class unpacker {
           if constexpr (detail::variant<FieldType>) {
             // field_number -> variant index
             constexpr auto oneof_n2i_map = get_oneof_n2i_map<T, FieldIndex>();
-            if constexpr (oneof_n2i_map.find(FieldNumber) != oneof_n2i_map.end()) {
+            if constexpr (oneof_n2i_map.find(FieldNumber) !=
+                          oneof_n2i_map.end()) {
               constexpr auto VariantIndex = oneof_n2i_map.at(FieldNumber);
-              return o.template deserialize_oneof<T, FieldIndex, VariantIndex>(t, get_field<T, FieldIndex>(t));
+              return o.template deserialize_oneof<T, FieldIndex, VariantIndex>(
+                  t, get_field<T, FieldIndex>(t));
             }
             else {
               return std::errc::invalid_argument;
@@ -1440,7 +1472,8 @@ class unpacker {
             if (field_wire_type != wire_type) [[unlikely]] {
               return std::errc::invalid_argument;
             }
-            return o.template deserialize_one<T, FieldIndex, field_wire_type>(t);
+            return o.template deserialize_one<T, FieldIndex, field_wire_type>(
+                t);
           }
         }
         else {
@@ -1452,38 +1485,40 @@ class unpacker {
 
   template <std::size_t FieldIndex>
   struct unpacker_helper {
-    template <typename Unpacker, typename T,
-              typename WireType, typename field_number_t>
-    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(Unpacker& o, T& t,
-                                                          WireType wire_type,
-                                                          field_number_t field_number
-                                                          ) {
+    template <typename Unpacker, typename T, typename WireType,
+              typename field_number_t>
+    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(
+        Unpacker& o, T& t, WireType wire_type, field_number_t field_number) {
       static_assert(std::same_as<WireType, wire_type_t>);
       return o.template deserialize_one<FieldIndex>(t, wire_type, field_number);
     }
   };
-  template<std::size_t FieldIndex>
+  template <std::size_t FieldIndex>
   struct oneof_unpacker_helper_with_field_index {
     static constexpr std::size_t field_index = FieldIndex;
   };
-  template<std::size_t VariantIndex,
-      typename Unpacker, typename T, detail::variant Variant, typename Helper>
+  template <std::size_t VariantIndex, typename Unpacker, typename T,
+            detail::variant Variant, typename Helper>
   struct oneof_unpacker_helper_with_variant_index {
-    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(Unpacker& o, T& t, Variant& v, Helper h
-    ) {
-      return o.template deserialize_oneof<T, Helper::field_index, VariantIndex>(t, v);
+    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(Unpacker& o, T& t,
+                                                          Variant& v,
+                                                          Helper h) {
+      return o.template deserialize_oneof<T, Helper::field_index, VariantIndex>(
+          t, v);
     }
   };
 
   template <std::size_t FieldNumber>
   struct oneof_unpacker_helper {
-    template<typename Unpacker, typename T, detail::variant Variant,
+    template <typename Unpacker, typename T, detail::variant Variant,
               typename WireType, typename Helper>
-    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(Unpacker& o, T& t, Variant& v,
-                                                          WireType wire_type, Helper h
-    ) {
+    [[nodiscard]] STRUCT_PACK_INLINE static std::errc run(Unpacker& o, T& t,
+                                                          Variant& v,
+                                                          WireType wire_type,
+                                                          Helper h) {
       static_assert(std::same_as<WireType, wire_type_t>);
-      constexpr auto oneof_n2i_map = get_oneof_n2i_map<T, Helper::field_index>();
+      constexpr auto oneof_n2i_map =
+          get_oneof_n2i_map<T, Helper::field_index>();
       auto it = oneof_n2i_map.find(FieldNumber);
       if (it == oneof_n2i_map.end()) {
         assert(false && "not support now");
@@ -1491,8 +1526,9 @@ class unpacker {
       }
       else {
         auto variant_index = oneof_n2i_map.at(FieldNumber);
-        return detail::template_switch<oneof_unpacker_helper_with_variant_index>
-            (variant_index, o, t, v, h);
+        return detail::template_switch<
+            oneof_unpacker_helper_with_variant_index>(variant_index, o, t, v,
+                                                      h);
       }
     }
   };
@@ -1541,10 +1577,10 @@ auto STRUCT_PACK_INLINE deserialize(const Byte* data, std::size_t size,
 }
 template <typename T, detail::struct_pack_byte Byte>
 auto STRUCT_PACK_INLINE deserialize_to(T& t, const Byte* data, std::size_t size,
-                                    std::size_t& consume_len) {
+                                       std::size_t& consume_len) {
   unpacker o(data, size);
   auto ec = o.deserialize(t);
   consume_len = o.consume_len();
   return ec;
 }
-}  // namespace struct_pack
+}  // namespace struct_pack::pb

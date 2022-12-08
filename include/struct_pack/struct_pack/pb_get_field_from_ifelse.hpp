@@ -115,7 +115,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a7;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7));
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7));
   }
   else if constexpr (Count == 8) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8] = t;
@@ -253,7 +254,8 @@ template <typename T, std::size_t FieldIndex>
       return a11;
     }
     //    return std::get<Index>(
-    //        std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11));
+    //        std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10,
+    //        a11));
   }
   else if constexpr (Count == 12) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12] = t;
@@ -294,7 +296,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a12;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
     //                                                 a9, a10, a11, a12));
   }
   else if constexpr (Count == 13) {
@@ -339,7 +342,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a13;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
     //                                                 a9, a10, a11, a12, a13));
   }
   else if constexpr (Count == 14) {
@@ -387,8 +391,10 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a14;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
-    //                                                 a9, a10, a11, a12, a13, a14));
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
+    //                                                 a9, a10, a11, a12, a13,
+    //                                                 a14));
   }
   else if constexpr (Count == 15) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15] =
@@ -440,7 +446,8 @@ template <typename T, std::size_t FieldIndex>
       return a15;
     }
     //    return std::get<Index>(std::forward_as_tuple(
-    //        a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15));
+    //        a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14,
+    //        a15));
   }
   else {
     static_assert(!sizeof(T), "wait for add hard code");
@@ -562,7 +569,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a7;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7));
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7));
   }
   else if constexpr (Count == 8) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8] = t;
@@ -700,7 +708,8 @@ template <typename T, std::size_t FieldIndex>
       return a11;
     }
     //    return std::get<Index>(
-    //        std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11));
+    //        std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10,
+    //        a11));
   }
   else if constexpr (Count == 12) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12] = t;
@@ -741,7 +750,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a12;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
     //                                                 a9, a10, a11, a12));
   }
   else if constexpr (Count == 13) {
@@ -786,7 +796,8 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a13;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
     //                                                 a9, a10, a11, a12, a13));
   }
   else if constexpr (Count == 14) {
@@ -834,8 +845,10 @@ template <typename T, std::size_t FieldIndex>
     else {
       return a14;
     }
-    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6, a7, a8,
-    //                                                 a9, a10, a11, a12, a13, a14));
+    //    return std::get<Index>(std::forward_as_tuple(a1, a2, a3, a4, a5, a6,
+    //    a7, a8,
+    //                                                 a9, a10, a11, a12, a13,
+    //                                                 a14));
   }
   else if constexpr (Count == 15) {
     auto& [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15] =
@@ -887,7 +900,8 @@ template <typename T, std::size_t FieldIndex>
       return a15;
     }
     //    return std::get<Index>(std::forward_as_tuple(
-    //        a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15));
+    //        a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14,
+    //        a15));
   }
   else {
     static_assert(!sizeof(T), "wait for add hard code");

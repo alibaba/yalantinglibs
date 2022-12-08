@@ -8,11 +8,11 @@
 
 #include "config.hpp"
 
-template<SampleName sample_name, typename Data, typename Buffer>
+template <SampleName sample_name, typename Data, typename Buffer>
 struct Sample;
 
 template <typename T>
-inline uint64_t get_avg(const T &v) {
+inline uint64_t get_avg(const T& v) {
   uint64_t sum = std::accumulate(v.begin(), v.end(), uint64_t(0));
   return sum / v.size();
 }
@@ -54,17 +54,20 @@ struct SampleBase {
   virtual void do_deserialization(int run_idx) = 0;
   void report_metric(std::string_view tag) const {
     std::cout << tag << " ";
-    std::cout << pretty_name(name()) << " serialize average: " << pretty_int(get_avg(serialize_cost_));
-    std::cout << ", deserialize average: " << pretty_int(get_avg(deserialize_cost_));
+    std::cout << pretty_name(name())
+              << " serialize average: " << pretty_int(get_avg(serialize_cost_));
+    std::cout << ", deserialize average: "
+              << pretty_int(get_avg(deserialize_cost_));
     std::cout << ", buf size: " << pretty_int(buffer_size() / SAMPLES_COUNT);
     std::cout << std::endl;
   }
   std::array<uint64_t, RUN_COUNT> serialize_cost_{};
   std::array<uint64_t, RUN_COUNT> deserialize_cost_{};
+
  private:
 };
 
-template<typename T>
+template <typename T>
 bool verify(const T& ground_truth, const T& t) {
   return ground_truth == t;
 }
