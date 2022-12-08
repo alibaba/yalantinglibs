@@ -43,16 +43,7 @@ constexpr inline auto enable_type_info<std::vector<Monster>> =
     type_info_config::disable;
 };
 
-struct struct_pack_sample : public sample {
-  size_t buffer_size(SampleType type) const override {
-    auto it = buf_size_map_.find(type);
-    if (it == buf_size_map_.end()) {
-      throw std::runtime_error("unknown sample type");
-    }
-
-    return it->second;
-  }
-
+struct struct_pack_sample : public base_sample {
   std::string name() const override { return "struct_pack"; }
 
   void create_samples() override {
@@ -82,13 +73,14 @@ struct struct_pack_sample : public sample {
  private:
   void serialize(SampleType sample_type, auto &sample) {
     {
-      std::string bench_name = "serialize " + get_bench_name(sample_type);
+      std::string bench_name =
+          name() + " serialize " + get_bench_name(sample_type);
       ScopedTimer timer(bench_name.data());
       for (int i = 0; i < SAMPLES_COUNT; ++i) {
         buffer_.clear();
         struct_pack::serialize_to(buffer_, sample);
-        no_op();
       }
+      no_op();
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -100,25 +92,21 @@ struct struct_pack_sample : public sample {
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
-    std::string bench_name = "deserialize " + get_bench_name(sample_type);
+    std::string bench_name =
+        name() + " deserialize " + get_bench_name(sample_type);
     ScopedTimer timer(bench_name.data());
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
       if constexpr (struct_pack::detail::container<T>) {
         sample.clear();
       }
 
-      auto ec = struct_pack::deserialize_to(sample, buffer_);
-      if (ec != struct_pack::errc{}) [[unlikely]] {
-        throw std::runtime_error("impossible");
-      }
-
-      no_op();
+      [[maybe_unused]] auto ec = struct_pack::deserialize_to(sample, buffer_);
     }
+    no_op();
   }
 
   std::vector<rect<int32_t>> rects_;
   std::vector<person> persons_;
   std::vector<Monster> monsters_;
   std::string buffer_;
-  std::unordered_map<SampleType, size_t> buf_size_map_;
 };
