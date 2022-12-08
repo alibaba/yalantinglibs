@@ -23,18 +23,3 @@ if (msgpack_FOUND)
     target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
 endif ()
-if (EXISTS ${CMAKE_SOURCE_DIR}/thirdparty/protopuf/include)
-    message(STATUS "struct_pack benchmark HAVE_PROTOPUF")
-    target_include_directories(struct_pack_benchmark PRIVATE
-            ${CMAKE_SOURCE_DIR}/thirdparty/protopuf/include
-            )
-    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOPUF)
-endif ()
-
-if (EXISTS ${CMAKE_SOURCE_DIR}/thirdparty/protozero/include)
-    message(STATUS "struct_pack benchmark HAVE_PROTOZERO")
-    target_include_directories(struct_pack_benchmark PRIVATE
-            ${CMAKE_SOURCE_DIR}/thirdparty/protozero/include
-            )
-    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOZERO)
-endif ()

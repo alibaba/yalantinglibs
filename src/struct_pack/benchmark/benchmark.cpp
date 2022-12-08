@@ -7,12 +7,6 @@
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
 #endif
-#ifdef HAVE_PROTOPUF
-#include "protopuf_sample.hpp"
-#endif
-#ifdef HAVE_PROTOZERO
-#include "protozero_sample.hpp"
-#endif
 
 #include <string>
 
@@ -32,14 +26,6 @@ void bench_struct_pack() {
             ,
         protobuf_sample::create_sample<sample_type>()
 #endif
-#ifdef HAVE_PROTOPUF
-            ,
-        protopuf_sample::create_sample<sample_type>()
-#endif
-#ifdef HAVE_PROTOZERO
-            ,
-        protozero_sample::create_sample<sample_type>()
-#endif
   );
 }
 
@@ -50,14 +36,6 @@ void bench_struct_pb() {
 #ifdef HAVE_PROTOBUF
                  ,
         protobuf_sample::create_sample<sample_type>()
-#endif
-#ifdef HAVE_PROTOPUF
-            ,
-        protopuf_sample::create_sample<sample_type>()
-#endif
-#ifdef HAVE_PROTOZERO
-            ,
-        protozero_sample::create_sample<sample_type>()
 #endif
   );
 }
