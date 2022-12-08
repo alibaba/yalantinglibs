@@ -8,7 +8,7 @@
 #include "no_op.h"
 #include "sample.hpp"
 template <typename Data, typename Buffer>
-struct Sample<SampleName::MSGPACK, Data, Buffer> : public SampleBase {
+struct Sample<LibType::MSGPACK, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {
     msgpack::pack(buffer_, data_);
     size_ = buffer_.size();
@@ -63,34 +63,34 @@ auto create_sample() {
   if constexpr (sample_type == SampleType::RECT) {
     using Data = rect<int32_t>;
     auto rects = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::MSGPACK, Data, Buffer>(rects[0]);
+    return Sample<LibType::MSGPACK, Data, Buffer>(rects[0]);
   }
   else if constexpr (sample_type == SampleType::RECTS) {
     using Data = std::vector<rect<int32_t>>;
     auto rects = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::MSGPACK, Data, Buffer>(rects);
+    return Sample<LibType::MSGPACK, Data, Buffer>(rects);
   }
   else if constexpr (sample_type == SampleType::PERSON) {
     using Data = person;
     auto persons = create_persons(OBJECT_COUNT);
     auto person = persons[0];
-    return Sample<SampleName::MSGPACK, Data, Buffer>(person);
+    return Sample<LibType::MSGPACK, Data, Buffer>(person);
   }
   else if constexpr (sample_type == SampleType::PERSONS) {
     using Data = std::vector<person>;
     auto persons = create_persons(OBJECT_COUNT);
-    return Sample<SampleName::MSGPACK, Data, Buffer>(persons);
+    return Sample<LibType::MSGPACK, Data, Buffer>(persons);
   }
   else if constexpr (sample_type == SampleType::MONSTER) {
     using Data = Monster;
     auto monsters = create_monsters(OBJECT_COUNT);
     auto monster = monsters[0];
-    return Sample<SampleName::MSGPACK, Data, Buffer>(monster);
+    return Sample<LibType::MSGPACK, Data, Buffer>(monster);
   }
   else if constexpr (sample_type == SampleType::MONSTERS) {
     using Data = std::vector<Monster>;
     auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<SampleName::MSGPACK, Data, Buffer>(monsters);
+    return Sample<LibType::MSGPACK, Data, Buffer>(monsters);
   }
   else {
     return sample_type;

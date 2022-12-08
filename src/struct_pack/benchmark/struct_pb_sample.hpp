@@ -180,7 +180,7 @@ bool verify(const struct_pb_sample::Monsters &a,
   return true;
 }
 template <typename Data, typename Buffer>
-struct Sample<SampleName::STRUCT_PB, Data, Buffer> : public SampleBase {
+struct Sample<LibType::STRUCT_PB, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {
     size_ = struct_pack::pb::get_needed_size(data_);
 #ifndef NDEBUG
@@ -249,34 +249,34 @@ auto create_sample() {
     using Data = struct_pb_sample::rect32;
     auto rects = create_rects(OBJECT_COUNT);
     auto rect = rects.rect32_list[0];
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(rect);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(rect);
   }
   else if constexpr (sample_type == SampleType::RECTS) {
     using Data = struct_pb_sample::rect32s;
     auto rects = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(rects);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(rects);
   }
   else if constexpr (sample_type == SampleType::PERSON) {
     using Data = struct_pb_sample::person;
     auto persons = create_persons(OBJECT_COUNT);
     auto person = persons.person_list[0];
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(person);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(person);
   }
   else if constexpr (sample_type == SampleType::PERSONS) {
     using Data = struct_pb_sample::persons;
     auto persons = create_persons(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(persons);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(persons);
   }
   else if constexpr (sample_type == SampleType::MONSTER) {
     using Data = struct_pb_sample::Monster;
     auto monsters = create_monsters(OBJECT_COUNT);
     auto monster = monsters.monsters[0];
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(monster);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(monster);
   }
   else if constexpr (sample_type == SampleType::MONSTERS) {
     using Data = struct_pb_sample::Monsters;
     auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PB, Data, Buffer>(monsters);
+    return Sample<LibType::STRUCT_PB, Data, Buffer>(monsters);
   }
   else {
     return sample_type;

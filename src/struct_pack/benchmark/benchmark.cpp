@@ -16,7 +16,7 @@ using namespace std::string_literals;
 
 template <SampleType sample_type>
 void bench_struct_pack() {
-  std::string tag = get_tag_name<sample_type>();
+  std::string tag = get_tag_name(sample_type);
   bench(tag, create_sample<sample_type>()
 #ifdef HAVE_MSGPACK
                  ,
@@ -31,7 +31,7 @@ void bench_struct_pack() {
 
 template <SampleType sample_type>
 void bench_struct_pb() {
-  std::string tag = get_tag_name<sample_type>();
+  std::string tag = get_tag_name(sample_type);
   bench(tag, struct_pb_sample::create_sample<sample_type>()
 #ifdef HAVE_PROTOBUF
                  ,

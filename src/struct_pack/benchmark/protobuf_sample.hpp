@@ -103,9 +103,9 @@ mygame::Monsters create_monsters(size_t object_count) {
   }
   return Monsters;
 }
-}
+}  // namespace protobuf_sample
 template <typename Data, typename Buffer>
-struct Sample<SampleName::PROTOBUF, Data, Buffer> : public SampleBase {
+struct Sample<LibType::PROTOBUF, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {
     pb_size_ = data_.SerializeAsString().size();
   }
@@ -156,7 +156,7 @@ struct Sample<SampleName::PROTOBUF, Data, Buffer> : public SampleBase {
   Buffer buffer_;
   std::size_t pb_size_;
 };
-namespace protobuf_sample{
+namespace protobuf_sample {
 template <SampleType sample_type>
 auto create_sample() {
   using Buffer = std::string;
@@ -164,37 +164,37 @@ auto create_sample() {
     using Data = mygame::rect32;
     auto pbs = create_rects(OBJECT_COUNT);
     auto pb = *(pbs.rect32_list().begin());
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(pb);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(pb);
   }
   else if constexpr (sample_type == SampleType::RECTS) {
     using Data = mygame::rect32s;
     auto pbs = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(pbs);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(pbs);
   }
   else if constexpr (sample_type == SampleType::PERSON) {
     using Data = mygame::person;
     auto pbs = create_persons(OBJECT_COUNT);
     auto pb = *(pbs.person_list().begin());
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(pb);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(pb);
   }
   else if constexpr (sample_type == SampleType::PERSONS) {
     using Data = mygame::persons;
     auto pbs = create_persons(OBJECT_COUNT);
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(pbs);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(pbs);
   }
   else if constexpr (sample_type == SampleType::MONSTER) {
     using Data = mygame::Monster;
     auto monsters = create_monsters(OBJECT_COUNT);
     auto monster = *(monsters.monsters().begin());
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(monster);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(monster);
   }
   else if constexpr (sample_type == SampleType::MONSTERS) {
     using Data = mygame::Monsters;
     auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<SampleName::PROTOBUF, Data, Buffer>(monsters);
+    return Sample<LibType::PROTOBUF, Data, Buffer>(monsters);
   }
   else {
     return sample_type;
   }
 }
-}
+}  // namespace protobuf_sample

@@ -39,7 +39,7 @@ constexpr inline auto enable_type_info<std::vector<Monster>> =
 };
 
 template <typename Data, typename Buffer>
-struct Sample<SampleName::STRUCT_PACK, Data, Buffer> : public SampleBase {
+struct Sample<LibType::STRUCT_PACK, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {}
 
   void clear_data() override {
@@ -82,34 +82,34 @@ auto create_sample() {
   if constexpr (sample_type == SampleType::RECT) {
     using Data = rect<int32_t>;
     auto rects = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(rects[0]);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(rects[0]);
   }
   else if constexpr (sample_type == SampleType::RECTS) {
     using Data = std::vector<rect<int32_t>>;
     auto rects = create_rects(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(rects);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(rects);
   }
   else if constexpr (sample_type == SampleType::PERSON) {
     using Data = person;
     auto persons = create_persons(OBJECT_COUNT);
     auto person = persons[0];
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(person);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(person);
   }
   else if constexpr (sample_type == SampleType::PERSONS) {
     using Data = std::vector<person>;
     auto persons = create_persons(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(persons);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(persons);
   }
   else if constexpr (sample_type == SampleType::MONSTER) {
     using Data = Monster;
     auto monsters = create_monsters(OBJECT_COUNT);
     auto monster = monsters[0];
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(monster);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(monster);
   }
   else if constexpr (sample_type == SampleType::MONSTERS) {
     using Data = std::vector<Monster>;
     auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<SampleName::STRUCT_PACK, Data, Buffer>(monsters);
+    return Sample<LibType::STRUCT_PACK, Data, Buffer>(monsters);
   }
   else {
     return sample_type;

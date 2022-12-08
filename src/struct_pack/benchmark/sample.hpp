@@ -8,7 +8,7 @@
 
 #include "config.hpp"
 
-template <SampleName sample_name, typename Data, typename Buffer>
+template <LibType sample_name, typename Data, typename Buffer>
 struct Sample;
 
 template <typename T>
