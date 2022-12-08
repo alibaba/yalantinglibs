@@ -187,7 +187,7 @@ struct Sample<LibType::STRUCT_PB, Data, Buffer> : public SampleBase {
     data_old_ = data_;
 #endif
   }
-  void clear_data() override {
+  void clear_data() {
     if constexpr (std::same_as<Data, struct_pb_sample::Monsters>) {
       data_.monsters.clear();
     }
@@ -203,8 +203,8 @@ struct Sample<LibType::STRUCT_PB, Data, Buffer> : public SampleBase {
       data_.path.clear();
     }
   }
-  void clear_buffer() override { buffer_.clear(); }
-  void reserve_buffer() override {
+  void clear_buffer() { buffer_.clear(); }
+  void reserve_buffer() {
     buffer_.reserve(struct_pack::pb::get_needed_size(data_) * SAMPLES_COUNT);
   }
   size_t buffer_size() const override { return buffer_.size(); }

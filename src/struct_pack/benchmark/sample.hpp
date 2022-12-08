@@ -45,9 +45,6 @@ std::string pretty_name(std::string name) {
   return name;
 }
 struct SampleBase {
-  virtual void clear_data() = 0;
-  virtual void clear_buffer() = 0;
-  virtual void reserve_buffer() = 0;
   virtual std::size_t buffer_size() const = 0;
   virtual std::string name() const = 0;
   virtual void do_serialization(int run_idx = 0) = 0;

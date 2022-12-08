@@ -42,13 +42,13 @@ template <typename Data, typename Buffer>
 struct Sample<LibType::STRUCT_PACK, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {}
 
-  void clear_data() override {
+  void clear_data() {
     if constexpr (std::same_as<Data, std::vector<Monster>>) {
       data_.clear();
     }
   }
-  void clear_buffer() override { buffer_.clear(); }
-  void reserve_buffer() override {
+  void clear_buffer() { buffer_.clear(); }
+  void reserve_buffer() {
     buffer_.reserve(struct_pack::get_needed_size(data_));
   }
   size_t buffer_size() const override { return buffer_.size(); }

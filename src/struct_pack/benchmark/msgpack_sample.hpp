@@ -13,13 +13,13 @@ struct Sample<LibType::MSGPACK, Data, Buffer> : public SampleBase {
     msgpack::pack(buffer_, data_);
     size_ = buffer_.size();
   }
-  void clear_data() override {
+  void clear_data() {
     if constexpr (std::same_as<Data, std::vector<Monster>>) {
       data_.clear();
     }
   }
-  void clear_buffer() override { buffer_.clear(); }
-  void reserve_buffer() override { buffer_.reserve(size_ * SAMPLES_COUNT); }
+  void clear_buffer() { buffer_.clear(); }
+  void reserve_buffer() { buffer_.reserve(size_ * SAMPLES_COUNT); }
   size_t buffer_size() const override { return buffer_.size(); }
   std::string name() const override { return "msgpack"; }
   void do_serialization(int run_idx) override {

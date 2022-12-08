@@ -109,7 +109,7 @@ struct Sample<LibType::PROTOBUF, Data, Buffer> : public SampleBase {
   Sample(Data data) : data_(std::move(data)) {
     pb_size_ = data_.SerializeAsString().size();
   }
-  void clear_data() override {
+  void clear_data() {
     if constexpr (std::same_as<Data, mygame::Monsters>) {
       data_.clear_monsters();
     }
@@ -125,8 +125,8 @@ struct Sample<LibType::PROTOBUF, Data, Buffer> : public SampleBase {
       data_.clear_path();
     }
   }
-  void clear_buffer() override { buffer_.clear(); }
-  void reserve_buffer() override { buffer_.reserve(pb_size_ * SAMPLES_COUNT); }
+  void clear_buffer() { buffer_.clear(); }
+  void reserve_buffer() { buffer_.reserve(pb_size_ * SAMPLES_COUNT); }
   size_t buffer_size() const override { return buffer_.size(); }
   std::string name() const override { return "protobuf"; }
   void do_serialization(int run_idx = 0) override {
