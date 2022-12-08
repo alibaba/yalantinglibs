@@ -1,5 +1,4 @@
 # Introduction
-[TOC]
 
 - [Introduction](#introduction)
 - [Usability](#usability)
@@ -147,7 +146,7 @@ int main() {
   syncAwait(test_client());
 }
 ```
-The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](/src/struct_pack/) with compile-time reflection. Users are not required to take efforts on such procedures.
+The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](https://alibaba.github.io/yalantinglibs/guide/struct-pack-intro.html) with compile-time reflection. Users are not required to take efforts on such procedures.
 
 # Compare with grpc/brpc
 

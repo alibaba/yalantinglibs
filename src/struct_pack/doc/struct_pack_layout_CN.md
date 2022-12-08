@@ -71,7 +71,7 @@
 
 当类型校验通过时，该字段的长度可在编译期确定。当校验失败时，该字段的长度需要根据`'\0'`字符的位置确定。
 
-该字段的编码规则以及它和struct_pack类型树的映射关系请见[struct_pack的类型系统](./struct_pack_type_system.md)。
+该字段的编码规则以及它和struct_pack类型树的映射关系请见[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)。
 
 例如，对于类型：
 ```cpp
@@ -219,7 +219,13 @@ struct_pack支持多种数据结构，不同的数据结构有着不同的内存
 
 该字段的内存布局，首先是一个`size_type`大小的长度字段，该字段为无符号整数，编码类型为原码。接着是若干个`map`的`value_type`字段，其数量由长度字段决定。
 
-例如，序列化对象包含字段`std::map<int,std::string>{{42，"Hello"},{24,"Student"}}`，该字段的编码如下图所示：
+例如，序列化对象包含字段
+
+```cpp
+std::map<int,std::string>{{42，"Hello"},{24,"Student"}}
+```
+
+，该字段的编码如下图所示：
 
 ![](images/layout/map_layout.svg)
 
@@ -288,13 +294,4 @@ struct person {
 则在release模式下序列化对象`person{.age=24,.name="Betty",.salary=2000.0}`，其编码结果为：     
 ![](./images/layout/release_person_with_compatible.svg)
 
-上图中元信息头为`0x01`，代表结构体包含compatible<T>`字段，且结构体的总长度小于65536。
-
-
-
-
-
-
-
-
-
+上图中元信息头为`0x01`，代表结构体包含`compatible<T>`字段，且结构体的总长度小于65536。

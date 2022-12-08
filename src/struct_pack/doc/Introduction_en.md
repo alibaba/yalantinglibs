@@ -1,6 +1,5 @@
 # struct_pack Introduction
 
-[TOC]
 
 - [struct_pack Introduction](#struct_pack-introduction)
   - [Serialization](#serialization)
@@ -298,4 +297,4 @@ struct_pack ensures that the two classes can be safely converted to each other b
 
 ### Test code
 
-see [benchmark.cpp](../benchmark/benchmark.cpp)
+see [benchmark.cpp](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/benchmark)

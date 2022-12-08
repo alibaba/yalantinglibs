@@ -1,7 +1,5 @@
 # struct_pack简介
 
-[TOC]
-
 - [struct\_pack简介](#struct_pack简介)
   - [序列化](#序列化)
     - [基本用法](#基本用法)
@@ -296,12 +294,12 @@ struct_pack保证这两个类可以通过序列化和反序列化实现安全的
 
 ## 关于struct_pack类型系统
 
-[struct_pack的类型系统](./struct_pack_type_system_CN.md)
+[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
 
 ## 关于struct_pack的编码与布局
 
-[struct_pack的编码与布局](./struct_pack_layout_CN.md)
+[struct_pack的编码与布局](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-layout.html)
 
 ### 测试代码
 
-请见 [benchmark.cpp](../benchmark/benchmark.cpp)
+请见 [benchmark.cpp](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/benchmark)

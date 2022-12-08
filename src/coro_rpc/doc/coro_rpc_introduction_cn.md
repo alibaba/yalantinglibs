@@ -1,7 +1,5 @@
 # coro_rpc简介
 
-[TOC]
-
 - [coro_rpc简介](#coro_rpc简介)
 - [coro_rpc的易用性](#coro_rpc的易用性)
   - [rpc_server端](#rpc_server端)
@@ -156,7 +154,7 @@ int main() {
 }
 ```
 
-这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](struct_pack：一个更快更好用的序列化库.md)实现自动的序列化和反序列化，用户无感知，省心省力。
+这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)实现自动的序列化和反序列化，用户无感知，省心省力。
 
 # 和grpc、brpc比较易用性
 

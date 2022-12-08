@@ -4,7 +4,7 @@ export default {
   description: 'A collection of C++20 libraries, include async_simple, coro_rpc and struct_pack.',
   base: '/yalantinglibs/',
   lastUpdated: true,
-  ignoreDeadLinks: true,
+  ignoreDeadLinks: false,
   outDir: "../docs",
   locales: {
     "/": {
@@ -100,6 +100,8 @@ function sidebarGuideZh() {
       collapsible: true,
       items: [
         {text: 'struct_pack简介', link: '/zh/guide/struct-pack-intro'},
+        {text: 'struct_pack类型系统', link: '/zh/guide/struct-pack-type-system'},
+        {text: 'struct_pack布局', link: '/zh/guide/struct-pack-layout'},
         {
           text: 'API Reference',
           link: "https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html"

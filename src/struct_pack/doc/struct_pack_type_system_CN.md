@@ -295,7 +295,7 @@ struct_pack计算类型哈希的步骤如下：
 
 如下图所示：
 
-![](images/type_system/md5_generate.PNG)
+![](images/type_system/md5_generate.png)
 
 对于结构体
 ```
