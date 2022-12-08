@@ -13,7 +13,7 @@ foreach(proj ${yLT_ALL_PROJECTS})
     endif()
 endforeach()
 
-message(STATUS "--------------yLT_ENABLE_PROJECTS: ${yLT_ENABLE_PROJECTS}")
+message(STATUS "yLT_ENABLE_PROJECTS: ${yLT_ENABLE_PROJECTS}")
 
 foreach(module ${yLT_ENABLE_PROJECTS})
     set(module_location ${CMAKE_SOURCE_DIR}/src/${module})
