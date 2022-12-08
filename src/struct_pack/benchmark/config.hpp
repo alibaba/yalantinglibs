@@ -12,8 +12,6 @@ enum class SampleName {
   STRUCT_PB,
   MSGPACK,
   PROTOBUF,
-  PROTOPUF,
-  PROTOZERO
 };
 enum class SampleType { RECT, RECTS, PERSON, PERSONS, MONSTER, MONSTERS };
 
