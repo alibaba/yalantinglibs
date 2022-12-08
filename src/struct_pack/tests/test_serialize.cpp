@@ -660,15 +660,6 @@ std::array<std::string, 127 * 127> ar4;
 std::array<std::string, 127 * 127> ar4_1;
 }  // namespace array_test
 
-TEST_CASE("hey") {
-  auto str = struct_pack::get_type_literal<person>();
-  for (auto &e : str) {
-    std::cout << int(e) << ' ';
-  }
-
-  std::cout << std::endl;
-}
-
 TEST_CASE("array test") {
   std::string test_str = "Hello Hi Hello Hi Hello Hi Hello Hi Hello Hi";
   using namespace array_test;
