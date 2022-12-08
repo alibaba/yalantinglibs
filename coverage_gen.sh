@@ -33,6 +33,7 @@ make -j test_rpc
 # https://groups.google.com/g/llvm-dev/c/oaA58fbNMGg
 # https://github.com/llvm/llvm-project/issues/50966
 export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
+ls
 cd tests
 ./test_rpc
 llvm-profdata merge -sparse test_rpc-*.profraw -o test_rpc.profdata
