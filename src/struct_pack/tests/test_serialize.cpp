@@ -660,7 +660,6 @@ std::array<std::string, 127 * 127> ar4;
 std::array<std::string, 127 * 127> ar4_1;
 }  // namespace array_test
 
-
 TEST_CASE("array test") {
   std::string test_str = "Hello Hi Hello Hi Hello Hi Hello Hi Hello Hi";
   using namespace array_test;
