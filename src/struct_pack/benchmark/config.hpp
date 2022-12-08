@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 static constexpr int OBJECT_COUNT = 20;
 #ifdef NDEBUG
 static constexpr int SAMPLES_COUNT = 10000;  // 0;
@@ -18,15 +19,19 @@ enum class LibType {
 };
 enum class SampleType { RECT, RECTS, PERSON, PERSONS, MONSTER, MONSTERS };
 
-inline const std::unordered_map<SampleType, std::string> sample_name_map = {
+inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
     {SampleType::RECT, "1 rect"},       {SampleType::RECTS, "20 rects"},
     {SampleType::PERSON, "1 person"},   {SampleType::PERSONS, "20 persons"},
     {SampleType::MONSTER, "1 monster"}, {SampleType::MONSTERS, "20 monsters"},
 };
 
-inline std::string get_tag_name(SampleType sample_type) {
-  auto it = sample_name_map.find(sample_type);
-  if (it == sample_name_map.end()) {
+inline const std::vector<SampleType> g_sample_type_vec = {
+    SampleType::RECT,    SampleType::RECTS,   SampleType::PERSON,
+    SampleType::PERSONS, SampleType::MONSTER, SampleType::MONSTERS};
+
+inline std::string get_bench_name(SampleType sample_type) {
+  auto it = g_sample_name_map.find(sample_type);
+  if (it == g_sample_name_map.end()) {
     throw std::invalid_argument("unknown sample type");
   }
 

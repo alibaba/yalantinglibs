@@ -14,24 +14,18 @@
 #include "config.hpp"
 using namespace std::string_literals;
 
-template <SampleType sample_type>
 void bench_struct_pack() {
-  std::string tag = get_tag_name(sample_type);
-  bench(tag, create_sample<sample_type>()
-#ifdef HAVE_MSGPACK
-                 ,
-        msgpack_sample::create_sample<sample_type>()
-#endif
-#ifdef HAVE_PROTOBUF
-            ,
-        protobuf_sample::create_sample<sample_type>()
-#endif
-  );
+  sample&& sp = struct_pack_sample();
+  sp.create_samples();
+  sp.do_serialization(0);
+  sp.do_deserialization(0);
+
+  sp.print_buffer_size();
 }
 
 template <SampleType sample_type>
 void bench_struct_pb() {
-  std::string tag = get_tag_name(sample_type);
+  std::string tag = get_bench_name(sample_type);
   bench(tag, struct_pb_sample::create_sample<sample_type>()
 #ifdef HAVE_PROTOBUF
                  ,
@@ -40,10 +34,6 @@ void bench_struct_pb() {
   );
 }
 
-void bench_all_struct_pack() {
-  bench_struct_pack<SampleType::MONSTER>();
-  bench_struct_pack<SampleType::MONSTERS>();
-}
 void bench_all_struct_pb() {
   bench_struct_pb<SampleType::MONSTER>();
   bench_struct_pb<SampleType::MONSTERS>();
@@ -52,13 +42,14 @@ int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
   std::cout << "SAMPLES_COUNT: " << SAMPLES_COUNT << std::endl;
 
+  bench_struct_pack();
+  return 0;
+
   if (argc == 1) {
     bench_all_struct_pb();
     return 0;
   }
-  if (argv[1] == "struct_pack"s) {
-    bench_all_struct_pack();
-  }
+
   else {
     bench_all_struct_pb();
   }

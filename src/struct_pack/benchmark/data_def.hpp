@@ -34,10 +34,10 @@ struct person {
 
 template <typename T>
 struct rect {
-  T x = get_max<T>();
-  T y = get_max<T>();
-  T width = get_max<T>();
-  T height = get_max<T>();
+  T x;
+  T y;
+  T width;
+  T height;
 #ifdef HAVE_MSGPACK
   MSGPACK_DEFINE(x, y, width, height);
 #endif

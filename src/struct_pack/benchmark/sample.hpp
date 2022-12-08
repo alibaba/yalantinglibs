@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iostream>
 #include <numeric>
 
 #include "config.hpp"
@@ -44,11 +45,28 @@ std::string pretty_name(std::string name) {
   }
   return name;
 }
+
+struct sample {
+  virtual std::size_t buffer_size(SampleType type) const = 0;
+  virtual std::string name() const = 0;
+  virtual void do_serialization(int run_idx = 0) = 0;
+  virtual void do_deserialization(int run_idx) = 0;
+  virtual void create_samples() {}
+
+  void print_buffer_size() {
+    for (auto sample_type : g_sample_type_vec) {
+      std::cout << get_bench_name(sample_type)
+                << " buffer size = " << buffer_size(sample_type) << "\n";
+    }
+  }
+};
+
 struct SampleBase {
   virtual std::size_t buffer_size() const = 0;
   virtual std::string name() const = 0;
   virtual void do_serialization(int run_idx = 0) = 0;
   virtual void do_deserialization(int run_idx) = 0;
+  virtual void create_samples() {}
   void report_metric(std::string_view tag) const {
     std::cout << tag << " ";
     std::cout << pretty_name(name())

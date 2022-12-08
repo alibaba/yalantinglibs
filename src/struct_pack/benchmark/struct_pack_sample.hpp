@@ -1,6 +1,11 @@
 #pragma once
+#include <stdexcept>
+#include <type_traits>
+#include <unordered_map>
+
 #include "ScopedTimer.hpp"
 #include "data_def.hpp"
+#include "no_op.h"
 #include "sample.hpp"
 #include "struct_pack/struct_pack.hpp"
 
@@ -38,80 +43,82 @@ constexpr inline auto enable_type_info<std::vector<Monster>> =
     type_info_config::disable;
 };
 
-template <typename Data, typename Buffer>
-struct Sample<LibType::STRUCT_PACK, Data, Buffer> : public SampleBase {
-  Sample(Data data) : data_(std::move(data)) {}
+struct struct_pack_sample : public sample {
+  size_t buffer_size(SampleType type) const override {
+    auto it = buf_size_map_.find(type);
+    if (it == buf_size_map_.end()) {
+      throw std::runtime_error("unknown sample type");
+    }
 
-  void clear_data() {
-    if constexpr (std::same_as<Data, std::vector<Monster>>) {
-      data_.clear();
-    }
+    return it->second;
   }
-  void clear_buffer() { buffer_.clear(); }
-  void reserve_buffer() {
-    buffer_.reserve(struct_pack::get_needed_size(data_));
-  }
-  size_t buffer_size() const override { return buffer_.size(); }
+
   std::string name() const override { return "struct_pack"; }
-  void do_serialization(int run_idx) override {
-    ScopedTimer timer(("serialize " + name()).c_str(),
-                      serialize_cost_[run_idx]);
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      struct_pack::serialize_to(buffer_, data_);
-    }
+
+  void create_samples() override {
+    rects_ = create_rects(OBJECT_COUNT);
+    persons_ = create_persons(OBJECT_COUNT);
+    monsters_ = create_monsters(OBJECT_COUNT);
   }
+
+  void do_serialization(int run_idx) override {
+    serialize(SampleType::RECT, rects_[0]);
+    serialize(SampleType::RECTS, rects_);
+    serialize(SampleType::PERSON, persons_[0]);
+    serialize(SampleType::PERSONS, persons_);
+    serialize(SampleType::MONSTER, monsters_[0]);
+    serialize(SampleType::MONSTERS, monsters_);
+  }
+
   void do_deserialization(int run_idx) override {
-    ScopedTimer timer(("deserialize " + name()).c_str(),
-                      deserialize_cost_[run_idx]);
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      std::size_t len = 0;
-      auto ec = struct_pack::deserialize_to_with_offset(data_, buffer_, len);
-      if (ec != struct_pack::errc{}) [[unlikely]] {
-        std::exit(1);
-      }
-    }
+    deserialize(SampleType::RECT, rects_[0]);
+    deserialize(SampleType::RECTS, rects_);
+    deserialize(SampleType::PERSON, persons_[0]);
+    deserialize(SampleType::PERSONS, persons_);
+    deserialize(SampleType::MONSTER, monsters_[0]);
+    deserialize(SampleType::MONSTERS, monsters_);
   }
 
  private:
-  Data data_;
-  Buffer buffer_;
+  void serialize(SampleType sample_type, auto &sample) {
+    {
+      std::string bench_name = "serialize " + get_bench_name(sample_type);
+      ScopedTimer timer(bench_name.data());
+      for (int i = 0; i < SAMPLES_COUNT; ++i) {
+        buffer_.clear();
+        struct_pack::serialize_to(buffer_, sample);
+        no_op();
+      }
+    }
+    buf_size_map_.emplace(sample_type, buffer_.size());
+  }
+
+  void deserialize(SampleType sample_type, auto &sample) {
+    using T = std::remove_cvref_t<decltype(sample)>;
+
+    // get serialized buffer of sample for deserialize
+    buffer_.clear();
+    struct_pack::serialize_to(buffer_, sample);
+
+    std::string bench_name = "deserialize " + get_bench_name(sample_type);
+    ScopedTimer timer(bench_name.data());
+    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+      if constexpr (struct_pack::detail::container<T>) {
+        sample.clear();
+      }
+
+      auto ec = struct_pack::deserialize_to(sample, buffer_);
+      if (ec != struct_pack::errc{}) [[unlikely]] {
+        throw std::runtime_error("impossible");
+      }
+
+      no_op();
+    }
+  }
+
+  std::vector<rect<int32_t>> rects_;
+  std::vector<person> persons_;
+  std::vector<Monster> monsters_;
+  std::string buffer_;
+  std::unordered_map<SampleType, size_t> buf_size_map_;
 };
-template <SampleType sample_type>
-auto create_sample() {
-  using Buffer = std::string;
-  if constexpr (sample_type == SampleType::RECT) {
-    using Data = rect<int32_t>;
-    auto rects = create_rects(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(rects[0]);
-  }
-  else if constexpr (sample_type == SampleType::RECTS) {
-    using Data = std::vector<rect<int32_t>>;
-    auto rects = create_rects(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(rects);
-  }
-  else if constexpr (sample_type == SampleType::PERSON) {
-    using Data = person;
-    auto persons = create_persons(OBJECT_COUNT);
-    auto person = persons[0];
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(person);
-  }
-  else if constexpr (sample_type == SampleType::PERSONS) {
-    using Data = std::vector<person>;
-    auto persons = create_persons(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(persons);
-  }
-  else if constexpr (sample_type == SampleType::MONSTER) {
-    using Data = Monster;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    auto monster = monsters[0];
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(monster);
-  }
-  else if constexpr (sample_type == SampleType::MONSTERS) {
-    using Data = std::vector<Monster>;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PACK, Data, Buffer>(monsters);
-  }
-  else {
-    return sample_type;
-  }
-}
