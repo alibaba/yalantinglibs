@@ -1,10 +1,9 @@
 # module-list
-set(yLT_ALL_PROJECTS "struct_pack;struct_json;coro_rpc;util")
+set(yLT_ALL_PROJECTS "struct_pack;struct_json;coro_rpc")
 # separate
 option(Build_ylt_struct_pack "Build struct_pack" ON)
 option(Build_ylt_struct_json "Build struct_json" ON)
 option(Build_ylt_coro_rpc "Build coro_rpc" ON)
-option(Build_ylt_util "Build util" OFF)
 
 foreach(proj ${yLT_ALL_PROJECTS})
     set(build_proj "Build_ylt_${proj}")
