@@ -1,23 +1,5 @@
 # coro_rpc简介
 
-- [coro\_rpc简介](#coro_rpc简介)
-- [coro\_rpc的易用性](#coro_rpc的易用性)
-  - [rpc\_server端](#rpc_server端)
-  - [rpc函数支持任意参数](#rpc函数支持任意参数)
-- [和grpc、brpc比较易用性](#和grpcbrpc比较易用性)
-  - [rpc易用性比较](#rpc易用性比较)
-  - [异步编程模型比较](#异步编程模型比较)
-- [coro\_rpc更多特色](#coro_rpc更多特色)
-  - [同时支持实时任务和延时任务](#同时支持实时任务和延时任务)
-  - [服务端同时支持协程和异步回调](#服务端同时支持协程和异步回调)
-- [benchmark](#benchmark)
-  - [测试环境](#测试环境)
-  - [测试case](#测试case)
-    - [极限qps测试](#极限qps测试)
-    - [ping-pong测试](#ping-pong测试)
-    - [长尾测试](#长尾测试)
-  - [benchmark备注](#benchmark备注)
-- [使用约束](#使用约束)
 
 coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分)
 ，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
