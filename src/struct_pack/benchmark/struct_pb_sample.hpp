@@ -17,9 +17,9 @@
 #include <optional>
 #include <valarray>
 
-#include "struct_pack/struct_pack/pb.hpp"
-#include "sample.hpp"
 #include "ScopedTimer.hpp"
+#include "sample.hpp"
+#include "struct_pack/struct_pack/pb.hpp"
 namespace struct_pb_sample {
 struct Vec3 {
   float x;
@@ -93,7 +93,7 @@ struct persons {
     return person_list == rhs.person_list;
   }
 };
-auto create_rects(std::size_t object_count) {
+inline auto create_rects(std::size_t object_count) {
   rect32s rcs;
   for (int i = 0; i < object_count; ++i) {
     rect32 rc{65536, 65536, 65536, 65536};
@@ -101,7 +101,7 @@ auto create_rects(std::size_t object_count) {
   }
   return rcs;
 }
-auto create_persons(std::size_t object_count) {
+inline auto create_persons(std::size_t object_count) {
   persons ps;
   for (int i = 0; i < object_count; ++i) {
     person p{65536, "tom", 65536, 65536.42};
@@ -109,7 +109,7 @@ auto create_persons(std::size_t object_count) {
   }
   return ps;
 }
-auto create_monsters(std::size_t object_count) {
+inline auto create_monsters(std::size_t object_count) {
   Monsters monsters;
   for (int i = 0; i < object_count / 2; ++i) {
     {
@@ -141,13 +141,15 @@ auto create_monsters(std::size_t object_count) {
   }
   return monsters;
 }
-}  // namespace struct_pb
-bool verify(const struct_pb_sample::Weapon& a, const struct_pb_sample::Weapon& b) {
+}  // namespace struct_pb_sample
+inline bool verify(const struct_pb_sample::Weapon &a,
+                   const struct_pb_sample::Weapon &b) {
   assert(a.name == b.name);
   assert(a.damage == b.damage);
   return true;
 }
-bool verify(const struct_pb_sample::Monster& a, const struct_pb_sample::Monster& b) {
+inline bool verify(const struct_pb_sample::Monster &a,
+                   const struct_pb_sample::Monster &b) {
   assert(a.pos == b.pos);
   assert(a.mana == b.mana);
   assert(a.hp == b.hp);
@@ -166,7 +168,8 @@ bool verify(const struct_pb_sample::Monster& a, const struct_pb_sample::Monster&
   assert(a.path == b.path);
   return true;
 }
-bool verify(const struct_pb_sample::Monsters& a, const struct_pb_sample::Monsters& b) {
+inline bool verify(const struct_pb_sample::Monsters &a,
+                   const struct_pb_sample::Monsters &b) {
   assert(a.monsters.size() == b.monsters.size());
   for (int i = 0; i < a.monsters.size(); ++i) {
     auto ok = verify(a.monsters[i], b.monsters[i]);
@@ -176,9 +179,9 @@ bool verify(const struct_pb_sample::Monsters& a, const struct_pb_sample::Monster
   }
   return true;
 }
-template<typename Data, typename Buffer>
-struct Sample<SampleName::STRUCT_PB, Data, Buffer>: public SampleBase {
-  Sample(Data data): data_(std::move(data)) {
+template <typename Data, typename Buffer>
+struct Sample<SampleName::STRUCT_PB, Data, Buffer> : public SampleBase {
+  Sample(Data data) : data_(std::move(data)) {
     size_ = struct_pack::pb::get_needed_size(data_);
 #ifndef NDEBUG
     data_old_ = data_;
@@ -200,27 +203,27 @@ struct Sample<SampleName::STRUCT_PB, Data, Buffer>: public SampleBase {
       data_.path.clear();
     }
   }
-  void clear_buffer() override {
-    buffer_.clear();
-  }
+  void clear_buffer() override { buffer_.clear(); }
   void reserve_buffer() override {
     buffer_.reserve(struct_pack::pb::get_needed_size(data_) * SAMPLES_COUNT);
   }
   size_t buffer_size() const override { return buffer_.size(); }
   std::string name() const override { return "struct_pb"; }
   void do_serialization(int run_idx) override {
-    ScopedTimer timer(("serialize " + name()).c_str(), serialize_cost_[run_idx]);
+    ScopedTimer timer(("serialize " + name()).c_str(),
+                      serialize_cost_[run_idx]);
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
       struct_pack::pb::serialize_to(buffer_, data_);
     }
   }
   void do_deserialization(int run_idx) override {
-    ScopedTimer timer(("deserialize " + name()).c_str(), deserialize_cost_[run_idx]);
+    ScopedTimer timer(("deserialize " + name()).c_str(),
+                      deserialize_cost_[run_idx]);
     std::size_t len = 0;
     std::size_t pos = 0;
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      auto ec = struct_pack::pb::deserialize_to<Data>(data_, buffer_.data() + pos,
-                                                    size_, len);
+      auto ec = struct_pack::pb::deserialize_to<Data>(
+          data_, buffer_.data() + pos, size_, len);
       if (ec != std::errc{}) [[unlikely]] {
         std::exit(1);
       }
@@ -229,6 +232,7 @@ struct Sample<SampleName::STRUCT_PB, Data, Buffer>: public SampleBase {
       clear_data();
     }
   }
+
  private:
   Data data_;
   Buffer buffer_;
@@ -238,7 +242,7 @@ struct Sample<SampleName::STRUCT_PB, Data, Buffer>: public SampleBase {
 #endif
 };
 namespace struct_pb_sample {
-template<SampleType sample_type>
+template <SampleType sample_type>
 auto create_sample() {
   using Buffer = std::string;
   if constexpr (sample_type == SampleType::RECT) {
@@ -278,4 +282,4 @@ auto create_sample() {
     return sample_type;
   }
 }
-}
+}  // namespace struct_pb_sample
