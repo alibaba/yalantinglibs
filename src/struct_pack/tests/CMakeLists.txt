@@ -61,4 +61,4 @@ target_sources(test_struct_pb_gen PRIVATE
         ${TEST_SERIALIZE_PROTO_SRCS}
         ${TEST_SERIALIZE_PROTO_HDRS}
         )
-add_subdirectory(conformance)
+# add_subdirectory(conformance)

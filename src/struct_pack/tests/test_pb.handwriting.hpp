@@ -1,6 +1,7 @@
 #pragma once
-#include <valarray>
 #include <unordered_map>
+#include <valarray>
+
 #include "struct_pack/struct_pack/pb.hpp"
 using namespace struct_pack::pb;
 struct test1 {
@@ -9,16 +10,16 @@ struct test1 {
 };
 struct test2 {
   std::string b;
-  bool operator==(const test2&) const = default;
+  bool operator==(const test2 &) const = default;
 };
 struct test3 {
   std::optional<test1> c;
-  bool operator==(const test3&) const = default;
+  bool operator==(const test3 &) const = default;
 };
 struct test4 {
   std::string d;
   std::vector<varint32_t> e;
-  bool operator==(const test4&) const = default;
+  bool operator==(const test4 &) const = default;
 };
 struct my_test_double {
   double a;
@@ -43,7 +44,6 @@ struct my_test_float {
     return (std::abs(lh - rh) < 0.05f).min();
   };
 };
-
 
 struct my_test_int32 {
   std::optional<varint32_t> a;
@@ -110,7 +110,6 @@ struct my_test_field_number_random {
   bool operator==(const my_test_field_number_random &) const = default;
 };
 
-
 struct my_test_all {
   double a;
   float b;
@@ -138,8 +137,9 @@ struct my_test_all {
 
 struct sub_message_for_oneof {
   bool ok;
-  bool operator==(const sub_message_for_oneof&) const = default;
+  bool operator==(const sub_message_for_oneof &) const = default;
 };
 struct sample_message_oneof {
-  std::variant<varint32_t, varint32_t, std::string, sub_message_for_oneof> test_oneof;
+  std::variant<varint32_t, varint32_t, std::string, sub_message_for_oneof>
+      test_oneof;
 };
