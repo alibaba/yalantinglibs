@@ -1,39 +1,5 @@
 # struct_pack Introduction
 
-
-- [struct\_pack Introduction](#struct_pack-introduction)
-  - [Serialization](#serialization)
-    - [Basic Usage](#basic-usage)
-    - [Explicit data container](#explicit-data-container)
-    - [Append the result at the end of existing data container](#append-the-result-at-the-end-of-existing-data-container)
-    - [Save the results to memory location indicated by pointer](#save-the-results-to-memory-location-indicated-by-pointer)
-    - [Multi-parameter serialization](#multi-parameter-serialization)
-    - [Save the results to output stream](#save-the-results-to-output-stream)
-  - [Deserialization](#deserialization)
-    - [Basic Usage](#basic-usage-1)
-    - [deserialize from pointers](#deserialize-from-pointers)
-    - [deserialize to an existing object](#deserialize-to-an-existing-object)
-    - [Multi-parameter deserialization](#multi-parameter-deserialization)
-    - [deserialize to input stream](#deserialize-to-input-stream)
-    - [Partial deserialization](#partial-deserialization)
-  - [support std containers, std::optional and custom containers](#support-std-containers-stdoptional-and-custom-containers)
-  - [custom support](#custom-support)
-    - [custom type](#custom-type)
-    - [custom output stream](#custom-output-stream)
-    - [custom input stream](#custom-input-stream)
-  - [varint support](#varint-support)
-  - [benchmark](#benchmark)
-    - [Test case](#test-case)
-    - [Test objects](#test-objects)
-    - [Test Environment](#test-environment)
-    - [Test results](#test-results)
-  - [Forward/backward compatibility](#forwardbackward-compatibility)
-  - [Why is struct\_pack faster?](#why-is-struct_pack-faster)
-  - [Appendix](#appendix)
-    - [struct\_pack type system](#struct_pack-type-system)
-    - [struct\_pack layout](#struct_pack-layout)
-    - [Test code](#test-code)
-
 struct_pack is a serialization library featuring zero-cost abstraction as well as usability. In struct_pack, the serialization or deserialization of one complex structure could easily be done in a single line of code, without any DSL, macro, or template to be defined. struct_pack supports the serialization of C++ structures through compile-time reflection and its performance is significantly better than protobuf and msgpack (see the benchmark section for details).
 
 Below, we show the basic usage of struct_pack with a simple object as an example.

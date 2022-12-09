@@ -1,24 +1,5 @@
 # Introduction
 
-- [Introduction](#introduction)
-- [Usability](#usability)
-  - [server](#server)
-  - [RPC with any parameters](#rpc-with-any-parameters)
-- [Compare with grpc/brpc](#compare-with-grpcbrpc)
-  - [Usability](#usability-1)
-  - [Asynchronous Model](#asynchronous-model)
-- [More features](#more-features)
-  - [Real-time Tasks and Non-Real-time Tasks](#real-time-tasks-and-non-real-time-tasks)
-  - [Asynchronous mode](#asynchronous-mode)
-- [Benchmark](#benchmark)
-  - [System Configuration](#system-configuration)
-  - [Test case](#test-case)
-    - [Peak QPS test](#peak-qps-test)
-    - [ping-pong test](#ping-pong-test)
-    - [long-tail test](#long-tail-test)
-  - [Notes on benchmark test](#notes-on-benchmark-test)
-- [Known Limitations](#known-limitations)
-
 coro_rpc is a high-performance Remote Procedure Call (RPC) framework in C++20, based on stackless coroutine and compile-time reflection. In an `echo` benchmark test on localhost, it reaches a peak QPS of 20 million, which exceeds other RPC libraries, such as grpc and brpc. Rather than high performance, the most key feature of coro_rpc is easy to use: as a header-only library, it does not need to be compiled or installed separately. It allows building an RPC client and server with a few lines of C++ code.
 
 The core design goal of coro_rpc is usability. Instead of exposing too many troublesome details of the underlying RPC framework, coro_rpc provides a simplifying abstraction that allows programmers to concentrate principally on business logic and implement an RPC service without much effort. Given such simplicity, coro_rpc goes back to the essence of RPC: a remote function call similar to a normal function call except for the underlying network I/O. So coro_rpc user does not need to care about the underlying networking, data serialization, and so on but focus on up-layer implementations. And coro_rpc provides simple and straightforward APIs to users. Let's see one simple demo below
