@@ -197,24 +197,21 @@ TEST_CASE("testing coro rpc server") {
   std::vector<bool> switch_list{true, false};
   for (auto async_start : switch_list) {
     for (auto enable_heartbeat : switch_list) {
-      // for (auto sync_client : switch_list) {
-      for (auto use_outer_io_context : switch_list) {
-        for (auto use_ssl : switch_list) {
-          TesterConfig config;
-          config.async_start = async_start;
-          config.enable_heartbeat = enable_heartbeat;
-          config.use_ssl = use_ssl;
-          config.sync_client = false;
-          config.use_outer_io_context = use_outer_io_context;
-          config.port = server_port;
-          if (enable_heartbeat) {
-            config.conn_timeout_duration = conn_timeout_duration;
-          }
-          std::stringstream ss;
-          ss << config;
-          easylog::info("config: {}", ss.str());
-          CoroServerTester(config).run();
+      for (auto use_ssl : switch_list) {
+        TesterConfig config;
+        config.async_start = async_start;
+        config.enable_heartbeat = enable_heartbeat;
+        config.use_ssl = use_ssl;
+        config.sync_client = false;
+        config.use_outer_io_context = false;
+        config.port = server_port;
+        if (enable_heartbeat) {
+          config.conn_timeout_duration = conn_timeout_duration;
         }
+        std::stringstream ss;
+        ss << config;
+        easylog::info("config: {}", ss.str());
+        CoroServerTester(config).run();
       }
       // }
     }
