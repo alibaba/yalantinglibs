@@ -67,30 +67,29 @@ inline void prettify_normal_state(const char c, auto &out, uint32_t &indent,
 }
 
 inline void prettify_other_states(const char c, general_state &state) noexcept {
-  using enum general_state;
   switch (state) {
-    case ESCAPED:
-      state = NORMAL;
+    case general_state::ESCAPED:
+      state = general_state::NORMAL;
       break;
-    case STRING:
+    case general_state::STRING:
       if (c == '"') {
-        state = NORMAL;
+        state = general_state::NORMAL;
       }
       break;
-    case BEFORE_ASTERISK:
-      state = COMMENT;
+    case general_state::BEFORE_ASTERISK:
+      state = general_state::COMMENT;
       break;
-    case COMMENT:
+    case general_state::COMMENT:
       if (c == '*') {
-        state = BEFORE_FSLASH;
+        state = general_state::BEFORE_FSLASH;
       }
       break;
-    case BEFORE_FSLASH:
+    case general_state::BEFORE_FSLASH:
       if (c == '/') {
-        state = NORMAL;
+        state = general_state::NORMAL;
       }
       else {
-        state = COMMENT;
+        state = general_state::COMMENT;
       }
       break;
     default:
