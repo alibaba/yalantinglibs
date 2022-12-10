@@ -72,7 +72,3 @@ foreach (_test_file ${TEST_REGISTER_DUPLICATION_SRCS})
 endforeach ()
 add_executable(test_util test_util.cpp)
 target_link_libraries(test_util PRIVATE libcoro_rpc)
-add_test(test_util test_util)
-set_tests_properties(test_util PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
-        )
