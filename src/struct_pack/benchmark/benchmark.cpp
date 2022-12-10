@@ -26,25 +26,9 @@ void bench_struct_pack() {
   sp.print_buffer_size();
 }
 
-#ifdef HAVE_MSGPACK
-
-#endif
-
-template <SampleType sample_type>
-void bench_struct_pb() {
-  std::string tag = get_bench_name(sample_type);
-
-  bench(tag, struct_pb_sample::create_sample<sample_type>()
-#ifdef HAVE_PROTOBUF
-                 ,
-        protobuf_sample::create_sample<sample_type>()
-#endif
-  );
-}
-
 void bench_all_struct_pb() {
-  bench_struct_pb<SampleType::MONSTER>();
-  bench_struct_pb<SampleType::MONSTERS>();
+  // bench_struct_pb<SampleType::MONSTER>();
+  // bench_struct_pb<SampleType::MONSTERS>();
 }
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
@@ -56,6 +40,9 @@ int main(int argc, char** argv) {
 #ifdef HAVE_MSGPACK
   vec.emplace_back(new message_pack_sample());
 #endif
+#ifdef HAVE_PROTOBUF
+  vec.emplace_back(new protobuf_sample_t());
+#endif
 
   for (auto sample : vec) {
     std::cout << "======= bench " << sample->name() << "=======\n";
@@ -63,7 +50,7 @@ int main(int argc, char** argv) {
     sample->do_serialization(0);
     sample->do_deserialization(0);
 
-    sample->print_buffer_size();
+    // sample->print_buffer_size();
   }
 
   // bench_struct_pack();

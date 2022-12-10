@@ -2,6 +2,8 @@
 #include <chrono>
 #include <iostream>
 
+#include "config.hpp"
+
 class ScopedTimer {
  public:
   ScopedTimer(const char *name)
@@ -16,7 +18,7 @@ class ScopedTimer {
     if (m_ns)
       *m_ns = dur.count();
     else
-      std::cout << m_name << " : " << dur.count() << " ns\n";
+      std::cout << m_name << " : " << dur.count() / SAMPLES_COUNT << " ns\n";
   }
 
  private:

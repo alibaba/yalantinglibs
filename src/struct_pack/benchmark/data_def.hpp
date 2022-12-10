@@ -144,5 +144,9 @@ inline std::vector<Monster> create_monsters(size_t object_count) {
     v.push_back(m1);
   }
 
+  if (object_count % 2 == 1) {
+    v.push_back(m);
+  }
+
   return v;
 }

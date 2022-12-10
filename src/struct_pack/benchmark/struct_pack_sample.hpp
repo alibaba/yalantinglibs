@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "ScopedTimer.hpp"
+#include "config.hpp"
 #include "data_def.hpp"
 #include "no_op.h"
 #include "sample.hpp"
@@ -57,8 +58,8 @@ struct struct_pack_sample : public base_sample {
     serialize(SampleType::RECTS, rects_);
     serialize(SampleType::PERSON, persons_[0]);
     serialize(SampleType::PERSONS, persons_);
-    serialize(SampleType::MONSTER, monsters_[0]);
     serialize(SampleType::MONSTERS, monsters_);
+    serialize(SampleType::MONSTER, monsters_[0]);
   }
 
   void do_deserialization(int run_idx) override {
@@ -92,14 +93,17 @@ struct struct_pack_sample : public base_sample {
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
+    if constexpr (struct_pack::detail::container<T>) {
+      sample.clear();
+      sample.reserve(SAMPLES_COUNT * OBJECT_COUNT);
+    }
+
+    no_op();
+
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
     ScopedTimer timer(bench_name.data());
     for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      if constexpr (struct_pack::detail::container<T>) {
-        sample.clear();
-      }
-
       [[maybe_unused]] auto ec = struct_pack::deserialize_to(sample, buffer_);
     }
     no_op();

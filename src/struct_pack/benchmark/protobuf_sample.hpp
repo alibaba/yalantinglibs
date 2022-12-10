@@ -101,100 +101,132 @@ mygame::Monsters create_monsters(size_t object_count) {
       p1->set_z(93);
     }
   }
+
+  if (object_count % 2 == 1) {
+    {
+      auto m = Monsters.add_monsters();
+      auto vec = new mygame::Vec3;
+      vec->set_x(1);
+      vec->set_y(2);
+      vec->set_z(3);
+      m->set_allocated_pos(vec);
+      m->set_mana(16);
+      m->set_hp(24);
+      m->set_name("it is a test");
+      m->set_inventory("\1\2\3\4");
+      m->set_color(::mygame::Monster_Color::Monster_Color_Red);
+      auto w1 = m->add_weapons();
+      w1->set_name("gun");
+      w1->set_damage(42);
+      auto w2 = m->add_weapons();
+      w2->set_name("mission");
+      w2->set_damage(56);
+      auto w3 = new mygame::Weapon;
+      w3->set_name("air craft");
+      w3->set_damage(67);
+      m->set_allocated_equipped(w3);
+      auto p1 = m->add_path();
+      p1->set_x(7);
+      p1->set_y(8);
+      p1->set_z(9);
+    }
+  }
   return Monsters;
 }
 }  // namespace protobuf_sample
-template <typename Data, typename Buffer>
-struct Sample<LibType::PROTOBUF, Data, Buffer> : public SampleBase {
-  Sample(Data data) : data_(std::move(data)) {
-    pb_size_ = data_.SerializeAsString().size();
-  }
-  void clear_data() {
-    if constexpr (std::same_as<Data, mygame::Monsters>) {
-      data_.clear_monsters();
-    }
-    else if constexpr (std::same_as<Data, mygame::Monster>) {
-      data_.clear_pos();
-      data_.set_mana(0);
-      data_.set_hp(0);
-      data_.clear_name();
-      data_.clear_inventory();
-      data_.clear_color();
-      data_.clear_weapons();
-      data_.clear_equipped();
-      data_.clear_path();
-    }
-  }
-  void clear_buffer() { buffer_.clear(); }
-  void reserve_buffer() { buffer_.reserve(pb_size_ * SAMPLES_COUNT); }
-  size_t buffer_size() const override { return buffer_.size(); }
+
+struct protobuf_sample_t : public base_sample {
   std::string name() const override { return "protobuf"; }
-  void do_serialization(int run_idx = 0) override {
-    ScopedTimer timer(("serialize " + name()).c_str(),
-                      serialize_cost_[run_idx]);
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      buffer_.resize(buffer_.size() + pb_size_);
-      data_.SerializeToArray(buffer_.data() + buffer_.size() - pb_size_,
-                             pb_size_);
-    }
+
+  void create_samples() override {
+    rects_ = protobuf_sample::create_rects(OBJECT_COUNT);
+    persons_ = protobuf_sample::create_persons(OBJECT_COUNT);
+    monsters_ = protobuf_sample::create_monsters(OBJECT_COUNT);
   }
+
+  void do_serialization(int run_idx) override {
+    serialize(SampleType::RECT, *((*rects_.mutable_rect32_list()).begin()));
+    serialize(SampleType::RECTS, rects_);
+    serialize(SampleType::PERSON, *((*persons_.mutable_person_list()).begin()));
+    serialize(SampleType::PERSONS, persons_);
+    serialize(SampleType::MONSTER, *((*monsters_.mutable_monsters()).begin()));
+    serialize(SampleType::MONSTERS, monsters_);
+  }
+
   void do_deserialization(int run_idx) override {
-    ScopedTimer timer(("deserialize " + name()).c_str(),
-                      deserialize_cost_[run_idx]);
-    std::size_t pos = 0;
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      if (!data_.ParseFromArray(buffer_.data() + pos, pb_size_)) [[unlikely]] {
-        std::exit(1);
-      }
-      pos += pb_size_;
-      clear_data();
-    }
+    deserialize(SampleType::RECT, *((*rects_.mutable_rect32_list()).begin()));
+    deserialize(SampleType::RECTS, rects_);
+    deserialize(SampleType::PERSON,
+                *((*persons_.mutable_person_list()).begin()));
+    deserialize(SampleType::PERSONS, persons_);
+    deserialize(SampleType::MONSTER,
+                *((*monsters_.mutable_monsters()).begin()));
+    deserialize(SampleType::MONSTERS, monsters_);
   }
 
  private:
-  Data data_;
-  Buffer buffer_;
-  std::size_t pb_size_;
+  void clear_data(auto &sample) {
+    using T = std::remove_cvref_t<decltype(sample)>;
+    if constexpr (std::same_as<T, mygame::Monsters>) {
+      sample.clear_monsters();
+    }
+    else if constexpr (std::same_as<T, mygame::Monster>) {
+      sample.clear_pos();
+      sample.set_mana(0);
+      sample.set_hp(0);
+      sample.clear_name();
+      sample.clear_inventory();
+      sample.clear_color();
+      sample.clear_weapons();
+      sample.clear_equipped();
+      sample.clear_path();
+    }
+  }
+
+  void serialize(SampleType sample_type, auto &sample) {
+    {
+      std::string bench_name =
+          name() + " serialize " + get_bench_name(sample_type);
+      ScopedTimer timer(bench_name.data());
+      for (int i = 0; i < SAMPLES_COUNT; ++i) {
+        buffer_.clear();
+        sample.SerializeToString(&buffer_);
+      }
+      no_op();
+    }
+    buf_size_map_.emplace(sample_type, buffer_.size());
+  }
+
+  void deserialize(SampleType sample_type, auto &sample) {
+    using T = std::remove_cvref_t<decltype(sample)>;
+
+    // get serialized buffer of sample for deserialize
+    buffer_.clear();
+    sample.SerializeToString(&buffer_);
+    if constexpr (std::same_as<T, mygame::Monsters>) {
+      sample.clear_monsters();
+      sample.mutable_monsters()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+    }
+    else if constexpr (std::same_as<T, mygame::rect32s>) {
+      sample.clear_rect32_list();
+      sample.mutable_rect32_list()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+    }
+    else if constexpr (std::same_as<T, mygame::persons>) {
+      sample.clear_person_list();
+      sample.mutable_person_list()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+    }
+
+    std::string bench_name =
+        name() + " deserialize " + get_bench_name(sample_type);
+    ScopedTimer timer(bench_name.data());
+    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+      sample.ParseFromString(buffer_);
+    }
+    no_op();
+  }
+
+  mygame::rect32s rects_;
+  mygame::persons persons_;
+  mygame::Monsters monsters_;
+  std::string buffer_;
 };
-namespace protobuf_sample {
-template <SampleType sample_type>
-auto create_sample() {
-  using Buffer = std::string;
-  if constexpr (sample_type == SampleType::RECT) {
-    using Data = mygame::rect32;
-    auto pbs = create_rects(OBJECT_COUNT);
-    auto pb = *(pbs.rect32_list().begin());
-    return Sample<LibType::PROTOBUF, Data, Buffer>(pb);
-  }
-  else if constexpr (sample_type == SampleType::RECTS) {
-    using Data = mygame::rect32s;
-    auto pbs = create_rects(OBJECT_COUNT);
-    return Sample<LibType::PROTOBUF, Data, Buffer>(pbs);
-  }
-  else if constexpr (sample_type == SampleType::PERSON) {
-    using Data = mygame::person;
-    auto pbs = create_persons(OBJECT_COUNT);
-    auto pb = *(pbs.person_list().begin());
-    return Sample<LibType::PROTOBUF, Data, Buffer>(pb);
-  }
-  else if constexpr (sample_type == SampleType::PERSONS) {
-    using Data = mygame::persons;
-    auto pbs = create_persons(OBJECT_COUNT);
-    return Sample<LibType::PROTOBUF, Data, Buffer>(pbs);
-  }
-  else if constexpr (sample_type == SampleType::MONSTER) {
-    using Data = mygame::Monster;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    auto monster = *(monsters.monsters().begin());
-    return Sample<LibType::PROTOBUF, Data, Buffer>(monster);
-  }
-  else if constexpr (sample_type == SampleType::MONSTERS) {
-    using Data = mygame::Monsters;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<LibType::PROTOBUF, Data, Buffer>(monsters);
-  }
-  else {
-    return sample_type;
-  }
-}
-}  // namespace protobuf_sample
