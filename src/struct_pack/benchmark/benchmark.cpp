@@ -43,12 +43,13 @@ int main(int argc, char** argv) {
 #ifdef HAVE_PROTOBUF
   vec.emplace_back(new protobuf_sample_t());
 #endif
+  vec.emplace_back(new struct_pb_sample_t());
 
   for (auto sample : vec) {
     std::cout << "======= bench " << sample->name() << "=======\n";
     sample->create_samples();
     sample->do_serialization(0);
-    sample->do_deserialization(0);
+    // sample->do_deserialization(0);
 
     // sample->print_buffer_size();
   }

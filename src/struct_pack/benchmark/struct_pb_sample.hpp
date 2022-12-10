@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <cstddef>
 #include <optional>
 #include <valarray>
 
@@ -60,6 +61,9 @@ struct Monster {
 struct Monsters {
   std::vector<Monster> monsters;
   bool operator==(const Monsters &) const = default;
+  static constexpr bool is_container = true;
+  void clear() { monsters.clear(); }
+  void reserve(size_t n) { monsters.reserve(n); }
 };
 struct rect32 {
   struct_pack::pb::varint32_t x;
@@ -76,6 +80,10 @@ struct rect32s {
   bool operator==(const rect32s &rhs) const {
     return rect32_list == rhs.rect32_list;
   }
+
+  static constexpr bool is_container = true;
+  void clear() { rect32_list.clear(); }
+  void reserve(size_t n) { rect32_list.reserve(n); }
 };
 struct person {
   struct_pack::pb::varint32_t id;
@@ -92,6 +100,9 @@ struct persons {
   bool operator==(const persons &rhs) const {
     return person_list == rhs.person_list;
   }
+  static constexpr bool is_container = true;
+  void clear() { person_list.clear(); }
+  void reserve(size_t n) { person_list.reserve(n); }
 };
 auto create_rects(std::size_t object_count) {
   rect32s rcs;
@@ -179,107 +190,81 @@ bool verify(const struct_pb_sample::Monsters &a,
   }
   return true;
 }
-template <typename Data, typename Buffer>
-struct Sample<LibType::STRUCT_PB, Data, Buffer> : public SampleBase {
-  Sample(Data data) : data_(std::move(data)) {
-    size_ = struct_pack::pb::get_needed_size(data_);
-#ifndef NDEBUG
-    data_old_ = data_;
-#endif
-  }
-  void clear_data() {
-    if constexpr (std::same_as<Data, struct_pb_sample::Monsters>) {
-      data_.monsters.clear();
-    }
-    else if constexpr (std::same_as<Data, struct_pb_sample::Monster>) {
-      data_.pos.reset();
-      data_.mana = 0;
-      data_.hp = 0;
-      data_.name.clear();
-      data_.inventory.clear();
-      data_.color = struct_pb_sample::Monster::Color::Red;
-      data_.weapons.clear();
-      data_.equipped.reset();
-      data_.path.clear();
-    }
-  }
-  void clear_buffer() { buffer_.clear(); }
-  void reserve_buffer() {
-    buffer_.reserve(struct_pack::pb::get_needed_size(data_) * SAMPLES_COUNT);
-  }
-  size_t buffer_size() const override { return buffer_.size(); }
+
+template <typename Type>
+concept is_container_t = Type::is_container;
+
+struct struct_pb_sample_t : public base_sample {
   std::string name() const override { return "struct_pb"; }
-  void do_serialization(int run_idx) override {
-    ScopedTimer timer(("serialize " + name()).c_str(),
-                      serialize_cost_[run_idx]);
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      struct_pack::pb::serialize_to(buffer_, data_);
-    }
+
+  void create_samples() override {
+    rects_ = struct_pb_sample::create_rects(OBJECT_COUNT);
+    persons_ = struct_pb_sample::create_persons(OBJECT_COUNT);
+    monsters_ = struct_pb_sample::create_monsters(OBJECT_COUNT);
   }
+
+  void do_serialization(int run_idx) override {
+    serialize(SampleType::RECT, rects_.rect32_list[0]);
+    serialize(SampleType::RECTS, rects_);
+    serialize(SampleType::PERSON, persons_.person_list[0]);
+    serialize(SampleType::PERSONS, persons_);
+    serialize(SampleType::MONSTER, monsters_.monsters[0]);
+    serialize(SampleType::MONSTERS, monsters_);
+  }
+
   void do_deserialization(int run_idx) override {
-    ScopedTimer timer(("deserialize " + name()).c_str(),
-                      deserialize_cost_[run_idx]);
-    std::size_t len = 0;
-    std::size_t pos = 0;
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      auto ec = struct_pack::pb::deserialize_to<Data>(
-          data_, buffer_.data() + pos, size_, len);
-      if (ec != std::errc{}) [[unlikely]] {
-        std::exit(1);
-      }
-      pos += size_;
-      assert(verify(data_old_, data_));
-      clear_data();
-    }
+    deserialize(SampleType::RECT, rects_.rect32_list[0]);
+    deserialize(SampleType::RECTS, rects_);
+    deserialize(SampleType::PERSON, persons_.person_list[0]);
+    deserialize(SampleType::PERSONS, persons_);
+    deserialize(SampleType::MONSTER, monsters_.monsters[0]);
+    deserialize(SampleType::MONSTERS, monsters_);
   }
 
  private:
-  Data data_;
-  Buffer buffer_;
-  std::size_t size_;
-#ifndef NDEBUG
-  Data data_old_;
-#endif
+  void serialize(SampleType sample_type, auto &sample) {
+    {
+      struct_pack::pb::serialize_to(buffer_, sample);
+      // std::cout << "buffer size: " << buffer_.size() << "\n";
+      std::string bench_name =
+          name() + " serialize " + get_bench_name(sample_type);
+      ScopedTimer timer(bench_name.data());
+      for (int i = 0; i < SAMPLES_COUNT; ++i) {
+        buffer_.clear();
+        struct_pack::pb::serialize_to(buffer_, sample);
+      }
+      no_op();
+    }
+    buf_size_map_.emplace(sample_type, buffer_.size());
+  }
+
+  void deserialize(SampleType sample_type, auto &sample) {
+    using T = std::remove_cvref_t<decltype(sample)>;
+
+    // get serialized buffer of sample for deserialize
+    buffer_.clear();
+    struct_pack::pb::serialize_to(buffer_, sample);
+
+    if constexpr (is_container_t<T>) {
+      sample.clear();
+      sample.reserve(SAMPLES_COUNT * OBJECT_COUNT);
+    }
+
+    no_op();
+
+    std::string bench_name =
+        name() + " deserialize " + get_bench_name(sample_type);
+    size_t len = 0;
+    ScopedTimer timer(bench_name.data());
+    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+      [[maybe_unused]] auto ec = struct_pack::pb::deserialize_to(
+          sample, buffer_.data(), buffer_.size(), len);
+    }
+    no_op();
+  }
+
+  struct_pb_sample::rect32s rects_;
+  struct_pb_sample::persons persons_;
+  struct_pb_sample::Monsters monsters_;
+  std::string buffer_;
 };
-namespace struct_pb_sample {
-template <SampleType sample_type>
-auto create_sample() {
-  using Buffer = std::string;
-  if constexpr (sample_type == SampleType::RECT) {
-    using Data = struct_pb_sample::rect32;
-    auto rects = create_rects(OBJECT_COUNT);
-    auto rect = rects.rect32_list[0];
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(rect);
-  }
-  else if constexpr (sample_type == SampleType::RECTS) {
-    using Data = struct_pb_sample::rect32s;
-    auto rects = create_rects(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(rects);
-  }
-  else if constexpr (sample_type == SampleType::PERSON) {
-    using Data = struct_pb_sample::person;
-    auto persons = create_persons(OBJECT_COUNT);
-    auto person = persons.person_list[0];
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(person);
-  }
-  else if constexpr (sample_type == SampleType::PERSONS) {
-    using Data = struct_pb_sample::persons;
-    auto persons = create_persons(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(persons);
-  }
-  else if constexpr (sample_type == SampleType::MONSTER) {
-    using Data = struct_pb_sample::Monster;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    auto monster = monsters.monsters[0];
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(monster);
-  }
-  else if constexpr (sample_type == SampleType::MONSTERS) {
-    using Data = struct_pb_sample::Monsters;
-    auto monsters = create_monsters(OBJECT_COUNT);
-    return Sample<LibType::STRUCT_PB, Data, Buffer>(monsters);
-  }
-  else {
-    return sample_type;
-  }
-}
-}  // namespace struct_pb_sample
