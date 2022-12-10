@@ -134,9 +134,8 @@ TEST_CASE("testing async rpc server") {
 
   // 0:async_start, 1:enable_heartbeat,
   // 2:use_outer_io_context, 3:use_ssl
-  std::array<std::bitset<4U>, 16U> switch_list{
-      0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111,
-      0b1000, 0b1001, 0b1010, 0b1011, 0b1100, 0b1101, 0b1110, 0b1111};
+  std::array<std::bitset<4U>, 8U> switch_list{0b0001, 0b0011, 0b0101, 0b0111,
+                                              0b1001, 0b1011, 0b1101, 0b1111};
 
   for (auto list : switch_list) {
     TesterConfig config;
