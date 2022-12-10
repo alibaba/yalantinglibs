@@ -4,6 +4,7 @@
 #pragma once
 
 #include <bit>
+#include <stdexcept>
 #include <string_view>
 
 #include "define.h"
