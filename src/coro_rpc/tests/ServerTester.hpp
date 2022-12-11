@@ -183,8 +183,8 @@ struct ServerTester : TesterConfig {
   void test_function_not_registered() {
     g_action = {};
     remove_handler<async_hi>();
-    easylog::info("run {}", __func__);
     auto client = create_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<async_hi>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
@@ -220,8 +220,8 @@ struct ServerTester : TesterConfig {
   }
   void test_function_registered() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     {
       auto ret = call<async_hi>(client);
       if (!ret) {
@@ -259,8 +259,8 @@ struct ServerTester : TesterConfig {
   }
   void test_client_send_bad_header() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_bad_header);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -268,8 +268,8 @@ struct ServerTester : TesterConfig {
   }
   void test_client_send_bad_magic_num() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_bad_magic_num);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -277,8 +277,8 @@ struct ServerTester : TesterConfig {
   }
   void test_client_send_header_length_is_0() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::client_send_header_length_0);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -286,9 +286,9 @@ struct ServerTester : TesterConfig {
   }
   void test_client_close_socket_after_send_header() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client =
         create_client(inject_action::client_close_socket_after_send_header);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -296,9 +296,9 @@ struct ServerTester : TesterConfig {
   }
   void test_client_close_socket_after_send_partial_header() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client(
         inject_action::client_close_socket_after_send_partial_header);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -306,19 +306,18 @@ struct ServerTester : TesterConfig {
   }
   void test_client_close_socket_after_send_payload() {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client =
         create_client(inject_action::client_close_socket_after_send_payload);
     auto ret = call<client_hello>(client);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
 
   void test_heartbeat() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::nothing);
-
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 
@@ -336,14 +335,14 @@ struct ServerTester : TesterConfig {
     easylog::info("test heartbeat done");
   }
   void test_call_function_with_long_response_time() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::nothing);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<long_run_func>(client, 1);
     CHECK(ret.value() == 1);
   }
   void test_call_with_large_buffer() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::nothing);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     std::string arg;
     arg.resize(2048);
     auto ret = call<large_arg_fun>(client, arg);
@@ -352,7 +351,6 @@ struct ServerTester : TesterConfig {
 
   void test_connect_timeout() {
     g_action = {};
-    easylog::info("run {}", __func__);
     if (sync_client) {
       return;
     }
@@ -373,6 +371,7 @@ struct ServerTester : TesterConfig {
       return client;
     };
     auto client = init_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     std::errc ec;
     // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
@@ -386,8 +385,8 @@ struct ServerTester : TesterConfig {
   template <auto func, typename... Args>
   void test_call_with_delay_func(Args... args) {
     g_action = {};
-    easylog::info("run {}", __func__);
     auto client = create_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = call<func>(client, std::forward<Args>(args)...);
     CHECK(ret.has_value());
   }
@@ -395,8 +394,9 @@ struct ServerTester : TesterConfig {
   template <auto func, typename... Args>
   void test_call_with_delay_func_client_read_length_error(Args... args) {
     g_action = {};
-    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
+    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
+                  client->get_client_id());
     g_action = inject_action::close_socket_after_read_header;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
@@ -407,8 +407,9 @@ struct ServerTester : TesterConfig {
   template <auto func, typename... Args>
   void test_call_with_delay_func_client_read_body_error(Args... args) {
     g_action = {};
-    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
+    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
+                  client->get_client_id());
     g_action = inject_action::close_socket_after_send_length;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
@@ -419,8 +420,9 @@ struct ServerTester : TesterConfig {
   template <auto func, typename... Args>
   void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
     g_action = {};
-    easylog::info("run {}", CORO_RPC_FUNCTION_SIGNATURE);
     auto client = this->create_client();
+    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
+                  client->get_client_id());
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
     REQUIRE_MESSAGE(
