@@ -18,6 +18,7 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <coro_rpc/coro_rpc_client.hpp>
+#include <exception>
 #include <future>
 #include <ostream>
 #include <string>
@@ -222,39 +223,43 @@ struct ServerTester : TesterConfig {
     g_action = {};
     auto client = create_client();
     easylog::info("run {}, client_id {}", __func__, client->get_client_id());
-    {
-      auto ret = call<async_hi>(client);
-      if (!ret) {
-        easylog::warn(
-            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+    try {
+      {
+        auto ret = call<async_hi>(client);
+        if (!ret) {
+          easylog::warn(
+              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+        }
+        CHECK(ret.value() == "async hi"s);
       }
-      CHECK(ret.value() == "async hi"s);
-    }
-    {
-      auto ret = call<hello>(client);
-      if (!ret) {
-        easylog::warn(
-            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+      {
+        auto ret = call<hello>(client);
+        if (!ret) {
+          easylog::warn(
+              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+        }
+        CHECK(ret.value() == "hello"s);
       }
-      CHECK(ret.value() == "hello"s);
-    }
-    {
-      auto ret = call<&HelloService::hello>(client);
-      if (!ret) {
-        easylog::warn(
-            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+      {
+        auto ret = call<&HelloService::hello>(client);
+        if (!ret) {
+          easylog::warn(
+              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+        }
+        CHECK(ret.value() == "hello"s);
       }
-      CHECK(ret.value() == "hello"s);
-    }
-    {
+      {
 #ifdef __GNUC__
-      auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
-      if (!ret) {
-        easylog::warn(
-            "{}", std::to_string(client->get_client_id()) + ret.error().msg);
-      }
-      CHECK(ret.value() == true);
+        auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
+        if (!ret) {
+          easylog::warn(
+              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+        }
+        CHECK(ret.value() == true);
 #endif
+      }
+    } catch (std::exception &e) {
+      easylog::error("test_function_registered has exception {}", e.what());
     }
   }
   void test_client_send_bad_header() {
