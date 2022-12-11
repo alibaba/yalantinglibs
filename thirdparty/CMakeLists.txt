@@ -3,7 +3,7 @@
 #############################
 add_library(asio INTERFACE)
 target_include_directories(asio INTERFACE asio)
-#target_compile_definitions(asio INTERFACE ASIO_HAS_STD_INVOKE_RESULT)
+target_compile_definitions(asio INTERFACE ASIO_HAS_STD_INVOKE_RESULT)
 if (NOT TARGET asio::asio)
     add_library(asio::asio ALIAS asio)
 endif ()
