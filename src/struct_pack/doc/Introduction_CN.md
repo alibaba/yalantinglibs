@@ -192,6 +192,21 @@ auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
 
+支持可变长编码：
+
+```cpp
+
+{
+  std::vector<struct_pack::var_int32_t> vec={-1,0,1,2,3,4,5,6,7};
+  auto buffer = std::serialize(vec); //zigzag+varint编码
+}
+{
+  std::vector<struct_pack::uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
+  auto buffer = std::serialize(vec); //varint编码
+}
+```
+
+
 ## benchmark
 
 ### 测试方法

@@ -158,6 +158,28 @@ struct person {
 
 含`float`（32位）和`double`（64位）。编码为IEEE754。
 
+
+### 变长无符号整数字段
+
+
+| 类型名                    | 编码长度（字节) | 编码格式   |
+| ------------------------- | --------------- | ---------- |
+| struct_pack::var_uint32_t | 1-5 (变长)      | varint编码 |
+| struct_pack::var_uint64_t | 1-10  (变长)    | varint编码 |
+
+含`struct_pack::var_uint32_t`,`struct_pack::var_uint64_t`类型。编码格式为varint编码。
+
+
+### 变长有符号整数字段
+
+
+| 类型名                   | 编码长度（字节) | 编码格式          |
+| ------------------------ | --------------- | ----------------- |
+| struct_pack::var_int32_t | 1-5   (变长)    | varint+zigzag编码 |
+| struct_pack::var_int64_t | 1-10  (变长)    | varint+zigzag编码 |
+
+含`struct_pack::var_uint32_t`,`struct_pack::var_uint64_t`类型。编码格式为varint+zigzag编码。
+
 ### 字符字段
 
 
