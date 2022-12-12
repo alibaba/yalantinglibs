@@ -191,7 +191,6 @@ TEST_CASE("Check tuplet::apply with tuplet::tie") {
   REQUIRE(b == 2);
   REQUIRE(c == "Hello, world!");
 }
-
 TEST_CASE("Test that for_each works") {
   std::string str;
 
