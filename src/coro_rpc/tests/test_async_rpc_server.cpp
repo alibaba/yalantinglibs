@@ -206,6 +206,8 @@ TEST_CASE("testing async rpc write error") {
   REQUIRE(ec == std::errc{});
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   coro_rpc_client client(g_client_id++);
+  easylog::info("client_id {}, run testing async rpc write error",
+                client.get_client_id());
   ec = syncAwait(client.connect("127.0.0.1", "8820"));
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
