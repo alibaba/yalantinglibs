@@ -3,7 +3,7 @@ GENERATE_HTML=yes
 GENERATE_LATEX=no
 INPUT=include/struct_pack include/coro_rpc include/coro_rpc/coro_rpc \
       include/struct_pack/struct_pack/struct_pack_impl.hpp \
-      src/coro_rpc/doc/coro_rpc_introduction_en.md
+      src/coro_rpc/doc/coro_rpc_introduction_EN.md
 
 GENERATE_TREEVIEW      = YES # required!
 DISABLE_INDEX          = NO

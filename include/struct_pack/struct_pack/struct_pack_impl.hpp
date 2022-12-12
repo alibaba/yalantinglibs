@@ -36,6 +36,7 @@
 
 #include "error_code.h"
 #include "md5_constexpr.hpp"
+#include "struct_pack/struct_pack/varint.hpp"
 #include "tuple.hpp"
 
 static_assert(std::endian::native == std::endian::little,
@@ -109,6 +110,11 @@ struct compatible : public std::optional<T> {
   using base::base;
 };
 
+using var_int32_t = detail::sint<int32_t>;
+using var_int64_t = detail::sint<int64_t>;
+using var_uint32_t = detail::varint<uint32_t>;
+using var_uint64_t = detail::varint<uint64_t>;
+
 enum class type_info_config { automatic, disable, enable };
 
 struct serialize_config {
@@ -135,17 +141,6 @@ namespace detail {
 #endif
 }
 
-// clang-format off
-template <typename T>
-concept struct_pack_byte = std::is_same_v<char, T>
-                           || std::is_same_v<unsigned char, T>
-                           || std::is_same_v<std::byte, T>;
-
-template <typename T>
-concept struct_pack_buffer = trivially_copyable_container<T>
-                             && struct_pack_byte<typename T::value_type>;
-// clang-format on
-
 template <typename T>
 constexpr inline bool is_trivial_tuple = false;
 
@@ -155,7 +150,7 @@ constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 template <class U>
 constexpr auto get_types(U &&t) {
   using T = std::remove_cvref_t<U>;
-  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> ||
+  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
                 variant<T> || expected<T> || array<T> || c_array<T> ||
                 std::is_same_v<std::monostate, T>) {
@@ -171,16 +166,85 @@ constexpr auto get_types(U &&t) {
     return std::tuple<typename T::first_type, typename T::second_type>{};
   }
   else if constexpr (std::is_aggregate_v<T>) {
+    // clang-format off
     return visit_members(
-        std::forward<U>(t),
-        [&]<typename... Args>(Args &&...) CONSTEXPR_INLINE_LAMBDA {
+        std::forward<U>(t), [&]<typename... Args>(Args &&
+                                                  ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
+    // clang-format on
   }
   else {
     static_assert(!sizeof(T), "the type is not supported!");
   }
 }
+
+template <typename T>
+struct is_trivial_serializable {
+ private:
+  static constexpr bool solve() {
+    if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
+      return true;
+    }
+    else if constexpr (array<T>) {
+      return is_trivial_serializable<typename T::value_type>::value;
+    }
+    else if constexpr (c_array<T>) {
+      return is_trivial_serializable<
+          typename std::remove_all_extents<T>::type>::value;
+    }
+    else if constexpr (!pair<T> && tuple<T> && !is_trivial_tuple<T>) {
+      return false;
+    }
+    else if constexpr (container<T> || optional<T> || variant<T> ||
+                       expected<T> || container_adapter<T> || varint_t<T>) {
+      return false;
+    }
+    else if constexpr (pair<T>) {
+      return is_trivial_serializable<typename T::first_type>::value &&
+             is_trivial_serializable<typename T::second_type>::value;
+    }
+    else if constexpr (is_trivial_tuple<T>) {
+      return []<std::size_t... I>(std::index_sequence<I...>)
+          CONSTEXPR_INLINE_LAMBDA {
+        return (is_trivial_serializable<std::tuple_element_t<I, T>>::value &&
+                ...);
+      }
+      (std::make_index_sequence<std::tuple_size_v<T>>{});
+    }
+    else if constexpr (std::is_class_v<T>) {
+      using T_ = decltype(get_types(T{}));
+      return []<std::size_t... I>(std::index_sequence<I...>)
+          CONSTEXPR_INLINE_LAMBDA {
+        return (is_trivial_serializable<std::tuple_element_t<I, T_>>::value &&
+                ...);
+      }
+      (std::make_index_sequence<std::tuple_size_v<T_>>{});
+    }
+    else
+      return false;
+  }
+
+ public:
+  static inline constexpr bool value = is_trivial_serializable::solve();
+};
+
+template <typename Type>
+concept trivially_copyable_container = continuous_container<Type> &&
+    requires(Type container) {
+  requires is_trivial_serializable<typename Type::value_type>::value;
+};
+
+// clang-format off
+template <typename T>
+concept struct_pack_byte = std::is_same_v<char, T>
+                           || std::is_same_v<unsigned char, T>
+                           || std::is_same_v<std::byte, T>;
+
+template <typename T>
+concept struct_pack_buffer = trivially_copyable_container<T>
+                             && struct_pack_byte<typename T::value_type>;
+// clang-format on
 
 enum class type_id {
   // compatible template type
@@ -207,6 +271,10 @@ enum class type_id {
   float32_t,
   float64_t,
   float128_t,
+  v_int32_t,   // variable size int
+  v_int64_t,   // variable size int
+  v_uint32_t,  // variable size unsigned int
+  v_uint64_t,  // variable size unsigned int
   // template type
   string_t = 128,
   array_t,
@@ -224,6 +292,25 @@ enum class type_id {
   // end helper
   type_end_flag = 255,
 };
+
+template <typename T>
+consteval type_id get_varint_type() {
+  if constexpr (std::is_same_v<var_int32_t, T>) {
+    return type_id::v_int32_t;
+  }
+  else if constexpr (std::is_same_v<var_int64_t, T>) {
+    return type_id::v_int64_t;
+  }
+  else if constexpr (std::is_same_v<var_uint32_t, T>) {
+    return type_id::v_uint32_t;
+  }
+  else if constexpr (std::is_same_v<var_uint64_t, T>) {
+    return type_id::v_uint64_t;
+  }
+  else {
+    static_assert(!std::is_same_v<wchar_t, T>, "unsupported varint type!");
+  }
+}
 
 template <typename T>
 consteval type_id get_integral_type() {
@@ -376,6 +463,9 @@ consteval type_id get_type_id() {
   }
   else if constexpr (std::is_floating_point_v<T>) {
     return get_floating_point_type<T>();
+  }
+  else if constexpr (detail::varint_t<T>) {
+    return get_varint_type<T>();
   }
   else if constexpr (std::is_same_v<T, std::monostate> ||
                      std::is_same_v<T, void>) {
@@ -776,8 +866,11 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
     ret.total += sizeof(type);
   }
+  else if constexpr (detail::varint_t<type>) {
+    ret.total += detail::calculate_varint_size(item);
+  }
   else if constexpr (c_array<type> || array<type>) {
-    if constexpr (std::is_trivially_copyable_v<type>) {
+    if constexpr (is_trivial_serializable<type>::value) {
       ret.total += sizeof(type);
     }
     else {
@@ -786,7 +879,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
       }
     }
   }
-  else if constexpr (map_container<type> || container<type>) {
+  else if constexpr (container<type>) {
     ret.size_cnt += 1;
     ret.max_size = std::max(ret.max_size, item.size());
     if constexpr (trivially_copyable_container<type>) {
@@ -802,7 +895,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   else if constexpr (container_adapter<type>) {
     static_assert(!sizeof(type), "the container adapter type is not supported");
   }
-  else if constexpr (tuple<type>) {
+  else if constexpr (!pair<type> && tuple<type> && !is_trivial_tuple<type>) {
     std::apply(
         [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
           ret += calculate_payload_size(items...);
@@ -834,7 +927,9 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     }
   }
   else if constexpr (std::is_class_v<type>) {
-    if constexpr (std::is_trivially_copyable_v<type>) {
+    if constexpr (!pair<type> && !is_trivial_tuple<type>)
+      static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+    if constexpr (is_trivial_serializable<type>::value) {
       ret.total += sizeof(type);
     }
     else {
@@ -846,14 +941,6 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   else {
     static_assert(!sizeof(type), "the type is not supported yet");
   }
-  return ret;
-}
-
-template <typename Key, typename Value>
-constexpr size_info STRUCT_PACK_INLINE
-calculate_one_size(const std::pair<Key, Value> &item) {
-  auto ret = calculate_one_size(item.first);
-  ret += calculate_one_size(item.second);
   return ret;
 }
 
@@ -1069,8 +1156,11 @@ class packer {
       std::memcpy(data_ + pos_, &item, sizeof(type));
       pos_ += sizeof(type);
     }
+    else if constexpr (detail::varint_t<type>) {
+      detail::serialize_varint(data_, pos_, item);
+    }
     else if constexpr (c_array<type> || array<type>) {
-      if constexpr (std::is_trivially_copyable_v<type>) {
+      if constexpr (is_trivial_serializable<type>::value) {
         std::memcpy(data_ + pos_, &item, sizeof(type));
         pos_ += sizeof(type);
       }
@@ -1129,7 +1219,7 @@ class packer {
       static_assert(!sizeof(type),
                     "the container adapter type is not supported");
     }
-    else if constexpr (tuple<type>) {
+    else if constexpr (!pair<type> && tuple<type> && !is_trivial_tuple<type>) {
       std::apply(
           [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             serialize_many<size_type>(items...);
@@ -1169,13 +1259,10 @@ class packer {
         serialize_one<size_type>(item.error());
       }
     }
-    else if constexpr (pair<type>) {
-      serialize_one<size_type>(item.first);
-      serialize_one<size_type>(item.second);
-    }
     else if constexpr (std::is_class_v<type>) {
-      static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
-      if constexpr (std::is_trivially_copyable_v<type>) {
+      if constexpr (!pair<type> && !is_trivial_tuple<type>)
+        static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+      if constexpr (is_trivial_serializable<type>::value) {
         std::memcpy(data_ + pos_, &item, sizeof(type));
         pos_ += sizeof(type);
       }
@@ -1452,8 +1539,11 @@ class unpacker {
       }
       pos_ += sizeof(type);
     }
+    else if constexpr (detail::varint_t<type>) {
+      code = detail::deserialize_varint(data_, pos_, size_, item);
+    }
     else if constexpr (array<type> || c_array<type>) {
-      if constexpr (std::is_trivially_copyable_v<type>) {
+      if constexpr (is_trivial_serializable<type>::value) {
         if constexpr (NotSkip) {
           std::memcpy(&item, data_ + pos_, sizeof(type));
         }
@@ -1584,7 +1674,7 @@ class unpacker {
       static_assert(!sizeof(type),
                     "the container adapter type is not supported");
     }
-    else if constexpr (tuple<type>) {
+    else if constexpr (!pair<type> && tuple<type> && !is_trivial_tuple<type>) {
       std::apply(
           [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             code = deserialize_many<size_type>(items...);
@@ -1641,8 +1731,9 @@ class unpacker {
       }
     }
     else if constexpr (std::is_class_v<type>) {
-      static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
-      if constexpr (std::is_trivially_copyable_v<type>) {
+      if constexpr (!pair<type> && !is_trivial_tuple<type>)
+        static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+      if constexpr (is_trivial_serializable<type>::value) {
         if (pos_ + sizeof(type) > size_) [[unlikely]] {
           return struct_pack::errc::no_buffer_space;
         }

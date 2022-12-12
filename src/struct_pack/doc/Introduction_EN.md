@@ -1,7 +1,7 @@
 # struct_pack Introduction
 
 
-- [struct_pack Introduction](#struct_pack-introduction)
+- [struct\_pack Introduction](#struct_pack-introduction)
   - [Serialization](#serialization)
     - [Basic Usage](#basic-usage)
     - [Explicit data container](#explicit-data-container)
@@ -9,7 +9,7 @@
     - [Save the results to memory location indicated by pointer](#save-the-results-to-memory-location-indicated-by-pointer)
     - [Multi-parameter serialization](#multi-parameter-serialization)
   - [Deserialization](#deserialization)
-    - [Basic Usage](#basic-usage)
+    - [Basic Usage](#basic-usage-1)
     - [deserialize from pointers](#deserialize-from-pointers)
     - [deserialize to an existing object](#deserialize-to-an-existing-object)
     - [Multi-parameter deserialization](#multi-parameter-deserialization)
@@ -21,7 +21,7 @@
     - [Test Environment](#test-environment)
     - [Test results](#test-results)
   - [Forward/backward compatibility](#forwardbackward-compatibility)
-  - [Why is struct_pack faster?](#why-is-struct_pack-faster)
+  - [Why is struct\_pack faster?](#why-is-struct_pack-faster)
   - [Appendix](#appendix)
     - [Test code](#test-code)
 
@@ -195,6 +195,21 @@ absl::flat_hash_map<int, std::string> map2 =
 auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
+
+struct_pack also supports varint code for integer.
+
+```cpp
+{
+  std::vector<struct_pack::var_int32_t> vec={-1,0,1,2,3,4,5,6,7};
+  auto buffer = std::serialize(vec); //zigzag+varint code
+}
+{
+  std::vector<struct_pack::uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
+  auto buffer = std::serialize(vec); //varint code
+}
+
+```
+
 
 ## benchmark
 

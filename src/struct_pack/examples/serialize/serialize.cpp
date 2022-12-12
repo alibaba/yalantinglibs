@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "struct_pack/struct_pack.hpp"
+#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 
 struct person {
   int age;
