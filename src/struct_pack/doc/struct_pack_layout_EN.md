@@ -231,12 +231,18 @@ For example, a `std::set<int>{42,24}` could be encoded as:
 
 For `std::map<K,V>` or similar user-defined data, the memory layout begins with number of elements of type `size_type`, followed by each data field of `value_type`.
 
-For example, a `std::map<int,std::string>{{42，"Hello"},{24,"Student"}}` is encoded as:
+For example, a 
+
+```cpp
+std::map<int,std::string>{{42,"Hello"},{24,"Student"}}
+```
+
+is encoded as:
 
 ![](images/layout/map_layout.svg)
 
 
-### optional<T>
+### `optional<T>`
 
 For `std::optional<T>` or similar user-defined data, it begins with a bool indicates if the value is present or not. The value will be followed by this bool field if it is present.
 

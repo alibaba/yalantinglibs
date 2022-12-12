@@ -77,6 +77,7 @@ function sidebarGuide() {
       collapsible: true,
       items: [
         {text: 'What is struct_pack?', link: '/guide/struct-pack-intro'},
+        {text: 'struct_pack layout', link: '/guide/struct-pack-layout'},
         {
           text: 'API Reference',
           link: "https://alibaba.github.io/yalantinglibs/en/html/group__struct__pack.html"
