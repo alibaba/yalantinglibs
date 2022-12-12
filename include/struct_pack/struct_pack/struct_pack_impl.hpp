@@ -166,11 +166,13 @@ constexpr auto get_types(U &&t) {
     return std::tuple<typename T::first_type, typename T::second_type>{};
   }
   else if constexpr (std::is_aggregate_v<T>) {
+    // clang-format off
     return visit_members(
         std::forward<U>(t), [&]<typename... Args>(Args &&
                                                   ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
+    // clang-format on
   }
   else {
     static_assert(!sizeof(T), "the type is not supported!");
@@ -180,7 +182,7 @@ constexpr auto get_types(U &&t) {
 template <typename T>
 struct is_trivial_serializable {
  private:
-  static consteval bool solve() {
+  static constexpr bool solve() {
     if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
       return true;
     }
@@ -224,7 +226,7 @@ struct is_trivial_serializable {
   }
 
  public:
-  static inline constexpr bool value = solve();
+  static inline constexpr bool value = is_trivial_serializable::solve();
 };
 
 template <typename Type>
