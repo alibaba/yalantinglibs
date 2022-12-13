@@ -24,6 +24,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -879,14 +880,14 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   if constexpr (std::is_same_v<type, std::monostate>) {
   }
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
-    ret.total += sizeof(type);
+    ret.total = sizeof(type);
   }
   else if constexpr (detail::varint_t<type>) {
-    ret.total += detail::calculate_varint_size(item);
+    ret.total = detail::calculate_varint_size(item);
   }
   else if constexpr (c_array<type> || array<type>) {
     if constexpr (is_trivial_serializable<type>::value) {
-      ret.total += sizeof(type);
+      ret.total = sizeof(type);
     }
     else {
       for (auto &i : item) {
@@ -899,7 +900,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     ret.max_size = std::max(ret.max_size, item.size());
     if constexpr (trivially_copyable_container<type>) {
       using value_type = typename type::value_type;
-      ret.total += item.size() * sizeof(value_type);
+      ret.total = item.size() * sizeof(value_type);
     }
     else {
       for (auto &&i : item) {
@@ -918,19 +919,15 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
         item);
   }
   else if constexpr (optional<type>) {
-    ret.total += sizeof(char);
+    ret.total = sizeof(char);
     if (item.has_value()) {
       ret += calculate_one_size(*item);
     }
   }
   else if constexpr (unique_ptr<type>) {
-    ret.total += sizeof(char);
-    if (item != nullptr) {
-      ret += calculate_one_size(*item);
-    }
   }
   else if constexpr (variant<type>) {
-    ret.total += sizeof(uint8_t);
+    ret.total = sizeof(uint8_t);
     ret += std::visit(
         [](const auto &e) {
           return calculate_one_size(e);
@@ -938,7 +935,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
         item);
   }
   else if constexpr (expected<type>) {
-    ret.total += sizeof(bool);
+    ret.total = sizeof(bool);
     if (item.has_value()) {
       if constexpr (!std::is_same_v<typename type::value_type, void>)
         ret += calculate_one_size(item.value());
@@ -951,7 +948,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
     if constexpr (!pair<type> && !is_trivial_tuple<type>)
       static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
     if constexpr (is_trivial_serializable<type>::value) {
-      ret.total += sizeof(type);
+      ret.total = sizeof(type);
     }
     else {
       visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -961,6 +958,15 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   }
   else {
     static_assert(!sizeof(type), "the type is not supported yet");
+  }
+  return ret;
+}
+
+template <unique_ptr T>
+constexpr size_info inline calculate_one_size(const T &item) {
+  size_info ret{.total = sizeof(char), .size_cnt = 0, .max_size = 0};
+  if (item != nullptr) {
+    ret += calculate_one_size(*item);
   }
   return ret;
 }
@@ -1193,7 +1199,7 @@ class packer {
       }
     }
     else if constexpr (map_container<type> || container<type>) {
-      auto size = item.size();
+      uint64_t size = item.size();
 #ifdef STRUCT_PACK_OPTIMIZE
       std::memcpy(data_ + pos_, &size, size_type);
       pos_ += size_type;
@@ -1252,15 +1258,6 @@ class packer {
       bool has_value = item.has_value();
       std::memcpy(data_ + pos_, &has_value, sizeof(char));
       pos_ += sizeof(char);
-
-      if (has_value) {
-        serialize_one<size_type>(*item);
-      }
-    }
-    else if constexpr (unique_ptr<type>) {
-      bool has_value = (item != nullptr);
-      std::memcpy(data_ + pos_, &has_value, sizeof(char));
-      pos_ += sizeof(char);
       if (has_value) {
         serialize_one<size_type>(*item);
       }
@@ -1306,6 +1303,16 @@ class packer {
       static_assert(!sizeof(type), "the type is not supported yet");
     }
     return;
+  }
+
+  template <std::size_t size_type, unique_ptr T>
+  constexpr void inline serialize_one(const T &item) {
+    bool has_value = (item != nullptr);
+    std::memcpy(data_ + pos_, &has_value, sizeof(char));
+    pos_ += sizeof(char);
+    if (has_value) {
+      serialize_one<size_type>(*item);
+    }
   }
 
   template <typename T>
@@ -1711,7 +1718,7 @@ class unpacker {
           },
           item);
     }
-    else if constexpr (optional<type> || unique_ptr<type>) {
+    else if constexpr (optional<type>) {
       if (pos_ + sizeof(bool) > size_) [[unlikely]] {
         return struct_pack::errc::no_buffer_space;
       }
@@ -1721,12 +1728,7 @@ class unpacker {
       if (!has_value) [[unlikely]] {
         return {};
       }
-      if constexpr (optional<type>) {
-        item = type{std::in_place_t{}};
-      }
-      else {
-        item = new typename type::element_type();
-      }
+      item = type{std::in_place_t{}};
       deserialize_one<size_type, NotSkip>(*item);
     }
     else if constexpr (variant<type>) {
@@ -1790,14 +1792,20 @@ class unpacker {
     return code;
   }
 
-  template <size_t size_type, bool NotSkip = true, typename Key, typename Value>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE
-  deserialize_one(std::pair<Key, Value> &item) {
-    auto code = deserialize_one<size_type, NotSkip>(item.first);
-    if (code != struct_pack::errc{}) [[unlikely]] {
-      return code;
+  template <size_t size_type, bool NotSkip, unique_ptr T>
+  constexpr struct_pack::errc inline deserialize_one(T &item) {
+    if (pos_ + sizeof(bool) > size_) [[unlikely]] {
+      return struct_pack::errc::no_buffer_space;
     }
-    return deserialize_one<size_type, NotSkip>(item.second);
+    bool has_value{};
+    std::memcpy(&has_value, data_ + pos_, sizeof(bool));
+    pos_ += sizeof(bool);
+    if (!has_value) [[unlikely]] {
+      return {};
+    }
+    item = std::make_unique<typename T::element_type>();
+    deserialize_one<size_type, NotSkip>(*item);
+    return struct_pack::errc{};
   }
 
   // partial deserialize_to
