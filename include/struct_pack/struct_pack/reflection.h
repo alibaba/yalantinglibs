@@ -183,6 +183,13 @@ concept optional = !expected<Type> && requires(Type optional) {
 };
 
 template <typename Type>
+concept unique_ptr = requires(Type ptr) {
+  ptr.operator*();
+  typename std::remove_cvref_t<Type>::element_type;
+}
+&&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+
+template <typename Type>
 constexpr inline bool is_variant_v = false;
 
 template <typename... args>

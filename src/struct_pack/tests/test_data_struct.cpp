@@ -1,5 +1,8 @@
+#include <memory>
+
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
+#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 #include "test_struct.hpp"
 using namespace struct_pack;
 
@@ -397,5 +400,169 @@ TEST_CASE("test variant") {
     auto ec = struct_pack::deserialize_to(big_variant2, ret.data(), ret.size());
     CHECK(ec == struct_pack::errc{});
     CHECK(big_variant2 == big_variant);
+  }
+}
+
+void init_tree(my_tree *tree, int depth = 0) {
+  tree->value = rand();
+  tree->name = std::to_string(tree->value);
+  tree->left_child = nullptr;
+  tree->right_child = nullptr;
+  if (depth > 10) {
+    return;
+  }
+  if (rand() % 10 != 0) {
+    tree->left_child = std::make_unique<my_tree>();
+    init_tree(tree->left_child.get(), depth + 1);
+  }
+  if (rand() % 10 != 0) {
+    tree->right_child = std::make_unique<my_tree>();
+    init_tree(tree->right_child.get(), depth + 1);
+  }
+}
+
+TEST_CASE("test unique_ptr") {
+  SUBCASE("nullptr") {
+    auto buffer = struct_pack::serialize(std::unique_ptr<int>{nullptr});
+    auto ret = deserialize<std::unique_ptr<int>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(ret->get() == nullptr);
+  }
+  SUBCASE("normal int") {
+    auto buffer = struct_pack::serialize(std::make_unique<int>(42));
+    auto ret = deserialize<std::unique_ptr<int>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(*ret.value() == 42);
+  }
+  SUBCASE("ptr2string") {
+    auto buffer =
+        struct_pack::serialize(std::make_unique<std::string>("Hello"));
+    auto ret = deserialize<std::unique_ptr<std::string>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(*ret.value() == "Hello");
+  }
+  SUBCASE("ptr2person") {
+    auto buffer = struct_pack::serialize(std::make_unique<person>(
+        person{.age = 24, .name = std::string{"name24"}}));
+    auto ret = deserialize<std::unique_ptr<person>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+  }
+
+  SUBCASE("ptr2optional") {
+    auto buffer = struct_pack::serialize(std::make_unique<person>(
+        person{.age = 24, .name = std::string{"name24"}}));
+    auto ret = deserialize<std::optional<person>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+  }
+  SUBCASE("optional2ptr") {
+    auto buffer = struct_pack::serialize(
+        std::optional<person>{person{.age = 24, .name = "name24"}});
+    auto ret = deserialize<std::unique_ptr<person>>(buffer);
+    CHECK(ret.has_value());
+    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+  }
+  SUBCASE("error template param") {
+    auto buffer = struct_pack::serialize(
+        std::tuple<std::unique_ptr<int>>{std::make_unique<int>(24)});
+    auto ret = deserialize<std::unique_ptr<float>>(buffer);
+    REQUIRE(!ret);
+    CHECK(ret.error() == struct_pack::errc::invalid_argument);
+  }
+  SUBCASE("test list") {
+    my_list list_head, *now = &list_head;
+    for (int i = 0; i < 100; ++i) {
+      now->name = std::to_string(i);
+      now->value = i;
+      if (i + 1 < 100) {
+        now->next = std::make_unique<my_list>();
+        now = now->next.get();
+      }
+      else {
+        now->next = nullptr;
+      }
+    }
+    auto buffer = struct_pack::serialize(list_head);
+    auto result = struct_pack::deserialize<my_list>(buffer);
+    auto literal = struct_pack::get_type_literal<my_list>();
+    std::string_view sv{literal.begin(), literal.size()};
+    using struct_pack::detail::type_id;
+    CHECK(sv ==
+          std::string{(char)type_id::trivial_class_t, (char)type_id::optional_t,
+                      (char)type_id::circle_flag, (char)129,
+                      (char)type_id::string_t, (char)type_id::char_8_t,
+                      (char)type_id::int32_t, (char)type_id::type_end_flag});
+    CHECK(result == list_head);
+  }
+  SUBCASE("test list(unique_ptr)") {
+    auto list_head = std::make_unique<my_list>();
+    my_list *now = list_head.get();
+    for (int i = 0; i < 100; ++i) {
+      now->name = std::to_string(i);
+      now->value = i;
+      if (i + 1 < 100) {
+        now->next = std::make_unique<my_list>();
+        now = now->next.get();
+      }
+      else {
+        now->next = nullptr;
+      }
+    }
+    auto buffer = struct_pack::serialize(list_head);
+    auto result = struct_pack::deserialize<std::unique_ptr<my_list>>(buffer);
+    auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list>>();
+    std::string_view sv{literal.begin(), literal.size()};
+    using struct_pack::detail::type_id;
+    CHECK(sv == std::string{
+                    (char)type_id::optional_t, (char)type_id::trivial_class_t,
+                    (char)type_id::optional_t, (char)type_id::circle_flag,
+                    (char)129, (char)type_id::string_t, (char)type_id::char_8_t,
+                    (char)type_id::int32_t, (char)type_id::type_end_flag});
+    CHECK(*result.value() == *result.value());
+  }
+  SUBCASE("test list2") {
+    auto list_head = std::make_unique<my_list2>();
+    my_list2 *now = list_head.get();
+    for (int i = 0; i < 100; ++i) {
+      now->list.name = std::to_string(i);
+      now->list.value = i;
+      if (i + 1 < 100) {
+        now->list.next = std::make_unique<my_list2>();
+        now = now->list.next.get();
+      }
+      else {
+        now->list.next = nullptr;
+      }
+    }
+    auto buffer = struct_pack::serialize(list_head);
+    auto result = struct_pack::deserialize<std::unique_ptr<my_list2>>(buffer);
+    auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list2>>();
+    std::string_view sv{literal.begin(), literal.size()};
+    using struct_pack::detail::type_id;
+    CHECK(sv ==
+          std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
+                      (char)type_id::trivial_class_t, (char)type_id::optional_t,
+                      (char)type_id::circle_flag, (char)130,
+                      (char)type_id::string_t, (char)type_id::char_8_t,
+                      (char)type_id::int32_t, (char)type_id::type_end_flag,
+                      (char)type_id::type_end_flag});
+    CHECK(*result.value() == *result.value());
+  }
+  SUBCASE("test tree") {
+    auto literal = struct_pack::get_type_literal<my_tree>();
+    auto sv = std::string_view{literal.data(), literal.size()};
+    using struct_pack::detail::type_id;
+    CHECK(sv == std::string{
+                    (char)type_id::trivial_class_t, (char)type_id::optional_t,
+                    (char)type_id::circle_flag, (char)129,
+                    (char)type_id::optional_t, (char)type_id::circle_flag,
+                    (char)129, (char)type_id::string_t, (char)type_id::char_8_t,
+                    (char)type_id::int32_t, (char)type_id::type_end_flag});
+    my_tree tree;
+    init_tree(&tree);
+    auto buffer = struct_pack::serialize(tree);
+    auto result = struct_pack::deserialize<my_tree>(buffer);
+    CHECK(tree == result);
   }
 }

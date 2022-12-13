@@ -152,8 +152,8 @@ constexpr auto get_types(U &&t) {
   using T = std::remove_cvref_t<U>;
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
-                variant<T> || expected<T> || array<T> || c_array<T> ||
-                std::is_same_v<std::monostate, T>) {
+                unique_ptr<T> || variant<T> || expected<T> || array<T> ||
+                c_array<T> || std::is_same_v<std::monostate, T>) {
     return std::tuple<T>{};
   }
   else if constexpr (tuple<T>) {
@@ -197,7 +197,8 @@ struct is_trivial_serializable {
       return false;
     }
     else if constexpr (container<T> || optional<T> || variant<T> ||
-                       expected<T> || container_adapter<T> || varint_t<T>) {
+                       unique_ptr<T> || expected<T> || container_adapter<T> ||
+                       varint_t<T>) {
       return false;
     }
     else if constexpr (pair<T>) {
@@ -286,6 +287,8 @@ enum class type_id {
   expected_t,
   // monostate, or void
   monostate_t = 250,
+  // circle_flag
+  circle_flag = 251,
   trivial_class_t = 253,
   // struct type
   non_trivial_class_t = 254,
@@ -486,7 +489,7 @@ consteval type_id get_type_id() {
   else if constexpr (container<T>) {
     return type_id::container_t;
   }
-  else if constexpr (optional<T>) {
+  else if constexpr (optional<T> || unique_ptr<T>) {
     return type_id::optional_t;
   }
   else if constexpr (variant<T>) {
@@ -520,23 +523,24 @@ template <size_t size>
 consteval decltype(auto) get_size_literal() {
   static_assert(sizeof(size_t) <= 8);
   if constexpr (size < 1ull * 127) {
-    return string_literal<char, 1>{{static_cast<char>(size + 1)}};
+    return string_literal<char, 1>{{static_cast<char>(size + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127) {
-    return string_literal<char, 2>{
-        {static_cast<char>(size % 127 + 1), static_cast<char>(size / 127 + 1)}};
+    return string_literal<char, 2>{{static_cast<char>(size % 127 + 1),
+                                    static_cast<char>(size / 127 + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127) {
-    return string_literal<char, 3>{{static_cast<char>(size % 127 + 1),
-                                    static_cast<char>(size / 127 % 127 + 1),
-                                    static_cast<char>(size / (127 * 127) + 1)}};
+    return string_literal<char, 3>{
+        {static_cast<char>(size % 127 + 1),
+         static_cast<char>(size / 127 % 127 + 1),
+         static_cast<char>(size / (127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127) {
     return string_literal<char, 4>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
          static_cast<char>(size / (127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127) + 1)}};
+         static_cast<char>(size / (127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 5>{
@@ -544,7 +548,7 @@ consteval decltype(auto) get_size_literal() {
          static_cast<char>(size / 127 % 127 + 1),
          static_cast<char>(size / (127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127) + 1)}};
+         static_cast<char>(size / (127 * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 6>{
@@ -553,7 +557,7 @@ consteval decltype(auto) get_size_literal() {
          static_cast<char>(size / (127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) + 1)}};
+         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 7>{
@@ -563,7 +567,7 @@ consteval decltype(auto) get_size_literal() {
          static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) + 1)}};
+         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size <
                      1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
@@ -575,26 +579,30 @@ consteval decltype(auto) get_size_literal() {
         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127 * 127) + 1),
+        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127 * 127) +
+                          129),
     }};
   }
   else {
     static_assert(
         size >= 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127,
-        "The array is too large.");
-    return string_literal<char, 9>{{
-        static_cast<char>(size % 127 + 1),
-        static_cast<char>(size / 127 % 127 + 1),
-        static_cast<char>(size / (127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(
-            size / (127 * 127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(
-            size / (127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) + 1),
-    }};
+        "The size is too large.");
+  }
+}
+template <typename arg, typename... ParentArgs>
+consteval std::size_t check_cycle() {
+  using types_tuple = std::tuple<ParentArgs...>;
+  if constexpr (sizeof...(ParentArgs)) {
+    return []<std::size_t... I>(std::index_sequence<I...>) {
+      std::size_t ret = std::max(
+          {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
+                                                                      : 0)...});
+      return ret;
+    }
+    (std::make_index_sequence<sizeof...(ParentArgs)>());
+  }
+  else {
+    return 0;
   }
 }
 
@@ -603,35 +611,22 @@ consteval decltype(auto) get_size_literal() {
 // Currently, the unit test coverage tools like
 // [Coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html)
 // can not detect code that is run at compile time.
-template <typename Args, typename ParentArg, std::size_t... I>
+template <typename Args, typename... ParentArgs, std::size_t... I>
 consteval decltype(auto) get_type_literal(std::index_sequence<I...>);
 
-template <typename Args, std::size_t... I>
+template <typename Args, typename... ParentArgs, std::size_t... I>
 consteval decltype(auto) get_variant_literal(std::index_sequence<I...>);
 
-template <typename Arg, typename ParentArg>
+template <typename Arg, typename... ParentArgs>
 consteval decltype(auto) get_type_literal() {
   constexpr auto id = get_type_id<Arg>();
   constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
-  if constexpr (id == type_id::monostate_t) {
-    if constexpr (expected<ParentArg>) {
-      static_assert(std::is_same_v<void, typename ParentArg::value_type> &&
-                        !std::is_same_v<void, typename ParentArg::error_type>,
-                    "std::monostate/void are not allowed as sub-type except in "
-                    "variant or in expected's value_type");
-    }
-    else {
-      static_assert(std::is_same_v<ParentArg, void> || variant<ParentArg>,
-                    "std::monostate/void are not allowed as sub-type except in "
-                    "variant or in expected's value_type");
-    }
-  }
   if constexpr (id == type_id::non_trivial_class_t ||
                 id == type_id::trivial_class_t) {
     using Args = decltype(get_types(Arg{}));
-    constexpr auto body = get_type_literal<Args, Arg>(
+    constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
         std::make_index_sequence<std::tuple_size_v<Args>>());
-    if constexpr (id == type_id::trivial_class_t) {
+    if constexpr (is_trivial_serializable<Arg>::value) {
       static_assert(
           min_align<Arg>() == '0' || min_align<Arg>() <= max_align<Arg>(),
           "#pragma pack may decrease the alignment of a class, however, "
@@ -640,12 +635,12 @@ consteval decltype(auto) get_type_literal() {
           string_literal<char, 3>{{static_cast<char>(min_align<Arg>()),
                                    static_cast<char>(max_align<Arg>()),
                                    static_cast<char>(type_id::type_end_flag)}};
-      return body + end;
+      return ret + body + end;
     }
     else {
       constexpr auto end =
           string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
-      return body + end;
+      return ret + body + end;
     }
   }
   else if constexpr (id == type_id::variant_t) {
@@ -665,31 +660,48 @@ consteval decltype(auto) get_type_literal() {
                         Arg>()[0]));  // std::size(std::declval<Arg>());
     return ret +
            get_type_literal<
-               std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg>() +
+               std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
+               ParentArgs...>() +
            get_size_literal<sz>();
+  }
+  else if constexpr (unique_ptr<Arg>) {
+    // detect cycle in graph
+    constexpr std::size_t has_cycle =
+        check_cycle<typename Arg::element_type, ParentArgs...>();
+    if constexpr (has_cycle) {
+      return ret +
+             string_literal<char, 1>{
+                 {static_cast<char>(type_id::circle_flag)}} +
+             get_size_literal<has_cycle - 1>();
+    }
+    else {
+      return ret +
+             get_type_literal<std::remove_cvref_t<typename Arg::element_type>,
+                              Arg, ParentArgs...>();
+    }
   }
   else if constexpr (id == type_id::container_t || id == type_id::optional_t ||
                      id == type_id::string_t) {
     return ret + get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
-                                  Arg>();
+                                  Arg, ParentArgs...>();
   }
   else if constexpr (id == type_id::set_container_t) {
-    return ret +
-           get_type_literal<std::remove_cvref_t<typename Arg::key_type>, Arg>();
+    return ret + get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+                                  Arg, ParentArgs...>();
   }
   else if constexpr (id == type_id::map_container_t) {
     return ret +
-           get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
-                            Arg>() +
-           get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>,
-                            Arg>();
+           get_type_literal<std::remove_cvref_t<typename Arg::key_type>, Arg,
+                            ParentArgs...>() +
+           get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>, Arg,
+                            ParentArgs...>();
   }
   else if constexpr (id == type_id::expected_t) {
     return ret +
-           get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
-                            Arg>() +
-           get_type_literal<std::remove_cvref_t<typename Arg::error_type>,
-                            Arg>();
+           get_type_literal<std::remove_cvref_t<typename Arg::value_type>, Arg,
+                            ParentArgs...>() +
+           get_type_literal<std::remove_cvref_t<typename Arg::error_type>, Arg,
+                            ParentArgs...>();
   }
   else if constexpr (id != type_id::compatible_t) {
     return ret;
@@ -699,24 +711,27 @@ consteval decltype(auto) get_type_literal() {
   }
 }
 
-template <typename Args, typename ParentArg, std::size_t... I>
+template <typename Args, typename... ParentArgs, std::size_t... I>
 consteval decltype(auto) get_type_literal(std::index_sequence<I...>) {
   return ((get_type_literal<std::remove_cvref_t<std::tuple_element_t<I, Args>>,
-                            ParentArg>()) +
+                            ParentArgs...>()) +
           ...);
 }
 
-template <typename Args, std::size_t... I>
+template <typename Args, typename... ParentArgs, std::size_t... I>
 consteval decltype(auto) get_variant_literal(std::index_sequence<I...>) {
-  return (
-      (get_type_literal<
-          std::remove_cvref_t<std::variant_alternative_t<I, Args>>, Args>()) +
-      ...);
+  return ((get_type_literal<
+              std::remove_cvref_t<std::variant_alternative_t<I, Args>>, Args,
+              ParentArgs...>()) +
+          ...);
 }
 
-template <typename... Args>
+template <typename Parent, typename... Args>
 consteval decltype(auto) get_types_literal_impl() {
-  return (get_type_literal<Args, void>() + ...);
+  if constexpr (std::is_same_v<Parent, void>)
+    return (get_type_literal<Args>() + ...);
+  else
+    return (get_type_literal<Args, Parent>() + ...);
 }
 
 template <typename T, typename... Args>
@@ -726,8 +741,8 @@ consteval decltype(auto) get_types_literal() {
                 root_id == type_id::trivial_class_t) {
     constexpr auto begin =
         string_literal<char, 1>{{static_cast<char>(root_id)}};
-    constexpr auto body = get_types_literal_impl<Args...>();
-    if constexpr (root_id == type_id::trivial_class_t) {
+    constexpr auto body = get_types_literal_impl<T, Args...>();
+    if constexpr (is_trivial_serializable<T>::value) {
       static_assert(min_align<T>() == '0' || min_align<T>() <= max_align<T>(),
                     "#pragma pack may decrease the alignment of a class, "
                     "however, it cannot make a class over aligned.");
@@ -743,7 +758,7 @@ consteval decltype(auto) get_types_literal() {
     }
   }
   else {
-    return get_types_literal_impl<Args...>();
+    return get_types_literal_impl<void, Args...>();
   }
 }
 
@@ -908,6 +923,12 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
       ret += calculate_one_size(*item);
     }
   }
+  else if constexpr (unique_ptr<type>) {
+    ret.total += sizeof(char);
+    if (item != nullptr) {
+      ret += calculate_one_size(*item);
+    }
+  }
   else if constexpr (variant<type>) {
     ret.total += sizeof(uint8_t);
     ret += std::visit(
@@ -1050,7 +1071,8 @@ get_serialize_runtime_info(const Args &...args) {
     ret.len += type_literal.size() + 1;
     ret.metainfo |= 0b100;
   }
-  if constexpr (has_compatible) {  // calculate bytes count of serialize length
+  if constexpr (has_compatible) {  // calculate bytes count of serialize
+                                   // length
     if (ret.len + 2 < (1ull << 16)) [[likely]] {
       ret.len += 2;
       ret.metainfo |= 0b01;
@@ -1231,6 +1253,14 @@ class packer {
       std::memcpy(data_ + pos_, &has_value, sizeof(char));
       pos_ += sizeof(char);
 
+      if (has_value) {
+        serialize_one<size_type>(*item);
+      }
+    }
+    else if constexpr (unique_ptr<type>) {
+      bool has_value = (item != nullptr);
+      std::memcpy(data_ + pos_, &has_value, sizeof(char));
+      pos_ += sizeof(char);
       if (has_value) {
         serialize_one<size_type>(*item);
       }
@@ -1681,7 +1711,7 @@ class unpacker {
           },
           item);
     }
-    else if constexpr (optional<type>) {
+    else if constexpr (optional<type> || unique_ptr<type>) {
       if (pos_ + sizeof(bool) > size_) [[unlikely]] {
         return struct_pack::errc::no_buffer_space;
       }
@@ -1691,8 +1721,13 @@ class unpacker {
       if (!has_value) [[unlikely]] {
         return {};
       }
-      item = type{std::in_place_t{}};
-      deserialize_one<size_type, NotSkip>(item.value());
+      if constexpr (optional<type>) {
+        item = type{std::in_place_t{}};
+      }
+      else {
+        item = new typename type::element_type();
+      }
+      deserialize_one<size_type, NotSkip>(*item);
     }
     else if constexpr (variant<type>) {
       if (pos_ + sizeof(uint8_t) > size_) [[unlikely]] {
