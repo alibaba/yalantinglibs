@@ -158,6 +158,7 @@ struct complicated_object {
   person n[2];
   std::pair<std::string, person> o;
   std::optional<int> p;
+  std::unique_ptr<int> q;
 };
 
 struct nested_object {
