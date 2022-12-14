@@ -565,4 +565,9 @@ TEST_CASE("test unique_ptr") {
     auto result = struct_pack::deserialize<my_tree>(buffer);
     CHECK(tree == result);
   }
+  SUBCASE("test unique_array") {
+    static_assert(
+        struct_pack::detail::unique_ptr<std::unique_ptr<int[]>> == false,
+        "We don't support unique_ptr to array now.");
+  }
 }

@@ -924,8 +924,6 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
       ret += calculate_one_size(*item);
     }
   }
-  else if constexpr (unique_ptr<type>) {
-  }
   else if constexpr (variant<type>) {
     ret.total = sizeof(uint8_t);
     ret += std::visit(
