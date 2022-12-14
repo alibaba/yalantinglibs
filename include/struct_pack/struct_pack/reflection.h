@@ -216,6 +216,10 @@ struct UniversalOptionalType {
   operator U();
 };
 
+struct UniversalNullptrType {
+  operator std::nullptr_t();
+};
+
 template <typename T, typename... Args>
 consteval std::size_t member_count_impl() {
   if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
@@ -230,6 +234,11 @@ consteval std::size_t member_count_impl() {
                        T{{Args{}}..., {UniversalIntegralType{}}};
                      } == true) {
     return member_count_impl<T, Args..., UniversalIntegralType>();
+  }
+  else if constexpr (requires {
+                       T{{Args{}}..., {UniversalNullptrType{}}};
+                     } == true) {
+    return member_count_impl<T, Args..., UniversalNullptrType>();
   }
   else {
     return sizeof...(Args);

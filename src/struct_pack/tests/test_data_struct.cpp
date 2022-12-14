@@ -486,7 +486,7 @@ TEST_CASE("test unique_ptr") {
     auto buffer = struct_pack::serialize(list_head);
     auto result = struct_pack::deserialize<my_list>(buffer);
     auto literal = struct_pack::get_type_literal<my_list>();
-    std::string_view sv{literal.begin(), literal.size()};
+    std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
     CHECK(sv ==
           std::string{(char)type_id::trivial_class_t, (char)type_id::optional_t,
@@ -512,7 +512,7 @@ TEST_CASE("test unique_ptr") {
     auto buffer = struct_pack::serialize(list_head);
     auto result = struct_pack::deserialize<std::unique_ptr<my_list>>(buffer);
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list>>();
-    std::string_view sv{literal.begin(), literal.size()};
+    std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
     CHECK(sv == std::string{
                     (char)type_id::optional_t, (char)type_id::trivial_class_t,
@@ -538,7 +538,7 @@ TEST_CASE("test unique_ptr") {
     auto buffer = struct_pack::serialize(list_head);
     auto result = struct_pack::deserialize<std::unique_ptr<my_list2>>(buffer);
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list2>>();
-    std::string_view sv{literal.begin(), literal.size()};
+    std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
     CHECK(sv ==
           std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
