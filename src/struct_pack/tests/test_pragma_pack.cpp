@@ -220,9 +220,9 @@ TEST_CASE("testing nesting #pragma pack()") {
   static_assert(offsetof(T, b) == 4);
   auto literal = struct_pack::get_type_literal<T>();
   // clang-format off
-  string_literal<char, 14> val{{(char)-3,
-                                12, 7, 1, 1, (char)-1,
-                                12, 1, 2, 2, (char)-1,
+  string_literal<char, 16> val{{(char)-3,
+                                (char)-3,12, 7, 1, 1, (char)-1,
+                                (char)-3,12, 1, 2, 2, (char)-1,
                                       48, 2, (char)-1}};
   // clang-format on
   REQUIRE(literal == val);
@@ -239,9 +239,9 @@ TEST_CASE("testing nesting #pragma pack(), outer pack(1)") {
   static_assert(offsetof(T, b) == 3);
   auto literal = struct_pack::get_type_literal<T>();
   // clang-format off
-  string_literal<char, 14> val{{(char)-3,
-                                12, 7, 1, 1, (char)-1,
-                                12, 1, 2, 2, (char)-1,
+  string_literal<char, 16> val{{(char)-3,
+                                (char)-3,12, 7, 1, 1, (char)-1,
+                                (char)-3,12, 1, 2, 2, (char)-1,
                                        1, 1, (char)-1}};
   // clang-format on
   REQUIRE(literal == val);
