@@ -42,16 +42,17 @@ struct_pack支持的类型主要包括：基本类型，约束类型，复合类
 
 struct_pack支持以下约束类型：
 
-| 类型名        | 含义                               | 例如                                                                                                                                |
-| ------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| container     | 顺序容器类型，存储了若干个元素     | std::vector, std::list, std::deque, folly::flat_vector                                                                              |
-| set_container | 集合类型，存储了若干个键           | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                                            |
-| map_container | 映射类型，存储了若干键值对         | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                                             |
-| string        | 字符串类型                         | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
-| array         | 数组类型，其长度编译期确定         | C语言内置数组类型，std::array                                                                                                       |
-| optional      | optional类型                       | std::optional, boost::optional                                                                                                      |
-| variant       | variant类型                        | std::variant                                                                                                                        |
-| expected      | expected类型，包含期望结果或错误码 | std::expected, tl::expected                                                                                                         |
+| 类型名        | 含义                                 | 例如                                                                                                                                |
+| ------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| container     | 顺序容器类型，存储了若干个元素       | std::vector, std::list, std::deque, folly::flat_vector                                                                              |
+| set_container | 集合类型，存储了若干个键             | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                                            |
+| map_container | 映射类型，存储了若干键值对           | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                                             |
+| string        | 字符串类型                           | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
+| array         | 数组类型，其长度编译期确定           | C语言内置数组类型，std::array                                                                                                       |
+| optional      | optional类型                         | std::optional, boost::optional                                                                                                      |
+| variant       | variant类型                          | std::variant                                                                                                                        |
+| expected      | expected类型，包含期望结果或错误码   | std::expected, tl::expected                                                                                                         |
+| unique_ptr    | unique_ptr类型，一个独占所有权的指针 | std::unique_ptr                                                                                                                     |
 
 下面我们列出各类型的详细约束条件, 用户可以根据约束条件来定义自己的数据结构：
 
@@ -169,7 +170,7 @@ concept expected = requires(Type e) {
 
 ### optional类型
 
-该类需要提供：`value_type`、类型成员，同时提供`has_value()`,、`value()`成员函数，重载了`operator *`，并且不满足expected类型的约束。`value_type`必须也是合法的struct_pack类型。
+该类需要提供：`value_type`类型成员，同时提供`has_value()`,、`value()`成员函数，重载了`operator *`，并且不满足expected类型的约束。`value_type`必须也是合法的struct_pack类型。
 
 
 
@@ -185,6 +186,20 @@ concept optional = !expected<Type> && requires(Type optional) {
 
 如果该类型为空，struct_pack会对其进行压缩。
 
+### unique_ptr类型
+
+该类需要提供：`operator*`，且禁用了拷贝赋值，同时定义了`element_type`类型成员。
+
+```cpp
+template <typename Type>
+concept unique_ptr = requires(Type ptr) {
+  ptr.operator*();
+  typename std::remove_cvref_t<Type>::element_type;
+}
+&&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+```
+
+如果该对象的值为空指针，struct_pack会对其进行压缩。
 
 ## 结构体
 
