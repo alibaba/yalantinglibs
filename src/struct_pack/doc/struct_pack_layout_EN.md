@@ -44,11 +44,11 @@ The detailed layout is shown figure in bellow:
 
 Current configurations are:
 
-| Configuration | Contents | Bit location | Dependency   | Configurable |
-| ------------- | ---------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------- | -------------- |
-| DATA_SIZE     | DATA_SIZE represents the total bytes of the serialization result, when compatible fields exist | 0b000000**     |  depends on compatible field              | N   |
-| ADD_TYPE_INFO | A flag indicates if full type information exists          | 0b00000*00     | Release(0) Debug(1); Could be set by user manually | Y   |
-| LEN_SIZE      | Number of bytes occupied by the containers                                                           | 0b000**000     | Depends on the latest data container in the encoded result                        | N   |
+| Configuration | Contents                                                                                       | Bit location | Dependency                                                 | Configurable |
+| ------------- | ---------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------- | ------------ |
+| DATA_SIZE     | DATA_SIZE represents the total bytes of the serialization result, when compatible fields exist | 0b000000**   | depends on compatible field                                | N            |
+| ADD_TYPE_INFO | A flag indicates if full type information exists                                               | 0b00000*00   | Release(0) Debug(1); Could be set by user manually         | Y            |
+| LEN_SIZE      | Number of bytes occupied by the containers                                                     | 0b000**000   | Depends on the latest data container in the encoded result | N            |
 
 1. `DATA_SIZE`(2 bits). When `compatible<T>` fields are present, we need to record the total data length. so
 - 00 : total data length field not present(so that no compatible fields)
@@ -135,44 +135,60 @@ where the meta information header is `0x08`, which indicates a `size_type` lengt
 
 All fundamental types(such as signed and unsigned integers, floating-point types, character types, enum and boolean) have definitive length.
 
-### unsigned integers
+### fix-sized unsigned integers
 
 
-| type   | length(bytes)) | format |
-| -------- | --------------- | -------- |
-| uint8_t  | 1               | original code     |
-| uint16_t | 2               | original code     |
-| uint32_t | 4               | original code     |
-| uint64_t | 8               | original code     |
+| type     | length(bytes) | format        |
+| -------- | ------------- | ------------- |
+| uint8_t  | 1             | original code |
+| uint16_t | 2             | original code |
+| uint32_t | 4             | original code |
+| uint64_t | 8             | original code |
 
 
-### unsigned integers
+### fix-sized unsigned integers
 
-| type   | length(bytes)) | format |
-| ------- | --------------- | -------- |
-| int8_t  | 1               | two's Complement     |
-| int16_t | 2               | two's Complement     |
-| int32_t | 4               | two's Complement     |
-| int64_t | 8               | two's Complement     |
+| type    | length(bytes) | format           |
+| ------- | ------------- | ---------------- |
+| int8_t  | 1             | two's Complement |
+| int16_t | 2             | two's Complement |
+| int32_t | 4             | two's Complement |
+| int64_t | 8             | two's Complement |
 
-
-### floating-point types
-
-| type   | length(bytes)) | format |
-| ------ | --------------- | ---------------- |
-| float  | 4               | IEEE 754 single-precision |
-| double | 8               | IEEE 754 double-precision |
+### fix-sized unsigned integers
 
 
-### character types
+| type                      | length(bytes)        | format |
+| ------------------------- | -------------------- | ------ |
+| struct_pack::var_uint32_t | 1-5 (variant length) | varint |
+| struct_pack::var_uint64_t | 1-10(variant length) | varint |
+
+### variant length signed integers
 
 
-| type   | length(bytes)) | format |
-| -------- | --------------- | -------- |
-| char8_t  | 1               | original code     |
-| char16_t | 2               | original code     |
-| char32_t | 4               | original code     |
-| wchar_t  | Platform-dependent | original code     |
+| type                     | length(bytes)        | format          |
+| ------------------------ | -------------------- | --------------- |
+| struct_pack::var_int32_t | 1-5 (variant length) | zigzag + varint |
+| struct_pack::var_int64_t | 1-10(variant length) | zigzag + varint |
+
+
+### fix-sized floating-point types
+
+| type   | length(bytes)) | format                    |
+| ------ | -------------- | ------------------------- |
+| float  | 4              | IEEE 754 single-precision |
+| double | 8              | IEEE 754 double-precision |
+
+
+### fix-sized character types
+
+
+| type     | length(bytes))     | format        |
+| -------- | ------------------ | ------------- |
+| char8_t  | 1                  | original code |
+| char16_t | 2                  | original code |
+| char32_t | 4                  | original code |
+| wchar_t  | Platform-dependent | original code |
 
 
 ### enum
