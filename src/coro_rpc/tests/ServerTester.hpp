@@ -226,25 +226,41 @@ struct ServerTester : TesterConfig {
     try {
       {
         auto ret = call<async_hi>(client);
+        easylog::info("client_id {} call async_hi", client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call async_hi error {}",
+                         client->get_client_id(), ret.error().msg);
+        }
+        else {
+          easylog::info("client_id {} call async_hi ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "async hi"s);
       }
       {
         auto ret = call<hello>(client);
+        easylog::info("client_id {} call hello", client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call hello error {}",
+                         client->get_client_id(), ret.error().msg);
+        }
+        else {
+          easylog::info("client_id {} call hello ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "hello"s);
       }
       {
         auto ret = call<&HelloService::hello>(client);
+        easylog::info("client_id {} call HelloService::hello",
+                      client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call HelloService::hello error {}",
+                         client->get_client_id(), ret.error().msg);
+        }
+        else {
+          easylog::info("client_id {} call HelloService::hello ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "hello"s);
       }
