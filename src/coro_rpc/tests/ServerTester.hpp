@@ -221,30 +221,54 @@ struct ServerTester : TesterConfig {
   }
   void test_function_registered() {
     g_action = {};
-    auto client = create_client();
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
-    try {
+
+    // because heartbeat timeout is 300ms, sometimes the client closed because
+    // of timeout, so retry call.
+    int retry = 4;
+    for (int i = 0; i < retry; i++) {
+      auto client = create_client();
+      easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+      easylog::info("retry call times {}", i);
       {
         auto ret = call<async_hi>(client);
+        easylog::info("client_id {} call async_hi", client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call async_hi error {}",
+                         client->get_client_id(), ret.error().msg);
+          continue;
+        }
+        else {
+          easylog::info("client_id {} call async_hi ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "async hi"s);
       }
       {
         auto ret = call<hello>(client);
+        easylog::info("client_id {} call hello", client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call hello error {}",
+                         client->get_client_id(), ret.error().msg);
+          continue;
+        }
+        else {
+          easylog::info("client_id {} call hello ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "hello"s);
       }
       {
         auto ret = call<&HelloService::hello>(client);
+        easylog::info("client_id {} call HelloService::hello",
+                      client->get_client_id());
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          easylog::error("client_id {} call HelloService::hello error {}",
+                         client->get_client_id(), ret.error().msg);
+          continue;
+        }
+        else {
+          easylog::info("client_id {} call HelloService::hello ok, result {}",
+                        client->get_client_id(), ret.value());
         }
         CHECK(ret.value() == "hello"s);
       }
@@ -258,8 +282,8 @@ struct ServerTester : TesterConfig {
         CHECK(ret.value() == true);
 #endif
       }
-    } catch (std::exception &e) {
-      easylog::error("test_function_registered has exception {}", e.what());
+
+      break;
     }
   }
   void test_client_send_bad_header() {
