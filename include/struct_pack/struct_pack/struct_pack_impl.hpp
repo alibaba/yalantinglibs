@@ -1112,7 +1112,18 @@ class packer {
 
   STRUCT_PACK_INLINE size_t size() { return pos_; }
 
- private:
+  template <serialize_config conf, typename T, typename... Args>
+  static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
+    constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
+    if constexpr (serialize_static_config<serialize_type>::has_compatible ||
+                  check_if_add_type_literal<conf, serialize_type>()) {
+      return raw_types_code - raw_types_code % 2 + 1;
+    }
+    else {  // default case, only has hash_code
+      return raw_types_code - raw_types_code % 2;
+    }
+  }
+
   template <typename T, typename... Args>
   static consteval uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
@@ -1126,17 +1137,8 @@ class packer {
           std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
     }
   }
-  template <serialize_config conf, typename T, typename... Args>
-  static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
-    constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
-    if constexpr (serialize_static_config<serialize_type>::has_compatible ||
-                  check_if_add_type_literal<conf, serialize_type>()) {
-      return raw_types_code - raw_types_code % 2 + 1;
-    }
-    else {  // default case, only has hash_code
-      return raw_types_code - raw_types_code % 2;
-    }
-  }
+
+ private:
   template <serialize_config conf, bool is_default_size_type, typename T,
             typename... Args>
   constexpr void STRUCT_PACK_INLINE serialize_metainfo() {
