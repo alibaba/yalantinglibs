@@ -49,9 +49,9 @@ int main(int argc, char** argv) {
     std::cout << "======= bench " << sample->name() << "=======\n";
     sample->create_samples();
     sample->do_serialization(0);
-    // sample->do_deserialization(0);
+    sample->do_deserialization(0);
 
-    // sample->print_buffer_size();
+    sample->print_buffer_size();
   }
 
   // bench_struct_pack();

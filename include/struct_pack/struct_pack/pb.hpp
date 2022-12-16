@@ -777,10 +777,10 @@ template <typename T>
   return array.back();
 }
 
-template <detail::deserialize_view View>
+template <detail::struct_pack_byte Byte>
 class packer {
  public:
-  packer(View& data, std::size_t max) : data_(data), max_(max) {}
+  packer(Byte* data, std::size_t max) : data_(data), max_(max) {}
   template <typename T>
   STRUCT_PACK_INLINE void serialize(const T& t) {
     constexpr auto Count = detail::member_count<T>();
@@ -819,10 +819,9 @@ class packer {
           if (v == 0) {
             return;
           }
-          // assert(pos_ < max_);
+          assert(pos_ < max_);
           // why '0'
-          data_.push_back('0');
-          pos_++;
+          data_[pos_++] = '0';
           serialize_varint(v);
         }
         else {
@@ -838,8 +837,7 @@ class packer {
           return;
         }
         write_tag<FieldNumber, wire_type>();
-        data_.resize(pos_ + sizeof(Field));
-        std::memcpy(data_.data() + pos_, &field, sizeof(Field));
+        std::memcpy(data_ + pos_, &field, sizeof(Field));
         pos_ += sizeof(Field);
       }
       else if constexpr (LEN<Field>) {
@@ -849,9 +847,8 @@ class packer {
           }
           write_tag<FieldNumber, wire_type>();
           serialize_varint(field.size());
-          // assert(pos_ + field.size() <= max_);
-          data_.resize(pos_ + field.size());
-          std::memcpy(data_.data() + pos_, field.data(), field.size());
+          assert(pos_ + field.size() <= max_);
+          std::memcpy(data_ + pos_, field.data(), field.size());
           pos_ += field.size();
         }
         else if constexpr (detail::map_container<Field> ||
@@ -879,9 +876,8 @@ class packer {
             write_tag<FieldNumber, wire_type>();
             auto size = field.size() * sizeof(value_type);
             serialize_varint(size);
-            // assert(pos_ + size <= max_);
-            data_.resize(pos_ + size);
-            std::memcpy(data_.data() + pos_, field.data(), size);
+            assert(pos_ + size <= max_);
+            std::memcpy(data_ + pos_, field.data(), size);
             pos_ += size;
           }
           else {
@@ -912,7 +908,6 @@ class packer {
       }
     }
   }
-
   template <std::size_t FieldIndex, typename T, detail::variant Variant>
   STRUCT_PACK_INLINE void serialize_oneof(const T& t, const Variant& v) {
     oneof_packer_helper_with_field_index<FieldIndex> helper;
@@ -931,7 +926,6 @@ class packer {
       return self.template serialize<FieldIndex, FieldNumber>(t, field);
     }
   };
-
   template <std::size_t VariantIndex>
   struct oneof_packer_helper {
     template <typename Helper, typename Packer, typename T, typename Variant>
@@ -952,9 +946,8 @@ class packer {
   STRUCT_PACK_INLINE void encode_varint_v1(T t) {
     uint64_t v = t;
     do {
-      // assert(pos_ < max_);
-      data_.push_back(0b1000'0000 | uint8_t(v));
-      pos_++;
+      assert(pos_ < max_);
+      data_[pos_++] = 0b1000'0000 | uint8_t(v);
       v >>= 7;
     } while (v != 0);
     assert(pos_ > 0);
@@ -964,13 +957,11 @@ class packer {
   template <std::unsigned_integral T>
   STRUCT_PACK_INLINE void encode_varint_v2(T t) {
     while (t >= 0x80) {
-      // assert(pos_ < max_);
-      data_.push_back(t | 0x80);
-      pos_++;
+      assert(pos_ < max_);
+      data_[pos_++] = static_cast<uint8_t>(t | 0x80);
       t >>= 7;
     }
-    data_.push_back(t);
-    pos_++;
+    data_[pos_++] = static_cast<uint8_t>(t);
   }
   template <typename T>
   STRUCT_PACK_INLINE void serialize_varint(T t) {
@@ -1003,7 +994,7 @@ class packer {
   }
 
  private:
-  View& data_;
+  Byte* data_;
   std::size_t pos_ = 0;
   std::size_t max_;
 };
@@ -1561,11 +1552,11 @@ template <detail::struct_pack_buffer Buffer = std::vector<char>,
 template <detail::struct_pack_buffer Buffer, typename... Args>
 void STRUCT_PACK_INLINE serialize_to(Buffer& buffer, const Args&... args) {
   static_assert(sizeof...(args) == 1);
-  // auto data_offset = buffer.size();
-  // auto need_size = get_needed_size(args...);
-  // auto total = data_offset + need_size;
-  // buffer.resize(total);
-  packer o(buffer, 0);
+  auto data_offset = buffer.size();
+  auto need_size = get_needed_size(args...);
+  auto total = data_offset + need_size;
+  buffer.resize(total);
+  packer o(buffer.data(), need_size);
   o.serialize(args...);
 }
 template <typename T, detail::struct_pack_byte Byte>

@@ -153,43 +153,6 @@ auto create_monsters(std::size_t object_count) {
   return monsters;
 }
 }  // namespace struct_pb_sample
-bool verify(const struct_pb_sample::Weapon &a,
-            const struct_pb_sample::Weapon &b) {
-  assert(a.name == b.name);
-  assert(a.damage == b.damage);
-  return true;
-}
-bool verify(const struct_pb_sample::Monster &a,
-            const struct_pb_sample::Monster &b) {
-  assert(a.pos == b.pos);
-  assert(a.mana == b.mana);
-  assert(a.hp == b.hp);
-  assert(a.name == b.name);
-  assert(a.inventory == b.inventory);
-  assert(a.color == b.color);
-  assert(a.weapons.size() == b.weapons.size());
-  for (int i = 0; i < a.weapons.size(); ++i) {
-    auto ok = verify(a.weapons[i], b.weapons[i]);
-    if (!ok) {
-      return ok;
-    }
-  }
-  assert(a.weapons == b.weapons);
-  assert(a.equipped == b.equipped);
-  assert(a.path == b.path);
-  return true;
-}
-bool verify(const struct_pb_sample::Monsters &a,
-            const struct_pb_sample::Monsters &b) {
-  assert(a.monsters.size() == b.monsters.size());
-  for (int i = 0; i < a.monsters.size(); ++i) {
-    auto ok = verify(a.monsters[i], b.monsters[i]);
-    if (!ok) {
-      return ok;
-    }
-  }
-  return true;
-}
 
 template <typename Type>
 concept is_container_t = Type::is_container;

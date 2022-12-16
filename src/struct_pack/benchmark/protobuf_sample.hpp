@@ -165,24 +165,6 @@ struct protobuf_sample_t : public base_sample {
   }
 
  private:
-  void clear_data(auto &sample) {
-    using T = std::remove_cvref_t<decltype(sample)>;
-    if constexpr (std::same_as<T, mygame::Monsters>) {
-      sample.clear_monsters();
-    }
-    else if constexpr (std::same_as<T, mygame::Monster>) {
-      sample.clear_pos();
-      sample.set_mana(0);
-      sample.set_hp(0);
-      sample.clear_name();
-      sample.clear_inventory();
-      sample.clear_color();
-      sample.clear_weapons();
-      sample.clear_equipped();
-      sample.clear_path();
-    }
-  }
-
   void serialize(SampleType sample_type, auto &sample) {
     {
       std::string bench_name =
