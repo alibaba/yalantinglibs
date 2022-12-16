@@ -34,6 +34,14 @@
  * | Clang       | 10.0.0             |
  * | MSVC        | 19.29(VS 16.11)    |
  *
+ * * \subsection 编译选项
+ *
+ * | 宏      | 作用 |
+ * | ----------- | ------------------ |
+ * | STRUCT_PACK_OPTIMIZE               |
+ * 增加模板实例化的数量，通过牺牲编译时间和二进制体积来换取更好的性能    | |
+ * STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |
+ * 允许序列化unportable的类型，如wchar_t和wstring，请注意，这些类型序列化出的二进制数据可能无法正常的在另一个不同的平台下反序列化|
  *
  *
  * \subsection 序列化内存布局
@@ -48,43 +56,34 @@
  * struct pack的数据格式比较紧凑，
  * 对于基本类型的字段(整形、浮点型)和定长数组，根据类型的实际长度放到内存，
  * 对于容器概念的字段(字符串、stl容器)先放其元素个数再一个一个存放元素，数据格式比较紧密。
+ * 详细的内存布局说明请见：[person对象序列化之后的内存布局](struct_pack_layout_CN.md)。
  *
  * \subsection 如何让序列化or反序列化更加高效
  *
- * 1. 尽可能使用定长字符串；
+ * 1. 使用string_view代替string；
  * 2. 把内存连续的字段封装到一个单独的对象里；
  * 3. 尽量使用内存连续的容器(std::vector)；
+ * 4. 定义宏`STRUCT_PACK_OPTIMIZE`,
+ * 实例化更多的模板代码，通过牺牲编译时间和可执行文件大小的方式来加速。
  *
- * 通过这几种方式可以将性能进一步大幅提升。
  *
- * \subsection 优化序列化后binary的大小
+ * \subsection 容器长度的自动压缩
  *
- * 对容器和string size做压缩可以让序列化后的binary更小，
- * 可以在cmake中添加预定义宏的方式来压缩binary，
- * 这种压缩不会降低序列化/反序列化的性能，甚至性能还会更好。
+ * struct_pack会自动压缩容器和字符串的长度字段的长度，当对象的所包含的所有容器的最大长度小于256字节时，仅使用一个字节来保存容器的长度信息。
+ * 当最大长度介于[2^8,2^16)时，使用两个字节来保存长度。当最大长度介于[2^16,2^32)时，使用四个字节来保存长度。
+ * 否则，使用八个字节来保存长度
  *
- * ```cpp
- * # 使用1个字节表示字符串和容器的size，即size不超过256
- * add_definitions(-DSTRUCT_PACK_USE_INT8_SIZE)
+ * \subsection 类型校验
  *
- * # 使用2个字节表示字符串和容器的size，即size不超过65536
- * add_definitions(-DSTRUCT_PACK_USE_INT16_SIZE)
- * ```
+ * struct_pack在编译期会根据被序列化的对象的类型生成类型字符串，并根据该字符串生成一个32位的MD5并取其高31位作为类型校验码。反序列化时会检查校验码是否和待反序列化的类型相同。
  *
- * 默认不做压缩，用4字节表示size。
+ * 为了缓解可能出现的哈希冲突，在debug模式下，struct_pack会在类型
  *
  * \subsection 使用约束
  *
- * 1. 容器的最大长度不应超过UINT32_MAX。
- * 2. 序列化对象不能含有指针和引用。
- *    如果序列化对象还有指针在编译期会报一个编译错误；
- *    如果需要使用引用，可以用可以变参数版本的 `struct_pack::serialize`;
- * 3. 对象必须是一个
- * [aggregate](https://en.cppreference.com/w/cpp/language/aggregate_initialization)
- * 对象(一个没有用户声明构造函数，没有私有或保护类型的非静态数据成员，没有父类和虚函数的对象)，
- * 否则会报一个编译错误。在完整的编译期反射实现之前这个需要这个约束，
- * 在编译器支持完整的编译期反射之后就不会有这个约束了。
- *
+ * 1.
+ * 序列化的类型必须是struct_pack类型系统中的合法类型。详见：struct_pack的类型系统。
+ * 2. 向后兼容字段只能添加在类的最尾部，且必须是struct_pack::compatible<T>类型
  */
 
 namespace struct_pack {
@@ -99,8 +98,9 @@ namespace struct_pack {
  * ```cpp
  * person p{20, "tom"};
  * auto buffer = struct_pack::serialize(p);
- * auto p2 = struct_pack::deserialize<person>(buffer.data(),
- * buffer.size()); assert(p2); assert(p == p2.value());
+ * auto p2 = struct_pack::deserialize<person>(buffer.data(), buffer.size());
+ * assert(p2);
+ * assert(p == p2.value());
  * ```
  */
 
@@ -125,7 +125,7 @@ namespace struct_pack {
  * };
  * ```
  *
- * 注意，扩展字段只能在末尾增加！否则会导致编译错误。例如，假设有以下代码：
+ * 注意，compatibale字段只能添加到结构体的末尾！否则会导致编译错误。例如，假设有以下代码：
  *
  * ```cpp
  * struct person2 {
@@ -240,16 +240,39 @@ namespace struct_pack {
 
 /*!
  * \ingroup struct_pack
+ * \struct members_count
+ * \brief
+ * 某些特殊情况下，struct_pack可能无法正确计算结构体内的元素个数并导致编译期错误。
+ * 此时请特化模板`struct_pack::members_count`，并手动标明结构体内元素的个数。
+ *
+ * 样例代码：
+ * ```cpp
+ * struct bug_member_count_struct1 {
+ *  int i;
+ *  std::string j;
+ *  double k = 3;
+ * };
+ *
+ * struct bug_member_count_struct2 : bug_member_count_struct1 {};
+ *
+ * template <>
+ * constexpr size_t struct_pack::members_count<bug_member_count_struct2> = 3;
+ * ```
+ *
+ */
+
+/*!
+ * \ingroup struct_pack
  * 本函数返回std::errc对应的错误消息。
  * @param err
  * @return
  */
-STRUCT_PACK_INLINE std::string error_message(std::errc err);
+STRUCT_PACK_INLINE std::string error_message(struct_pack::errc err);
 
 /*!
  * \ingroup struct_pack
  * 用于预先分配好合适长度的内存，通常配合`struct_pack::serialize_to`函数使用。
- * 该计算允许在编译期进行（如果类型允许的话）。
+ * 如果类型允许，该计算可能在编译期完成。
  *
  * 样例代码：
  *
@@ -295,7 +318,7 @@ STRUCT_PACK_INLINE consteval std::uint32_t get_type_code();
  * 样例代码：
  *
  * ```cpp
- * auto str = get_type_literal<int, int, short>();
+ * auto str = get_type_literal<tuple<int, int, short>>();
  * CHECK(str.size() == 5);
  * string_literal<char, 5> val{{(char)-2, 1, 1, 7, (char)-1}};
  * //{struct_begin,int32_t,int32_t,int16_t,struct_end}; CHECK(str == val);

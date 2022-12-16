@@ -46,4 +46,29 @@ IGUANA_INLINE void from_json_file(T &value, const std::string &filename,
   iguana::from_json_file(value, filename, ec);
 }
 
+// dom parse
+using jvalue = iguana::jvalue;
+using jarray = iguana::jarray;
+using jobject = iguana::jarray;
+
+template <typename It>
+inline void parse(jvalue &result, It &&it, It &&end) {
+  iguana::parse(result, it, end);
+}
+
+template <typename It>
+inline void parse(jvalue &result, It &&it, It &&end, std::error_code &ec) {
+  iguana::parse(result, it, end, ec);
+}
+
+template <typename T, iguana::json_view View>
+inline void parse(T &result, const View &view) {
+  iguana::parse(result, view);
+}
+
+template <typename T, iguana::json_view View>
+inline void parse(T &result, const View &view, std::error_code &ec) {
+  iguana::parse(result, view, ec);
+}
+
 }  // namespace struct_json

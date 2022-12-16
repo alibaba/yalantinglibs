@@ -605,9 +605,9 @@ inline auto get_value_type(std::tuple<Args...>) {
 }
 
 inline constexpr frozen::string filter_str(const frozen::string &str) {
-  if (str.size() > 2 && str[0] == '_' && str[1] == '_') {
-    auto ptr = str.data() + 2;
-    return frozen::string(ptr, str.size() - 2);
+  if (str.size() > 3 && str[0] == '_' && str[1] == '_' && str[2] == '_') {
+    auto ptr = str.data() + 3;
+    return frozen::string(ptr, str.size() - 3);
   }
   return str;
 }

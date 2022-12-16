@@ -66,3 +66,44 @@ struct nested_object {
   complicated_object o;
   bool operator==(const nested_object &o) const = default;
 };
+
+struct my_list {
+  std::unique_ptr<my_list> next;
+  std::string name;
+  int value;
+  friend bool operator==(const my_list &a, const my_list &b) {
+    return a.value == b.value && a.name == b.name &&
+           ((a.next == nullptr && b.next == nullptr) ||
+            ((a.next != nullptr && b.next != nullptr) && *a.next == *b.next));
+  }
+};
+struct my_list2 {
+  struct my_list {
+    std::unique_ptr<my_list2> next;
+    std::string name;
+    int value;
+  };
+  my_list list;
+  friend bool operator==(const my_list2 &a, const my_list2 &b) {
+    return a.list.value == b.list.value && a.list.name == b.list.name &&
+           ((a.list.next == nullptr && b.list.next == nullptr) ||
+            ((a.list.next != nullptr && b.list.next != nullptr) &&
+             *a.list.next == *b.list.next));
+  }
+};
+
+struct my_tree {
+  std::unique_ptr<my_tree> left_child;
+  std::unique_ptr<my_tree> right_child;
+  std::string name;
+  int value;
+  friend bool operator==(const my_tree &a, const my_tree &b) {
+    return a.value == b.value && a.name == b.name &&
+           ((a.left_child == nullptr && b.left_child == nullptr) ||
+            ((a.left_child != nullptr && b.left_child != nullptr) &&
+             *a.left_child == *b.left_child)) &&
+           ((a.right_child == nullptr && b.right_child == nullptr) ||
+            ((a.right_child != nullptr && b.right_child != nullptr) &&
+             *a.right_child == *b.right_child));
+  }
+};

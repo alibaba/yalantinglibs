@@ -18,8 +18,19 @@ jobs:
           sudo apt-get install libssl-dev
           sudo apt-get install llvm
 
-      - name: Run Coverage Script
-        run: bash coverage_gen.sh llvm
+      - name: Run Coverage
+        run: |
+          ls
+          cp -r src/coro_rpc/tests/openssl_files .
+          ls
+          mkdir build && cd build
+          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
+          make -j test_rpc
+          export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
+          ./tests/test_rpc
+          llvm-profdata merge -sparse test_rpc-*.profraw -o test_rpc.profdata
+          llvm-cov show ./tests/test_rpc -instr-profile=test_rpc.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
+          echo "Done!"
 
       - name: Upload Coverage Results
         uses: actions/upload-artifact@v3

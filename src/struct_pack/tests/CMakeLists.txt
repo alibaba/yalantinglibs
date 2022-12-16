@@ -8,11 +8,7 @@ add_executable(test_serialize
         test_alignas.cpp
         test_pragma_pack.cpp
         test_pragma_pack_and_alignas_mix.cpp
-#        test_pb.cpp
-        test_pb_benchmark_struct.cpp
-#        test_pb_oneof.cpp
-#        test_pb.handwriting.cpp
-        test_pb_proxy.cpp
+        test_varint.cpp
         main.cpp
         )
 add_test(NAME test_serialize COMMAND test_serialize)

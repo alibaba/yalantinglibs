@@ -134,11 +134,10 @@ TEST_CASE("testing async rpc server") {
 
   // 0:async_start, 1:enable_heartbeat,
   // 2:use_outer_io_context, 3:use_ssl
-  std::array<std::bitset<4U>, 16U> switch_list{
-      0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111,
-      0b1000, 0b1001, 0b1010, 0b1011, 0b1100, 0b1101, 0b1110, 0b1111};
+  std::array<std::bitset<4U>, 8U> switch_list{0b0000, 0b0001, 0b0010, 0b0011,
+                                              0b1000, 0b1001, 0b1010, 0b1011};
 
-  for (auto list : switch_list) {
+  for (auto& list : switch_list) {
     TesterConfig config;
     config.async_start = list[0];
     config.enable_heartbeat = list[1];
@@ -151,7 +150,7 @@ TEST_CASE("testing async rpc server") {
     }
     std::stringstream ss;
     ss << config;
-    easylog::info("config: {}", ss.str());
+    easylog::info("{}, config: {}", list.to_string(), ss.str());
     AsyncServerTester(config).run();
   }
 }
@@ -207,6 +206,8 @@ TEST_CASE("testing async rpc write error") {
   REQUIRE(ec == std::errc{});
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   coro_rpc_client client(g_client_id++);
+  easylog::info("client_id {}, run testing async rpc write error",
+                client.get_client_id());
   ec = syncAwait(client.connect("127.0.0.1", "8820"));
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
@@ -262,7 +263,7 @@ TEST_CASE("test server write queue") {
     std::string buffer_read;
     buffer_read.resize(buf.size());
     read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
-    uint32_t body_len = *(uint32_t *)resp_len_buf;
+    uint32_t body_len = *(uint32_t*)resp_len_buf;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
     std::monostate r2;

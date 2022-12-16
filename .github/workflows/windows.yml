@@ -6,45 +6,34 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  # Customize the CMake build type here (Release, Debug, etc.)
-  BUILD_TYPE: Release
-
 jobs:
   build:
     runs-on: windows-latest
 
     strategy:
       matrix:
-        #mode: [ Release, Debug ]
-        mode: [ Debug ]
-        #arch: [ Win32, x64, ARM, ARM64 ]
-        #TODO: support Win32
-        arch: [ x64 ]
-        #ssl: [ON, OFF]
-        ssl: [ OFF ]
-
-    env:
-      CXX: cl.exe
-      CC: cl.exe
+        mode: [ Debug ] #[ Release, Debug ]
+        arch: [ amd64, x86 ] #[ amd64,x86 ]
+        ssl: [ OFF ] #[ ON, OFF ]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: SetUp Vcpkg
-        uses: friendlyanon/setup-vcpkg@v1
-        with: { committish: 63aa65e65b9d2c08772ea15d25fb8fdb0d32e557 }
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v3
 
-      - name: test env
-        run: echo $VCPKG_ROOT
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.12.0
+        with:
+          arch: ${{ matrix.arch }}
 
-      - name: Generate Project
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DyaLanTingLibs_ENABLE_PROJECTS=all -DENABLE_SSL=${{matrix.ssl}} -A ${{ matrix.arch }} -D "CMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake"
+      - name: Configure CMake
+        run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}/build
 
-      - name: Build struct_pack
+      - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
 
-      - name: Test struct_pack
+      - name: Test
         working-directory: ${{github.workspace}}/build
         run: ctest -C ${{matrix.mode}} -j 1 -V

@@ -1,8 +1,7 @@
 # struct_pack Introduction
 
-[TOC]
 
-- [struct_pack Introduction](#struct_pack-introduction)
+- [struct\_pack Introduction](#struct_pack-introduction)
   - [Serialization](#serialization)
     - [Basic Usage](#basic-usage)
     - [Explicit data container](#explicit-data-container)
@@ -10,7 +9,7 @@
     - [Save the results to memory location indicated by pointer](#save-the-results-to-memory-location-indicated-by-pointer)
     - [Multi-parameter serialization](#multi-parameter-serialization)
   - [Deserialization](#deserialization)
-    - [Basic Usage](#basic-usage)
+    - [Basic Usage](#basic-usage-1)
     - [deserialize from pointers](#deserialize-from-pointers)
     - [deserialize to an existing object](#deserialize-to-an-existing-object)
     - [Multi-parameter deserialization](#multi-parameter-deserialization)
@@ -22,7 +21,7 @@
     - [Test Environment](#test-environment)
     - [Test results](#test-results)
   - [Forward/backward compatibility](#forwardbackward-compatibility)
-  - [Why is struct_pack faster?](#why-is-struct_pack-faster)
+  - [Why is struct\_pack faster?](#why-is-struct_pack-faster)
   - [Appendix](#appendix)
     - [Test code](#test-code)
 
@@ -30,7 +29,7 @@ struct_pack is a serialization library featuring zero-cost abstraction as well a
 
 Below, we show the basic usage of struct_pack with a simple object as an example.
 
-```c++
+```cpp
 struct person {
   int64_t id;
   std::string name;
@@ -47,21 +46,21 @@ In below we demonstrate serval ways of serialize one object with struct_pack API
 
 ### Basic Usage 
 
-```c++
+```cpp
 // serialization in one line
 std::vector<char> result = struct_pack::serialize(person1);
 ```
 
 ### Explicit data container
 
-```c++
+```cpp
 auto result = struct_pack::serialize<std::string>(person1);
 // explicitly use std::string instead of std::vector<char> to hold the result
 ```
 
 ### Append the result at the end of existing data container
 
-```c++
+```cpp
 std::string result="The next line is struct_pack serialize result.\n";
 auto result = struct_pack::serialize_to(result,person1);
 // 
@@ -69,7 +68,7 @@ auto result = struct_pack::serialize_to(result,person1);
 
 ### Save the results to memory location indicated by pointer
 
-```c++
+```cpp
 auto sz=struct_pack::get_needed_siarray(person1);
 std::unique_ptr array=std::make_unique<char[]>(sz);
 auto result = struct_pack::serialize_to(array.get(),sz,person1);
@@ -78,7 +77,7 @@ auto result = struct_pack::serialize_to(array.get(),sz,person1);
 
 ### Multi-parameter serialization
 
-```c++
+```cpp
 auto result=struct_pack::serialize(person1.id, person1.name, person1.age, person1.salary);
 //serialize as std::tuple<int64_t, std::string, int, double>
 ```
@@ -89,7 +88,7 @@ In below we demonstrate serval ways of deserialize one object with struct_pack A
 
 ### Basic Usage
 
-```c++
+```cpp
 // deserialize in one line
 auto person2 = deserialize<person>(buffer);
 assert(person2); // person2.has_value() == true
@@ -98,7 +97,7 @@ assert(person2.value()==person1);
 
 ### deserialize from pointers
 
-```c++
+```cpp
 // deserialize from memory location indicated by pointers
 auto person2 = deserialize<person>(buffer.data(),buffer.size());
 assert(person2); //person2.has_value() == true
@@ -107,7 +106,7 @@ assert(person2.value()==person1);
 
 ### deserialize to an existing object
 
-```c++
+```cpp
 // deserialize to an existing object
 person person2;
 std::errc ec = deserialize_to(person2, buffer);
@@ -117,7 +116,7 @@ assert(person2==person1);
 
 ### Multi-parameter deserialization
 
-```c++
+```cpp
 auto person2 = deserialize<int64_t,std::string,int,double>(buffer);
 assert(person2); // person2.has_value() == true
 auto &&[id,name,age,salary]=person2.value();
@@ -132,7 +131,7 @@ assert(person1.salary==salary);
 
 Sometimes users only need to deserialize specific fields of an object instead of all of them, and that's when the partial deserialization feature can be used. This can avoid full deserialization and improve efficiency significantly, eg.:
 
-```c++
+```cpp
 // Just deserialize the 2nd field of person 
 auto name = get_field<person, 1>(buffer.data(), buffer.size());
 assert(name); // name.has_value() == true
@@ -143,7 +142,7 @@ assert(name.value() == "hello struct pack");
 
 For example, the library supports the following complicated objects with std containers and std::optional fields:
 
-```c++
+```cpp
 enum class Color { red, black, white };
 
 struct complicated_object {
@@ -163,6 +162,7 @@ struct complicated_object {
   person n[2];
   std::pair<std::string, person> o;
   std::optional<int> p;
+  std::unique_ptr<int> q;
 };
 
 struct nested_object {
@@ -181,7 +181,7 @@ assert(nested2==nested1);
 
 In addition, struct_pack supports serialization and deserialization on custom containers, as below:
 
-```c++
+```cpp
 // We should not inherit from stl container, this case just for testing.
 template <typename Key, typename Value>
 struct my_map : public std::map<Key, Value> {};
@@ -197,6 +197,21 @@ auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
 
+struct_pack also supports varint code for integer.
+
+```cpp
+{
+  std::vector<struct_pack::var_int32_t> vec={-1,0,1,2,3,4,5,6,7};
+  auto buffer = std::serialize(vec); //zigzag+varint code
+}
+{
+  std::vector<struct_pack::uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
+  auto buffer = std::serialize(vec); //varint code
+}
+
+```
+
+
 ## benchmark
 
 ### Test case
@@ -207,7 +222,7 @@ The object to be serialized is pre-initialized and the memory to store the seria
 
 1. A simple object `person` with 4 scaler types
 
-```c++
+```cpp
 struct person {
   int64_t id;
   std::string name;
@@ -218,7 +233,7 @@ struct person {
 
 2. A complicated object `monster` with nested types
 
-```c++
+```cpp
 enum Color : uint8_t { Red, Green, Blue };
 
 struct Vec3 {
@@ -247,7 +262,7 @@ struct Monster {
 
 3. A `rect` object with for `int32_t`
 
-```c++
+```cpp
 struct rect {
   int32_t x;
   int32_t y;
@@ -270,7 +285,7 @@ Processor: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 If current message type no longer meets all you needs - say, you'd like the object to  have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
 
-```c++
+```cpp
 struct person {
   int age;
   std::string name;
@@ -298,4 +313,4 @@ struct_pack ensures that the two classes can be safely converted to each other b
 
 ### Test code
 
-see [benchmark.cpp](../benchmark/benchmark.cpp)
+see [benchmark.cpp](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/benchmark)

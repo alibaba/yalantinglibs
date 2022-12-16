@@ -1,5 +1,4 @@
 # Introduction
-[TOC]
 
 - [Introduction](#introduction)
 - [Usability](#usability)
@@ -30,13 +29,13 @@ The core design goal of coro_rpc is usability. Instead of exposing too many trou
 
 1. define the RPC function
 
-```c++
+```cpp
 // rpc_service.hpp
 inline std::string echo(std::string str) { return str; }
 ```
 2. register the RPC function and start the server
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -52,7 +51,7 @@ Basically one could build a RPC server in 5~6 lines by defining the rpc function
 
 An RPC client has to connect to the server and then call the remote method.
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_client.hpp>
 
@@ -77,7 +76,7 @@ Another usability of coro_rpc is that: there are barely any constraints on the R
 
 ## RPC with any parameters
 
-```c++
+```cpp
 // rpc_service.h
 // client needs to include this header and the implementation details are hidden 
 void hello(){};
@@ -107,7 +106,7 @@ person get_person(person p, int id) {
 
 And in server, we define the following:
 
-```c++
+```cpp
 #include "rpc_service.h"
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -124,7 +123,7 @@ int main() {
 
 In client, we have the following:
 
-```c++
+```cpp
 # include "rpc_service.h"
 # include <coro_rpc/coro_rpc_client.hpp>
 
@@ -147,7 +146,7 @@ int main() {
   syncAwait(test_client());
 }
 ```
-The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](/src/struct_pack/) with compile-time reflection. Users are not required to take efforts on such procedures.
+The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](https://alibaba.github.io/yalantinglibs/guide/struct-pack-intro.html) with compile-time reflection. Users are not required to take efforts on such procedures.
 
 # Compare with grpc/brpc
 
@@ -164,7 +163,7 @@ The input parameter and return type of `get_person` is a `struct`. The serializa
 Asynchronous callback VS. coroutine
 - grpc asynchronous client
 
-```c++
+```cpp
 //<https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_callback_client.cc>
 std::string SayHello(const std::string& user) {
     // Data we are sending to the server.
@@ -208,7 +207,7 @@ std::string SayHello(const std::string& user) {
 ```
 
 - brpc asynchronous client
-```c++
+```cpp
 // <https://github.com/apache/incubator-brpc/blob/master/example/asynchronous_echo_c%2B%2B/client.cpp>
 void HandleEchoResponse(
         brpc::Controller*cntl,
@@ -267,7 +266,7 @@ example::EchoService_Stub stub(&channel);
 
 - coro_rpc client with coroutine
 
-```c++
+```cpp
 # include <coro_rpc/coro_rpc_client.hpp>
 
 Lazy<void> say_hello(){
@@ -293,7 +292,7 @@ coro_rpc has taken this problem into account. coro_rpc considers that RPC tasks 
 
 Switch to time-delayed task
 
-```c++
+```cpp
 #include <coro_rpc/connection.hpp>
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -313,7 +312,7 @@ void delay_echo(coro_connection<std::string> conn, std::string str) {
 It is recommended to use coroutine on server development. However, the asynchronous call mode is also supported if user does not prefer coroutine.
 
 - coroutine based rpc server
-```c++
+```cpp
 #include <coro_rpc/coro_rpc_server.hpp>
 std::string hello() { return "hello coro_rpc"; }
 
@@ -326,7 +325,7 @@ int main() {
 
 - Asynchronous rpc server
 
-```c++
+```cpp
 #include <coro_rpc/async_rpc_server.hpp>
 std::string hello() { return "hello coro_rpc"; }
 
@@ -340,13 +339,13 @@ int main() {
 Compile-time syntax checks
 coro_rpc does a compile-time check on the legality of the arguments when it is called, e.g.:
 
-```c++
+```cpp
 inline std::string echo(std::string str) { return str; }
 ```
 
 When client is called via:
 
-```c++
+```cpp
 client.call<echo>(42);    //Parameter mismatch, compile error
 client.call<echo>();      //Missing parameters, compile error
 client.call<echo>("", 0); //Redundant parameters, compile error

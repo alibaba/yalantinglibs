@@ -1,7 +1,5 @@
 # coro_rpc简介
 
-[TOC]
-
 - [coro_rpc简介](#coro_rpc简介)
 - [coro_rpc的易用性](#coro_rpc的易用性)
   - [rpc_server端](#rpc_server端)
@@ -34,14 +32,14 @@ rpc的本质是什么？rpc的本质就是一个远程函数，除了rpc底层�
 
 1.定义rpc函数
 
-```c++
+```cpp
 // rpc_service.hpp
 inline std::string echo(std::string str) { return str; }
 ```
 
 2.注册rpc函数和启动server
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -59,7 +57,7 @@ rpc_client端
 1. 连接服务端
 2. rpc调用
 
-```c++
+```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_client.hpp>
 
@@ -85,7 +83,7 @@ coro_rpc的接口易用性还体现在rpc函数几乎没有任何限制，你可
 
 ## rpc函数支持任意参数
 
-```c++
+```cpp
 // rpc_service.h
 // 客户端只需要包含这个头文件即可，无需把rpc的定义暴露给客户端。
 void hello(){};
@@ -115,7 +113,7 @@ person get_person(person p, int id) {
 
 server端
 
-```c++
+```cpp
 #include "rpc_service.h"
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -132,7 +130,7 @@ int main() {
 
 client端
 
-```c++
+```cpp
 # include "rpc_service.h"
 # include <coro_rpc/coro_rpc_client.hpp>
 
@@ -156,7 +154,7 @@ int main() {
 }
 ```
 
-这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](struct_pack：一个更快更好用的序列化库.md)实现自动的序列化和反序列化，用户无感知，省心省力。
+这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)实现自动的序列化和反序列化，用户无感知，省心省力。
 
 # 和grpc、brpc比较易用性
 
@@ -173,7 +171,7 @@ int main() {
 异步回调 vs 协程
 grpc异步回调
 
-```c++
+```cpp
 //<https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_callback_client.cc>
 std::string SayHello(const std::string& user) {
     // Data we are sending to the server.
@@ -216,7 +214,7 @@ std::string SayHello(const std::string& user) {
   }
 ```
 
-```c++
+```cpp
 brpc异步回调
 // <https://github.com/apache/incubator-brpc/blob/master/example/asynchronous_echo_c%2B%2B/client.cpp>
 void HandleEchoResponse(
@@ -276,7 +274,7 @@ example::EchoService_Stub stub(&channel);
 
 coro_rpc协程
 
-```c++
+```cpp
 # include <coro_rpc/coro_rpc_client.hpp>
 
 Lazy<void> say_hello(){
@@ -301,7 +299,7 @@ coro_rpc已经考虑到了这个问题，coro_rpc认为rpc任务分为实时任�
 
 将之前实时任务改成延时任务
 
-```c++
+```cpp
 #include <coro_rpc/connection.hpp>
 #include <coro_rpc/coro_rpc_server.hpp>
 
@@ -322,7 +320,7 @@ coro_rpc server推荐使用协程去开发，但同时也支持异步回调模�
 
 基于协程的rpc server
 
-```c++
+```cpp
 #include <coro_rpc/coro_rpc_server.hpp>
 std::string hello() { return "hello coro_rpc"; }
 
@@ -335,7 +333,7 @@ int main() {
 
 基于异步回调的rpc server
 
-```c++
+```cpp
 #include <coro_rpc/async_rpc_server.hpp>
 std::string hello() { return "hello coro_rpc"; }
 
@@ -349,13 +347,13 @@ int main() {
 rpc调用编译期安全检查
 coro_rpc会在调用的时候对参数的合法性做编译期检查，比如:
 
-```c++
+```cpp
 inline std::string echo(std::string str) { return str; }
 ```
 
 client调用rpc
 
-```c++
+```cpp
 client.call<echo>(42);//参数不匹配，编译报错
 client.call<echo>();//缺少参数，编译报错
 client.call<echo>("", 0);//多了参数，编译报错

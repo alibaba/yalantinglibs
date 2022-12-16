@@ -116,12 +116,6 @@ concept continuous_container = container<Type> &&
 #endif
 
 template <typename Type>
-concept trivially_copyable_container = continuous_container<Type> &&
-    requires(Type container) {
-  requires std::is_trivially_copyable_v<typename Type::value_type>;
-};
-
-template <typename Type>
 concept map_container = container<Type> && requires(Type container) {
   typename std::remove_cvref_t<Type>::mapped_type;
 };
@@ -189,6 +183,13 @@ concept optional = !expected<Type> && requires(Type optional) {
 };
 
 template <typename Type>
+concept unique_ptr = requires(Type ptr) {
+  ptr.operator*();
+  typename std::remove_cvref_t<Type>::element_type;
+}
+&&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+
+template <typename Type>
 constexpr inline bool is_variant_v = false;
 
 template <typename... args>
@@ -202,9 +203,21 @@ struct UniversalType {
   operator T();
 };
 
+template <typename T>
+concept integral = std::is_integral_v<T>;
+
+struct UniversalIntegralType {
+  template <integral T>
+  operator T();
+};
+
 struct UniversalOptionalType {
   template <optional U>
   operator U();
+};
+
+struct UniversalNullptrType {
+  operator std::nullptr_t();
 };
 
 template <typename T, typename... Args>
@@ -216,6 +229,16 @@ consteval std::size_t member_count_impl() {
                        T{{Args{}}..., {UniversalOptionalType{}}};
                      } == true) {
     return member_count_impl<T, Args..., UniversalOptionalType>();
+  }
+  else if constexpr (requires {
+                       T{{Args{}}..., {UniversalIntegralType{}}};
+                     } == true) {
+    return member_count_impl<T, Args..., UniversalIntegralType>();
+  }
+  else if constexpr (requires {
+                       T{{Args{}}..., {UniversalNullptrType{}}};
+                     } == true) {
+    return member_count_impl<T, Args..., UniversalNullptrType>();
   }
   else {
     return sizeof...(Args);

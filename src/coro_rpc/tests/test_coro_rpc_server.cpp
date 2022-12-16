@@ -152,8 +152,8 @@ struct CoroServerTester : ServerTester {
                     make_error_code(ec).message());
   }
   void test_server_send_bad_rpc_result() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::server_send_bad_rpc_result);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = this->call<hi>(client);
     CHECK_MESSAGE(
         ret.error().code == std::errc::invalid_argument,
@@ -162,8 +162,8 @@ struct CoroServerTester : ServerTester {
   }
 
   void test_server_send_no_body() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::close_socket_after_send_length);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -172,8 +172,8 @@ struct CoroServerTester : ServerTester {
   }
 
   void test_coro_handler() {
-    easylog::info("run {}", __func__);
     auto client = create_client(inject_action::nothing);
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
     auto ret = this->template call<get_coro_value>(client, 42);
     CHECK(ret.value() == 42);
 
@@ -197,24 +197,21 @@ TEST_CASE("testing coro rpc server") {
   std::vector<bool> switch_list{true, false};
   for (auto async_start : switch_list) {
     for (auto enable_heartbeat : switch_list) {
-      // for (auto sync_client : switch_list) {
-      for (auto use_outer_io_context : switch_list) {
-        for (auto use_ssl : switch_list) {
-          TesterConfig config;
-          config.async_start = async_start;
-          config.enable_heartbeat = enable_heartbeat;
-          config.use_ssl = use_ssl;
-          config.sync_client = false;
-          config.use_outer_io_context = use_outer_io_context;
-          config.port = server_port;
-          if (enable_heartbeat) {
-            config.conn_timeout_duration = conn_timeout_duration;
-          }
-          std::stringstream ss;
-          ss << config;
-          easylog::info("config: {}", ss.str());
-          CoroServerTester(config).run();
+      for (auto use_ssl : switch_list) {
+        TesterConfig config;
+        config.async_start = async_start;
+        config.enable_heartbeat = enable_heartbeat;
+        config.use_ssl = use_ssl;
+        config.sync_client = false;
+        config.use_outer_io_context = false;
+        config.port = server_port;
+        if (enable_heartbeat) {
+          config.conn_timeout_duration = conn_timeout_duration;
         }
+        std::stringstream ss;
+        ss << config;
+        easylog::info("config: {}", ss.str());
+        CoroServerTester(config).run();
       }
       // }
     }
@@ -252,6 +249,8 @@ TEST_CASE("test server accept error") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   coro_rpc_client client(g_client_id++);
+  easylog::info("run test server accept error, client_id {}",
+                client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
@@ -343,6 +342,8 @@ TEST_CASE("testing coro rpc write error") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   coro_rpc_client client(g_client_id++);
+  easylog::info("run testing coro rpc write error, client_id {}",
+                client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
