@@ -24,14 +24,13 @@
 #include "struct_pack/struct_pack.hpp"
 #include "struct_pack/struct_pack/struct_pack_impl.hpp"
 
-// read u32 from binary
 static uint32_t deserialize_to_u32(const uint8_t bytes[4])
 {
   return ((bytes[3] << 24) + (bytes[2] << 16) + (bytes[1] << 8) + bytes[0]);
 
 }
 
-// read u64 from binary, no use in this file.
+
 static uint64_t deserialize_to_u64(const uint8_t m[8]) 
 {
     return ((uint64_t)m[7] << 56) | ((uint64_t)m[6] << 48) | ((uint64_t)m[5] << 40) | ((uint64_t)m[4] << 32) 
@@ -59,17 +58,17 @@ int main()
 
   file.close();
 
-  // c deserialize demo
+  // c deserialize
   // read serialize string and print deserialize's value 
   uint8_t *text = (uint8_t*)malloc(128);
   FILE *fp = NULL;
   fp = fopen("./example.txt", "r");
   fgets((char*)text, 128, fp);
-  // must be 14 bytes
-  for (int i = 0; i < 14; i++)
-    printf("%02x\n", text[i]);
-
   fclose(fp);
+  // test hash code
+  uint32_t hash_code = deserialize_to_u32(text);
+  std::cout << "hash code is: " << hash_code << std::endl;
+
   int offset = 4; // first 4 bytes are hash code, no use for other language
   int age = deserialize_to_u32(text + offset);
   std::cout << "deserialize get age field: " << age << std::endl;

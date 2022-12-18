@@ -1,2 +1,3 @@
 add_executable(serialize_example serialize.cpp)
 add_executable(cross_language_demo simple_serialize.cpp)
+add_executable(read_from_other deserialize_from_other_language.cpp)
