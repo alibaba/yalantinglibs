@@ -77,12 +77,15 @@ struct struct_pack_sample : public base_sample {
       struct_pack::serialize_to(buffer_, sample);
       buffer_.clear();
 
+      uint64_t ns = 0;
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
+
       {
-        ScopedTimer timer(bench_name.data());
+        ScopedTimer timer(bench_name.data(), ns);
         struct_pack::serialize_to(buffer_, sample);
       }
+      ser_time_elapsed_map_.emplace(sample_type, ns);
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -99,12 +102,15 @@ struct struct_pack_sample : public base_sample {
       sample.reserve(OBJECT_COUNT);
     }
 
+    uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
+
     {
-      ScopedTimer timer(bench_name.data());
+      ScopedTimer timer(bench_name.data(), ns);
       [[maybe_unused]] auto ec = struct_pack::deserialize_to(sample, buffer_);
     }
+    deser_time_elapsed_map_.emplace(sample_type, ns);
   }
 
   std::vector<rect<int32_t>> rects_;

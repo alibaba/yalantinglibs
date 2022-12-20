@@ -191,13 +191,16 @@ struct struct_pb_sample_t : public base_sample {
     using T = std::remove_cvref_t<decltype(sample)>;
     struct_pack::pb::serialize_to(buffer_, sample);
     buffer_.clear();
+
+    uint64_t ns = 0;
     std::string bench_name =
         name() + " serialize " + get_bench_name(sample_type);
+
     {
-      ScopedTimer timer(bench_name.data());
+      ScopedTimer timer(bench_name.data(), ns);
       struct_pack::pb::serialize_to(buffer_, sample);
     }
-
+    ser_time_elapsed_map_.emplace(sample_type, ns);
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
@@ -213,14 +216,17 @@ struct struct_pb_sample_t : public base_sample {
       sample.reserve(OBJECT_COUNT);
     }
 
+    uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
     size_t len = 0;
+
     {
-      ScopedTimer timer(bench_name.data());
+      ScopedTimer timer(bench_name.data(), ns);
       [[maybe_unused]] auto ec = struct_pack::pb::deserialize_to(
           sample, buffer_.data(), buffer_.size(), len);
     }
+    deser_time_elapsed_map_.emplace(sample_type, ns);
   }
 
   struct_pb_sample::rect32s rects_;

@@ -169,13 +169,16 @@ struct protobuf_sample_t : public base_sample {
     {
       sample.SerializeToString(&buffer_);
       buffer_.clear();
+
+      uint64_t ns = 0;
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
 
       {
-        ScopedTimer timer(bench_name.data());
+        ScopedTimer timer(bench_name.data(), ns);
         sample.SerializeToString(&buffer_);
       }
+      ser_time_elapsed_map_.emplace(sample_type, ns);
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -199,12 +202,15 @@ struct protobuf_sample_t : public base_sample {
       sample.mutable_person_list()->Reserve(OBJECT_COUNT);
     }
 
+    uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
+
     {
-      ScopedTimer timer(bench_name.data());
+      ScopedTimer timer(bench_name.data(), ns);
       sample.ParseFromString(buffer_);
     }
+    deser_time_elapsed_map_.emplace(sample_type, ns);
   }
 
   mygame::rect32s rects_;

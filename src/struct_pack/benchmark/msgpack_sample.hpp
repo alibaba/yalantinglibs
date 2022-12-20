@@ -47,12 +47,16 @@ struct message_pack_sample : public base_sample {
     {
       msgpack::pack(buffer_, sample);
       buffer_.clear();
+
+      uint64_t ns = 0;
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
+
       {
-        ScopedTimer timer(bench_name.data());
+        ScopedTimer timer(bench_name.data(), ns);
         msgpack::pack(buffer_, sample);
       }
+      ser_time_elapsed_map_.emplace(sample_type, ns);
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -64,13 +68,16 @@ struct message_pack_sample : public base_sample {
     buffer_.clear();
     msgpack::pack(buffer_, sample);
 
+    uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
     msgpack::unpacked unpacked;
+
     {
-      ScopedTimer timer(bench_name.data());
+      ScopedTimer timer(bench_name.data(), ns);
       msgpack::unpack(unpacked, buffer_.data(), buffer_.size());
     }
+    deser_time_elapsed_map_.emplace(sample_type, ns);
   }
 
   std::vector<rect<int32_t>> rects_;

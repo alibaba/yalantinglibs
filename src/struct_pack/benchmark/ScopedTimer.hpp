@@ -17,8 +17,8 @@ class ScopedTimer {
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_beg);
     if (m_ns)
       *m_ns = dur.count();
-    else
-      std::cout << m_name << " : " << dur.count() << " ns\n";
+
+    std::cout << m_name << " : " << dur.count() << " ns\n";
   }
 
  private:

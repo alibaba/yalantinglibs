@@ -16,6 +16,34 @@
 #include "config.hpp"
 using namespace std::string_literals;
 
+void calculate_ser_rate(const auto& vec, SampleType type) {
+  auto base = vec[0]->get_ser_time_elapsed_map()[type];
+
+  for (int i = 1; i < vec.size(); ++i) {
+    auto ns = vec[i]->get_ser_time_elapsed_map()[type];
+    std::cout << "struct_pack serialize " << get_bench_name(type) << " is ["
+              << double(ns) / base << "] times faster than " << vec[i]->name()
+              << ", [" << base << ", " << ns << "]"
+              << "\n";
+  }
+
+  std::cout << "========================\n";
+}
+
+void calculate_deser_rate(const auto& vec, SampleType type) {
+  auto base = vec[0]->get_deser_time_elapsed_map()[type];
+
+  for (int i = 1; i < vec.size(); ++i) {
+    auto ns = vec[i]->get_deser_time_elapsed_map()[type];
+    std::cout << "struct_pack deserialize " << get_bench_name(type) << " is ["
+              << double(ns) / base << "] times faster than " << vec[i]->name()
+              << ", [" << base << ", " << ns << "]"
+              << "\n";
+  }
+
+  std::cout << "========================\n";
+}
+
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
 
@@ -38,6 +66,15 @@ int main(int argc, char** argv) {
 
     sample->print_buffer_size();
   }
+
+  std::cout << "calculate serialization rate\n";
+  calculate_ser_rate(vec, SampleType::RECTS);
+  calculate_ser_rate(vec, SampleType::PERSONS);
+  calculate_ser_rate(vec, SampleType::MONSTERS);
+
+  calculate_deser_rate(vec, SampleType::RECTS);
+  calculate_deser_rate(vec, SampleType::PERSONS);
+  calculate_deser_rate(vec, SampleType::MONSTERS);
 
   return 0;
 }
