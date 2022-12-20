@@ -31,5 +31,7 @@ target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benc
 target_include_directories(struct_pack_benchmark PRIVATE
         ${CMAKE_SOURCE_DIR}/thirdparty/frozen
         )
-target_link_libraries(struct_pack_benchmark ${Protobuf_LIBRARIES})
+if (Protobuf_FOUND)
+    target_link_libraries(struct_pack_benchmark ${Protobuf_LIBRARIES})
+endif()
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST STRUCT_PACK_OPTIMIZE)
