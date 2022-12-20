@@ -3,7 +3,7 @@ if(NOT BUILD_SP_BENCHMARK)
     return()
 endif()
 
-find_package(Protobuf REQUIRED)
+find_package(Protobuf)
 if (Protobuf_FOUND)
     message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
     find_program(PROTOC_CXX_FOUND protoc DOC "Protobuf Compiler (protoc)")
