@@ -18,7 +18,7 @@ if (Protobuf_FOUND)
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
 endif()
 
-find_package(Msgpack REQUIRED)
+find_package(Msgpack)
 if (Msgpack_FOUND)
     message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
