@@ -16,6 +16,8 @@ if (Protobuf_FOUND)
                     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/benchmark)
     add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp ${CMAKE_BINARY_DIR}/benchmark/benchmark.pb.cc)
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
+else()
+    add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
 endif()
 
 # TODO
