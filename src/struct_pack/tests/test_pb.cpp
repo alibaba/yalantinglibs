@@ -299,7 +299,6 @@ TEST_CASE("testing float") {
   CHECK(t.e == d_t.e);
 }
 
-
 TEST_CASE("testing int32") {
   std::string buf{0x08, (char)0x80, 0x01};
   MyTestInt32 pb_t;
@@ -804,7 +803,6 @@ TEST_CASE("testing fixed64") {
   }
 }
 
-
 TEST_CASE("testing sfixed32") {
   using T = int32_t;
   T max_val = 4;
@@ -823,7 +821,6 @@ TEST_CASE("testing sfixed32") {
     check_serialization(t, pb_t);
   }
 }
-
 
 TEST_CASE("testing sfixed64") {
   using T = int64_t;

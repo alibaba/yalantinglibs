@@ -82,8 +82,8 @@ TEST_CASE("testing rect") {
     REQUIRE(my_buf == pb_buf);
 
     std::size_t len = 0;
-    auto d_t_ret =
-        deserialize<struct_pb_sample::rect32>(my_buf.data(), my_buf.size(), len);
+    auto d_t_ret = deserialize<struct_pb_sample::rect32>(my_buf.data(),
+                                                         my_buf.size(), len);
     REQUIRE(len == my_buf.size());
     REQUIRE(d_t_ret);
     auto d_t = d_t_ret.value();
@@ -99,8 +99,8 @@ TEST_CASE("testing rect") {
   REQUIRE(my_buf2 == pb_buf2);
 
   std::size_t len = 0;
-  auto d_t_ret =
-      deserialize<struct_pb_sample::rect32s>(my_buf2.data(), my_buf2.size(), len);
+  auto d_t_ret = deserialize<struct_pb_sample::rect32s>(my_buf2.data(),
+                                                        my_buf2.size(), len);
   REQUIRE(len == my_buf2.size());
   REQUIRE(d_t_ret);
   auto d_t = d_t_ret.value();
@@ -132,8 +132,8 @@ TEST_CASE("testing person") {
     REQUIRE(my_buf == pb_buf);
 
     std::size_t len = 0;
-    auto d_t_ret =
-        deserialize<struct_pb_sample::person>(my_buf.data(), my_buf.size(), len);
+    auto d_t_ret = deserialize<struct_pb_sample::person>(my_buf.data(),
+                                                         my_buf.size(), len);
     REQUIRE(len == my_buf.size());
     REQUIRE(d_t_ret);
     auto d_t = d_t_ret.value();
@@ -149,8 +149,8 @@ TEST_CASE("testing person") {
   REQUIRE(my_buf2 == pb_buf2);
 
   std::size_t len = 0;
-  auto d_t_ret =
-      deserialize<struct_pb_sample::persons>(my_buf2.data(), my_buf2.size(), len);
+  auto d_t_ret = deserialize<struct_pb_sample::persons>(my_buf2.data(),
+                                                        my_buf2.size(), len);
   REQUIRE(len == my_buf2.size());
   REQUIRE(d_t_ret);
   auto d_t = d_t_ret.value();
@@ -187,8 +187,8 @@ TEST_CASE("testing monsters") {
     REQUIRE(my_buf == pb_buf);
 
     std::size_t len = 0;
-    auto d_t_ret =
-        deserialize<struct_pb_sample::Monster>(my_buf.data(), my_buf.size(), len);
+    auto d_t_ret = deserialize<struct_pb_sample::Monster>(my_buf.data(),
+                                                          my_buf.size(), len);
     REQUIRE(len == my_buf.size());
     REQUIRE(d_t_ret);
     auto d_t = d_t_ret.value();
@@ -212,8 +212,8 @@ TEST_CASE("testing monsters") {
   REQUIRE(my_buf2 == pb_buf2);
 
   std::size_t len = 0;
-  auto d_t_ret =
-      deserialize<struct_pb_sample::Monsters>(my_buf2.data(), my_buf2.size(), len);
+  auto d_t_ret = deserialize<struct_pb_sample::Monsters>(my_buf2.data(),
+                                                         my_buf2.size(), len);
   REQUIRE(len == my_buf2.size());
   REQUIRE(d_t_ret);
   auto d_t = d_t_ret.value();
