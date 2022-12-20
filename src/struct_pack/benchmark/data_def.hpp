@@ -22,6 +22,7 @@
 #include <numeric>
 #include <thread>
 #include <valarray>
+#include <vector>
 struct person {
   int32_t id;
   std::string name;
