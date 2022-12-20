@@ -17,22 +17,8 @@
 #include "config.hpp"
 using namespace std::string_literals;
 
-void bench_struct_pack() {
-  base_sample&& sp = struct_pack_sample();
-  sp.create_samples();
-  sp.do_serialization(0);
-  sp.do_deserialization(0);
-
-  sp.print_buffer_size();
-}
-
-void bench_all_struct_pb() {
-  // bench_struct_pb<SampleType::MONSTER>();
-  // bench_struct_pb<SampleType::MONSTERS>();
-}
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
-  std::cout << "SAMPLES_COUNT: " << SAMPLES_COUNT << std::endl;
 
   std::vector<std::shared_ptr<base_sample>> vec;
   vec.emplace_back(new struct_pack_sample());
@@ -54,16 +40,5 @@ int main(int argc, char** argv) {
     sample->print_buffer_size();
   }
 
-  // bench_struct_pack();
-  return 0;
-
-  if (argc == 1) {
-    bench_all_struct_pb();
-    return 0;
-  }
-
-  else {
-    bench_all_struct_pb();
-  }
   return 0;
 }

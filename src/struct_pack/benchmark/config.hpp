@@ -4,12 +4,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-static constexpr int OBJECT_COUNT = 20;
-#ifdef NDEBUG
-static constexpr int SAMPLES_COUNT = 10000;  // 0;
-#else
-static constexpr int SAMPLES_COUNT = 100;
-#endif
+static constexpr int OBJECT_COUNT = 10000;
+
 constexpr static std::size_t RUN_COUNT = 10;
 enum class LibType {
   STRUCT_PACK,
@@ -20,9 +16,9 @@ enum class LibType {
 enum class SampleType { RECT, RECTS, PERSON, PERSONS, MONSTER, MONSTERS };
 
 inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
-    {SampleType::RECT, "1 rect"},       {SampleType::RECTS, "20 rects"},
-    {SampleType::PERSON, "1 person"},   {SampleType::PERSONS, "20 persons"},
-    {SampleType::MONSTER, "1 monster"}, {SampleType::MONSTERS, "20 monsters"},
+    {SampleType::RECT, "1 rect"},       {SampleType::RECTS, "many rects"},
+    {SampleType::PERSON, "1 person"},   {SampleType::PERSONS, "many persons"},
+    {SampleType::MONSTER, "1 monster"}, {SampleType::MONSTERS, "many monsters"},
 };
 
 inline const std::vector<SampleType> g_sample_type_vec = {

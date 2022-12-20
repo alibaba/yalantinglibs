@@ -85,7 +85,6 @@ struct SampleBase {
               << " serialize average: " << pretty_int(get_avg(serialize_cost_));
     std::cout << ", deserialize average: "
               << pretty_int(get_avg(deserialize_cost_));
-    std::cout << ", buf size: " << pretty_int(buffer_size() / SAMPLES_COUNT);
     std::cout << std::endl;
   }
   std::array<uint64_t, RUN_COUNT> serialize_cost_{};

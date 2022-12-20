@@ -16,9 +16,11 @@
 #pragma once
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <valarray>
 
 #include "ScopedTimer.hpp"
+#include "config.hpp"
 #include "sample.hpp"
 #include "struct_pack/struct_pack/pb.hpp"
 namespace struct_pb_sample {
@@ -186,18 +188,16 @@ struct struct_pb_sample_t : public base_sample {
 
  private:
   void serialize(SampleType sample_type, auto &sample) {
+    using T = std::remove_cvref_t<decltype(sample)>;
+    struct_pack::pb::serialize_to(buffer_, sample);
+    buffer_.clear();
+    std::string bench_name =
+        name() + " serialize " + get_bench_name(sample_type);
     {
-      struct_pack::pb::serialize_to(buffer_, sample);
-      // std::cout << "buffer size: " << buffer_.size() << "\n";
-      std::string bench_name =
-          name() + " serialize " + get_bench_name(sample_type);
       ScopedTimer timer(bench_name.data());
-      for (int i = 0; i < SAMPLES_COUNT; ++i) {
-        buffer_.clear();
-        struct_pack::pb::serialize_to(buffer_, sample);
-      }
-      no_op();
+      struct_pack::pb::serialize_to(buffer_, sample);
     }
+
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
@@ -210,20 +210,17 @@ struct struct_pb_sample_t : public base_sample {
 
     if constexpr (is_container_t<T>) {
       sample.clear();
-      sample.reserve(SAMPLES_COUNT * OBJECT_COUNT);
+      sample.reserve(OBJECT_COUNT);
     }
-
-    no_op();
 
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
     size_t len = 0;
-    ScopedTimer timer(bench_name.data());
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+    {
+      ScopedTimer timer(bench_name.data());
       [[maybe_unused]] auto ec = struct_pack::pb::deserialize_to(
           sample, buffer_.data(), buffer_.size(), len);
     }
-    no_op();
   }
 
   struct_pb_sample::rect32s rects_;

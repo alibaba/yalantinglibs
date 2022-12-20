@@ -45,14 +45,14 @@ struct message_pack_sample : public base_sample {
  private:
   void serialize(SampleType sample_type, auto &sample) {
     {
+      msgpack::pack(buffer_, sample);
+      buffer_.clear();
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
-      ScopedTimer timer(bench_name.data());
-      for (int i = 0; i < SAMPLES_COUNT; ++i) {
-        buffer_.clear();
+      {
+        ScopedTimer timer(bench_name.data());
         msgpack::pack(buffer_, sample);
       }
-      no_op();
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -66,16 +66,11 @@ struct message_pack_sample : public base_sample {
 
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
-    ScopedTimer timer(bench_name.data());
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
-      if constexpr (struct_pack::detail::container<T>) {
-        sample.clear();
-      }
-
-      msgpack::unpacked unpacked;
+    msgpack::unpacked unpacked;
+    {
+      ScopedTimer timer(bench_name.data());
       msgpack::unpack(unpacked, buffer_.data(), buffer_.size());
     }
-    no_op();
   }
 
   std::vector<rect<int32_t>> rects_;

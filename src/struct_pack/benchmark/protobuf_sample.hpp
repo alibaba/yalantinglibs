@@ -167,14 +167,15 @@ struct protobuf_sample_t : public base_sample {
  private:
   void serialize(SampleType sample_type, auto &sample) {
     {
+      sample.SerializeToString(&buffer_);
+      buffer_.clear();
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
-      ScopedTimer timer(bench_name.data());
-      for (int i = 0; i < SAMPLES_COUNT; ++i) {
-        buffer_.clear();
+
+      {
+        ScopedTimer timer(bench_name.data());
         sample.SerializeToString(&buffer_);
       }
-      no_op();
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -187,24 +188,23 @@ struct protobuf_sample_t : public base_sample {
     sample.SerializeToString(&buffer_);
     if constexpr (std::same_as<T, mygame::Monsters>) {
       sample.clear_monsters();
-      sample.mutable_monsters()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+      sample.mutable_monsters()->Reserve(OBJECT_COUNT);
     }
     else if constexpr (std::same_as<T, mygame::rect32s>) {
       sample.clear_rect32_list();
-      sample.mutable_rect32_list()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+      sample.mutable_rect32_list()->Reserve(OBJECT_COUNT);
     }
     else if constexpr (std::same_as<T, mygame::persons>) {
       sample.clear_person_list();
-      sample.mutable_person_list()->Reserve(SAMPLES_COUNT * OBJECT_COUNT);
+      sample.mutable_person_list()->Reserve(OBJECT_COUNT);
     }
 
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
-    ScopedTimer timer(bench_name.data());
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+    {
+      ScopedTimer timer(bench_name.data());
       sample.ParseFromString(buffer_);
     }
-    no_op();
   }
 
   mygame::rect32s rects_;

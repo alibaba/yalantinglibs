@@ -58,8 +58,8 @@ struct struct_pack_sample : public base_sample {
     serialize(SampleType::RECTS, rects_);
     serialize(SampleType::PERSON, persons_[0]);
     serialize(SampleType::PERSONS, persons_);
-    serialize(SampleType::MONSTERS, monsters_);
     serialize(SampleType::MONSTER, monsters_[0]);
+    serialize(SampleType::MONSTERS, monsters_);
   }
 
   void do_deserialization(int run_idx) override {
@@ -74,14 +74,15 @@ struct struct_pack_sample : public base_sample {
  private:
   void serialize(SampleType sample_type, auto &sample) {
     {
+      struct_pack::serialize_to(buffer_, sample);
+      buffer_.clear();
+
       std::string bench_name =
           name() + " serialize " + get_bench_name(sample_type);
-      ScopedTimer timer(bench_name.data());
-      for (int i = 0; i < SAMPLES_COUNT; ++i) {
-        buffer_.clear();
+      {
+        ScopedTimer timer(bench_name.data());
         struct_pack::serialize_to(buffer_, sample);
       }
-      no_op();
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
@@ -95,18 +96,15 @@ struct struct_pack_sample : public base_sample {
 
     if constexpr (struct_pack::detail::container<T>) {
       sample.clear();
-      sample.reserve(SAMPLES_COUNT * OBJECT_COUNT);
+      sample.reserve(OBJECT_COUNT);
     }
-
-    no_op();
 
     std::string bench_name =
         name() + " deserialize " + get_bench_name(sample_type);
-    ScopedTimer timer(bench_name.data());
-    for (int i = 0; i < SAMPLES_COUNT; ++i) {
+    {
+      ScopedTimer timer(bench_name.data());
       [[maybe_unused]] auto ec = struct_pack::deserialize_to(sample, buffer_);
     }
-    no_op();
   }
 
   std::vector<rect<int32_t>> rects_;
