@@ -39,30 +39,30 @@ if (Protobuf_FOUND)
     message(STATUS "TEST_SERIALIZE_PROTO_HDRS: ${TEST_SERIALIZE_PROTO_HDRS}")
 endif ()
 
-add_executable(test_struct_pb_gen
-        test_struct_pb_proxy.cpp
-        main.cpp
-        )
-add_test(NAME test_struct_pb_gen COMMAND test_struct_pb_gen)
-target_compile_definitions(test_struct_pb_gen PRIVATE
-        STRUCT_PACK_ENABLE_UNPORTABLE_TYPE
-        )
-if (Protobuf_FOUND)
-target_link_libraries(test_struct_pb_gen PRIVATE
-        libstruct_pack
-        doctest
-        protobuf::libprotobuf
-        )
-else()
-target_link_libraries(test_struct_pb_gen PRIVATE
-        libstruct_pack
-        doctest
-        )
-endif()
+# add_executable(test_struct_pb_gen
+#         test_struct_pb_proxy.cpp
+#         main.cpp
+#         )
+# add_test(NAME test_struct_pb_gen COMMAND test_struct_pb_gen)
+# target_compile_definitions(test_struct_pb_gen PRIVATE
+#         STRUCT_PACK_ENABLE_UNPORTABLE_TYPE
+#         )
+# if (Protobuf_FOUND)
+# target_link_libraries(test_struct_pb_gen PRIVATE
+#         libstruct_pack
+#         doctest
+#         protobuf::libprotobuf
+#         )
+# else()
+# target_link_libraries(test_struct_pb_gen PRIVATE
+#         libstruct_pack
+#         doctest
+#         )
+# endif()
 
-target_include_directories(test_struct_pb_gen PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-target_sources(test_struct_pb_gen PRIVATE
-        ${TEST_SERIALIZE_PROTO_SRCS}
-        ${TEST_SERIALIZE_PROTO_HDRS}
-        )
-add_subdirectory(conformance)
+# target_include_directories(test_struct_pb_gen PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+# target_sources(test_struct_pb_gen PRIVATE
+#         ${TEST_SERIALIZE_PROTO_SRCS}
+#         ${TEST_SERIALIZE_PROTO_HDRS}
+#         )
+# add_subdirectory(conformance)
