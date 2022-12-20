@@ -19,7 +19,9 @@
 #include <msgpack.hpp>
 #endif
 #include <atomic>
+#include <iostream>
 #include <numeric>
+#include <string>
 #include <thread>
 #include <valarray>
 #include <vector>
