@@ -1365,7 +1365,7 @@ class unpacker {
           //  f.reserve(32);
           // }
           unpacker o(data_ + pos_, sz);
-          ec = o.template deserialize(f.emplace_back());
+          ec = o.deserialize(f.emplace_back());
           if (ec != std::errc{}) [[unlikely]] {
             return ec;
           }
@@ -1381,7 +1381,7 @@ class unpacker {
         return ec;
       }
       unpacker o(data_ + pos_, sz);
-      ec = o.template deserialize(f);
+      ec = o.deserialize(f);
       if (ec != std::errc{}) [[unlikely]] {
         return ec;
       }
