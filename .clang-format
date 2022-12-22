@@ -7,6 +7,8 @@ BraceWrapping:
   BeforeElse: true
 AllowShortLambdasOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: Never
+# header files order:
+SortIncludes: Never
 ---
 Language: JavaScript
 DisableFormat: true
