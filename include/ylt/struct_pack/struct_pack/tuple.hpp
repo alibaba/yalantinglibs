@@ -69,17 +69,14 @@ template <class Tup>
 using element_list_t = typename std::decay_t<Tup>::element_list;
 
 template <class Tuple>
-concept base_list_tuple = requires() {
-  typename std::decay_t<Tuple>::base_list;
-};
+concept base_list_tuple =
+    requires() { typename std::decay_t<Tuple>::base_list; };
 
 template <class T>
 concept stateless = std::is_empty_v<std::decay_t<T>>;
 
 template <class T>
-concept indexable = stateless<T> || requires(T t) {
-  t[tag<0>()];
-};
+concept indexable = stateless<T> || requires(T t) { t[tag<0>()]; };
 
 template <size_t I, indexable Tup>
 constexpr decltype(auto) get(Tup&& tup);
@@ -89,18 +86,16 @@ concept other_than_tuple =
     !std::is_same_v<std::decay_t<T>, U> && (requires(U u) { get<U>(); });
 
 template <class U, class T>
-concept assignable_to = requires(U u, T t) {
-  t = u;
-};
+concept assignable_to = requires(U u, T t) { t = u; };
 
 template <class T>
 concept ordered = requires(T const& t) {
-  {t <=> t};
-};
+                    { t <=> t };
+                  };
 template <class T>
 concept equality_comparable = requires(T const& t) {
-  { t == t } -> same_as<bool>;
-};
+                                { t == t } -> same_as<bool>;
+                              };
 }  // namespace tuplet
 
 // tuplet::type_list implementation
@@ -144,13 +139,16 @@ struct tuple_elem {
   auto operator<=>(tuple_elem const&) const = default;
   bool operator==(tuple_elem const&) const = default;
   // Implements comparison for tuples containing reference types
-  constexpr auto operator<=>(tuple_elem const& other) const noexcept(noexcept(
-      value <=> other.value)) requires(std::is_reference_v<T>&& ordered<T>) {
+  constexpr auto operator<=>(tuple_elem const& other) const
+      noexcept(noexcept(value <=> other.value))
+    requires(std::is_reference_v<T> && ordered<T>)
+  {
     return value <=> other.value;
   }
   constexpr bool operator==(tuple_elem const& other) const
-      noexcept(noexcept(value == other.value)) requires(
-          std::is_reference_v<T>&& equality_comparable<T>) {
+      noexcept(noexcept(value == other.value))
+    requires(std::is_reference_v<T> && equality_comparable<T>)
+  {
     return value == other.value;
   }
 };
@@ -390,8 +388,10 @@ struct tuple<> : tuple_base_t<> {
   using element_list = type_list<>;
 
   template <other_than<tuple> U>  // Preserves default assignments
-  requires stateless<U>           // Check that U is similarly stateless
-  constexpr auto& operator=(U&&) noexcept { return *this; }
+    requires stateless<U>         // Check that U is similarly stateless
+  constexpr auto& operator=(U&&) noexcept {
+    return *this;
+  }
 
   constexpr auto& assign() noexcept { return *this; }
   auto operator<=>(tuple const&) const = default;

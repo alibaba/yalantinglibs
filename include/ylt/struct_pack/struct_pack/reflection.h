@@ -48,51 +48,55 @@ constexpr std::size_t min_alignment = 0;
 namespace detail {
 template <typename Type>
 concept deserialize_view = requires(Type container) {
-  container.size();
-  container.data();
-};
+                             container.size();
+                             container.data();
+                           };
 
 template <typename Type>
 concept container_adapter = requires(Type container) {
-  typename std::remove_cvref_t<Type>::value_type;
-  container.size();
-  container.pop();
-};
+                              typename std::remove_cvref_t<Type>::value_type;
+                              container.size();
+                              container.pop();
+                            };
 
 template <typename Type>
 concept container = requires(Type container) {
-  typename std::remove_cvref_t<Type>::value_type;
-  container.size();
-  container.begin();
-  container.end();
-};
+                      typename std::remove_cvref_t<Type>::value_type;
+                      container.size();
+                      container.begin();
+                      container.end();
+                    };
 
 template <typename Type>
-concept is_char_t = std::is_same_v<Type, signed char> ||
-    std::is_same_v<Type, char> || std::is_same_v<Type, unsigned char> ||
-    std::is_same_v<Type, wchar_t> || std::is_same_v<Type, char16_t> ||
-    std::is_same_v<Type, char32_t> || std::is_same_v<Type, char8_t>;
+concept is_char_t =
+    std::is_same_v<Type, signed char> || std::is_same_v<Type, char> ||
+    std::is_same_v<Type, unsigned char> || std::is_same_v<Type, wchar_t> ||
+    std::is_same_v<Type, char16_t> || std::is_same_v<Type, char32_t> ||
+    std::is_same_v<Type, char8_t>;
 
 template <typename Type>
-concept string = container<Type> && requires(Type container) {
-  requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
-  container.length();
-  container.data();
-};
+concept string =
+    container<Type> &&
+    requires(Type container) {
+      requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
+      container.length();
+      container.data();
+    };
 
 template <typename Type>
 concept string_view = string<Type> && !requires(Type container) {
-  container.resize(std::size_t{});
-};
+                                         container.resize(std::size_t{});
+                                       };
 
 #if __cpp_lib_span >= 202002L
 
 template <typename Type>
 concept continuous_container = string<Type> ||
-    (container<Type> &&requires(Type container) {
-      std::span{container};
-      container.resize(std::size_t{});
-    });
+                               (container<Type> &&
+                                requires(Type container) {
+                                  std::span{container};
+                                  container.resize(std::size_t{});
+                                });
 
 #else
 
@@ -112,83 +116,81 @@ template <typename... args>
 constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
 
 template <typename Type>
-concept continuous_container = container<Type> &&
-    (is_std_vector_v<Type> || is_std_basic_string_v<Type>);
+concept continuous_container = container<Type> && (is_std_vector_v<Type> ||
+                                                   is_std_basic_string_v<Type>);
 #endif
 
 template <typename Type>
-concept map_container = container<Type> && requires(Type container) {
-  typename std::remove_cvref_t<Type>::mapped_type;
-};
+concept map_container =
+    container<Type> && requires(Type container) {
+                         typename std::remove_cvref_t<Type>::mapped_type;
+                       };
 
 template <typename Type>
-concept set_container = container<Type> && requires(Type container) {
-  typename std::remove_cvref_t<Type>::key_type;
-};
+concept set_container =
+    container<Type> &&
+    requires(Type container) { typename std::remove_cvref_t<Type>::key_type; };
 
 template <typename Type>
 concept tuple = requires(Type tuple) {
-  std::get<0>(tuple);
-  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
-};
+                  std::get<0>(tuple);
+                  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+                };
 
 template <typename Type>
 concept tuple_size = requires(Type tuple) {
-  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
-};
+                       sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+                     };
 
 template <typename Type>
 concept array = requires(Type arr) {
-  arr.size();
-  std::tuple_size<std::remove_cvref_t<Type>>{};
-};
+                  arr.size();
+                  std::tuple_size<std::remove_cvref_t<Type>>{};
+                };
 
 // this version not work, can't checkout the is_xx_v in ```require(Type){...}```
 template <typename Type>
-concept c_array1 = requires(Type arr) {
-  std::is_array_v<Type> == true;
-};
+concept c_array1 = requires(Type arr) { std::is_array_v<Type> == true; };
 
 template <class T>
-concept c_array = std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> >
-0;
+concept c_array =
+    std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> > 0;
 
 template <typename Type>
 concept pair = requires(Type p) {
-  typename std::remove_cvref_t<Type>::first_type;
-  typename std::remove_cvref_t<Type>::second_type;
-  p.first;
-  p.second;
-};
+                 typename std::remove_cvref_t<Type>::first_type;
+                 typename std::remove_cvref_t<Type>::second_type;
+                 p.first;
+                 p.second;
+               };
 
 template <typename Type>
-concept expected = requires(Type e) {
-  typename std::remove_cvref_t<Type>::value_type;
-  typename std::remove_cvref_t<Type>::error_type;
-  typename std::remove_cvref_t<Type>::unexpected_type;
-  e.has_value();
-  e.error();
-  requires std::is_same_v<void,
-                          typename std::remove_cvref_t<Type>::value_type> ||
-      requires(Type e) {
-    e.value();
-  };
-};
+concept expected =
+    requires(Type e) {
+      typename std::remove_cvref_t<Type>::value_type;
+      typename std::remove_cvref_t<Type>::error_type;
+      typename std::remove_cvref_t<Type>::unexpected_type;
+      e.has_value();
+      e.error();
+      requires std::is_same_v<void,
+                              typename std::remove_cvref_t<Type>::value_type> ||
+                   requires(Type e) { e.value(); };
+    };
 
 template <typename Type>
-concept optional = !expected<Type> && requires(Type optional) {
-  optional.value();
-  optional.has_value();
-  optional.operator*();
-  typename std::remove_cvref_t<Type>::value_type;
-};
+concept optional =
+    !expected<Type> && requires(Type optional) {
+                         optional.value();
+                         optional.has_value();
+                         optional.operator*();
+                         typename std::remove_cvref_t<Type>::value_type;
+                       };
 
 template <typename Type>
 concept unique_ptr = requires(Type ptr) {
-  ptr.operator*();
-  typename std::remove_cvref_t<Type>::element_type;
-}
-&&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+                       ptr.operator*();
+                       typename std::remove_cvref_t<Type>::element_type;
+                     } && !requires(Type ptr, Type ptr2) { ptr = ptr2; };
 
 template <typename Type>
 constexpr inline bool is_variant_v = false;

@@ -207,21 +207,19 @@ struct is_trivial_serializable {
              is_trivial_serializable<typename T::second_type>::value;
     }
     else if constexpr (is_trivial_tuple<T>) {
-      return []<std::size_t... I>(std::index_sequence<I...>)
-          CONSTEXPR_INLINE_LAMBDA {
+      return []<std::size_t... I>(
+                 std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
         return (is_trivial_serializable<std::tuple_element_t<I, T>>::value &&
                 ...);
-      }
-      (std::make_index_sequence<std::tuple_size_v<T>>{});
+      }(std::make_index_sequence<std::tuple_size_v<T>>{});
     }
     else if constexpr (std::is_class_v<T>) {
       using T_ = decltype(get_types(T{}));
-      return []<std::size_t... I>(std::index_sequence<I...>)
-          CONSTEXPR_INLINE_LAMBDA {
+      return []<std::size_t... I>(
+                 std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
         return (is_trivial_serializable<std::tuple_element_t<I, T_>>::value &&
                 ...);
-      }
-      (std::make_index_sequence<std::tuple_size_v<T_>>{});
+      }(std::make_index_sequence<std::tuple_size_v<T_>>{});
     }
     else
       return false;
@@ -232,10 +230,11 @@ struct is_trivial_serializable {
 };
 
 template <typename Type>
-concept trivially_copyable_container = continuous_container<Type> &&
+concept trivially_copyable_container =
+    continuous_container<Type> &&
     requires(Type container) {
-  requires is_trivial_serializable<typename Type::value_type>::value;
-};
+      requires is_trivial_serializable<typename Type::value_type>::value;
+    };
 
 // clang-format off
 template <typename T>
@@ -453,7 +452,8 @@ template <typename T>
 consteval type_id get_type_id() {
   static_assert(CHAR_BIT == 8);
   // compatible member, which should be ignored in MD5 calculated.
-  if constexpr (optional<T> && requires {
+  if constexpr (optional<T> &&
+                requires {
                   requires std::is_same_v<
                       struct_pack::compatible<typename T::value_type>, T>;
                 }) {
@@ -599,8 +599,7 @@ consteval std::size_t check_cycle() {
           {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
                                                                       : 0)...});
       return ret;
-    }
-    (std::make_index_sequence<sizeof...(ParentArgs)>());
+    }(std::make_index_sequence<sizeof...(ParentArgs)>());
   }
   else {
     return 0;
@@ -991,14 +990,14 @@ consteval int check_if_compatible_element_exist() {
 }
 
 template <typename T>
-concept exist_compatible_member = check_if_compatible_element_exist<
-    decltype(get_types(std::remove_cvref_t<T>{}))>()
-== 1;
+concept exist_compatible_member =
+    check_if_compatible_element_exist<
+        decltype(get_types(std::remove_cvref_t<T>{}))>() == 1;
 
 template <typename T>
-concept unexist_compatible_member = check_if_compatible_element_exist<
-    decltype(get_types(std::remove_cvref_t<T>{}))>()
-== 0;
+concept unexist_compatible_member =
+    check_if_compatible_element_exist<
+        decltype(get_types(std::remove_cvref_t<T>{}))>() == 0;
 
 template <typename T>
 struct serialize_static_config {
@@ -1836,8 +1835,7 @@ class unpacker {
       ((!stop && (stop = set_value<size_type, I, FieldIndex>(
                       code, field, get_nth<I>(items...)))),
        ...);
-    }
-    (std::make_index_sequence<sizeof...(Args)>{});
+    }(std::make_index_sequence<sizeof...(Args)>{});
     return code;
   }
 

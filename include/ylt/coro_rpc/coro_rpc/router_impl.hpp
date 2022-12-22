@@ -402,7 +402,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         co_await func();
       }
       else {
-        co_await(self->*func)();
+        co_await (self->*func)();
       }
     }
     else {
@@ -410,7 +410,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         co_return pack_result(co_await func());
       }
       else {
-        co_return pack_result(co_await(self->*func)());
+        co_return pack_result(co_await (self->*func)());
       }
     }
   }

@@ -36,10 +36,10 @@ namespace coro_rpc {
  */
 template <typename T>
 concept connection_t = requires(T t) {
-  t.response_msg();
-  t.set_delay(true);
-  t.has_closed();
-};
+                         t.response_msg();
+                         t.set_delay(true);
+                         t.has_closed();
+                       };
 
 class coro_connection;
 /*!
