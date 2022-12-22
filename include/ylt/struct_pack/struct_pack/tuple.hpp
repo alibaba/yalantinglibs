@@ -94,11 +94,11 @@ concept assignable_to = requires(U u, T t) {
 };
 
 template <class T>
-concept ordered = requires(T const &t) {
-  { t <=> t };
+concept ordered = requires(T const& t) {
+  {t <=> t};
 };
 template <class T>
-concept equality_comparable = requires(T const &t) {
+concept equality_comparable = requires(T const& t) {
   { t == t } -> same_as<bool>;
 };
 }  // namespace tuplet
@@ -144,17 +144,17 @@ struct tuple_elem {
   auto operator<=>(tuple_elem const&) const = default;
   bool operator==(tuple_elem const&) const = default;
 
-    // Implements comparison for tuples containing reference types
-    constexpr auto operator<=>(tuple_elem const &other) const noexcept(noexcept(
-            value <=> other.value)) requires (std::is_reference_v<T> && ordered<T>) {
-      return value <=> other.value;
-    }
+  // Implements comparison for tuples containing reference types
+  constexpr auto operator<=>(tuple_elem const& other) const noexcept(noexcept(
+      value <=> other.value)) requires(std::is_reference_v<T>&& ordered<T>) {
+    return value <=> other.value;
+  }
 
-    constexpr bool operator==(tuple_elem const &other) const
-    noexcept(noexcept(value == other.value)) requires (
-            std::is_reference_v<T> && equality_comparable<T>) {
-      return value == other.value;
-    }
+  constexpr bool operator==(tuple_elem const& other) const
+      noexcept(noexcept(value == other.value)) requires(
+          std::is_reference_v<T>&& equality_comparable<T>) {
+    return value == other.value;
+  }
 };
 template <class T>
 using unwrap_ref_decay_t = typename std::unwrap_ref_decay<T>::type;
@@ -391,10 +391,10 @@ struct tuple<> : tuple_base_t<> {
   using base_list = type_list<>;
   using element_list = type_list<>;
 
-    template<other_than<tuple> U>
-    // Preserves default assignments
-    requires stateless<U>           // Check that U is similarly stateless
-    constexpr auto &operator=(U &&) noexcept { return *this; }
+  template <other_than<tuple> U>
+  // Preserves default assignments
+  requires stateless<U>  // Check that U is similarly stateless
+  constexpr auto& operator=(U&&) noexcept { return *this; }
 
   constexpr auto& assign() noexcept { return *this; }
   auto operator<=>(tuple const&) const = default;

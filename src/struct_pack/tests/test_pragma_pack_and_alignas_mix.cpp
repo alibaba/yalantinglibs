@@ -27,8 +27,8 @@ TEST_SUITE_BEGIN("test_pragma_pack_and_alignas_mix");
 namespace test_pragma_pack_and_alignas_mix {
 template <typename T>
 concept Dummy = requires {
-    T().a;
-    T().b;
+  T().a;
+  T().b;
 };
 
 template <Dummy A, Dummy B>
