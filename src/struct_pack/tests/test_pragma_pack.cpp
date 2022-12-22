@@ -27,9 +27,9 @@ TEST_SUITE_BEGIN("test_pragma_pack");
 namespace test_pragma_pack {
 template <typename T>
 concept Dummy = requires {
-                  T().a;
-                  T().b;
-                };
+    T().a;
+    T().b;
+};
 
 template <Dummy A, Dummy B>
 bool operator==(const A& a, const B& b) {
