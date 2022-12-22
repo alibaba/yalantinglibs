@@ -1,2 +1,0 @@
-add_executable(struct_pb_conformance struct_pb_conformance.cpp)
-target_link_libraries(struct_pb_conformance PRIVATE libstruct_pack)

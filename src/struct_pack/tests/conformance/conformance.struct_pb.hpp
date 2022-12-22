@@ -1,1 +1,0 @@
-/home/shuoshu.yh/code/protobuf/struct_pb/conformance.struct_pb.hpp
