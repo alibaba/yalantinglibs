@@ -1,9 +1,7 @@
 #include <memory>
 #include <vector>
 
-#include "struct_pack/struct_pack/pb.hpp"
 #include "struct_pack_sample.hpp"
-#include "struct_pb_sample.hpp"
 #ifdef HAVE_MSGPACK
 #include "msgpack_sample.hpp"
 #endif
@@ -56,7 +54,6 @@ int main(int argc, char** argv) {
 #ifdef HAVE_PROTOBUF
   vec.emplace_back(new protobuf_sample_t());
 #endif
-  vec.emplace_back(new struct_pb_sample_t());
 
   for (auto sample : vec) {
     std::cout << "======= bench " << sample->name() << "=======\n";
