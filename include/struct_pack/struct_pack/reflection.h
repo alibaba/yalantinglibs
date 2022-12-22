@@ -1331,8 +1331,10 @@ constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
       return Func<253, Args...>::run(args...);
     case 254:
       return Func<254, Args...>::run(args...);
-    default:
+    case 255:
       return Func<255, Args...>::run(args...);
+    default:
+      return Func<256, Args...>::run(args...);
       // index shouldn't bigger than 256
   }
 }
