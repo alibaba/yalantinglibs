@@ -1,13 +1,14 @@
+#pragma once
+
 #include <cstdint>
 #include <ostream>
 #include <system_error>
 #include <type_traits>
 
+#include "error_code.h"
 #include "reflection.h"
-#include "struct_pack/struct_pack/error_code.h"
-namespace struct_pack {
 
-namespace detail {
+namespace struct_pack::detail {
 
 template <typename T>
 class varint {
@@ -236,6 +237,4 @@ template <typename charT, typename T>
   // between one and ten bytes, with small values using fewer bytes.
   // return decode_varint_v1(f);
 }
-}  // namespace detail
-
-}  // namespace struct_pack
+}  // namespace struct_pack::detail

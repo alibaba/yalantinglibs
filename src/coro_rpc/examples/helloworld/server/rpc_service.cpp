@@ -15,8 +15,9 @@
  */
 #include "rpc_service/rpc_service.h"
 
-#include <logging/easylog.hpp>
 #include <thread>
+
+#include "coro_rpc/coro_rpc/easylog.hpp"
 
 using namespace coro_rpc;
 

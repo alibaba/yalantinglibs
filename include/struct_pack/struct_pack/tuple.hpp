@@ -18,9 +18,7 @@
 // commit id: ce4ab635c4f70b63ef9d19728bc8d76d71ae8685
 // Use of this source code is governed by a Boost Software License that can be
 // found in the LICENSE file.
-
-#ifndef TUPLET_TUPLET_HPP_IMPLEMENTATION
-#define TUPLET_TUPLET_HPP_IMPLEMENTATION
+#pragma once
 
 #include <compare>
 #include <cstddef>
@@ -626,4 +624,3 @@ constexpr size_t tuple_size_v = std::tuple_size<T>::value;
 template <size_t I, class T>
 using tuple_element_t = typename std::tuple_element<I, T>::type;
 }  // namespace tuplet
-#endif

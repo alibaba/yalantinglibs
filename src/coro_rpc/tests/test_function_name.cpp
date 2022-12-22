@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <util/function_name.h>
 
+#include "coro_rpc/coro_rpc/function_name.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 using namespace coro_rpc;

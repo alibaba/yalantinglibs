@@ -16,9 +16,8 @@
 // Copyright 2019 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+#pragma once
 
-#ifndef STRUCT_PACK_MD5_CONSTEXPR_H
-#define STRUCT_PACK_MD5_CONSTEXPR_H
 #include <algorithm>
 #include <array>
 // #include <compare>
@@ -337,4 +336,3 @@ constexpr uint32_t MD5Hash32Constexpr(const char *string, uint32_t length) {
 }  // namespace MD5
 
 }  // namespace struct_pack
-#endif  // STRUCT_PACK_MD5_CONSTEXPR_H

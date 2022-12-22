@@ -16,11 +16,11 @@
 #pragma once
 
 #include <filesystem>
-#include <logging/easylog.hpp>
-
 #ifdef ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
+
+#include "easylog.hpp"
 
 namespace coro_rpc {
 /*!

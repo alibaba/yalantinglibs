@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iguana/json_reader.hpp>
+
 namespace struct_json {
 template <typename T, typename It>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {

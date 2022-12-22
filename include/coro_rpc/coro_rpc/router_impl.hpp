@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -21,13 +22,14 @@
 #include <unordered_map>
 #include <variant>
 
+#include "struct_pack/struct_pack.hpp"
+
 #include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
-#include "logging/easylog.hpp"
+#include "easylog.hpp"
 #include "rpc_protocol.h"
-#include "struct_pack/struct_pack.hpp"
-#include "util/type_traits.h"
+#include "type_traits.h"
 
 namespace coro_rpc {
 

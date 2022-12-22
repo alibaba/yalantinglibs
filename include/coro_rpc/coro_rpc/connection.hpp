@@ -22,9 +22,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "logging/easylog.hpp"
+#include "easylog.hpp"
 #include "rpc_protocol.h"
-#include "util/type_traits.h"
+#include "type_traits.h"
 
 namespace coro_rpc {
 

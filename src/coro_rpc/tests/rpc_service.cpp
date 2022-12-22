@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 #include <coro_rpc/rpc_connection.hpp>
-#include <logging/easylog.hpp>
 
+#include "coro_rpc/coro_rpc/easylog.hpp"
 #include "rpc_api.hpp"
 
 using namespace coro_rpc;

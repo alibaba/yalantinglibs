@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -24,12 +25,13 @@
 #include <unordered_map>
 
 #include "asio_util/io_context_pool.hpp"
+
 #include "async_connection.hpp"
 #include "common_service.hpp"
-#include "coro_rpc/coro_rpc/coro_rpc_server.hpp"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
+#include "coro_rpc_server.hpp"
 #include "remote.hpp"
-#include "util/utils.hpp"
+#include "rpc_protocol.h"
+#include "utils.hpp"
 
 namespace coro_rpc {
 /*!

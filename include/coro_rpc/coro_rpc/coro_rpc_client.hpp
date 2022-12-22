@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-#include <async_simple/Future.h>
-#include <async_simple/coro/FutureAwaiter.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -26,23 +24,28 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#ifdef GENERATE_BENCHMARK_DATA
+#include <fstream>
+#endif
+
+#include <async_simple/Future.h>
+#include <async_simple/coro/FutureAwaiter.h>
+#include <async_simple/coro/SyncAwait.h>
 
 #include "asio_util/asio_coro_util.hpp"
-#include "async_simple/coro/SyncAwait.h"
-#include "common_service.hpp"
-#include "coro_rpc/coro_rpc/connection.hpp"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
-#include "logging/easylog.hpp"
 #include "struct_pack/struct_pack.hpp"
-#include "util/function_name.h"
-#include "util/type_traits.h"
-#include "util/utils.hpp"
+
+#include "common_service.hpp"
+#include "connection.hpp"
+#include "easylog.hpp"
+#include "utils.hpp"
+#include "function_name.h"
+#include "rpc_protocol.h"
+#include "type_traits.h"
+
 #ifdef UNIT_TEST_INJECT
 #include "asio_util/asio_util.hpp"
 #include "inject_action.hpp"
-#endif
-#ifdef GENERATE_BENCHMARK_DATA
-#include <fstream>
 #endif
 
 namespace coro_rpc {

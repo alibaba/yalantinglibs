@@ -23,9 +23,9 @@
 #include <ostream>
 #include <string>
 
+#include "coro_rpc/coro_rpc/easylog.hpp"
 #include "doctest.h"
 #include "inject_action.hpp"
-#include "logging/easylog.hpp"
 #include "rpc_api.hpp"
 
 #ifdef _MSC_VER

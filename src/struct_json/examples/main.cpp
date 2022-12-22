@@ -1,8 +1,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "struct_json/json_reader.h"
-#include "struct_json/json_writer.h"
+#include "struct_json/struct_json/json_reader.h"
+#include "struct_json/struct_json/json_writer.h"
 
 struct person {
   std::string name;

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <any>
 #include <asio.hpp>
 #include <atomic>
@@ -27,15 +28,17 @@
 #include <variant>
 #include <vector>
 
+#include "struct_pack/struct_pack.hpp"
 #include "asio_util/asio_coro_util.hpp"
-#include "logging/easylog.hpp"
+
+#include "easylog.hpp"
 #include "router.hpp"
 #include "router_impl.hpp"
 #include "rpc_protocol.h"
-#include "struct_pack/struct_pack.hpp"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
 #endif
+
 using asio::ip::tcp;
 
 namespace coro_rpc {

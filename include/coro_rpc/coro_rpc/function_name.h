@@ -15,16 +15,13 @@
  */
 #pragma once
 
-#include "function_name.h"
-#include "magic_names.hpp"
-#include "struct_pack/struct_pack/md5_constexpr.hpp"
+#include <string_view>
+
+#include "util/refvalue/magic_names.hpp"
 
 namespace coro_rpc {
 template <auto func>
-consteval auto func_id() {
-  constexpr auto name = get_func_name<func>();
-  constexpr auto id =
-      struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
-  return id;
-}
+consteval std::string_view get_func_name() {
+  return std::string_view{refvalue::qualified_name_of_v<func>};
+};
 }  // namespace coro_rpc

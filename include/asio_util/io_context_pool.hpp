@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 #pragma once
-#include <asio.hpp>
+
 #include <memory>
 #include <thread>
 #include <vector>
+
+#include <asio.hpp>
 
 class io_context_pool {
  public:

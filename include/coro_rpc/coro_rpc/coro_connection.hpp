@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <any>
 #include <atomic>
 #include <cstdint>
@@ -24,14 +25,17 @@
 #include <variant>
 #include <vector>
 
+#include <async_simple/coro/SyncAwait.h>
+
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/asio_util.hpp"
-#include "async_simple/coro/SyncAwait.h"
-#include "logging/easylog.hpp"
+#include "struct_pack/struct_pack.hpp"
+
+#include "easylog.hpp"
 #include "router.hpp"
 #include "router_impl.hpp"
 #include "rpc_protocol.h"
-#include "struct_pack/struct_pack.hpp"
+
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
 #endif

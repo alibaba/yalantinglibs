@@ -15,13 +15,12 @@
  */
 #pragma once
 
-#include <spdlog/sinks/rotating_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
-
 #include <filesystem>
 
-#include "spdlog/common.h"
+#include <spdlog/spdlog.h>
+#include <spdlog/common.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace coro_rpc {
 struct easylog_options {
@@ -50,6 +49,7 @@ struct source_location {
   const char *function_name_;
   const unsigned int line_;
 };
+
 namespace easylog {
 [[nodiscard]] inline constexpr auto get_log_source_location(
     const source_location &location) {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <asio.hpp>
 
 template <typename Socket, typename AsioBuffer>
