@@ -15,13 +15,7 @@
  */
 #pragma once
 
-#include <string_view>
-
-#include "util/refvalue/magic_names.hpp"
-
-namespace coro_rpc {
-template <auto func>
-consteval std::string_view get_func_name() {
-  return std::string_view{refvalue::qualified_name_of_v<func>};
-};
-}  // namespace coro_rpc
+#include "ylt/coro_rpc/coro_rpc/async_connection.hpp"
+#include "ylt/coro_rpc/coro_rpc/connection.hpp"
+#include "ylt/coro_rpc/coro_rpc/coro_connection.hpp"
+#include "ylt/coro_rpc/coro_rpc/router_impl.hpp"

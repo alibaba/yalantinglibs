@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
 
 #include "rpc_service/rpc_service.h"
+
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_literals;

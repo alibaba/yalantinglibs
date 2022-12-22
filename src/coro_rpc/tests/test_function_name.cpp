@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "coro_rpc/coro_rpc/function_name.h"
+#include "ylt/coro_rpc/coro_rpc/function_name.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 using namespace coro_rpc;

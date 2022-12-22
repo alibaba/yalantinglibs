@@ -15,4 +15,17 @@
  */
 #pragma once
 
-#include "coro_rpc/coro_rpc/coro_rpc_client.hpp"
+#include "ylt/struct_pack/struct_pack/md5_constexpr.hpp"
+#include "ylt/util/refvalue/magic_names.hpp"
+
+#include "function_name.h"
+
+namespace coro_rpc {
+template <auto func>
+consteval auto func_id() {
+  constexpr auto name = get_func_name<func>();
+  constexpr auto id =
+      struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
+  return id;
+}
+}  // namespace coro_rpc

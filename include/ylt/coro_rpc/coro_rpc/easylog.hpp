@@ -17,10 +17,10 @@
 
 #include <filesystem>
 
-#include <spdlog/spdlog.h>
 #include <spdlog/common.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 namespace coro_rpc {
 struct easylog_options {

@@ -22,7 +22,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack/struct_pack.hpp"
 
 #include "async_connection.hpp"
 #include "connection.hpp"

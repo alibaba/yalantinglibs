@@ -19,16 +19,16 @@
 #include <type_traits>
 #include <utility>
 
-#include "struct_pack/struct_pack_impl.hpp"
+#include "ylt/struct_pack/struct_pack/struct_pack_impl.hpp"
 
 #if __has_include(<expected>) && __cplusplus > 202002L
 #include <expected>
 #if __cpp_lib_expected >= 202202L
 #else
-#include "util/expected.hpp"
+#include "ylt/util/expected.hpp"
 #endif
 #else
-#include "util/expected.hpp"
+#include "ylt/util/expected.hpp"
 #endif
 
 /*! \defgroup struct_pack struct_pack

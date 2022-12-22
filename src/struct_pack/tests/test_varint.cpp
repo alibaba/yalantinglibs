@@ -1,8 +1,10 @@
 #include <cstdint>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/struct_pack_impl.hpp"
+
+#include "ylt/struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack/struct_pack/struct_pack_impl.hpp"
+
 #include "test_struct.hpp"
 
 using namespace struct_pack;

@@ -16,8 +16,9 @@
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
 
-#include <coro_rpc/rpc_connection.hpp>
 #include <string>
+
+#include <ylt/coro_rpc/rpc_connection.hpp>
 
 std::string hello_world();
 std::string echo(std::string str);

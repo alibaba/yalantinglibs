@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <coro_rpc/rpc_connection.hpp>
+#include <ylt/coro_rpc/rpc_connection.hpp>
 
 #include "doctest.h"
 #include "rpc_api.hpp"
