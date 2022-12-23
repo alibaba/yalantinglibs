@@ -29,7 +29,7 @@ endif()
 
 target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benchmark/)
 target_include_directories(struct_pack_benchmark PRIVATE
-        ${CMAKE_SOURCE_DIR}/thirdparty/frozen
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/frozen
         )
 if (Protobuf_FOUND)
     target_link_libraries(struct_pack_benchmark ${Protobuf_LIBRARIES})
