@@ -248,12 +248,13 @@ TEST_CASE("test server write queue") {
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);
-  auto ret = connect(io_context, socket, "127.0.0.1", "8820");
+  auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8820");
   CHECK(!ret);
   easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
                 "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
-    auto err = write(socket, asio::buffer(buffer.data(), buffer.size()));
+    auto err =
+        asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {
@@ -262,10 +263,10 @@ TEST_CASE("test server write queue") {
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
+    asio_util::read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
     uint32_t body_len = *(uint32_t*)resp_len_buf;
     CHECK(body_len == buf.size());
-    read(socket, asio::buffer(buffer_read, body_len));
+    asio_util::read(socket, asio::buffer(buffer_read, body_len));
     std::monostate r2;
     std::size_t sz;
     auto ret =

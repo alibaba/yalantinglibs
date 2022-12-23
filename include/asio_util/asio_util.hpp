@@ -16,6 +16,7 @@
 #pragma once
 #include <asio.hpp>
 
+namespace asio_util {
 template <typename Socket, typename AsioBuffer>
 std::pair<asio::error_code, size_t> read_some(Socket &sock,
                                               AsioBuffer &&buffer) {
@@ -55,3 +56,4 @@ inline std::error_code connect(asio::io_context &io_context,
   asio::connect(socket, endpoints, error);
   return error;
 }
+}  // namespace asio_util
