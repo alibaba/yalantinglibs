@@ -20,7 +20,7 @@
 #include <unistd.h>
 #endif
 
-#include <coro_rpc/coro_rpc_server.hpp>
+#include "ylt/coro_rpc/coro_rpc_server.hpp"
 
 #include "doctest.h"
 #include "rpc_api.hpp"

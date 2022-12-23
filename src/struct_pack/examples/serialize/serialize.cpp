@@ -18,8 +18,8 @@
 #include <iostream>
 #include <memory>
 
-#include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/struct_pack_impl.hpp"
+#include "ylt/struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack/struct_pack/struct_pack_impl.hpp"
 
 struct person {
   int age;

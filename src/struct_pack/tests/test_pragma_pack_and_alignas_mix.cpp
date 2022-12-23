@@ -17,7 +17,7 @@
 #include <iostream>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack/struct_pack.hpp"
 using namespace struct_pack;
 using namespace doctest;
 // clang-format off

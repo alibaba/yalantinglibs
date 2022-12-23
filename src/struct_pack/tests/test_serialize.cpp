@@ -26,7 +26,7 @@
 #include <variant>
 
 #define private public
-#include "struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack/struct_pack.hpp"
 #undef private
 
 #include "doctest.h"

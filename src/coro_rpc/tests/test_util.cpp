@@ -1,7 +1,6 @@
-#include <util/type_traits.h>
-
-#include <util/magic_names.hpp>
-#include <util/meta_string.hpp>
+#include <ylt/coro_rpc/coro_rpc/type_traits.h>
+#include <ylt/util/refvalue/magic_names.hpp>
+#include <ylt/util/refvalue/meta_string.hpp>
 
 namespace refvalue::tests {
 constexpr void meta_string_tests() {

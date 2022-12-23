@@ -19,9 +19,9 @@
 #include <filesystem>
 #include <thread>
 
+#include "coro_rpc/coro_rpc/easylog.hpp"
 #include "coro_rpc/coro_rpc_client.hpp"
 #include "coro_rpc/coro_rpc_server.hpp"
-#include "logging/easylog.hpp"
 #include "server.hpp"
 using namespace std::chrono_literals;
 
