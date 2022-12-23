@@ -261,7 +261,7 @@ class async_rpc_server {
     }
   }
 
-  io_context_pool pool_;
+  asio_util::io_context_pool pool_;
   tcp::acceptor acceptor_;
   std::atomic<uint16_t> port_;
   std::chrono::steady_clock::duration conn_timeout_duration_;

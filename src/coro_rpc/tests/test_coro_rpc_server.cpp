@@ -296,12 +296,13 @@ TEST_CASE("test server write queue") {
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);
-  auto ret = connect(io_context, socket, "127.0.0.1", "8810");
+  auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8810");
   CHECK(!ret);
   easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
                 "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
-    auto err = write(socket, asio::buffer(buffer.data(), buffer.size()));
+    auto err =
+        asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {

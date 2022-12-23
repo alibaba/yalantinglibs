@@ -332,7 +332,7 @@ class coro_rpc_server {
     close_accept_promise_.get_future().wait();
   }
 
-  io_context_pool pool_;
+  asio_util::io_context_pool pool_;
   asio::io_context acceptor_ioc_;
   asio::ip::tcp::acceptor acceptor_;
   std::atomic<uint16_t> port_;

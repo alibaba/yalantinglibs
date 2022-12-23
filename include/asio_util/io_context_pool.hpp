@@ -19,6 +19,7 @@
 #include <thread>
 #include <vector>
 
+namespace asio_util {
 class io_context_pool {
  public:
   explicit io_context_pool(std::size_t pool_size) : next_io_context_(0) {
@@ -87,3 +88,4 @@ class io_context_pool {
   std::vector<work_ptr> work_;
   std::size_t next_io_context_;
 };
+}  // namespace asio_util

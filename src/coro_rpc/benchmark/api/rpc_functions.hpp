@@ -24,7 +24,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "coro_rpc/rpc_connection.hpp"
 
-inline io_context_pool pool(std::thread::hardware_concurrency());
+inline asio_util::io_context_pool pool(std::thread::hardware_concurrency());
 
 inline std::string echo_4B(const std::string &str) { return str; }
 inline std::string echo_50B(const std::string &str) { return str; }
