@@ -73,11 +73,19 @@ function nav() {
 function sidebarGuide() {
   return [
     {
+      text: 'how to use?',
+      collapsible: true,
+      items: [
+        {text: 'Use as Git Submodule', link: '/guide/how-to-use-as-git-submodule'}
+      ]
+    },
+    {
       text: 'struct_pack',
       collapsible: true,
       items: [
         {text: 'What is struct_pack?', link: '/guide/struct-pack-intro'},
         {text: 'struct_pack layout', link: '/guide/struct-pack-layout'},
+        {text: 'struct_pack type system', link: '/guide/struct-pack-type-system'},
         {
           text: 'API Reference',
           link: "https://alibaba.github.io/yalantinglibs/en/html/group__struct__pack.html"
