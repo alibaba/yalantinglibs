@@ -460,7 +460,19 @@ class coro_rpc_client {
       ret = co_await asio_util::async_read(
           socket, asio::buffer(head, RESPONSE_HEADER_LEN));
       if (!ret.first) {
-        uint32_t body_len = *(uint32_t *)head;
+        rpc_header header{};
+        auto errc =
+            struct_pack::deserialize_to(header, head, RESPONSE_HEADER_LEN);
+        if (errc != struct_pack::errc::ok) [[unlikely]] {
+          easylog::error("deserialize rpc header failed");
+          co_await close();
+          r = rpc_result<R>{
+              unexpect_t{},
+              rpc_error{std::errc::io_error, struct_pack::error_message(errc)}};
+          co_return r;
+        }
+
+        uint32_t body_len = header.length;
         if (body_len > read_buf_.size()) {
           read_buf_.resize(body_len);
         }

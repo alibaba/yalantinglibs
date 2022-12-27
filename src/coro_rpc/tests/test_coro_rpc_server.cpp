@@ -312,7 +312,11 @@ TEST_CASE("test server write queue") {
     std::string buffer_read;
     buffer_read.resize(buf.size());
     read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
-    uint32_t body_len = *(uint32_t *)resp_len_buf;
+
+    rpc_header header{};
+    [[maybe_unused]] auto errc =
+        struct_pack::deserialize_to(header, resp_len_buf, RESPONSE_HEADER_LEN);
+    uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
     std::monostate r2;

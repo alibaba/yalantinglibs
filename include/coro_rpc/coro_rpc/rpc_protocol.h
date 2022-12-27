@@ -79,7 +79,7 @@ using unexpect_t = tl::unexpect_t;
 constexpr int RPC_HEAD_LEN = struct_pack::get_needed_size(rpc_header{});
 static_assert(RPC_HEAD_LEN == 16);
 
-constexpr int RESPONSE_HEADER_LEN = 4;
+constexpr int RESPONSE_HEADER_LEN = RPC_HEAD_LEN;
 constexpr int FUNCTION_ID_LEN = 4;
 
 constexpr int8_t magic_number = 21;
