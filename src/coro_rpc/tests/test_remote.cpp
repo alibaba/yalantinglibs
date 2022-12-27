@@ -222,7 +222,7 @@ TEST_CASE("testing invalid arguments") {
     pair = test_route<&test_class::get_str>(coro_conn, std::string("test"));
     CHECK(pair.first == err_ok);
 
-    auto r = get_result<&test_class::get_str>(pair, 4);
+    auto r = get_result<&test_class::get_str>(pair, RESPONSE_HEADER_LEN);
     CHECK(r.value() == "test");
   }
 
