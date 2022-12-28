@@ -15,8 +15,10 @@
  */
 #include <cassert>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <ostream>
 
 #include "struct_pack/struct_pack.hpp"
 #include "struct_pack/struct_pack/struct_pack_impl.hpp"
@@ -36,41 +38,39 @@ void basic_usage() {
   person p2{.age = 21, .name = "Betty"};
 
   // serialize api
-  {// api 1. return default container
-   {auto buffer = struct_pack::serialize(p);
-}
-// api 2. use specifier container
-{ auto buffer = struct_pack::serialize<std::string>(p); }
-// api 3. serialize to container's back
-{
-  std::string buffer = "The next line is struct_pack data.\n";
-  struct_pack::serialize_to(buffer, p);
-}
-// api 4. serialize to continuous buffer
-{
-  auto sz = struct_pack::get_needed_size(p);
-  auto array = std::make_unique<char[]>(sz);
-  [[maybe_unused]] auto len = struct_pack::serialize_to(array.get(), sz, p);
-  assert(len == sz);
-  // if buffer's size < struct_pack::get_needed_size(p), the return value is
-  // zero, and the buffer won't be written.
-  len = struct_pack::serialize_to(array.get(), sz - 1, p);
-  assert(len == 0);
-}
-// api 5. serialize with offset
-{
-  auto buffer = struct_pack::serialize_with_offset(2, p);
-  assert(buffer[0] == '\0' && buffer[1] == '\0');
-}
-// api 6. serialize varadic param
-{
-  person p2{.age = 21, .name = "Betty"};
-  auto buffer = struct_pack::serialize(p.age, p2.name);
-}
-}
+  // api 1. return default container
 
-// deserialize api
-{
+  { auto buffer = struct_pack::serialize(p); }
+  // api 2. use specifier container
+  { auto buffer = struct_pack::serialize<std::string>(p); }
+  // api 3. serialize to container's back
+  {
+    std::string buffer = "The next line is struct_pack data.\n";
+    struct_pack::serialize_to(buffer, p);
+  }
+  // api 4. serialize to continuous buffer
+  {
+    auto info = struct_pack::get_serialize_info(p);
+    auto array = std::make_unique<char[]>(info.size());
+    struct_pack::serialize_to(array.get(), info, p);
+  }
+  // api 5. serialize with offset
+  {
+    auto buffer = struct_pack::serialize_with_offset(2, p);
+    assert(buffer[0] == '\0' && buffer[1] == '\0');
+  }
+  // api 6. serialize varadic param
+  {
+    person p2{.age = 21, .name = "Betty"};
+    auto buffer = struct_pack::serialize(p.age, p2.name);
+  }
+  // api 7. serialize to stream
+  {
+    std::ofstream writer("test.out");
+    struct_pack::serialize_to(writer, p);
+  }
+
+  // deserialize api
   auto buffer = struct_pack::serialize(p);
   // api 1. deserialize object to return value
   {
@@ -110,7 +110,6 @@ void basic_usage() {
     assert(p3.age == p.age);
     assert(p3.name == p2.name);
   }
-}
 }
 
 int main() { basic_usage(); }

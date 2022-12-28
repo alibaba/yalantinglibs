@@ -129,8 +129,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
     rpc_header resp_header = header_;
     resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-    [[maybe_unused]] auto sz =
-        struct_pack::serialize_to(buf.data(), RESPONSE_HEADER_LEN, resp_header);
+    constexpr auto info = struct_pack::get_serialize_info(rpc_header{});
+    struct_pack::serialize_to(buf.data(), info, resp_header);
 
     io_context_.post([this, buf = std::move(buf), self = shared_from_this()] {
       if (has_closed()) [[unlikely]] {
@@ -236,8 +236,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
     rpc_header resp_header = header_;
     resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-    [[maybe_unused]] auto sz =
-        struct_pack::serialize_to(buf.data(), RESPONSE_HEADER_LEN, resp_header);
+    constexpr auto info = struct_pack::get_serialize_info(rpc_header{});
+    struct_pack::serialize_to(buf.data(), info, resp_header);
 
     write(std::move(buf));
 

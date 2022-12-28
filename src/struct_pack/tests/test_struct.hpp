@@ -29,6 +29,9 @@ struct person1 {
   std::string name;
   struct_pack::compatible<int32_t> id;
   struct_pack::compatible<bool> maybe;
+  auto operator==(const person1 &rhs) const {
+    return age == rhs.age && name == rhs.name && id == rhs.id && maybe == rhs.maybe;
+  }
 };
 
 struct empty {};

@@ -76,7 +76,8 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
-constexpr int RPC_HEAD_LEN = struct_pack::get_needed_size(rpc_header{});
+constexpr int RPC_HEAD_LEN =
+    struct_pack::get_serialize_info(rpc_header{}).size();
 static_assert(RPC_HEAD_LEN == 16);
 
 constexpr int RESPONSE_HEADER_LEN = RPC_HEAD_LEN;
