@@ -67,6 +67,7 @@ concept seek_reader_t = reader_t<T> && requires(T t) {
   t.seekg(std::size_t{});
 };
 
+//clang-format off
 namespace detail {
   template <typename Type>
   concept deserialize_view = requires(Type container) {
