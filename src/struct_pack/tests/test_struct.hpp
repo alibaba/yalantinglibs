@@ -30,7 +30,8 @@ struct person1 {
   struct_pack::compatible<int32_t> id;
   struct_pack::compatible<bool> maybe;
   auto operator==(const person1 &rhs) const {
-    return age == rhs.age && name == rhs.name && id == rhs.id && maybe == rhs.maybe;
+    return age == rhs.age && name == rhs.name && id == rhs.id &&
+           maybe == rhs.maybe;
   }
 };
 

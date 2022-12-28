@@ -938,7 +938,7 @@ TEST_CASE("test compatible") {
     person1 p1, p0 = {.age = 20, .name = "tom"};
     auto ec = struct_pack::deserialize_to(p1, buffer);
     CHECK(ec == struct_pack::errc{});
-    bool i=p1.id.has_value();
+    bool i = p1.id.has_value();
     CHECK(p1 == p0);
   }
   SUBCASE("big compatible metainfo") {
