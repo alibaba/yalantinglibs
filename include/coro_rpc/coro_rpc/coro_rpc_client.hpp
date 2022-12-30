@@ -309,7 +309,7 @@ class coro_rpc_client {
     }
 
     co_await promise.getFuture();
-#ifdef UNIT_TEST_INJECT
+#ifndef NDEBUG
     easylog::info("client_id {} call {} {}", client_id_, get_func_name<func>(),
                   ret ? "ok" : "failed");
 #endif
@@ -322,6 +322,16 @@ class coro_rpc_client {
   auto &get_executor() { return executor_; }
 
   uint32_t get_client_id() const { return client_id_; }
+
+  std::errc sync_connect(const std::string &host, const std::string &port) {
+    return async_simple::coro::syncAwait(connect(host, port));
+  }
+
+  template <auto func, typename... Args>
+  rpc_result<decltype(get_return_type<func>())> sync_call(Args &&...args) {
+    return async_simple::coro::syncAwait(
+        call<func>(std::forward<Args>(args)...));
+  }
 
  private:
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto duration,
@@ -403,59 +413,10 @@ class coro_rpc_client {
     file << std::string_view{(char *)buffer.data(), buffer.size()};
     file.close();
 #endif
-    std::pair<std::error_code, size_t> ret;
-#ifdef UNIT_TEST_INJECT
-    if (g_action == inject_action::client_send_bad_header) {
-      buffer[0] = (std::byte)(uint8_t(buffer[0]) + 1);
-    }
-    if (g_action == inject_action::client_close_socket_after_send_header) {
-      ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("client_id {} close socket", client_id_);
-      co_await close();
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      co_return r;
-    }
-    else if (g_action ==
-             inject_action::client_close_socket_after_send_partial_header) {
-      ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
-      easylog::info("client_id {} close socket", client_id_);
-      co_await close();
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      co_return r;
-    }
-    else if (g_action ==
-             inject_action::client_shutdown_socket_after_send_header) {
-      ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      easylog::info("client_id {} shutdown", client_id_);
-      socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{std::errc::io_error, ret.first.message()}};
-      co_return r;
-    }
-    else {
-      ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), buffer.size()));
-    }
-#else
-    ret = co_await asio_util::async_write(
+    std::pair<std::error_code, size_t> ret = co_await asio_util::async_write(
         socket, asio::buffer(buffer.data(), buffer.size()));
-#endif
+
     if (!ret.first) {
-#ifdef UNIT_TEST_INJECT
-      if (g_action == inject_action::client_close_socket_after_send_payload) {
-        easylog::info("client_id {} client_close_socket_after_send_payload",
-                      client_id_);
-        r = rpc_result<R>{unexpect_t{},
-                          rpc_error{std::errc::io_error, ret.first.message()}};
-        co_await close();
-        co_return r;
-      }
-#endif
       char head[RESPONSE_HEADER_LEN];
       ret = co_await asio_util::async_read(
           socket, asio::buffer(head, RESPONSE_HEADER_LEN));
@@ -495,11 +456,7 @@ class coro_rpc_client {
         }
       }
     }
-#ifdef UNIT_TEST_INJECT
-    if (g_action == inject_action::force_inject_client_write_data_timeout) {
-      is_timeout_ = true;
-    }
-#endif
+
     if (is_timeout_) {
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{.code = std::errc::timed_out, .msg = {}}};
@@ -534,20 +491,9 @@ class coro_rpc_client {
     std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
 
     rpc_header header{magic_number};
-#ifdef UNIT_TEST_INJECT
-    header.seq_num = client_id_;
-    if (g_action == inject_action::client_send_bad_magic_num) {
-      header.magic = magic_number + 1;
-    }
-    if (g_action == inject_action::client_send_header_length_0) {
-      header.length = 0;
-    }
-    else {
-#endif
-      header.length = buffer.size() - RPC_HEAD_LEN;
-#ifdef UNIT_TEST_INJECT
-    }
-#endif
+
+    header.length = buffer.size() - RPC_HEAD_LEN;
+
     [[maybe_unused]] auto sz =
         struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
     assert(sz == RPC_HEAD_LEN);
@@ -683,18 +629,6 @@ class coro_rpc_client {
     return *io_context_ptr_;
   }
 
-#ifdef UNIT_TEST_INJECT
- public:
-  std::errc sync_connect(const std::string &host, const std::string &port) {
-    return async_simple::coro::syncAwait(connect(host, port));
-  }
-
-  template <auto func, typename... Args>
-  rpc_result<decltype(get_return_type<func>())> sync_call(Args &&...args) {
-    return async_simple::coro::syncAwait(
-        call<func>(std::forward<Args>(args)...));
-  }
-#endif
  private:
   std::shared_ptr<asio::io_context> inner_io_context_ =
       std::make_shared<asio::io_context>();
