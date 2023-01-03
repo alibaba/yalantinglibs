@@ -120,7 +120,7 @@ void check_repeated(const std::vector<T>& a,
   bool ret = (a == b);
   REQUIRE(ret);
 }
-
+TEST_SUITE_BEGIN("test pb benchmark struct");
 TEST_CASE("testing rect") {
   auto my_rects = struct_pb_sample::create_rects(OBJECT_COUNT);
   auto pb_rects = protobuf_sample::create_rects(OBJECT_COUNT);
@@ -213,3 +213,4 @@ TEST_CASE("testing monsters") {
   check_with_protobuf(my_ms, pb_ms);
 #endif
 }
+TEST_SUITE_END;

@@ -20,7 +20,8 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test1& t
     // int32_t a; // int32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
 } // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -36,11 +37,13 @@ bool deserialize_to(::test_struct_pb::Test1& t, const char* data, std::size_t si
     switch(tag) {
       // int32_t a; // int32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
@@ -121,6 +124,7 @@ bool deserialize_to(::test_struct_pb::Test2& t, const char* data, std::size_t si
 // ::test_struct_pb::Test3
 std::size_t get_needed_size(const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
+
   if (t.c) {
     auto sz = get_needed_size(*t.c);
     total += 1 + calculate_varint_size(sz) + sz;
@@ -131,6 +135,7 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test3& t
   std::size_t pos = 0;
   {
     // std::unique_ptr<::test_struct_pb::Test1> c; // message, field number = 3
+
     if (t.c) {
       serialize_varint(data, pos, size, 26);
       auto sz = get_needed_size(*t.c);
@@ -189,11 +194,11 @@ std::size_t get_needed_size(const ::test_struct_pb::Test4& t, const ::struct_pb:
     total += 1 + calculate_varint_size(t.d.size()) + t.d.size();
   }
   if (!t.e.empty()) {
+
     std::size_t container_total = 0;
     for(const auto& e: t.e) {
       container_total += calculate_varint_size(e);
     }
-
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
@@ -213,11 +218,11 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test4& t
     // std::vector<int32_t> e; // int32, field number = 5
     if (!t.e.empty()) {
       serialize_varint(data, pos, size, 42);
+
       std::size_t container_total = 0;
       for(const auto& e: t.e) {
         container_total += calculate_varint_size(e);
       }
-
       serialize_varint(data, pos, size, container_total);
       for(const auto& v: t.e) {
         serialize_varint(data, pos, size, static_cast<uint64_t>(v));}
@@ -253,11 +258,13 @@ bool deserialize_to(::test_struct_pb::Test4& t, const char* data, std::size_t si
       // std::vector<int32_t> e; // int32, field number = 5
       case 40: {
         int32_t e{};
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         e = varint_tmp;
         t.e.push_back(e);
         break;
@@ -271,15 +278,16 @@ bool deserialize_to(::test_struct_pb::Test4& t, const char* data, std::size_t si
         std::size_t cur_max_size = pos + sz;
         while (pos < cur_max_size) {
           int32_t e{};
+
           uint64_t varint_tmp = 0;
           ok = deserialize_varint(data, pos, size, varint_tmp);
           if (!ok) {
             return false;
           }
+
           e = varint_tmp;
           t.e.push_back(e);
         }
-
         break;
       }
       default: {
@@ -316,24 +324,30 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestDo
     // double a; // double, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 9);
+
       std::memcpy(data + pos, &t.a, 8);
       pos += 8;
+
     }
   }
   {
     // double b; // double, field number = 2
     if (t.b != 0) {
       serialize_varint(data, pos, size, 17);
+
       std::memcpy(data + pos, &t.b, 8);
       pos += 8;
+
     }
   }
   {
     // double c; // double, field number = 3
     if (t.c != 0) {
       serialize_varint(data, pos, size, 25);
+
       std::memcpy(data + pos, &t.c, 8);
       pos += 8;
+
     }
   }
   unknown_fields.serialize_to(data, pos, size);
@@ -350,6 +364,7 @@ bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::si
     switch(tag) {
       // double a; // double, field number = 1
       case 9: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -361,6 +376,7 @@ bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::si
       }
       // double b; // double, field number = 2
       case 17: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -372,6 +388,7 @@ bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::si
       }
       // double c; // double, field number = 3
       case 25: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -421,40 +438,50 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFl
     // float a; // float, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 13);
+
       std::memcpy(data + pos, &t.a, 4);
       pos += 4;
+
     }
   }
   {
     // float b; // float, field number = 2
     if (t.b != 0) {
       serialize_varint(data, pos, size, 21);
+
       std::memcpy(data + pos, &t.b, 4);
       pos += 4;
+
     }
   }
   {
     // float c; // float, field number = 3
     if (t.c != 0) {
       serialize_varint(data, pos, size, 29);
+
       std::memcpy(data + pos, &t.c, 4);
       pos += 4;
+
     }
   }
   {
     // float d; // float, field number = 4
     if (t.d != 0) {
       serialize_varint(data, pos, size, 37);
+
       std::memcpy(data + pos, &t.d, 4);
       pos += 4;
+
     }
   }
   {
     // float e; // float, field number = 5
     if (t.e != 0) {
       serialize_varint(data, pos, size, 45);
+
       std::memcpy(data + pos, &t.e, 4);
       pos += 4;
+
     }
   }
   unknown_fields.serialize_to(data, pos, size);
@@ -471,6 +498,7 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
     switch(tag) {
       // float a; // float, field number = 1
       case 13: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -482,6 +510,7 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
       }
       // float b; // float, field number = 2
       case 21: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -493,6 +522,7 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
       }
       // float c; // float, field number = 3
       case 29: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -504,6 +534,7 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
       }
       // float d; // float, field number = 4
       case 37: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -515,6 +546,7 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
       }
       // float e; // float, field number = 5
       case 45: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -545,11 +577,11 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestInt32& t, const ::stru
     total += 1 + calculate_varint_size(t.a);
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 0;
     for(const auto& e: t.b) {
       container_total += calculate_varint_size(e);
     }
-
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
@@ -560,17 +592,18 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestIn
     // int32_t a; // int32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));
+    }
   }
   {
     // std::vector<int32_t> b; // int32, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 0;
       for(const auto& e: t.b) {
         container_total += calculate_varint_size(e);
       }
-
       serialize_varint(data, pos, size, container_total);
       for(const auto& v: t.b) {
         serialize_varint(data, pos, size, static_cast<uint64_t>(v));}
@@ -590,22 +623,26 @@ bool deserialize_to(::test_struct_pb::MyTestInt32& t, const char* data, std::siz
     switch(tag) {
       // int32_t a; // int32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
       // std::vector<int32_t> b; // int32, field number = 2
       case 16: {
         int32_t e{};
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         e = varint_tmp;
         t.b.push_back(e);
         break;
@@ -619,15 +656,16 @@ bool deserialize_to(::test_struct_pb::MyTestInt32& t, const char* data, std::siz
         std::size_t cur_max_size = pos + sz;
         while (pos < cur_max_size) {
           int32_t e{};
+
           uint64_t varint_tmp = 0;
           ok = deserialize_varint(data, pos, size, varint_tmp);
           if (!ok) {
             return false;
           }
+
           e = varint_tmp;
           t.b.push_back(e);
         }
-
         break;
       }
       default: {
@@ -651,11 +689,11 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestInt64& t, const ::stru
     total += 1 + calculate_varint_size(t.a);
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 0;
     for(const auto& e: t.b) {
       container_total += calculate_varint_size(e);
     }
-
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
@@ -666,17 +704,18 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestIn
     // int64_t a; // int64, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));
+    }
   }
   {
     // std::vector<int64_t> b; // int64, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 0;
       for(const auto& e: t.b) {
         container_total += calculate_varint_size(e);
       }
-
       serialize_varint(data, pos, size, container_total);
       for(const auto& v: t.b) {
         serialize_varint(data, pos, size, static_cast<uint64_t>(v));}
@@ -696,22 +735,26 @@ bool deserialize_to(::test_struct_pb::MyTestInt64& t, const char* data, std::siz
     switch(tag) {
       // int64_t a; // int64, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
       // std::vector<int64_t> b; // int64, field number = 2
       case 16: {
         int64_t e{};
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         e = varint_tmp;
         t.b.push_back(e);
         break;
@@ -725,15 +768,16 @@ bool deserialize_to(::test_struct_pb::MyTestInt64& t, const char* data, std::siz
         std::size_t cur_max_size = pos + sz;
         while (pos < cur_max_size) {
           int64_t e{};
+
           uint64_t varint_tmp = 0;
           ok = deserialize_varint(data, pos, size, varint_tmp);
           if (!ok) {
             return false;
           }
+
           e = varint_tmp;
           t.b.push_back(e);
         }
-
         break;
       }
       default: {
@@ -757,11 +801,11 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestUint32& t, const ::str
     total += 1 + calculate_varint_size(t.a);
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 0;
     for(const auto& e: t.b) {
       container_total += calculate_varint_size(e);
     }
-
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
@@ -772,17 +816,18 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUi
     // uint32_t a; // uint32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));
+    }
   }
   {
     // std::vector<uint32_t> b; // uint32, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 0;
       for(const auto& e: t.b) {
         container_total += calculate_varint_size(e);
       }
-
       serialize_varint(data, pos, size, container_total);
       for(const auto& v: t.b) {
         serialize_varint(data, pos, size, static_cast<uint64_t>(v));}
@@ -802,22 +847,26 @@ bool deserialize_to(::test_struct_pb::MyTestUint32& t, const char* data, std::si
     switch(tag) {
       // uint32_t a; // uint32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
       // std::vector<uint32_t> b; // uint32, field number = 2
       case 16: {
         uint32_t e{};
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         e = varint_tmp;
         t.b.push_back(e);
         break;
@@ -831,15 +880,16 @@ bool deserialize_to(::test_struct_pb::MyTestUint32& t, const char* data, std::si
         std::size_t cur_max_size = pos + sz;
         while (pos < cur_max_size) {
           uint32_t e{};
+
           uint64_t varint_tmp = 0;
           ok = deserialize_varint(data, pos, size, varint_tmp);
           if (!ok) {
             return false;
           }
+
           e = varint_tmp;
           t.b.push_back(e);
         }
-
         break;
       }
       default: {
@@ -863,11 +913,11 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestUint64& t, const ::str
     total += 1 + calculate_varint_size(t.a);
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 0;
     for(const auto& e: t.b) {
       container_total += calculate_varint_size(e);
     }
-
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
@@ -878,17 +928,18 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUi
     // uint64_t a; // uint64, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, t.a);}
+      serialize_varint(data, pos, size, t.a);
+    }
   }
   {
     // std::vector<uint64_t> b; // uint64, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 0;
       for(const auto& e: t.b) {
         container_total += calculate_varint_size(e);
       }
-
       serialize_varint(data, pos, size, container_total);
       for(const auto& v: t.b) {
         serialize_varint(data, pos, size, v);}
@@ -908,22 +959,26 @@ bool deserialize_to(::test_struct_pb::MyTestUint64& t, const char* data, std::si
     switch(tag) {
       // uint64_t a; // uint64, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
       // std::vector<uint64_t> b; // uint64, field number = 2
       case 16: {
         uint64_t e{};
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         e = varint_tmp;
         t.b.push_back(e);
         break;
@@ -937,15 +992,16 @@ bool deserialize_to(::test_struct_pb::MyTestUint64& t, const char* data, std::si
         std::size_t cur_max_size = pos + sz;
         while (pos < cur_max_size) {
           uint64_t e{};
+
           uint64_t varint_tmp = 0;
           ok = deserialize_varint(data, pos, size, varint_tmp);
           if (!ok) {
             return false;
           }
+
           e = varint_tmp;
           t.b.push_back(e);
         }
-
         break;
       }
       default: {
@@ -967,18 +1023,20 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestEnum& t, const ::struc
   std::size_t total = unknown_fields.total_size();
 
   if (t.color != ::test_struct_pb::MyTestEnum::Color::Red) {
-   total += 1 + calculate_varint_size(static_cast<uint64_t>(t.color));
+    total += 1 + calculate_varint_size(static_cast<uint64_t>(t.color));
   }
-
   return total;
 } // std::size_t get_needed_size(const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields)
 void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // ::test_struct_pb::MyTestEnum::Color color; // enum, field number = 6
+
     if (t.color != ::test_struct_pb::MyTestEnum::Color::Red) {
-      serialize_varint(data, pos, size, 48);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.color));
+
+    serialize_varint(data, pos, size, 48);
+    serialize_varint(data, pos, size, static_cast<uint64_t>(t.color));
+
     }
   }
   unknown_fields.serialize_to(data, pos, size);
@@ -994,13 +1052,16 @@ bool deserialize_to(::test_struct_pb::MyTestEnum& t, const char* data, std::size
     }
     switch(tag) {
       // ::test_struct_pb::MyTestEnum::Color color; // enum, field number = 6
+
       case 48: {
-        uint64_t enum_val_tmp{};
-        ok = deserialize_varint(data, pos, size, enum_val_tmp);
-        if (!ok) {
-          return false;
-        }
-        t.color = static_cast<::test_struct_pb::MyTestEnum::Color>(enum_val_tmp);
+
+      uint64_t enum_val_tmp{};
+      ok = deserialize_varint(data, pos, size, enum_val_tmp);
+      if (!ok) {
+        return false;
+      }
+      t.color = static_cast<::test_struct_pb::MyTestEnum::Color>(enum_val_tmp);
+
         break;
       }
       default: {
@@ -1021,6 +1082,7 @@ bool deserialize_to(::test_struct_pb::MyTestEnum& t, const char* data, std::size
 std::size_t get_needed_size(const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.fs.empty()) {
+
     for(const auto& e: t.fs) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
@@ -1033,6 +1095,7 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestRe
   {
     // std::vector<::test_struct_pb::MyTestFloat> fs; // message, field number = 1
     if (!t.fs.empty()) {
+
       for(const auto& e: t.fs) {
         serialize_varint(data, pos, size, 10);
         std::size_t sz = get_needed_size(e);
@@ -1098,7 +1161,8 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSi
     // int32_t a; // sint32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, encode_zigzag(t.a));}
+      serialize_varint(data, pos, size, encode_zigzag(t.a));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
 } // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -1114,11 +1178,13 @@ bool deserialize_to(::test_struct_pb::MyTestSint32& t, const char* data, std::si
     switch(tag) {
       // int32_t a; // sint32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = static_cast<int32_t>(decode_zigzag(uint32_t(varint_tmp)));
         break;
       }
@@ -1150,7 +1216,8 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSi
     // int64_t b; // sint64, field number = 2
     if (t.b != 0) {
       serialize_varint(data, pos, size, 16);
-      serialize_varint(data, pos, size, encode_zigzag(t.b));}
+      serialize_varint(data, pos, size, encode_zigzag(t.b));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
 } // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -1166,11 +1233,13 @@ bool deserialize_to(::test_struct_pb::MyTestSint64& t, const char* data, std::si
     switch(tag) {
       // int64_t b; // sint64, field number = 2
       case 16: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.b = static_cast<int64_t>(decode_zigzag(varint_tmp));
         break;
       }
@@ -1195,8 +1264,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestMap& t, const ::struct
     std::size_t map_entry_sz = 0;
     map_entry_sz += 1 + calculate_varint_size(e.first.size()) + e.first.size();
     map_entry_sz += 1 + calculate_varint_size(e.second);
-    total += 1 + calculate_varint_size(map_entry_sz) + map_entry_sz;
-  }
+    total += 1 + calculate_varint_size(map_entry_sz) + map_entry_sz;}
   return total;
 } // std::size_t get_needed_size(const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields)
 void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields) {
@@ -1220,6 +1288,7 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestMa
         pos += e.first.size();
       }
       {
+
         serialize_varint(data, pos, size, 16);
         serialize_varint(data, pos, size, static_cast<uint64_t>(e.second));}
     }
@@ -1237,6 +1306,7 @@ bool deserialize_to(::test_struct_pb::MyTestMap& t, const char* data, std::size_
     }
     switch(tag) {
       // std::map<std::string, int32_t> e; // message, field number = 3
+
       case 26: {
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
@@ -1244,45 +1314,51 @@ bool deserialize_to(::test_struct_pb::MyTestMap& t, const char* data, std::size_
           return false;
         }
         std::size_t cur_max_size = pos + sz;
-        std::string key_tmp_val {};
-        int32_t value_tmp_val {};
-        while (pos < cur_max_size) {
-          ok = read_tag(data, pos, size, tag);
-          if (!ok) {
+      std::string key_tmp_val{};
+      int32_t value_tmp_val{};
+
+      while (pos < cur_max_size) {
+        ok = read_tag(data, pos, size, tag);
+        if (!ok) {
+          return false;
+        }
+        switch(tag) {
+          case 10: {
+      uint64_t str_sz = 0;
+      ok = deserialize_varint(data, pos, cur_max_size, str_sz);
+      if (!ok) {
+        return false;
+      }
+      key_tmp_val.resize(str_sz);
+      if (pos + str_sz > cur_max_size) {
+        return false;
+      }
+      std::memcpy(key_tmp_val.data(), data+pos, str_sz);
+      pos += str_sz;
+
+      break;
+      }
+      case 16: {
+
+      uint64_t varint_tmp = 0;
+      ok = deserialize_varint(data, pos, size, varint_tmp);
+      if (!ok) {
+        return false;
+      }
+
+      value_tmp_val = varint_tmp;
+
+      break;
+          }
+
+          default: {
             return false;
           }
-          switch(tag) {
-            case 10: {
-              uint64_t str_sz = 0;
-              ok = deserialize_varint(data, pos, cur_max_size, str_sz);
-              if (!ok) {
-                return false;
-              }
-              key_tmp_val.resize(str_sz);
-              if (pos + str_sz > cur_max_size) {
-                return false;
-              }
-              std::memcpy(key_tmp_val.data(), data+pos, str_sz);
-              pos += str_sz;
-              break;
-            }
-            case 16: {
-              uint64_t varint_tmp = 0;
-              ok = deserialize_varint(data, pos, size, varint_tmp);
-              if (!ok) {
-                return false;
-              }
-              value_tmp_val = varint_tmp;
-              break;
-            }
-
-            default: {
-              return false;
-            }
-          }
         }
-        t.e[key_tmp_val] = std::move(value_tmp_val);
-        break;
+      }
+      t.e[key_tmp_val] = std::move(value_tmp_val);
+
+      break;
       }
       default: {
         ok = deserialize_unknown(data, pos, size, tag, unknown_fields);
@@ -1305,6 +1381,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed32& t, const ::st
     total += 1 + 4;
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 4 * t.b.size();
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
@@ -1316,14 +1393,17 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     // uint32_t a; // fixed32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 13);
+
       std::memcpy(data + pos, &t.a, 4);
       pos += 4;
+
     }
   }
   {
     // std::vector<uint32_t> b; // fixed32, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 4 * t.b.size();
       serialize_varint(data, pos, size, container_total);
       std::memcpy(data + pos, t.b.data(), container_total);
@@ -1343,6 +1423,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::s
     switch(tag) {
       // uint32_t a; // fixed32, field number = 1
       case 13: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1355,6 +1436,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::s
       // std::vector<uint32_t> b; // fixed32, field number = 2
       case 21: {
         uint32_t e{};
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1372,6 +1454,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::s
           return false;
         }
         std::size_t cur_max_size = pos + sz;
+
         int count = sz / 4;
         if (4 * count != sz) {
           return false;
@@ -1405,6 +1488,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed64& t, const ::st
     total += 1 + 8;
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 8 * t.b.size();
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
@@ -1416,14 +1500,17 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     // uint64_t a; // fixed64, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 9);
+
       std::memcpy(data + pos, &t.a, 8);
       pos += 8;
+
     }
   }
   {
     // std::vector<uint64_t> b; // fixed64, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 8 * t.b.size();
       serialize_varint(data, pos, size, container_total);
       std::memcpy(data + pos, t.b.data(), container_total);
@@ -1443,6 +1530,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::s
     switch(tag) {
       // uint64_t a; // fixed64, field number = 1
       case 9: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -1455,6 +1543,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::s
       // std::vector<uint64_t> b; // fixed64, field number = 2
       case 17: {
         uint64_t e{};
+
         if (pos + 8 > size) {
           return false;
         }
@@ -1472,6 +1561,7 @@ bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::s
           return false;
         }
         std::size_t cur_max_size = pos + sz;
+
         int count = sz / 8;
         if (8 * count != sz) {
           return false;
@@ -1505,6 +1595,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed32& t, const ::s
     total += 1 + 4;
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 4 * t.b.size();
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
@@ -1516,14 +1607,17 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSf
     // int32_t a; // sfixed32, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 13);
+
       std::memcpy(data + pos, &t.a, 4);
       pos += 4;
+
     }
   }
   {
     // std::vector<int32_t> b; // sfixed32, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 4 * t.b.size();
       serialize_varint(data, pos, size, container_total);
       std::memcpy(data + pos, t.b.data(), container_total);
@@ -1543,6 +1637,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::
     switch(tag) {
       // int32_t a; // sfixed32, field number = 1
       case 13: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1555,6 +1650,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::
       // std::vector<int32_t> b; // sfixed32, field number = 2
       case 21: {
         int32_t e{};
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1572,6 +1668,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::
           return false;
         }
         std::size_t cur_max_size = pos + sz;
+
         int count = sz / 4;
         if (4 * count != sz) {
           return false;
@@ -1605,6 +1702,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed64& t, const ::s
     total += 1 + 8;
   }
   if (!t.b.empty()) {
+
     std::size_t container_total = 8 * t.b.size();
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
@@ -1616,14 +1714,17 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSf
     // int64_t a; // sfixed64, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 9);
+
       std::memcpy(data + pos, &t.a, 8);
       pos += 8;
+
     }
   }
   {
     // std::vector<int64_t> b; // sfixed64, field number = 2
     if (!t.b.empty()) {
       serialize_varint(data, pos, size, 18);
+
       std::size_t container_total = 8 * t.b.size();
       serialize_varint(data, pos, size, container_total);
       std::memcpy(data + pos, t.b.data(), container_total);
@@ -1643,6 +1744,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::
     switch(tag) {
       // int64_t a; // sfixed64, field number = 1
       case 9: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -1655,6 +1757,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::
       // std::vector<int64_t> b; // sfixed64, field number = 2
       case 17: {
         int64_t e{};
+
         if (pos + 8 > size) {
           return false;
         }
@@ -1672,6 +1775,7 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::
           return false;
         }
         std::size_t cur_max_size = pos + sz;
+
         int count = sz / 8;
         if (8 * count != sz) {
           return false;
@@ -1717,6 +1821,7 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFieldNumberRandom& t, 
     total += 1 + 4;
   }
   if (!t.f.empty()) {
+
     std::size_t container_total = 4 * t.f.size();
     total += 2 + calculate_varint_size(container_total) + container_total;
   }
@@ -1728,15 +1833,18 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     // float e; // float, field number = 1
     if (t.e != 0) {
       serialize_varint(data, pos, size, 13);
+
       std::memcpy(data + pos, &t.e, 4);
       pos += 4;
+
     }
   }
   {
     // int64_t b; // sint64, field number = 3
     if (t.b != 0) {
       serialize_varint(data, pos, size, 24);
-      serialize_varint(data, pos, size, encode_zigzag(t.b));}
+      serialize_varint(data, pos, size, encode_zigzag(t.b));
+    }
   }
   {
     // std::string c; // string, field number = 4
@@ -1751,20 +1859,24 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     // double d; // double, field number = 5
     if (t.d != 0) {
       serialize_varint(data, pos, size, 41);
+
       std::memcpy(data + pos, &t.d, 8);
       pos += 8;
+
     }
   }
   {
     // int32_t a; // int32, field number = 6
     if (t.a != 0) {
       serialize_varint(data, pos, size, 48);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.a));
+    }
   }
   {
     // std::vector<uint32_t> f; // fixed32, field number = 128
     if (!t.f.empty()) {
       serialize_varint(data, pos, size, 1026);
+
       std::size_t container_total = 4 * t.f.size();
       serialize_varint(data, pos, size, container_total);
       std::memcpy(data + pos, t.f.data(), container_total);
@@ -1784,21 +1896,25 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
     switch(tag) {
       // int32_t a; // int32, field number = 6
       case 48: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.a = varint_tmp;
         break;
       }
       // int64_t b; // sint64, field number = 3
       case 24: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.b = static_cast<int64_t>(decode_zigzag(varint_tmp));
         break;
       }
@@ -1819,6 +1935,7 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
       }
       // double d; // double, field number = 5
       case 41: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -1830,6 +1947,7 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
       }
       // float e; // float, field number = 1
       case 13: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1842,6 +1960,7 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
       // std::vector<uint32_t> f; // fixed32, field number = 128
       case 1029: {
         uint32_t e{};
+
         if (pos + 4 > size) {
           return false;
         }
@@ -1859,6 +1978,7 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
           return false;
         }
         std::size_t cur_max_size = pos + sz;
+
         int count = sz / 4;
         if (4 * count != sz) {
           return false;
@@ -1941,91 +2061,110 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestAl
     // double a; // double, field number = 1
     if (t.a != 0) {
       serialize_varint(data, pos, size, 9);
+
       std::memcpy(data + pos, &t.a, 8);
       pos += 8;
+
     }
   }
   {
     // float b; // float, field number = 2
     if (t.b != 0) {
       serialize_varint(data, pos, size, 21);
+
       std::memcpy(data + pos, &t.b, 4);
       pos += 4;
+
     }
   }
   {
     // int32_t c; // int32, field number = 3
     if (t.c != 0) {
       serialize_varint(data, pos, size, 24);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.c));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.c));
+    }
   }
   {
     // int64_t d; // int64, field number = 4
     if (t.d != 0) {
       serialize_varint(data, pos, size, 32);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.d));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.d));
+    }
   }
   {
     // uint32_t e; // uint32, field number = 5
     if (t.e != 0) {
       serialize_varint(data, pos, size, 40);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.e));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.e));
+    }
   }
   {
     // uint64_t f; // uint64, field number = 6
     if (t.f != 0) {
       serialize_varint(data, pos, size, 48);
-      serialize_varint(data, pos, size, t.f);}
+      serialize_varint(data, pos, size, t.f);
+    }
   }
   {
     // int32_t g; // sint32, field number = 7
     if (t.g != 0) {
       serialize_varint(data, pos, size, 56);
-      serialize_varint(data, pos, size, encode_zigzag(t.g));}
+      serialize_varint(data, pos, size, encode_zigzag(t.g));
+    }
   }
   {
     // int64_t h; // sint64, field number = 8
     if (t.h != 0) {
       serialize_varint(data, pos, size, 64);
-      serialize_varint(data, pos, size, encode_zigzag(t.h));}
+      serialize_varint(data, pos, size, encode_zigzag(t.h));
+    }
   }
   {
     // uint32_t i; // fixed32, field number = 9
     if (t.i != 0) {
       serialize_varint(data, pos, size, 77);
+
       std::memcpy(data + pos, &t.i, 4);
       pos += 4;
+
     }
   }
   {
     // uint64_t j; // fixed64, field number = 10
     if (t.j != 0) {
       serialize_varint(data, pos, size, 81);
+
       std::memcpy(data + pos, &t.j, 8);
       pos += 8;
+
     }
   }
   {
     // int32_t k; // sfixed32, field number = 11
     if (t.k != 0) {
       serialize_varint(data, pos, size, 93);
+
       std::memcpy(data + pos, &t.k, 4);
       pos += 4;
+
     }
   }
   {
     // int64_t l; // sfixed64, field number = 12
     if (t.l != 0) {
       serialize_varint(data, pos, size, 97);
+
       std::memcpy(data + pos, &t.l, 8);
       pos += 8;
+
     }
   }
   {
     // bool m; // bool, field number = 13
     if (t.m != 0) {
       serialize_varint(data, pos, size, 104);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.m));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.m));
+    }
   }
   {
     // std::string n; // string, field number = 14
@@ -2059,6 +2198,7 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
     switch(tag) {
       // double a; // double, field number = 1
       case 9: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -2070,6 +2210,7 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // float b; // float, field number = 2
       case 21: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -2081,66 +2222,79 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // int32_t c; // int32, field number = 3
       case 24: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.c = varint_tmp;
         break;
       }
       // int64_t d; // int64, field number = 4
       case 32: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.d = varint_tmp;
         break;
       }
       // uint32_t e; // uint32, field number = 5
       case 40: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.e = varint_tmp;
         break;
       }
       // uint64_t f; // uint64, field number = 6
       case 48: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.f = varint_tmp;
         break;
       }
       // int32_t g; // sint32, field number = 7
       case 56: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.g = static_cast<int32_t>(decode_zigzag(uint32_t(varint_tmp)));
         break;
       }
       // int64_t h; // sint64, field number = 8
       case 64: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.h = static_cast<int64_t>(decode_zigzag(varint_tmp));
         break;
       }
       // uint32_t i; // fixed32, field number = 9
       case 77: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -2152,6 +2306,7 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // uint64_t j; // fixed64, field number = 10
       case 81: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -2163,6 +2318,7 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // int32_t k; // sfixed32, field number = 11
       case 93: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -2174,6 +2330,7 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // int64_t l; // sfixed64, field number = 12
       case 97: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -2185,11 +2342,13 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
       }
       // bool m; // bool, field number = 13
       case 104: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.m = static_cast<bool>(varint_tmp);
         break;
       }
@@ -2251,7 +2410,8 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SubMessa
     // bool ok; // bool, field number = 1
     if (t.ok != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.ok));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.ok));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
 } // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -2267,11 +2427,13 @@ bool deserialize_to(::test_struct_pb::SubMessageForOneof& t, const char* data, s
     switch(tag) {
       // bool ok; // bool, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.ok = static_cast<bool>(varint_tmp);
         break;
       }
@@ -2293,20 +2455,26 @@ bool deserialize_to(::test_struct_pb::SubMessageForOneof& t, const char* data, s
 std::size_t get_needed_size(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.test_oneof.index() == 1) {
-    total += 1 + calculate_varint_size(std::get<1>(t.test_oneof));
+  total += 1 + calculate_varint_size(std::get<1>(t.test_oneof));
+
   }
   if (t.test_oneof.index() == 2) {
-    total += 1 + calculate_varint_size(std::get<2>(t.test_oneof));
+  total += 1 + calculate_varint_size(std::get<2>(t.test_oneof));
+
   }
   if (t.test_oneof.index() == 3) {
-    total += 1 + calculate_varint_size(std::get<3>(t.test_oneof).size()) + std::get<3>(t.test_oneof).size();
+
+  total += 1 + calculate_varint_size(std::get<3>(t.test_oneof).size()) + std::get<3>(t.test_oneof).size();
+
   }
   if (t.test_oneof.index() == 4) {
-    uint64_t sz = 0;
-    if (std::get<4>(t.test_oneof)) {
-      sz = get_needed_size(*std::get<4>(t.test_oneof));
-    }
-    total += 1 + calculate_varint_size(sz) + sz;
+
+  uint64_t sz = 0;
+  if (std::get<4>(t.test_oneof)) {
+    sz = get_needed_size(*std::get<4>(t.test_oneof));
+  }
+  total += 1 + calculate_varint_size(sz) + sz;
+
   }
   return total;
 } // std::size_t get_needed_size(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -2314,35 +2482,42 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SampleMe
   std::size_t pos = 0;
   {
     if (t.test_oneof.index() == 3) {
-      serialize_varint(data, pos, size, 34);
-      serialize_varint(data, pos, size, std::get<3>(t.test_oneof).size());
-      std::memcpy(data + pos, std::get<3>(t.test_oneof).data(), std::get<3>(t.test_oneof).size());
-      pos += std::get<3>(t.test_oneof).size();
+    serialize_varint(data, pos, size, 34);
+    serialize_varint(data, pos, size, std::get<3>(t.test_oneof).size());
+    std::memcpy(data + pos, std::get<3>(t.test_oneof).data(), std::get<3>(t.test_oneof).size());
+    pos += std::get<3>(t.test_oneof).size();
+
     }
   }
   {
     if (t.test_oneof.index() == 2) {
-      serialize_varint(data, pos, size, 64);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(std::get<2>(t.test_oneof)));}
+
+    serialize_varint(data, pos, size, 64);
+    serialize_varint(data, pos, size, static_cast<uint64_t>(std::get<2>(t.test_oneof)));
+    }
   }
   {
     if (t.test_oneof.index() == 4) {
-      serialize_varint(data, pos, size, 74);
-      if (std::get<4>(t.test_oneof)) {
-        std::size_t sz = get_needed_size(*std::get<4>(t.test_oneof));
-        serialize_varint(data, pos, size, sz);
-        serialize_to(data + pos, sz, *std::get<4>(t.test_oneof));
-        pos += sz;
-      }
-      else {
-        serialize_varint(data, pos, size, 0);
-      }
+
+    serialize_varint(data, pos, size, 74);
+    if (std::get<4>(t.test_oneof)) {
+      std::size_t sz = get_needed_size(*std::get<4>(t.test_oneof));
+      serialize_varint(data, pos, size, sz);
+      serialize_to(data + pos, sz, *std::get<4>(t.test_oneof));
+      pos += sz;
+    }
+    else {
+      serialize_varint(data, pos, size, 0);
+    }
+
     }
   }
   {
     if (t.test_oneof.index() == 1) {
-      serialize_varint(data, pos, size, 80);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(std::get<1>(t.test_oneof)));}
+
+    serialize_varint(data, pos, size, 80);
+    serialize_varint(data, pos, size, static_cast<uint64_t>(std::get<1>(t.test_oneof)));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
 } // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -2357,33 +2532,36 @@ bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, s
     }
     switch(tag) {
       case 80: {
-        if (t.test_oneof.index() != 1) {
-          t.test_oneof.emplace<1>();
-        }
+      if (t.test_oneof.index() != 1) {
+        t.test_oneof.emplace<1>();
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         std::get<1>(t.test_oneof) = varint_tmp;
-        break;
+      }
+      break;
       }
       case 64: {
-        if (t.test_oneof.index() != 2) {
-          t.test_oneof.emplace<2>();
-        }
+      if (t.test_oneof.index() != 2) {
+        t.test_oneof.emplace<2>();
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         std::get<2>(t.test_oneof) = varint_tmp;
-        break;
+      }
+      break;
       }
       case 34: {
-        if (t.test_oneof.index() != 3) {
-          t.test_oneof.emplace<3>();
-        }
+      if (t.test_oneof.index() != 3) {
+        t.test_oneof.emplace<3>();
         uint64_t str_sz = 0;
         ok = deserialize_varint(data, pos, size, str_sz);
         if (!ok) {
@@ -2395,23 +2573,25 @@ bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, s
         }
         std::memcpy(std::get<3>(t.test_oneof).data(), data+pos, str_sz);
         pos += str_sz;
-        break;
+      }
+      break;
       }
       case 74: {
-        if (t.test_oneof.index() != 4) {
-          t.test_oneof.emplace<4>(new ::test_struct_pb::SubMessageForOneof());
-        }
-        uint64_t msg_sz = 0;
-        ok = deserialize_varint(data, pos, size, msg_sz);
-        if (!ok) {
-          return false;
-        }
-        ok = deserialize_to(*std::get<4>(t.test_oneof), data + pos, msg_sz);
-        if (!ok) {
-          return false;
-        }
-        pos += msg_sz;
-        break;
+
+      if (t.test_oneof.index() != 4) {
+        t.test_oneof.emplace<4>(new ::test_struct_pb::SubMessageForOneof());
+      }
+      uint64_t msg_sz = 0;
+      ok = deserialize_varint(data, pos, size, msg_sz);
+      if (!ok) {
+        return false;
+      }
+      ok = deserialize_to(*std::get<4>(t.test_oneof), data + pos, msg_sz);
+      if (!ok) {
+        return false;
+      }
+      pos += msg_sz;
+      break;
       }
       default: {
         ok = deserialize_unknown(data, pos, size, tag, unknown_fields);

@@ -198,6 +198,7 @@ struct SampleMessageOneof {
   , std::string // string, field number = 4
   , std::unique_ptr<::test_struct_pb::SubMessageForOneof> // message, field number = 9
   > test_oneof;
+
   bool has_b() const {
     return test_oneof.index() == 1;
   }
@@ -208,6 +209,7 @@ struct SampleMessageOneof {
     assert(test_oneof.index() == 1);
     return std::get<1>(test_oneof);
   }
+
   bool has_a() const {
     return test_oneof.index() == 2;
   }
@@ -218,6 +220,7 @@ struct SampleMessageOneof {
     assert(test_oneof.index() == 2);
     return std::get<2>(test_oneof);
   }
+
   bool has_name() const {
     return test_oneof.index() == 3;
   }
@@ -228,6 +231,7 @@ struct SampleMessageOneof {
     assert(test_oneof.index() == 3);
     return std::get<3>(test_oneof);
   }
+
   bool has_sub_message() const {
     return test_oneof.index() == 4;
   }
@@ -241,6 +245,7 @@ struct SampleMessageOneof {
   }
   bool operator==(const SampleMessageOneof&) const = default;
 };
+
 } // namespace test_struct_pb
 namespace struct_pb {
 namespace internal {
