@@ -1,0 +1,14 @@
+{
+   "hash_code": 136024138,
+   "struct_name": "person",
+   "fileds": [
+      {
+         "field_name": "name",
+         "field_type": "string"
+      },
+      {
+         "field_name": "age",
+         "field_type": "int32"
+      }
+   ]
+}
