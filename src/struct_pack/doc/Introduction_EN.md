@@ -283,7 +283,7 @@ Processor: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 ## Forward/backward compatibility
 
-If current message type no longer meets all you needs - say, you'd like the object to  have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
+If current message type no longer meets all you needs - say, you'd like the object to have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
 
 ```cpp
 struct person {
