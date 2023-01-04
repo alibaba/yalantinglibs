@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "../benchmark/config.hpp"
+#ifdef HAVE_PROTOBUF
 #include "../benchmark/protobuf_sample.hpp"
+#endif
 #include "../benchmark/struct_pb_sample.hpp"
 #include "doctest.h"
 #include "helper.hpp"
@@ -112,19 +114,20 @@ struct PB_equal<struct_pb_sample::Monsters, mygame::Monsters> {
     return lhs.monsters == rhs.monsters();
   }
 };
-#endif
-
 template <typename T, typename U>
 void check_repeated(const std::vector<T>& a,
                     const google::protobuf::RepeatedPtrField<U>& b) {
   bool ret = (a == b);
   REQUIRE(ret);
 }
+#endif
+
 TEST_SUITE_BEGIN("test pb benchmark struct");
 TEST_CASE("testing rect") {
   auto my_rects = struct_pb_sample::create_rects(OBJECT_COUNT);
+#ifdef HAVE_PROTOBUF
   auto pb_rects = protobuf_sample::create_rects(OBJECT_COUNT);
-
+#endif
   for (int i = 0; i < OBJECT_COUNT; ++i) {
     auto my_rect = my_rects.rect32_list[i];
     check_self(my_rect);
@@ -145,8 +148,9 @@ TEST_CASE("testing rect") {
 
 TEST_CASE("testing person") {
   auto my_persons = struct_pb_sample::create_persons(OBJECT_COUNT);
+#ifdef HAVE_PROTOBUF
   auto pb_persons = protobuf_sample::create_persons(OBJECT_COUNT);
-
+#endif
   for (int i = 0; i < OBJECT_COUNT; ++i) {
     auto my_person = my_persons.person_list[i];
     check_self(my_person);
@@ -167,8 +171,9 @@ TEST_CASE("testing person") {
 
 TEST_CASE("testing monsters") {
   auto my_ms = struct_pb_sample::create_monsters(OBJECT_COUNT);
+#ifdef HAVE_PROTOBUF
   auto pb_ms = protobuf_sample::create_monsters(OBJECT_COUNT);
-
+#endif
   for (int i = 0; i < OBJECT_COUNT; ++i) {
     auto& my_m = my_ms.monsters[i];
     check_self(my_m);

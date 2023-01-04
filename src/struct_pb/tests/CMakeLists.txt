@@ -46,5 +46,7 @@ else()
     target_sources(test_struct_pb PRIVATE
             test_pb.struct_pb.cc
             test_pb.struct_pb.h
+            ../benchmark/benchmark.struct_pb.cc
+            ../benchmark/benchmark.struct_pb.h
             )
 endif ()
