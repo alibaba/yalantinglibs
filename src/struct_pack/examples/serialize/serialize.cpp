@@ -13,64 +13,93 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <fcntl.h>
+
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <ostream>
+#include <sstream>
 
 #include "struct_pack/struct_pack.hpp"
 #include "struct_pack/struct_pack/struct_pack_impl.hpp"
+
+struct fwrite_stream {
+  FILE* file;
+  bool write(const char* data, std::size_t sz) {
+    return fwrite(data, sz, 1, file) == 1;
+  }
+  fwrite_stream(const char* file_name) : file(fopen(file_name, "wb")) {}
+  ~fwrite_stream() { fclose(file); }
+};
+
+struct fread_stream {
+  FILE* file;
+  bool read(char* data, std::size_t sz) {
+    return fread(data, sz, 1, file) == 1;
+  }
+  bool ignore(std::size_t sz) { return fseek(file, sz, SEEK_CUR) == 0; }
+  std::size_t tellg() {
+    // if you worry about ftell performance, just use an variable to record it.
+    return ftell(file);
+  }
+  fread_stream(const char* file_name) : file(fopen(file_name, "rb")) {}
+  ~fread_stream() { fclose(file); }
+};
 
 struct person {
   int age;
   std::string name;
 
-  auto operator==(const person &rhs) const {
+  auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
   }
 };
 
+//clang-format off
 void basic_usage() {
   person p{20, "tom"};
 
   person p2{.age = 21, .name = "Betty"};
 
   // serialize api
-  {// api 1. return default container
-   {auto buffer = struct_pack::serialize(p);
-}
-// api 2. use specifier container
-{ auto buffer = struct_pack::serialize<std::string>(p); }
-// api 3. serialize to container's back
-{
-  std::string buffer = "The next line is struct_pack data.\n";
-  struct_pack::serialize_to(buffer, p);
-}
-// api 4. serialize to continuous buffer
-{
-  auto sz = struct_pack::get_needed_size(p);
-  auto array = std::make_unique<char[]>(sz);
-  [[maybe_unused]] auto len = struct_pack::serialize_to(array.get(), sz, p);
-  assert(len == sz);
-  // if buffer's size < struct_pack::get_needed_size(p), the return value is
-  // zero, and the buffer won't be written.
-  len = struct_pack::serialize_to(array.get(), sz - 1, p);
-  assert(len == 0);
-}
-// api 5. serialize with offset
-{
-  auto buffer = struct_pack::serialize_with_offset(2, p);
-  assert(buffer[0] == '\0' && buffer[1] == '\0');
-}
-// api 6. serialize varadic param
-{
-  person p2{.age = 21, .name = "Betty"};
-  auto buffer = struct_pack::serialize(p.age, p2.name);
-}
-}
+  // api 1. serialize with default container
+  { auto buffer = struct_pack::serialize(p); }
+  // api 2. use specifier container
+  { auto buffer = struct_pack::serialize<std::string>(p); }
+  // api 3. serialize to container's back
+  {
+    std::string buffer = "The next line is struct_pack data.\n";
+    struct_pack::serialize_to(buffer, p);
+  }
+  // api 4. serialize to continuous buffer
+  {
+    auto size = struct_pack::get_needed_size(p);
+    auto array = std::make_unique<char[]>(size);
+    struct_pack::serialize_to(array.get(), size, p);
+  }
+  // api 5. serialize with offset
+  {
+    auto buffer = struct_pack::serialize_with_offset(/* offset = */ 2, p);
+    assert(buffer[0] == '\0' && buffer[1] == '\0');
+  }
+  // api 6. serialize varadic param
+  {
+    person p2{.age = 21, .name = "Betty"};
+    auto buffer = struct_pack::serialize(p.age, p2.name);
+  }
+  // api 7. serialize to stream
+  {
+    // std::ofstream writer("struct_pack_demo.data",
+    //                      std::ofstream::out | std::ofstream::binary);
+    fwrite_stream writer("struct_pack_demo.data");
+    struct_pack::serialize_to(writer, p);
+  }
 
-// deserialize api
-{
+  // deserialize api
   auto buffer = struct_pack::serialize(p);
   // api 1. deserialize object to return value
   {
@@ -96,7 +125,7 @@ void basic_usage() {
     auto buffer = struct_pack::serialize(p.age, p2.name);
     auto result = struct_pack::deserialize<int, std::string>(buffer);
     assert(result);  // no error
-    [[maybe_unused]] auto &&[age, name] = result.value();
+    [[maybe_unused]] auto&& [age, name] = result.value();
     assert(age == p.age);
     assert(name == p2.name);
   }
@@ -110,7 +139,14 @@ void basic_usage() {
     assert(p3.age == p.age);
     assert(p3.name == p2.name);
   }
-}
+  // api 5. deserialize from stream
+  {
+    // std::ifstream ifs("struct_pack_demo.data",
+    //                   std::ofstream::in | std::ofstream::binary);
+    fread_stream ifs("struct_pack_demo.data");
+    auto p4 = struct_pack::deserialize<person>(ifs);
+    assert(p4 == p);
+  }
 }
 
 int main() { basic_usage(); }

@@ -168,86 +168,38 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
 }
 
 template <serialize_config conf = serialize_config{}, typename... Args>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr size_t get_needed_size(
-    const Args &...args) {
-  return detail::get_serialize_runtime_info<conf>(args...).len;
+[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_buffer_size
+get_needed_size(const Args &...args) {
+  return detail::get_serialize_runtime_info<conf>(args...);
 }
 
 template <serialize_config conf = serialize_config{},
-          detail::struct_pack_byte Byte, typename... Args>
-std::size_t STRUCT_PACK_INLINE serialize_to(Byte *buffer, std::size_t len,
-                                            const Args &...args) noexcept {
+          struct_pack::writer_t Writer, typename... Args>
+STRUCT_PACK_INLINE void serialize_to(Writer &writer, const Args &...args) {
   static_assert(sizeof...(args) > 0);
-  auto config = detail::get_serialize_runtime_info<conf>(args...);
-  if (config.len > len) [[unlikely]] {
-    return 0;
-  }
-  detail::packer<Byte, detail::get_args_type<Args...>> o(buffer, config);
-  switch ((config.metainfo & 0b11000) >> 3) {
-    case 0:
-      o.template serialize<conf, 1>(args...);
-      break;
-#ifdef STRUCT_PACK_OPTIMIZE
-    case 1:
-      o.template serialize<conf, 2>(args...);
-      break;
-    case 2:
-      o.template serialize<conf, 4>(args...);
-      break;
-    case 3:
-      o.template serialize<conf, 8>(args...);
-      break;
-#else
-    case 1:
-    case 2:
-    case 3:
-      o.template serialize<conf, 2>(args...);
-      break;
-#endif
-    default:
-      detail::unreachable();
-      break;
-  };
-  return config.len;
+  auto info = detail::get_serialize_runtime_info<conf>(args...);
+  struct_pack::detail::serialize_to<conf>(writer, info, args...);
+}
+
+template <serialize_config conf = serialize_config{}, typename... Args>
+void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_buffer_size info,
+                                     const Args &...args) noexcept {
+  static_assert(sizeof...(args) > 0);
+  auto writer = struct_pack::detail::memory_writer{(char *)buffer};
+  struct_pack::detail::serialize_to<conf>(writer, info, args...);
 }
 
 template <serialize_config conf = serialize_config{},
           detail::struct_pack_buffer Buffer, typename... Args>
-STRUCT_PACK_INLINE void serialize_to(Buffer &buffer, const Args &...args) {
+void STRUCT_PACK_INLINE serialize_to(Buffer &buffer, const Args &...args) {
   static_assert(sizeof...(args) > 0);
   auto data_offset = buffer.size();
-  auto config = detail::get_serialize_runtime_info<conf>(args...);
-  auto total = data_offset + config.len;
+  auto info = detail::get_serialize_runtime_info<conf>(args...);
+  auto total = data_offset + info.size();
   buffer.resize(total);
-
-  detail::packer<std::remove_reference_t<decltype(*buffer.data())>,
-                 detail::get_args_type<Args...>>
-      o(buffer.data() + data_offset, config);
-  switch ((config.metainfo & 0b11000) >> 3) {
-    case 0:
-      o.template serialize<conf, 1>(args...);
-      break;
-#ifdef STRUCT_PACK_OPTIMIZE
-    case 1:
-      o.template serialize<conf, 2>(args...);
-      break;
-    case 2:
-      o.template serialize<conf, 4>(args...);
-      break;
-    case 3:
-      o.template serialize<conf, 8>(args...);
-      break;
-#else
-    case 1:
-    case 2:
-    case 3:
-      o.template serialize<conf, 2>(args...);
-      break;
-#endif
-    default:
-      detail::unreachable();
-      break;
-  };
+  auto writer =
+      struct_pack::detail::memory_writer{(char *)buffer.data() + data_offset};
+  struct_pack::detail::serialize_to<conf>(writer, info, args...);
 }
 
 template <serialize_config conf = serialize_config{},
@@ -256,8 +208,12 @@ void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
                                                  std::size_t offset,
                                                  const Args &...args) {
   static_assert(sizeof...(args) > 0);
-  buffer.resize(buffer.size() + offset);
-  serialize_to<conf>(buffer, args...);
+  auto info = detail::get_serialize_runtime_info<conf>(args...);
+  auto old_size = buffer.size();
+  buffer.resize(old_size + offset + info.size());
+  auto writer = struct_pack::detail::memory_writer{(char *)buffer.data() +
+                                                   old_size + offset};
+  struct_pack::detail::serialize_to<conf>(writer, info, args...);
 }
 
 template <detail::struct_pack_buffer Buffer = std::vector<char>,
@@ -275,55 +231,104 @@ template <detail::struct_pack_buffer Buffer = std::vector<char>,
 serialize_with_offset(std::size_t offset, const Args &...args) {
   static_assert(sizeof...(args) > 0);
   Buffer buffer;
-  buffer.resize(offset);
-  serialize_to<conf>(buffer, args...);
+  serialize_to_with_offset<conf>(buffer, offset, args...);
   return buffer;
 }
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
     T &t, const View &v, Args &...args) {
-  detail::unpacker in(v.data(), v.size());
+  detail::memory_reader reader{(const char *)v.data(),
+                               (const char *)v.data() + v.size()};
+  detail::unpacker in(reader);
   return in.deserialize(t, args...);
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
+template <typename T, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
-    T &t, const Byte *data, size_t size, Args &...args) {
-  detail::unpacker in(data, size);
+    T &t, const char *data, size_t size, Args &...args) {
+  detail::memory_reader reader{data, data + size};
+  detail::unpacker in(reader);
   return in.deserialize(t, args...);
+}
+
+template <typename T, typename... Args, struct_pack::reader_t Reader>
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
+    T &t, Reader &reader, Args &...args) {
+  detail::unpacker in(reader);
+  std::size_t consume_len;
+  auto old_pos = reader.tellg();
+  auto ret = in.deserialize_with_len(consume_len, t, args...);
+  std::size_t delta = reader.tellg() - old_pos;
+  if (ret == errc{}) [[likely]] {
+    if (consume_len > 0) [[likely]] {
+      if (delta > consume_len) [[unlikely]] {
+        ret = struct_pack::errc::invalid_buffer;
+        if constexpr (struct_pack::seek_reader_t<Reader>)
+          if (!reader.seekg(old_pos)) [[unlikely]] {
+            return struct_pack::errc::seek_failed;
+          }
+      }
+      else {
+        reader.ignore(consume_len - delta);
+      }
+    }
+  }
+  else {
+    if constexpr (struct_pack::seek_reader_t<Reader>)
+      if (!reader.seekg(old_pos)) [[unlikely]] {
+        return struct_pack::errc::seek_failed;
+      }
+  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
     T &t, const View &v, size_t &consume_len, Args &...args) {
-  detail::unpacker in(v.data(), v.size());
-  return in.deserialize(consume_len, t, args...);
+  detail::memory_reader reader{(const char *)v.data(),
+                               (const char *)v.data() + v.size()};
+  detail::unpacker in(reader);
+  auto ret = in.deserialize_with_len(consume_len, t, args...);
+  if (ret == errc{}) [[likely]] {
+    consume_len = std::max((size_t)(reader.now - v.data()), consume_len);
+  }
+  else {
+    consume_len = 0;
+  }
+  return ret;
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
+template <typename T, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
-    T &t, const Byte *data, size_t size, size_t &consume_len, Args &...args) {
-  detail::unpacker in(data, size);
-  return in.deserialize(consume_len, t, args...);
+    T &t, const char *data, size_t size, size_t &consume_len, Args &...args) {
+  detail::memory_reader reader{data, data + size};
+  detail::unpacker in(reader);
+  auto ret = in.deserialize_with_len(consume_len, t, args...);
+  if (ret == errc{}) [[likely]] {
+    consume_len = std::max((size_t)(reader.now - data), consume_len);
+  }
+  else {
+    consume_len = 0;
+  }
+  return ret;
 }
 
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to_with_offset(
     T &t, const View &v, size_t &offset, Args &...args) {
-  detail::unpacker in(v.data() + offset, v.size() - offset);
   size_t sz;
-  auto ret = in.deserialize(sz, t, args...);
+  auto ret =
+      deserialize_to(t, v.data() + offset, v.size() - offset, sz, args...);
   offset += sz;
   return ret;
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
+template <typename T, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to_with_offset(
-    T &t, const Byte *data, size_t size, size_t &offset, Args &...args) {
-  detail::unpacker in(data + offset, size - offset);
+    T &t, const char *data, size_t size, size_t &offset, Args &...args) {
   size_t sz;
-  auto ret = in.deserialize(sz, t, args...);
+  auto ret = deserialize_to(t, data + offset, size - offset, sz, args...);
   offset += sz;
   return ret;
 }
@@ -331,18 +336,29 @@ template <typename T, typename... Args, detail::struct_pack_byte Byte>
 template <typename T, typename... Args, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{}) {
+  if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{})
+      [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data,
+template <typename T, typename... Args>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const char *data,
                                                   size_t size) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to(ret.value(), data, size);
       errc != struct_pack::errc{}) {
+    ret = unexpected<struct_pack::errc>{errc};
+  }
+  return ret;
+}
+
+template <typename T, typename... Args, struct_pack::reader_t Reader>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(Reader &v) {
+  expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
+  if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{})
+      [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -353,18 +369,18 @@ template <typename T, typename... Args, detail::deserialize_view View>
                                                   size_t &consume_len) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to(ret.value(), v, consume_len);
-      errc != struct_pack::errc{}) {
+      errc != struct_pack::errc{}) [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const Byte *data, size_t size,
+template <typename T, typename... Args>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const char *data, size_t size,
                                                   size_t &consume_len) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
-      errc != struct_pack::errc{}) {
+      errc != struct_pack::errc{}) [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -375,19 +391,19 @@ template <typename T, typename... Args, detail::deserialize_view View>
                                                               size_t &offset) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
-      errc != struct_pack::errc{}) {
+      errc != struct_pack::errc{}) [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
 }
 
-template <typename T, typename... Args, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const Byte *data,
+template <typename T, typename... Args>
+[[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const char *data,
                                                               size_t size,
                                                               size_t &offset) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
-      errc != struct_pack::errc{}) {
+      errc != struct_pack::errc{}) [[unlikely]] {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -401,19 +417,34 @@ template <typename T, size_t I, typename Field, detail::deserialize_view View>
   static_assert(std::is_same_v<Field, T_Field>,
                 "The dst's type is not correct. It should be as same as the "
                 "T's Ith field's type");
-  detail::unpacker in(v.data(), v.size());
+  detail::memory_reader reader((const char *)v.data(),
+                               (const char *)v.data() + v.size());
+  detail::unpacker in(reader);
   return in.template get_field<T, I>(dst);
 }
 
-template <typename T, size_t I, typename Field, detail::struct_pack_byte Byte>
+template <typename T, size_t I, typename Field>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc get_field_to(
-    Field &dst, const Byte *data, size_t size) {
+    Field &dst, const char *data, size_t size) {
   using T_Field =
       std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
   static_assert(std::is_same_v<Field, T_Field>,
                 "The dst's type is not correct. It should be as same as the "
                 "T's Ith field's type");
-  detail::unpacker in(data, size);
+  detail::memory_reader reader{data, data + size};
+  detail::unpacker in(reader);
+  return in.template get_field<T, I>(dst);
+}
+
+template <typename T, size_t I, typename Field, struct_pack::reader_t Reader>
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc get_field_to(
+    Field &dst, Reader &reader) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  static_assert(std::is_same_v<Field, T_Field>,
+                "The dst's type is not correct. It should be as same as the "
+                "T's Ith field's type");
+  detail::unpacker in(reader);
   return in.template get_field<T, I>(dst);
 }
 
@@ -421,24 +452,33 @@ template <typename T, size_t I, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const View &v) {
   using T_Field =
       std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
-  detail::unpacker in(v.data(), v.size());
   expected<T_Field, struct_pack::errc> ret;
-
-  if (auto ec = get_field_to<T, I>(ret.value(), v); ec != struct_pack::errc{}) {
+  if (auto ec = get_field_to<T, I>(ret.value(), v); ec != struct_pack::errc{})
+      [[unlikely]] {
     ret = unexpected<struct_pack::errc>{ec};
   }
   return ret;
 }
 
-template <typename T, size_t I, detail::struct_pack_byte Byte>
-[[nodiscard]] STRUCT_PACK_INLINE auto get_field(const Byte *data, size_t size) {
+template <typename T, size_t I>
+[[nodiscard]] STRUCT_PACK_INLINE auto get_field(const char *data, size_t size) {
   using T_Field =
       std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
-  detail::unpacker in(data, size);
   expected<T_Field, struct_pack::errc> ret;
-
   if (auto ec = get_field_to<T, I>(ret.value(), data, size);
-      ec != struct_pack::errc{}) {
+      ec != struct_pack::errc{}) [[unlikely]] {
+    ret = unexpected<struct_pack::errc>{ec};
+  }
+  return ret;
+}
+
+template <typename T, size_t I, struct_pack::reader_t Reader>
+[[nodiscard]] STRUCT_PACK_INLINE auto get_field(Reader &reader) {
+  using T_Field =
+      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  expected<T_Field, struct_pack::errc> ret;
+  if (auto ec = get_field_to<T, I>(ret.value(), reader);
+      ec != struct_pack::errc{}) [[unlikely]] {
     ret = unexpected<struct_pack::errc>{ec};
   }
   return ret;

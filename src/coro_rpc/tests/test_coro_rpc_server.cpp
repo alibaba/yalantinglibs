@@ -26,6 +26,7 @@
 #include "coro_rpc/coro_rpc/remote.hpp"
 #include "doctest.h"
 #include "rpc_api.hpp"
+#include "struct_pack/struct_pack.hpp"
 
 async_simple::coro::Lazy<int> get_coro_value(int val) { co_return val; }
 
@@ -288,8 +289,8 @@ TEST_CASE("test server write queue") {
   header.seq_num = g_client_id++;
   easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
-  auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
-  CHECK(sz == RPC_HEAD_LEN);
+  constexpr auto size = struct_pack::get_needed_size(header);
+  struct_pack::serialize_to((char *)buffer.data(), size, header);
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);
@@ -314,8 +315,8 @@ TEST_CASE("test server write queue") {
     read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
 
     rpc_header header{};
-    [[maybe_unused]] auto errc =
-        struct_pack::deserialize_to(header, resp_len_buf, RESPONSE_HEADER_LEN);
+    [[maybe_unused]] auto errc = struct_pack::deserialize_to(
+        header, (const char *)resp_len_buf, RESPONSE_HEADER_LEN);
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

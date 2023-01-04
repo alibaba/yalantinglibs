@@ -298,7 +298,7 @@ TEST_CASE("testing enum") {
     auto ec = deserialize<enum_i32>(ret.data(), ret.size());
     CHECK(!ec);
     if (!ec) {
-      CHECK(ec.error() == struct_pack::errc::invalid_argument);
+      CHECK(ec.error() == struct_pack::errc::invalid_buffer);
     }
   }
   {
@@ -468,7 +468,7 @@ TEST_CASE("test unique_ptr") {
         std::tuple<std::unique_ptr<int>>{std::make_unique<int>(24)});
     auto ret = deserialize<std::unique_ptr<float>>(buffer);
     REQUIRE(!ret);
-    CHECK(ret.error() == struct_pack::errc::invalid_argument);
+    CHECK(ret.error() == struct_pack::errc::invalid_buffer);
   }
   SUBCASE("test list") {
     my_list list_head, *now = &list_head;
