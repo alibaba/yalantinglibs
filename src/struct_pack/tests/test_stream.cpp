@@ -34,8 +34,8 @@ TEST_CASE("test serialize_to/deserialize file") {
       struct_pack::serialize_to(ofs, p1);
       struct_pack::serialize_to(ofs, nested);
     }
-    auto total_size = (struct_pack::get_serialize_info(p1).size() +
-                       struct_pack::get_serialize_info(nested).size()) *
+    auto total_size = (struct_pack::get_needed_size(p1) +
+                       struct_pack::get_needed_size(nested)) *
                       100;
     CHECK(ofs.tellp() == total_size);
   }
@@ -104,8 +104,8 @@ TEST_CASE("test get_field file") {
       CHECK(ofs.seekp(npos));
     }
   }
-  auto total_size = (struct_pack::get_serialize_info(p[0]).size() +
-                     struct_pack::get_serialize_info(p[1]).size() + 8) *
+  auto total_size = (struct_pack::get_needed_size(p[0]) +
+                     struct_pack::get_needed_size(p[1]) + 8) *
                     100;
   CHECK(ofs.tellp() == total_size);
 
@@ -152,10 +152,10 @@ TEST_CASE("test compatible obj") {
         struct_pack::serialize_to(ofs, p2);
         struct_pack::serialize_to(ofs, p3);
       }
-      auto total_size = (struct_pack::get_serialize_info(p1).size() +
-                         struct_pack::get_serialize_info(p2).size() +
-                         struct_pack::get_serialize_info(p3).size()) *
-                        100;
+      auto total_size =
+          (struct_pack::get_needed_size(p1) + struct_pack::get_needed_size(p2) +
+           struct_pack::get_needed_size(p3)) *
+          100;
       CHECK(ofs.tellp() == total_size);
     }
     {
@@ -178,10 +178,10 @@ TEST_CASE("test compatible obj") {
         struct_pack::serialize_to(ofs, p1);
         struct_pack::serialize_to(ofs, p2);
       }
-      auto total_size = (struct_pack::get_serialize_info(p).size() +
-                         struct_pack::get_serialize_info(p1).size() +
-                         struct_pack::get_serialize_info(p2).size()) *
-                        100;
+      auto total_size =
+          (struct_pack::get_needed_size(p) + struct_pack::get_needed_size(p1) +
+           struct_pack::get_needed_size(p2)) *
+          100;
       CHECK(ofs.tellp() == total_size);
     }
     {

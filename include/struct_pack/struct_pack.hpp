@@ -168,8 +168,8 @@ STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
 }
 
 template <serialize_config conf = serialize_config{}, typename... Args>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
-get_serialize_info(const Args &...args) {
+[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_buffer_size
+get_needed_size(const Args &...args) {
   return detail::get_serialize_runtime_info<conf>(args...);
 }
 
@@ -182,7 +182,7 @@ STRUCT_PACK_INLINE void serialize_to(Writer &writer, const Args &...args) {
 }
 
 template <serialize_config conf = serialize_config{}, typename... Args>
-void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_runtime_info info,
+void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_buffer_size info,
                                      const Args &...args) noexcept {
   static_assert(sizeof...(args) > 0);
   auto writer = struct_pack::detail::memory_writer{(char *)buffer};

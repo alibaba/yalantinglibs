@@ -77,9 +77,9 @@ void basic_usage() {
   }
   // api 4. serialize to continuous buffer
   {
-    auto info = struct_pack::get_serialize_info(p);
-    auto array = std::make_unique<char[]>(info.size());
-    struct_pack::serialize_to(array.get(), info, p);
+    auto size = struct_pack::get_needed_size(p);
+    auto array = std::make_unique<char[]>(size);
+    struct_pack::serialize_to(array.get(), size, p);
   }
   // api 5. serialize with offset
   {

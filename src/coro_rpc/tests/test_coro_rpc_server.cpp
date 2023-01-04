@@ -289,8 +289,8 @@ TEST_CASE("test server write queue") {
   header.seq_num = g_client_id++;
   easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
-  constexpr auto info = struct_pack::get_serialize_info(header);
-  struct_pack::serialize_to((char *)buffer.data(), info, header);
+  constexpr auto size = struct_pack::get_needed_size(header);
+  struct_pack::serialize_to((char *)buffer.data(), size, header);
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);

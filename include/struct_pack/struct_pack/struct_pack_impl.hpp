@@ -134,25 +134,27 @@ constexpr inline type_info_config enable_type_info =
 template <typename... Args>
 STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal();
 
-struct serialize_runtime_info;
+struct serialize_buffer_size;
 
 namespace detail {
 template <serialize_config conf, typename... Args>
-STRUCT_PACK_INLINE constexpr serialize_runtime_info get_serialize_runtime_info(
+STRUCT_PACK_INLINE constexpr serialize_buffer_size get_serialize_runtime_info(
     const Args &...args);
 }
 
-struct serialize_runtime_info {
+struct serialize_buffer_size {
  private:
-  std::size_t len_ = 4;
-  unsigned char metainfo_ = 0;
+  std::size_t len_;
+  unsigned char metainfo_;
 
  public:
+  constexpr serialize_buffer_size() : len_(sizeof(uint32_t)), metainfo_(0) {}
   constexpr std::size_t size() const { return len_; }
   constexpr unsigned char metainfo() const { return metainfo_; }
+  constexpr operator std::size_t() const { return len_; }
 
   template <serialize_config conf, typename... Args>
-  friend STRUCT_PACK_INLINE constexpr serialize_runtime_info
+  friend STRUCT_PACK_INLINE constexpr serialize_buffer_size
   struct_pack::detail::get_serialize_runtime_info(const Args &...args);
 };
 
@@ -1059,12 +1061,12 @@ constexpr bool check_if_add_type_literal() {
 }
 
 template <serialize_config conf, typename... Args>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_runtime_info
+[[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_buffer_size
 get_serialize_runtime_info(const Args &...args) {
   using Type = get_args_type<Args...>;
   constexpr bool has_compatible = serialize_static_config<Type>::has_compatible;
   constexpr bool has_type_literal = check_if_add_type_literal<conf, Type>();
-  serialize_runtime_info ret;
+  serialize_buffer_size ret;
   auto sz_info = calculate_payload_size(args...);
 
   if (sz_info.max_size < (1ull << 8)) [[likely]] {
@@ -1118,7 +1120,7 @@ get_serialize_runtime_info(const Args &...args) {
 template <writer_t writer, typename serialize_type>
 class packer {
  public:
-  packer(writer &writer_, const serialize_runtime_info &info)
+  packer(writer &writer_, const serialize_buffer_size &info)
       : writer_(writer_), info(info) {}
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
@@ -1318,15 +1320,15 @@ class packer {
   }
 
   template <typename T>
-  friend constexpr size_t get_needed_size(const T &t);
+  friend constexpr serialize_buffer_size get_needed_size(const T &t);
   writer &writer_;
-  const serialize_runtime_info &info;
+  const serialize_buffer_size &info;
 };
 
 template <serialize_config conf = serialize_config{},
           struct_pack::writer_t Writer, typename... Args>
 STRUCT_PACK_INLINE void serialize_to(Writer &writer,
-                                     const serialize_runtime_info &info,
+                                     const serialize_buffer_size &info,
                                      const Args &...args) {
   static_assert(sizeof...(args) > 0);
   detail::packer<Writer, detail::get_args_type<Args...>> o(writer, info);
