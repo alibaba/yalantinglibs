@@ -255,6 +255,7 @@ TEST_CASE("test server accept error") {
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
                       .append(make_error_code(ec).message()));
+  easylog::info("client_id {} call hi", client.get_client_id());
   auto ret = syncAwait(client.call<hi>());
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
   REQUIRE(client.has_closed() == true);

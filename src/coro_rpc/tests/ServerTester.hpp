@@ -27,6 +27,7 @@
 #include "inject_action.hpp"
 #include "logging/easylog.hpp"
 #include "rpc_api.hpp"
+#include "util/function_name.h"
 
 #ifdef _MSC_VER
 #define CORO_RPC_FUNCTION_SIGNATURE __FUNCSIG__
@@ -407,7 +408,7 @@ struct ServerTester : TesterConfig {
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
     CHECK_MESSAGE(ec == std::errc::timed_out,
-                  std::to_string(client->get_client_id())
+                  std::to_string(client2->get_client_id())
                       .append(make_error_code(ec).message()));
   }
 
@@ -415,7 +416,8 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func(Args... args) {
     g_action = {};
     auto client = create_client();
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    easylog::info("run {}, client_id {}", get_func_name<func>(),
+                  client->get_client_id());
     auto ret = call<func>(client, std::forward<Args>(args)...);
     CHECK(ret.has_value());
   }
@@ -450,7 +452,7 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
     g_action = {};
     auto client = this->create_client();
-    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
+    easylog::info("run {}, client_id {}", get_func_name<func>(),
                   client->get_client_id());
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
