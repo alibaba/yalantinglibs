@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <future>
 #include <memory>
 #include <system_error>
 #include <thread>
@@ -177,16 +178,32 @@ class coro_rpc_client {
       co_return std::errc::timed_out;
     }
 
+    quit_promise_ = std::make_shared<std::promise<void>>();
+
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
+        quit_promise_->set_value();
         easylog::warn("client_id {} handshake failed:{}", client_id_,
                       shake_ec.message());
         co_return std::errc::not_connected;
       }
+    }
+#endif
+
+#ifdef ENABLE_SSL
+    if (use_ssl_) {
+      do_read(*ssl_stream_).start([](auto &&) {
+      });
+    }
+    else {
+#endif
+      do_read(socket_).start([](auto &&) {
+      });
+#ifdef ENABLE_SSL
     }
 #endif
 
@@ -228,7 +245,25 @@ class coro_rpc_client {
   }
 #endif
 
-  ~coro_rpc_client() { sync_close(); }
+  ~coro_rpc_client() {
+    // easylog::info("begin to ~coro_rpc_client client_id {}", client_id_);
+
+    if (quit_promise_) {
+      io_context_ptr_->post([this] {
+        sync_close();
+      });
+
+      io_context_ptr_->poll();
+      quit_promise_->get_future().wait();
+      // easylog::info("close socket in ~coro_rpc_client");
+    }
+
+#ifdef ENABLE_SSL
+    close_ssl_stream();
+#endif
+    stop_inner_io_context();
+    // easylog::info("finish ~coro_rpc_client");
+  }
 
   /*!
    * Call RPC function with default timeout (5 second)
@@ -282,33 +317,25 @@ class coro_rpc_client {
 
     static_check<func, Args...>();
 
-    async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(get_io_context());
-    timeout(timer, duration, promise, "rpc call timer canceled")
-        .via(&executor_)
-        .detach();
-
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
-      ret = co_await call_impl<func>(*ssl_stream_, std::forward<Args>(args)...);
+      ret = co_await call_impl<func>(*ssl_stream_, duration,
+                                     std::forward<Args>(args)...);
     }
     else {
 #endif
-      ret = co_await call_impl<func>(socket_, std::forward<Args>(args)...);
+      ret = co_await call_impl<func>(socket_, duration,
+                                     std::forward<Args>(args)...);
 #ifdef ENABLE_SSL
     }
 #endif
-
-    std::error_code err_code;
-    timer.cancel(err_code);
 
     if (is_timeout_) {
       ret = rpc_result<R>{
           unexpect_t{}, rpc_error{std::errc::timed_out, "rpc call timed out"}};
     }
 
-    co_await promise.getFuture();
 #ifndef NDEBUG
     easylog::info("client_id {} call {} {}", client_id_, get_func_name<func>(),
                   ret ? "ok" : "failed");
@@ -351,7 +378,7 @@ class coro_rpc_client {
     }
 
     is_timeout_ = is_timeout;
-    sync_close(false);
+    sync_close();
     promise.setValue(async_simple::Unit());
     co_return true;
   }
@@ -401,11 +428,38 @@ class coro_rpc_client {
 
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
-  call_impl(Socket &socket, Args &&...args) {
+  call_impl(Socket &socket, auto duration, Args &&...args) {
     using R = decltype(get_return_type<func>());
-
-    auto buffer = prepare_buffer<func>(std::forward<Args>(args)...);
+    uint32_t req_id = req_id_.fetch_add(1);
     rpc_result<R> r{};
+
+    asio_util::period_timer timer(get_io_context());
+    async_simple::Promise<async_simple::Unit> promise;
+    auto it = req_map_.emplace(
+        req_id, [this, &r, &promise, &timer,
+                 req_id](const std::pair<std::error_code, size_t> &ret) {
+          easylog::info("req_map_ callback client_id {} req_id {}", client_id_,
+                        req_id);
+          if (ret.first) {
+            if (is_timeout_) {
+              r = rpc_result<R>{
+                  unexpect_t{},
+                  rpc_error{.code = std::errc::timed_out, .msg = {}}};
+              return;
+            }
+            r = rpc_result<R>{unexpect_t{},
+                              rpc_error{.code = std::errc::io_error,
+                                        .msg = ret.first.message()}};
+          }
+          else {
+            r = handle_response_buffer<R>(read_buf_.data(), ret.second);
+          }
+
+          std::error_code err_code;
+          timer.cancel(err_code);
+        });
+
+    auto buffer = prepare_buffer<func>(req_id, std::forward<Args>(args)...);
 #ifdef GENERATE_BENCHMARK_DATA
     std::ofstream file(
         benchmark_file_path + std::string{get_func_name<func>()} + ".in",
@@ -413,12 +467,81 @@ class coro_rpc_client {
     file << std::string_view{(char *)buffer.data(), buffer.size()};
     file.close();
 #endif
-    std::pair<std::error_code, size_t> ret = co_await asio_util::async_write(
-        socket, asio::buffer(buffer.data(), buffer.size()));
 
-    if (!ret.first) {
-      char head[RESPONSE_HEADER_LEN];
-      ret = co_await asio_util::async_read(
+    timeout(timer, duration, promise, "rpc call timer canceled")
+        .via(&executor_)
+        .detach();
+
+    write_queue_.push_back(std::move(buffer));
+    if (write_queue_.size() == 1) {
+      send_data(socket).start([this, &timer](auto &&ret) {
+        if (!ret.value()) {
+          easylog::info("client_id {} send data failed", client_id_);
+          std::error_code err_code;
+          timer.cancel(err_code);
+        }
+      });
+    }
+
+    if (has_closed_) {
+      std::error_code err_code;
+      timer.cancel(err_code);
+
+      r = rpc_result<R>{unexpect_t{},
+                        rpc_error{.code = std::errc::io_error,
+                                  .msg = "socket has been closed"}};
+
+      co_await promise.getFuture();
+      co_return r;
+    }
+
+    co_await promise.getFuture();
+    easylog::info("erase req_id {}", req_id);
+    req_map_.erase(req_id);
+
+    if (!r) {
+      co_await close();
+    }
+
+    co_return r;
+  }
+
+  template <typename Socket>
+  async_simple::coro::Lazy<bool> send_data(Socket &socket) {
+    std::pair<std::error_code, size_t> ret;
+    while (!write_queue_.empty()) {
+      auto &msg = write_queue_.front();
+      ret = co_await asio_util::async_write(socket, asio::buffer(msg));
+      if (ret.first) [[unlikely]] {
+        easylog::info("close client_id_ {}, reason {}", client_id_,
+                      ret.first.message());
+        co_await close();
+        co_return false;
+      }
+
+      write_queue_.pop_front();
+    }
+    co_return true;
+  }
+
+  void notify_all(const auto &ret) {
+    for (auto &pair : req_map_) {
+      pair.second(ret);
+    }
+
+    req_map_.clear();
+  }
+
+  void notify_one(uint32_t req_id, const auto &ret) {
+    if (auto it = req_map_.find(req_id); it != req_map_.end()) {
+      it->second(ret);
+    }
+  }
+
+  async_simple::coro::Lazy<void> do_read(auto &socket) {
+    char head[RESPONSE_HEADER_LEN];
+    while (true) {
+      auto ret = co_await asio_util::async_read(
           socket, asio::buffer(head, RESPONSE_HEADER_LEN));
       if (!ret.first) {
         rpc_header header{};
@@ -427,10 +550,8 @@ class coro_rpc_client {
         if (errc != struct_pack::errc::ok) [[unlikely]] {
           easylog::error("deserialize rpc header failed");
           co_await close();
-          r = rpc_result<R>{
-              unexpect_t{},
-              rpc_error{std::errc::io_error, struct_pack::error_message(errc)}};
-          co_return r;
+          notify_all(std::make_pair(struct_pack::make_error_code(errc), 0));
+          break;
         }
 
         uint32_t body_len = header.length;
@@ -439,35 +560,35 @@ class coro_rpc_client {
         }
         ret = co_await asio_util::async_read(
             socket, asio::buffer(read_buf_.data(), body_len));
-        if (!ret.first) {
-#ifdef GENERATE_BENCHMARK_DATA
-          std::ofstream file(
-              benchmark_file_path + std::string{get_func_name<func>()} + ".out",
-              std::ofstream::binary | std::ofstream::out);
-          file << std::string_view{std::begin(head), RESPONSE_HEADER_LEN};
-          file << std::string_view{(char *)read_buf_.data(), body_len};
-          file.close();
-#endif
-          r = handle_response_buffer<R>(read_buf_.data(), ret.second);
-          if (!r) {
-            co_await close();
-          }
-          co_return r;
+        if (ret.first) {
+          co_await close();
+          notify_one(header.seq_num, ret);
+          break;
         }
+
+#ifdef GENERATE_BENCHMARK_DATA
+        std::ofstream file(
+            benchmark_file_path + std::string{get_func_name<func>()} + ".out",
+            std::ofstream::binary | std::ofstream::out);
+        file << std::string_view{std::begin(head), RESPONSE_HEADER_LEN};
+        file << std::string_view{(char *)read_buf_.data(), body_len};
+        file.close();
+#endif
+        notify_one(header.seq_num, ret);
+      }
+      else {
+        co_await close();
+
+        notify_all(ret);
+
+        break;
       }
     }
 
-    if (is_timeout_) {
-      r = rpc_result<R>{unexpect_t{},
-                        rpc_error{.code = std::errc::timed_out, .msg = {}}};
-    }
-    else {
-      r = rpc_result<R>{unexpect_t{}, rpc_error{.code = std::errc::io_error,
-                                                .msg = ret.first.message()}};
-    }
-    co_await close();
-    co_return r;
+    easylog::info("client_id {} do_read finished", client_id_);
+    quit_promise_->set_value();
   }
+
   /*
    * buffer layout
    * ┌────────────────┬────────────────┬────────────────┐
@@ -477,7 +598,7 @@ class coro_rpc_client {
    * └────────────────┴────────────────┴────────────────┘
    */
   template <auto func, typename... Args>
-  std::vector<std::byte> prepare_buffer(Args &&...args) {
+  std::vector<std::byte> prepare_buffer(uint32_t req_id, Args &&...args) {
     std::vector<std::byte> buffer;
     constexpr auto id = func_id<func>();
     std::size_t offset = RPC_HEAD_LEN + FUNCTION_ID_LEN;
@@ -491,6 +612,7 @@ class coro_rpc_client {
     std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
 
     rpc_header header{magic_number};
+    header.seq_num = req_id;
 
     header.length = buffer.size() - RPC_HEAD_LEN;
 
@@ -553,12 +675,7 @@ class coro_rpc_client {
         offset, std::forward<Args>(args)...);
   }
 
-  async_simple::coro::Lazy<void> close(bool close_ssl = true) {
-#ifdef ENABLE_SSL
-    if (close_ssl) {
-      close_ssl_stream();
-    }
-#endif
+  async_simple::coro::Lazy<void> close() {
     if (has_closed_) {
       co_return;
     }
@@ -579,28 +696,14 @@ class coro_rpc_client {
   }
 #endif
 
-  void sync_close(bool close_ssl = true) {
-#ifdef ENABLE_SSL
-    if (close_ssl) {
-      close_ssl_stream();
-      stop_inner_io_context();
-    }
-#endif
-    if (close_ssl && has_closed_) {
-      stop_inner_io_context();
-      return;
-    }
+  void sync_close() {
+    if (!has_closed_) {
+      easylog::info("client_id {} close {}", client_id_, has_closed_);
+      asio::error_code ignored_ec;
+      socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+      socket_.close(ignored_ec);
 
-    easylog::info("client_id {} close", client_id_);
-
-    asio::error_code ignored_ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-    socket_.close(ignored_ec);
-
-    has_closed_ = true;
-
-    if (close_ssl) {
-      stop_inner_io_context();
+      has_closed_ = true;
     }
   }
 
@@ -649,5 +752,13 @@ class coro_rpc_client {
 
   uint32_t client_id_ = 0;
   std::atomic<bool> has_closed_ = false;
+
+  std::deque<std::vector<std::byte>> write_queue_;
+  std::unordered_map<
+      uint32_t, std::function<void(const std::pair<std::error_code, size_t> &)>>
+      req_map_;
+  std::atomic<uint32_t> req_id_ = 0;
+
+  std::shared_ptr<std::promise<void>> quit_promise_ = nullptr;
 };
 }  // namespace coro_rpc
