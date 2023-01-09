@@ -6,8 +6,9 @@ namespace struct_pack {
 enum class errc {
   ok = 0,
   no_buffer_space,
-  invalid_argument,
+  invalid_buffer,
   hash_conflict,
+  seek_failed,
 };
 
 namespace detail {
@@ -24,7 +25,7 @@ class struct_pack_category : public std::error_category {
         return "ok";
       case errc::no_buffer_space:
         return "no buffer space";
-      case errc::invalid_argument:
+      case errc::invalid_buffer:
         return "invalid argument";
       case errc::hash_conflict:
         return "hash conflict";

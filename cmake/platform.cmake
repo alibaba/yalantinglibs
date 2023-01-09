@@ -4,7 +4,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     #-ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 endif()
-
 # --------------------- Clang
 
 # --------------------- Msvc

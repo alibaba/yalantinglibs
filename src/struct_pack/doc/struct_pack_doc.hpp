@@ -288,7 +288,7 @@ STRUCT_PACK_INLINE std::string error_message(struct_pack::errc err);
  * @return 序列化所需的buffer的长度。
  */
 template <typename... Args>
-[[nodiscard]] STRUCT_PACK_INLINE constexpr size_t get_needed_size(
+[[nodiscard]] STRUCT_PACK_INLINE constexpr auto get_needed_size(
     const Args &...args);
 
 /*!

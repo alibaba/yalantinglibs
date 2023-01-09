@@ -7,13 +7,20 @@
     - [将序列化结果保存到已有的容器尾部](#将序列化结果保存到已有的容器尾部)
     - [将序列化结果保存到指针指向的内存中。](#将序列化结果保存到指针指向的内存中)
     - [多参数序列化](#多参数序列化)
+    - [将序列化结果保存到输出流](#将序列化结果保存到输出流)
   - [反序列化](#反序列化)
     - [基本用法](#基本用法-1)
     - [从指针指向的内存中反序列化](#从指针指向的内存中反序列化)
     - [反序列化（将结果保存到已有的对象中）](#反序列化将结果保存到已有的对象中)
     - [多参数反序列化](#多参数反序列化)
+    - [从输入流中反序列化](#从输入流中反序列化)
     - [部分反序列化](#部分反序列化)
   - [支持序列化所有的STL容器、自定义容器和optional](#支持序列化所有的stl容器自定义容器和optional)
+  - [自定义功能支持](#自定义功能支持)
+    - [自定义类型的序列化](#自定义类型的序列化)
+    - [序列化到自定义的输出流](#序列化到自定义的输出流)
+    - [从自定义的输入流中反序列化](#从自定义的输入流中反序列化)
+  - [支持可变长编码：](#支持可变长编码)
   - [benchmark](#benchmark)
     - [测试方法](#测试方法)
     - [测试对象](#测试对象)
@@ -22,8 +29,8 @@
   - [向前/向后兼容性](#向前向后兼容性)
   - [为什么struct\_pack更快？](#为什么struct_pack更快)
   - [附录](#附录)
-  - [关于struct\_pack类型系统](#关于struct_pack类型系统)
-  - [关于struct\_pack的编码与布局](#关于struct_pack的编码与布局)
+    - [关于struct\_pack类型系统](#关于struct_pack类型系统)
+    - [关于struct\_pack的编码与布局](#关于struct_pack的编码与布局)
     - [测试代码](#测试代码)
 
 struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。用户无需定义任何DSL，宏或模板代码，struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。
@@ -80,6 +87,14 @@ auto result=struct_pack::serialize(person1.id, person1.name, person1.age, person
 //serialize as std::tuple<int64_t, std::string, int, double>
 ```
 
+### 将序列化结果保存到输出流
+
+```cpp
+std::ofstream writer("struct_pack_demo.data",
+                      std::ofstream::out | std::ofstream::binary);
+struct_pack::serialize_to(writer, person1);
+```
+
 ## 反序列化
 
 ### 基本用法
@@ -120,6 +135,15 @@ assert(person1.id==id);
 assert(person1.name==name);
 assert(person1.age==age);
 assert(person1.salary==salary);
+```
+
+### 从输入流中反序列化
+
+```cpp
+std::ifstream ifs("struct_pack_demo.data",
+                  std::ofstream::in | std::ofstream::binary);
+auto person2 = struct_pack::deserialize<person>(ifs);
+assert(person2 == person1);
 ```
 
 
@@ -175,7 +199,11 @@ assert(nested2)
 assert(nested2==nested1);
 ```
 
-自定义容器的序列化
+## 自定义功能支持
+
+### 自定义类型的序列化
+
+struct_pack支持序列化自定义类型。
 
 ```cpp
 // We should not inherit from stl container, this case just for testing.
@@ -193,7 +221,87 @@ auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
 
-支持可变长编码：
+关于自定义类型的更多细节，请见：
+
+[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
+
+### 序列化到自定义的输出流
+
+该流需要满足以下约束条件：
+
+```cpp
+template <typename T>
+concept writer_t = requires(T t) {
+  t.write((const char *)nullptr, std::size_t{}); //向流输出一段数据。返回值应能隐式转换为bool值，出错时应返回false。
+};
+```
+
+例如：
+
+```cpp
+
+//一个简单的输出流，对fwrite函数进行封装。
+struct fwrite_stream {
+  FILE* file;
+  bool write(const char* data, std::size_t sz) {
+    return fwrite(data, sz, 1, file) == 1;
+  }
+  fwrite_stream(const char* file_name) : file(fopen(file_name, "wb")) {}
+  ~fwrite_stream() { fclose(file); }
+};
+// ...
+fwrite_stream writer("struct_pack_demo.data");
+struct_pack::serialize_to(writer, person);
+```
+
+### 从自定义的输入流中反序列化
+
+该流需要满足以下约束条件：
+
+```cpp
+template <typename T>
+concept reader_t = requires(T t) {
+  t.read((char *)nullptr, std::size_t{}); //从流中读取一段数据。返回值应能隐式转换为bool值，出错时应返回false。
+  t.ignore(std::size_t{}); //从流中跳过一段数据。返回值应能隐式转换为bool值，出错时应返回false。
+  t.tellg(); //返回一个无符号整数，代表当前的绝对读取位置
+};
+```
+
+此外，如果该流还额外支持`read_view`函数，则支持对string_view的零拷贝优化。
+```cpp
+template <typename T>
+concept view_reader_t = reader_t<T> && requires(T t) {
+  { t.read_view(std::size_t{}) } -> std::convertible_to<const char *>;
+  //从流中读取一段视图（零拷贝读取），返回值为该视图指向的起始位置，出错时应返回空指针。
+};
+```
+
+示例代码如下所示：
+
+```cpp
+//一个简单的输入流，对fread函数进行封装。
+struct fread_stream {
+  FILE* file;
+  bool read(char* data, std::size_t sz) {
+    return fread(data, sz, 1, file) == 1;
+  }
+  bool ignore(std::size_t sz) { return fseek(file, sz, SEEK_CUR) == 0; }
+  std::size_t tellg() {
+    //if you worry about ftell performance, just use an variable to record it.
+    return ftell(file);
+  }
+  fread_stream(const char* file_name) : file(fopen(file_name, "rb")) {}
+  ~fread_stream() { fclose(file); }
+};
+
+//...
+
+fread_stream ifs("struct_pack_demo.data");
+auto person2 = struct_pack::deserialize<person>(ifs);
+assert(person2 == person);
+```
+
+## 支持可变长编码：
 
 ```cpp
 
@@ -308,11 +416,11 @@ struct_pack保证这两个类可以通过序列化和反序列化实现安全的
 
 ## 附录
 
-## 关于struct_pack类型系统
+### 关于struct_pack类型系统
 
 [struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
 
-## 关于struct_pack的编码与布局
+### 关于struct_pack的编码与布局
 
 [struct_pack的编码与布局](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-layout.html)
 

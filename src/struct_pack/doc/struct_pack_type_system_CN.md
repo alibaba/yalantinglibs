@@ -24,7 +24,7 @@ struct_pack支持的类型主要包括：基本类型，约束类型，复合类
 | uint64_t                  | 无符号定长64位整数          | 原码                  |
 | struct_pack::var_uint32_t | 无符号变长32位整数          | varint变长编码        |
 | struct_pack::var_uint64_t | 无符号变长64位整数          | varint变长编码        |
-| struct_pack::var_int32_t  | 有符号变长64位整数          | varint+zigzag变长编码 |
+| struct_pack::var_int32_t  | 有符号变长32位整数          | varint+zigzag变长编码 |
 | struct_pack::var_int64_t  | 有符号变长64位整数          | varint+zigzag变长编码 |
 | float                     | 定长32位浮点数              | IEEE-754 单精度编码   |
 | double                    | 定长64位整数                | IEEE-754 双精度编码   |
@@ -36,7 +36,7 @@ struct_pack支持的类型主要包括：基本类型，约束类型，复合类
 | enum/enum class           | 枚举类型                    | 原码                  |
 | std::monostate            | 空类型                      | N/A                   |
 
-### 约束类型
+## 约束类型
 
 约束类型指：满足了一定约束条件的特定数据结构。只要满足约束条件，无论该数据结构是标准库自带的类，还是第三方库提供的类，都属于相同的约束类型
 
@@ -56,7 +56,7 @@ struct_pack支持以下约束类型：
 
 下面我们列出各类型的详细约束条件, 用户可以根据约束条件来定义自己的数据结构：
 
-## container类型
+### container类型
 
 该类需要提供：`value_type`类型成员和`size()`,`begin()`,`end()`成员函数，同时不满足`set_container`,`map_container`和`string`的约束条件。`value_type`必须也是合法的struct_pack类型。
 
