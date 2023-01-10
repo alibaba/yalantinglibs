@@ -67,6 +67,9 @@ concept seek_reader_t = reader_t<T> && requires(T t) {
   t.seekg(std::size_t{});
 };
 
+template <typename T, uint64_t version = 0>
+struct compatible;
+
 // clang-format off
 namespace detail {
   template <typename Type>
@@ -223,6 +226,13 @@ namespace detail {
     optional.operator*();
     typename std::remove_cvref_t<Type>::value_type;
   };
+
+
+  template <typename Type>
+  constexpr inline bool is_compatible = false;
+
+  template <typename Type, uint64_t version>
+  constexpr inline bool is_compatible<compatible<Type,version>> = true;
 
   template <typename Type>
   constexpr inline bool is_variant_v = false;

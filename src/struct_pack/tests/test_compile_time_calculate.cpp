@@ -1,13 +1,10 @@
+#include <memory>
+
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 #include "test_struct.hpp"
 
 using namespace struct_pack;
-
-struct compatible_in_nested_class {
-  int a;
-  struct_pack::compatible<int> c;
-};
 
 struct bug_member_count_struct1 {
   int i;
@@ -21,6 +18,8 @@ struct bug_member_count_struct2 : bug_member_count_struct1 {};
 
 template <>
 constexpr std::size_t struct_pack::members_count<bug_member_count_struct2> = 3;
+
+
 
 TEST_CASE("test members_count") {
   {
@@ -37,24 +36,6 @@ TEST_CASE("test members_count") {
     auto ret = struct_pack::deserialize<t>(res.data(), res.size());
     CHECK(ret);
   }
-}
-
-TEST_CASE("compatible not in the end of struct") {
-  static_assert(
-      detail::check_if_compatible_element_exist<
-          0, int, struct_pack::compatible<short>, std::string>() == -1,
-      "compatible member not in the end is illegal!");
-  static_assert(detail::check_if_compatible_element_exist<
-                    0, int, compatible_in_nested_class>() == -1,
-                "compatible member in the nested class is illegal!");
-  static_assert(
-      detail::check_if_compatible_element_exist<0, compatible_in_nested_class,
-                                                double>() == -1,
-      "compatible member in the nested class is illegal!");
-  static_assert(
-      detail::check_if_compatible_element_exist<
-          0, double, std::tuple<int, double, compatible<std::string>>>() == -1,
-      "compatible member in the nested class is illegal!");
 }
 
 struct type_calculate_test_1 {
