@@ -20,7 +20,7 @@ struct base_sample {
 
   void print_buffer_size() {
     for (auto sample_type : g_sample_type_vec) {
-      std::cout << get_bench_name(sample_type)
+      std::cout << get_sample_name(sample_type)
                 << " buffer size = " << buffer_size(sample_type) << "\n";
     }
   }

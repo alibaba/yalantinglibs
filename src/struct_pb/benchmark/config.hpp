@@ -25,7 +25,7 @@ inline const std::vector<SampleType> g_sample_type_vec = {
     SampleType::RECT,    SampleType::RECTS,   SampleType::PERSON,
     SampleType::PERSONS, SampleType::MONSTER, SampleType::MONSTERS};
 
-inline std::string get_bench_name(SampleType sample_type) {
+inline std::string get_sample_name(SampleType sample_type) {
   auto it = g_sample_name_map.find(sample_type);
   if (it == g_sample_name_map.end()) {
     throw std::invalid_argument("unknown sample type");

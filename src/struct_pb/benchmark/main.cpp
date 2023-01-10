@@ -16,7 +16,7 @@ void calculate_ser_rate(const auto& vec, SampleType type) {
 
   for (int i = 1; i < vec.size(); ++i) {
     auto ns = vec[i]->get_ser_time_elapsed_map()[type];
-    std::cout << "struct_pack serialize " << get_bench_name(type) << " is ["
+    std::cout << "struct_pack serialize " << get_sample_name(type) << " is ["
               << double(ns) / base << "] times faster than " << vec[i]->name()
               << ", [" << base << ", " << ns << "]"
               << "\n";
@@ -30,7 +30,7 @@ void calculate_deser_rate(const auto& vec, SampleType type) {
 
   for (int i = 1; i < vec.size(); ++i) {
     auto ns = vec[i]->get_deser_time_elapsed_map()[type];
-    std::cout << "struct_pack deserialize " << get_bench_name(type) << " is ["
+    std::cout << "struct_pack deserialize " << get_sample_name(type) << " is ["
               << double(ns) / base << "] times faster than " << vec[i]->name()
               << ", [" << base << ", " << ns << "]"
               << "\n";

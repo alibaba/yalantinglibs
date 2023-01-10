@@ -45,7 +45,8 @@ constexpr inline auto enable_type_info<std::vector<Monster>> =
 };
 
 struct struct_pack_sample : public base_sample {
-  std::string name() const override { return "struct_pack"; }
+  static inline constexpr LibType lib_type = LibType::STRUCT_PACK;
+  std::string name() const override { return get_lib_name(lib_type); }
 
   void create_samples() override {
     rects_ = create_rects(OBJECT_COUNT);
@@ -79,7 +80,7 @@ struct struct_pack_sample : public base_sample {
 
       uint64_t ns = 0;
       std::string bench_name =
-          name() + " serialize " + get_bench_name(sample_type);
+          name() + " serialize " + get_sample_name(sample_type);
 
       {
         ScopedTimer timer(bench_name.data(), ns);
@@ -104,7 +105,7 @@ struct struct_pack_sample : public base_sample {
 
     uint64_t ns = 0;
     std::string bench_name =
-        name() + " deserialize " + get_bench_name(sample_type);
+        name() + " deserialize " + get_sample_name(sample_type);
 
     {
       ScopedTimer timer(bench_name.data(), ns);

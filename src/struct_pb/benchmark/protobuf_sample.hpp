@@ -172,7 +172,7 @@ struct protobuf_sample_t : public base_sample {
 
       uint64_t ns = 0;
       std::string bench_name =
-          name() + " serialize " + get_bench_name(sample_type);
+          name() + " serialize " + get_sample_name(sample_type);
 
       {
         ScopedTimer timer(bench_name.data(), ns);
@@ -204,7 +204,7 @@ struct protobuf_sample_t : public base_sample {
 
     uint64_t ns = 0;
     std::string bench_name =
-        name() + " deserialize " + get_bench_name(sample_type);
+        name() + " deserialize " + get_sample_name(sample_type);
 
     {
       ScopedTimer timer(bench_name.data(), ns);

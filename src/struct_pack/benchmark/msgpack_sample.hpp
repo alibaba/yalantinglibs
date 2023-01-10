@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ScopedTimer.hpp"
+#include "config.hpp"
 #include "data_def.hpp"
 #include "no_op.h"
 #include "sample.hpp"
@@ -16,7 +17,8 @@ struct tbuffer : public std::vector<char> {
 };
 
 struct message_pack_sample : public base_sample {
-  std::string name() const override { return "message_pack"; }
+  static inline constexpr LibType lib_type = LibType::MSGPACK;
+  std::string name() const override { return get_lib_name(lib_type); }
 
   void create_samples() override {
     rects_ = create_rects(OBJECT_COUNT);
@@ -50,7 +52,7 @@ struct message_pack_sample : public base_sample {
 
       uint64_t ns = 0;
       std::string bench_name =
-          name() + " serialize " + get_bench_name(sample_type);
+          name() + " serialize " + get_sample_name(sample_type);
 
       {
         ScopedTimer timer(bench_name.data(), ns);
@@ -70,7 +72,7 @@ struct message_pack_sample : public base_sample {
 
     uint64_t ns = 0;
     std::string bench_name =
-        name() + " deserialize " + get_bench_name(sample_type);
+        name() + " deserialize " + get_sample_name(sample_type);
     msgpack::unpacked unpacked;
 
     {
