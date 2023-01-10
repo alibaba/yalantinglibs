@@ -13,14 +13,15 @@
 
 struct base_sample {
   virtual std::string name() const = 0;
-  virtual void do_serialization(int run_idx = 0) = 0;
-  virtual void do_deserialization(int run_idx) = 0;
+  virtual void do_serialization() = 0;
+  virtual void do_deserialization() = 0;
   virtual void create_samples() {}
   virtual ~base_sample() {}
 
-  void print_buffer_size() {
+  void print_buffer_size(LibType type) {
+    auto lib_name = get_lib_name(type);
     for (auto sample_type : g_sample_type_vec) {
-      std::cout << get_sample_name(sample_type)
+      std::cout << lib_name << " serialize " << get_sample_name(sample_type)
                 << " buffer size = " << buffer_size(sample_type) << "\n";
     }
   }

@@ -51,20 +51,6 @@ void calculate_ser_rate(const auto& map, LibType base_line_type,
   std::cout << "========================\n";
 }
 
-void calculate_deser_rate(const auto& vec, SampleType type) {
-  auto base = vec[0]->get_deser_time_elapsed_map()[type];
-
-  for (int i = 1; i < vec.size(); ++i) {
-    auto ns = vec[i]->get_deser_time_elapsed_map()[type];
-    std::cout << "struct_pack deserialize " << get_sample_name(type) << " is ["
-              << double(ns) / base << "] times faster than " << vec[i]->name()
-              << ", [" << base << ", " << ns << "]"
-              << "\n";
-  }
-
-  std::cout << "========================\n";
-}
-
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
 
@@ -78,18 +64,21 @@ int main(int argc, char** argv) {
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
 #endif
 
-  for (auto [_, sample] : map) {
+  for (auto [lib_type, sample] : map) {
     std::cout << "======= bench " << sample->name() << "=======\n";
     sample->create_samples();
-    sample->do_serialization(0);
-    sample->do_deserialization(0);
+    sample->do_serialization();
+    sample->do_deserialization();
 
-    sample->print_buffer_size();
+    sample->print_buffer_size(lib_type);
   }
 
   std::cout << "calculate serialization rate\n";
+  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::RECT);
   calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::RECTS);
+  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::PERSON);
   calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::PERSONS);
+  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::MONSTER);
   calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::MONSTERS);
 
   return 0;

@@ -145,7 +145,7 @@ struct protobuf_sample_t : public base_sample {
     monsters_ = protobuf_sample::create_monsters(OBJECT_COUNT);
   }
 
-  void do_serialization(int run_idx) override {
+  void do_serialization() override {
     serialize(SampleType::RECT, *((*rects_.mutable_rect32_list()).begin()));
     serialize(SampleType::RECTS, rects_);
     serialize(SampleType::PERSON, *((*persons_.mutable_person_list()).begin()));
@@ -154,7 +154,7 @@ struct protobuf_sample_t : public base_sample {
     serialize(SampleType::MONSTERS, monsters_);
   }
 
-  void do_deserialization(int run_idx) override {
+  void do_deserialization() override {
     deserialize(SampleType::RECT, *((*rects_.mutable_rect32_list()).begin()));
     deserialize(SampleType::RECTS, rects_);
     deserialize(SampleType::PERSON,
@@ -177,7 +177,10 @@ struct protobuf_sample_t : public base_sample {
 
       {
         ScopedTimer timer(bench_name.data(), ns);
-        sample.SerializeToString(&buffer_);
+        for (int i = 0; i < ITERATIONS; ++i) {
+          buffer_.clear();
+          sample.SerializeToString(&buffer_);
+        }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
     }
@@ -190,18 +193,9 @@ struct protobuf_sample_t : public base_sample {
     // get serialized buffer of sample for deserialize
     buffer_.clear();
     sample.SerializeToString(&buffer_);
-    if constexpr (std::same_as<T, mygame::Monsters>) {
-      sample.clear_monsters();
-      sample.mutable_monsters()->Reserve(OBJECT_COUNT);
-    }
-    else if constexpr (std::same_as<T, mygame::rect32s>) {
-      sample.clear_rect32_list();
-      sample.mutable_rect32_list()->Reserve(OBJECT_COUNT);
-    }
-    else if constexpr (std::same_as<T, mygame::persons>) {
-      sample.clear_person_list();
-      sample.mutable_person_list()->Reserve(OBJECT_COUNT);
-    }
+
+    std::vector<T> vec;
+    vec.resize(ITERATIONS);
 
     uint64_t ns = 0;
     std::string bench_name =
@@ -209,7 +203,9 @@ struct protobuf_sample_t : public base_sample {
 
     {
       ScopedTimer timer(bench_name.data(), ns);
-      sample.ParseFromString(buffer_);
+      for (int i = 0; i < ITERATIONS; ++i) {
+        vec[i].ParseFromString(buffer_);
+      }
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

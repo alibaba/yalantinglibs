@@ -54,7 +54,7 @@ struct struct_pack_sample : public base_sample {
     monsters_ = create_monsters(OBJECT_COUNT);
   }
 
-  void do_serialization(int run_idx) override {
+  void do_serialization() override {
     serialize(SampleType::RECT, rects_[0]);
     serialize(SampleType::RECTS, rects_);
     serialize(SampleType::PERSON, persons_[0]);
@@ -63,7 +63,7 @@ struct struct_pack_sample : public base_sample {
     serialize(SampleType::MONSTERS, monsters_);
   }
 
-  void do_deserialization(int run_idx) override {
+  void do_deserialization() override {
     deserialize(SampleType::RECT, rects_[0]);
     deserialize(SampleType::RECTS, rects_);
     deserialize(SampleType::PERSON, persons_[0]);
@@ -84,7 +84,10 @@ struct struct_pack_sample : public base_sample {
 
       {
         ScopedTimer timer(bench_name.data(), ns);
-        struct_pack::serialize_to(buffer_, sample);
+        for (int i = 0; i < ITERATIONS; ++i) {
+          buffer_.clear();
+          struct_pack::serialize_to(buffer_, sample);
+        }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
     }
@@ -98,10 +101,8 @@ struct struct_pack_sample : public base_sample {
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
-    if constexpr (struct_pack::detail::container<T>) {
-      sample.clear();
-      sample.reserve(OBJECT_COUNT);
-    }
+    std::vector<T> vec;
+    vec.resize(ITERATIONS);
 
     uint64_t ns = 0;
     std::string bench_name =
@@ -109,7 +110,9 @@ struct struct_pack_sample : public base_sample {
 
     {
       ScopedTimer timer(bench_name.data(), ns);
-      [[maybe_unused]] auto ec = struct_pack::deserialize_to(sample, buffer_);
+      for (int i = 0; i < ITERATIONS; ++i) {
+        [[maybe_unused]] auto ec = struct_pack::deserialize_to(vec[i], buffer_);
+      }
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

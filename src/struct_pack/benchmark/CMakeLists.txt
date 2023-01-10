@@ -21,11 +21,11 @@ else()
 endif()
 
 # TODO
-# find_package(Msgpack)
-# if (Msgpack_FOUND)
-#     message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
-#     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
-# endif()
+find_package(Msgpack)
+if (Msgpack_FOUND)
+    message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
+    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
+endif()
 
 target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benchmark/)
 target_include_directories(struct_pack_benchmark PRIVATE
