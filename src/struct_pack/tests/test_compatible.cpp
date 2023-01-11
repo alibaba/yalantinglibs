@@ -429,14 +429,17 @@ struct compatible_nested5 {
 
 TEST_CASE("test nested compatible5") {
   compatible_nested5_old obj_old = {
-      "Hello", unexpected<compatible_nested5_old::nested>{{"Hi", "Hey"}},
+      "Hello",
+      struct_pack::unexpected<compatible_nested5_old::nested>{{"Hi", "Hey"}},
       "HooooooooooHo"};
   compatible_nested5 obj = {
-      "Hello", unexpected<compatible_nested5::nested>{{"Hi", "42", "Hey"}},
+      "Hello",
+      struct_pack::unexpected<compatible_nested5::nested>{{"Hi", "42", "Hey"}},
       "HooooooooooHo"};
   compatible_nested5 obj_empty = {
       "Hello",
-      unexpected<compatible_nested5::nested>{{"Hi", std::nullopt, "Hey"}},
+      struct_pack::unexpected<compatible_nested5::nested>{
+          {"Hi", std::nullopt, "Hey"}},
       "HooooooooooHo"};
   SUBCASE("test compatible_nested5 to compatible_nested5") {
     auto buffer = struct_pack::serialize(obj);
