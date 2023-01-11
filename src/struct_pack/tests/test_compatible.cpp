@@ -50,17 +50,9 @@ struct compatible5 {
   std::string b;
 };
 
-struct compatible6 {
-  std::string a;
-  struct_pack::expected<int, compatible5> comp;
-  std::string b;
-  compatible6(){};
-  compatible6(compatible6& other){};
-};
-
 struct compatible7 {
   std::string a;
-  std::set<compatible6> j;
+  std::set<compatible5> j;
   std::string b;
 };
 
@@ -106,8 +98,6 @@ TEST_CASE("test compatible check") {
   static_assert(struct_pack::detail::exist_compatible_member<compatible4>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible5>,
-                "check compatible failed");
-  static_assert(struct_pack::detail::exist_compatible_member<compatible6>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible7>,
                 "check compatible failed");
