@@ -44,10 +44,11 @@ STRUCT_PB_NODISCARD STRUCT_PB_INLINE std::size_t calculate_varint_size(
   return ret;
 }
 
-[[nodiscard]] STRUCT_PB_INLINE bool decode_varint_v2(const char* data_,
+[[nodiscard]] STRUCT_PB_INLINE bool decode_varint_v2(const char* data,
                                                      std::size_t& pos_,
                                                      std::size_t size_,
                                                      uint64_t& v) {
+  const signed char* data_ = reinterpret_cast<const signed char*>(data);
   if (pos_ < size_ && (static_cast<uint64_t>(data_[pos_]) & 0x80U) == 0) {
     v = static_cast<uint64_t>(data_[pos_]);
     pos_++;
@@ -59,23 +60,23 @@ STRUCT_PB_NODISCARD STRUCT_PB_INLINE std::size_t calculate_varint_size(
     do {
       // clang-format off
         int64_t b = data_[pos_++];
-                           val  = ((uint64_t(b) & 0x7fU)       ); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) <<  7U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 14U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 21U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 28U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 35U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 42U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 49U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 56U); if (!(b & 0b10000000)) { break; }
-        b = data_[pos_++]; val |= ((uint64_t(b) & 0x01U) << 63U); if (!(b & 0b10000000)) { break; }
+                           val  = ((uint64_t(b) & 0x7fU)       ); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) <<  7U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 14U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 21U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 28U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 35U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 42U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 49U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x7fU) << 56U); if (b >= 0) { break; }
+        b = data_[pos_++]; val |= ((uint64_t(b) & 0x01U) << 63U); if (b >= 0) { break; }
       // clang-format on
       return false;
     } while (false);
   }
   else {
     unsigned int shift = 0;
-    while (pos_ != size_ && (data_[pos_] & 0b10000000)) {
+    while (pos_ != size_ && int64_t(data_[pos_]) < 0) {
       val |= (uint64_t(data_[pos_++]) & 0x7fU) << shift;
       shift += 7;
     }
