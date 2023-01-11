@@ -24,7 +24,7 @@ jobs:
         uses: Homebrew/actions/setup-homebrew@master
 
       - name: Install Dependencies
-        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl
+        run: HOMEBREW_NO_INSTALL_CLEANUP=1 brew install openssl
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v3
