@@ -50,6 +50,21 @@ TEST_CASE("testing test_struct_pb::Test1") {
   }
 
   SUBCASE("negative") {
+    {
+      // an example for check arm char
+      std::string buf{0x08,       (char)0xff, (char)0xff, (char)0xff,
+                      (char)0xff, (char)0xff, (char)0xff, (char)0xff,
+                      (char)0xff, (char)0xff, 0x01};
+      test_struct_pb::Test1 t{.a = -1};
+      check_self(t, buf);
+#ifdef HAVE_PROTOBUF
+      // for debug
+      Test1 pb_t;
+      pb_t.set_a(-1);
+      auto s = pb_t.SerializeAsString();
+      check_with_protobuf(t, pb_t);
+#endif
+    }
     for (int32_t i = -1; i > INT16_MIN + 1; i *= 2) {
       test_struct_pb::Test1 t{.a = i};
       check_self(t);

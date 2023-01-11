@@ -44,10 +44,13 @@ STRUCT_PB_NODISCARD STRUCT_PB_INLINE std::size_t calculate_varint_size(
   return ret;
 }
 
-[[nodiscard]] STRUCT_PB_INLINE bool decode_varint_v2(const char* data_,
-                                                     std::size_t& pos_,
-                                                     std::size_t size_,
-                                                     uint64_t& v) {
+[[nodiscard]] STRUCT_PB_INLINE bool decode_varint(const char* data,
+                                                  std::size_t& pos_,
+                                                  std::size_t size_,
+                                                  uint64_t& v) {
+  // fix test failed on arm due to different char definition
+  const signed char* data_ = reinterpret_cast<const signed char*>(data);
+  // from https://github.com/facebook/folly/blob/main/folly/Varint.h
   if (pos_ < size_ && (static_cast<uint64_t>(data_[pos_]) & 0x80U) == 0) {
     v = static_cast<uint64_t>(data_[pos_]);
     pos_++;
@@ -100,7 +103,7 @@ STRUCT_PB_NODISCARD STRUCT_PB_INLINE bool deserialize_varint(const char* data,
                                                              std::size_t& pos,
                                                              std::size_t size,
                                                              uint64_t& v) {
-  return decode_varint_v2(data, pos, size, v);
+  return decode_varint(data, pos, size, v);
 }
 STRUCT_PB_NODISCARD STRUCT_PB_INLINE bool read_tag(const char* data,
                                                    std::size_t& pos,

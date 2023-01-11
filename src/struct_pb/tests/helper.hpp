@@ -29,7 +29,7 @@ void check_self(const T& t, std::optional<std::string> buf_opt = {}) {
 
 #ifdef HAVE_PROTOBUF
 template <typename T, typename PB_T>
-struct PB_equal : public std::binary_function<T, PB_T, bool> {
+struct PB_equal {
   constexpr bool operator()(const T& t, const PB_T& pb_t) const {
     return t == pb_t;
   }
