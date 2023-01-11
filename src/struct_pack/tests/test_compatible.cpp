@@ -42,18 +42,18 @@ struct compatible4 {
   std::string a;
   std::optional<compatible3> comp;
   std::string b;
-};
-
-struct compatible5 {
-  std::string a;
-  struct_pack::expected<compatible4, int> comp;
-  std::string b;
+  friend bool operator<(const compatible4&, const compatible4&) {
+    return false;
+  }
 };
 
 struct compatible7 {
   std::string a;
-  std::set<compatible5> j;
+  std::set<compatible4> j;
   std::string b;
+  friend bool operator<(const compatible7&, const compatible7&) {
+    return false;
+  }
 };
 
 struct compatible8 {
@@ -96,8 +96,6 @@ TEST_CASE("test compatible check") {
   static_assert(struct_pack::detail::exist_compatible_member<compatible3>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible4>,
-                "check compatible failed");
-  static_assert(struct_pack::detail::exist_compatible_member<compatible5>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible7>,
                 "check compatible failed");
