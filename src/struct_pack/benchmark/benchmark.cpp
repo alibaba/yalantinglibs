@@ -64,6 +64,16 @@ void calculate_ser_rate(const auto& map, LibType base_line_type,
   std::cout << "========================\n";
 }
 
+void run_benchmark(const auto& map, LibType base_line_type) {
+  std::cout << "======== calculate serialization rate ========\n";
+  calculate_ser_rate(map, base_line_type, SampleType::RECT);
+  calculate_ser_rate(map, base_line_type, SampleType::RECTS);
+  calculate_ser_rate(map, base_line_type, SampleType::PERSON);
+  calculate_ser_rate(map, base_line_type, SampleType::PERSONS);
+  calculate_ser_rate(map, base_line_type, SampleType::MONSTER);
+  calculate_ser_rate(map, base_line_type, SampleType::MONSTERS);
+}
+
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
 
@@ -90,13 +100,15 @@ int main(int argc, char** argv) {
     sample->print_buffer_size(lib_type);
   }
 
-  std::cout << "======== calculate serialization rate ========\n";
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::RECT);
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::RECTS);
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::PERSON);
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::PERSONS);
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::MONSTER);
-  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::MONSTERS);
+  run_benchmark(map, LibType::STRUCT_PACK);
+
+#ifdef HAVE_PROTOBUF
+  std::erase_if(map, [](auto& pair) {
+    return pair.first != LibType::STRUCT_PB && pair.first != LibType::PROTOBUF;
+  });
+
+  run_benchmark(map, LibType::STRUCT_PB);
+#endif
 
   return 0;
 }
