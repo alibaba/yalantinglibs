@@ -13,17 +13,135 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "../benchmark/config.hpp"
+#include "config.hpp"
 #ifdef HAVE_PROTOBUF
-#include "../benchmark/protobuf_sample.hpp"
+#include "protobuf_sample.hpp"
 #endif
-#include "../benchmark/struct_pb_sample.hpp"
+#include "benchmark.struct_pb.h"
 #include "doctest.h"
 #include "helper.hpp"
+#include "struct_pb_sample.hpp"
 using namespace doctest;
 using namespace struct_pb::internal;
 
 #ifdef HAVE_PROTOBUF
+namespace struct_pb_sample {
+template <typename T>
+bool check_unique_ptr(const T& lhs, const T& rhs) {
+  if (lhs && rhs) {
+    return *lhs == *rhs;
+  }
+  return !lhs && !rhs;
+}
+bool operator==(const Vec3& lhs, const Vec3& rhs) {
+  std::valarray<float> lh({lhs.x, lhs.y, lhs.z});
+  std::valarray<float> rh({rhs.x, rhs.y, rhs.z});
+  return (std::abs(lh - rh) < 0.05f).min();
+}
+bool operator==(const Weapon& lhs, const Weapon& rhs) {
+  return lhs.name == rhs.name && lhs.damage == rhs.damage;
+};
+bool operator==(const rect32& lhs, const rect32& rhs) {
+  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width &&
+         lhs.height == rhs.height;
+}
+bool operator==(const rect32s& lhs, const rect32s& rhs) {
+  return lhs.rect32_list == rhs.rect32_list;
+}
+bool operator==(const person& lhs, const person& rhs) {
+  return lhs.id == rhs.id && lhs.name == rhs.name && lhs.age == rhs.age &&
+         lhs.salary == rhs.salary;
+}
+bool operator==(const persons& lhs, const persons& rhs) {
+  return lhs.person_list == rhs.person_list;
+}
+bool operator==(const Monster& lhs, const Monster& rhs) {
+  bool ok = check_unique_ptr(lhs.pos, rhs.pos);
+  if (!ok) {
+    return false;
+  }
+  ok = check_unique_ptr(lhs.equipped, rhs.equipped);
+  if (!ok) {
+    return false;
+  }
+  return lhs.mana == rhs.mana && lhs.hp == rhs.hp && lhs.name == rhs.name &&
+         lhs.inventory == rhs.inventory && lhs.color == rhs.color &&
+         lhs.weapons == rhs.weapons && lhs.path == rhs.path;
+};
+bool operator==(const Monsters& lhs, const Monsters& rhs) {
+  return lhs.monsters == rhs.monsters;
+}
+
+bool verify(const struct_pb_sample::Weapon& a,
+            const struct_pb_sample::Weapon& b) {
+  assert(a.name == b.name);
+  assert(a.damage == b.damage);
+  return true;
+}
+bool verify(const struct_pb_sample::Monster& a,
+            const struct_pb_sample::Monster& b) {
+  assert(a.pos && b.pos);
+  assert(*a.pos == *b.pos);
+  assert(a.mana == b.mana);
+  assert(a.hp == b.hp);
+  assert(a.name == b.name);
+  assert(a.inventory == b.inventory);
+  assert(a.color == b.color);
+  assert(a.weapons.size() == b.weapons.size());
+  for (int i = 0; i < a.weapons.size(); ++i) {
+    auto ok = verify(a.weapons[i], b.weapons[i]);
+    if (!ok) {
+      return ok;
+    }
+  }
+  assert(a.weapons == b.weapons);
+  assert(a.equipped && b.equipped);
+  assert(*a.equipped == *b.equipped);
+  assert(a.path == b.path);
+  return true;
+}
+bool verify(const struct_pb_sample::Monsters& a,
+            const struct_pb_sample::Monsters& b) {
+  assert(a.monsters.size() == b.monsters.size());
+  for (int i = 0; i < a.monsters.size(); ++i) {
+    auto ok = verify(a.monsters[i], b.monsters[i]);
+    if (!ok) {
+      return ok;
+    }
+  }
+  return true;
+}
+template <typename T>
+T copy(const T& t) {
+  return t;
+}
+template <>
+struct_pb_sample::Monster copy(const struct_pb_sample::Monster& t) {
+  struct_pb_sample::Monster m;
+  m.pos = std::make_unique<struct_pb_sample::Vec3>();
+  *m.pos = *t.pos;
+  m.mana = t.mana;
+  m.hp = t.hp;
+  m.name = t.name;
+  m.inventory = t.inventory;
+  m.color = t.color;
+  m.weapons = t.weapons;
+  m.equipped = std::make_unique<struct_pb_sample::Weapon>();
+  *m.equipped = *t.equipped;
+  m.path = t.path;
+  return m;
+}
+template <>
+struct_pb_sample::Monsters copy(const struct_pb_sample::Monsters& t) {
+  struct_pb_sample::Monsters m;
+  m.monsters.reserve(t.monsters.size());
+  for (const auto& e : t.monsters) {
+    m.monsters.push_back(std::move(copy(e)));
+  }
+  return m;
+}
+}  // namespace struct_pb_sample
+
 template <>
 struct PB_equal<struct_pb_sample::rect32s, mygame::rect32s> {
   bool operator()(const struct_pb_sample::rect32s& t,
