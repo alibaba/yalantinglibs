@@ -54,6 +54,8 @@ struct compatible6 {
   std::string a;
   struct_pack::expected<int, compatible5> comp;
   std::string b;
+  compatible6(){};
+  compatible6(compatible6& other){};
 };
 
 struct compatible7 {

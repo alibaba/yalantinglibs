@@ -19,8 +19,6 @@ struct bug_member_count_struct2 : bug_member_count_struct1 {};
 template <>
 constexpr std::size_t struct_pack::members_count<bug_member_count_struct2> = 3;
 
-
-
 TEST_CASE("test members_count") {
   {
     using t = bug_member_count_struct1;
