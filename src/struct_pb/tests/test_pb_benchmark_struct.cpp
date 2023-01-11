@@ -288,6 +288,7 @@ TEST_CASE("testing person") {
 }
 
 TEST_CASE("testing monsters") {
+  using namespace struct_pb_sample;
   auto my_ms = struct_pb_sample::create_monsters(OBJECT_COUNT);
 #ifdef HAVE_PROTOBUF
   auto pb_ms = protobuf_sample::create_monsters(OBJECT_COUNT);
@@ -317,7 +318,7 @@ TEST_CASE("testing monsters") {
     struct_pb_sample::Monster d_t{};
     auto ok = deserialize_to(d_t, my_buf.data(), my_buf.size());
     REQUIRE(ok);
-    CHECK(d_t == my_m);
+    CHECK(verify(d_t, my_m));
     REQUIRE(d_t.pos);
     REQUIRE(my_m.pos);
     CHECK(*d_t.pos == *my_m.pos);
