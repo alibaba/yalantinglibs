@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <sys/types.h>
 
 #include <algorithm>
 #include <array>
@@ -21,7 +20,11 @@ struct base_sample {
   void print_buffer_size(LibType type) {
     auto lib_name = get_lib_name(type);
     for (auto sample_type : g_sample_type_vec) {
-      std::cout << lib_name << " serialize " << get_sample_name(sample_type)
+      std::string prefix = lib_name;
+      prefix.append(" serialize ").append(get_sample_name(sample_type));
+
+      auto space_str = get_space_str(prefix.size(), 36);
+      std::cout << prefix << space_str
                 << " buffer size = " << buffer_size(sample_type) << "\n";
     }
   }

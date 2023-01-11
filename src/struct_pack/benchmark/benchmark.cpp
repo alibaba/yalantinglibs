@@ -9,6 +9,7 @@
 #endif
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
+#include "struct_pb_sample.hpp"
 #endif
 
 #include <string>
@@ -34,17 +35,29 @@ void calculate_ser_rate(const auto& map, LibType base_line_type,
 
     auto ns_ser = other_lib->get_ser_time_elapsed_map()[sample_type];
     auto ns_deser = other_lib->get_deser_time_elapsed_map()[sample_type];
-    std::cout << base_lib->name() << " serialize "
-              << get_sample_name(sample_type) << " is ["
-              << double(ns_ser) / base_line_ser << "] times faster than "
-              << other_lib->name() << ", [" << base_line_ser << ", " << ns_ser
-              << "]"
+    double rate_ser = std::ceil(double(ns_ser) / base_line_ser * 100.0) / 100.0;
+    double rate_deser =
+        std::ceil(double(ns_deser) / base_line_deser * 100.0) / 100.0;
+
+    std::string prefix_ser = base_lib->name()
+                                 .append(" serialize   ")
+                                 .append(get_sample_name(sample_type))
+                                 .append(" is ");
+    std::string prefix_deser = base_lib->name()
+                                   .append(" deserialize ")
+                                   .append(get_sample_name(sample_type))
+                                   .append(" is ");
+
+    auto space_ser = get_space_str(prefix_ser.size(), 39);
+    auto space_deser = get_space_str(prefix_deser.size(), 39);
+
+    std::cout << prefix_ser << space_ser << "[" << rate_ser
+              << "] times faster than " << other_lib->name() << ", ["
+              << base_line_ser << ", " << ns_ser << "]"
               << "\n";
-    std::cout << base_lib->name() << " deserialize "
-              << get_sample_name(sample_type) << " is ["
-              << double(ns_deser) / base_line_deser << "] times faster than "
-              << other_lib->name() << ", [" << base_line_deser << ", "
-              << ns_deser << "]"
+    std::cout << prefix_deser << space_deser << "[" << rate_deser
+              << "] times faster than " << other_lib->name() << ", ["
+              << base_line_deser << ", " << ns_deser << "]"
               << "\n";
   }
 
@@ -61,6 +74,7 @@ int main(int argc, char** argv) {
   map.emplace(LibType::MSGPACK, new message_pack_sample());
 #endif
 #ifdef HAVE_PROTOBUF
+  map.emplace(LibType::STRUCT_PB, new struct_pb_sample::struct_pb_sample_t());
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
 #endif
 
@@ -69,17 +83,20 @@ int main(int argc, char** argv) {
     sample->create_samples();
     sample->do_serialization();
     sample->do_deserialization();
+  }
 
+  std::cout << "======= serialize buffer size ========\n";
+  for (auto [lib_type, sample] : map) {
     sample->print_buffer_size(lib_type);
   }
 
-  std::cout << "calculate serialization rate\n";
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::RECT);
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::RECTS);
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::PERSON);
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::PERSONS);
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::MONSTER);
-  calculate_ser_rate(map, LibType::STRUCT_PACK, SampleType::MONSTERS);
+  std::cout << "======== calculate serialization rate ========\n";
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::RECT);
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::RECTS);
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::PERSON);
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::PERSONS);
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::MONSTER);
+  calculate_ser_rate(map, LibType::STRUCT_PB, SampleType::MONSTERS);
 
   return 0;
 }

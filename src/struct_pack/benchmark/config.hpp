@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -47,4 +48,12 @@ inline std::string get_lib_name(LibType lib_type) {
   }
 
   return it->second;
+}
+
+inline std::string get_space_str(size_t size, size_t max_size) {
+  std::string space_str = "";
+  if (size < max_size) {
+    for (int i = 0; i < max_size - size; ++i) space_str.append(" ");
+  }
+  return space_str;
 }
