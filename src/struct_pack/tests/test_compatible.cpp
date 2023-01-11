@@ -81,7 +81,6 @@ struct compatible12 {
 };
 
 TEST_CASE("test compatible check") {
-  compatible8 hi;
   static_assert(!struct_pack::detail::exist_compatible_member<nested_object>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible1>,
