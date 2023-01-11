@@ -49,7 +49,7 @@ struct compatible4 {
 
 struct compatible7 {
   std::string a;
-  std::set<compatible4> j;
+  compatible4 j;
   std::string b;
   friend bool operator<(const compatible7&, const compatible7&) {
     return false;
@@ -87,6 +87,7 @@ struct compatible12 {
 };
 
 TEST_CASE("test compatible check") {
+  compatible8 hi;
   static_assert(!struct_pack::detail::exist_compatible_member<nested_object>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible1>,
