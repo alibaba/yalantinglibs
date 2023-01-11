@@ -1724,46 +1724,55 @@ class unpacker {
       T &t, Args &...args, std::index_sequence<I...>) {
     using Type = get_args_type<T, Args...>;
     struct_pack::errc err_code;
-    [[maybe_unused]] bool val =
-        ((
-             [&] {
-               switch (size_type_) {
-                 case 0:
-                   err_code =
-                       deserialize_many<1, compatible_version_number<Type>[I]>(
-                           t, args...);
-                   break;
-#ifdef STRUCT_PACK_OPTIMIZE
-                 case 1:
-                   err_code =
-                       deserialize_many<2, compatible_version_number<Type>[I]>(
-                           t, args...);
-                   break;
-                 case 2:
-                   err_code =
-                       deserialize_many<4, compatible_version_number<Type>[I]>(
-                           t, args...);
-                   break;
-                 case 3:
-                   err_code =
-                       deserialize_many<8, compatible_version_number<Type>[I]>(
-                           t, args...);
-                   break;
-#else
-                 case 1:
-                 case 2:
-                 case 3:
-                   err_code =
-                       deserialize_many<2, compatible_version_number<Type>[I]>(
-                           t, args...);
-                   break;
-#endif
-                 default:
-                   unreachable();
-               }
-             }(),
-             err_code == errc::ok) &&
+    switch (size_type_) {
+      case 0:
+        ([&] {
+          err_code = deserialize_many<1, compatible_version_number<Type>[I]>(
+              t, args...);
+          return err_code == errc::ok;
+        }() &&
          ...);
+        break;
+#ifdef STRUCT_PACK_OPTIMIZE
+      case 1:
+        ([&] {
+          err_code = deserialize_many<2, compatible_version_number<Type>[I]>(
+              t, args...);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+      case 2:
+        ([&] {
+          err_code = deserialize_many<4, compatible_version_number<Type>[I]>(
+              t, args...);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+      case 3:
+        ([&] {
+          err_code = deserialize_many<8, compatible_version_number<Type>[I]>(
+              t, args...);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+#else
+      case 1:
+      case 2:
+      case 3:
+        ([&] {
+          err_code = deserialize_many<2, compatible_version_number<Type>[I]>(
+              t, args...);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+#endif
+      default:
+        unreachable();
+    }
     if (size_type_ ==
         UCHAR_MAX) {  // reuse size_type_ as a tag that the buffer miss some
                       // compatible field, whic is legal.
@@ -1781,46 +1790,60 @@ class unpacker {
     using T = std::remove_cvref_t<U>;
     using Type = get_args_type<T>;
     struct_pack::errc err_code;
-    [[maybe_unused]] bool val =
-        ((
-             [&] {
-               switch (size_type_) {
-                 case 0:
-                   err_code =
-                       get_field_impl<1, compatible_version_number<Type>[Is], U,
-                                      I>(field);
-                   break;
-#ifdef STRUCT_PACK_OPTIMIZE
-                 case 1:
-                   err_code =
-                       get_field_impl<2, compatible_version_number<Type>[Is], U,
-                                      I>(field);
-                   break;
-                 case 2:
-                   err_code =
-                       get_field_impl<4, compatible_version_number<Type>[Is], U,
-                                      I>(field);
-                   break;
-                 case 3:
-                   err_code =
-                       get_field_impl<8, compatible_version_number<Type>[Is], U,
-                                      I>(field);
-                   break;
-#else
-                 case 1:
-                 case 2:
-                 case 3:
-                   err_code =
-                       get_field_impl<2, compatible_version_number<Type>[Is], U,
-                                      I>(field);
-                   break;
-#endif
-                 default:
-                   unreachable();
-               }
-             }(),
-             err_code == errc::ok) &&
+    switch (size_type_) {
+      case 0:
+        ([&] {
+          err_code =
+              get_field_impl<1, compatible_version_number<Type>[Is], U, I>(
+                  field);
+          return err_code == errc::ok;
+        }() &&
          ...);
+        break;
+#ifdef STRUCT_PACK_OPTIMIZE
+      case 1:
+        ([&] {
+          err_code =
+              get_field_impl<2, compatible_version_number<Type>[Is], U, I>(
+                  field);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+      case 2:
+        ([&] {
+          err_code =
+              get_field_impl<4, compatible_version_number<Type>[Is], U, I>(
+                  field);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+      case 3:
+        ([&] {
+          err_code =
+              get_field_impl<8, compatible_version_number<Type>[Is], U, I>(
+                  field);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+#else
+      case 1:
+      case 2:
+      case 3:
+        ([&] {
+          err_code =
+              get_field_impl<2, compatible_version_number<Type>[Is], U, I>(
+                  field);
+          return err_code == errc::ok;
+        }() &&
+         ...);
+        break;
+#endif
+      default:
+        unreachable();
+    }
     if (size_type_ ==
         UCHAR_MAX) {  // reuse size_type_ as a tag that the buffer miss some
                       // compatible field, whic is legal.
