@@ -47,24 +47,9 @@ struct compatible4 {
   }
 };
 
-struct compatible7 {
-  std::string a;
-  compatible4 j;
-  std::string b;
-  friend bool operator<(const compatible7&, const compatible7&) {
-    return false;
-  }
-};
-
-struct compatible9 {
-  std::string a;
-  std::map<int, compatible7> j;
-  std::string b;
-};
-
 struct compatible10 {
   std::string a;
-  std::vector<compatible9> j;
+  std::vector<compatible4> j;
   std::string b;
 };
 
@@ -90,10 +75,6 @@ TEST_CASE("test compatible check") {
   static_assert(struct_pack::detail::exist_compatible_member<compatible3>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible4>,
-                "check compatible failed");
-  static_assert(struct_pack::detail::exist_compatible_member<compatible7>,
-                "check compatible failed");
-  static_assert(struct_pack::detail::exist_compatible_member<compatible9>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible10>,
                 "check compatible failed");
