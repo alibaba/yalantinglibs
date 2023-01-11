@@ -67,6 +67,9 @@ concept seek_reader_t = reader_t<T> && requires(T t) {
   t.seekg(std::size_t{});
 };
 
+template <typename T, uint64_t version = 0>
+struct compatible;
+
 // clang-format off
 namespace detail {
   template <typename Type>
@@ -224,6 +227,13 @@ namespace detail {
     typename std::remove_cvref_t<Type>::value_type;
   };
 
+
+  template <typename Type>
+  constexpr inline bool is_compatible_v = false;
+
+  template <typename Type, uint64_t version>
+  constexpr inline bool is_compatible_v<compatible<Type,version>> = true;
+
   template <typename Type>
   constexpr inline bool is_variant_v = false;
 
@@ -232,6 +242,9 @@ namespace detail {
 
   template <typename T>
   concept variant = is_variant_v<T>;
+
+  template <typename T>
+  concept is_compatible = is_compatible_v<T>;
 
   struct UniversalType {
     template <typename T>
@@ -255,6 +268,11 @@ namespace detail {
     operator U();
   };
 
+  struct UniversalCompatibleType {
+    template <is_compatible U>
+    operator U();
+  };
+
   template <typename T, typename... Args>
   consteval std::size_t member_count_impl() {
     if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
@@ -274,6 +292,11 @@ namespace detail {
                          T{{Args{}}..., {UniversalNullptrType{}}};
                        } == true) {
       return member_count_impl<T, Args..., UniversalNullptrType>();
+    }
+    else if constexpr (requires {
+                         T{{Args{}}..., {UniversalCompatibleType{}}};
+                       } == true) {
+      return member_count_impl<T, Args..., UniversalCompatibleType>();
     }
     else {
       return sizeof...(Args);
