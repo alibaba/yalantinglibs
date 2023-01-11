@@ -3,29 +3,43 @@ if(NOT BUILD_SP_BENCHMARK)
     return()
 endif()
 
+add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
+
 find_package(Protobuf)
 if (Protobuf_FOUND)
-    message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
-    find_program(PROTOC_CXX_FOUND protoc DOC "Protobuf Compiler (protoc)")
-    if(NOT PROTOC_CXX_FOUND)
-        message(FATAL_ERROR "install protoc before struct_pack benchmark")
-    endif()
+    protobuf_generate_cpp(STRUCT_PACK_BENCHMARK_PROTO_SRCS
+            STRUCT_PACK_BENCHMARK_PROTO_HDRS
+            benchmark.proto
+            )
+    target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+    target_sources(struct_pack_benchmark PRIVATE
+            ${STRUCT_PACK_BENCHMARK_PROTO_SRCS}
+            ${STRUCT_PACK_BENCHMARK_PROTO_HDRS}
+            )
 
-    execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/benchmark/)
-    execute_process(COMMAND protoc benchmark.proto --cpp_out=. -I ${CMAKE_CURRENT_SOURCE_DIR}
-                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/benchmark)
-    add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp ${CMAKE_BINARY_DIR}/benchmark/benchmark.pb.cc)
+    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
+    protobuf_generate_struct_pb(STRUCT_PACK_BENCHMARK_PROTO_SRCS2
+            STRUCT_PACK_BENCHMARK_PROTO_HDRS2
+            benchmark.proto
+            OPTION "namespace=struct_pb_sample"
+            )
+    target_sources(struct_pack_benchmark PRIVATE
+            ${STRUCT_PACK_BENCHMARK_PROTO_SRCS2}
+            ${STRUCT_PACK_BENCHMARK_PROTO_HDRS2}
+            )
+
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
 else()
-    add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
+    target_sources(struct_pack_benchmark PRIVATE benchmark.struct_pb.cc
+            benchmark.struct_pb.h)
 endif()
 
 # TODO
-# find_package(Msgpack)
-# if (Msgpack_FOUND)
-#     message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
-#     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
-# endif()
+find_package(Msgpack)
+if (Msgpack_FOUND)
+    message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
+    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
+endif()
 
 target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benchmark/)
 target_include_directories(struct_pack_benchmark PRIVATE
