@@ -1299,7 +1299,7 @@ get_serialize_runtime_info(const Args &...args) {
   serialize_buffer_size ret;
   auto sz_info = calculate_payload_size(args...);
 
-  if (sz_info.max_size < (1ull << 8)) [[likely]] {
+  if (sz_info.max_size < (int64_t{1} << 8)) [[likely]] {
     ret.len_ += sz_info.total + sz_info.size_cnt;
     ret.metainfo_ = 0b00000;
     constexpr bool has_compile_time_determined_meta_info =
@@ -1309,11 +1309,11 @@ get_serialize_runtime_info(const Args &...args) {
     }
   }
   else {
-    if (sz_info.max_size < (1ull << 16)) {
+    if (sz_info.max_size < (int64_t{1} << 16)) {
       ret.len_ += sz_info.total + sz_info.size_cnt * 2;
       ret.metainfo_ = 0b01000;
     }
-    else if (sz_info.max_size < (1ull << 32)) {
+    else if (sz_info.max_size < (int64_t{1} << 32)) {
       ret.len_ += sz_info.total + sz_info.size_cnt * 4;
       ret.metainfo_ = 0b10000;
     }
@@ -1332,11 +1332,11 @@ get_serialize_runtime_info(const Args &...args) {
   }
   if constexpr (has_compatible) {  // calculate bytes count of serialize
                                    // length
-    if (ret.len_ + 2 < (1ull << 16)) [[likely]] {
+    if (ret.len_ + 2 < (int64_t{1} << 16)) [[likely]] {
       ret.len_ += 2;
       ret.metainfo_ |= 0b01;
     }
-    else if (ret.len_ + 4 < (1ull << 32)) {
+    else if (ret.len_ + 4 < (int64_t{1} << 32)) {
       ret.len_ += 4;
       ret.metainfo_ |= 0b10;
     }
@@ -1360,7 +1360,7 @@ class packer {
             typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
     serialize_metainfo<conf, size_type == 1, T, Args...>();
-    serialize_many<size_type, SIZE_MAX>(t, args...);
+    serialize_many<size_type, UINT64_MAX>(t, args...);
     using Type = get_args_type<T, Args...>;
     if constexpr (serialize_static_config<Type>::has_compatible) {
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -2036,7 +2036,7 @@ class unpacker {
     }
   };
 
-  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
+  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
   deserialize_compatible(unsigned compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
@@ -2073,7 +2073,7 @@ class unpacker {
   }
 
   template <class T>
-  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::size_t>
+  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
   deserialize_metainfo() {
     uint32_t current_types_code;
     if (!reader_.read((char *)&current_types_code, sizeof(uint32_t)))
@@ -2094,7 +2094,7 @@ class unpacker {
     if (!reader_.read((char *)&metainfo, sizeof(unsigned char))) [[unlikely]] {
       return {struct_pack::errc::no_buffer_space, 0};
     }
-    std::pair<errc, std::size_t> ret;
+    std::pair<errc, std::uint64_t> ret;
     auto compatible_sz_len = metainfo & 0b11;
     if (compatible_sz_len) {
       if (ret = deserialize_compatible(compatible_sz_len); ret.first != errc{})
@@ -2341,7 +2341,7 @@ class unpacker {
         else {
           template_switch<variant_construct_helper,
                           std::integral_constant<std::size_t, size_type>,
-                          std::integral_constant<std::size_t, version>,
+                          std::integral_constant<std::uint64_t, version>,
                           std::integral_constant<bool, NotSkip>>(index, *this,
                                                                  item);
         }
