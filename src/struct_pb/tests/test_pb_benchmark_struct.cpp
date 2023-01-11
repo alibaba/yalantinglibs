@@ -318,7 +318,7 @@ TEST_CASE("testing monsters") {
     struct_pb_sample::Monster d_t{};
     auto ok = deserialize_to(d_t, my_buf.data(), my_buf.size());
     REQUIRE(ok);
-    CHECK(verify(d_t, my_m));
+    CHECK(struct_pb_sample::verify(d_t, my_m));
     REQUIRE(d_t.pos);
     REQUIRE(my_m.pos);
     CHECK(*d_t.pos == *my_m.pos);
