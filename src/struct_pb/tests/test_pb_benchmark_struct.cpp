@@ -24,7 +24,6 @@
 using namespace doctest;
 using namespace struct_pb::internal;
 
-#ifdef HAVE_PROTOBUF
 namespace struct_pb_sample {
 template <typename T>
 bool check_unique_ptr(const T& lhs, const T& rhs) {
@@ -142,6 +141,7 @@ struct_pb_sample::Monsters copy(const struct_pb_sample::Monsters& t) {
 }
 }  // namespace struct_pb_sample
 
+#ifdef HAVE_PROTOBUF
 template <>
 struct PB_equal<struct_pb_sample::rect32s, mygame::rect32s> {
   bool operator()(const struct_pb_sample::rect32s& t,
