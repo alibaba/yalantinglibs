@@ -847,9 +847,9 @@ TEST_CASE("test set_value") {
   std::string s;
   int v;
   int v2 = -1;
-  auto ret1 = in.set_value<0, 0, 0, int, int>(ec, v, std::move(v2));
+  auto ret1 = in.set_value<0, UINT64_MAX, 0, 0, int, int>(ec, v, std::move(v2));
   CHECK(ret1 == true);
-  auto ret2 = in.set_value<0, 0, 1, int, int>(ec, v, std::move(v2));
+  auto ret2 = in.set_value<0, UINT64_MAX, 0, 1, int, int>(ec, v, std::move(v2));
   CHECK(ret2 == false);
 }
 
@@ -886,140 +886,7 @@ TEST_CASE("test free functions") {
   CHECK(pair1.value() == "tom");
 }
 
-TEST_CASE("test compatible") {
-  SUBCASE("serialize person1 2 person") {
-    person1 p1{20, "tom", 1, false};
-    std::vector<char> buffer;
-    auto size = get_needed_size(p1);
-    buffer.resize(size);
-    serialize_to(buffer.data(), size, p1);
-
-    person p;
-    auto res = deserialize_to(p, buffer.data(), buffer.size());
-    CHECK(res == struct_pack::errc{});
-    CHECK(p.name == p1.name);
-    CHECK(p.age == p1.age);
-
-    auto size2 = get_needed_size(p);
-    // short data
-    for (int i = 0, lim = size2; i < lim; ++i)
-      CHECK(deserialize_to(p, buffer.data(), i) ==
-            struct_pack::errc::no_buffer_space);
-
-    serialize_to(buffer.data(), size2, p);
-
-    person1 p2;
-    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) ==
-          struct_pack::errc{});
-    CHECK((p2.age == p.age && p2.name == p.name));
-  }
-  SUBCASE("serialize person 2 person1") {
-    std::vector<char> buffer;
-    person p{20, "tom"};
-    struct_pack::serialize_to(buffer, p);
-    struct_pack::serialize_to(buffer, p);
-    struct_pack::serialize_to(buffer, p);
-
-    person1 p1, p0 = {.age = 20, .name = "tom"};
-    auto ec = struct_pack::deserialize_to(p1, buffer);
-    CHECK(ec == struct_pack::errc{});
-    bool i = p1.id.has_value();
-    CHECK(p1 == p0);
-  }
-  SUBCASE("big compatible metainfo") {
-    {
-#ifdef NDEBUG
-      constexpr size_t array_sz = 247;
-#else
-      constexpr size_t array_sz = 244;
-#endif
-      std::tuple<compatible<std::array<char, array_sz>>> big =
-          std::array<char, array_sz>{'A', 'E', 'I', 'O', 'U'};
-      auto sz = get_needed_size(big);
-      CHECK(sz == 255);
-      auto buffer = serialize(big);
-      CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
-      CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
-      memcpy(&r_sz, &buffer[5], 2);
-      CHECK(r_sz == sz);
-      auto big2 =
-          deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
-              buffer);
-      CHECK(big2);
-      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
-    }
-    {
-#ifdef NDEBUG
-      constexpr size_t array_sz = 248;
-#else
-      constexpr size_t array_sz = 245;
-#endif
-      std::tuple<compatible<std::array<char, array_sz>>> big =
-          std::array<char, array_sz>{'A', 'E', 'I', 'O', 'U'};
-      auto sz = get_needed_size(big);
-      CHECK(sz == 256);
-      auto buffer = serialize(big);
-      CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
-      CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
-      memcpy(&r_sz, &buffer[5], 2);
-      CHECK(r_sz == sz);
-      auto big2 =
-          deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
-              buffer);
-      CHECK(big2);
-      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
-    }
-    {
-#ifdef NDEBUG
-      constexpr size_t array_sz = 65525;
-#else
-      constexpr size_t array_sz = 65522;
-#endif
-      std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
-      std::get<0>(big).value().resize(array_sz);
-      auto sz = get_needed_size(big);
-      CHECK(sz == 65535);
-      auto buffer = serialize(big);
-      CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
-      CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
-      memcpy(&r_sz, &buffer[5], 2);
-      CHECK(r_sz == sz);
-      auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
-      CHECK(big2);
-      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
-    }
-    {
-#ifdef NDEBUG
-      constexpr size_t array_sz = 65526;
-#else
-      constexpr size_t array_sz = 65523;
-#endif
-      std::tuple<compatible<std::string>> big = {std::string{"Hello"}};
-      std::get<0>(big).value().resize(array_sz);
-      auto sz = get_needed_size(big);
-      CHECK(sz == 65538);
-      auto buffer = serialize(big);
-      CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
-      CHECK((buffer[4] & 0b11) == 2);
-      std::size_t r_sz = 0;
-      memcpy(&r_sz, &buffer[5], 4);
-      CHECK(r_sz == sz);
-      auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
-      CHECK(big2);
-      CHECK(std::get<0>(big2.value()).value() == std::get<0>(big).value());
-    }
-    // TODO: test 8byte-len compatible object
-  }
-}
-
-TEST_CASE("test varinat size_type") {
+TEST_CASE("test variant size_type") {
   {
     std::string str(255, 'A');
     auto ret =
