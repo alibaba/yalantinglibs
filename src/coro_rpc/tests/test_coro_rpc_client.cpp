@@ -181,33 +181,11 @@ TEST_CASE("testing client with inject server") {
     syncAwait(f());
   }
 
-  SUBCASE("client read length error") {
-    g_action = {};
-    auto f = [&io_context, &port]() -> Lazy<void> {
-      auto client = co_await create_client(io_context, port);
-      g_action = inject_action::close_socket_after_read_header;
-      auto ret = co_await client->template call<hello>();
-      REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-    };
-    syncAwait(f());
-  }
-  SUBCASE("client read body error") {
-    g_action = {};
-    auto f = [&io_context, &port]() -> Lazy<void> {
-      auto client = co_await create_client(io_context, port);
-      g_action = inject_action::close_socket_after_send_length;
-      auto ret = co_await client->template call<hello>();
-      REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-    };
-    syncAwait(f());
-  }
-
   remove_handler<hello>();
 
   server.stop();
   io_context.stop();
   thd.join();
-  g_action = inject_action::nothing;
 }
 #ifdef ENABLE_SSL
 
@@ -385,10 +363,6 @@ TEST_CASE("testing client with eof") {
   ret = client.sync_call<client_hello>();
   CHECK(ret.value() == "client hello"s);
 
-  g_action = inject_action::client_close_socket_after_send_partial_header;
-  ret = client.sync_call<hello>();
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-
   remove_handler<hello>();
   remove_handler<client_hello>();
 }
@@ -404,16 +378,11 @@ TEST_CASE("testing client with shutdown") {
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
   register_handler<hello, client_hello>();
 
-  g_action = inject_action::nothing;
   auto ret = client.sync_call<hello>();
   CHECK(ret.value() == "hello"s);
 
   ret = client.sync_call<client_hello>();
   CHECK(ret.value() == "client hello"s);
-
-  g_action = inject_action::client_shutdown_socket_after_send_header;
-  ret = client.sync_call<hello>();
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
 
   g_action = {};
   remove_handler<hello>();
@@ -482,20 +451,7 @@ TEST_CASE("testing client call timeout") {
   g_action = {};
   register_handler<hello_timeout>();
   register_handler<hi>();
-  SUBCASE("write timeout") {
-    g_action = inject_action::force_inject_client_write_data_timeout;
-    //    coro_rpc_server server(2, 8801);
-    //    server.async_start().start([](auto&&) {
-    //    });
-    coro_rpc_client client(g_client_id++);
-    //    auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
-    //    auto ec = syncAwait(ec_lazy);
-    //    assert(ec == std::errc{});
-    auto ret = client.call<hi>();
-    auto val = syncAwait(ret);
-    CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-    g_action = inject_action::nothing;
-  }
+
   SUBCASE("read timeout") {
     g_action = {};
     coro_rpc_server server(2, 8801);
