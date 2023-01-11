@@ -7,7 +7,6 @@ using namespace struct_pack;
 
 struct compatible12;
 struct compatible1 {
-  std::unique_ptr<compatible12> s;
   struct_pack::compatible<int> c;
   friend bool operator<(const compatible1& self, const compatible1& other) {
     if (self.c.has_value()) {
