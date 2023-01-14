@@ -31,7 +31,7 @@ English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/
 
 [Talk](https://alibaba.github.io/yalantinglibs/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
 
-[Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 04:55:08 of the vedio record.
+[Vedio](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 04:55:08 of the vedio record.
 
 ### quick example
 
@@ -90,7 +90,9 @@ English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/
 
 [Talk](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
 
-[Vedio](http://t.csdn.cn/uBRwn) on purecpp conference, start from 01:32:20 of the vedio record.
+[Vedio](https://www.youtube.com/watch?v=myhB8ZlwOlE) on cppcon2022
+
+[Vedio](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the vedio record.
 
 ### quick example
 ```cpp
