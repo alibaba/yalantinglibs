@@ -86,11 +86,11 @@ Only one line code to finish serialization and deserialization, 10-50x faster th
 
 English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
 
-[Talk](https://alibaba.github.io/yalantinglibs/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
+[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://alibaba.github.io/yalantinglibs/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
-[Talk](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
+[Slides](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
 
-[(Vedio)A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://www.youtube.com/watch?v=myhB8ZlwOlE)  on cppcon2022
+[(Vedio) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://www.youtube.com/watch?v=myhB8ZlwOlE)  on cppcon2022
 
 [Vedio](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the vedio record.
 
