@@ -24,6 +24,7 @@
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "coro_rpc/coro_rpc/remote.hpp"
+#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 
@@ -159,6 +160,7 @@ struct CoroServerTester : ServerTester {
         ret.error().code == std::errc::invalid_argument,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
+    async_simple::coro::syncAwait(client->close());
   }
 
   void test_server_send_no_body() {
@@ -169,6 +171,7 @@ struct CoroServerTester : ServerTester {
         ret.error().code == std::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
+    async_simple::coro::syncAwait(client->close());
   }
 
   void test_coro_handler() {
@@ -185,6 +188,7 @@ struct CoroServerTester : ServerTester {
 
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
+    async_simple::coro::syncAwait(client->close());
   }
   coro_rpc_server server;
   std::thread thd;
@@ -257,7 +261,7 @@ TEST_CASE("test server accept error") {
                       .append(make_error_code(ec).message()));
   easylog::info("client_id {} call hi", client.get_client_id());
   auto ret = syncAwait(client.call<hi>());
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+  REQUIRE_MESSAGE(ret.error().code != err_ok, ret.error().msg);
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));

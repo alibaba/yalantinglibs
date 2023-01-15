@@ -29,6 +29,7 @@
 #include <variant>
 
 #include "asio_util/asio_coro_util.hpp"
+#include "async_simple/Unit.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "common_service.hpp"
 #include "coro_rpc/coro_rpc/connection.hpp"
@@ -178,7 +179,8 @@ class coro_rpc_client {
       co_return std::errc::timed_out;
     }
 
-    quit_promise_ = std::make_shared<std::promise<void>>();
+    quit_promise_ =
+        std::make_shared<async_simple::Promise<async_simple::Unit>>();
 
 #ifdef ENABLE_SSL
     if (use_ssl_) {
@@ -186,7 +188,7 @@ class coro_rpc_client {
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
-        quit_promise_->set_value();
+        quit_promise_->setValue(async_simple::Unit());
         easylog::warn("client_id {} handshake failed:{}", client_id_,
                       shake_ec.message());
         co_return std::errc::not_connected;
@@ -245,17 +247,17 @@ class coro_rpc_client {
   }
 #endif
 
+  async_simple::coro::Lazy<void> close() {
+    co_await async_close().via(&executor_);
+  }
+
   ~coro_rpc_client() {
     // easylog::info("begin to ~coro_rpc_client client_id {}", client_id_);
 
     if (quit_promise_) {
-      io_context_ptr_->post([this] {
-        sync_close();
-      });
-
-      io_context_ptr_->poll();
-      quit_promise_->get_future().wait();
-      // easylog::info("close socket in ~coro_rpc_client");
+      if (!has_closed_) {
+        async_simple::coro::syncAwait(async_close().via(&executor_));
+      }
     }
 
 #ifdef ENABLE_SSL
@@ -500,7 +502,7 @@ class coro_rpc_client {
     req_map_.erase(req_id);
 
     if (!r) {
-      co_await close();
+      sync_close();
     }
 
     co_return r;
@@ -515,7 +517,7 @@ class coro_rpc_client {
       if (ret.first) [[unlikely]] {
         easylog::info("close client_id_ {}, reason {}", client_id_,
                       ret.first.message());
-        co_await close();
+        co_await async_close();
         co_return false;
       }
 
@@ -549,7 +551,7 @@ class coro_rpc_client {
             struct_pack::deserialize_to(header, head, RESPONSE_HEADER_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
           easylog::error("deserialize rpc header failed");
-          co_await close();
+          sync_close();
           notify_all(std::make_pair(struct_pack::make_error_code(errc), 0));
           break;
         }
@@ -561,7 +563,7 @@ class coro_rpc_client {
         ret = co_await asio_util::async_read(
             socket, asio::buffer(read_buf_.data(), body_len));
         if (ret.first) {
-          co_await close();
+          sync_close();
           notify_one(header.seq_num, ret);
           break;
         }
@@ -577,8 +579,7 @@ class coro_rpc_client {
         notify_one(header.seq_num, ret);
       }
       else {
-        co_await close();
-
+        sync_close();
         notify_all(ret);
 
         break;
@@ -586,7 +587,7 @@ class coro_rpc_client {
     }
 
     easylog::info("client_id {} do_read finished", client_id_);
-    quit_promise_->set_value();
+    quit_promise_->setValue(async_simple::Unit());
   }
 
   /*
@@ -675,7 +676,7 @@ class coro_rpc_client {
         offset, std::forward<Args>(args)...);
   }
 
-  async_simple::coro::Lazy<void> close() {
+  async_simple::coro::Lazy<void> async_close() {
     if (has_closed_) {
       co_return;
     }
@@ -684,6 +685,9 @@ class coro_rpc_client {
 
     co_await asio_util::async_close(socket_);
     has_closed_ = true;
+
+    if (quit_promise_ != nullptr)
+      co_await quit_promise_->getFuture();
   }
 
 #ifdef ENABLE_SSL
@@ -759,6 +763,7 @@ class coro_rpc_client {
       req_map_;
   std::atomic<uint32_t> req_id_ = 0;
 
-  std::shared_ptr<std::promise<void>> quit_promise_ = nullptr;
+  std::shared_ptr<async_simple::Promise<async_simple::Unit>> quit_promise_ =
+      nullptr;
 };
 }  // namespace coro_rpc

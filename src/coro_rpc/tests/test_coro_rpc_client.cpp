@@ -86,6 +86,9 @@ TEST_CASE("testing client") {
       auto ret = co_await client->template call<hello>();
       CHECK_MESSAGE(ret.error().code == std::errc::function_not_supported,
                     ret.error().msg);
+      std::cout << "begin to close\n";
+      co_await client->close();
+      easylog::info("client_id {} closed", client->get_client_id());
       co_return;
     };
     syncAwait(f());
@@ -97,6 +100,7 @@ TEST_CASE("testing client") {
       auto ret = co_await client->template call<hi>();
       CHECK_MESSAGE(ret.error().code == std::errc::function_not_supported,
                     ret.error().msg);
+      co_await client->close();
       co_return;
     };
     syncAwait(f());
@@ -108,6 +112,7 @@ TEST_CASE("testing client") {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call_for<hello_timeout>(20ms);
       CHECK_MESSAGE(ret.error().code == std::errc::timed_out, ret.error().msg);
+      co_await client->close();
       co_return;
     };
     register_handler<hello_timeout>();
@@ -123,6 +128,7 @@ TEST_CASE("testing client") {
       CHECK(ret.value() == std::string("hello"));
       ret = co_await client->call_for<hello>(100ms);
       CHECK(ret.value() == std::string("hello"));
+      co_await client->close();
       co_return;
     };
     register_handler<hello>();
@@ -138,6 +144,7 @@ TEST_CASE("testing client") {
       arg.resize(2048);
       auto ret = co_await client->template call<large_arg_fun>(arg);
       CHECK(ret.value() == arg);
+      co_await client->close();
       co_return;
     };
     register_handler<large_arg_fun>();
@@ -176,6 +183,7 @@ TEST_CASE("testing client with inject server") {
       auto client = co_await create_client(io_context, port);
       auto ret = co_await client->template call<hello>();
       CHECK(ret.value() == std::string("hello"));
+      co_await client->close();
       co_return;
     };
     syncAwait(f());
