@@ -1,6 +1,9 @@
 #pragma once
 #include <chrono>
+#include <cstddef>
+#include <cstring>
 #include <iostream>
+#include <string>
 
 #include "config.hpp"
 
@@ -18,7 +21,10 @@ class ScopedTimer {
     if (m_ns)
       *m_ns = dur.count();
 
-    std::cout << m_name << " : " << dur.count() << " ns\n";
+    size_t len = strlen(m_name);
+    std::string space = get_space_str(len, 39);
+
+    std::cout << m_name << " : " << space << dur.count() << " ns\n";
   }
 
  private:

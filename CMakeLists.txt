@@ -9,6 +9,7 @@ project(yaLanTingLibs
 include_directories(include)
 
 include(cmake/utils.cmake)
+include(cmake/struct_pb.cmake)
 include(cmake/build.cmake)
 include(cmake/platform.cmake)
 include(cmake/dependency.cmake)

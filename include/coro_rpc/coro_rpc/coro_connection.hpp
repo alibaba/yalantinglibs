@@ -197,8 +197,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       rpc_header resp_header = header_;
       resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-      [[maybe_unused]] auto sz = struct_pack::serialize_to(
-          buf.data(), RESPONSE_HEADER_LEN, resp_header);
+      struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -250,8 +249,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
     rpc_header resp_header = header_;
     resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-    [[maybe_unused]] auto sz =
-        struct_pack::serialize_to(buf.data(), RESPONSE_HEADER_LEN, resp_header);
+    struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
 
     auto self = shared_from_this();
     response(std::move(buf), std::move(self)).via(&executor_).detach();

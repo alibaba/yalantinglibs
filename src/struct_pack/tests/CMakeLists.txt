@@ -9,6 +9,8 @@ add_executable(test_serialize
         test_pragma_pack.cpp
         test_pragma_pack_and_alignas_mix.cpp
         test_varint.cpp
+        test_stream.cpp
+        test_compatible.cpp
         main.cpp
         )
 add_test(NAME test_serialize COMMAND test_serialize)
