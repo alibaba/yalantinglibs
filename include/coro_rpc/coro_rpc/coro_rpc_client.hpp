@@ -495,8 +495,10 @@ class coro_rpc_client {
                                   .msg = "socket has been closed"}};
 
       co_await promise.getFuture();
-      co_await quit_promise_->getFuture();
-      quit_promise_ = nullptr;
+      if (quit_promise_) {
+        co_await quit_promise_->getFuture();
+        quit_promise_ = nullptr;
+      }
       co_return r;
     }
 
@@ -506,8 +508,10 @@ class coro_rpc_client {
 
     if (!r) {
       sync_close();
-      co_await quit_promise_->getFuture();
-      quit_promise_ = nullptr;
+      if (quit_promise_) {
+        co_await quit_promise_->getFuture();
+        quit_promise_ = nullptr;
+      }
     }
 
     co_return r;
@@ -691,8 +695,10 @@ class coro_rpc_client {
     co_await asio_util::async_close(socket_);
     has_closed_ = true;
 
-    if (quit_promise_ != nullptr)
+    if (quit_promise_) {
       co_await quit_promise_->getFuture();
+      quit_promise_ = nullptr;
+    }
   }
 
 #ifdef ENABLE_SSL
