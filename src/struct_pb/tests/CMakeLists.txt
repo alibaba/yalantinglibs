@@ -4,6 +4,7 @@ add_executable(test_struct_pb
         test_pb.cpp
         test_pb_oneof.cpp
         test_pb_benchmark_struct.cpp
+        test_pb_bad_identifiers.cpp
         )
 target_sources(test_struct_pb PRIVATE
         main.cpp
@@ -43,10 +44,23 @@ if (Protobuf_FOUND)
             ${STRUCT_PB_TEST_BENCHMARK_PROTO_SRCS}
             ${STRUCT_PB_TEST_BENCHMARK_PROTO_HDRS}
             )
+    protobuf_generate_struct_pb(STRUCT_PB_PROTO_SRCS2
+            STRUCT_PB_PROTO_HDRS2
+            test_bad_identifiers.proto
+            test_large_enum_value.proto
+            )
+    target_sources(test_struct_pb PRIVATE
+            ${STRUCT_PB_PROTO_SRCS2}
+            ${STRUCT_PB_PROTO_HDRS2}
+            )
 else()
     target_sources(test_struct_pb PRIVATE
             test_pb.struct_pb.cc
             test_pb.struct_pb.h
+            test_bad_identifiers.struct_pb.cc
+            test_bad_identifiers.struct_pb.h
+            test_large_enum_value.struct_pb.cc
+            test_large_enum_value.struct_pb.h
             ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/benchmark.struct_pb.cc
             ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/benchmark.struct_pb.h
             )
