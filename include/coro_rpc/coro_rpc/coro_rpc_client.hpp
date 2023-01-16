@@ -381,7 +381,7 @@ class coro_rpc_client {
     }
 
     is_timeout_ = is_timeout;
-    sync_close();
+    co_await async_close();
     promise.setValue(async_simple::Unit());
     co_return true;
   }
