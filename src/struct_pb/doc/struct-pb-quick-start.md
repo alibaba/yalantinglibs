@@ -10,7 +10,7 @@ which is the protobuf compatible solution of the [yalantinglibs](https://github.
 By walking through creating a simple example application, it shows you how to
 
 - Define message formats in a `.proto` file. (same as official protobuf document)
-- Use the protocol buffer compiler with `struct_pb` plugin.
+- Use the protocol buffer compiler (`protoc`) with `struct_pb` plugin.
 - Use the `struct_pb` low-level API to write and read messages.
 
 ## Defining Your Protocol Format
@@ -56,7 +56,7 @@ To do this, you need to run the protocol buffer compiler `protoc` with `struct_p
 ```shell
 protoc -I=$SRC_DIR --plugin=$PATH_TO_protoc-gen-struct_pb --struct_pb_out=$DST_DIR $SRC_DIR/addressbook.proto
 ```
-see []() for details.
+see [Generating source code](https://alibaba.github.io/yalantinglibs/guide/struct-pb-generating-your-struct.html) for details.
 
 This generates the following files in your specified destination directory:
 
@@ -191,4 +191,7 @@ void list_people(const tutorial::AddressBook& address_book) {
 }
 ```
 
+## the demo code
 
+- [code in yalantinglibs repo](https://github.com/alibaba/yalantinglibs/blob/main/src/struct_pb/examples/tutorial.cpp)
+- [code in standalone repo](https://github.com/PikachuHyA/struct_pb_tutorial)

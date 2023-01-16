@@ -1,7 +1,7 @@
 # struct_pb Introduction
 
 ## Motivation
-Protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. So many programs use protobuf as their serialization library. It is convienient for our customers to use `struct_pack` if we (`struct_pack`) can compatible with protobuf binary format. That why we create `struct_pb`.
+Protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. So many programs use protobuf as their serialization library. It is convienient for our customers to use `struct_pack` if we (`struct_pack`) can compatible with protobuf binary format. That is why we create `struct_pb`.
 
 ## Background
 In this section, we introduce the [protocol buffer wire format](https://developers.google.com/protocol-buffers/docs/encoding),  which defines the details of how protobuf message is sent on the wire and how much space it consumes on disk.
@@ -22,8 +22,9 @@ Variable-width integers, or _varints_, are at the core of the wire format. They 
 ![](images/struct_pb_overview.jpeg)
 
 ## Type Mapping
-proto3 first
+proto3 first,
 see also [Protocol Buffers Language Guide (proto3)](https://developers.google.com/protocol-buffers/docs/proto3#scalar)
+
 ### Overview
 Scalar Value Types with no modifier (a.k.a **singular**) -> T
 
@@ -42,26 +43,27 @@ oneof -> `std::variant <std::monostate, ...>`
 
 Note:
 
-- singular
+- singular.
   You cannot determine whether it was parsed from the wire. It will be serialized to the wire unless it is the default value. see also [Field Presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md).
-- optional
+- optional.
   You can check to see if the value was explicitly set.
-- repeat
+- repeat.
   In proto3, repeated fields of scalar numeric types use packed encoding by default.
-- map
+- map.
   The key of map can be any integral or string type except enum.
   The value of map can be any type except another map.
-- enum
+- enum.
   Every enum definition must contain a constant that maps to zero as its first element.
   Enumerator constants must be in the range of a 32-bit integer.
   During deserialization, unrecognized enum values will be preserved in the message
-- oneof
+- oneof.
   If you set an oneof field to the default value (such as setting an int32 oneof field to 0), the "case" of that oneof field will be set, and the value will be serialized on the wire.
 - default value
     - For numeric types, the default is 0.
     - For enums, the default is the zero-valued enumerator.
     - For strings, bytes, and repeated fields, the default is the zero-length value.
     - For messages, the default is the language-specific null value.
+
 ### Basic
 | .proto Type | struct_pb Type                    | pb native C++ type | Notes                              |
 |-------------|-----------------------------------|--------------------|------------------------------------|
@@ -118,19 +120,32 @@ protoc --plugin=/tmp/protoc-gen-structpb --structpb_out=. conformance.proto
 ```
 ## TODO
 
--[ ] handle no circle dependencies automatically
+-[ ] using value instead of `std::unique_ptr` when no circle dependencies
 
-```cpp
+for example, we convert the message `SearchResponse` to c++ struct `SearchResponse_v1`
+```
 message SearchResponse {
-  repeated Result results = 1;
+  Result result = 1;
 }
 
 message Result {
   string url = 1;
-  string title = 2;
-  repeated string snippets = 3;
 }
 ```
+
+```cpp
+struct SearchResponse_v1 {
+    std::unique_ptr<Result> result;
+};
+```
+
+we can optimize the pointer overhead if we can convert the message `SearchResponse` to c++ struct `SearchResponse_v2`
+```cpp
+struct SearchResponse_v2 {
+    Result result;
+};
+```
+
 
 ## Compatibility
 see also
@@ -143,6 +158,12 @@ see also
 - Reflection not support
 - proto2 extension not support
 
+## Acknowledge
+
+- [Embedded Proto](https://embeddedproto.com/): an easy to use C++ Protocol Buffer implementation specifically suited for microcontrollers
+- [protobuf-c](https://github.com/protobuf-c/protobuf-c): Protocol Buffers implementation in C
+- [protozero](https://github.com/mapbox/protozero): Minimalist protocol buffer decoder and encoder in C++
+- [protopuf](https://github.com/PragmaTwice/protopuf): A little, highly templated, and protobuf-compatible serialization/deserialization header-only library written in C++20
 
 ## Reference
 

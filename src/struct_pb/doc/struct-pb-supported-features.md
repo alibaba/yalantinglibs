@@ -26,6 +26,7 @@ The mapping type is same as the official implementation.
 ### Advance
 | .proto Type  | Support |
 |--------------|---------|
+| Groups       | ❌       |
 | Oneof        | ✅       |
 | Maps         | ✅       |
 | JSON Mapping | ❌       |
