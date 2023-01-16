@@ -296,7 +296,8 @@ class coro_rpc_client {
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
   call_for(auto duration, Args &&...args) {
     using R = decltype(get_return_type<func>());
-    easylog::info("client_id {} begin to call {}", client_id_, get_func_name<func>());
+    easylog::info("client_id {} begin to call {}", client_id_,
+                  get_func_name<func>());
     if (has_closed_) [[unlikely]] {
       easylog::error(
           "a closed client is not allowed call again, please create a new "
