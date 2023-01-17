@@ -82,7 +82,7 @@ void FileGenerator::generate_dependency_includes(
     auto dep = file_->dependency(i);
     std::string basename = StripProto(dep->name());
     std::string header_name = basename + ".struct_pb.h";
-    format("#include \"$1$\"", header_name);
+    format("#include \"$1$\"\n", header_name);
   }
 }
 void FileGenerator::generate_source(google::protobuf::io::Printer *p) {
