@@ -54,9 +54,9 @@ bool StructGenerator::Generate(
         generator_context->Open(basename + ".struct_pb.h"));
     google::protobuf::io::Printer p(output.get(), '$');
     p.Print({{"parameter", parameter}}, R"(// protoc generate parameter
+// clang-format off
 // $parameter$
 // =========================
-// clang-format off
 #include "struct_pb/struct_pb.hpp"
 )");
     file_generator.generate_header(&p);
@@ -69,9 +69,9 @@ bool StructGenerator::Generate(
     p.Print(
         {{"parameter", parameter}, {"header_file", basename + ".struct_pb.h"}},
         R"(// protoc generate parameter
+// clang-format off
 // $parameter$
 // =========================
-// clang-format off
 #include "$header_file$"
 #include "struct_pb/struct_pb/struct_pb_impl.hpp"
 )");

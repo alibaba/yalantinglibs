@@ -57,6 +57,7 @@ void FileGenerator::generate_header(google::protobuf::io::Printer *p) {
 #include <map>
 #include <variant>
 #include <vector>
+#include <optional>
 )");
 
   generate_dependency_includes(p);

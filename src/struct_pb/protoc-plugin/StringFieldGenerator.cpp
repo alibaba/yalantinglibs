@@ -91,13 +91,15 @@ void RepeatedStringFieldGenerator::generate_calculate_size(
     bool can_ignore_default_value) const {
   Formatter format(p);
   format("for (const auto& s: $1$) {\n", value);
-
-  p->Print({{"tag_sz", calculate_tag_size(d_)}, {"value", value}},
-           R"(
-for (const auto& s: $value$) {
-  total += $tag_sz$ + calculate_varint_size(s.size()) + s.size();
-}
-  )");
+  format.indent();
+  format("for (const auto& s: $1$) {\n", value);
+  format.indent();
+  format("total += $1$ + calculate_varint_size(s.size()) + s.size();\n",
+         calculate_tag_size(d_));
+  format.outdent();
+  format("}\n");
+  format.outdent();
+  format("}\n");
 }
 void RepeatedStringFieldGenerator::generate_calculate_only(
     google::protobuf::io::Printer *p, const std::string &value,
@@ -140,23 +142,14 @@ void RepeatedStringFieldGenerator::generate_serialization_only(
 void RepeatedStringFieldGenerator::generate_deserialization(
     google::protobuf::io::Printer *p, const std::string &value) const {
   StringFieldGenerator g(d_, options_);
-
-  p->Print({{"value", value}, {"tag", calculate_tag_str(d_)}},
-           R"(
-case $tag$: {
-  std::string tmp_str;
-}
-)");
+  Formatter format(p);
+  format("case $1$: {\n", calculate_tag_str(d_));
+  format.indent();
+  format("std::string tmp_str;\n");
   g.generate_deserialization_only(p, "tmp_str");
-  p->Print(
-      {
-          {"value", value},
-      },
-      R"(
-  $value$.push_back(std::move(tmp_str));
-  break;
-}
-)");
+  format("$1$.push_back(std::move(tmp_str));\n", value);
+  format.outdent();
+  format("}\n");
 }
 }  // namespace compiler
 }  // namespace struct_pb

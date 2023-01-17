@@ -56,6 +56,7 @@ inline void flatten_messages_in_file(
   }
 }
 inline std::string resolve_keyword(const std::string &name) {
+  // clang-format off
   static std::set<std::string> keyword_set{
       //
       "NULL",
@@ -151,7 +152,15 @@ inline std::string resolve_keyword(const std::string &name) {
       "co_return",
       "co_yield",
       "requires",
+      // typedef
+      "uint32_t",
+      "int32_t",
+      "uint64_t",
+      "int64_t",
+      "size_t",
+      "memset"
   };
+  // clang-format on
   auto it = keyword_set.find(name);
   if (it == keyword_set.end()) {
     return name;
@@ -165,7 +174,7 @@ inline std::string class_name(const google::protobuf::Descriptor *descriptor) {
   if (parent) {
     ret += class_name(parent) + "::";
   }
-  ret += descriptor->name();
+  ret += resolve_keyword(descriptor->name());
   return resolve_keyword(ret);
 }
 inline std::string enum_name(
@@ -175,7 +184,7 @@ inline std::string enum_name(
   if (parent) {
     ret += class_name(parent) + "::";
   }
-  ret += descriptor->name();
+  ret += resolve_keyword(descriptor->name());
   return resolve_keyword(ret);
 }
 // https://stackoverflow.com/questions/2896600/how-to-replace-all-occurrences-of-a-character-in-string
