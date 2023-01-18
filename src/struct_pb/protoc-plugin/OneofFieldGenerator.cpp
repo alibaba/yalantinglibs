@@ -178,30 +178,30 @@ pos += msg_sz;
       format("if ($1$.index() != $2$) {\n", value, index());
       format.indent();
       format("$1$.emplace<$2$>();\n", value, index());
-      StringFieldGenerator(d_, options_)
-          .generate_deserialization_only(p, oneof_value, "str_sz", max_size);
       format.outdent();
       format("}\n");
+      StringFieldGenerator(d_, options_)
+          .generate_deserialization_only(p, oneof_value, "str_sz", max_size);
       break;
     }
     case FieldDescriptor::CPPTYPE_ENUM: {
       format("if ($1$.index() != $2$) {\n", value, index());
       format.indent();
       format("$1$.emplace<$2$>();\n", value, index());
-      EnumFieldGenerator(d_, options_)
-          .generate_deserialization_only(p, oneof_value, max_size);
       format.outdent();
       format("}\n");
+      EnumFieldGenerator(d_, options_)
+          .generate_deserialization_only(p, oneof_value, max_size);
       break;
     }
     default: {
       format("if ($1$.index() != $2$) {\n", value, index());
       format.indent();
       format("$1$.emplace<$2$>();\n", value, index());
-      PrimitiveFieldGenerator(d_, options_)
-          .generate_deserialization_only(p, oneof_value);
       format.outdent();
       format("}\n");
+      PrimitiveFieldGenerator(d_, options_)
+          .generate_deserialization_only(p, oneof_value);
     }
   }
 }

@@ -46,6 +46,6 @@ target_include_directories(struct_pack_benchmark PRIVATE
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/frozen
         )
 if (Protobuf_FOUND)
-    target_link_libraries(struct_pack_benchmark ${Protobuf_LIBRARIES})
+    target_link_libraries(struct_pack_benchmark PRIVATE protobuf::libprotobuf)
 endif()
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST STRUCT_PACK_OPTIMIZE)
