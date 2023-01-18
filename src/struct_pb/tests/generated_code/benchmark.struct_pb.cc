@@ -1,7 +1,7 @@
 // protoc generate parameter
-// clang-format off
 // namespace=struct_pb_sample
 // =========================
+// clang-format off
 #include "benchmark.struct_pb.h"
 #include "struct_pb/struct_pb/struct_pb_impl.hpp"
 namespace struct_pb {

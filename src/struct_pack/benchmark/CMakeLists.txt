@@ -1,6 +1,5 @@
-add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
-
 find_package(Protobuf)
+add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
 if (Protobuf_FOUND)
     protobuf_generate_cpp(STRUCT_PACK_BENCHMARK_PROTO_SRCS
             STRUCT_PACK_BENCHMARK_PROTO_HDRS
@@ -11,6 +10,7 @@ if (Protobuf_FOUND)
             ${STRUCT_PACK_BENCHMARK_PROTO_SRCS}
             ${STRUCT_PACK_BENCHMARK_PROTO_HDRS}
             )
+    target_link_libraries(struct_pack_benchmark PRIVATE protobuf::libprotobuf)
 
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
     protobuf_generate_struct_pb(STRUCT_PACK_BENCHMARK_PROTO_SRCS2
@@ -29,20 +29,15 @@ else ()
             generated_code/benchmark.struct_pb.cc
             generated_code/benchmark.struct_pb.h
             )
+    target_include_directories(struct_pack_benchmark PRIVATE generated_code)
 endif ()
 
 # TODO
 find_package(Msgpack)
 if (Msgpack_FOUND)
     message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
+    target_link_libraries(struct_pack_benchmark PRIVATE msgpackc-cxx)
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_MSGPACK)
+    target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
 endif()
-
-target_include_directories(struct_pack_benchmark PUBLIC ${CMAKE_BINARY_DIR}/benchmark/)
-target_include_directories(struct_pack_benchmark PRIVATE
-        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/frozen
-        )
-if (Protobuf_FOUND)
-    target_link_libraries(struct_pack_benchmark PRIVATE protobuf::libprotobuf)
-endif()
-target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST STRUCT_PACK_OPTIMIZE)
+target_compile_definitions(struct_pack_benchmark PRIVATE STRUCT_PACK_OPTIMIZE)

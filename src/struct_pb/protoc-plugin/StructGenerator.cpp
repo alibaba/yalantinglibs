@@ -18,21 +18,7 @@ bool StructGenerator::Generate(
   for (const auto &option : options) {
     const auto &key = option.first;
     const auto &value = option.second;
-    if (key == "struct_name_style") {
-      if (value == "camel_case") {
-        struct_pb_options.struct_name_style = Options::name_style::camel_case;
-      }
-      else if (value == "snake_case") {
-        struct_pb_options.struct_name_style = Options::name_style::snake_case;
-      }
-      else if (value == "kebab_case") {
-        struct_pb_options.struct_name_style = Options::name_style::kebab_case;
-      }
-      else if (value == "pascal_case") {
-        struct_pb_options.struct_name_style = Options::name_style::pascal_case;
-      }
-    }
-    else if (key == "generate_eq_op") {
+    if (key == "generate_eq_op") {
       struct_pb_options.generate_eq_op = true;
     }
     else if (key == "namespace") {
@@ -57,7 +43,8 @@ bool StructGenerator::Generate(
 // clang-format off
 // $parameter$
 // =========================
-#include "struct_pb/struct_pb.hpp"
+#pragma once
+
 )");
     file_generator.generate_header(&p);
   }

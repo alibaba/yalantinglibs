@@ -84,8 +84,7 @@ int main(int argc, char* argv[]) {
     buffer.resize(length);
     input.read(buffer.data(), buffer.size());
     input.close();
-    bool ok = struct_pb::internal::deserialize_to(address_book, buffer.data(),
-                                                  buffer.size());
+    bool ok = struct_pb::deserialize_to(address_book, buffer);
     if (!ok) {
       std::cerr << "Failed to parse address book." << std::endl;
       return -1;
@@ -96,10 +95,7 @@ int main(int argc, char* argv[]) {
   prompt_for_address(address_book.people.back());
   std::fstream output(argv[1],
                       std::ios::out | std::ios::trunc | std::ios::binary);
-  std::string buffer;
-  auto length = struct_pb::internal::get_needed_size(address_book);
-  buffer.resize(length);
-  struct_pb::internal::serialize_to(buffer.data(), buffer.size(), address_book);
+  std::string buffer = struct_pb::serialize<std::string>(address_book);
   output.write(buffer.data(), buffer.size());
   output.close();
   list_people(address_book);

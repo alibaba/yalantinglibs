@@ -3,14 +3,10 @@
 #include <cstring>
 #include <map>
 #include <string>
-#if defined __clang__
-#define STRUCT_PB_INLINE __attribute__((always_inline)) inline
-#elif defined _MSC_VER
-#define STRUCT_PB_INLINE __forceinline
-#else
-#define STRUCT_PB_INLINE __attribute__((always_inline)) inline
-#endif
-#define STRUCT_PB_NODISCARD [[nodiscard]]
+#include <vector>
+
+#include "struct_pb/struct_pb.hpp"
+
 namespace struct_pb {
 
 namespace internal {
@@ -111,6 +107,63 @@ STRUCT_PB_NODISCARD STRUCT_PB_INLINE bool read_tag(const char* data,
                                                    uint64_t& tag) {
   return deserialize_varint(data, pos, size, tag);
 }
-
+inline bool deserialize_unknown(const char* data, std::size_t& pos,
+                                std::size_t size, uint32_t tag,
+                                UnknownFields& unknown_fields) {
+  uint32_t field_number = tag >> 3;
+  if (field_number == 0) {
+    return false;
+  }
+  auto offset = internal::calculate_varint_size(tag);
+  auto start = pos - offset;
+  uint32_t wire_type = tag & 0b0000'0111;
+  switch (wire_type) {
+    case 0: {
+      uint64_t t;
+      auto ok = internal::deserialize_varint(data, pos, size, t);
+      if (!ok) [[unlikely]] {
+        return false;
+      }
+      unknown_fields.add_field(data, start, pos);
+      break;
+    }
+    case 1: {
+      static_assert(sizeof(double) == 8);
+      if (pos + 8 > size) [[unlikely]] {
+        return false;
+      }
+      pos += 8;
+      unknown_fields.add_field(data, start, pos);
+      break;
+    }
+    case 2: {
+      uint64_t sz;
+      auto ok = internal::deserialize_varint(data, pos, size, sz);
+      if (!ok) [[unlikely]] {
+        return false;
+      }
+      if (pos + sz > size) [[unlikely]] {
+        return false;
+      }
+      pos += sz;
+      unknown_fields.add_field(data, start, pos);
+      break;
+    }
+    case 5: {
+      static_assert(sizeof(float) == 4);
+      if (pos + 4 > size) [[unlikely]] {
+        return false;
+      }
+      pos += 4;
+      unknown_fields.add_field(data, start, pos);
+      break;
+    }
+    default: {
+      assert(false && "error path");
+    }
+  }
+  return true;
+}
 }  // namespace internal
+
 }  // namespace struct_pb
