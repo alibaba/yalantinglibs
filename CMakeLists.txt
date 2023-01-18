@@ -8,6 +8,9 @@ project(yaLanTingLibs
 
 include_directories(include)
 
+#the thread library of the system.
+find_package(Threads REQUIRED)
+
 include(cmake/utils.cmake)
 include(cmake/struct_pb.cmake)
 include(cmake/build.cmake)
