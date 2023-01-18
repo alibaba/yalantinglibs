@@ -79,7 +79,7 @@ of this field is used to get the `type hash` higher 31 bits.
 
 The length of this field could be determined at compile time if it passed validation. However, it's length could only be determined by the position of char `'\0'` when validation failed.
 
-The encoding rules for this field and its mapping to the struct_pack type tree can be found in[struct_pack的类型系统]。
+The encoding rules for this field and its mapping to the struct_pack type tree can be found in[struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
 
 
 Take the following type as an example:
@@ -231,12 +231,18 @@ For example, a `std::set<int>{42,24}` could be encoded as:
 
 For `std::map<K,V>` or similar user-defined data, the memory layout begins with number of elements of type `size_type`, followed by each data field of `value_type`.
 
-For example, a `std::map<int,std::string>{{42，"Hello"},{24,"Student"}}` is encoded as:
+For example, a 
+
+```cpp
+std::map<int,std::string>{{42,"Hello"},{24,"Student"}}
+```
+
+is encoded as:
 
 ![](images/layout/map_layout.svg)
 
 
-### optional<T>
+### `optional<T>`
 
 For `std::optional<T>` or similar user-defined data, it begins with a bool indicates if the value is present or not. The value will be followed by this bool field if it is present.
 

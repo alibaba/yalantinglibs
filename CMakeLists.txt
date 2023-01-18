@@ -12,6 +12,7 @@ include_directories(include)
 find_package(Threads REQUIRED)
 
 include(cmake/utils.cmake)
+include(cmake/struct_pb.cmake)
 include(cmake/build.cmake)
 include(cmake/platform.cmake)
 include(cmake/dependency.cmake)

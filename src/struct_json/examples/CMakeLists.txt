@@ -4,8 +4,8 @@ add_executable(struct_json_example
 target_link_libraries(struct_json_example PRIVATE libstruct_json)
 
 ## manual import struct_json
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/frozen)
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/iguana)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/frozen)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/iguana)
 
 add_executable(struct_json_example_manual
     main.cpp

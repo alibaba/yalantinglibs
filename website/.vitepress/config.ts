@@ -73,14 +73,35 @@ function nav() {
 function sidebarGuide() {
   return [
     {
+      text: 'how to use?',
+      collapsible: true,
+      items: [
+        {text: 'Use as Git Submodule', link: '/guide/how-to-use-as-git-submodule'}
+      ]
+    },
+    {
       text: 'struct_pack',
       collapsible: true,
       items: [
         {text: 'What is struct_pack?', link: '/guide/struct-pack-intro'},
+        {text: 'struct_pack layout', link: '/guide/struct-pack-layout'},
+        {text: 'struct_pack type system', link: '/guide/struct-pack-type-system'},
         {
           text: 'API Reference',
           link: "https://alibaba.github.io/yalantinglibs/en/html/group__struct__pack.html"
         }
+      ]
+    },
+    {
+      text: 'struct_pb',
+      collapsible: true,
+      items: [
+        {text: 'What is struct_pb?', link: '/guide/struct-pb-intro'},
+        {text: 'Quick Start', link: '/guide/struct-pb-quick-start'},
+        {text: 'Supported Features', link: '/guide/struct-pb-supported-features'},
+        {text: 'Guide (proto3)', link: '/guide/struct-pb-guide-proto3'},
+        {text: 'Generating your struct', link: '/guide/struct-pb-generating-your-struct'},
+        {text: 'struct_pb API', link: '/guide/struct-pb-api'},
       ]
     },
     {

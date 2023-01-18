@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build_by_clang:
     strategy:
       matrix:
         mode: [ Release, Debug ]
@@ -37,3 +37,43 @@ jobs:
       - name: Test
         working-directory: ${{github.workspace}}/build
         run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
+
+  build_by_clang_pb:
+    strategy:
+      matrix:
+        mode: [ Release, Debug ]
+        libcxx: [ OFF ]
+        ssl: [ ON, OFF ]
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get install openssl
+          sudo apt-get install libssl-dev
+          sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v3
+
+      - name: Check protoc
+        run: |
+          protoc --version
+
+      - name: Configure
+        run: |
+          rm -rf ${{github.workspace}}/build
+          CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} -G Ninja
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
+
+

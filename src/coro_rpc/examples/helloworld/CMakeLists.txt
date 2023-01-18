@@ -30,14 +30,14 @@ target_compile_definitions(helloworld_server_manually PRIVATE ASYNC_SIMPLE_HAS_N
 target_compile_definitions(helloworld_client_manually PRIVATE ASIO_HAS_STD_INVOKE_RESULT)
 target_compile_definitions(helloworld_client_manually PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 target_include_directories(helloworld_server_manually PRIVATE
-        ${CMAKE_SOURCE_DIR}/thirdparty/asio
-        ${CMAKE_SOURCE_DIR}/thirdparty/async_simple
-        ${CMAKE_SOURCE_DIR}/thirdparty/spdlog
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/spdlog
 )
 target_include_directories(helloworld_client_manually PRIVATE
-        ${CMAKE_SOURCE_DIR}/thirdparty/asio
-        ${CMAKE_SOURCE_DIR}/thirdparty/async_simple
-        ${CMAKE_SOURCE_DIR}/thirdparty/spdlog
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/spdlog
 )
 target_link_libraries(helloworld_server_manually -lpthread)
 target_link_libraries(helloworld_client_manually -lpthread)

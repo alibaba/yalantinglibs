@@ -8,13 +8,20 @@
     - [Append the result at the end of existing data container](#append-the-result-at-the-end-of-existing-data-container)
     - [Save the results to memory location indicated by pointer](#save-the-results-to-memory-location-indicated-by-pointer)
     - [Multi-parameter serialization](#multi-parameter-serialization)
+    - [Save the results to output stream](#save-the-results-to-output-stream)
   - [Deserialization](#deserialization)
     - [Basic Usage](#basic-usage-1)
     - [deserialize from pointers](#deserialize-from-pointers)
     - [deserialize to an existing object](#deserialize-to-an-existing-object)
     - [Multi-parameter deserialization](#multi-parameter-deserialization)
+    - [deserialize to input stream](#deserialize-to-input-stream)
     - [Partial deserialization](#partial-deserialization)
   - [support std containers, std::optional and custom containers](#support-std-containers-stdoptional-and-custom-containers)
+  - [custom support](#custom-support)
+    - [custom type](#custom-type)
+    - [custom output stream](#custom-output-stream)
+    - [custom input stream](#custom-input-stream)
+  - [varint support](#varint-support)
   - [benchmark](#benchmark)
     - [Test case](#test-case)
     - [Test objects](#test-objects)
@@ -23,6 +30,8 @@
   - [Forward/backward compatibility](#forwardbackward-compatibility)
   - [Why is struct\_pack faster?](#why-is-struct_pack-faster)
   - [Appendix](#appendix)
+    - [struct\_pack type system](#struct_pack-type-system)
+    - [struct\_pack layout](#struct_pack-layout)
     - [Test code](#test-code)
 
 struct_pack is a serialization library featuring zero-cost abstraction as well as usability. In struct_pack, the serialization or deserialization of one complex structure could easily be done in a single line of code, without any DSL, macro, or template to be defined. struct_pack supports the serialization of C++ structures through compile-time reflection and its performance is significantly better than protobuf and msgpack (see the benchmark section for details).
@@ -82,6 +91,14 @@ auto result=struct_pack::serialize(person1.id, person1.name, person1.age, person
 //serialize as std::tuple<int64_t, std::string, int, double>
 ```
 
+### Save the results to output stream
+
+```cpp
+std::ofstream writer("struct_pack_demo.data",
+                      std::ofstream::out | std::ofstream::binary);
+struct_pack::serialize_to(writer, person1);
+```
+
 ## Deserialization
 
 In below we demonstrate serval ways of deserialize one object with struct_pack APIs.
@@ -124,6 +141,15 @@ assert(person1.id==id);
 assert(person1.name==name);
 assert(person1.age==age);
 assert(person1.salary==salary);
+```
+
+### deserialize to input stream
+
+```cpp
+std::ifstream ifs("struct_pack_demo.data",
+                  std::ofstream::in | std::ofstream::binary);
+auto person2 = struct_pack::deserialize<person>(ifs);
+assert(person2 == person1);
 ```
 
 
@@ -179,6 +205,10 @@ assert(nested2)
 assert(nested2==nested1);
 ```
 
+## custom support
+
+### custom type
+
 In addition, struct_pack supports serialization and deserialization on custom containers, as below:
 
 ```cpp
@@ -196,6 +226,65 @@ absl::flat_hash_map<int, std::string> map2 =
 auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
+
+For more detail, See [struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
+
+### custom output stream
+
+Except std::ostream/std::sstream struct_pack also support serialize to custom output stream.
+
+The custom stream should satisfy those conditions:
+
+```cpp
+template <typename T>
+concept writer_t = requires(T t) {
+  t.write((const char *)nullptr, std::size_t{}); // Output a piece of data. The return value can be implicit conversion to bool. Return false in any error. 
+};
+```
+
+For example:
+
+```cpp
+// A simple output stream for fwrite.
+struct fwrite_stream {
+  FILE* file;
+  bool write(const char* data, std::size_t sz) {
+    return fwrite(data, sz, 1, file) == 1;
+  }
+  fwrite_stream(const char* file_name) : file(fopen(file_name, "wb")) {}
+  ~fwrite_stream() { fclose(file); }
+};
+// ...
+fwrite_stream writer("struct_pack_demo.data");
+struct_pack::serialize_to(writer, person);
+```
+
+### custom input stream
+
+Except std::istream/std::sstream struct_pack also support serialize to custom input stream.
+
+The custom stream should satisfy those conditions:
+
+```cpp
+template <typename T>
+concept reader_t = requires(T t) {
+  t.read((char *)nullptr, std::size_t{}); // Input a piece of data. The return value can be implicit conversion to bool. Return false in any error. 
+  t.ignore(std::size_t{}); // Skip a piece of data. The return value can be implicit conversion to bool. Return false in any error. 
+  t.tellg(); // Return an unsigned integer as the absolute position of stream.
+};
+```
+
+In addition, if the stream support `read_view`, then we enable the support of zero-copy for string_view.
+
+```cpp
+template <typename T>
+concept view_reader_t = reader_t<T> && requires(T t) {
+  { t.read_view(std::size_t{}) } -> std::convertible_to<const char *>;
+  // Read a view from stream. The return value is the begin pointer to view. Return nullptr in any error.
+};
+```
+
+## varint support
 
 struct_pack also supports varint code for integer.
 
@@ -283,7 +372,7 @@ Processor: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 ## Forward/backward compatibility
 
-If current message type no longer meets all you needs - say, you'd like the object to  have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
+If current message type no longer meets all you needs - say, you'd like the object to have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
 
 ```cpp
 struct person {
@@ -310,6 +399,15 @@ struct_pack ensures that the two classes can be safely converted to each other b
 6. Compile-time type calculation allows struct_pack to generate different codes according to different types. So we can do optimization upon types. For example, we could use `memcpy` on contiguous containers and zero-copy optimization could be used on `string_view`
 
 ## Appendix
+
+### struct_pack type system
+
+[struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
+
+### struct_pack layout
+
+[struct_pack layout](https://alibaba.github.io/yalantinglibs/guide/struct-pack-layout.html)
+
 
 ### Test code
 

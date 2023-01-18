@@ -1,4 +1,5 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+find_package(Protobuf)
 add_executable(test_serialize
         test_serialize.cpp
         test_compile_time_calculate.cpp
@@ -8,6 +9,8 @@ add_executable(test_serialize
         test_pragma_pack.cpp
         test_pragma_pack_and_alignas_mix.cpp
         test_varint.cpp
+        test_stream.cpp
+        test_compatible.cpp
         main.cpp
         )
 add_test(NAME test_serialize COMMAND test_serialize)

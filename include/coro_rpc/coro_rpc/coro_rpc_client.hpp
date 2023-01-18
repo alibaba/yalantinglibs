@@ -460,7 +460,19 @@ class coro_rpc_client {
       ret = co_await asio_util::async_read(
           socket, asio::buffer(head, RESPONSE_HEADER_LEN));
       if (!ret.first) {
-        uint32_t body_len = *(uint32_t *)head;
+        rpc_header header{};
+        auto errc =
+            struct_pack::deserialize_to(header, head, RESPONSE_HEADER_LEN);
+        if (errc != struct_pack::errc::ok) [[unlikely]] {
+          easylog::error("deserialize rpc header failed");
+          co_await close();
+          r = rpc_result<R>{
+              unexpect_t{},
+              rpc_error{std::errc::io_error, struct_pack::error_message(errc)}};
+          co_return r;
+        }
+
+        uint32_t body_len = header.length;
         if (body_len > read_buf_.size()) {
           read_buf_.resize(body_len);
         }
@@ -536,9 +548,7 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     }
 #endif
-    [[maybe_unused]] auto sz =
-        struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
-    assert(sz == RPC_HEAD_LEN);
+    struct_pack::serialize_to((char *)buffer.data(), RPC_HEAD_LEN, header);
     return buffer;
   }
 
@@ -546,7 +556,7 @@ class coro_rpc_client {
   rpc_result<T> handle_response_buffer(const std::byte *buffer,
                                        std::size_t len) {
     rpc_return_type_t<T> ret;
-    auto ec = struct_pack::deserialize_to(ret, buffer, len);
+    auto ec = struct_pack::deserialize_to(ret, (const char *)buffer, len);
     if (ec == struct_pack::errc::ok) {
       if constexpr (std::is_same_v<T, void>) {
         return {};
@@ -557,7 +567,7 @@ class coro_rpc_client {
     }
     else {
       rpc_error err;
-      auto ec = struct_pack::deserialize_to(err, buffer, len);
+      auto ec = struct_pack::deserialize_to(err, (const char *)buffer, len);
       if (ec != struct_pack::errc::ok) {
         // if deserialize failed again,
         // we can do nothing but give an error code.

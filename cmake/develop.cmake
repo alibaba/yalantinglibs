@@ -3,7 +3,6 @@ option(BUILD_EXAMPLES "Build examples" ON)
 
 # bench test
 option(BUILD_BENCHMARK "Build benchmark" ON)
-option(BUILD_SP_BENCHMARK "Build struct_pack benchmark" OFF)
 
 # unit test
 option(BUILD_UNIT_TESTS "Build unit tests" ON)

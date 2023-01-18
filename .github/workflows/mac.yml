@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build_on_mac:
     strategy:
       matrix:
         mode: [ Debug ]  #mode: [Release, Debug]
@@ -24,7 +24,11 @@ jobs:
         uses: Homebrew/actions/setup-homebrew@master
 
       - name: Install Dependencies
-        run: brew install openssl
+        run: HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install openssl protobuf
+
+      - name: Check protoc
+        run: |
+          protoc --version
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v3

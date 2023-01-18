@@ -19,10 +19,12 @@
 #include <variant>
 
 #include "ServerTester.hpp"
+#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
+#include "struct_pack/struct_pack.hpp"
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -240,20 +242,20 @@ TEST_CASE("test server write queue") {
   header.seq_num = g_client_id++;
   easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
-  auto sz = struct_pack::serialize_to(buffer.data(), RPC_HEAD_LEN, header);
-  CHECK(sz == RPC_HEAD_LEN);
+  struct_pack::serialize_to((char*)buffer.data(), RPC_HEAD_LEN, header);
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);
-  auto ret = connect(io_context, socket, "127.0.0.1", "8820");
+  auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8820");
   CHECK(!ret);
   easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
                 "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
-    auto err = write(socket, asio::buffer(buffer.data(), buffer.size()));
+    auto err =
+        asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {
@@ -262,10 +264,15 @@ TEST_CASE("test server write queue") {
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
-    uint32_t body_len = *(uint32_t*)resp_len_buf;
+    asio_util::read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
+
+    rpc_header header{};
+    [[maybe_unused]] auto errc = struct_pack::deserialize_to(
+        header, (const char*)resp_len_buf, RESPONSE_HEADER_LEN);
+    uint32_t body_len = header.length;
+
     CHECK(body_len == buf.size());
-    read(socket, asio::buffer(buffer_read, body_len));
+    asio_util::read(socket, asio::buffer(buffer_read, body_len));
     std::monostate r2;
     std::size_t sz;
     auto ret =

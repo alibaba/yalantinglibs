@@ -127,7 +127,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     }
 
     auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
-    *((uint32_t *)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
+    rpc_header resp_header = header_;
+    resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
+    struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
 
     io_context_.post([this, buf = std::move(buf), self = shared_from_this()] {
       if (has_closed()) [[unlikely]] {
@@ -169,8 +171,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
                                                       std::size_t length) {
       if (!ec) {
         assert(length == RPC_HEAD_LEN);
-        rpc_header header{};
-        auto errc = struct_pack::deserialize_to(header, head_, RPC_HEAD_LEN);
+
+        auto errc = struct_pack::deserialize_to(header_, head_, RPC_HEAD_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
           log(std::errc::protocol_error, "bad head");
           close();
@@ -178,27 +180,27 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         }
 
 #ifdef UNIT_TEST_INJECT
-        client_id_ = header.seq_num;
+        client_id_ = header_.seq_num;
         easylog::info("client_id {}", client_id_);
 #endif
 
-        if (header.magic != magic_number) [[unlikely]] {
+        if (header_.magic != magic_number) [[unlikely]] {
           easylog::error("bad magic number");
           close();
           return;
         }
 
-        if (header.length == 0) [[unlikely]] {
+        if (header_.length == 0) [[unlikely]] {
           log(std::errc::protocol_error, "bad body length");
           close();
           return;
         }
 
-        if (header.length > body_size_) {
-          body_size_ = header.length;
+        if (header_.length > body_size_) {
+          body_size_ = header_.length;
           body_.resize(body_size_);
         }
-        read_body(header.length);
+        read_body(header_.length);
       }
       else {
         log((std::errc)ec.value());
@@ -231,8 +233,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
       return;
     }
 
-    // set buf len at the head.
-    *((uint32_t *)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
+    rpc_header resp_header = header_;
+    resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
+    struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
 
     write(std::move(buf));
 
@@ -431,6 +434,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::atomic_bool has_closed_ = false;
   std::once_flag flag_{};
   std::any tag_;
+  rpc_header header_{};
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =

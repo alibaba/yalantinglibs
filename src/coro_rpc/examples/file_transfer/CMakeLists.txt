@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.15)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/asio)
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/async_simple)
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/spdlog)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/spdlog)
 
 add_definitions(-DASIO_HAS_STD_INVOKE_RESULT)
 add_definitions(-DASYNC_SIMPLE_HAS_NOT_AIO)
