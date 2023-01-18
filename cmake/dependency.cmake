@@ -1,6 +1,3 @@
-#the thread library of the system.
-find_package(Threads REQUIRED)
-
 # 3rd-party package load
 option(USE_CONAN "Use conan package manager" OFF)
 if(USE_CONAN)
