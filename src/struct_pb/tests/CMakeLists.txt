@@ -55,13 +55,15 @@ if (Protobuf_FOUND)
             )
 else()
     target_sources(test_struct_pb PRIVATE
-            test_pb.struct_pb.cc
-            test_pb.struct_pb.h
-            test_bad_identifiers.struct_pb.cc
-            test_bad_identifiers.struct_pb.h
-            test_large_enum_value.struct_pb.cc
-            test_large_enum_value.struct_pb.h
-            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/benchmark.struct_pb.cc
-            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/benchmark.struct_pb.h
+            generated_code/test_pb.struct_pb.cc
+            generated_code/test_pb.struct_pb.h
+            generated_code/test_bad_identifiers.struct_pb.cc
+            generated_code/test_bad_identifiers.struct_pb.h
+            generated_code/test_large_enum_value.struct_pb.cc
+            generated_code/test_large_enum_value.struct_pb.h
+            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code/benchmark.struct_pb.cc
+            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code/benchmark.struct_pb.h
             )
+    target_include_directories(test_struct_pb PRIVATE generated_code)
+    target_include_directories(test_struct_pb PRIVATE ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code)
 endif ()

@@ -1,8 +1,3 @@
-if(NOT BUILD_SP_BENCHMARK)
-    message(WARNING "additional BUILD_SP_BENCHMARK=ON needed for struct_pack benchmark")
-    return()
-endif()
-
 add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
 
 find_package(Protobuf)
@@ -29,10 +24,12 @@ if (Protobuf_FOUND)
             )
 
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
-else()
-    target_sources(struct_pack_benchmark PRIVATE benchmark.struct_pb.cc
-            benchmark.struct_pb.h)
-endif()
+else ()
+    target_sources(struct_pack_benchmark PRIVATE
+            generated_code/benchmark.struct_pb.cc
+            generated_code/benchmark.struct_pb.h
+            )
+endif ()
 
 # TODO
 find_package(Msgpack)

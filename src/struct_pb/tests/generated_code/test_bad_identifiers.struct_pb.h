@@ -65,7 +65,7 @@ struct TestConflictingSymbolNames {
   };
   std::optional<int32_t> input; // int32, field number = 1
   std::optional<int32_t> output; // int32, field number = 2
-  std::string length; // string, field number = 3
+  std::optional<std::string> length; // string, field number = 3
   std::vector<int32_t> i; // int32, field number = 4
   std::vector<std::string> new_element; // string, field number = 5
   std::optional<int32_t> total_size; // int32, field number = 6
@@ -82,7 +82,7 @@ struct TestConflictingSymbolNames {
   std::optional<uint32_t> uint32_t_; // uint32, field number = 41
   std::optional<uint64_t> uint64; // uint64, field number = 17
   std::optional<uint32_t> uint64_t_; // uint32, field number = 42
-  std::string string; // string, field number = 18
+  std::optional<std::string> string; // string, field number = 18
   std::optional<int32_t> memset_; // int32, field number = 19
   std::optional<int32_t> int32; // int32, field number = 20
   std::optional<int32_t> int32_t_; // int32, field number = 43
@@ -95,8 +95,8 @@ struct TestConflictingSymbolNames {
   std::optional<uint32_t> bits; // uint32, field number = 25
   std::optional<uint32_t> offsets; // uint32, field number = 26
   std::optional<uint32_t> reflection; // uint32, field number = 27
-  std::string some_cord; // string, field number = 28
-  std::string some_string_piece; // string, field number = 29
+  std::optional<std::string> some_cord; // string, field number = 28
+  std::optional<std::string> some_string_piece; // string, field number = 29
   std::optional<uint32_t> int_; // uint32, field number = 30
   std::optional<uint32_t> friend_; // uint32, field number = 31
   std::optional<uint32_t> class_; // uint32, field number = 37
@@ -105,9 +105,9 @@ struct TestConflictingSymbolNames {
   std::unique_ptr<::protobuf_unittest::TestConflictingSymbolNames::DO> do_; // message, field number = 32
   std::optional<int32_t> field_type; // int32, field number = 33
   std::optional<bool> is_packed; // bool, field number = 34
-  std::string release_length; // string, field number = 35
+  std::optional<std::string> release_length; // string, field number = 35
   std::unique_ptr<::protobuf_unittest::TestConflictingSymbolNames::DO> release_do; // message, field number = 36
-  std::string target; // string, field number = 38
+  std::optional<std::string> target; // string, field number = 38
 };
 struct TestConflictingSymbolNamesExtension {
 };
