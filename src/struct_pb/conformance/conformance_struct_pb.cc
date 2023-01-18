@@ -69,16 +69,6 @@ class Harness {
 };
 
 template <typename T>
-std::string serialize(const T& t,
-                      const struct_pb::UnknownFields& unknown_fields = {}) {
-  std::string buffer;
-  auto sz = struct_pb::internal::get_needed_size(t, unknown_fields);
-  buffer.resize(sz);
-  struct_pb::internal::serialize_to(buffer.data(), sz, t, unknown_fields);
-  return buffer;
-}
-
-template <typename T>
 absl::StatusOr<ConformanceResponse> run_test(
     const ConformanceRequest& request) {
   ConformanceResponse response{};
@@ -111,7 +101,8 @@ absl::StatusOr<ConformanceResponse> run_test(
   }
   switch (request.requested_output_format) {
     case conformance::WireFormat::PROTOBUF: {
-      response.set_protobuf_payload(serialize(data, unknown_fields));
+      response.set_protobuf_payload(
+          struct_pb::serialize<std::string>(data, unknown_fields));
       break;
     }
     case conformance::WireFormat::UNSPECIFIED:
@@ -175,7 +166,7 @@ absl::StatusOr<bool> Harness::ServeConformanceRequest() {
   absl::StatusOr<ConformanceResponse> response = RunTest(request);
   RETURN_IF_ERROR(response.status());
 
-  std::string serialized_output = serialize(*response);
+  std::string serialized_output = struct_pb::serialize<std::string>(*response);
 
   uint32_t out_len = static_cast<uint32_t>(serialized_output.size());
   RETURN_IF_ERROR(WriteFd(STDOUT_FILENO, &out_len, sizeof(out_len)));
@@ -240,7 +231,7 @@ int debug_struct_pb() {
       std::cout << "ERROR: " << index << " run test" << std::endl;
       return 2;
     }
-    auto buf = serialize(*ret);
+    auto buf = struct_pb::serialize<std::string>(*ret);
     if (buf != out_buf) {
       std::cout << "ERROR: " << index << " test fail" << std::endl;
       return 3;

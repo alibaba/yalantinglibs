@@ -22,7 +22,6 @@
 #include "helper.hpp"
 #include "struct_pb_sample.hpp"
 using namespace doctest;
-using namespace struct_pb::internal;
 
 namespace struct_pb_sample {
 template <typename T>
@@ -310,13 +309,10 @@ TEST_CASE("testing monsters") {
 
     check_with_protobuf(my_m, pb_m);
 #endif
-    auto sz = get_needed_size(my_m);
-    std::string my_buf;
-    my_buf.resize(sz);
-    serialize_to(my_buf.data(), my_buf.size(), my_m);
 
+    std::string my_buf = struct_pb::serialize<std::string>(my_m);
     struct_pb_sample::Monster d_t{};
-    auto ok = deserialize_to(d_t, my_buf.data(), my_buf.size());
+    auto ok = struct_pb::deserialize_to(d_t, my_buf);
     REQUIRE(ok);
     CHECK(struct_pb_sample::verify(d_t, my_m));
     REQUIRE(d_t.pos);

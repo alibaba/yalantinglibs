@@ -7,15 +7,18 @@
 namespace struct_pb {
 namespace internal {
 // ::protobuf_unittest::TestLargeEnumValue
-std::size_t get_needed_size(const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestLargeEnumValue>(const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestLargeEnumValue>(const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestLargeEnumValue>(char* data, std::size_t size, const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestLargeEnumValue& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestLargeEnumValue>(char* data, std::size_t size, const ::protobuf_unittest::TestLargeEnumValue& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestLargeEnumValue>(::protobuf_unittest::TestLargeEnumValue& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -32,9 +35,10 @@ bool deserialize_to(::protobuf_unittest::TestLargeEnumValue& t, const char* data
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestLargeEnumValue&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestLargeEnumValue>(::protobuf_unittest::TestLargeEnumValue&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestLargeEnumValue
-bool deserialize_to(::protobuf_unittest::TestLargeEnumValue& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestLargeEnumValue>(::protobuf_unittest::TestLargeEnumValue& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }

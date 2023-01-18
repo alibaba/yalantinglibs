@@ -7,15 +7,18 @@
 namespace struct_pb {
 namespace internal {
 // ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -32,23 +35,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::BuildDescri
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors>(::protobuf_unittest::TestConflictingSymbolNames::BuildDescriptors& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -65,15 +72,17 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits&
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::TypeTraits
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::TypeTraits>(::protobuf_unittest::TestConflictingSymbolNames::TypeTraits& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data1
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data1>(const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.data.empty()) {
 
@@ -85,8 +94,9 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
     total += container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data1>(const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data1>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<int32_t> data; // int32, field number = 1
@@ -95,8 +105,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
       serialize_varint(data, pos, size, static_cast<uint64_t>(v));}
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data1>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data1>(::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -148,15 +159,17 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data1& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data1&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data1>(::protobuf_unittest::TestConflictingSymbolNames::Data1&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data1
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data1>(::protobuf_unittest::TestConflictingSymbolNames::Data1& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data2
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data2>(const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
 
   if (!t.data.empty()) { // unpacked
@@ -170,8 +183,9 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
     total += sz;
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data2>(const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data2>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::protobuf_unittest::TestConflictingSymbolNames::TestEnum> data; // enum, field number = 1
@@ -185,8 +199,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data2>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data2>(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -235,22 +250,25 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data2&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data2>(::protobuf_unittest::TestConflictingSymbolNames::Data2&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data2
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data2>(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data3
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data3>(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
     total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data3>(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data3>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<std::string> data; // string, field number = 1
@@ -264,8 +282,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data3>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data3>(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -299,15 +318,17 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data3&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data3>(::protobuf_unittest::TestConflictingSymbolNames::Data3&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data3
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data3>(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data4
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data4>(const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.data.empty()) {
 
@@ -317,8 +338,9 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data4>(const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data4>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::protobuf_unittest::TestConflictingSymbolNames::Data4> data; // message, field number = 1
@@ -334,8 +356,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data4>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data4>(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -368,22 +391,25 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data4&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data4>(::protobuf_unittest::TestConflictingSymbolNames::Data4&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data4
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data4>(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data5
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data5>(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
     total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data5>(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data5>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<std::string> data; // string, field number = 1
@@ -397,8 +423,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data5>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data5>(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -432,22 +459,25 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data5>(::protobuf_unittest::TestConflictingSymbolNames::Data5&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data5
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data5>(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Data6
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data6>(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
     total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Data6>(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data6>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<std::string> data; // string, field number = 1
@@ -461,8 +491,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data6>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data6>(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -496,23 +527,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, c
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data6&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data6>(::protobuf_unittest::TestConflictingSymbolNames::Data6&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Data6
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Data6>(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::Cord
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Cord>(const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::Cord>(const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Cord>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::Cord>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Cord>(::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -529,23 +564,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Cord& t, co
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Cord&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Cord>(::protobuf_unittest::TestConflictingSymbolNames::Cord&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::Cord
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::Cord>(::protobuf_unittest::TestConflictingSymbolNames::Cord& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::StringPiece
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -562,23 +601,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::StringPiece
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::StringPiece&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(::protobuf_unittest::TestConflictingSymbolNames::StringPiece&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::StringPiece
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::StringPiece>(::protobuf_unittest::TestConflictingSymbolNames::StringPiece& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames::DO
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::DO>(const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames::DO>(const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::DO>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::DO& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames::DO>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames::DO& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::DO>(::protobuf_unittest::TestConflictingSymbolNames::DO& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -595,15 +638,17 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::DO& t, cons
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::DO&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::DO>(::protobuf_unittest::TestConflictingSymbolNames::DO&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames::DO
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::DO& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames::DO>(::protobuf_unittest::TestConflictingSymbolNames::DO& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNames
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames>(const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.input.has_value()) {
     total += 1 + calculate_varint_size(t.input.value());
@@ -757,8 +802,9 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
     total += 2 + calculate_varint_size(t.target->size()) + t.target->size();
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNames>(const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNames>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::optional<int32_t> input; // int32, field number = 1
@@ -1098,8 +1144,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNames>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames>(::protobuf_unittest::TestConflictingSymbolNames& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1753,23 +1800,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames>(::protobuf_unittest::TestConflictingSymbolNames&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNames
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNames>(::protobuf_unittest::TestConflictingSymbolNames& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingSymbolNamesExtension
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNamesExtension>(const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingSymbolNamesExtension>(const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingSymbolNamesExtension>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingSymbolNamesExtension>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNamesExtension>(::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1786,22 +1837,25 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNamesExtension& t,
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNamesExtension&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNamesExtension>(::protobuf_unittest::TestConflictingSymbolNamesExtension&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingSymbolNamesExtension
-bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingSymbolNamesExtension>(::protobuf_unittest::TestConflictingSymbolNamesExtension& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TestConflictingEnumNames
-std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TestConflictingEnumNames>(const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.conflicting_enum.has_value()) {
     total += 1 + calculate_varint_size(static_cast<uint64_t>(t.conflicting_enum.value()));
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TestConflictingEnumNames>(const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TestConflictingEnumNames>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::optional<::protobuf_unittest::TestConflictingEnumNames::while_> conflicting_enum; // enum, field number = 1
@@ -1814,8 +1868,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TestConflictingEnumNames& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TestConflictingEnumNames>(char* data, std::size_t size, const ::protobuf_unittest::TestConflictingEnumNames& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingEnumNames>(::protobuf_unittest::TestConflictingEnumNames& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1845,23 +1900,27 @@ bool deserialize_to(::protobuf_unittest::TestConflictingEnumNames& t, const char
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TestConflictingEnumNames&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TestConflictingEnumNames>(::protobuf_unittest::TestConflictingEnumNames&, const char*, std::size_t)
 // end of ::protobuf_unittest::TestConflictingEnumNames
-bool deserialize_to(::protobuf_unittest::TestConflictingEnumNames& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TestConflictingEnumNames>(::protobuf_unittest::TestConflictingEnumNames& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::DummyMessage
-std::size_t get_needed_size(const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::DummyMessage>(const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::DummyMessage>(const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::DummyMessage>(char* data, std::size_t size, const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::DummyMessage& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::DummyMessage>(char* data, std::size_t size, const ::protobuf_unittest::DummyMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::DummyMessage>(::protobuf_unittest::DummyMessage& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1878,22 +1937,25 @@ bool deserialize_to(::protobuf_unittest::DummyMessage& t, const char* data, std:
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::DummyMessage&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::DummyMessage>(::protobuf_unittest::DummyMessage&, const char*, std::size_t)
 // end of ::protobuf_unittest::DummyMessage
-bool deserialize_to(::protobuf_unittest::DummyMessage& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::DummyMessage>(::protobuf_unittest::DummyMessage& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::NULL_
-std::size_t get_needed_size(const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::NULL_>(const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.int_.has_value()) {
     total += 1 + calculate_varint_size(t.int_.value());
   }
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::NULL_>(const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::NULL_>(char* data, std::size_t size, const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::optional<int32_t> int_; // int32, field number = 1
@@ -1903,8 +1965,9 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::NULL_
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::NULL_& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::NULL_>(char* data, std::size_t size, const ::protobuf_unittest::NULL_& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::NULL_>(::protobuf_unittest::NULL_& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1933,23 +1996,27 @@ bool deserialize_to(::protobuf_unittest::NULL_& t, const char* data, std::size_t
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::NULL_&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::NULL_>(::protobuf_unittest::NULL_&, const char*, std::size_t)
 // end of ::protobuf_unittest::NULL_
-bool deserialize_to(::protobuf_unittest::NULL_& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::NULL_>(::protobuf_unittest::NULL_& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::Shutdown
-std::size_t get_needed_size(const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::Shutdown>(const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::Shutdown>(const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::Shutdown>(char* data, std::size_t size, const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::Shutdown& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::Shutdown>(char* data, std::size_t size, const ::protobuf_unittest::Shutdown& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::Shutdown>(::protobuf_unittest::Shutdown& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1966,23 +2033,27 @@ bool deserialize_to(::protobuf_unittest::Shutdown& t, const char* data, std::siz
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::Shutdown&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::Shutdown>(::protobuf_unittest::Shutdown&, const char*, std::size_t)
 // end of ::protobuf_unittest::Shutdown
-bool deserialize_to(::protobuf_unittest::Shutdown& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::Shutdown>(::protobuf_unittest::Shutdown& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::protobuf_unittest::TableStruct
-std::size_t get_needed_size(const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::protobuf_unittest::TableStruct>(const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   return total;
-} // std::size_t get_needed_size(const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::protobuf_unittest::TableStruct>(const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::protobuf_unittest::TableStruct>(char* data, std::size_t size, const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::protobuf_unittest::TableStruct& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::protobuf_unittest::TableStruct>(char* data, std::size_t size, const ::protobuf_unittest::TableStruct& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::protobuf_unittest::TableStruct>(::protobuf_unittest::TableStruct& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1999,9 +2070,10 @@ bool deserialize_to(::protobuf_unittest::TableStruct& t, const char* data, std::
     }
   }
 return true;
-} // bool deserialize_to(::protobuf_unittest::TableStruct&, const char*, std::size_t)
+} // bool deserialize_to<::protobuf_unittest::TableStruct>(::protobuf_unittest::TableStruct&, const char*, std::size_t)
 // end of ::protobuf_unittest::TableStruct
-bool deserialize_to(::protobuf_unittest::TableStruct& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::protobuf_unittest::TableStruct>(::protobuf_unittest::TableStruct& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }

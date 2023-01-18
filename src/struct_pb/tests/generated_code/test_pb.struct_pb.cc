@@ -7,14 +7,16 @@
 namespace struct_pb {
 namespace internal {
 // ::test_struct_pb::Test1
-std::size_t get_needed_size(const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::Test1>(const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::Test1>(const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::Test1>(char* data, std::size_t size, const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t a; // int32, field number = 1
@@ -24,8 +26,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test1& t
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::Test1& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::Test1>(char* data, std::size_t size, const ::test_struct_pb::Test1& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::Test1>(::test_struct_pb::Test1& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -54,22 +57,25 @@ bool deserialize_to(::test_struct_pb::Test1& t, const char* data, std::size_t si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::Test1&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::Test1>(::test_struct_pb::Test1&, const char*, std::size_t)
 // end of ::test_struct_pb::Test1
-bool deserialize_to(::test_struct_pb::Test1& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::Test1>(::test_struct_pb::Test1& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::Test2
-std::size_t get_needed_size(const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::Test2>(const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.b.empty()) {
     total += 1 + calculate_varint_size(t.b.size()) + t.b.size();
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::Test2>(const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::Test2>(char* data, std::size_t size, const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::string b; // string, field number = 2
@@ -81,8 +87,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test2& t
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::Test2& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::Test2>(char* data, std::size_t size, const ::test_struct_pb::Test2& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::Test2>(::test_struct_pb::Test2& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -114,15 +121,17 @@ bool deserialize_to(::test_struct_pb::Test2& t, const char* data, std::size_t si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::Test2&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::Test2>(::test_struct_pb::Test2&, const char*, std::size_t)
 // end of ::test_struct_pb::Test2
-bool deserialize_to(::test_struct_pb::Test2& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::Test2>(::test_struct_pb::Test2& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::Test3
-std::size_t get_needed_size(const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::Test3>(const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
 
   if (t.c) {
@@ -130,8 +139,9 @@ std::size_t get_needed_size(const ::test_struct_pb::Test3& t, const ::struct_pb:
     total += 1 + calculate_varint_size(sz) + sz;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::Test3>(const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::Test3>(char* data, std::size_t size, const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::unique_ptr<::test_struct_pb::Test1> c; // message, field number = 3
@@ -145,8 +155,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test3& t
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::Test3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::Test3>(char* data, std::size_t size, const ::test_struct_pb::Test3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::Test3>(::test_struct_pb::Test3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -180,15 +191,17 @@ bool deserialize_to(::test_struct_pb::Test3& t, const char* data, std::size_t si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::Test3&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::Test3>(::test_struct_pb::Test3&, const char*, std::size_t)
 // end of ::test_struct_pb::Test3
-bool deserialize_to(::test_struct_pb::Test3& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::Test3>(::test_struct_pb::Test3& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::Test4
-std::size_t get_needed_size(const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::Test4>(const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.d.empty()) {
     total += 1 + calculate_varint_size(t.d.size()) + t.d.size();
@@ -202,8 +215,9 @@ std::size_t get_needed_size(const ::test_struct_pb::Test4& t, const ::struct_pb:
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::Test4>(const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::Test4>(char* data, std::size_t size, const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::string d; // string, field number = 4
@@ -229,8 +243,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test4& t
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::Test4& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::Test4>(char* data, std::size_t size, const ::test_struct_pb::Test4& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::Test4>(::test_struct_pb::Test4& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -297,15 +312,17 @@ bool deserialize_to(::test_struct_pb::Test4& t, const char* data, std::size_t si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::Test4&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::Test4>(::test_struct_pb::Test4&, const char*, std::size_t)
 // end of ::test_struct_pb::Test4
-bool deserialize_to(::test_struct_pb::Test4& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::Test4>(::test_struct_pb::Test4& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestDouble
-std::size_t get_needed_size(const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestDouble>(const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 8;
@@ -317,8 +334,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestDouble& t, const ::str
     total += 1 + 8;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestDouble>(const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestDouble>(char* data, std::size_t size, const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // double a; // double, field number = 1
@@ -351,8 +369,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestDo
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestDouble>(char* data, std::size_t size, const ::test_struct_pb::MyTestDouble& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestDouble>(::test_struct_pb::MyTestDouble& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -405,15 +424,17 @@ bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestDouble&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestDouble>(::test_struct_pb::MyTestDouble&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestDouble
-bool deserialize_to(::test_struct_pb::MyTestDouble& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestDouble>(::test_struct_pb::MyTestDouble& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestFloat
-std::size_t get_needed_size(const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestFloat>(const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 4;
@@ -431,8 +452,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFloat& t, const ::stru
     total += 1 + 4;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestFloat>(const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestFloat>(char* data, std::size_t size, const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // float a; // float, field number = 1
@@ -485,8 +507,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFl
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestFloat>(char* data, std::size_t size, const ::test_struct_pb::MyTestFloat& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFloat>(::test_struct_pb::MyTestFloat& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -563,15 +586,17 @@ bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::siz
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestFloat&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestFloat>(::test_struct_pb::MyTestFloat&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestFloat
-bool deserialize_to(::test_struct_pb::MyTestFloat& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFloat>(::test_struct_pb::MyTestFloat& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestInt32
-std::size_t get_needed_size(const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestInt32>(const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
@@ -585,8 +610,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestInt32& t, const ::stru
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestInt32>(const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestInt32>(char* data, std::size_t size, const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t a; // int32, field number = 1
@@ -610,8 +636,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestIn
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestInt32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestInt32>(char* data, std::size_t size, const ::test_struct_pb::MyTestInt32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestInt32>(::test_struct_pb::MyTestInt32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -675,15 +702,17 @@ bool deserialize_to(::test_struct_pb::MyTestInt32& t, const char* data, std::siz
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestInt32&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestInt32>(::test_struct_pb::MyTestInt32&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestInt32
-bool deserialize_to(::test_struct_pb::MyTestInt32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestInt32>(::test_struct_pb::MyTestInt32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestInt64
-std::size_t get_needed_size(const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestInt64>(const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
@@ -697,8 +726,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestInt64& t, const ::stru
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestInt64>(const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestInt64>(char* data, std::size_t size, const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int64_t a; // int64, field number = 1
@@ -722,8 +752,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestIn
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestInt64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestInt64>(char* data, std::size_t size, const ::test_struct_pb::MyTestInt64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestInt64>(::test_struct_pb::MyTestInt64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -787,15 +818,17 @@ bool deserialize_to(::test_struct_pb::MyTestInt64& t, const char* data, std::siz
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestInt64&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestInt64>(::test_struct_pb::MyTestInt64&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestInt64
-bool deserialize_to(::test_struct_pb::MyTestInt64& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestInt64>(::test_struct_pb::MyTestInt64& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestUint32
-std::size_t get_needed_size(const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestUint32>(const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
@@ -809,8 +842,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestUint32& t, const ::str
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestUint32>(const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestUint32>(char* data, std::size_t size, const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // uint32_t a; // uint32, field number = 1
@@ -834,8 +868,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestUint32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestUint32>(char* data, std::size_t size, const ::test_struct_pb::MyTestUint32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestUint32>(::test_struct_pb::MyTestUint32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -899,15 +934,17 @@ bool deserialize_to(::test_struct_pb::MyTestUint32& t, const char* data, std::si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestUint32&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestUint32>(::test_struct_pb::MyTestUint32&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestUint32
-bool deserialize_to(::test_struct_pb::MyTestUint32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestUint32>(::test_struct_pb::MyTestUint32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestUint64
-std::size_t get_needed_size(const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestUint64>(const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
@@ -921,8 +958,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestUint64& t, const ::str
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestUint64>(const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestUint64>(char* data, std::size_t size, const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // uint64_t a; // uint64, field number = 1
@@ -946,8 +984,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestUint64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestUint64>(char* data, std::size_t size, const ::test_struct_pb::MyTestUint64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestUint64>(::test_struct_pb::MyTestUint64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1011,23 +1050,26 @@ bool deserialize_to(::test_struct_pb::MyTestUint64& t, const char* data, std::si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestUint64&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestUint64>(::test_struct_pb::MyTestUint64&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestUint64
-bool deserialize_to(::test_struct_pb::MyTestUint64& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestUint64>(::test_struct_pb::MyTestUint64& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestEnum
-std::size_t get_needed_size(const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestEnum>(const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
 
   if (t.color != ::test_struct_pb::MyTestEnum::Color::Red) {
     total += 1 + calculate_varint_size(static_cast<uint64_t>(t.color));
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestEnum>(const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestEnum>(char* data, std::size_t size, const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // ::test_struct_pb::MyTestEnum::Color color; // enum, field number = 6
@@ -1040,8 +1082,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestEn
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestEnum& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestEnum>(char* data, std::size_t size, const ::test_struct_pb::MyTestEnum& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestEnum>(::test_struct_pb::MyTestEnum& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1071,15 +1114,17 @@ bool deserialize_to(::test_struct_pb::MyTestEnum& t, const char* data, std::size
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestEnum&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestEnum>(::test_struct_pb::MyTestEnum&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestEnum
-bool deserialize_to(::test_struct_pb::MyTestEnum& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestEnum>(::test_struct_pb::MyTestEnum& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestRepeatedMessage
-std::size_t get_needed_size(const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestRepeatedMessage>(const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.fs.empty()) {
 
@@ -1089,8 +1134,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestRepeatedMessage& t, co
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestRepeatedMessage>(const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestRepeatedMessage>(char* data, std::size_t size, const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::test_struct_pb::MyTestFloat> fs; // message, field number = 1
@@ -1106,8 +1152,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestRe
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestRepeatedMessage& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestRepeatedMessage>(char* data, std::size_t size, const ::test_struct_pb::MyTestRepeatedMessage& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestRepeatedMessage>(::test_struct_pb::MyTestRepeatedMessage& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1140,22 +1187,25 @@ bool deserialize_to(::test_struct_pb::MyTestRepeatedMessage& t, const char* data
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestRepeatedMessage&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestRepeatedMessage>(::test_struct_pb::MyTestRepeatedMessage&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestRepeatedMessage
-bool deserialize_to(::test_struct_pb::MyTestRepeatedMessage& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestRepeatedMessage>(::test_struct_pb::MyTestRepeatedMessage& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestSint32
-std::size_t get_needed_size(const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestSint32>(const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(encode_zigzag(t.a));
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestSint32>(const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestSint32>(char* data, std::size_t size, const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t a; // sint32, field number = 1
@@ -1165,8 +1215,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestSint32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestSint32>(char* data, std::size_t size, const ::test_struct_pb::MyTestSint32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSint32>(::test_struct_pb::MyTestSint32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1195,22 +1246,25 @@ bool deserialize_to(::test_struct_pb::MyTestSint32& t, const char* data, std::si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestSint32&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestSint32>(::test_struct_pb::MyTestSint32&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestSint32
-bool deserialize_to(::test_struct_pb::MyTestSint32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSint32>(::test_struct_pb::MyTestSint32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestSint64
-std::size_t get_needed_size(const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestSint64>(const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.b != 0) {
     total += 1 + calculate_varint_size(encode_zigzag(t.b));
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestSint64>(const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestSint64>(char* data, std::size_t size, const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int64_t b; // sint64, field number = 2
@@ -1220,8 +1274,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestSint64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestSint64>(char* data, std::size_t size, const ::test_struct_pb::MyTestSint64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSint64>(::test_struct_pb::MyTestSint64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1250,15 +1305,17 @@ bool deserialize_to(::test_struct_pb::MyTestSint64& t, const char* data, std::si
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestSint64&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestSint64>(::test_struct_pb::MyTestSint64&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestSint64
-bool deserialize_to(::test_struct_pb::MyTestSint64& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSint64>(::test_struct_pb::MyTestSint64& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestMap
-std::size_t get_needed_size(const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestMap>(const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for(const auto& e: t.e) {
     std::size_t map_entry_sz = 0;
@@ -1266,8 +1323,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestMap& t, const ::struct
     map_entry_sz += 1 + calculate_varint_size(e.second);
     total += 1 + calculate_varint_size(map_entry_sz) + map_entry_sz;}
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestMap>(const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestMap>(char* data, std::size_t size, const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::map<std::string, int32_t> e; // message, field number = 3
@@ -1294,8 +1352,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestMa
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestMap& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestMap>(char* data, std::size_t size, const ::test_struct_pb::MyTestMap& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestMap>(::test_struct_pb::MyTestMap& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1367,15 +1426,17 @@ bool deserialize_to(::test_struct_pb::MyTestMap& t, const char* data, std::size_
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestMap&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestMap>(::test_struct_pb::MyTestMap&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestMap
-bool deserialize_to(::test_struct_pb::MyTestMap& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestMap>(::test_struct_pb::MyTestMap& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestFixed32
-std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestFixed32>(const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 4;
@@ -1386,8 +1447,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed32& t, const ::st
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestFixed32>(const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestFixed32>(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // uint32_t a; // fixed32, field number = 1
@@ -1410,8 +1472,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestFixed32>(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFixed32>(::test_struct_pb::MyTestFixed32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1474,15 +1537,17 @@ bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::s
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestFixed32&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestFixed32>(::test_struct_pb::MyTestFixed32&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestFixed32
-bool deserialize_to(::test_struct_pb::MyTestFixed32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFixed32>(::test_struct_pb::MyTestFixed32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestFixed64
-std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestFixed64>(const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 8;
@@ -1493,8 +1558,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed64& t, const ::st
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestFixed64>(const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestFixed64>(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // uint64_t a; // fixed64, field number = 1
@@ -1517,8 +1583,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestFixed64>(char* data, std::size_t size, const ::test_struct_pb::MyTestFixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFixed64>(::test_struct_pb::MyTestFixed64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1581,15 +1648,17 @@ bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::s
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestFixed64&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestFixed64>(::test_struct_pb::MyTestFixed64&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestFixed64
-bool deserialize_to(::test_struct_pb::MyTestFixed64& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFixed64>(::test_struct_pb::MyTestFixed64& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestSfixed32
-std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestSfixed32>(const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 4;
@@ -1600,8 +1669,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed32& t, const ::s
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestSfixed32>(const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestSfixed32>(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t a; // sfixed32, field number = 1
@@ -1624,8 +1694,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSf
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestSfixed32>(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSfixed32>(::test_struct_pb::MyTestSfixed32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1688,15 +1759,17 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestSfixed32&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestSfixed32>(::test_struct_pb::MyTestSfixed32&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestSfixed32
-bool deserialize_to(::test_struct_pb::MyTestSfixed32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSfixed32>(::test_struct_pb::MyTestSfixed32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestSfixed64
-std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestSfixed64>(const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 8;
@@ -1707,8 +1780,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed64& t, const ::s
     total += 1 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestSfixed64>(const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestSfixed64>(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int64_t a; // sfixed64, field number = 1
@@ -1731,8 +1805,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSf
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestSfixed64>(char* data, std::size_t size, const ::test_struct_pb::MyTestSfixed64& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSfixed64>(::test_struct_pb::MyTestSfixed64& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1795,15 +1870,17 @@ bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestSfixed64&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestSfixed64>(::test_struct_pb::MyTestSfixed64&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestSfixed64
-bool deserialize_to(::test_struct_pb::MyTestSfixed64& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestSfixed64>(::test_struct_pb::MyTestSfixed64& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestFieldNumberRandom
-std::size_t get_needed_size(const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestFieldNumberRandom>(const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + calculate_varint_size(t.a);
@@ -1826,8 +1903,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestFieldNumberRandom& t, 
     total += 2 + calculate_varint_size(container_total) + container_total;
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestFieldNumberRandom>(const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestFieldNumberRandom>(char* data, std::size_t size, const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // float e; // float, field number = 1
@@ -1883,8 +1961,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFi
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestFieldNumberRandom>(char* data, std::size_t size, const ::test_struct_pb::MyTestFieldNumberRandom& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFieldNumberRandom>(::test_struct_pb::MyTestFieldNumberRandom& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -1998,15 +2077,17 @@ bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* da
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestFieldNumberRandom>(::test_struct_pb::MyTestFieldNumberRandom&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestFieldNumberRandom
-bool deserialize_to(::test_struct_pb::MyTestFieldNumberRandom& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestFieldNumberRandom>(::test_struct_pb::MyTestFieldNumberRandom& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::MyTestAll
-std::size_t get_needed_size(const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::MyTestAll>(const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.a != 0) {
     total += 1 + 8;
@@ -2054,8 +2135,9 @@ std::size_t get_needed_size(const ::test_struct_pb::MyTestAll& t, const ::struct
     total += 1 + calculate_varint_size(t.o.size()) + t.o.size();
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::MyTestAll>(const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::MyTestAll>(char* data, std::size_t size, const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // double a; // double, field number = 1
@@ -2185,8 +2267,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestAl
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::MyTestAll>(char* data, std::size_t size, const ::test_struct_pb::MyTestAll& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::MyTestAll>(::test_struct_pb::MyTestAll& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -2389,22 +2472,25 @@ bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::MyTestAll&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::MyTestAll>(::test_struct_pb::MyTestAll&, const char*, std::size_t)
 // end of ::test_struct_pb::MyTestAll
-bool deserialize_to(::test_struct_pb::MyTestAll& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::MyTestAll>(::test_struct_pb::MyTestAll& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::SubMessageForOneof
-std::size_t get_needed_size(const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::SubMessageForOneof>(const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.ok != 0) {
     total += 1 + calculate_varint_size(static_cast<uint64_t>(t.ok));
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::SubMessageForOneof>(const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::SubMessageForOneof>(char* data, std::size_t size, const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // bool ok; // bool, field number = 1
@@ -2414,8 +2500,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SubMessa
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::SubMessageForOneof& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::SubMessageForOneof>(char* data, std::size_t size, const ::test_struct_pb::SubMessageForOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::SubMessageForOneof>(::test_struct_pb::SubMessageForOneof& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -2444,15 +2531,17 @@ bool deserialize_to(::test_struct_pb::SubMessageForOneof& t, const char* data, s
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::SubMessageForOneof&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::SubMessageForOneof>(::test_struct_pb::SubMessageForOneof&, const char*, std::size_t)
 // end of ::test_struct_pb::SubMessageForOneof
-bool deserialize_to(::test_struct_pb::SubMessageForOneof& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::SubMessageForOneof>(::test_struct_pb::SubMessageForOneof& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::test_struct_pb::SampleMessageOneof
-std::size_t get_needed_size(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::test_struct_pb::SampleMessageOneof>(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.test_oneof.index() == 1) {
   total += 1 + calculate_varint_size(std::get<1>(t.test_oneof));
@@ -2477,8 +2566,9 @@ std::size_t get_needed_size(const ::test_struct_pb::SampleMessageOneof& t, const
 
   }
   return total;
-} // std::size_t get_needed_size(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::test_struct_pb::SampleMessageOneof>(const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::test_struct_pb::SampleMessageOneof>(char* data, std::size_t size, const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     if (t.test_oneof.index() == 3) {
@@ -2520,8 +2610,9 @@ void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SampleMe
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::test_struct_pb::SampleMessageOneof>(char* data, std::size_t size, const ::test_struct_pb::SampleMessageOneof& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::test_struct_pb::SampleMessageOneof>(::test_struct_pb::SampleMessageOneof& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -2600,9 +2691,10 @@ bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, s
     }
   }
 return true;
-} // bool deserialize_to(::test_struct_pb::SampleMessageOneof&, const char*, std::size_t)
+} // bool deserialize_to<::test_struct_pb::SampleMessageOneof>(::test_struct_pb::SampleMessageOneof&, const char*, std::size_t)
 // end of ::test_struct_pb::SampleMessageOneof
-bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::test_struct_pb::SampleMessageOneof>(::test_struct_pb::SampleMessageOneof& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }

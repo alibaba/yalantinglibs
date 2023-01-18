@@ -13,9 +13,9 @@ target_link_libraries(test_struct_pb PRIVATE libstruct_pb doctest)
 add_test(NAME test_struct_pb COMMAND test_struct_pb)
 target_include_directories(test_struct_pb PUBLIC ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark)
 if (Protobuf_FOUND)
-    message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
     target_compile_definitions(test_struct_pb PRIVATE HAVE_PROTOBUF)
     target_link_libraries(test_struct_pb PRIVATE protobuf::libprotobuf)
+    # generate .pb.cc .pb.h
     protobuf_generate_cpp(PROTO_SRCS
             PROTO_HDRS
             test_pb.proto
