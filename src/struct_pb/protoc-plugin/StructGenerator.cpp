@@ -46,7 +46,7 @@ bool StructGenerator::Generate(
   if (struct_pb_options.ns.empty()) {
     struct_pb_options.ns = file->package();
   }
-  auto basename = google::protobuf::compiler::StripProto(file->name());
+  auto basename = strip_proto(file->name());
   FileGenerator file_generator(file, struct_pb_options);
   // generate xxx.struct_pb.h
   {

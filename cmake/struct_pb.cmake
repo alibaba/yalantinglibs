@@ -1,4 +1,5 @@
 function(protobuf_generate_modified)
+    find_package(Protobuf REQUIRED)
     set(_options APPEND_PATH DESCRIPTORS)
     set(_singleargs LANGUAGE OUT_VAR EXPORT_MACRO PROTOC_OUT_DIR PLUGIN PROTOC_OPTION)
     if(COMMAND target_sources)

@@ -42,6 +42,26 @@ void NamespaceOpener::close() const {
 )");
   }
 }
-
+// from std::string_view ends_with
+bool string_ends_with(std::string_view s, std::string_view suffix) {
+  return s.size() >= suffix.size() &&
+         s.compare(s.size() - suffix.size(), std::string_view::npos, suffix) ==
+             0;
+}
+std::string_view string_strip_suffix(const std::string_view s,
+                                     const std::string_view suffix) {
+  if (string_ends_with(s, suffix)) {
+    return s.substr(0, s.size() - suffix.size());
+  }
+  return s;
+}
+std::string strip_proto(const std::string &filename) {
+  if (string_ends_with(filename, ".protodevel")) {
+    return std::string(string_strip_suffix(filename, ".protodevel"));
+  }
+  else {
+    return std::string(string_strip_suffix(filename, ".proto"));
+  }
+}
 }  // namespace compiler
 }  // namespace struct_pb

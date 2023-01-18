@@ -31,7 +31,10 @@ class Status {
   Status(StatusCode code = StatusCode::kOk, std::string_view message = {})
       : code_(code), msg_(message) {}
   bool ok() const { return code_ == StatusCode::kOk; }
-  std::string_view message() const { return msg_; }
+  std::string message() const {
+    // fix gcc 10
+    return std::string(msg_);
+  }
 
  private:
   StatusCode code_;
