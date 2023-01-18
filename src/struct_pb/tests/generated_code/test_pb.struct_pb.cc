@@ -1,7 +1,7 @@
 // protoc generate parameter
+// clang-format off
 // generate_eq_op=true,namespace=test_struct_pb
 // =========================
-// clang-format off
 #include "test_pb.struct_pb.h"
 #include "struct_pb/struct_pb/struct_pb_impl.hpp"
 namespace struct_pb {
@@ -2534,46 +2534,46 @@ bool deserialize_to(::test_struct_pb::SampleMessageOneof& t, const char* data, s
       case 80: {
       if (t.test_oneof.index() != 1) {
         t.test_oneof.emplace<1>();
-
-        uint64_t varint_tmp = 0;
-        ok = deserialize_varint(data, pos, size, varint_tmp);
-        if (!ok) {
-          return false;
-        }
-
-        std::get<1>(t.test_oneof) = varint_tmp;
       }
+
+      uint64_t varint_tmp = 0;
+      ok = deserialize_varint(data, pos, size, varint_tmp);
+      if (!ok) {
+        return false;
+      }
+
+      std::get<1>(t.test_oneof) = varint_tmp;
       break;
       }
       case 64: {
       if (t.test_oneof.index() != 2) {
         t.test_oneof.emplace<2>();
-
-        uint64_t varint_tmp = 0;
-        ok = deserialize_varint(data, pos, size, varint_tmp);
-        if (!ok) {
-          return false;
-        }
-
-        std::get<2>(t.test_oneof) = varint_tmp;
       }
+
+      uint64_t varint_tmp = 0;
+      ok = deserialize_varint(data, pos, size, varint_tmp);
+      if (!ok) {
+        return false;
+      }
+
+      std::get<2>(t.test_oneof) = varint_tmp;
       break;
       }
       case 34: {
       if (t.test_oneof.index() != 3) {
         t.test_oneof.emplace<3>();
-        uint64_t str_sz = 0;
-        ok = deserialize_varint(data, pos, size, str_sz);
-        if (!ok) {
-          return false;
-        }
-        std::get<3>(t.test_oneof).resize(str_sz);
-        if (pos + str_sz > size) {
-          return false;
-        }
-        std::memcpy(std::get<3>(t.test_oneof).data(), data+pos, str_sz);
-        pos += str_sz;
       }
+      uint64_t str_sz = 0;
+      ok = deserialize_varint(data, pos, size, str_sz);
+      if (!ok) {
+        return false;
+      }
+      std::get<3>(t.test_oneof).resize(str_sz);
+      if (pos + str_sz > size) {
+        return false;
+      }
+      std::memcpy(std::get<3>(t.test_oneof).data(), data+pos, str_sz);
+      pos += str_sz;
       break;
       }
       case 74: {

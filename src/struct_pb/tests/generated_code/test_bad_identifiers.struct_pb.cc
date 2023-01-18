@@ -246,9 +246,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data2& t, c
 std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
-    for (const auto& s: t.data) {
-      total += 1 + calculate_varint_size(s.size()) + s.size();
-    }
+    total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
 } // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data3& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -292,6 +290,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data3& t, c
         std::memcpy(tmp_str.data(), data+pos, sz);
         pos += sz;
         t.data.push_back(std::move(tmp_str));
+        break;
       }
       default: {
         ok = deserialize_unknown(data, pos, size, tag, unknown_fields);
@@ -380,9 +379,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data4& t, c
 std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
-    for (const auto& s: t.data) {
-      total += 1 + calculate_varint_size(s.size()) + s.size();
-    }
+    total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
 } // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data5& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -426,6 +423,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, c
         std::memcpy(tmp_str.data(), data+pos, sz);
         pos += sz;
         t.data.push_back(std::move(tmp_str));
+        break;
       }
       default: {
         ok = deserialize_unknown(data, pos, size, tag, unknown_fields);
@@ -445,9 +443,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data5& t, c
 std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   for (const auto& s: t.data) {
-    for (const auto& s: t.data) {
-      total += 1 + calculate_varint_size(s.size()) + s.size();
-    }
+    total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   return total;
 } // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames::Data6& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -491,6 +487,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames::Data6& t, c
         std::memcpy(tmp_str.data(), data+pos, sz);
         pos += sz;
         t.data.push_back(std::move(tmp_str));
+        break;
       }
       default: {
         ok = deserialize_unknown(data, pos, size, tag, unknown_fields);
@@ -614,8 +611,8 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
   if (t.output.has_value()) {
     total += 1 + calculate_varint_size(t.output.value());
   }
-  if (!t.length.empty()) {
-    total += 1 + calculate_varint_size(t.length.size()) + t.length.size();
+  if (t.length.has_value()) {
+    total += 1 + calculate_varint_size(t.length->size()) + t.length->size();
   }
   if (!t.i.empty()) {
 
@@ -627,9 +624,7 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
     total += container_total;
   }
   for (const auto& s: t.new_element) {
-    for (const auto& s: t.new_element) {
-      total += 1 + calculate_varint_size(s.size()) + s.size();
-    }
+    total += 1 + calculate_varint_size(s.size()) + s.size();
   }
   if (t.total_size.has_value()) {
     total += 1 + calculate_varint_size(t.total_size.value());
@@ -679,8 +674,8 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
   if (t.uint64_t_.has_value()) {
     total += 2 + calculate_varint_size(t.uint64_t_.value());
   }
-  if (!t.string.empty()) {
-    total += 2 + calculate_varint_size(t.string.size()) + t.string.size();
+  if (t.string.has_value()) {
+    total += 2 + calculate_varint_size(t.string->size()) + t.string->size();
   }
   if (t.memset_.has_value()) {
     total += 2 + calculate_varint_size(t.memset_.value());
@@ -718,11 +713,11 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
   if (t.reflection.has_value()) {
     total += 2 + calculate_varint_size(t.reflection.value());
   }
-  if (!t.some_cord.empty()) {
-    total += 2 + calculate_varint_size(t.some_cord.size()) + t.some_cord.size();
+  if (t.some_cord.has_value()) {
+    total += 2 + calculate_varint_size(t.some_cord->size()) + t.some_cord->size();
   }
-  if (!t.some_string_piece.empty()) {
-    total += 2 + calculate_varint_size(t.some_string_piece.size()) + t.some_string_piece.size();
+  if (t.some_string_piece.has_value()) {
+    total += 2 + calculate_varint_size(t.some_string_piece->size()) + t.some_string_piece->size();
   }
   if (t.int_.has_value()) {
     total += 2 + calculate_varint_size(t.int_.value());
@@ -750,16 +745,16 @@ std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolName
   if (t.is_packed.has_value()) {
     total += 2 + calculate_varint_size(static_cast<uint64_t>(t.is_packed.value()));
   }
-  if (!t.release_length.empty()) {
-    total += 2 + calculate_varint_size(t.release_length.size()) + t.release_length.size();
+  if (t.release_length.has_value()) {
+    total += 2 + calculate_varint_size(t.release_length->size()) + t.release_length->size();
   }
 
   if (t.release_do) {
     auto sz = get_needed_size(*t.release_do);
     total += 2 + calculate_varint_size(sz) + sz;
   }
-  if (!t.target.empty()) {
-    total += 2 + calculate_varint_size(t.target.size()) + t.target.size();
+  if (t.target.has_value()) {
+    total += 2 + calculate_varint_size(t.target->size()) + t.target->size();
   }
   return total;
 } // std::size_t get_needed_size(const ::protobuf_unittest::TestConflictingSymbolNames& t, const ::struct_pb::UnknownFields& unknown_fields)
@@ -780,12 +775,12 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   {
-    // std::string length; // string, field number = 3
-    if (!t.length.empty()) {
+    // std::optional<std::string> length; // string, field number = 3
+    if (t.length.has_value()) {
       serialize_varint(data, pos, size, 26);
-      serialize_varint(data, pos, size, t.length.size());
-      std::memcpy(data + pos, t.length.data(), t.length.size());
-      pos += t.length.size();
+      serialize_varint(data, pos, size, t.length.value().size());
+      std::memcpy(data + pos, t.length.value().data(), t.length.value().size());
+      pos += t.length.value().size();
     }
   }
   {
@@ -889,12 +884,12 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   {
-    // std::string string; // string, field number = 18
-    if (!t.string.empty()) {
+    // std::optional<std::string> string; // string, field number = 18
+    if (t.string.has_value()) {
       serialize_varint(data, pos, size, 146);
-      serialize_varint(data, pos, size, t.string.size());
-      std::memcpy(data + pos, t.string.data(), t.string.size());
-      pos += t.string.size();
+      serialize_varint(data, pos, size, t.string.value().size());
+      std::memcpy(data + pos, t.string.value().data(), t.string.value().size());
+      pos += t.string.value().size();
     }
   }
   {
@@ -961,21 +956,21 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   {
-    // std::string some_cord; // string, field number = 28
-    if (!t.some_cord.empty()) {
+    // std::optional<std::string> some_cord; // string, field number = 28
+    if (t.some_cord.has_value()) {
       serialize_varint(data, pos, size, 226);
-      serialize_varint(data, pos, size, t.some_cord.size());
-      std::memcpy(data + pos, t.some_cord.data(), t.some_cord.size());
-      pos += t.some_cord.size();
+      serialize_varint(data, pos, size, t.some_cord.value().size());
+      std::memcpy(data + pos, t.some_cord.value().data(), t.some_cord.value().size());
+      pos += t.some_cord.value().size();
     }
   }
   {
-    // std::string some_string_piece; // string, field number = 29
-    if (!t.some_string_piece.empty()) {
+    // std::optional<std::string> some_string_piece; // string, field number = 29
+    if (t.some_string_piece.has_value()) {
       serialize_varint(data, pos, size, 234);
-      serialize_varint(data, pos, size, t.some_string_piece.size());
-      std::memcpy(data + pos, t.some_string_piece.data(), t.some_string_piece.size());
-      pos += t.some_string_piece.size();
+      serialize_varint(data, pos, size, t.some_string_piece.value().size());
+      std::memcpy(data + pos, t.some_string_piece.value().data(), t.some_string_piece.value().size());
+      pos += t.some_string_piece.value().size();
     }
   }
   {
@@ -1018,12 +1013,12 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   {
-    // std::string release_length; // string, field number = 35
-    if (!t.release_length.empty()) {
+    // std::optional<std::string> release_length; // string, field number = 35
+    if (t.release_length.has_value()) {
       serialize_varint(data, pos, size, 282);
-      serialize_varint(data, pos, size, t.release_length.size());
-      std::memcpy(data + pos, t.release_length.data(), t.release_length.size());
-      pos += t.release_length.size();
+      serialize_varint(data, pos, size, t.release_length.value().size());
+      std::memcpy(data + pos, t.release_length.value().data(), t.release_length.value().size());
+      pos += t.release_length.value().size();
     }
   }
   {
@@ -1045,12 +1040,12 @@ void serialize_to(char* data, std::size_t size, const ::protobuf_unittest::TestC
     }
   }
   {
-    // std::string target; // string, field number = 38
-    if (!t.target.empty()) {
+    // std::optional<std::string> target; // string, field number = 38
+    if (t.target.has_value()) {
       serialize_varint(data, pos, size, 306);
-      serialize_varint(data, pos, size, t.target.size());
-      std::memcpy(data + pos, t.target.data(), t.target.size());
-      pos += t.target.size();
+      serialize_varint(data, pos, size, t.target.value().size());
+      std::memcpy(data + pos, t.target.value().data(), t.target.value().size());
+      pos += t.target.value().size();
     }
   }
   {
@@ -1138,18 +1133,21 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         t.output = varint_tmp;
         break;
       }
-      // std::string length; // string, field number = 3
+      // std::optional<std::string> length; // string, field number = 3
       case 26: {
+        if (!t.length.has_value()) {
+          t.length = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.length.resize(sz);
+        t.length.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.length.data(), data+pos, sz);
+        std::memcpy(t.length.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
@@ -1203,6 +1201,7 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         std::memcpy(tmp_str.data(), data+pos, sz);
         pos += sz;
         t.new_element.push_back(std::move(tmp_str));
+        break;
       }
       // std::optional<int32_t> total_size; // int32, field number = 6
       case 48: {
@@ -1395,18 +1394,21 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         t.uint64_t_ = varint_tmp;
         break;
       }
-      // std::string string; // string, field number = 18
+      // std::optional<std::string> string; // string, field number = 18
       case 146: {
+        if (!t.string.has_value()) {
+          t.string = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.string.resize(sz);
+        t.string.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.string.data(), data+pos, sz);
+        std::memcpy(t.string.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
@@ -1554,33 +1556,39 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         t.reflection = varint_tmp;
         break;
       }
-      // std::string some_cord; // string, field number = 28
+      // std::optional<std::string> some_cord; // string, field number = 28
       case 226: {
+        if (!t.some_cord.has_value()) {
+          t.some_cord = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.some_cord.resize(sz);
+        t.some_cord.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.some_cord.data(), data+pos, sz);
+        std::memcpy(t.some_cord.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
-      // std::string some_string_piece; // string, field number = 29
+      // std::optional<std::string> some_string_piece; // string, field number = 29
       case 234: {
+        if (!t.some_string_piece.has_value()) {
+          t.some_string_piece = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.some_string_piece.resize(sz);
+        t.some_string_piece.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.some_string_piece.data(), data+pos, sz);
+        std::memcpy(t.some_string_piece.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
@@ -1685,18 +1693,21 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         t.is_packed = static_cast<bool>(varint_tmp);
         break;
       }
-      // std::string release_length; // string, field number = 35
+      // std::optional<std::string> release_length; // string, field number = 35
       case 282: {
+        if (!t.release_length.has_value()) {
+          t.release_length = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.release_length.resize(sz);
+        t.release_length.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.release_length.data(), data+pos, sz);
+        std::memcpy(t.release_length.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
@@ -1717,18 +1728,21 @@ bool deserialize_to(::protobuf_unittest::TestConflictingSymbolNames& t, const ch
         pos += sz;
         break;
       }
-      // std::string target; // string, field number = 38
+      // std::optional<std::string> target; // string, field number = 38
       case 306: {
+        if (!t.target.has_value()) {
+          t.target = std::string();
+        }
         uint64_t sz = 0;
         ok = deserialize_varint(data, pos, size, sz);
         if (!ok) {
           return false;
         }
-        t.target.resize(sz);
+        t.target.value().resize(sz);
         if (pos + sz > size) {
           return false;
         }
-        std::memcpy(t.target.data(), data+pos, sz);
+        std::memcpy(t.target.value().data(), data+pos, sz);
         pos += sz;
         break;
       }
