@@ -274,6 +274,6 @@ class NamespaceOpener {
   std::vector<std::string> ns_;
   google::protobuf::io::Printer *p_;
 };
-
+std::string strip_proto(const std::string &filename);
 }  // namespace compiler
 }  // namespace struct_pb

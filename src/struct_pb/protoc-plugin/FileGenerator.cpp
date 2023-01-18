@@ -80,7 +80,7 @@ void FileGenerator::generate_dependency_includes(
   Formatter format(p);
   for (int i = 0; i < file_->dependency_count(); ++i) {
     auto dep = file_->dependency(i);
-    std::string basename = StripProto(dep->name());
+    std::string basename = strip_proto(dep->name());
     std::string header_name = basename + ".struct_pb.h";
     format("#include \"$1$\"\n", header_name);
   }

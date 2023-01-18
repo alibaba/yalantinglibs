@@ -6,7 +6,6 @@
 #include "test_pb.struct_pb.h"
 #ifdef HAVE_PROTOBUF
 #include "google/protobuf/repeated_field.h"
-#include "google/protobuf/repeated_ptr_field.h"
 #endif
 
 template <typename T, typename Pred = std::equal_to<T>>
