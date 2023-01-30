@@ -10,7 +10,7 @@ which is the protobuf compatible solution of the [yalantinglibs](https://github.
 By walking through creating a simple example application, it shows you how to
 
 - Define message formats in a `.proto` file. (same as official protobuf document)
-- Use the protocol buffer compiler with `struct_pb` plugin.
+- Use the protocol buffer compiler (`protoc`) with `struct_pb` plugin.
 - Use the `struct_pb` low-level API to write and read messages.
 
 ## Defining Your Protocol Format
@@ -56,7 +56,7 @@ To do this, you need to run the protocol buffer compiler `protoc` with `struct_p
 ```shell
 protoc -I=$SRC_DIR --plugin=$PATH_TO_protoc-gen-struct_pb --struct_pb_out=$DST_DIR $SRC_DIR/addressbook.proto
 ```
-see []() for details.
+see [Generating source code](https://alibaba.github.io/yalantinglibs/guide/struct-pb-generating-your-struct.html) for details.
 
 This generates the following files in your specified destination directory:
 
@@ -98,25 +98,65 @@ struct AddressBook {
 namespace struct_pb {
 namespace internal {
 // ::tutorial::Person::PhoneNumber
-std::size_t get_needed_size(const ::tutorial::Person::PhoneNumber&, const ::struct_pb::UnknownFields& unknown_fields = {});
-void serialize_to(char*, std::size_t, const ::tutorial::Person::PhoneNumber&, const ::struct_pb::UnknownFields& unknown_fields = {});
-bool deserialize_to(::tutorial::Person::PhoneNumber&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
-bool deserialize_to(::tutorial::Person::PhoneNumber&, const char*, std::size_t);
+template<>
+std::size_t get_needed_size<::tutorial::Person::PhoneNumber>(const ::tutorial::Person::PhoneNumber&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+void serialize_to<::tutorial::Person::PhoneNumber>(char*, std::size_t, const ::tutorial::Person::PhoneNumber&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::Person::PhoneNumber>(::tutorial::Person::PhoneNumber&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::Person::PhoneNumber>(::tutorial::Person::PhoneNumber&, const char*, std::size_t);
 
 // ::tutorial::Person
-std::size_t get_needed_size(const ::tutorial::Person&, const ::struct_pb::UnknownFields& unknown_fields = {});
-void serialize_to(char*, std::size_t, const ::tutorial::Person&, const ::struct_pb::UnknownFields& unknown_fields = {});
-bool deserialize_to(::tutorial::Person&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
-bool deserialize_to(::tutorial::Person&, const char*, std::size_t);
+template<>
+std::size_t get_needed_size<::tutorial::Person>(const ::tutorial::Person&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+void serialize_to<::tutorial::Person>(char*, std::size_t, const ::tutorial::Person&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::Person>(::tutorial::Person&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::Person>(::tutorial::Person&, const char*, std::size_t);
 
 // ::tutorial::AddressBook
-std::size_t get_needed_size(const ::tutorial::AddressBook&, const ::struct_pb::UnknownFields& unknown_fields = {});
-void serialize_to(char*, std::size_t, const ::tutorial::AddressBook&, const ::struct_pb::UnknownFields& unknown_fields = {});
-bool deserialize_to(::tutorial::AddressBook&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
-bool deserialize_to(::tutorial::AddressBook&, const char*, std::size_t);
+template<>
+std::size_t get_needed_size<::tutorial::AddressBook>(const ::tutorial::AddressBook&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+void serialize_to<::tutorial::AddressBook>(char*, std::size_t, const ::tutorial::AddressBook&, const ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::AddressBook>(::tutorial::AddressBook&, const char*, std::size_t, ::struct_pb::UnknownFields& unknown_fields);
+template<>
+bool deserialize_to<::tutorial::AddressBook>(::tutorial::AddressBook&, const char*, std::size_t);
 
 } // internal
 } // struct_pb
+```
+
+## The struct_pb high-level API
+
+We encapsulate the low-level API to make `struct_pb` easier to use.
+
+```
+/*
+ * High-Level API for struct_pb user
+ * If you need more fine-grained operations, encapsulate the internal API yourself.
+ */
+template<typename Buffer = std::vector<char>, typename T>
+Buffer serialize(const T& t, const UnknownFields& unknown_fields = {}) {
+  Buffer buffer;
+  auto size = struct_pb::internal::get_needed_size(t, unknown_fields);
+  buffer.resize(size);
+  struct_pb::internal::serialize_to(buffer.data(), buffer.size(), t, unknown_fields);
+  return buffer;
+}
+template<typename T, typename Buffer>
+bool deserialize_to(T& t, UnknownFields& unknown_fields, const Buffer& buffer) {
+  return struct_pb::internal::deserialize_to(t, buffer.data(), buffer.size(), unknown_fields);
+}
+template<typename T, typename Buffer>
+bool deserialize_to(T& t, const Buffer& buffer) {
+  return struct_pb::internal::deserialize_to(t, buffer.data(), buffer.size());
+}
+
 ```
 
 ## Writing A Message
@@ -191,4 +231,7 @@ void list_people(const tutorial::AddressBook& address_book) {
 }
 ```
 
+## the demo code
 
+- [code in yalantinglibs repo](https://github.com/alibaba/yalantinglibs/blob/main/src/struct_pb/examples/tutorial.cpp)
+- [code in standalone repo](https://github.com/PikachuHyA/struct_pb_tutorial)

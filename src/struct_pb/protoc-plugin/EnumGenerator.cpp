@@ -4,8 +4,7 @@
 namespace struct_pb {
 namespace compiler {
 void EnumGenerator::generate(google::protobuf::io::Printer *p) {
-  std::string enum_name = d_->name();
-  //  enum_name = get_prefer_struct_name(enum_name);
+  std::string enum_name = resolve_keyword(d_->name());
   p->Print({{"enum_name", enum_name}}, R"(
 enum class $enum_name$ {
 )");
@@ -24,7 +23,7 @@ $name$ = $value$,
 }
 void EnumGenerator::generate_definition(google::protobuf::io::Printer *p) {
   Formatter format(p);
-  format("enum class $1$: int {\n", d_->name());
+  format("enum class $1$: int {\n", resolve_keyword(d_->name()));
   format.indent();
   for (int i = 0; i < d_->value_count(); ++i) {
     auto value = resolve_keyword(d_->value(i)->name());

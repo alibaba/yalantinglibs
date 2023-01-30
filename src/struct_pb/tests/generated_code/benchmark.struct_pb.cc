@@ -7,7 +7,8 @@
 namespace struct_pb {
 namespace internal {
 // ::struct_pb_sample::Vec3
-std::size_t get_needed_size(const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::Vec3>(const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.x != 0) {
     total += 1 + 4;
@@ -19,36 +20,44 @@ std::size_t get_needed_size(const ::struct_pb_sample::Vec3& t, const ::struct_pb
     total += 1 + 4;
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::Vec3>(const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::Vec3>(char* data, std::size_t size, const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // float x; // float, field number = 1
     if (t.x != 0) {
       serialize_varint(data, pos, size, 13);
+
       std::memcpy(data + pos, &t.x, 4);
       pos += 4;
+
     }
   }
   {
     // float y; // float, field number = 2
     if (t.y != 0) {
       serialize_varint(data, pos, size, 21);
+
       std::memcpy(data + pos, &t.y, 4);
       pos += 4;
+
     }
   }
   {
     // float z; // float, field number = 3
     if (t.z != 0) {
       serialize_varint(data, pos, size, 29);
+
       std::memcpy(data + pos, &t.z, 4);
       pos += 4;
+
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::Vec3>(char* data, std::size_t size, const ::struct_pb_sample::Vec3& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::Vec3>(::struct_pb_sample::Vec3& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -60,6 +69,7 @@ bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t s
     switch(tag) {
       // float x; // float, field number = 1
       case 13: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -71,6 +81,7 @@ bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t s
       }
       // float y; // float, field number = 2
       case 21: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -82,6 +93,7 @@ bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t s
       }
       // float z; // float, field number = 3
       case 29: {
+
         if (pos + 4 > size) {
           return false;
         }
@@ -98,15 +110,17 @@ bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t s
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::Vec3&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::Vec3>(::struct_pb_sample::Vec3&, const char*, std::size_t)
 // end of ::struct_pb_sample::Vec3
-bool deserialize_to(::struct_pb_sample::Vec3& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::Vec3>(::struct_pb_sample::Vec3& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::Weapon
-std::size_t get_needed_size(const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::Weapon>(const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.name.empty()) {
     total += 1 + calculate_varint_size(t.name.size()) + t.name.size();
@@ -115,8 +129,9 @@ std::size_t get_needed_size(const ::struct_pb_sample::Weapon& t, const ::struct_
     total += 1 + calculate_varint_size(t.damage);
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::Weapon>(const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::Weapon>(char* data, std::size_t size, const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::string name; // string, field number = 1
@@ -131,11 +146,13 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Weapon
     // int32_t damage; // int32, field number = 2
     if (t.damage != 0) {
       serialize_varint(data, pos, size, 16);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.damage));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.damage));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::Weapon& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::Weapon>(char* data, std::size_t size, const ::struct_pb_sample::Weapon& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::Weapon>(::struct_pb_sample::Weapon& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -162,11 +179,13 @@ bool deserialize_to(::struct_pb_sample::Weapon& t, const char* data, std::size_t
       }
       // int32_t damage; // int32, field number = 2
       case 16: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.damage = varint_tmp;
         break;
       }
@@ -177,16 +196,19 @@ bool deserialize_to(::struct_pb_sample::Weapon& t, const char* data, std::size_t
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::Weapon&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::Weapon>(::struct_pb_sample::Weapon&, const char*, std::size_t)
 // end of ::struct_pb_sample::Weapon
-bool deserialize_to(::struct_pb_sample::Weapon& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::Weapon>(::struct_pb_sample::Weapon& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::Monster
-std::size_t get_needed_size(const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::Monster>(const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
+
   if (t.pos) {
     auto sz = get_needed_size(*t.pos);
     total += 1 + calculate_varint_size(sz) + sz;
@@ -205,31 +227,35 @@ std::size_t get_needed_size(const ::struct_pb_sample::Monster& t, const ::struct
   }
 
   if (t.color != ::struct_pb_sample::Monster::Color::Red) {
-   total += 1 + calculate_varint_size(static_cast<uint64_t>(t.color));
+    total += 1 + calculate_varint_size(static_cast<uint64_t>(t.color));
   }
-
   if (!t.weapons.empty()) {
+
     for(const auto& e: t.weapons) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
     }
   }
+
   if (t.equipped) {
     auto sz = get_needed_size(*t.equipped);
     total += 1 + calculate_varint_size(sz) + sz;
   }
   if (!t.path.empty()) {
+
     for(const auto& e: t.path) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::Monster>(const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::Monster>(char* data, std::size_t size, const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::unique_ptr<::struct_pb_sample::Vec3> pos; // message, field number = 1
+
     if (t.pos) {
       serialize_varint(data, pos, size, 10);
       auto sz = get_needed_size(*t.pos);
@@ -242,13 +268,15 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
     // int32_t mana; // int32, field number = 2
     if (t.mana != 0) {
       serialize_varint(data, pos, size, 16);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.mana));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.mana));
+    }
   }
   {
     // int32_t hp; // int32, field number = 3
     if (t.hp != 0) {
       serialize_varint(data, pos, size, 24);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.hp));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.hp));
+    }
   }
   {
     // std::string name; // string, field number = 4
@@ -270,14 +298,18 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
   }
   {
     // ::struct_pb_sample::Monster::Color color; // enum, field number = 6
+
     if (t.color != ::struct_pb_sample::Monster::Color::Red) {
-      serialize_varint(data, pos, size, 48);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.color));
+
+    serialize_varint(data, pos, size, 48);
+    serialize_varint(data, pos, size, static_cast<uint64_t>(t.color));
+
     }
   }
   {
     // std::vector<::struct_pb_sample::Weapon> weapons; // message, field number = 7
     if (!t.weapons.empty()) {
+
       for(const auto& e: t.weapons) {
         serialize_varint(data, pos, size, 58);
         std::size_t sz = get_needed_size(e);
@@ -289,6 +321,7 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
   }
   {
     // std::unique_ptr<::struct_pb_sample::Weapon> equipped; // message, field number = 8
+
     if (t.equipped) {
       serialize_varint(data, pos, size, 66);
       auto sz = get_needed_size(*t.equipped);
@@ -300,6 +333,7 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
   {
     // std::vector<::struct_pb_sample::Vec3> path; // message, field number = 9
     if (!t.path.empty()) {
+
       for(const auto& e: t.path) {
         serialize_varint(data, pos, size, 74);
         std::size_t sz = get_needed_size(e);
@@ -310,8 +344,9 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::Monster& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::Monster>(char* data, std::size_t size, const ::struct_pb_sample::Monster& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::Monster>(::struct_pb_sample::Monster& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -340,21 +375,25 @@ bool deserialize_to(::struct_pb_sample::Monster& t, const char* data, std::size_
       }
       // int32_t mana; // int32, field number = 2
       case 16: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.mana = varint_tmp;
         break;
       }
       // int32_t hp; // int32, field number = 3
       case 24: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.hp = varint_tmp;
         break;
       }
@@ -389,13 +428,16 @@ bool deserialize_to(::struct_pb_sample::Monster& t, const char* data, std::size_
         break;
       }
       // ::struct_pb_sample::Monster::Color color; // enum, field number = 6
+
       case 48: {
-        uint64_t enum_val_tmp{};
-        ok = deserialize_varint(data, pos, size, enum_val_tmp);
-        if (!ok) {
-          return false;
-        }
-        t.color = static_cast<::struct_pb_sample::Monster::Color>(enum_val_tmp);
+
+      uint64_t enum_val_tmp{};
+      ok = deserialize_varint(data, pos, size, enum_val_tmp);
+      if (!ok) {
+        return false;
+      }
+      t.color = static_cast<::struct_pb_sample::Monster::Color>(enum_val_tmp);
+
         break;
       }
       // std::vector<::struct_pb_sample::Weapon> weapons; // message, field number = 7
@@ -454,29 +496,34 @@ bool deserialize_to(::struct_pb_sample::Monster& t, const char* data, std::size_
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::Monster&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::Monster>(::struct_pb_sample::Monster&, const char*, std::size_t)
 // end of ::struct_pb_sample::Monster
-bool deserialize_to(::struct_pb_sample::Monster& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::Monster>(::struct_pb_sample::Monster& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::Monsters
-std::size_t get_needed_size(const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::Monsters>(const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.monsters.empty()) {
+
     for(const auto& e: t.monsters) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::Monsters>(const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::Monsters>(char* data, std::size_t size, const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::struct_pb_sample::Monster> monsters; // message, field number = 1
     if (!t.monsters.empty()) {
+
       for(const auto& e: t.monsters) {
         serialize_varint(data, pos, size, 10);
         std::size_t sz = get_needed_size(e);
@@ -487,8 +534,9 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monste
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::Monsters& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::Monsters>(char* data, std::size_t size, const ::struct_pb_sample::Monsters& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::Monsters>(::struct_pb_sample::Monsters& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -521,15 +569,17 @@ bool deserialize_to(::struct_pb_sample::Monsters& t, const char* data, std::size
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::Monsters&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::Monsters>(::struct_pb_sample::Monsters&, const char*, std::size_t)
 // end of ::struct_pb_sample::Monsters
-bool deserialize_to(::struct_pb_sample::Monsters& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::Monsters>(::struct_pb_sample::Monsters& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::rect32
-std::size_t get_needed_size(const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::rect32>(const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.x != 0) {
     total += 1 + calculate_varint_size(t.x);
@@ -544,36 +594,42 @@ std::size_t get_needed_size(const ::struct_pb_sample::rect32& t, const ::struct_
     total += 1 + calculate_varint_size(t.height);
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::rect32>(const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::rect32>(char* data, std::size_t size, const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t x; // int32, field number = 1
     if (t.x != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.x));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.x));
+    }
   }
   {
     // int32_t y; // int32, field number = 2
     if (t.y != 0) {
       serialize_varint(data, pos, size, 16);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.y));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.y));
+    }
   }
   {
     // int32_t width; // int32, field number = 3
     if (t.width != 0) {
       serialize_varint(data, pos, size, 24);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.width));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.width));
+    }
   }
   {
     // int32_t height; // int32, field number = 4
     if (t.height != 0) {
       serialize_varint(data, pos, size, 32);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.height));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.height));
+    }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::rect32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::rect32>(char* data, std::size_t size, const ::struct_pb_sample::rect32& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::rect32>(::struct_pb_sample::rect32& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -585,41 +641,49 @@ bool deserialize_to(::struct_pb_sample::rect32& t, const char* data, std::size_t
     switch(tag) {
       // int32_t x; // int32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.x = varint_tmp;
         break;
       }
       // int32_t y; // int32, field number = 2
       case 16: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.y = varint_tmp;
         break;
       }
       // int32_t width; // int32, field number = 3
       case 24: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.width = varint_tmp;
         break;
       }
       // int32_t height; // int32, field number = 4
       case 32: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.height = varint_tmp;
         break;
       }
@@ -630,29 +694,34 @@ bool deserialize_to(::struct_pb_sample::rect32& t, const char* data, std::size_t
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::rect32&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::rect32>(::struct_pb_sample::rect32&, const char*, std::size_t)
 // end of ::struct_pb_sample::rect32
-bool deserialize_to(::struct_pb_sample::rect32& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::rect32>(::struct_pb_sample::rect32& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::rect32s
-std::size_t get_needed_size(const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::rect32s>(const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.rect32_list.empty()) {
+
     for(const auto& e: t.rect32_list) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::rect32s>(const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::rect32s>(char* data, std::size_t size, const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::struct_pb_sample::rect32> rect32_list; // message, field number = 1
     if (!t.rect32_list.empty()) {
+
       for(const auto& e: t.rect32_list) {
         serialize_varint(data, pos, size, 10);
         std::size_t sz = get_needed_size(e);
@@ -663,8 +732,9 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::rect32
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::rect32s& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::rect32s>(char* data, std::size_t size, const ::struct_pb_sample::rect32s& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::rect32s>(::struct_pb_sample::rect32s& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -697,15 +767,17 @@ bool deserialize_to(::struct_pb_sample::rect32s& t, const char* data, std::size_
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::rect32s&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::rect32s>(::struct_pb_sample::rect32s&, const char*, std::size_t)
 // end of ::struct_pb_sample::rect32s
-bool deserialize_to(::struct_pb_sample::rect32s& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::rect32s>(::struct_pb_sample::rect32s& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::person
-std::size_t get_needed_size(const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::person>(const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (t.id != 0) {
     total += 1 + calculate_varint_size(t.id);
@@ -720,14 +792,16 @@ std::size_t get_needed_size(const ::struct_pb_sample::person& t, const ::struct_
     total += 1 + 8;
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::person>(const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::person>(char* data, std::size_t size, const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // int32_t id; // int32, field number = 1
     if (t.id != 0) {
       serialize_varint(data, pos, size, 8);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.id));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.id));
+    }
   }
   {
     // std::string name; // string, field number = 2
@@ -742,19 +816,23 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::person
     // int32_t age; // int32, field number = 3
     if (t.age != 0) {
       serialize_varint(data, pos, size, 24);
-      serialize_varint(data, pos, size, static_cast<uint64_t>(t.age));}
+      serialize_varint(data, pos, size, static_cast<uint64_t>(t.age));
+    }
   }
   {
     // double salary; // double, field number = 4
     if (t.salary != 0) {
       serialize_varint(data, pos, size, 33);
+
       std::memcpy(data + pos, &t.salary, 8);
       pos += 8;
+
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::person& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::person>(char* data, std::size_t size, const ::struct_pb_sample::person& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::person>(::struct_pb_sample::person& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -766,11 +844,13 @@ bool deserialize_to(::struct_pb_sample::person& t, const char* data, std::size_t
     switch(tag) {
       // int32_t id; // int32, field number = 1
       case 8: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.id = varint_tmp;
         break;
       }
@@ -791,16 +871,19 @@ bool deserialize_to(::struct_pb_sample::person& t, const char* data, std::size_t
       }
       // int32_t age; // int32, field number = 3
       case 24: {
+
         uint64_t varint_tmp = 0;
         ok = deserialize_varint(data, pos, size, varint_tmp);
         if (!ok) {
           return false;
         }
+
         t.age = varint_tmp;
         break;
       }
       // double salary; // double, field number = 4
       case 33: {
+
         if (pos + 8 > size) {
           return false;
         }
@@ -817,29 +900,34 @@ bool deserialize_to(::struct_pb_sample::person& t, const char* data, std::size_t
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::person&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::person>(::struct_pb_sample::person&, const char*, std::size_t)
 // end of ::struct_pb_sample::person
-bool deserialize_to(::struct_pb_sample::person& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::person>(::struct_pb_sample::person& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }
 
 // ::struct_pb_sample::persons
-std::size_t get_needed_size(const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields) {
+template<>
+std::size_t get_needed_size<::struct_pb_sample::persons>(const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t total = unknown_fields.total_size();
   if (!t.person_list.empty()) {
+
     for(const auto& e: t.person_list) {
       std::size_t sz = get_needed_size(e);
       total += 1 + calculate_varint_size(sz) + sz;
     }
   }
   return total;
-} // std::size_t get_needed_size(const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields)
-void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields) {
+} // std::size_t get_needed_size<::struct_pb_sample::persons>(const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+void serialize_to<::struct_pb_sample::persons>(char* data, std::size_t size, const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   {
     // std::vector<::struct_pb_sample::person> person_list; // message, field number = 1
     if (!t.person_list.empty()) {
+
       for(const auto& e: t.person_list) {
         serialize_varint(data, pos, size, 10);
         std::size_t sz = get_needed_size(e);
@@ -850,8 +938,9 @@ void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::person
     }
   }
   unknown_fields.serialize_to(data, pos, size);
-} // void serialize_to(char* data, std::size_t size, const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields)
-bool deserialize_to(::struct_pb_sample::persons& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
+} // void serialize_to<::struct_pb_sample::persons>(char* data, std::size_t size, const ::struct_pb_sample::persons& t, const ::struct_pb::UnknownFields& unknown_fields)
+template<>
+bool deserialize_to<::struct_pb_sample::persons>(::struct_pb_sample::persons& t, const char* data, std::size_t size, ::struct_pb::UnknownFields& unknown_fields) {
   std::size_t pos = 0;
   bool ok = false;
   while (pos < size) {
@@ -884,9 +973,10 @@ bool deserialize_to(::struct_pb_sample::persons& t, const char* data, std::size_
     }
   }
 return true;
-} // bool deserialize_to(::struct_pb_sample::persons&, const char*, std::size_t)
+} // bool deserialize_to<::struct_pb_sample::persons>(::struct_pb_sample::persons&, const char*, std::size_t)
 // end of ::struct_pb_sample::persons
-bool deserialize_to(::struct_pb_sample::persons& t, const char* data, std::size_t size) {
+template<>
+bool deserialize_to<::struct_pb_sample::persons>(::struct_pb_sample::persons& t, const char* data, std::size_t size) {
   ::struct_pb::UnknownFields unknown_fields{};
   return deserialize_to(t,data,size,unknown_fields);
 }

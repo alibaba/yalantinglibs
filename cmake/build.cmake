@@ -1,7 +1,7 @@
 # Compile Standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-message(STATUS "Cxx Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "CXX Standard: ${CMAKE_CXX_STANDARD}")
 
 # Build Type
 if(NOT CMAKE_BUILD_TYPE)
@@ -20,11 +20,13 @@ endif()
 
 # ccache
 option(USE_CCACHE "use ccache to faster compile when develop" OFF)
-find_program(CCACHE_FOUND ccache)
-if(CCACHE_FOUND AND USE_CCACHE)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-    #set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) # ccache for link is useless
-    message(STATUS "ccache found")
-else()
-    message(WARNING "ccache not found :you'd better use ccache to faster compile if you are developer")
-endif()
+if (USE_CCACHE)
+    find_program(CCACHE_FOUND ccache)
+    if (CCACHE_FOUND AND USE_CCACHE)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        #set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) # ccache for link is useless
+        message(STATUS "ccache found")
+    else ()
+        message(WARNING "ccache not found :you'd better use ccache to faster compile if you are developer")
+    endif ()
+endif ()

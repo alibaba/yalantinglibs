@@ -244,7 +244,7 @@ struct_pack支持多种数据结构，不同的数据结构有着不同的内存
 例如，序列化对象包含字段
 
 ```cpp
-std::map<int,std::string>{{42，"Hello"},{24,"Student"}}
+std::map<int,std::string>{{42, "Hello"},{24,"Student"}}
 ```
 
 ，该字段的编码如下图所示：

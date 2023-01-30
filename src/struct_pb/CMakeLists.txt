@@ -4,3 +4,4 @@ target_include_directories(libstruct_pb INTERFACE
         $<INSTALL_INTERFACE:include>
         )
 add_subdirectory(protoc-plugin)
+add_subdirectory(conformance)

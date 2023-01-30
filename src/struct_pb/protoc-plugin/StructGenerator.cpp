@@ -18,21 +18,7 @@ bool StructGenerator::Generate(
   for (const auto &option : options) {
     const auto &key = option.first;
     const auto &value = option.second;
-    if (key == "struct_name_style") {
-      if (value == "camel_case") {
-        struct_pb_options.struct_name_style = Options::name_style::camel_case;
-      }
-      else if (value == "snake_case") {
-        struct_pb_options.struct_name_style = Options::name_style::snake_case;
-      }
-      else if (value == "kebab_case") {
-        struct_pb_options.struct_name_style = Options::name_style::kebab_case;
-      }
-      else if (value == "pascal_case") {
-        struct_pb_options.struct_name_style = Options::name_style::pascal_case;
-      }
-    }
-    else if (key == "generate_eq_op") {
+    if (key == "generate_eq_op") {
       struct_pb_options.generate_eq_op = true;
     }
     else if (key == "namespace") {
@@ -46,7 +32,7 @@ bool StructGenerator::Generate(
   if (struct_pb_options.ns.empty()) {
     struct_pb_options.ns = file->package();
   }
-  auto basename = google::protobuf::compiler::StripProto(file->name());
+  auto basename = strip_proto(file->name());
   FileGenerator file_generator(file, struct_pb_options);
   // generate xxx.struct_pb.h
   {
@@ -54,10 +40,11 @@ bool StructGenerator::Generate(
         generator_context->Open(basename + ".struct_pb.h"));
     google::protobuf::io::Printer p(output.get(), '$');
     p.Print({{"parameter", parameter}}, R"(// protoc generate parameter
+// clang-format off
 // $parameter$
 // =========================
-// clang-format off
-#include "struct_pb/struct_pb.hpp"
+#pragma once
+
 )");
     file_generator.generate_header(&p);
   }
@@ -69,9 +56,9 @@ bool StructGenerator::Generate(
     p.Print(
         {{"parameter", parameter}, {"header_file", basename + ".struct_pb.h"}},
         R"(// protoc generate parameter
+// clang-format off
 // $parameter$
 // =========================
-// clang-format off
 #include "$header_file$"
 #include "struct_pb/struct_pb/struct_pb_impl.hpp"
 )");

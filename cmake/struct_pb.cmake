@@ -1,4 +1,5 @@
 function(protobuf_generate_modified)
+    find_package(Protobuf REQUIRED)
     set(_options APPEND_PATH DESCRIPTORS)
     set(_singleargs LANGUAGE OUT_VAR EXPORT_MACRO PROTOC_OUT_DIR PLUGIN PROTOC_OPTION)
     if(COMMAND target_sources)
@@ -127,6 +128,7 @@ function(protobuf_generate_modified)
     endif()
     if(protobuf_generate_TARGET)
         target_sources(${protobuf_generate_TARGET} PRIVATE ${_generated_srcs_all})
+        target_include_directories(${protobuf_generate_TARGET} PUBLIC ${protobuf_generate_PROTOC_OUT_DIR})
     endif()
 endfunction()
 
@@ -188,4 +190,35 @@ function(protobuf_generate_struct_pb SRCS HDRS)
     if(protobuf_generate_struct_pb_DESCRIPTORS)
         set(${protobuf_generate_struct_pb_DESCRIPTORS} "${${protobuf_generate_struct_pb_DESCRIPTORS}}" PARENT_SCOPE)
     endif()
+endfunction()
+
+function(target_protos_struct_pb target)
+    set(_options APPEND_PATH DESCRIPTORS)
+    set(_singleargs LANGUAGE EXPORT_MACRO PROTOC_OUT_DIR PLUGIN OPTION)
+    set(_multiargs IMPORT_DIRS PRIVATE PUBLIC)
+    cmake_parse_arguments(target_protos_struct_pb "${_options}" "${_singleargs}" "${_multiargs}" "${ARGN}")
+    set(_proto_files "${target_protos_struct_pb_PRIVATE}" "${target_protos_struct_pb_PUBLIC}")
+    if (NOT _proto_files)
+        message(SEND_ERROR "Error: TARGET_PROTOS_STRUCT_PB() called without any proto files")
+        return()
+    endif ()
+
+    if (DEFINED PROTOBUF_IMPORT_DIRS AND NOT DEFINED Protobuf_IMPORT_DIRS)
+        set(Protobuf_IMPORT_DIRS "${PROTOBUF_IMPORT_DIRS}")
+    endif ()
+
+    if (DEFINED Protobuf_IMPORT_DIRS)
+        set(_import_arg IMPORT_DIRS ${Protobuf_IMPORT_DIRS})
+    endif ()
+
+    if (target_protos_struct_pb_OPTION)
+        set(_opt ${target_protos_struct_pb_OPTION})
+    endif ()
+    protobuf_generate_modified(
+            TARGET ${target}
+            LANGUAGE struct_pb EXPORT_MACRO ${target_protos_struct_pb_EXPORT_MACRO}
+            PLUGIN $<TARGET_FILE:protoc-gen-struct_pb>
+            ${_import_arg} PROTOS ${_proto_files}
+            PROTOC_OPTION ${_opt}
+    )
 endfunction()

@@ -245,7 +245,9 @@ for(const auto& v: $value$) {
 )");
   }
   else {
-    p->Print({{"tag", std::to_string(calculate_tag(d_, true))}}, R"(
+    p->Print(
+        {{"tag", std::to_string(calculate_tag(d_, true))}, {"value", value}},
+        R"(
 for(const auto& v: $value$) {
   serialize_varint(data, pos, size, $tag$);
   serialize_varint(data, pos, size, static_cast<uint64_t>(v));
