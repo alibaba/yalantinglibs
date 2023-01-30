@@ -29,9 +29,9 @@ constexpr inline std::string_view BOM_STR = "\xEF\xBB\xBF";
 
 class appender {
  public:
-  appender(const std::string &filename, size_t max_file_size = 0,
-           size_t max_files = 0)
-      : max_file_size_(max_file_size) {
+  appender(const std::string &filename, size_t max_file_size, size_t max_files,
+           bool flush_every_time)
+      : flush_every_time_(flush_every_time), max_file_size_(max_file_size) {
     filename_ = filename;
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
   }
@@ -50,9 +50,17 @@ class appender {
     // It can be improved witch cache.
     if (file_.write(str.data(), str.size())) {
       // It can be improved: flush with some interval .
-      file_.flush();
+      if (flush_every_time_) {
+        file_.flush();
+      }
+
       file_size_ += str.size();
     }
+  }
+
+  void flush() {
+    std::lock_guard guard(mtx_);
+    file_.flush();
   }
 
  private:
@@ -116,6 +124,7 @@ class appender {
 
   std::string filename_;
 
+  bool flush_every_time_;
   size_t file_size_ = 0;
   size_t max_file_size_ = 0;
   size_t max_files_ = 0;

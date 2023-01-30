@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <filesystem>
+
 #include "doctest.h"
 #include "logging/easylog.h"
 
@@ -33,8 +35,10 @@ std::string get_last_line(const std::string& filename) {
 
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
-  easylog_ns::init_log(Severity::DEBUG, filename);
+  std::filesystem::remove(filename);
+  easylog_ns::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
   ELOG(Severity::INFO) << "test log";
+  easylog_ns::flush();
   CHECK(get_last_line(filename).rfind("test log") != std::string::npos);
   ELOG_INFO << "hello "
             << "easylog";

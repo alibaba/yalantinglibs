@@ -20,7 +20,7 @@
 #endif
 
 #ifdef _WIN32
-#include <processthreadsapi.h>
+#include <Windows.h>
 #endif
 
 #include "appender.hpp"
@@ -52,10 +52,17 @@ class logger {
     }
   }
 
+  void flush() {
+    if (appender_) {
+      appender_->flush();
+    }
+  }
+
   void init(Severity min_severity, bool enable_console,
-            const std::string &filename, size_t max_file_size = 0,
-            size_t max_files = 0) {
-    static appender appender(filename, max_file_size, max_files);
+            const std::string &filename, size_t max_file_size, size_t max_files,
+            bool flush_every_time) {
+    static appender appender(filename, max_file_size, max_files,
+                             flush_every_time);
     appender_ = &appender;
     min_severity_ = min_severity;
     enable_console_ = enable_console;
@@ -124,11 +131,13 @@ class logger {
 };
 
 inline void init_log(Severity min_severity, const std::string &filename = "",
-                     size_t max_file_size = 0, size_t max_files = 0,
-                     bool enable_console = true) {
+                     bool enable_console = true, size_t max_file_size = 0,
+                     size_t max_files = 0, bool flush_every_time = false) {
   logger::instance().init(min_severity, enable_console, filename, max_file_size,
-                          max_files);
+                          max_files, flush_every_time);
 }
+
+inline void flush() { logger::instance().flush(); }
 }  // namespace easylog_ns
 
 #define ELOG(severity)                                                   \
