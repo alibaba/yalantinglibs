@@ -18,12 +18,12 @@
 
 using namespace easylog_ns;
 
-std::string get_last_line(std::string_view filename) {
+std::string get_last_line(const std::string& filename) {
   std::string last_line;
   std::string temp;
-  std::ifstream fin(filename);
-  if (fin) {
-    while (std::getline(fin, temp)) {
+  std::ifstream file(filename);
+  if (file) {
+    while (std::getline(file, temp)) {
       last_line = std::move(temp);
     }
   }

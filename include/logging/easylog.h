@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 #pragma once
+#if defined(__linux__)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #include "appender.hpp"
 
 namespace easylog_ns {
