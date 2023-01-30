@@ -10,6 +10,21 @@ constexpr void meta_string_tests() {
   constexpr meta_string str2{"Hello world!"};
   constexpr meta_string str3{"Hello WORLD!"};
 
+  constexpr size_t pos = str1.find('o');
+  static_assert(pos == 4);
+  constexpr size_t pos1 = str1.rfind('e');
+  static_assert(pos1 == 1);
+
+  constexpr size_t pos2 = str1.find(' ');
+  constexpr auto str = str1.substr<pos2 + 1>();
+  static_assert(str == "world!");
+
+  constexpr auto append_str = str1 + " Tom" + " and Jerry";
+  static_assert(append_str == "Hello world! Tom and Jerry");
+
+  constexpr auto append_str1 = "Good " + str1;
+  static_assert(append_str1 == "Good Hello world!");
+
   static_assert(str1 == str2);
   static_assert(str2 != str3);
   static_assert(str1 > str3);

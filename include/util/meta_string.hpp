@@ -105,6 +105,37 @@ struct meta_string {
                ? std::search(begin(), end(), str.begin(), str.end()) != end()
                : false;
   }
+
+  static constexpr size_t substr_len(size_t pos, size_t count) {
+    if (pos >= N) {
+      return 0;
+    }
+    else if (count == std::string_view::npos || pos + count > N) {
+      return N - pos;
+    }
+    else {
+      return count;
+    }
+  }
+
+  template <size_t pos, size_t count = std::string_view::npos>
+  constexpr meta_string<substr_len(pos, count)> substr() const noexcept {
+    constexpr size_t n = substr_len(pos, count);
+
+    meta_string<n> result;
+    for (int i = 0; i < n; ++i) {
+      result[i] = elements[pos + i];
+    }
+    return result;
+  }
+
+  constexpr size_t rfind(char c) const noexcept {
+    return std::string_view(*this).rfind(c);
+  }
+
+  constexpr size_t find(char c) const noexcept {
+    return std::string_view(*this).find(c);
+  }
 };
 
 template <std::size_t N>
@@ -134,9 +165,28 @@ constexpr bool operator==(const meta_string<M>& left,
 }
 
 template <std::size_t M, std::size_t N>
+consteval bool operator==(const meta_string<M>& left,
+                          const char (&right)[N]) noexcept {
+  return static_cast<std::string_view>(left) ==
+         static_cast<std::string_view>(meta_string{right});
+}
+
+template <std::size_t M, std::size_t N>
 consteval auto operator+(const meta_string<M>& left,
                          const meta_string<N>& right) noexcept {
   return meta_string{left, right};
+}
+
+template <std::size_t M, std::size_t N>
+consteval auto operator+(const meta_string<M>& left,
+                         const char (&right)[N]) noexcept {
+  return left + meta_string{right};
+}
+
+template <std::size_t M, std::size_t N>
+consteval auto operator+(const char (&left)[M],
+                         const meta_string<N>& right) noexcept {
+  return meta_string{left} + right;
 }
 
 template <meta_string S, meta_string Delim>
