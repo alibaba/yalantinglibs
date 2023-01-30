@@ -81,7 +81,7 @@ class appender {
     }
 
     auto file_path = std::filesystem::path(filename_);
-    std::string filename = file_path.stem();
+    std::string filename = file_path.stem().string();
 
     if (file_number > 0) {
       char buf[32];
@@ -90,7 +90,7 @@ class appender {
     }
 
     if (file_path.has_extension()) {
-      filename.append(file_path.extension());
+      filename.append(file_path.extension().string());
     }
 
     return filename;
