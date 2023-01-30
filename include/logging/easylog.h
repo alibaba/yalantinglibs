@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 #pragma once
-#if defined(__linux__)
+#ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
+#endif
+
+#ifdef _WIN32
+#include <processthreadsapi.h>
 #endif
 
 #include "appender.hpp"
