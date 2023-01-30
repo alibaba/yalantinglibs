@@ -19,10 +19,6 @@
 #include <unistd.h>
 #endif
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-
 #include "appender.hpp"
 
 namespace easylog_ns {
@@ -76,7 +72,8 @@ class logger {
 
   unsigned int get_tid() {
 #ifdef _WIN32
-    return GetCurrentThreadId();
+    // return GetCurrentThreadId();
+    return 0;  // TODO: do it later
 #elif defined(__linux__)
     return static_cast<unsigned int>(::syscall(__NR_gettid));
 #elif defined(__FreeBSD__)
