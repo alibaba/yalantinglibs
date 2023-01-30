@@ -31,6 +31,7 @@
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
+#include "logging/easylog.h"
 using namespace coro_rpc;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
@@ -57,6 +58,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 }
 
 TEST_CASE("testing client") {
+  ELOG_INFO<<"hello "<<"elog";
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
