@@ -21,8 +21,6 @@
 #include <util/meta_string.hpp>
 #include <utility>
 
-#include "short_alloc.h"
-
 namespace easylog_ns {
 enum class Severity {
   NONE = 0,
@@ -52,10 +50,6 @@ inline std::string_view severity_str(Severity severity) {
       return "NONE";
   }
 }
-
-using easylog_alloc = short_alloc<char, 1024, alignof(char)>;
-using small_string =
-    std::basic_string<char, std::char_traits<char>, easylog_alloc>;
 
 class record_t {
  public:
@@ -98,8 +92,7 @@ class record_t {
   void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
 
-    easylog_alloc::arena_type arena;
-    small_string buf(arena);
+    std::string buf;
     buf.reserve(size + 1);
     buf.resize(size);
 

@@ -147,7 +147,7 @@ inline void flush() { logger::instance().flush(); }
                              GET_STRING(__FILE__, __LINE__))             \
             .ref()
 
-#define ELOGV(severity, str, ...)                                        \
+#define ELOGV_IMPL(severity, fmt, ...)                                   \
   if (!easylog_ns::logger::instance().check_severity(severity)) {        \
     ;                                                                    \
   }                                                                      \
@@ -155,7 +155,9 @@ inline void flush() { logger::instance().flush(); }
     easylog_ns::logger::instance() +=                                    \
         easylog_ns::record_t(std::chrono::system_clock::now(), severity, \
                              GET_STRING(__FILE__, __LINE__))             \
-            .sprintf(str, __VA_ARGS__);
+            .sprintf(fmt, __VA_ARGS__);
+
+#define ELOGV(severity, ...) ELOGV_IMPL(severity, __VA_ARGS__, "\n")
 
 #define ELOG_TRACE ELOG(easylog_ns::Severity::INFO)
 #define ELOG_DEBUG ELOG(easylog_ns::Severity::DEBUG)
