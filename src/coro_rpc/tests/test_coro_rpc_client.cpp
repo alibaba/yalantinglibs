@@ -153,7 +153,7 @@ TEST_CASE("testing client") {
 TEST_CASE("testing client with inject server") {
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
-  easylog::info("inject server port: {}", port);
+  ELOGV(Severity::INFO, "inject server port: %d", port.data());
   asio::io_context io_context;
   std::thread thd([&io_context] {
     asio::io_context::work work(io_context);
@@ -272,7 +272,7 @@ class SSLClientTester {
       default: {
       }
     }
-    easylog::info("{}: {}", msg, path);
+    ELOGV(Severity::INFO, "%s %s", msg.data(), path.data());
   }
   void run() {
     auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
@@ -292,7 +292,7 @@ class SSLClientTester {
         auto ec = co_await client->connect("127.0.0.1", port_);
         if (server_crt == ssl_type::_ && server_key == ssl_type::_) {
           if (ec != std::errc{}) {
-            easylog::error("{}", gen_err());
+            ELOGV(Severity::INFO, "%s", gen_err().data());
           }
           REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
           auto ret = co_await client->template call<hi>();
@@ -523,14 +523,14 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
   asio::error_code ec;
   acceptor_.bind(endpoint, ec);
   if (ec) {
-    easylog::error("bind error : {}", ec.message());
+    ELOGV(Severity::ERROR, "bind error : %s", ec.message().data());
     acceptor_.cancel(ec);
     acceptor_.close(ec);
     return std::errc::address_in_use;
   }
   acceptor_.listen();
 
-  easylog::info("listen port {} successfully", port_);
+  ELOGV(Severity::INFO, "listen port %d successfully", port_);
   return std::errc{};
 }
 // TODO: will open after code refactor.

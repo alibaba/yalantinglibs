@@ -159,12 +159,12 @@ inline void flush() { logger::instance().flush(); }
 
 #define ELOGV(severity, ...) ELOGV_IMPL(severity, __VA_ARGS__, "\n")
 
-#define ELOG_TRACE ELOG(easylog_ns::Severity::INFO)
-#define ELOG_DEBUG ELOG(easylog_ns::Severity::DEBUG)
-#define ELOG_INFO ELOG(easylog_ns::Severity::INFO)
-#define ELOG_WARN ELOG(easylog_ns::Severity::WARN)
-#define ELOG_ERROR ELOG(easylog_ns::Severity::ERROR)
-#define ELOG_CRITICAL ELOG(easylog_ns::Severity::CRITICAL)
+#define ELOG_TRACE ELOG(Severity::INFO)
+#define ELOG_DEBUG ELOG(Severity::DEBUG)
+#define ELOG_INFO ELOG(Severity::INFO)
+#define ELOG_WARN ELOG(Severity::WARN)
+#define ELOG_ERROR ELOG(Severity::ERROR)
+#define ELOG_CRITICAL ELOG(Severity::CRITICAL)
 
 #define ELOGT ELOG_TRACE
 #define ELOGD ELOG_DEBUG

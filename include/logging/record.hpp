@@ -21,7 +21,6 @@
 #include <util/meta_string.hpp>
 #include <utility>
 
-namespace easylog_ns {
 enum class Severity {
   NONE = 0,
   TRACE = 1,
@@ -31,6 +30,8 @@ enum class Severity {
   ERROR = 5,
   CRITICAL = 6,
 };
+
+namespace easylog_ns {
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {
