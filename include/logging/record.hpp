@@ -21,6 +21,8 @@
 #include <util/meta_string.hpp>
 #include <utility>
 
+#include "short_alloc.h"
+
 namespace easylog_ns {
 enum class Severity {
   NONE = 0,
@@ -50,6 +52,10 @@ inline std::string_view severity_str(Severity severity) {
       return "NONE";
   }
 }
+
+using easylog_alloc = short_alloc<char, 1024, alignof(char)>;
+using small_string =
+    std::basic_string<char, std::char_traits<char>, easylog_alloc>;
 
 class record_t {
  public:
@@ -82,20 +88,24 @@ class record_t {
 
   template <typename... Args>
   record_t &sprintf(const char *fmt, Args... args) {
-    ss_ << string_format(fmt, args...);
+    printf_string_format(fmt, args...);
 
     return *this;
   }
 
  private:
   template <typename... Args>
-  std::string string_format(const char *fmt, Args... args) {
+  void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
-    std::string buf;
+
+    easylog_alloc::arena_type arena;
+    small_string buf(arena);
     buf.reserve(size + 1);
     buf.resize(size);
+
     snprintf(&buf[0], size + 1, fmt, args...);
-    return buf;
+
+    ss_ << buf;
   }
 
   std::chrono::system_clock::time_point tm_point_;
