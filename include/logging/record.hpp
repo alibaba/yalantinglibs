@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <util/meta_string.hpp>
+#include <utility>
 
 namespace easylog_ns {
 enum class Severity {
@@ -79,7 +80,24 @@ class record_t {
     return *this;
   }
 
+  template <typename... Args>
+  record_t &sprintf(const char *fmt, Args... args) {
+    ss_ << string_format(fmt, args...);
+
+    return *this;
+  }
+
  private:
+  template <typename... Args>
+  std::string string_format(const char *fmt, Args... args) {
+    size_t size = snprintf(nullptr, 0, fmt, args...);
+    std::string buf;
+    buf.reserve(size + 1);
+    buf.resize(size);
+    snprintf(&buf[0], size + 1, fmt, args...);
+    return buf;
+  }
+
   std::chrono::system_clock::time_point tm_point_;
   Severity severity_;
   unsigned int tid_;

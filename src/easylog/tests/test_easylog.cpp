@@ -37,6 +37,15 @@ TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
   easylog_ns::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
+
+  ELOGV(Severity::INFO, "test %d %s", 2, "ok");
+  CHECK(get_last_line(filename).rfind("test 2 ok") != std::string::npos);
+
+  int len = 42;
+  ELOGV(Severity::INFO, "rpc header data_len: %d, buf sz: %lu", len, 20);
+  CHECK(get_last_line(filename).rfind("rpc header data_len: 42, buf sz: 20") !=
+        std::string::npos);
+
   ELOG(Severity::INFO) << "test log";
   easylog_ns::flush();
   CHECK(get_last_line(filename).rfind("test log") != std::string::npos);
