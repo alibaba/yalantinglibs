@@ -36,16 +36,7 @@ class logger {
       return;
     }
 
-    std::string str = format(record);
-
-    if (appender_) {
-      appender_->write(str);
-    }
-
-    if (enable_console_) {
-      std::cout << str;
-      std::cout << std::flush;
-    }
+    append_format(record);
 
     if (record.get_severity() == Severity::CRITICAL) {
       flush();
@@ -110,11 +101,12 @@ class logger {
     return endpos + 4;
   }
 
-  std::string format(const record_t &record) {
+  void append_format(const record_t &record) {
     char buf[32];
     size_t len = get_time_str(buf, record.get_time_point());
 
-    std::string str;
+    alloc::arena_type a;
+    small_string str(a);
     str.append(buf, len).append(" ");
     str.append(severity_str(record.get_severity())).append(" ");
 
@@ -124,7 +116,14 @@ class logger {
     str.append(record.get_file_str());
     str.append(record.get_message()).append("\n");
 
-    return str;
+    if (appender_) {
+      appender_->write(str);
+    }
+
+    if (enable_console_) {
+      std::cout << str;
+      std::cout << std::flush;
+    }
   }
 
   Severity min_severity_;
