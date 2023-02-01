@@ -157,7 +157,7 @@ inline void flush() { logger::instance().flush(); }
                              GET_STRING(__FILE__, __LINE__))             \
             .sprintf(fmt, __VA_ARGS__);
 
-#define ELOGV(severity, ...) ELOGV_IMPL(severity, __VA_ARGS__, "\n")
+#define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
 
 #define ELOG_TRACE ELOG(Severity::INFO)
 #define ELOG_DEBUG ELOG(Severity::DEBUG)

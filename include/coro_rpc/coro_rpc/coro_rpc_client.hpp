@@ -146,14 +146,13 @@ class coro_rpc_client {
     }
 #endif
     if (has_closed_) [[unlikely]] {
-      ELOGV(Severity::ERROR,
+      ELOGV(ERROR,
             "a closed client is not allowed connect again, please create a new "
             "client");
       co_return std::errc::io_error;
     }
 
-    ELOGV(Severity::INFO, "client_id %d begin to connect %s", client_id_,
-          port.data());
+    ELOGV(INFO, "client_id %d begin to connect %s", client_id_, port.data());
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(get_io_context());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
@@ -174,7 +173,7 @@ class coro_rpc_client {
     }
 
     if (is_timeout_) {
-      ELOGV(Severity::WARN, "client_id %d connect timeout", client_id_);
+      ELOGV(WARN, "client_id %d connect timeout", client_id_);
       co_return std::errc::timed_out;
     }
 
@@ -184,7 +183,7 @@ class coro_rpc_client {
       auto shake_ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
-        ELOGV(Severity::WARN, "client_id %d handshake failed: %s", client_id_,
+        ELOGV(WARN, "client_id %d handshake failed: %s", client_id_,
               shake_ec.message().data());
         co_return std::errc::not_connected;
       }
@@ -199,17 +198,16 @@ class coro_rpc_client {
                               const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
-      ELOGV(Severity::INFO, "init ssl: %s", domain.data());
+      ELOGV(INFO, "init ssl: %s", domain.data());
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
-      ELOGV(Severity::INFO, "current path %s",
+      ELOGV(INFO, "current path %s",
             std::filesystem::current_path().string().data());
       if (file_exists(full_cert_file)) {
-        ELOGV(Severity::INFO, "load %s", full_cert_file.string().data());
+        ELOGV(INFO, "load %s", full_cert_file.string().data());
         ssl_ctx_.load_verify_file(full_cert_file);
       }
       else {
-        ELOGV(Severity::INFO, "no certificate file %s",
-              full_cert_file.string().data());
+        ELOGV(INFO, "no certificate file %s", full_cert_file.string().data());
         return ssl_init_ret_;
       }
 
@@ -224,7 +222,7 @@ class coro_rpc_client {
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      ELOGV(Severity::ERROR, "init ssl failed: %s", e.what());
+      ELOGV(ERROR, "init ssl failed: %s", e.what());
     }
     return ssl_init_ret_;
   }
@@ -263,7 +261,7 @@ class coro_rpc_client {
     using R = decltype(get_return_type<func>());
 
     if (has_closed_) [[unlikely]] {
-      ELOGV(Severity::ERROR,
+      ELOGV(ERROR,
             "a closed client is not allowed call again, please create a new "
             "client");
       auto ret = rpc_result<R>{
@@ -312,7 +310,7 @@ class coro_rpc_client {
 
     co_await promise.getFuture();
 #ifdef UNIT_TEST_INJECT
-    ELOGV(Severity::INFO, "client_id %d call %s %s", client_id_,
+    ELOGV(INFO, "client_id %d call %s %s", client_id_,
           get_func_name<func>().data(), ret ? "ok" : "failed");
 #endif
     co_return ret;
@@ -330,9 +328,8 @@ class coro_rpc_client {
                                          auto &promise, std::string err_msg) {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
-    ELOGV(Severity::INFO,
-          "client_id %d %s, is_timeout_ %d, %d , duration %d ms", client_id_,
-          err_msg.data(), is_timeout_, is_timeout,
+    ELOGV(INFO, "client_id %d %s, is_timeout_ %d, %d , duration %d ms",
+          client_id_, err_msg.data(), is_timeout_, is_timeout,
           std::chrono::duration_cast<std::chrono::milliseconds>(duration)
               .count());
 
@@ -412,7 +409,7 @@ class coro_rpc_client {
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      ELOGV(Severity::INFO, "client_id %d close socket", client_id_);
+      ELOGV(INFO, "client_id %d close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -422,7 +419,7 @@ class coro_rpc_client {
              inject_action::client_close_socket_after_send_partial_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
-      ELOGV(Severity::INFO, "client_id %d close socket", client_id_);
+      ELOGV(INFO, "client_id %d close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -432,7 +429,7 @@ class coro_rpc_client {
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await asio_util::async_write(
           socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
-      ELOGV(Severity::INFO, "client_id %d shutdown", client_id_);
+      ELOGV(INFO, "client_id %d shutdown", client_id_);
       socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R>{unexpect_t{},
                         rpc_error{std::errc::io_error, ret.first.message()}};
@@ -449,8 +446,7 @@ class coro_rpc_client {
     if (!ret.first) {
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::client_close_socket_after_send_payload) {
-        ELOGV(Severity::INFO,
-              "client_id %d client_close_socket_after_send_payload",
+        ELOGV(INFO, "client_id %d client_close_socket_after_send_payload",
               client_id_);
         r = rpc_result<R>{unexpect_t{},
                           rpc_error{std::errc::io_error, ret.first.message()}};
@@ -466,7 +462,7 @@ class coro_rpc_client {
         auto errc =
             struct_pack::deserialize_to(header, head, RESPONSE_HEADER_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
-          ELOGV(Severity::ERROR, "deserialize rpc header failed");
+          ELOGV(ERROR, "deserialize rpc header failed");
           co_await close();
           r = rpc_result<R>{
               unexpect_t{},
@@ -617,7 +613,7 @@ class coro_rpc_client {
       co_return;
     }
 
-    ELOGV(Severity::INFO, "client_id %d close", client_id_);
+    ELOGV(INFO, "client_id %d close", client_id_);
 
     co_await asio_util::async_close(socket_);
     has_closed_ = true;
@@ -645,7 +641,7 @@ class coro_rpc_client {
       return;
     }
 
-    ELOGV(Severity::INFO, "client_id %d close", client_id_);
+    ELOGV(INFO, "client_id %d close", client_id_);
 
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
@@ -661,7 +657,7 @@ class coro_rpc_client {
   void stop_inner_io_context() {
     if (thd_.joinable()) {
       if (thd_.get_id() == std::this_thread::get_id()) {
-        ELOGV(Severity::WARN, "client_id %d avoid join self", client_id_);
+        ELOGV(WARN, "client_id %d avoid join self", client_id_);
         std::thread([thd = std::move(thd_),
                      io_ctx = std::move(inner_io_context_)]() mutable {
           io_ctx->stop();
