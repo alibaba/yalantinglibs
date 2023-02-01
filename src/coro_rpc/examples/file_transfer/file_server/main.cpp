@@ -3,8 +3,6 @@
 
 #include "../rpc_service/rpc_service.h"
 
-
-
 int main() {
   coro_rpc::coro_rpc_server server(4, 9000);
 
