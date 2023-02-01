@@ -226,13 +226,14 @@ class SSLClientTester {
         server_crt(server_crt),
         server_key(server_key),
         dh(dh) {
-    register_handler<hi>();
+
     inject("client crt", client_crt_path, client_crt);
     inject("server crt", server_crt_path, server_crt);
     inject("server key", server_key_path, server_key);
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
     server.init_ssl_context(config);
+    server.regist_handler<hi>();
     if constexpr (std::is_same_v<Server, coro_rpc_server>) {
       server.async_start().start([](auto&&) {
       });
@@ -254,8 +255,6 @@ class SSLClientTester {
     future.wait();
   }
   ~SSLClientTester() {
-    remove_handler<hi>();
-
     io_context.stop();
     thd.join();
   }
