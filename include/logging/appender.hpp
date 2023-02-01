@@ -36,7 +36,8 @@ class appender {
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
   }
 
-  void write(const std::string &str) {
+  template <typename String>
+  void write(const String &str) {
     std::lock_guard guard(mtx_);
     if (is_first_write_) {
       open_log_file();

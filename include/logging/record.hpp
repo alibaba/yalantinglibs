@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #pragma once
+#include <util/short_alloc.h>
+
 #include <chrono>
 #include <cstring>
 #include <sstream>
@@ -49,6 +51,9 @@ enum class Severity {
 };
 
 namespace easylog {
+
+using alloc = short_alloc<char, 1024, alignof(char)>;
+using small_string = std::basic_string<char, std::char_traits<char>, alloc>;
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {
@@ -110,7 +115,9 @@ class record_t {
   void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
 
-    std::string buf;
+    alloc::arena_type a;
+    small_string buf(a);
+
     buf.reserve(size + 1);
     buf.resize(size);
 
