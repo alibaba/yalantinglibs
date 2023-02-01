@@ -24,7 +24,7 @@
 
 #include "record.hpp"
 
-namespace easylog_ns {
+namespace easylog {
 constexpr inline std::string_view BOM_STR = "\xEF\xBB\xBF";
 
 class appender {
@@ -133,4 +133,4 @@ class appender {
   std::mutex mtx_;
   std::ofstream file_;
 };
-}  // namespace easylog_ns
+}  // namespace easylog

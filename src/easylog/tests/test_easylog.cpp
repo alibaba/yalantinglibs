@@ -18,7 +18,7 @@
 #include "doctest.h"
 #include "logging/easylog.h"
 
-using namespace easylog_ns;
+using namespace easylog;
 
 std::string get_last_line(const std::string& filename) {
   std::string last_line;
@@ -36,7 +36,7 @@ std::string get_last_line(const std::string& filename) {
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
-  easylog_ns::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
+  easylog::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
 
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
@@ -48,7 +48,7 @@ TEST_CASE("test basic") {
         std::string::npos);
 
   ELOG(Severity::INFO) << "test log";
-  easylog_ns::flush();
+  easylog::flush();
   CHECK(get_last_line(filename).rfind("test log") != std::string::npos);
   ELOG_INFO << "hello "
             << "easylog";

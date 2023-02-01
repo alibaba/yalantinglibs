@@ -48,7 +48,7 @@ enum class Severity {
   CRITICAL = 6,
 };
 
-namespace easylog_ns {
+namespace easylog {
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {
@@ -141,4 +141,4 @@ class record_t {
     return "[" + prefix + "] ";                                 \
   }()
 
-}  // namespace easylog_ns
+}  // namespace easylog

@@ -21,7 +21,7 @@
 
 #include "appender.hpp"
 
-namespace easylog_ns {
+namespace easylog {
 class logger {
  public:
   static logger &instance() {
@@ -140,31 +140,31 @@ inline void init_log(Severity min_severity, const std::string &filename = "",
 }
 
 inline void flush() { logger::instance().flush(); }
-}  // namespace easylog_ns
+}  // namespace easylog
 
-#define ELOG(severity)                                                   \
-  if (!easylog_ns::logger::instance().check_severity(severity)) {        \
-    ;                                                                    \
-  }                                                                      \
-  else                                                                   \
-    easylog_ns::logger::instance() +=                                    \
-        easylog_ns::record_t(std::chrono::system_clock::now(), severity, \
-                             GET_STRING(__FILE__, __LINE__))             \
+#define ELOG(severity)                                                \
+  if (!easylog::logger::instance().check_severity(severity)) {        \
+    ;                                                                 \
+  }                                                                   \
+  else                                                                \
+    easylog::logger::instance() +=                                    \
+        easylog::record_t(std::chrono::system_clock::now(), severity, \
+                          GET_STRING(__FILE__, __LINE__))             \
             .ref()
 
-#define ELOGV_IMPL(severity, fmt, ...)                                   \
-  if (!easylog_ns::logger::instance().check_severity(severity)) {        \
-    ;                                                                    \
-  }                                                                      \
-  else {                                                                 \
-    easylog_ns::logger::instance() +=                                    \
-        easylog_ns::record_t(std::chrono::system_clock::now(), severity, \
-                             GET_STRING(__FILE__, __LINE__))             \
-            .sprintf(fmt, __VA_ARGS__);                                  \
-    if (severity == Severity::CRITICAL) {                                \
-      easylog_ns::flush();                                               \
-      std::exit(EXIT_FAILURE);                                           \
-    }                                                                    \
+#define ELOGV_IMPL(severity, fmt, ...)                                \
+  if (!easylog::logger::instance().check_severity(severity)) {        \
+    ;                                                                 \
+  }                                                                   \
+  else {                                                              \
+    easylog::logger::instance() +=                                    \
+        easylog::record_t(std::chrono::system_clock::now(), severity, \
+                          GET_STRING(__FILE__, __LINE__))             \
+            .sprintf(fmt, __VA_ARGS__);                               \
+    if (severity == Severity::CRITICAL) {                             \
+      easylog::flush();                                               \
+      std::exit(EXIT_FAILURE);                                        \
+    }                                                                 \
   }
 
 #define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
