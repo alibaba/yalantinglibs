@@ -4,7 +4,6 @@ set(TEST_SRCS
         test_async_rpc_server.cpp
         test_coro_rpc_server.cpp
         test_coro_rpc_client.cpp
-        test_remote.cpp
         test_register_handler.cpp
         test_router.cpp
         test_connection.cpp

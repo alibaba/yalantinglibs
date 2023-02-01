@@ -18,7 +18,8 @@
 #include "rpc_api.hpp"
 using namespace coro_rpc;
 int main() {
-  register_handler<&HelloService::hello>(nullptr);
+  coro_rpc_server server(1, 9001);
+  server.regist_handler<&HelloService::hello>(nullptr);
   assert(false && "can not reach");
   return 0;
 }

@@ -1,13 +1,13 @@
 # coro_rpc简介
 
-- [coro_rpc简介](#coro_rpc简介)
-- [coro_rpc的易用性](#coro_rpc的易用性)
-  - [rpc_server端](#rpc_server端)
+- [coro\_rpc简介](#coro_rpc简介)
+- [coro\_rpc的易用性](#coro_rpc的易用性)
+  - [rpc\_server端](#rpc_server端)
   - [rpc函数支持任意参数](#rpc函数支持任意参数)
 - [和grpc、brpc比较易用性](#和grpcbrpc比较易用性)
   - [rpc易用性比较](#rpc易用性比较)
   - [异步编程模型比较](#异步编程模型比较)
-- [coro_rpc更多特色](#coro_rpc更多特色)
+- [coro\_rpc更多特色](#coro_rpc更多特色)
   - [同时支持实时任务和延时任务](#同时支持实时任务和延时任务)
   - [服务端同时支持协程和异步回调](#服务端同时支持协程和异步回调)
 - [benchmark](#benchmark)
@@ -44,9 +44,12 @@ inline std::string echo(std::string str) { return str; }
 #include <coro_rpc/coro_rpc_server.hpp>
 
 int main() {
-  register_handler<echo>(); // 注册rpc函数
 
+  // 初始化服务器
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+
+  server.regist_handler<echo>(); // 注册rpc函数
+
   server.start(); // 启动server并阻塞等待
 }
 ```
@@ -118,12 +121,14 @@ server端
 #include <coro_rpc/coro_rpc_server.hpp>
 
 int main() {
-  register_handler<hello, get_value, get_person>();//注册任意参数类型的普通函数
-
-  dummy d{};
-  register_handler<&dummy::echo>(&d); //注册成员函数
 
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+
+  server.regist_handler<hello, get_value, get_person>();//注册任意参数类型的普通函数
+
+  dummy d{};
+  server.regist_handler<&dummy::echo>(&d); //注册成员函数
+
   server.start(); // 启动server
 }
 ```
@@ -159,11 +164,11 @@ int main() {
 # 和grpc、brpc比较易用性
 
 ## rpc易用性比较
-| RPC | 是否需要定义DSL | 是否支持协程 | hello world例子代码行数 | 依赖库 | 是否header only |
-|---|---|---|---|---|---|
-|grpc|Yes|No| 70+ [helloworld](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld)| 16 | No|
-|brpc|Yes|No| 40+ [helloworld](https://github.com/apache/incubator-brpc/tree/master/example/asynchronous_echo_c%2B%2B)| 6 | No|
-|coro_rpc| No| Yes | 9 | 3 | Yes |
+| RPC      | 是否需要定义DSL | 是否支持协程 | hello world例子代码行数                                                                                  | 依赖库 | 是否header only |
+| -------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------- | ------ | --------------- |
+| grpc     | Yes             | No           | 70+ [helloworld](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld)                       | 16     | No              |
+| brpc     | Yes             | No           | 40+ [helloworld](https://github.com/apache/incubator-brpc/tree/master/example/asynchronous_echo_c%2B%2B) | 6      | No              |
+| coro_rpc | No              | Yes          | 9                                                                                                        | 3      | Yes             |
 
 
 ## 异步编程模型比较
@@ -325,8 +330,9 @@ coro_rpc server推荐使用协程去开发，但同时也支持异步回调模�
 std::string hello() { return "hello coro_rpc"; }
 
 int main() {
-  register_handler<hello, echo>();
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.regist_handler<hello>();
+
   server.start();
 }
 ```
@@ -338,8 +344,8 @@ int main() {
 std::string hello() { return "hello coro_rpc"; }
 
 int main() {
-  register_handler<hello, echo>();
   async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.regist_handler<hello>();
   server.start();
 }
 ```

@@ -69,6 +69,7 @@ struct AsyncServerTester : public ServerTester {
     test_server_start_again();
     g_action = {};
     ServerTester::test_all();
+    test_function_not_registered();
     g_action = {};
     test_start_new_server_with_same_port();
     this->test_call_with_delay_func<async_fun_with_delay_return_void>();
@@ -81,22 +82,52 @@ struct AsyncServerTester : public ServerTester {
     this->test_call_with_delay_func<async_fun_with_delay_return_string_twice>();
   }
   void register_all_function() override {
+    g_action = {};
     easylog::info("run {}", __func__);
-    ServerTester::register_all_function();
-    register_handler<async_fun_with_delay_return_void>();
-    register_handler<async_fun_with_delay_return_void_twice>();
-    register_handler<async_fun_with_delay_return_void_cost_long_time>();
-    register_handler<async_fun_with_delay_return_string>();
-    register_handler<async_fun_with_delay_return_string_twice>();
+    server.regist_handler<async_hi, large_arg_fun, client_hello>();
+    server.regist_handler<long_run_func>();
+    server.regist_handler<&ns_login::LoginService::login>(&login_service_);
+    server.regist_handler<&HelloService::hello>(&hello_service_);
+    server.regist_handler<hello>();
+    server.regist_handler<async_fun_with_delay_return_void>();
+    server.regist_handler<async_fun_with_delay_return_void_twice>();
+    server.regist_handler<async_fun_with_delay_return_void_cost_long_time>();
+    server.regist_handler<async_fun_with_delay_return_string>();
+    server.regist_handler<async_fun_with_delay_return_string_twice>();
   }
   void remove_all_rpc_function() override {
+    g_action = {};
     easylog::info("run {}", __func__);
-    ServerTester::remove_all_rpc_function();
-    remove_handler<async_fun_with_delay_return_void>();
-    remove_handler<async_fun_with_delay_return_void_twice>();
-    remove_handler<async_fun_with_delay_return_void_cost_long_time>();
-    remove_handler<async_fun_with_delay_return_string>();
-    remove_handler<async_fun_with_delay_return_string_twice>();
+    server.remove_handler<async_hi>();
+    server.remove_handler<large_arg_fun>();
+    server.remove_handler<client_hello>();
+    server.remove_handler<long_run_func>();
+    server.remove_handler<&ns_login::LoginService::login>();
+    server.remove_handler<hello>();
+    server.remove_handler<&HelloService::hello>();
+    server.remove_handler<async_fun_with_delay_return_void>();
+    server.remove_handler<async_fun_with_delay_return_void_twice>();
+    server.remove_handler<async_fun_with_delay_return_void_cost_long_time>();
+    server.remove_handler<async_fun_with_delay_return_string>();
+    server.remove_handler<async_fun_with_delay_return_string_twice>();
+  }
+
+  void test_function_not_registered() {
+    g_action = {};
+    server.remove_handler<async_hi>();
+    auto client = create_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    auto ret = call<async_hi>(client);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::function_not_supported,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
+    REQUIRE(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    CHECK(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    CHECK(client->has_closed() == true);
+    server.regist_handler<async_hi>();
   }
 
   void test_server_start_again() {
@@ -201,9 +232,10 @@ TEST_CASE("testing async rpc server stop") {
 
 TEST_CASE("testing async rpc write error") {
   easylog::info("run testing async rpc write error");
-  register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   async_rpc_server server(2, 8820);
+
+  server.regist_handler<hi>();
   auto ec = server.async_start();
   REQUIRE(ec == std::errc{});
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -220,15 +252,15 @@ TEST_CASE("testing async rpc write error") {
       std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
-  remove_handler<hi>();
+  server.remove_handler<hi>();
 }
 
 TEST_CASE("test server write queue") {
   easylog::info("run test server write queue");
   g_action = {};
-  remove_handler<async_fun_with_delay_return_void_cost_long_time>();
-  register_handler<async_fun_with_delay_return_void_cost_long_time>();
   async_rpc_server server(2, 8820);
+  server.remove_handler<async_fun_with_delay_return_void_cost_long_time>();
+  server.regist_handler<async_fun_with_delay_return_void_cost_long_time>();
   auto ec = server.async_start();
   REQUIRE(ec == std::errc{});
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -289,5 +321,5 @@ TEST_CASE("test server write queue") {
   io_context.stop();
   thd.join();
   server.stop();
-  remove_handler<async_fun_with_delay_return_void_cost_long_time>();
+  server.remove_handler<async_fun_with_delay_return_void_cost_long_time>();
 }

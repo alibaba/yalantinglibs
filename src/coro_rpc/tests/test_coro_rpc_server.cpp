@@ -23,7 +23,6 @@
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "coro_rpc/coro_rpc/remote.hpp"
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
@@ -83,6 +82,7 @@ struct CoroServerTester : ServerTester {
     easylog::info("run {}", __func__);
     test_coro_handler();
     ServerTester::test_all();
+    test_function_not_registered();
     test_start_new_server_with_same_port();
     test_server_send_bad_rpc_result();
     test_server_send_no_body();
@@ -100,31 +100,54 @@ struct CoroServerTester : ServerTester {
     this->test_call_with_delay_func<coro_fun_with_delay_return_string_twice>();
   }
   void register_all_function() override {
+    g_action = {};
     easylog::info("run {}", __func__);
-    ServerTester::register_all_function();
-    register_handler<coro_fun_with_delay_return_void>();
-    register_handler<coro_fun_with_delay_return_void_twice>();
-    register_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    register_handler<coro_fun_with_delay_return_string>();
-    register_handler<coro_fun_with_delay_return_string_twice>();
-    register_handler<coro_func>();
-    register_handler<&HelloService::coro_func>(&hello_service_);
-    register_handler<get_coro_value>();
-    register_handler<&CoroServerTester::get_value>(this);
+    server.regist_handler<async_hi, large_arg_fun, client_hello>();
+    server.regist_handler<long_run_func>();
+    server.regist_handler<&ns_login::LoginService::login>(&login_service_);
+    server.regist_handler<&HelloService::hello>(&hello_service_);
+    server.regist_handler<hello>();
+    server.regist_handler<coro_fun_with_delay_return_void>();
+    server.regist_handler<coro_fun_with_delay_return_void_twice>();
+    server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
+    server.regist_handler<coro_fun_with_delay_return_string>();
+    server.regist_handler<coro_fun_with_delay_return_string_twice>();
+    server.regist_handler<coro_func>();
+    server.regist_handler<&HelloService::coro_func>(&hello_service_);
+    server.regist_handler<get_coro_value>();
+    server.regist_handler<&CoroServerTester::get_value>(this);
   }
   void remove_all_rpc_function() override {
     easylog::info("run {}", __func__);
     test_server_start_again();
     ServerTester::remove_all_rpc_function();
-    remove_handler<coro_fun_with_delay_return_void>();
-    remove_handler<coro_fun_with_delay_return_void_twice>();
-    remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    remove_handler<coro_fun_with_delay_return_string>();
-    remove_handler<coro_fun_with_delay_return_string_twice>();
-    remove_handler<coro_func>();
-    remove_handler<&HelloService::coro_func>();
-    remove_handler<get_coro_value>();
-    remove_handler<&CoroServerTester::get_value>();
+    server.remove_handler<coro_fun_with_delay_return_void>();
+    server.remove_handler<coro_fun_with_delay_return_void_twice>();
+    server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
+    server.remove_handler<coro_fun_with_delay_return_string>();
+    server.remove_handler<coro_fun_with_delay_return_string_twice>();
+    server.remove_handler<coro_func>();
+    server.remove_handler<&HelloService::coro_func>();
+    server.remove_handler<get_coro_value>();
+    server.remove_handler<&CoroServerTester::get_value>();
+  }
+
+  void test_function_not_registered() {
+    g_action = {};
+    server.remove_handler<async_hi>();
+    auto client = create_client();
+    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    auto ret = call<async_hi>(client);
+    REQUIRE_MESSAGE(
+        ret.error().code == std::errc::function_not_supported,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
+    REQUIRE(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    CHECK(client->has_closed() == true);
+    ret = call<async_hi>(client);
+    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    CHECK(client->has_closed() == true);
+    server.regist_handler<async_hi>();
   }
 
   void test_server_start_again() {
@@ -243,9 +266,9 @@ TEST_CASE("testing coro rpc server stop") {
 
 TEST_CASE("test server accept error") {
   easylog::info("run test server accept error");
-  register_handler<hi>();
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
+  server.regist_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -267,16 +290,16 @@ TEST_CASE("test server accept error") {
   ret = syncAwait(client.call<hi>());
   CHECK(!ret);
   REQUIRE(client.has_closed() == true);
-  remove_handler<hi>();
+  server.remove_handler<hi>();
   g_action = {};
 }
 
 TEST_CASE("test server write queue") {
   easylog::info("run server write queue");
   g_action = {};
-  remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
-  register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   coro_rpc_server server(2, 8810);
+  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
+  server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -336,14 +359,14 @@ TEST_CASE("test server write queue") {
   io_context.stop();
   thd.join();
   server.stop();
-  remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
+  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
 }
 
 TEST_CASE("testing coro rpc write error") {
   easylog::info("run testing coro rpc write error");
-  register_handler<hi>();
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);
+  server.regist_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -360,5 +383,5 @@ TEST_CASE("testing coro rpc write error") {
       std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
-  remove_handler<hi>();
+  server.remove_handler<hi>();
 }

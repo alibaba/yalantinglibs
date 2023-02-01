@@ -44,15 +44,16 @@ namespace coro_rpc {
  */
 class async_connection : public std::enable_shared_from_this<async_connection> {
  public:
-  async_connection(asio::io_context &io_context)
+  async_connection(asio::io_context &io_context, internal::router &router)
       : io_context_(io_context),
         socket_(io_context),
         body_(body_size_),
-        timer_(io_context) {}
+        timer_(io_context),
+        router_(router) {}
 
-  async_connection(asio::io_context &io_context,
+  async_connection(asio::io_context &io_context, internal::router &router,
                    std::chrono::steady_clock::duration timeout_duration)
-      : async_connection(io_context) {
+      : async_connection(io_context, router) {
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
     }
@@ -226,8 +227,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   }
 
   void handle_body(size_t length, auto &self) {
-    auto handler = internal::get_handler({body_.data(), length});
-    auto [err, buf] = internal::route(handler, {body_.data(), length}, self);
+    auto handler = router_.get_handler({body_.data(), length});
+    auto [err, buf] = router_.route(handler, {body_.data(), length}, self);
     if (delay_) {
       delay_ = false;
       return;
@@ -435,6 +436,8 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::once_flag flag_{};
   std::any tag_;
   rpc_header header_{};
+
+  internal::router &router_;
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
