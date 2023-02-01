@@ -105,8 +105,7 @@ class logger {
     char buf[32];
     size_t len = get_time_str(buf, record.get_time_point());
 
-    alloc::arena_type a;
-    small_string str(a);
+    std::string str;
     str.append(buf, len).append(" ");
     str.append(severity_str(record.get_severity())).append(" ");
 
