@@ -105,7 +105,13 @@ class logger {
     char buf[32];
     size_t len = get_time_str(buf, record.get_time_point());
 
+#if __has_include(<memory_resource>)
+    char arr[1024];
+    std::pmr::monotonic_buffer_resource resource(arr, 1024);
+    std::pmr::string str{&resource};
+#else
     std::string str;
+#endif
     str.append(buf, len).append(" ");
     str.append(severity_str(record.get_severity())).append(" ");
 

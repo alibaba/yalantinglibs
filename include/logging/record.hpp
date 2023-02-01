@@ -16,6 +16,9 @@
 #pragma once
 #include <chrono>
 #include <cstring>
+#if __has_include(<memory_resource>)
+#include <memory_resource>
+#endif
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -110,8 +113,13 @@ class record_t {
   void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
 
+#if __has_include(<memory_resource>)
+    char arr[1024];
+    std::pmr::monotonic_buffer_resource resource(arr, 1024);
+    std::pmr::string buf{&resource};
+#else
     std::string buf;
-
+#endif
     buf.reserve(size + 1);
     buf.resize(size);
 
