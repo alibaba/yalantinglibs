@@ -232,7 +232,7 @@ class SSLClientTester {
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
     server.init_ssl_context(config);
-    server.regist_handler<hi>();
+    server.template regist_handler<hi>();
     if constexpr (std::is_same_v<Server, coro_rpc_server>) {
       server.async_start().start([](auto&&) {
       });
