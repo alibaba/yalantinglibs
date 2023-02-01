@@ -24,7 +24,7 @@ namespace {
 template <auto func, typename Self>
 inline void register_one_handler(Self *self) {
   if (self == nullptr) [[unlikely]] {
-    easylog::critical("null connection!");
+    ELOGV(CRITICAL, "null connection!");
   }
 
   constexpr auto name = get_func_name<func>();
@@ -40,7 +40,7 @@ inline void register_one_handler(Self *self) {
           co_return co_await internal::execute_coro<func>(data, conn, self);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   else {
@@ -49,7 +49,7 @@ inline void register_one_handler(Self *self) {
           return internal::execute<func>(data, conn, self);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
 
@@ -74,7 +74,7 @@ inline void register_one_handler() {
           co_return co_await internal::execute_coro<func>(data, conn);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   else {
@@ -83,7 +83,7 @@ inline void register_one_handler() {
           return internal::execute<func>(data, conn);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %d register!", name.data());
     }
   }
   internal::g_id2name.emplace(id, name);

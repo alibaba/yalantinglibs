@@ -154,7 +154,7 @@ person get_person1(const person &p, int id, std::string name) {
 void not_register_func(int) {}
 
 async_simple::coro::Lazy<void> coro_func() {
-  coro_rpc::easylog::info("hello, it's in coro function");
+  ELOGV(INFO, "hello, it's in coro function");
   co_return;
 }
 

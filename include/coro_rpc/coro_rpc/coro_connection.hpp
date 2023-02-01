@@ -125,14 +125,16 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
       // So, no special handling of eof is required.
       if (ret.first) {
-        log((std::errc)ret.first.value());
+        ELOGV(ERROR, "%s, %s", ret.first.message().data(), "read head error");
         co_await close();
         co_return;
       }
       assert(ret.second == RPC_HEAD_LEN);
       auto errc = struct_pack::deserialize_to(header_, head_, RPC_HEAD_LEN);
       if (errc != struct_pack::errc::ok) [[unlikely]] {
-        log(std::errc::protocol_error);
+        ELOGV(ERROR, "%s, %s",
+              std::make_error_code(std::errc::protocol_error).message().data(),
+              "deserialize error");
         co_await close();
         co_return;
       }
@@ -329,16 +331,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     co_await send_data();
   }
 
-  void log(std::errc err, source_location loc = {}) {
-#ifdef UNIT_TEST_INJECT
-    ELOGV(INFO, "close conn_id %d, client_id %d, reason %s", conn_id_,
-          client_id_, std::make_error_code(err).message().data());
-#else
-    ELOGV(INFO, "close conn_id %d, reason %s", conn_id_,
-          std::make_error_code(err).message().data());
-#endif
-  }
-
   async_simple::coro::Lazy<void> send_data(bool close_ssl = true) {
     std::pair<std::error_code, size_t> ret;
     while (!write_queue_.empty()) {
@@ -366,14 +358,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 #endif
       if (ret.first) [[unlikely]] {
-        log((std::errc)ret.first.value());
+        ELOGV(ERROR, "%s, %s", ret.first.message().data(), "async_write error");
         co_await close(close_ssl);
         co_return;
       }
       write_queue_.pop_front();
     }
     if (rsp_err_ != err_ok) [[unlikely]] {
-      log(rsp_err_);
+      ELOGV(ERROR, "%s, %s", std::make_error_code(rsp_err_).message().data(),
+            "rsp_err_");
       co_await close(false);
       co_return;
     }
