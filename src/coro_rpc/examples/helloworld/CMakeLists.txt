@@ -17,7 +17,7 @@ target_link_libraries(helloworld_client PRIVATE libcoro_rpc)
 # You must
 #     - define macro ASIO_HAS_STD_INVOKE_RESULT and ASYNC_SIMPLE_HAS_NOT_AIO manually
 #     - include coro_rpc folder if needed
-#     - include coro_rpc dependencies folders (asio, async_simple, spdlog)
+#     - include coro_rpc dependencies folders (asio, async_simple)
 #     - link pthread
 #########################################################################################
 add_executable(helloworld_server_manually
@@ -32,12 +32,10 @@ target_compile_definitions(helloworld_client_manually PRIVATE ASYNC_SIMPLE_HAS_N
 target_include_directories(helloworld_server_manually PRIVATE
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
-        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/spdlog
 )
 target_include_directories(helloworld_client_manually PRIVATE
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
-        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/spdlog
 )
 target_link_libraries(helloworld_server_manually -lpthread)
 target_link_libraries(helloworld_client_manually -lpthread)

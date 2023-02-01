@@ -92,7 +92,7 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     }
 
     if (file_exists(key_file)) {
-      ELOGV(INFO, "load %s", key_file.string());
+      ELOGV(INFO, "load %s", key_file.string().data());
       context.use_private_key_file(key_file, asio::ssl::context::pem);
     }
     else {
