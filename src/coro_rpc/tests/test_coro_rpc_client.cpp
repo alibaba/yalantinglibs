@@ -226,7 +226,6 @@ class SSLClientTester {
         server_crt(server_crt),
         server_key(server_key),
         dh(dh) {
-
     inject("client crt", client_crt_path, client_crt);
     inject("server crt", server_crt_path, server_crt);
     inject("server key", server_key_path, server_key);
