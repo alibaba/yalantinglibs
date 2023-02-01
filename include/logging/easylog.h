@@ -46,6 +46,11 @@ class logger {
       std::cout << str;
       std::cout << std::flush;
     }
+
+    if (record.get_severity() == Severity::CRITICAL) {
+      flush();
+      std::exit(EXIT_FAILURE);
+    }
   }
 
   void flush() {
@@ -151,11 +156,16 @@ inline void flush() { logger::instance().flush(); }
   if (!easylog_ns::logger::instance().check_severity(severity)) {        \
     ;                                                                    \
   }                                                                      \
-  else                                                                   \
+  else {                                                                 \
     easylog_ns::logger::instance() +=                                    \
         easylog_ns::record_t(std::chrono::system_clock::now(), severity, \
                              GET_STRING(__FILE__, __LINE__))             \
-            .sprintf(fmt, __VA_ARGS__);
+            .sprintf(fmt, __VA_ARGS__);                                  \
+    if (severity == Severity::CRITICAL) {                                \
+      easylog_ns::flush();                                               \
+      std::exit(EXIT_FAILURE);                                           \
+    }                                                                    \
+  }
 
 #define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
 

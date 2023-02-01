@@ -83,7 +83,7 @@ inline void register_one_handler() {
           return internal::execute<func>(data, conn);
         });
     if (!it.second) {
-      ELOGV(CRITICAL, "duplication function %d register!", name.data());
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   internal::g_id2name.emplace(id, name);
