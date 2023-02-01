@@ -1,5 +1,6 @@
 #pragma once
-#include <coro_rpc/coro_rpc_server.hpp>
+
+#include <coro_rpc/rpc_connection.hpp>
 #include <fstream>
 #include <string>
 using namespace coro_rpc;

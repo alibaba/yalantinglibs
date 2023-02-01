@@ -28,54 +28,6 @@ namespace coro_rpc {
 
 /*!
  * \ingroup coro_rpc
- * 注册rpc服务函数（非成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
- * 在模版参数中填入函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出。
- *
- * 函数注册示例
- * ```c++
- * // RPC函数(普通函数)
- * void hello() {}
- * std::string get_str() { return ""; }
- * int add(int a, int b) {return a + b; }
- *
- * // RPC函数(成员函数)
- * class test_class {
- *  public:
- *   void plus_one(int val) {}
- *   std::string get_str(std::string str) { return str; }
- * };
- *
- * int main() {
- *   register_handler<hello>(); //一次注册一个RPC函数
- *   register_handler<get_str, add>(); //一次注册多个RPC函数
- *
- *   test_class obj{};
- *   register_handler<&test_class::plus_one,
- * &test_class::get_str>(&obj);//注册成员函数
- * }
- * ```
- *
- * @tparam first 需要注册的非成员函数，至少注册一个，允许同时注册多个
- * @tparam func
- */
-template <auto first, auto... func>
-inline void register_handler();
-
-/*!
- * \ingroup coro_rpc
- * 注册rpc服务函数（成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
- * 在模版参数中填入成员函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出；
- * 如果成员函数对应的对象指针为空程序会终止退出。
- *
- * @tparam first 需要注册的成员函数，至少注册一个，允许同时注册多个
- * @tparam func
- * @param self 成员函数对应的对象指针
- */
-template <auto first, auto... func>
-inline void register_handler(class_type_t<decltype(first)> *self);
-
-/*!
- * \ingroup coro_rpc
  * RPC Server
  * 服务端使用示例
  *
@@ -85,8 +37,8 @@ inline void register_handler(class_type_t<decltype(first)> *self);
  * inline std::string hello_coro_rpc() { return "hello coro_rpc"; }
  *
  * int main(){
- *   register_handler<hello_coro_rpc>();
  *   coro_rpc_server server(std::thread::hardware_concurrency(), 9000);
+ *   server.regist_handler<hello_coro_rpc>();
  *   server.start();
  * }
  * ```
@@ -135,6 +87,56 @@ class coro_rpc_server {
    * @return
    */
   auto &get_executor();
+
+  /*!
+   * \ingroup coro_rpc
+   * 注册rpc服务函数（非成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
+   * 在模版参数中填入函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出。
+   *
+   * 函数注册示例
+   * ```c++
+   * // RPC函数(普通函数)
+   * void hello() {}
+   * std::string get_str() { return ""; }
+   * int add(int a, int b) {return a + b; }
+   *
+   * // RPC函数(成员函数)
+   * class test_class {
+   *  public:
+   *   void plus_one(int val) {}
+   *   std::string get_str(std::string str) { return str; }
+   * };
+   *
+   * int main() {
+   *   coro_rpc_server server;
+   *
+   *   server.regist_handler<hello>(); //一次注册一个RPC函数
+   *   server.regist_handler<get_str, add>(); //一次注册多个RPC函数
+   *
+   *   test_class obj{};
+   *   server.regist_handler<&test_class::plus_one,
+   * &test_class::get_str>(&obj);//注册成员函数
+   * }
+   * ```
+   *
+   * @tparam first 需要注册的非成员函数，至少注册一个，允许同时注册多个
+   * @tparam func
+   */
+  template <auto first, auto... func>
+  void regist_handler();
+
+  /*!
+   * \ingroup coro_rpc
+   * 注册rpc服务函数（成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
+   * 在模版参数中填入成员函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出；
+   * 如果成员函数对应的对象指针为空程序会终止退出。
+   *
+   * @tparam first 需要注册的成员函数，至少注册一个，允许同时注册多个
+   * @tparam func
+   * @param self 成员函数对应的对象指针
+   */
+  template <auto first, auto... func>
+  void regist_handler(class_type_t<decltype(first)> *self);
 };
 
 /*!

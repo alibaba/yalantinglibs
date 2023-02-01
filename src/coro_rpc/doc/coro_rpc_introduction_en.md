@@ -5,7 +5,7 @@
   - [server](#server)
   - [RPC with any parameters](#rpc-with-any-parameters)
 - [Compare with grpc/brpc](#compare-with-grpcbrpc)
-  - [Usability](#usability)
+  - [Usability](#usability-1)
   - [Asynchronous Model](#asynchronous-model)
 - [More features](#more-features)
   - [Real-time Tasks and Non-Real-time Tasks](#real-time-tasks-and-non-real-time-tasks)
@@ -33,16 +33,15 @@ The core design goal of coro_rpc is usability. Instead of exposing too many trou
 // rpc_service.hpp
 inline std::string echo(std::string str) { return str; }
 ```
-2. register the RPC function and start the server
+2. regist the RPC function and start the server
 
 ```cpp
 #include "rpc_service.hpp"
 #include <coro_rpc/coro_rpc_server.hpp>
 
 int main() {
-  register_handler<echo>(); // register rpc function
-
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.regist_handler<echo>(); // register rpc function
   server.start(); // start the server and blocking wait
 }
 ```
@@ -111,12 +110,13 @@ And in server, we define the following:
 #include <coro_rpc/coro_rpc_server.hpp>
 
 int main() {
-  register_handler<hello, get_value, get_person>();//register the RPC functions of any signature 
+  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+
+  server.regist_handler<hello, get_value, get_person>();//register the RPC functions of any signature 
 
   dummy d{};
-  register_handler<&dummy::echo>(&d); //register the member functions
+  server.regist_handler<&dummy::echo>(&d); //register the member functions
 
-  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
   server.start(); // start the server
 }
 ```
@@ -152,11 +152,11 @@ The input parameter and return type of `get_person` is a `struct`. The serializa
 
 ## Usability
 
-| RPC | Define DSL | support coroutine | code lines of hello world | external dependency | header-only |
-|---|---|---|---|---|---|
-|grpc|Yes|No| 70+ [helloworld](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld)| 16 | No|
-|brpc|Yes|No| 40+ [helloworld](https://github.com/apache/incubator-brpc/tree/master/example/asynchronous_echo_c%2B%2B)| 6 | No|
-|coro_rpc| No| Yes | 9 | 3 | Yes |
+| RPC      | Define DSL | support coroutine | code lines of hello world                                                                                | external dependency | header-only |
+| -------- | ---------- | ----------------- | -------------------------------------------------------------------------------------------------------- | ------------------- | ----------- |
+| grpc     | Yes        | No                | 70+ [helloworld](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld)                       | 16                  | No          |
+| brpc     | Yes        | No                | 40+ [helloworld](https://github.com/apache/incubator-brpc/tree/master/example/asynchronous_echo_c%2B%2B) | 6                   | No          |
+| coro_rpc | No         | Yes               | 9                                                                                                        | 3                   | Yes         |
 
 ## Asynchronous Model
 
@@ -317,8 +317,8 @@ It is recommended to use coroutine on server development. However, the asynchron
 std::string hello() { return "hello coro_rpc"; }
 
 int main() {
-  register_handler<hello, echo>();
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.regist_handler<hello>();
   server.start();
 }
 ```
@@ -330,8 +330,8 @@ int main() {
 std::string hello() { return "hello coro_rpc"; }
 
 int main() {
-  register_handler<hello, echo>();
   async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.regist_handler<hello, echo>();
   server.start();
 }
 ```
