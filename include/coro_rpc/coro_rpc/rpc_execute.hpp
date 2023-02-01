@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
 #include <functional>
 #include <memory>
@@ -172,7 +187,7 @@ inline auto execute(std::string_view data, rpc_conn &conn,
   }
   return pack_result();
 }
-
+// clang-format off
 template <auto func, typename Self = void>
 inline async_simple::coro::Lazy<std::pair<std::errc, std::vector<char>>>
 execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
@@ -287,7 +302,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         co_await func();
       }
       else {
-        co_await(self->*func)();
+        co_await (self->*func)();
       }
     }
     else {
@@ -295,7 +310,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         co_return pack_result(co_await func());
       }
       else {
-        co_return pack_result(co_await(self->*func)());
+        co_return pack_result(co_await (self->*func)());
       }
     }
   }
