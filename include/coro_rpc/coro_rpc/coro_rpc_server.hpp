@@ -36,7 +36,7 @@
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "remote.hpp"
 namespace coro_rpc {
 /*!
@@ -78,9 +78,7 @@ class coro_rpc_server {
         flag_{stat::init} {}
 
   ~coro_rpc_server() {
-    // FIXME: when coro_rpc_server is global variable, spdlog's log level may
-    // destructe first, which cause crash.
-    // easylog::info("coro_rpc_server will quit");
+    ELOGV(INFO, "coro_rpc_server will quit");
     stop();
   }
 
@@ -103,10 +101,10 @@ class coro_rpc_server {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
         if (flag_ == stat::started) {
-          easylog::info("start again");
+          ELOGV(INFO, "start again");
         }
-        else if (flag_ == stat::started) {
-          easylog::info("has stoped");
+        else if (flag_ == stat::stop) {
+          ELOGV(INFO, "has stoped");
         }
         return std::errc::io_error;
       }
@@ -148,10 +146,10 @@ class coro_rpc_server {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
         if (flag_ == stat::started) {
-          easylog::info("start again");
+          ELOGV(INFO, "start again");
         }
-        else if (flag_ == stat::started) {
-          easylog::info("has stoped");
+        else if (flag_ == stat::stop) {
+          ELOGV(INFO, "has stoped");
         }
         co_return std::errc::io_error;
       }
@@ -189,7 +187,8 @@ class coro_rpc_server {
       return;
     }
 
-    easylog::info("begin to stop coro_rpc_server, conn size {}", conns_.size());
+    ELOGV(INFO, "begin to stop coro_rpc_server, conn size %d", conns_.size());
+
     close_acceptor();
     if (flag_ == stat::started) {
       {
@@ -216,7 +215,7 @@ class coro_rpc_server {
       acceptor_ioc_.stop();
       acceptor_thd_.join();
     }
-    easylog::info("stop coro_rpc_server ok");
+    ELOGV(INFO, "stop coro_rpc_server ok");
     flag_ = stat::stop;
   }
 
@@ -234,7 +233,7 @@ class coro_rpc_server {
 
  private:
   std::errc listen() {
-    easylog::info("begin to listen");
+    ELOGV(INFO, "begin to listen");
     using asio::ip::tcp;
     auto endpoint = tcp::endpoint(tcp::v4(), port_);
     acceptor_.open(endpoint.protocol());
@@ -244,7 +243,8 @@ class coro_rpc_server {
     asio::error_code ec;
     acceptor_.bind(endpoint, ec);
     if (ec) {
-      easylog::error("bind port {} error : {}", port_, ec.message());
+      ELOGV(ERROR, "bind port %d error : %s", port_.load(),
+            ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
       start_accept_promise_.set_value();
@@ -258,13 +258,13 @@ class coro_rpc_server {
 
     auto end_point = acceptor_.local_endpoint(ec);
     if (ec) {
-      easylog::error("get local endpoint port {} error {}", port_,
-                     ec.message());
+      ELOGV(ERROR, "get local endpoint port %d error : %s", port_.load(),
+            ec.message().data());
       return std::errc::address_in_use;
     }
     port_ = end_point.port();
 
-    easylog::info("listen port {} successfully", port_);
+    ELOGV(INFO, "isten port %d successfully", port_.load());
     start_accept_promise_.set_value();
     return {};
   }
@@ -285,7 +285,7 @@ class coro_rpc_server {
       }
 #endif
       if (error) {
-        easylog::error("accept failed, error: {}", error.message());
+        ELOGV(ERROR, "accept failed, error: %s", error.message().data());
         if (error == asio::error::operation_aborted) {
           close_accept_promise_.set_value();
           co_return std::errc::io_error;
@@ -294,7 +294,7 @@ class coro_rpc_server {
       }
 
       int64_t conn_id = ++conn_id_;
-      easylog::info("new client conn_id {} coming", conn_id);
+      ELOGV(INFO, "new client conn_id %d coming", conn_id);
       auto conn = std::make_shared<coro_connection>(
           io_context, std::move(socket), conn_timeout_duration_);
       conn->set_quit_callback(

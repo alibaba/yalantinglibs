@@ -24,7 +24,7 @@
 #include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "rpc_protocol.h"
 #include "struct_pack/struct_pack.hpp"
 #include "util/type_traits.h"
@@ -92,22 +92,22 @@ route_coro(auto handler, std::string_view data, rpc_conn conn) {
 #ifndef NDEBUG
       if (auto it = internal::g_id2name.find(id);
           it != internal::g_id2name.end()) {
-        easylog::info("route coro function name {}", it->second);
+        ELOGV(INFO, "route coro function name %d", it->second.data());
       }
 #endif
       co_return co_await (*handler)(data, conn);
     } catch (const std::exception &e) {
-      easylog::error("the rpc function has exception {}, function id {}",
-                     e.what(), id);
+      ELOGV(ERROR, "the rpc function has exception %s, function id %d",
+            e.what(), id);
       co_return pack_result(std::errc::interrupted, e.what());
     } catch (...) {
-      easylog::error("the rpc function has unknown exception, function id {}",
-                     id);
+      ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
+            id);
       co_return pack_result(std::errc::interrupted, "unknown exception");
     }
   }
   else [[unlikely]] {
-    easylog::error("the rpc function not found, function id {}", id);
+    ELOGV(ERROR, "the rpc function not found, function id %d", id);
     co_return pack_result(std::errc::function_not_supported,
                           "the function not found");
   }
@@ -122,22 +122,22 @@ inline std::pair<std::errc, std::vector<char>> route(auto handler,
 #ifndef NDEBUG
       if (auto it = internal::g_id2name.find(id);
           it != internal::g_id2name.end()) {
-        easylog::info("route function name {}", it->second);
+        ELOGV(INFO, "route function name %s", it->second.data());
       }
 #endif
       return (*handler)(data, conn);
     } catch (const std::exception &e) {
-      easylog::error("the rpc function has exception {}, function id {}",
-                     e.what(), id);
+      ELOGV(ERROR, "the rpc function has exception %s, function id %d",
+            e.what(), id);
       return pack_result(std::errc::interrupted, e.what());
     } catch (...) {
-      easylog::error("the rpc function has unknown exception, function id {}",
-                     id);
+      ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
+            id);
       return pack_result(std::errc::interrupted, "unknown exception");
     }
   }
   else [[unlikely]] {
-    easylog::error("the rpc function not found, function id {}", id);
+    ELOGV(ERROR, "the rpc function not found, function id %d", id);
     return pack_result(std::errc::function_not_supported,
                        "the function not found");
   }

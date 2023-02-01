@@ -22,7 +22,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "rpc_protocol.h"
 #include "util/type_traits.h"
 
@@ -83,7 +83,7 @@ class connection {
   void response_msg(Args &&...args) {
     auto old_flag = has_response_->exchange(true);
     if (old_flag != false) {
-      easylog::error("response message more than one time");
+      ELOGV(ERROR, "response message more than one time");
       return;
     }
 
@@ -108,7 +108,7 @@ class connection {
   void response_msg() {
     auto old_flag = has_response_->exchange(true);
     if (old_flag != false) {
-      easylog::error("response message more than one time");
+      ELOGV(ERROR, "response message more than one time");
       return;
     }
     conn_->response_msg();

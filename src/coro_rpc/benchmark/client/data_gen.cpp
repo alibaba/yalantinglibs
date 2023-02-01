@@ -21,7 +21,7 @@
 
 #include "coro_rpc/coro_rpc_client.hpp"
 #include "coro_rpc/coro_rpc_server.hpp"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "server.hpp"
 using namespace std::chrono_literals;
 
@@ -34,7 +34,7 @@ int main() {
 
   bool started = server.wait_for_start(3s);
   if (!started) {
-    easylog::error("server started failed");
+    ELOGV(ERROR, "server started failed");
     server.stop();
     thrd.join();
     return -1;

@@ -15,13 +15,14 @@
  */
 #include "rpc_service/rpc_service.h"
 
-#include <logging/easylog.hpp>
+#include <logging/easylog.h>
+
 #include <thread>
 
 using namespace coro_rpc;
 
 std::string hello_world() {
-  easylog::info("call helloworld");
+  ELOGV(INFO, "call helloworld");
   return "hello world";
 }
 
@@ -34,6 +35,6 @@ void hello_with_delay(connection<std::string> conn) {
 }
 
 std::string HelloService::hello() {
-  easylog::info("call HelloServer hello");
+  ELOGV(INFO, "call HelloServer hello");
   return "hello";
 }
