@@ -276,11 +276,11 @@ void watch(asio::steady_timer &timer, unsigned int &tot,
       auto now = std::chrono::steady_clock::now();
       int64_t tmp = qps;
       auto r_qps = 1000 * tmp /
-                   (std::max)<uint64_t>(
+                   std::max<uint64_t>(
                        1, std::chrono::duration_cast<std::chrono::milliseconds>(
                               now - per_time)
                               .count());
-      max_qps = (std::max)<double>(max_qps, r_qps);
+      max_qps = std::max<double>(max_qps, r_qps);
       if (cnt >= config.warm_up_time.count())
         tot_qps += r_qps;
       cnt += 1;
@@ -342,7 +342,7 @@ void init_config(int argc, char **argv) {
       config.client_cnt_per_thread = std::stoul(argv[2]);
       assert(config.client_cnt_per_thread >= 1);
       if (argc >= 4) {
-        config.pipeline_size = (std::max)<size_t>(1, std::stoul(argv[3]));
+        config.pipeline_size = std::max<size_t>(1, std::stoul(argv[3]));
         if (argc >= 5) {
           config.host = argv[4];
         }
