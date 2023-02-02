@@ -38,6 +38,8 @@ TEST_CASE("test basic") {
   std::filesystem::remove(filename);
   easylog::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
 
+  ELOG_INFO << 42 << " " << 4.5 << 'a';
+
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
   CHECK(get_last_line(filename).rfind("test 2 ok") != std::string::npos);

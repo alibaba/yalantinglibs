@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #pragma once
+#include <charconv>
 #include <chrono>
 #include <cstring>
+#include <type_traits>
 #if __has_include(<memory_resource>)
 #include <memory_resource>
 #endif
@@ -24,6 +26,8 @@
 #include <string_view>
 #include <util/meta_string.hpp>
 #include <utility>
+
+#include "../thirdparty/iguana/iguana/detail//dragonbox_to_chars.h"
 
 #if defined(_WIN32)
 #ifndef _WINDOWS_
@@ -82,10 +86,7 @@ class record_t {
 
   Severity get_severity() const { return severity_; }
 
-  const char *get_message() const {
-    msg_ = ss_.str();
-    return msg_.data();
-  }
+  const char *get_message() const { return ss_.data(); }
 
   std::string_view get_file_str() const { return {buf_, buf_len_}; }
 
@@ -97,7 +98,25 @@ class record_t {
 
   template <typename T>
   record_t &operator<<(const T &data) {
-    ss_ << data;
+    using U = std::remove_cvref_t<T>;
+    if constexpr (std::is_floating_point_v<U>) {
+      char temp[40];
+      const auto end = jkj::dragonbox::to_chars(data, temp);
+      ss_.append(temp, std::distance(temp, end));
+    }
+    else if constexpr (std::is_same_v<char, U>) {
+      char buf[2] = {data, 0};
+      ss_.append(buf);
+    }
+    else if constexpr (std::is_integral_v<U>) {
+      char buf[32];
+      auto [ptr, ec] = std::to_chars(buf, buf + 32, data);
+      ss_.append(buf, std::distance(buf, ptr));
+    }
+    else {
+      ss_.append(data);
+    }
+
     return *this;
   }
 
@@ -125,7 +144,7 @@ class record_t {
 
     snprintf(&buf[0], size + 1, fmt, args...);
 
-    ss_ << buf;
+    ss_.append(buf);
   }
 
   std::chrono::system_clock::time_point tm_point_;
@@ -133,9 +152,14 @@ class record_t {
   unsigned int tid_;
   char buf_[64] = {};
   size_t buf_len_ = 0;
-  std::ostringstream ss_;  // TODO: will replace it with std::string to improve
-                           // the performance.
-  mutable std::string msg_;
+
+#if __has_include(<memory_resource>)
+  char arr_[1024];
+  std::pmr::monotonic_buffer_resource resource_;
+  std::pmr::string ss_{&resource_};
+#else
+  std::string ss_;
+#endif
 };
 
 #define TO_STR(s) #s
