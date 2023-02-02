@@ -588,7 +588,7 @@ char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
 // Returns the next-to-end position
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
+inline char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
   using namespace jkj::dragonbox::detail::policy_impl;
   using policy_holder = decltype(make_policy_holder(
       base_default_pair_list<
@@ -606,7 +606,7 @@ char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
 // Null-terminate and bypass the return value of fp_to_chars_n
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
+inline char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
   auto ptr = to_chars_n<Float, FloatTraits>(x, buffer, policies...);
   *ptr = '\0';
   return ptr;
