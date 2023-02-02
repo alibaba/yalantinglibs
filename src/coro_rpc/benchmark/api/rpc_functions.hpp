@@ -53,7 +53,7 @@ inline void heavy_calculate(coro_rpc::connection<int> conn, int a) {
       int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
     std::vector<int> ar;
     ar.reserve(10001);
-    for (int i = 0; i < 10000; ++i) ar.push_back(std::max(a, rand()));
+    for (int i = 0; i < 10000; ++i) ar.push_back((std::max)(a, rand()));
     ar.push_back(a);
     std::sort(ar.begin(), ar.end());
     conn.response_msg(ar[0]);

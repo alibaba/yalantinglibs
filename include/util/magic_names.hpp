@@ -107,7 +107,7 @@ struct parse_qualified_function_name {
 
     // Finds the end index of the function name before the top-level left
     // "<" or "(" indicating the start of the template or function arguments.
-    constexpr auto function_name_start_index = std::max(
+    constexpr auto function_name_start_index = (std::max)(
         start_index,
         find_significant_index<find_mode_type::full_match_reverse>("::"));
 
