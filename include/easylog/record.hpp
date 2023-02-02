@@ -108,6 +108,10 @@ class record_t {
       char buf[2] = {data, 0};
       ss_.append(buf);
     }
+    else if constexpr (std::is_enum_v<U>) {
+      int val = (int)data;
+      *this << val;
+    }
     else if constexpr (std::is_integral_v<U>) {
       char buf[32];
       auto [ptr, ec] = std::to_chars(buf, buf + 32, data);

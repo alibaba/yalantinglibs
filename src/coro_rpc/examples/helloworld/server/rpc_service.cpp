@@ -15,7 +15,7 @@
  */
 #include "rpc_service/rpc_service.h"
 
-#include <logging/easylog.h>
+#include <easylog/easylog.h>
 
 #include <thread>
 

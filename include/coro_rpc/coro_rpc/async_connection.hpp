@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "asio_util/asio_coro_util.hpp"
-#include "logging/easylog.h"
+#include "easylog/easylog.h"
 #include "router.hpp"
 #include "router_impl.hpp"
 #include "rpc_protocol.h"

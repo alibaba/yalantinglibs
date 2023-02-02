@@ -23,7 +23,7 @@ class CoroRpcConan(ConanFile):
 
     # Sources are located in the same place as this recipe, copy them to the recipe
     exports_sources = "CMakeLists.txt", \
-                      "asio_util/*", "examples/*", "logging/*", "coro_rpc/*", "struct_pack/*", "util/*", "tests/*"
+                      "asio_util/*", "examples/*", "easylog/*", "coro_rpc/*", "struct_pack/*", "util/*", "tests/*"
 
     def requirements(self):
         self.requires("asio/1.23.0")

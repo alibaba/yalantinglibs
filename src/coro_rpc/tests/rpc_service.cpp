@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <logging/easylog.h>
+#include <easylog/easylog.h>
 
 #include <coro_rpc/rpc_connection.hpp>
 

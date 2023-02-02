@@ -24,8 +24,8 @@
 #include <string>
 
 #include "doctest.h"
+#include "easylog/easylog.h"
 #include "inject_action.hpp"
-#include "logging/easylog.h"
 #include "rpc_api.hpp"
 
 #ifdef _MSC_VER

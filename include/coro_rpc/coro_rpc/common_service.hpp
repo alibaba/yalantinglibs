@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <logging/easylog.h>
+#include <easylog/easylog.h>
 
 #include <filesystem>
 

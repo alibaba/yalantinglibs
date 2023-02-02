@@ -16,7 +16,7 @@
 #include <filesystem>
 
 #include "doctest.h"
-#include "logging/easylog.h"
+#include "easylog/easylog.h"
 
 using namespace easylog;
 
@@ -38,7 +38,7 @@ TEST_CASE("test basic") {
   std::filesystem::remove(filename);
   easylog::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
 
-  ELOG_INFO << 42 << " " << 4.5 << 'a';
+  ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
 
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
