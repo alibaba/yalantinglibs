@@ -146,7 +146,7 @@ inline void init_log(Severity min_severity, const std::string &filename = "",
 inline void flush() { logger::instance().flush(); }
 }  // namespace easylog
 
-#define ELOG(severity)                                                \
+#define ELOG_IMPL(severity)                                           \
   if (!easylog::logger::instance().check_severity(severity)) {        \
     ;                                                                 \
   }                                                                   \
@@ -155,6 +155,8 @@ inline void flush() { logger::instance().flush(); }
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .ref()
+
+#define ELOG(severity) ELOG_IMPL(Severity::severity)
 
 #define ELOGV_IMPL(severity, fmt, ...)                                \
   if (!easylog::logger::instance().check_severity(severity)) {        \
@@ -173,12 +175,12 @@ inline void flush() { logger::instance().flush(); }
 
 #define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
 
-#define ELOG_TRACE ELOG(Severity::INFO)
-#define ELOG_DEBUG ELOG(Severity::DEBUG)
-#define ELOG_INFO ELOG(Severity::INFO)
-#define ELOG_WARN ELOG(Severity::WARN)
-#define ELOG_ERROR ELOG(Severity::ERROR)
-#define ELOG_CRITICAL ELOG(Severity::CRITICAL)
+#define ELOG_TRACE ELOG(INFO)
+#define ELOG_DEBUG ELOG(DEBUG)
+#define ELOG_INFO ELOG(INFO)
+#define ELOG_WARN ELOG(WARN)
+#define ELOG_ERROR ELOG(ERROR)
+#define ELOG_CRITICAL ELOG(CRITICAL)
 
 #define ELOGT ELOG_TRACE
 #define ELOGD ELOG_DEBUG
