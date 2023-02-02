@@ -65,7 +65,7 @@ struct AsyncServerTester : public ServerTester {
     }
   }
   void test_all() override {
-    easylog::info("run {}", __func__);
+    ELOGV(INFO, "run %s", __func__);
     test_server_start_again();
     g_action = {};
     ServerTester::test_all();
@@ -83,7 +83,7 @@ struct AsyncServerTester : public ServerTester {
   }
   void register_all_function() override {
     g_action = {};
-    easylog::info("run {}", __func__);
+    ELOGV(INFO, "run %s", __func__);
     server.regist_handler<async_hi, large_arg_fun, client_hello>();
     server.regist_handler<long_run_func>();
     server.regist_handler<&ns_login::LoginService::login>(&login_service_);
@@ -97,7 +97,7 @@ struct AsyncServerTester : public ServerTester {
   }
   void remove_all_rpc_function() override {
     g_action = {};
-    easylog::info("run {}", __func__);
+    ELOGV(INFO, "run %s", __func__);
     server.remove_handler<async_hi>();
     server.remove_handler<large_arg_fun>();
     server.remove_handler<client_hello>();
@@ -116,7 +116,7 @@ struct AsyncServerTester : public ServerTester {
     g_action = {};
     server.remove_handler<async_hi>();
     auto client = create_client();
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<async_hi>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
@@ -131,7 +131,7 @@ struct AsyncServerTester : public ServerTester {
   }
 
   void test_server_start_again() {
-    easylog::info("run {}", __func__);
+    ELOGV(INFO, "run %s", __func__);
     std::errc ec;
     if (async_start) {
       ec = server.async_start();
@@ -143,7 +143,7 @@ struct AsyncServerTester : public ServerTester {
     CHECK_MESSAGE(ec == std::errc::io_error, make_error_code(ec).message());
   }
   void test_start_new_server_with_same_port() {
-    easylog::info("run {}", __func__);
+    ELOGV(INFO, "run %s", __func__);
     auto new_server = async_rpc_server(2, std::stoi(this->port_));
     std::errc ec;
     if (async_start) {
@@ -161,7 +161,7 @@ struct AsyncServerTester : public ServerTester {
 };
 
 TEST_CASE("testing async rpc server") {
-  easylog::info("run testing async rpc server");
+  ELOGV(INFO, "run testing async rpc server");
   unsigned short server_port = 8820;
   auto conn_timeout_duration = 300ms;
 
@@ -183,7 +183,7 @@ TEST_CASE("testing async rpc server") {
     }
     std::stringstream ss;
     ss << config;
-    easylog::info("{}, config: {}", list.to_string(), ss.str());
+    ELOGV(INFO, "%s, config: %s", list.to_string().data(), ss.str().data());
     AsyncServerTester(config).run();
   }
 }
@@ -209,7 +209,7 @@ TEST_CASE("testing async rpc server") {
 // #endif
 
 TEST_CASE("testing async rpc server stop") {
-  easylog::info("run testing async rpc server stop");
+  ELOGV(INFO, "run testing async rpc server stop");
   async_rpc_server server(2, 8820);
   auto ec = server.async_start();
   REQUIRE(ec == std::errc{});
@@ -231,7 +231,7 @@ TEST_CASE("testing async rpc server stop") {
 }
 
 TEST_CASE("testing async rpc write error") {
-  easylog::info("run testing async rpc write error");
+  ELOGV(INFO, "run testing async rpc write error");
   g_action = inject_action::force_inject_connection_close_socket;
   async_rpc_server server(2, 8820);
 
@@ -240,8 +240,8 @@ TEST_CASE("testing async rpc write error") {
   REQUIRE(ec == std::errc{});
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   coro_rpc_client client(g_client_id++);
-  easylog::info("client_id {}, run testing async rpc write error",
-                client.get_client_id());
+  ELOGV(INFO, "client_id %d, run testing async rpc write error",
+        client.get_client_id());
   ec = syncAwait(client.connect("127.0.0.1", "8820"));
   REQUIRE_MESSAGE(ec == std::errc{},
                   std::to_string(client.get_client_id())
@@ -256,7 +256,7 @@ TEST_CASE("testing async rpc write error") {
 }
 
 TEST_CASE("test server write queue") {
-  easylog::info("run test server write queue");
+  ELOGV(INFO, "run test server write queue");
   g_action = {};
   async_rpc_server server(2, 8820);
   server.remove_handler<async_fun_with_delay_return_void_cost_long_time>();
@@ -272,7 +272,7 @@ TEST_CASE("test server write queue") {
   std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
   rpc_header header{magic_number};
   header.seq_num = g_client_id++;
-  easylog::info("client_id {} begin to connect {}", header.seq_num, 8820);
+  ELOGV(INFO, "client_id %d begin to connect %d", header.seq_num, 8820);
   header.length = buffer.size() - RPC_HEAD_LEN;
   struct_pack::serialize_to((char*)buffer.data(), RPC_HEAD_LEN, header);
   asio::io_context io_context;
@@ -283,8 +283,8 @@ TEST_CASE("test server write queue") {
   asio::ip::tcp::socket socket(io_context);
   auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8820");
   CHECK(!ret);
-  easylog::info("{} client_id {} call {}", "sync_client", header.seq_num,
-                "coro_fun_with_delay_return_void_cost_long_time");
+  ELOGV(INFO, "%d client_id %d call %s", "sync_client", header.seq_num,
+        "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 10; ++i) {
     auto err =
         asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
@@ -314,7 +314,7 @@ TEST_CASE("test server write queue") {
     CHECK(r2 == r);
   }
 
-  easylog::info("client_id {} close", header.seq_num);
+  ELOGV(INFO, "client_id %d close", header.seq_num);
   asio::error_code ignored_ec;
   socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
   socket.close(ignored_ec);

@@ -27,7 +27,6 @@ class CoroRpcConan(ConanFile):
 
     def requirements(self):
         self.requires("asio/1.23.0")
-        self.requires("spdlog/1.10.0")
 
     def config_options(self):
         if self.settings.os == "Windows":

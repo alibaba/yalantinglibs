@@ -291,7 +291,7 @@ template <typename T, typename... Args, detail::deserialize_view View>
   detail::unpacker in(reader);
   auto ret = in.deserialize_with_len(consume_len, t, args...);
   if (ret == errc{}) [[likely]] {
-    consume_len = std::max((size_t)(reader.now - v.data()), consume_len);
+    consume_len = (std::max)((size_t)(reader.now - v.data()), consume_len);
   }
   else {
     consume_len = 0;
@@ -306,7 +306,7 @@ template <typename T, typename... Args>
   detail::unpacker in(reader);
   auto ret = in.deserialize_with_len(consume_len, t, args...);
   if (ret == errc{}) [[likely]] {
-    consume_len = std::max((size_t)(reader.now - data), consume_len);
+    consume_len = (std::max)((size_t)(reader.now - data), consume_len);
   }
   else {
     consume_len = 0;

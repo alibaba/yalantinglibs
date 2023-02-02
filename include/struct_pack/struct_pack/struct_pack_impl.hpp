@@ -624,7 +624,7 @@ consteval std::size_t check_cycle() {
   using types_tuple = std::tuple<ParentArgs...>;
   if constexpr (sizeof...(ParentArgs)) {
     return []<std::size_t... I>(std::index_sequence<I...>) {
-      std::size_t ret = std::max(
+      std::size_t ret = (std::max)(
           {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
                                                                       : 0)...});
       return ret;
@@ -901,12 +901,12 @@ struct size_info {
   constexpr size_info &operator+=(const size_info &other) {
     this->total += other.total;
     this->size_cnt += other.size_cnt;
-    this->max_size = std::max(this->max_size, other.max_size);
+    this->max_size = (std::max)(this->max_size, other.max_size);
     return *this;
   }
   constexpr size_info operator+(const size_info &other) {
     return {this->total + other.total, this->size_cnt += other.size_cnt,
-            std::max(this->max_size, other.max_size)};
+            (std::max)(this->max_size, other.max_size)};
   }
 };
 
@@ -941,7 +941,7 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   }
   else if constexpr (container<type>) {
     ret.size_cnt += 1;
-    ret.max_size = std::max(ret.max_size, item.size());
+    ret.max_size = (std::max)(ret.max_size, item.size());
     if constexpr (trivially_copyable_container<type>) {
       using value_type = typename type::value_type;
       ret.total = item.size() * sizeof(value_type);

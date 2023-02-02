@@ -50,16 +50,16 @@ TEST_CASE("test varadic param") {
                                                   "hi"s,
                                                   "what"s,
                                               }));
-  easylog::info("begin to stop server");
+  ELOGV(INFO, "begin to stop server");
   server->stop();
   if (thrd.joinable())
     thrd.join();
-  easylog::info("finished stop server");
+  ELOGV(INFO, "finished stop server");
   if (ret) {
-    easylog::info("ret value {}", ret.value());
+    ELOGV(INFO, "ret value %s", ret.value().data());
   }
   else {
-    easylog::info("ret err msg {}", ret.error().msg);
+    ELOGV(INFO, "ret err msg %s", ret.error().msg.data());
   }
 
   CHECK(ret);

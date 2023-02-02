@@ -24,7 +24,7 @@
 #include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "rpc_execute.hpp"
 #include "rpc_protocol.h"
 #include "struct_pack/struct_pack.hpp"
@@ -61,22 +61,22 @@ router::route_coro(auto handler, std::string_view data, rpc_conn conn) {
     try {
 #ifndef NDEBUG
       if (auto it = id2name_.find(id); it != id2name_.end()) {
-        easylog::info("route coro function name {}", it->second);
+        ELOGV(INFO, "route coro function name %d", it->second.data());
       }
 #endif
       co_return co_await (*handler)(data, conn);
     } catch (const std::exception &e) {
-      easylog::error("the rpc function has exception {}, function id {}",
-                     e.what(), id);
+      ELOGV(ERROR, "the rpc function has exception %s, function id %d",
+            e.what(), id);
       co_return pack_result(std::errc::interrupted, e.what());
     } catch (...) {
-      easylog::error("the rpc function has unknown exception, function id {}",
-                     id);
+      ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
+            id);
       co_return pack_result(std::errc::interrupted, "unknown exception");
     }
   }
   else [[unlikely]] {
-    easylog::error("the rpc function not found, function id {}", id);
+    ELOGV(ERROR, "the rpc function not found, function id %d", id);
     co_return pack_result(std::errc::function_not_supported,
                           "the function not found");
   }
@@ -89,22 +89,22 @@ inline std::pair<std::errc, std::vector<char>> router::route(
     try {
 #ifndef NDEBUG
       if (auto it = id2name_.find(id); it != id2name_.end()) {
-        easylog::info("route function name {}", it->second);
+        ELOGV(INFO, "route function name %s", it->second.data());
       }
 #endif
       return (*handler)(data, conn);
     } catch (const std::exception &e) {
-      easylog::error("the rpc function has exception {}, function id {}",
-                     e.what(), id);
+      ELOGV(ERROR, "the rpc function has exception %s, function id %d",
+            e.what(), id);
       return pack_result(std::errc::interrupted, e.what());
     } catch (...) {
-      easylog::error("the rpc function has unknown exception, function id {}",
-                     id);
+      ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
+            id);
       return pack_result(std::errc::interrupted, "unknown exception");
     }
   }
   else [[unlikely]] {
-    easylog::error("the rpc function not found, function id {}", id);
+    ELOGV(ERROR, "the rpc function not found, function id %d", id);
     return pack_result(std::errc::function_not_supported,
                        "the function not found");
   }
@@ -113,7 +113,7 @@ inline std::pair<std::errc, std::vector<char>> router::route(
 template <auto func, typename Self>
 inline void router::regist_one_handler(Self *self) {
   if (self == nullptr) [[unlikely]] {
-    easylog::critical("null connection!");
+    ELOGV(CRITICAL, "null connection!");
   }
 
   constexpr auto name = get_func_name<func>();
@@ -129,7 +129,7 @@ inline void router::regist_one_handler(Self *self) {
           co_return co_await internal::execute_coro<func>(data, conn, self);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   else {
@@ -138,7 +138,7 @@ inline void router::regist_one_handler(Self *self) {
           return internal::execute<func>(data, conn, self);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
 
@@ -163,7 +163,7 @@ inline void router::regist_one_handler() {
           co_return co_await internal::execute_coro<func>(data, conn);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   else {
@@ -172,7 +172,7 @@ inline void router::regist_one_handler() {
           return internal::execute<func>(data, conn);
         });
     if (!it.second) {
-      easylog::critical("duplication function {} register!", name);
+      ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   id2name_.emplace(id, name);

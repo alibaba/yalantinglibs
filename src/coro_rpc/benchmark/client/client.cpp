@@ -151,8 +151,8 @@ class async_rpc_client {
           if (!ec) {
             auto all_res = std::string_view{read_buf_, length};
             while (all_res.size()) {
-              auto min_size =
-                  std::min(all_res.length(), expected_buf_.length() - read_pos);
+              auto min_size = (std::min)(all_res.length(),
+                                         expected_buf_.length() - read_pos);
               auto res = all_res.substr(0, min_size);
               auto expected_res = expected_buf_.substr(read_pos, min_size);
               if (config.disable_check || res == expected_res) {

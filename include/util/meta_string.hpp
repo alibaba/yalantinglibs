@@ -178,15 +178,21 @@ consteval auto operator+(const meta_string<M>& left,
 }
 
 template <std::size_t M, std::size_t N>
-consteval auto operator+(const meta_string<M>& left,
+constexpr auto operator+(const meta_string<M>& left,
                          const char (&right)[N]) noexcept {
-  return left + meta_string{right};
+  meta_string<M + N - 1> s;
+  for (size_t i = 0; i < M; ++i) s[i] = left[i];
+  for (size_t i = 0; i < N; ++i) s[M + i] = right[i];
+  return s;
 }
 
 template <std::size_t M, std::size_t N>
-consteval auto operator+(const char (&left)[M],
+constexpr auto operator+(const char (&left)[M],
                          const meta_string<N>& right) noexcept {
-  return meta_string{left} + right;
+  meta_string<M + N - 1> s;
+  for (size_t i = 0; i < M - 1; ++i) s[i] = left[i];
+  for (size_t i = 0; i < N; ++i) s[M + i - 1] = right[i];
+  return s;
 }
 
 template <meta_string S, meta_string Delim>

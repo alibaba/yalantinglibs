@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,28 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "rpc_service/rpc_service.h"
+#define DOCTEST_CONFIG_IMPLEMENT
 
-#include <logging/easylog.h>
+#include "doctest.h"
 
-#include <thread>
-
-using namespace coro_rpc;
-
-std::string hello_world() {
-  ELOGV(INFO, "call helloworld");
-  return "hello world";
-}
-
-std::string echo(std::string str) { return str; }
-
-void hello_with_delay(connection<std::string> conn) {
-  std::thread([conn]() mutable {
-    conn.response_msg("hello coro_rpc");
-  }).detach();
-}
-
-std::string HelloService::hello() {
-  ELOGV(INFO, "call HelloServer hello");
-  return "hello";
-}
+// doctest comments
+// 'function' : must be 'attribute' - see issue #182
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
+int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
+DOCTEST_MSVC_SUPPRESS_WARNING_POP

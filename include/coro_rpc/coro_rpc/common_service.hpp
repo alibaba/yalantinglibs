@@ -15,8 +15,9 @@
  */
 #pragma once
 
+#include <logging/easylog.h>
+
 #include <filesystem>
-#include <logging/easylog.hpp>
 
 #ifdef ENABLE_SSL
 #include <asio/ssl.hpp>
@@ -80,36 +81,36 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     auto key_file = fs::path(conf.base_path).append(conf.key_file);
     auto dh_file = fs::path(conf.base_path).append(conf.dh_file);
 
-    easylog::info("current path {}", fs::current_path().string());
+    ELOGV(INFO, "current path %s", fs::current_path().string().data());
     if (file_exists(cert_file)) {
-      easylog::info("load {}", cert_file.string());
+      ELOGV(INFO, "load %s", cert_file.string().data());
       context.use_certificate_chain_file(cert_file);
     }
     else {
-      easylog::error("no certificate file {}", cert_file.string());
+      ELOGV(ERROR, "no certificate file %s", cert_file.string().data());
       return false;
     }
 
     if (file_exists(key_file)) {
-      easylog::info("load {}", key_file.string());
+      ELOGV(INFO, "load %s", key_file.string().data());
       context.use_private_key_file(key_file, asio::ssl::context::pem);
     }
     else {
-      easylog::error("no private key file {}", key_file.string());
+      ELOGV(ERROR, "no private key file %s", key_file.string().data());
       return false;
     }
 
     if (file_exists(dh_file)) {
-      easylog::info("load {}", dh_file.string());
+      ELOGV(INFO, "load %s", dh_file.string().data());
       context.use_tmp_dh_file(dh_file);
     }
     else {
-      easylog::info("no temp dh file {}", dh_file.string());
+      ELOGV(INFO, "no temp dh file %s", dh_file.string().data());
     }
 
     return true;
   } catch (std::exception &e) {
-    easylog::info("{}", e.what());
+    ELOGV(INFO, "%s", e.what());
     return false;
   }
 }

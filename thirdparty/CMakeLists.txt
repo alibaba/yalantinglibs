@@ -9,15 +9,6 @@ if (NOT TARGET asio::asio)
 endif ()
 
 #############################
-# spdlog
-#############################
-add_library(spdlog INTERFACE)
-target_include_directories(spdlog INTERFACE spdlog)
-if (NOT TARGET spdlog::spdlog)
-    add_library(spdlog::spdlog ALIAS spdlog)
-endif ()
-
-#############################
 # libasync_simple
 #############################
 add_library(libasync_simple INTERFACE)

@@ -80,10 +80,10 @@ class async_rpc_server {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
         if (flag_ == stat::started) {
-          easylog::info("start again");
+          ELOGV(INFO, "start again");
         }
-        else if (flag_ == stat::started) {
-          easylog::info("has stoped");
+        else if (flag_ == stat::stop) {
+          ELOGV(INFO, "has stoped");
         }
         return std::errc::io_error;
       }
@@ -118,10 +118,10 @@ class async_rpc_server {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
         if (flag_ == stat::started) {
-          easylog::info("start again");
+          ELOGV(INFO, "start again");
         }
-        else if (flag_ == stat::started) {
-          easylog::info("has stoped");
+        else if (flag_ == stat::stop) {
+          ELOGV(INFO, "has stoped");
         }
         return std::errc::io_error;
       }
@@ -157,7 +157,7 @@ class async_rpc_server {
       }
       return;
     }
-    easylog::info("begin to stop async_rpc_server");
+    ELOGV(INFO, "begin to stop async_rpc_server");
     close_acceptor();
     if (flag_ == stat::started) {
       // notify connection quit all async event
@@ -172,7 +172,7 @@ class async_rpc_server {
       thd_.join();
     }
 
-    easylog::info("stop async_rpc_server ok");
+    ELOGV(INFO, "stop async_rpc_server ok");
     flag_ = stat::stop;
   }
 
@@ -272,7 +272,7 @@ class async_rpc_server {
     acceptor_.async_accept(
         conn->socket(), [this, conn](asio::error_code ec) mutable {
           if (ec) {
-            easylog::info("acceptor error: {}", ec.message());
+            ELOGV(INFO, "acceptor error: %s", ec.message().data());
             if (ec == asio::error::operation_aborted) {
               promise_.value().set_value();
               return;
@@ -280,7 +280,7 @@ class async_rpc_server {
           }
           else {
             int64_t conn_id = ++conn_id_;
-            easylog::info("new client conn_id {} coming", conn_id);
+            ELOGV(INFO, "new client conn_id %d coming", conn_id);
             conns_.emplace(conn_id, conn);
             conn->start();
           }
@@ -300,7 +300,8 @@ class async_rpc_server {
     asio::error_code ec;
     acceptor_.bind(endpoint, ec);
     if (ec) {
-      easylog::error("bind port {} error : {}", port_, ec.message());
+      ELOGV(ERROR, "bind port %d error : %s", port_.load(),
+            ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
       return std::errc::address_in_use;
@@ -312,13 +313,13 @@ class async_rpc_server {
 
     auto end_point = acceptor_.local_endpoint(ec);
     if (ec) {
-      easylog::error("get local endpoint port {} error {}", port_,
-                     ec.message());
+      ELOGV(ERROR, "get local endpoint port %d error %s", port_.load(),
+            ec.message().data());
       return std::errc::address_in_use;
     }
     port_ = end_point.port();
 
-    easylog::info("listen port {} successfully", port_);
+    ELOGV(INFO, "listen port %d successfully", port_.load());
     return std::errc{};
   }
 

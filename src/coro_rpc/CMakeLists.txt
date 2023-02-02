@@ -8,7 +8,6 @@ target_include_directories(libcoro_rpc INTERFACE
 target_link_libraries(libcoro_rpc INTERFACE
         Threads::Threads
         asio::asio
-        spdlog::spdlog
         async_simple::async_simple_header_only
         )
 

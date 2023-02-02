@@ -25,7 +25,7 @@
 
 #include "doctest.h"
 #include "inject_action.hpp"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "rpc_api.hpp"
 
 #ifdef _MSC_VER
@@ -104,7 +104,7 @@ struct ServerTester : TesterConfig {
     g_action = coro_rpc::inject_action::nothing;
   }
   void run() {
-    easylog::info("run test: heartbeat={}, ssl={}", enable_heartbeat, use_ssl);
+    ELOGV(INFO, "run test: heartbeat=%d, ssl=%d", enable_heartbeat, use_ssl);
     register_all_function();
     test_all();
     remove_all_rpc_function();
@@ -158,7 +158,7 @@ struct ServerTester : TesterConfig {
         break;
       }
 
-      easylog::info("retry times {}", retry);
+      ELOGV(INFO, "retry times %d", retry);
     }
 
     REQUIRE_MESSAGE(ec == err_ok, std::to_string(client->get_client_id())
@@ -168,9 +168,9 @@ struct ServerTester : TesterConfig {
   }
   template <auto func, typename... Args>
   decltype(auto) call(std::shared_ptr<coro_rpc_client> client, Args &&...args) {
-    easylog::info("{} client_id {} call {}",
-                  sync_client ? "sync_client" : "async_client",
-                  client->get_client_id(), coro_rpc::get_func_name<func>());
+    ELOGV(INFO, "%s client_id %d call %s",
+          sync_client ? "sync_client" : "async_client", client->get_client_id(),
+          coro_rpc::get_func_name<func>().data());
     if (sync_client) {
       return client->sync_call<func>(std::forward<Args>(args)...);
     }
@@ -192,48 +192,48 @@ struct ServerTester : TesterConfig {
     int retry = 4;
     for (int i = 0; i < retry; i++) {
       auto client = create_client();
-      easylog::info("run {}, client_id {}", __func__, client->get_client_id());
-      easylog::info("retry call times {}", i);
+      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+      ELOGV(INFO, "retry call times %d", i);
       {
         auto ret = call<async_hi>(client);
-        easylog::info("client_id {} call async_hi", client->get_client_id());
+        ELOGV(INFO, "client_id %d call async_hi", client->get_client_id());
         if (!ret) {
-          easylog::error("client_id {} call async_hi error {}",
-                         client->get_client_id(), ret.error().msg);
+          ELOGV(ERROR, "client_id %d call async_hi error %s",
+                client->get_client_id(), ret.error().msg.data());
           continue;
         }
         else {
-          easylog::info("client_id {} call async_hi ok, result {}",
-                        client->get_client_id(), ret.value());
+          ELOGV(INFO, "client_id %d call async_hi ok, result %s",
+                client->get_client_id(), ret.value().data());
         }
         CHECK(ret.value() == "async hi"s);
       }
       {
         auto ret = call<hello>(client);
-        easylog::info("client_id {} call hello", client->get_client_id());
+        ELOGV(INFO, "client_id %d call hello", client->get_client_id());
         if (!ret) {
-          easylog::error("client_id {} call hello error {}",
-                         client->get_client_id(), ret.error().msg);
+          ELOGV(ERROR, "client_id %d call hello error %s",
+                client->get_client_id(), ret.error().msg.data());
           continue;
         }
         else {
-          easylog::info("client_id {} call hello ok, result {}",
-                        client->get_client_id(), ret.value());
+          ELOGV(INFO, "client_id %d call hello ok, result %s",
+                client->get_client_id(), ret.value().data());
         }
         CHECK(ret.value() == "hello"s);
       }
       {
         auto ret = call<&HelloService::hello>(client);
-        easylog::info("client_id {} call HelloService::hello",
-                      client->get_client_id());
+        ELOGV(INFO, "client_id %d call HelloService::hello",
+              client->get_client_id());
         if (!ret) {
-          easylog::error("client_id {} call HelloService::hello error {}",
-                         client->get_client_id(), ret.error().msg);
+          ELOGV(ERROR, "client_id %d call HelloService::hello error %s",
+                client->get_client_id(), ret.error().msg.data());
           continue;
         }
         else {
-          easylog::info("client_id {} call HelloService::hello ok, result {}",
-                        client->get_client_id(), ret.value());
+          ELOGV(INFO, "client_id %d call HelloService::hello ok, result %s",
+                client->get_client_id(), ret.value().data());
         }
         CHECK(ret.value() == "hello"s);
       }
@@ -241,8 +241,7 @@ struct ServerTester : TesterConfig {
 #ifdef __GNUC__
         auto ret = call<&ns_login::LoginService::login>(client, "foo"s, "bar"s);
         if (!ret) {
-          easylog::warn(
-              "{}", std::to_string(client->get_client_id()) + ret.error().msg);
+          ELOGV(WARN, "%d %s", client->get_client_id(), ret.error().msg.data());
         }
         CHECK(ret.value() == true);
 #endif
@@ -254,7 +253,7 @@ struct ServerTester : TesterConfig {
   void test_client_send_bad_header() {
     g_action = {};
     auto client = create_client(inject_action::client_send_bad_header);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -263,7 +262,7 @@ struct ServerTester : TesterConfig {
   void test_client_send_bad_magic_num() {
     g_action = {};
     auto client = create_client(inject_action::client_send_bad_magic_num);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -272,7 +271,7 @@ struct ServerTester : TesterConfig {
   void test_client_send_header_length_is_0() {
     g_action = {};
     auto client = create_client(inject_action::client_send_header_length_0);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -282,7 +281,7 @@ struct ServerTester : TesterConfig {
     g_action = {};
     auto client =
         create_client(inject_action::client_close_socket_after_send_header);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -292,7 +291,7 @@ struct ServerTester : TesterConfig {
     g_action = {};
     auto client = create_client(
         inject_action::client_close_socket_after_send_partial_header);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
@@ -303,7 +302,7 @@ struct ServerTester : TesterConfig {
     auto client =
         create_client(inject_action::client_close_socket_after_send_payload);
     auto ret = call<client_hello>(client);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
@@ -311,7 +310,7 @@ struct ServerTester : TesterConfig {
 
   void test_heartbeat() {
     auto client = create_client(inject_action::nothing);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 
@@ -326,17 +325,17 @@ struct ServerTester : TesterConfig {
     else {
       CHECK(ret.value() == "async hi"s);
     }
-    easylog::info("test heartbeat done");
+    ELOGV(INFO, "test heartbeat done");
   }
   void test_call_function_with_long_response_time() {
     auto client = create_client(inject_action::nothing);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<long_run_func>(client, 1);
     CHECK(ret.value() == 1);
   }
   void test_call_with_large_buffer() {
     auto client = create_client(inject_action::nothing);
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     std::string arg;
     arg.resize(2048);
     auto ret = call<large_arg_fun>(client, arg);
@@ -365,7 +364,7 @@ struct ServerTester : TesterConfig {
       return client;
     };
     auto client = init_client();
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     std::errc ec;
     // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
@@ -380,7 +379,7 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func(Args... args) {
     g_action = {};
     auto client = create_client();
-    easylog::info("run {}, client_id {}", __func__, client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<func>(client, std::forward<Args>(args)...);
     CHECK(ret.has_value());
   }
@@ -389,8 +388,8 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func_client_read_length_error(Args... args) {
     g_action = {};
     auto client = this->create_client();
-    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
-                  client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
+          client->get_client_id());
     g_action = inject_action::close_socket_after_read_header;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
@@ -402,8 +401,8 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func_client_read_body_error(Args... args) {
     g_action = {};
     auto client = this->create_client();
-    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
-                  client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
+          client->get_client_id());
     g_action = inject_action::close_socket_after_send_length;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
@@ -415,8 +414,8 @@ struct ServerTester : TesterConfig {
   void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
     g_action = {};
     auto client = this->create_client();
-    easylog::info("run {}, client_id {}", CORO_RPC_FUNCTION_SIGNATURE,
-                  client->get_client_id());
+    ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
+          client->get_client_id());
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
     REQUIRE_MESSAGE(

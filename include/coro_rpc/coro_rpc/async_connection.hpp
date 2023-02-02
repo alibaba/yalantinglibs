@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "asio_util/asio_coro_util.hpp"
-#include "logging/easylog.hpp"
+#include "logging/easylog.h"
 #include "router.hpp"
 #include "router_impl.hpp"
 #include "rpc_protocol.h"
@@ -87,17 +87,17 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
 #ifdef ENABLE_SSL
   void async_handshake() {
-    easylog::info("begin to handshake");
+    ELOGV(INFO, "begin to handshake");
     reset_timer();
     auto self = this->shared_from_this();
     auto callback = [this, self](const asio::error_code &error) {
       cancel_timer();
       if (error) {
-        easylog::error("handshake failed:{}", error.message());
+        ELOGV(ERROR, "handshake failed: %s", error.message().data());
         close();
         return;
       }
-      easylog::info("handshake ok");
+      ELOGV(INFO, "handshake ok");
       read_head();
     };
     ssl_stream_->async_handshake(asio::ssl::stream_base::server, callback);
@@ -105,7 +105,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 #endif
   ~async_connection() {
 #ifdef UNIT_TEST_INJECT
-    easylog::info("~async_connection client_id {}", client_id_);
+    ELOGV(INFO, "~async_connection client_id %d", client_id_);
 #endif
     cancel_timer();
     sync_close();
@@ -114,7 +114,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   void quit() {
     cancel_timer();
 #ifdef UNIT_TEST_INJECT
-    easylog::info("quit client_id {}", client_id_);
+    ELOGV(INFO, "quit client_id %d", client_id_);
 #endif
     close();
     quit_promise_.get_future().wait();
@@ -123,7 +123,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   template <typename R>
   void response_msg(const R &ret) {
     if (has_closed()) [[unlikely]] {
-      easylog::info("response_msg failed: connection has been closed");
+      ELOGV(INFO, "response_msg failed: connection has been closed");
       return;
     }
 
@@ -134,7 +134,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
     io_context_.post([this, buf = std::move(buf), self = shared_from_this()] {
       if (has_closed()) [[unlikely]] {
-        easylog::info("response_msg failed: connection has been closed");
+        ELOGV(INFO, "response_msg failed: connection has been closed");
         return;
       }
       write(std::move(buf));
@@ -155,18 +155,6 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
   std::any get_tag() { return tag_; }
 
  private:
-  void log(std::errc err, const std::string err_prefix = "",
-           source_location loc = {}) {
-#ifdef UNIT_TEST_INJECT
-    easylog::info(loc, "{} {} client_id {} write_queue size {}", err_prefix,
-                  std::make_error_code(err).message(), client_id_,
-                  write_queue_.size());
-#else
-    easylog::info(loc, "{} {}", err_prefix,
-                  std::make_error_code(err).message());
-#endif
-  }
-
   void read_head() {
     async_read_head([this, self = shared_from_this()](asio::error_code ec,
                                                       std::size_t length) {
@@ -175,24 +163,30 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
 
         auto errc = struct_pack::deserialize_to(header_, head_, RPC_HEAD_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
-          log(std::errc::protocol_error, "bad head");
+          ELOGV(
+              ERROR, "%s, %s",
+              std::make_error_code(std::errc::protocol_error).message().data(),
+              "deserialize error");
           close();
           return;
         }
 
 #ifdef UNIT_TEST_INJECT
         client_id_ = header_.seq_num;
-        easylog::info("client_id {}", client_id_);
+        ELOGV(INFO, "client_id %d", client_id_);
 #endif
 
         if (header_.magic != magic_number) [[unlikely]] {
-          easylog::error("bad magic number");
+          ELOGV(ERROR, "bad magic number");
           close();
           return;
         }
 
         if (header_.length == 0) [[unlikely]] {
-          log(std::errc::protocol_error, "bad body length");
+          ELOGV(
+              ERROR, "%s, %s",
+              std::make_error_code(std::errc::protocol_error).message().data(),
+              "bad body length");
           close();
           return;
         }
@@ -204,7 +198,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         read_body(header_.length);
       }
       else {
-        log((std::errc)ec.value());
+        ELOGV(ERROR, "%s, %s", ec.message().data(), "read head error");
         close();
       }
     });
@@ -220,7 +214,7 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
         handle_body(length, self);
       }
       else {
-        log((std::errc)ec.value());
+        ELOGV(ERROR, "%s, %s", ec.message().data(), "read body error");
         close(false);
       }
     });
@@ -262,38 +256,39 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
     auto &msg = write_queue_.front();
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::force_inject_connection_close_socket) {
-      easylog::warn(
-          "inject action: force_inject_connection_close_socket, "
-          "client_id {}",
-          client_id_);
+      ELOGV(WARN,
+            "inject action: force_inject_connection_close_socket, "
+            "client_id %d",
+            client_id_);
 
       asio::error_code ignored_ec;
       socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket_.close(ignored_ec);
     }
 #endif
-    async_write(asio::buffer(msg),
-                [this, self = shared_from_this()](asio::error_code ec,
-                                                  std::size_t length) {
-                  if (ec) {
-                    log((std::errc)ec.value());
-                    close(false);
-                  }
-                  else {
-                    write_queue_.pop_front();
+    async_write(asio::buffer(msg), [this, self = shared_from_this()](
+                                       asio::error_code ec,
+                                       std::size_t length) {
+      if (ec) {
+        ELOGV(ERROR, "%s, %s", ec.message().data(), "async_write error")
+        close(false);
+      }
+      else {
+        write_queue_.pop_front();
 
-                    if (!write_queue_.empty()) {
-                      write();
-                    }
-                    else {
-                      if (rsp_err_ != err_ok) [[unlikely]] {
-                        log(rsp_err_);
-                        close(false);
-                        return;
-                      }
-                    }
-                  }
-                });
+        if (!write_queue_.empty()) {
+          write();
+        }
+        else {
+          if (rsp_err_ != err_ok) [[unlikely]] {
+            ELOGV(ERROR, "%s, %s",
+                  std::make_error_code(rsp_err_).message().data(), "rsp_err_")
+            close(false);
+            return;
+          }
+        }
+      }
+    });
   }
 
   template <typename Handler>
@@ -395,9 +390,9 @@ class async_connection : public std::enable_shared_from_this<async_connection> {
           }
 
 #ifdef UNIT_TEST_INJECT
-          easylog::info("close timeout client_id {}", client_id_);
+          ELOGV(INFO, "close timeout client_id %d", client_id_);
 #else
-          easylog::info("close timeout client");
+          ELOGV(INFO, "close timeout client");
 #endif
 
           close(false);

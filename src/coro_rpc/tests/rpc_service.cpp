@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <logging/easylog.h>
+
 #include <coro_rpc/rpc_connection.hpp>
-#include <logging/easylog.hpp>
 
 #include "rpc_api.hpp"
 
@@ -22,7 +23,7 @@ using namespace coro_rpc;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 
-void hi() { easylog::info("call hi"); }
+void hi() { ELOGV(INFO, "call hi"); }
 std::string hello() { return "hello"; }
 std::string hello_timeout() {
   std::this_thread::sleep_for(40ms);
@@ -34,9 +35,7 @@ std::string client_hello() { return "client hello"; }
 std::string client_hello_not_reg() { return "client hello"; }
 
 std::string large_arg_fun(std::string data) {
-  easylog::info("data size: {}", data.size());
-  //  easylog::info("data: {}", std::string_view(data).substr(0, 10));
-  //  easylog::info("data: {}", data[0]);
+  ELOGV(INFO, "data size: %d", data.size());
   return data;
 }
 
@@ -129,11 +128,11 @@ void async_fun_with_delay_return_void_cost_long_time(
 std::string async_hi() { return "async hi"; }
 
 std::string HelloService::hello() {
-  easylog::info("call HelloServer hello");
+  ELOGV(INFO, "call HelloServer hello");
   return "hello";
 }
 std::string HelloService::static_hello() {
-  easylog::info("call static hello");
+  ELOGV(INFO, "call static hello");
   return "static hello";
 }
 

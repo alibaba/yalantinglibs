@@ -20,6 +20,7 @@
 #include <functional>
 #include <memory>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 

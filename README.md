@@ -185,13 +185,12 @@ options:
 ## Dependencies
 
 - [doctest](https://github.com/doctest/doctest)
-- [spdlog](https://github.com/gabime/spdlog)
 - [asio](https://github.com/chriskohlhoff/asio)
 - openssl (optional)
 - [async_simple](https://github.com/alibaba/async_simple)
 - [iguana](https://github.com/qicosmos/iguana)
 
-Currently, asio and spdlog are put in thirdparty folder.
+Currently, asio and frozen are put in thirdparty folder.
 doctest is put in tests folder.
 
 # How to generate document
