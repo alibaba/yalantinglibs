@@ -111,7 +111,6 @@ struct ServerTester : TesterConfig {
   }
   virtual void test_all() {
     test_connect_timeout();
-    test_function_not_registered();
     test_function_registered();
     if (sync_client) {
       // only sync_call implement inject behavior
@@ -181,44 +180,10 @@ struct ServerTester : TesterConfig {
     }
   }
 
-  void test_function_not_registered() {
-    g_action = {};
-    remove_handler<async_hi>();
-    auto client = create_client();
-    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    auto ret = call<async_hi>(client);
-    REQUIRE_MESSAGE(
-        ret.error().code == std::errc::function_not_supported,
-        std::to_string(client->get_client_id()).append(ret.error().msg));
-    REQUIRE(client->has_closed() == true);
-    ret = call<async_hi>(client);
-    CHECK(client->has_closed() == true);
-    ret = call<async_hi>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-    CHECK(client->has_closed() == true);
-    register_handler<async_hi>();
-  }
-  virtual void register_all_function() {
-    g_action = {};
-    ELOGV(INFO, "run %s", __func__);
-    register_handler<async_hi, large_arg_fun, client_hello>();
-    register_handler<long_run_func>();
-    register_handler<&ns_login::LoginService::login>(&login_service_);
-    register_handler<&HelloService::hello>(&hello_service_);
-    register_handler<hello>();
-  }
+  virtual void register_all_function() {}
 
-  virtual void remove_all_rpc_function() {
-    g_action = {};
-    ELOGV(INFO, "run %s", __func__);
-    remove_handler<async_hi>();
-    remove_handler<large_arg_fun>();
-    remove_handler<client_hello>();
-    remove_handler<long_run_func>();
-    remove_handler<&ns_login::LoginService::login>();
-    remove_handler<hello>();
-    remove_handler<&HelloService::hello>();
-  }
+  virtual void remove_all_rpc_function() {}
+
   void test_function_registered() {
     g_action = {};
 

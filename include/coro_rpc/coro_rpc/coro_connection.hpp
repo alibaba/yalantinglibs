@@ -29,7 +29,6 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "logging/easylog.h"
 #include "router.hpp"
-#include "router_impl.hpp"
 #include "rpc_protocol.h"
 #include "struct_pack/struct_pack.hpp"
 #ifdef UNIT_TEST_INJECT
@@ -48,13 +47,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param timeout_duration
    */
   coro_connection(asio::io_context &io_context, asio::ip::tcp::socket socket,
+                  internal::router &router,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
       : io_context_(io_context),
         executor_(io_context),
         socket_(std::move(socket)),
         rsp_err_(std::errc{}),
-        timer_(io_context) {
+        timer_(io_context),
+        router_(router) {
     body_.resize(body_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
@@ -180,15 +181,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
       std::pair<std::errc, std::vector<char>> pair{};
-      auto handler = internal::get_handler({body_.data(), ret.second});
+      auto handler = router_.get_handler({body_.data(), ret.second});
       if (!handler) {
         auto coro_handler =
-            internal::get_coro_handler({body_.data(), ret.second});
-        pair = co_await internal::route_coro(coro_handler,
-                                             {body_.data(), ret.second}, self);
+            router_.get_coro_handler({body_.data(), ret.second});
+        pair = co_await router_.route_coro(coro_handler,
+                                           {body_.data(), ret.second}, self);
       }
       else {
-        pair = internal::route(handler, {body_.data(), ret.second}, self);
+        pair = router_.route(handler, {body_.data(), ret.second}, self);
       }
 
       auto &[err, buf] = pair;
@@ -199,7 +200,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       rpc_header resp_header = header_;
       resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-      struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
+      struct_pack::serialize_to(buf.data(), RESPONSE_HEADER_LEN, resp_header);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -474,6 +475,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   std::any tag_;
   rpc_header header_{};
+
+  internal::router &router_;
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;

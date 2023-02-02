@@ -22,12 +22,12 @@
 
 inline int start_server(coro_rpc::coro_rpc_server& server) {
   using namespace coro_rpc;
-  coro_rpc::register_handler<
+  server.regist_handler<
       echo_4B, echo_100B, echo_500B, echo_1KB, echo_5KB, echo_10KB, async_io,
       block_io, heavy_calculate, long_tail_async_io, long_tail_block_io,
       long_tail_heavy_calculate, array_1K_int, array_1K_str_4B, array_1K_rect,
       monsterFunc, ValidateRequestFunc, download_10KB>();
-  coro_rpc::register_handler<
+  server.regist_handler<
       many_argument<int, int, int, int, int, int, int, int, int, int, double,
                     double, double, double, double, double>>();
   std::cout << "hardware_concurrency=" << std::thread::hardware_concurrency()

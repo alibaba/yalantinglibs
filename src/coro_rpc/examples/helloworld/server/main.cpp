@@ -20,13 +20,16 @@ using namespace coro_rpc;
 using namespace async_simple;
 using namespace async_simple::coro;
 int main() {
-  // register rpc function
-  register_handler<hello_world, echo, hello_with_delay>();
-  HelloService hello_service;
-  register_handler<&HelloService::hello>(&hello_service);
-
   // start rpc server
   coro_rpc_server server(2, 8801);
+
+  // regist normal function for rpc
+  server.regist_handler<hello_world, echo, hello_with_delay>();
+
+  // regist member function for rpc
+  HelloService hello_service;
+  server.regist_handler<&HelloService::hello>(&hello_service);
+
   auto ec = server.start();
   return ec == std::errc{};
 }
