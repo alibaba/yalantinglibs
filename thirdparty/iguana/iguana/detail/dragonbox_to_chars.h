@@ -287,9 +287,8 @@ JKJ_FORCEINLINE static void print_9_digits(std::uint32_t s32, int &exponent,
 }
 
 template <>
-char *to_chars<float, default_float_traits<float>>(std::uint32_t s32,
-                                                   int exponent,
-                                                   char *buffer) noexcept {
+inline char *to_chars<float, default_float_traits<float>>(
+    std::uint32_t s32, int exponent, char *buffer) noexcept {
   // Print significand.
   print_9_digits(s32, exponent, buffer);
 
@@ -317,7 +316,7 @@ char *to_chars<float, default_float_traits<float>>(std::uint32_t s32,
 }
 
 template <>
-char *to_chars<double, default_float_traits<double>>(
+inline char *to_chars<double, default_float_traits<double>>(
     std::uint64_t const significand, int exponent, char *buffer) noexcept {
   // Print significand by decomposing it into a 9-digit block and a 8-digit
   // block.
@@ -544,8 +543,8 @@ char *to_chars<double, default_float_traits<double>>(
 
 // Avoid needless ABI overhead incurred by tag dispatch.
 template <class PolicyHolder, class Float, class FloatTraits>
-char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
-                      char *buffer) noexcept {
+inline char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
+                             char *buffer) noexcept {
   auto const exponent_bits = br.extract_exponent_bits();
   auto const s = br.remove_exponent_bits(exponent_bits);
 
@@ -588,7 +587,7 @@ char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
 // Returns the next-to-end position
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
+inline char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
   using namespace jkj::dragonbox::detail::policy_impl;
   using policy_holder = decltype(make_policy_holder(
       base_default_pair_list<
@@ -606,7 +605,7 @@ char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
 // Null-terminate and bypass the return value of fp_to_chars_n
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
+inline char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
   auto ptr = to_chars_n<Float, FloatTraits>(x, buffer, policies...);
   *ptr = '\0';
   return ptr;

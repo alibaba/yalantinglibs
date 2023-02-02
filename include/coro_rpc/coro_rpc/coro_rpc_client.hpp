@@ -32,7 +32,7 @@
 #include "common_service.hpp"
 #include "coro_rpc/coro_rpc/connection.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
-#include "logging/easylog.h"
+#include "easylog/easylog.h"
 #include "struct_pack/struct_pack.hpp"
 #include "util/function_name.h"
 #include "util/type_traits.h"

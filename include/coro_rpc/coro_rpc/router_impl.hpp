@@ -24,7 +24,7 @@
 #include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
-#include "logging/easylog.h"
+#include "easylog/easylog.h"
 #include "rpc_execute.hpp"
 #include "rpc_protocol.h"
 #include "struct_pack/struct_pack.hpp"

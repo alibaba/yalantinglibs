@@ -37,7 +37,7 @@
 #include "coro_connection.hpp"
 #include "coro_rpc/coro_rpc/router.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
-#include "logging/easylog.h"
+#include "easylog/easylog.h"
 
 namespace coro_rpc {
 /*!
