@@ -35,3 +35,17 @@ target_include_directories(frozen INTERFACE frozen)
 #############################
 add_library(iguana INTERFACE)
 target_include_directories(iguana INTERFACE frozen iguana)
+
+#
+# Install
+#
+install(DIRECTORY asio/ DESTINATION include/yalantinglibs)
+install(DIRECTORY async_simple/ DESTINATION include/yalantinglibs
+        REGEX "test" EXCLUDE
+        REGEX "async_simple/uthread" EXCLUDE
+        PATTERN "*.cpp" EXCLUDE
+        )
+install(DIRECTORY frozen/ DESTINATION include/yalantinglibs
+        REGEX "CMakeLists.txt" EXCLUDE
+        )
+install(DIRECTORY iguana/ DESTINATION include/yalantinglibs)
