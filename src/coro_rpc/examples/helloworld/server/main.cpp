@@ -24,11 +24,12 @@ int main() {
   coro_rpc_server server(2, 8801);
 
   // regist normal function for rpc
-  server.regist_handler<hello_world, echo, hello_with_delay>();
+  server.regist_handler<hello_world, A_add_B, hello_with_delay, coro_echo>();
 
   // regist member function for rpc
   HelloService hello_service;
-  server.regist_handler<&HelloService::hello>(&hello_service);
+  server.regist_handler<&HelloService::hello, &HelloService::hello_with_delay>(
+      &hello_service);
 
   auto ec = server.start();
   return ec == std::errc{};

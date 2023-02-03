@@ -144,7 +144,7 @@ inline auto execute(std::string_view data, rpc_conn &conn,
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connnect<conn_return_type>(
+                      o, connection<conn_return_type>(
                              std::get<std::shared_ptr<coro_connection>>(conn))),
                   args));
         }
@@ -272,7 +272,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connnect<conn_return_type>(
+                      o, connection<conn_return_type>(
                              std::get<std::shared_ptr<coro_connection>>(conn))),
                   args));
         }
