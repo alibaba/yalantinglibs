@@ -232,16 +232,9 @@ class SSLClientTester {
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
     server.init_ssl_context(config);
     server.template regist_handler<hi>();
-    if constexpr (std::is_same_v<Server, coro_rpc_server>) {
-      server.async_start().start([](auto&&) {
-      });
-      CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-    }
-    else if constexpr (std::is_same_v<Server, async_rpc_server>) {
-      auto ec = server.async_start();
-      REQUIRE(ec == std::errc{});
-      CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-    }
+    server.async_start().start([](auto&&) {
+    });
+    CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
 
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -355,9 +348,6 @@ TEST_CASE("testing client with ssl server") {
         for (auto dh : type_list) {
           SSLClientTester<coro_rpc_server>(base_path, port, client_crt,
                                            server_crt, server_key, dh)
-              .run();
-          SSLClientTester<async_rpc_server>(base_path, port, client_crt,
-                                            server_crt, server_key, dh)
               .run();
         }
       }
