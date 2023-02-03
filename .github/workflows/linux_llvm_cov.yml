@@ -2,7 +2,7 @@ name: Ubuntu 22.04 (llvm cov)
 
 on:
   pull_request_target:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build:

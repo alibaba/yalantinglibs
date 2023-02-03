@@ -2,9 +2,9 @@ name: Ubuntu 22.04 (clang)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build_by_clang:
