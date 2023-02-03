@@ -20,7 +20,6 @@
 #include <string_view>
 #include <variant>
 
-#include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
 #include "rpc_protocol.h"
@@ -77,11 +76,9 @@ inline auto execute(std::string_view data, rpc_conn &conn,
     }
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
-    constexpr bool has_async_conn_v =
-        std::is_same_v<connection<conn_return_type, async_connection>, First>;
     constexpr bool has_coro_conn_v =
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
-    auto args = get_args < has_async_conn_v || has_coro_conn_v, param_type > ();
+    auto args = get_args<has_coro_conn_v, param_type>();
 
     struct_pack::errc err{};
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
@@ -102,23 +99,12 @@ inline auto execute(std::string_view data, rpc_conn &conn,
 
     if constexpr (std::is_void_v<return_type>) {
       if constexpr (std::is_void_v<Self>) {
-        if constexpr (has_async_conn_v) {
-          // call void func(async_conn, args...)
-          std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      connection<conn_return_type, async_connection>(
-                          std::get<std::shared_ptr<async_connection>>(conn))),
-                  args));
-        }
-        else if constexpr (has_coro_conn_v) {
+        if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
           std::apply(func,
-                     std::tuple_cat(
-                         std::forward_as_tuple(connection<conn_return_type>(
-                             std::get<std::shared_ptr<coro_connection>>(conn))),
-                         args));
+                     std::tuple_cat(std::forward_as_tuple(
+                                        connection<conn_return_type>(conn)),
+                                    args));
         }
         else {
           // call void func(args...)
@@ -127,26 +113,12 @@ inline auto execute(std::string_view data, rpc_conn &conn,
       }
       else {
         auto &o = *self;
-        if constexpr (has_async_conn_v) {
-          // call void o.func(async_conn, args...)
-          std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      o,
-                      connection<conn_return_type, async_connection>(
-                          std::get<std::shared_ptr<async_connection>>(conn))),
-                  args));
-        }
-        else if constexpr (has_coro_conn_v) {
+        if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
-          std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      o, connection<conn_return_type>(
-                             std::get<std::shared_ptr<coro_connection>>(conn))),
-                  args));
+          std::apply(func,
+                     std::tuple_cat(std::forward_as_tuple(
+                                        o, connection<conn_return_type>(conn)),
+                                    args));
         }
         else {
           // call void o.func(args...)
@@ -205,11 +177,9 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
     }
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
-    constexpr bool has_async_conn_v =
-        std::is_same_v<connection<conn_return_type, async_connection>, First>;
     constexpr bool has_coro_conn_v =
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
-    auto args = get_args < has_async_conn_v || has_coro_conn_v, param_type > ();
+    auto args = get_args < has_coro_conn_v, param_type > ();
 
     struct_pack::errc err{};
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
@@ -230,22 +200,11 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
 
     if constexpr (std::is_void_v<return_type>) {
       if constexpr (std::is_void_v<Self>) {
-        if constexpr (has_async_conn_v) {
-          // call void func(async_conn, args...)
-          co_await std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      connection<conn_return_type, async_connection>(
-                          std::get<std::shared_ptr<async_connection>>(conn))),
-                  args));
-        }
-        else if constexpr (has_coro_conn_v) {
+        if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
           co_await std::apply(
               func, std::tuple_cat(
-                        std::forward_as_tuple(connection<conn_return_type>(
-                            std::get<std::shared_ptr<coro_connection>>(conn))),
+                        std::forward_as_tuple(connection<conn_return_type>(conn)),
                         args));
         }
         else {
@@ -255,25 +214,13 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
       }
       else {
         auto &o = *self;
-        if constexpr (has_async_conn_v) {
-          // call void o.func(async_conn, args...)
-          co_await std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      o,
-                      connection<conn_return_type, async_connection>(
-                          std::get<std::shared_ptr<async_connection>>(conn))),
-                  args));
-        }
-        else if constexpr (has_coro_conn_v) {
+        if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
           co_await std::apply(
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connection<conn_return_type>(
-                             std::get<std::shared_ptr<coro_connection>>(conn))),
+                      o, connection<conn_return_type>(conn)),
                   args));
         }
         else {

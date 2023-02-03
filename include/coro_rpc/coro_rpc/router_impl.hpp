@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <variant>
 
-#include "async_connection.hpp"
 #include "connection.hpp"
 #include "coro_connection.hpp"
 #include "easylog/easylog.h"

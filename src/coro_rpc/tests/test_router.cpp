@@ -137,20 +137,10 @@ void foo2(coro_rpc::connection<void> conn) {
 
 void bar() {}
 
-void bar1(coro_rpc::connection<void, async_connection> con) {
-  std::cout << "bar1 "
-            << "\n";
-}
-
-void bar2(coro_rpc::connection<void, async_connection> con, int val) {
-  std::cout << "bar2 val = " << val << "\n";
-}
-
 void bar3(int val) { std::cout << "bar3 val=" << val << "\n"; }
 
 using namespace test_util;
 
-std::shared_ptr<async_connection> async_conn = nullptr;
 std::shared_ptr<coro_connection> coro_conn = nullptr;
 
 struct person {
@@ -314,23 +304,17 @@ TEST_CASE("testing object arguments") {
   person p1;
   auto ec = struct_pack::deserialize_to(p1, buf);
   REQUIRE(ec == struct_pack::errc{});
-  test_route_and_check<get_person>(async_conn, p);
+  test_route_and_check<get_person>(coro_conn, p);
 
   router.regist_handler<get_person1>();
-  test_route_and_check<get_person1>(async_conn, p, 42, std::string("jerry"));
+  test_route_and_check<get_person1>(coro_conn, p, 42, std::string("jerry"));
 }
 
 TEST_CASE("testing basic rpc register and route") {
   router.regist_handler<bar>();
-  router.regist_handler<bar1>();
-  router.regist_handler<bar2>();
   router.regist_handler<bar3>();
 
   router.regist_handler<foo, foo1, foo2>();
-
-  test_route_and_check<bar1>(async_conn);
-  test_route_and_check<bar2>(async_conn, 42);
-  test_route_and_check<bar3>(async_conn, 42);
 
   test_route_and_check<foo>(coro_conn, 42);
   test_route_and_check<foo1>(coro_conn, 42);

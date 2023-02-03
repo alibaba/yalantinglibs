@@ -52,7 +52,6 @@ std::string benchmark_file_path = "./";
 #endif
 
 class coro_connection;
-class async_connection;
 
 template <typename T>
 struct rpc_return_type {

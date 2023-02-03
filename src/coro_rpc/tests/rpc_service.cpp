@@ -72,40 +72,24 @@ void coro_fun_with_delay_return_void(
   fun_with_delay_return_void(conn);
 }
 
-void async_fun_with_delay_return_void(
-    coro_rpc::connection<void, async_connection> conn) {
-  fun_with_delay_return_void(conn);
-}
 
 void coro_fun_with_delay_return_string(
     coro_rpc::connection<std::string, coro_connection> conn) {
   fun_with_delay_return_string(conn);
 }
 
-void async_fun_with_delay_return_string(
-    coro_rpc::connection<std::string, async_connection> conn) {
-  fun_with_delay_return_string(conn);
-}
 
 void coro_fun_with_delay_return_void_twice(
     coro_rpc::connection<void, coro_connection> conn) {
   fun_with_delay_return_void_twice(conn);
 }
 
-void async_fun_with_delay_return_void_twice(
-    coro_rpc::connection<void, async_connection> conn) {
-  fun_with_delay_return_void_twice(conn);
-}
 
 void coro_fun_with_delay_return_string_twice(
     coro_rpc::connection<std::string, coro_connection> conn) {
   fun_with_delay_return_string_twice(conn);
 }
 
-void async_fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string, async_connection> conn) {
-  fun_with_delay_return_string_twice(conn);
-}
 
 template <typename Conn>
 void fun_with_delay_return_void_cost_long_time(
@@ -118,10 +102,6 @@ void fun_with_delay_return_void_cost_long_time(
 
 void coro_fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void, coro_rpc::coro_connection> conn) {
-  fun_with_delay_return_void_cost_long_time(conn);
-}
-void async_fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void, coro_rpc::async_connection> conn) {
   fun_with_delay_return_void_cost_long_time(conn);
 }
 
