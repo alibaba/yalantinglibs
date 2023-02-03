@@ -49,9 +49,8 @@ inline std::string echo(std::string str) { return str; }
 #include <coro_rpc/coro_rpc_server.hpp>
 
 int main() {
-  register_handler<echo>();
-
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
+  server.register_handler<echo>();
   server.start();
 }
 ```
