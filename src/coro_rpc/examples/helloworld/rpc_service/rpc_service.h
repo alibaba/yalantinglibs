@@ -18,14 +18,19 @@
 
 #include <coro_rpc/rpc_connection.hpp>
 #include <string>
+#include <string_view>
+
+#include "async_simple/coro/Lazy.h"
 
 std::string hello_world();
-std::string echo(std::string str);
+int A_add_B(int a, int b);
 void hello_with_delay(coro_rpc::connection<std::string> conn);
+async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv);
 
 class HelloService {
  public:
   std::string hello();
+  void hello_with_delay(coro_rpc::connection<std::string> conn);
 
  private:
 };

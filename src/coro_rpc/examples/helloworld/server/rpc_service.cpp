@@ -19,22 +19,42 @@
 
 #include <thread>
 
+#include "asio_util/asio_coro_util.hpp"
+
 using namespace coro_rpc;
 
 std::string hello_world() {
   ELOGV(INFO, "call helloworld");
-  return "hello world";
+  return "hello_world";
 }
 
-std::string echo(std::string str) { return str; }
+int A_add_B(int a, int b) {
+  ELOGV(INFO, "call A+B");
+  return a + b;
+}
 
-void hello_with_delay(connection<std::string> conn) {
+async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
+  ELOGV(INFO, "call coro_echo");
+  co_return std::string{sv};
+}
+
+void hello_with_delay(connection</*response type:*/ std::string> conn) {
+  ELOGV(INFO, "call HelloServer hello_with_delay");
   std::thread([conn]() mutable {
-    conn.response_msg("hello coro_rpc");
+    conn.response_msg("hello_with_delay");
   }).detach();
 }
 
 std::string HelloService::hello() {
-  ELOGV(INFO, "call HelloServer hello");
-  return "hello";
+  ELOGV(INFO, "call HelloServer::hello");
+  return "HelloService::hello";
+}
+
+void HelloService::hello_with_delay(
+    coro_rpc::connection</*response type:*/ std::string> conn) {
+  ELOGV(INFO, "call HelloServer::hello_with_delay");
+  std::thread([conn]() mutable {
+    conn.response_msg("HelloService::hello_with_delay");
+  }).detach();
+  return;
 }

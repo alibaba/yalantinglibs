@@ -31,25 +31,37 @@ Lazy<void> show_rpc_call(coro_rpc_client &client) {
   if (!ret) {
     std::cout << "err: " << ret.error().msg << std::endl;
   }
-  assert(ret.value() == "hello world"s);
+  assert(ret.value() == "hello_world"s);
 
-  ret = co_await client.call<echo>("hello coro_rpc");
+  auto ret_int = co_await client.call<A_add_B>(12, 30);
+  if (!ret_int) {
+    std::cout << "err: " << ret_int.error().msg << std::endl;
+  }
+  assert(ret_int.value() == 42);
+
+  ret = co_await client.call<coro_echo>("coro_echo");
   if (!ret) {
     std::cout << "err: " << ret.error().msg << std::endl;
   }
-  assert(ret.value() == "hello coro_rpc"s);
+  assert(ret.value() == "coro_echo"s);
 
   ret = co_await client.call<hello_with_delay>();
   if (!ret) {
     std::cout << "err: " << ret.error().msg << std::endl;
   }
-  assert(ret.value() == "hello coro_rpc"s);
+  assert(ret.value() == "hello_with_delay"s);
 
   ret = co_await client.call<&HelloService::hello>();
   if (!ret) {
     std::cout << "err: " << ret.error().msg << std::endl;
   }
-  assert(ret.value() == "hello"s);
+  assert(ret.value() == "HelloService::hello"s);
+
+  ret = co_await client.call<&HelloService::hello_with_delay>();
+  if (!ret) {
+    std::cout << "err: " << ret.error().msg << std::endl;
+  }
+  assert(ret.value() == "HelloService::hello_with_delay"s);
 }
 
 int main() {
