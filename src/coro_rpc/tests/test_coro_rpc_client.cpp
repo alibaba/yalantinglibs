@@ -17,7 +17,6 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <chrono>
-#include <coro_rpc/coro_rpc/async_rpc_server.hpp>
 #include <coro_rpc/coro_rpc_client.hpp>
 #include <coro_rpc/coro_rpc_server.hpp>
 #include <cstddef>

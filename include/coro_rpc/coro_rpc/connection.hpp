@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "async_simple/coro/Lazy.h"
 #include "easylog/easylog.h"
 #include "rpc_protocol.h"
 #include "util/type_traits.h"

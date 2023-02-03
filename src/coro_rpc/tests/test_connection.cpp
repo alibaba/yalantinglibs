@@ -35,10 +35,6 @@ TEST_CASE("test get_return_type") {
     static_assert(
         std::is_same_v<void, decltype(get_return_type<
                                       coro_fun_with_delay_return_void>())>);
-    get_return_type<async_fun_with_delay_return_void>();
-    static_assert(
-        std::is_same_v<void, decltype(get_return_type<
-                                      async_fun_with_delay_return_void>())>);
   }
   SUBCASE("return std::string with conn") {
     auto s1 = get_return_type<coro_fun_with_delay_return_string>();
@@ -47,11 +43,5 @@ TEST_CASE("test get_return_type") {
         std::is_same_v<
             std::string,
             decltype(get_return_type<coro_fun_with_delay_return_string>())>);
-    auto s2 = get_return_type<async_fun_with_delay_return_string>();
-    CHECK(s2.empty());
-    static_assert(
-        std::is_same_v<
-            std::string,
-            decltype(get_return_type<async_fun_with_delay_return_string>())>);
   }
 }

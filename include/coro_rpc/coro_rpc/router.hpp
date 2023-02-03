@@ -26,10 +26,8 @@
 
 namespace coro_rpc {
 
-class async_connection;
 class coro_connection;
-using rpc_conn = std::variant<std::shared_ptr<async_connection>,
-                              std::shared_ptr<coro_connection>>;
+using rpc_conn = std::shared_ptr<coro_connection>;
 namespace internal {
 
 class router {

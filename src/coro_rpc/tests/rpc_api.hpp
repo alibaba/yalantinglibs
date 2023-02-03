@@ -28,24 +28,14 @@ int long_run_func(int val);
 std::string async_hi();
 void coro_fun_with_delay_return_void(
     coro_rpc::connection<void, coro_rpc::coro_connection> conn);
-void async_fun_with_delay_return_void(
-    coro_rpc::connection<void, coro_rpc::async_connection> conn);
 void coro_fun_with_delay_return_string(
     coro_rpc::connection<std::string, coro_rpc::coro_connection> conn);
-void async_fun_with_delay_return_string(
-    coro_rpc::connection<std::string, coro_rpc::async_connection> conn);
 void coro_fun_with_delay_return_void_twice(
     coro_rpc::connection<void, coro_rpc::coro_connection> conn);
-void async_fun_with_delay_return_void_twice(
-    coro_rpc::connection<void, coro_rpc::async_connection> conn);
 void coro_fun_with_delay_return_string_twice(
     coro_rpc::connection<std::string, coro_rpc::coro_connection> conn);
-void async_fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string, coro_rpc::async_connection> conn);
 void coro_fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void, coro_rpc::coro_connection> conn);
-void async_fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void, coro_rpc::async_connection> conn);
 inline async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
 class HelloService {
  public:
