@@ -18,6 +18,10 @@
 #include <chrono>
 #include <cstring>
 #include <type_traits>
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 #if __has_include(<memory_resource>)
 #include <memory_resource>
 #endif
@@ -79,7 +83,7 @@ inline std::string_view severity_str(Severity severity) {
 class record_t {
  public:
   record_t(auto tm_point, Severity severity, auto str)
-      : tm_point_(tm_point), severity_(severity), tid_(get_tid()) {
+      : tm_point_(tm_point), severity_(severity), tid_(get_tid_impl()) {
     std::memcpy(buf_, str.data(), str.size());
     buf_len_ = str.size();
   }
@@ -149,6 +153,27 @@ class record_t {
     snprintf(&buf[0], size + 1, fmt, args...);
 
     ss_.append(buf);
+  }
+
+  unsigned int get_tid_impl() {
+#ifdef _WIN32
+    // return GetCurrentThreadId();
+    return 0;  // TODO: do it later
+#elif defined(__linux__)
+    return static_cast<unsigned int>(::syscall(__NR_gettid));
+#elif defined(__FreeBSD__)
+    long tid;
+    syscall(SYS_thr_self, &tid);
+    return static_cast<unsigned int>(tid);
+#elif defined(__rtems__)
+    return rtems_task_self();
+#elif defined(__APPLE__)
+    uint64_t tid64;
+    pthread_threadid_np(NULL, &tid64);
+    return static_cast<unsigned int>(tid64);
+#else
+    return 0;
+#endif
   }
 
   std::chrono::system_clock::time_point tm_point_;
