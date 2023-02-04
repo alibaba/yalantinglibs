@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-#ifdef __linux__
-#include <sys/syscall.h>
-#include <unistd.h>
-#endif
-
 #include "appender.hpp"
 
 namespace easylog {
@@ -65,27 +60,6 @@ class logger {
  private:
   logger() = default;
   logger(const logger &) = default;
-
-  unsigned int get_tid() {
-#ifdef _WIN32
-    // return GetCurrentThreadId();
-    return 0;  // TODO: do it later
-#elif defined(__linux__)
-    return static_cast<unsigned int>(::syscall(__NR_gettid));
-#elif defined(__FreeBSD__)
-    long tid;
-    syscall(SYS_thr_self, &tid);
-    return static_cast<unsigned int>(tid);
-#elif defined(__rtems__)
-    return rtems_task_self();
-#elif defined(__APPLE__)
-    uint64_t tid64;
-    pthread_threadid_np(NULL, &tid64);
-    return static_cast<unsigned int>(tid64);
-#else
-    return 0;
-#endif
-  }
 
   template <size_t N>
   size_t get_time_str(char (&buf)[N], const auto &now) {
