@@ -239,8 +239,8 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
-      Args &&...args) {
-    return call_for<func>(std::chrono::seconds(5), std::forward<Args>(args)...);
+      Args... args) {
+    return call_for<func>(std::chrono::seconds(5), std::move(args)...);
   }
 
   /*!
@@ -256,7 +256,7 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
-  call_for(auto duration, Args &&...args) {
+  call_for(auto duration, Args... args) {
     using R = decltype(get_return_type<func>());
 
     if (has_closed_) [[unlikely]] {
@@ -290,11 +290,11 @@ class coro_rpc_client {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
-      ret = co_await call_impl<func>(*ssl_stream_, std::forward<Args>(args)...);
+      ret = co_await call_impl<func>(*ssl_stream_, std::move(args)...);
     }
     else {
 #endif
-      ret = co_await call_impl<func>(socket_, std::forward<Args>(args)...);
+      ret = co_await call_impl<func>(socket_, std::move(args)...);
 #ifdef ENABLE_SSL
     }
 #endif
@@ -388,10 +388,10 @@ class coro_rpc_client {
 
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
-  call_impl(Socket &socket, Args &&...args) {
+  call_impl(Socket &socket, Args... args) {
     using R = decltype(get_return_type<func>());
 
-    auto buffer = prepare_buffer<func>(std::forward<Args>(args)...);
+    auto buffer = prepare_buffer<func>(std::move(args)...);
     rpc_result<R> r{};
 #ifdef GENERATE_BENCHMARK_DATA
     std::ofstream file(
