@@ -109,8 +109,7 @@ class record_t {
       ss_.append(temp, std::distance(temp, end));
     }
     else if constexpr (std::is_same_v<char, U>) {
-      char buf[2] = {data, 0};
-      ss_.append(buf);
+      ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {
       int val = (int)data;
@@ -157,8 +156,7 @@ class record_t {
 
   unsigned int get_tid_impl() {
 #ifdef _WIN32
-    // return GetCurrentThreadId();
-    return 0;  // TODO: do it later
+    return std::hash<std::thread::id>{}(std::this_thread::get_id());
 #elif defined(__linux__)
     return static_cast<unsigned int>(::syscall(__NR_gettid));
 #elif defined(__FreeBSD__)
