@@ -75,4 +75,9 @@ TEST_CASE("test basic") {
   easylog::flush<InstanceId>();
   CHECK(get_last_line(other_filename).rfind("test in other") !=
         std::string::npos);
+
+  MELOGV(INFO, InstanceId, "it is a test %d", 42);
+  easylog::flush<InstanceId>();
+  CHECK(get_last_line(other_filename).rfind("it is a test 42") !=
+        std::string::npos);
 }

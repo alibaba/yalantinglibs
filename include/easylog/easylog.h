@@ -138,22 +138,26 @@ inline void flush() {
 
 #define ELOG(severity, ...) ELOG_IMPL(Severity::severity, __VA_ARGS__, 0)
 
-#define ELOGV_IMPL(severity, fmt, ...)                                \
-  if (!easylog::logger<>::instance().check_severity(severity)) {      \
+#define ELOGV_IMPL(severity, Id, fmt, ...)                            \
+  if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
     ;                                                                 \
   }                                                                   \
   else {                                                              \
-    easylog::logger<>::instance() +=                                  \
+    easylog::logger<Id>::instance() +=                                \
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .sprintf(fmt, __VA_ARGS__);                               \
     if (severity == Severity::CRITICAL) {                             \
-      easylog::flush<>();                                             \
+      easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
     }                                                                 \
   }
 
-#define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
+#define ELOGV(severity, ...) \
+  ELOGV_IMPL(Severity::severity, 0, __VA_ARGS__, "\n")
+
+#define MELOGV(severity, Id, ...) \
+  ELOGV_IMPL(Severity::severity, Id, __VA_ARGS__, "\n")
 
 #define ELOG_TRACE ELOG(INFO)
 #define ELOG_DEBUG ELOG(DEBUG)
