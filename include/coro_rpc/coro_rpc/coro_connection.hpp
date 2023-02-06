@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <variant>
@@ -47,15 +48,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param timeout_duration
    */
   coro_connection(asio::io_context &io_context, asio::ip::tcp::socket socket,
-                  internal::router &router,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
       : io_context_(io_context),
         executor_(io_context),
         socket_(std::move(socket)),
         rsp_err_(std::errc{}),
-        timer_(io_context),
-        router_(router) {
+        timer_(io_context) {
     body_.resize(body_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
@@ -83,7 +82,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 #endif
 
-  async_simple::coro::Lazy<void> start() noexcept {
+  template <typename server_config>
+  async_simple::coro::Lazy<void> start(
+      internal::router<server_config> &router) noexcept {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
@@ -99,11 +100,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
       ELOGV(INFO, "handshake ok conn_id %d", conn_id_);
-      co_await start_impl(*ssl_stream_);
+      co_await start_impl(router, *ssl_stream_);
     }
     else {
 #endif
-      co_await start_impl(socket_);
+      co_await start_impl(router, socket_);
 #ifdef ENABLE_SSL
     }
 #endif
@@ -112,8 +113,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
     promise_.set_value();
   }
-  template <typename Socket>
-  async_simple::coro::Lazy<void> start_impl(Socket &socket) noexcept {
+  template <typename server_config, typename Socket>
+  async_simple::coro::Lazy<void> start_impl(
+      internal::router<server_config> &router, Socket &socket) noexcept {
     char head_[RPC_HEAD_LEN];
     auto self = shared_from_this();
     while (true) {
@@ -128,6 +130,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (ret.first) {
         ELOGV(ERROR, "%s, %s", ret.first.message().data(), "read head error");
         co_await close();
+        ELOGV(ERROR, "hello");
         co_return;
       }
       assert(ret.second == RPC_HEAD_LEN);
@@ -160,7 +163,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_await close();
         co_return;
       }
-      if (header_.length == 0) [[unlikely]] {
+      if (header_.length < 4) [[unlikely]] {
         ELOGV(ERROR, "bad length: %d, conn_id %d", header_.length, conn_id_);
         co_await close();
         co_return;
@@ -180,27 +183,31 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 
-      std::pair<std::errc, std::vector<char>> pair{};
-      auto handler = router_.get_handler({body_.data(), ret.second});
+      std::pair<std::errc, std::string> pair{};
+
+      uint32_t function_id = *(uint32_t *)body_.data();
+
+      auto payload = std::string_view{body_.data() + 4, ret.second - 4};
+
+      auto handler = router.get_handler(function_id);
       if (!handler) {
-        auto coro_handler =
-            router_.get_coro_handler({body_.data(), ret.second});
-        pair = co_await router_.route_coro(coro_handler,
-                                           {body_.data(), ret.second}, self);
+        auto coro_handler = router.get_coro_handler(function_id);
+        pair = co_await router.route_coro(function_id, coro_handler, payload,
+                                          self);
       }
       else {
-        pair = router_.route(handler, {body_.data(), ret.second}, self);
+        pair = router.route(function_id, handler, payload, self);
       }
 
-      auto &[err, buf] = pair;
+      auto &[err, body_buf] = pair;
       if (delay_) {
         delay_ = false;
         continue;
       }
 
       rpc_header resp_header = header_;
-      resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-      struct_pack::serialize_to(buf.data(), RESPONSE_HEADER_LEN, resp_header);
+      resp_header.length = body_buf.size();
+      auto header_buf = struct_pack::serialize<std::string>(resp_header);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -208,8 +215,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
               "inject action: close_socket_after_send_length conn_id %d, "
               "client_id %d",
               conn_id_, client_id_);
-        co_await asio_util::async_write(
-            socket, asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
+        co_await asio_util::async_write(socket, asio::buffer(header_buf));
         co_await close();
         co_return;
       }
@@ -218,14 +224,14 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
               "inject action: server_send_bad_rpc_result conn_id %d, client_id "
               "%d",
               conn_id_, client_id_);
-        buf[RESPONSE_HEADER_LEN + 1] = (buf[RESPONSE_HEADER_LEN + 1] + 1);
+        body_buf[0] = body_buf[0] + 1;
       }
 #endif
       if (rsp_err_ == err_ok) [[likely]] {
         if (err != err_ok) [[unlikely]] {
           rsp_err_ = err;
         }
-        write_queue_.push_back(std::move(buf));
+        write_queue_.emplace_back(std::move(header_buf), std::move(body_buf));
         if (write_queue_.size() == 1) {
           send_data().start([ec = shared_from_this()](auto &&) {
           });
@@ -249,13 +255,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return;
     }
 
-    auto buf = struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN, ret);
+    auto body_buf = struct_pack::serialize<std::string>(ret);
     rpc_header resp_header = header_;
-    resp_header.length = buf.size() - RESPONSE_HEADER_LEN;
-    struct_pack::serialize_to(buf.data(), RPC_HEAD_LEN, resp_header);
+    resp_header.length = body_buf.size();
+    auto header_buf = struct_pack::serialize<std::string>(resp_header);
 
     auto self = shared_from_this();
-    response(std::move(buf), std::move(self)).via(&executor_).detach();
+    response(std::move(header_buf), std::move(body_buf), std::move(self))
+        .via(&executor_)
+        .detach();
   }
 
   /*!
@@ -313,7 +321,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::any get_tag() { return tag_; }
 
  private:
-  async_simple::coro::Lazy<void> response(std::vector<char> buf,
+  async_simple::coro::Lazy<void> response(std::string header_buf,
+                                          std::string body_buf,
                                           auto self) noexcept {
     if (has_closed()) [[unlikely]] {
       ELOGV(DEBUG, "response_msg failed: connection has been closed");
@@ -322,10 +331,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
       ELOGV(WARN, "inject action: close_socket_after_send_length");
-      buf.resize(RESPONSE_HEADER_LEN);
+      body_buf.clear();
     }
 #endif
-    write_queue_.push_back(std::move(buf));
+    write_queue_.emplace_back(std::move(header_buf), std::move(body_buf));
     if (write_queue_.size() > 1) {
       co_return;
     }
@@ -350,11 +359,20 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
-        ret = co_await asio_util::async_write(*ssl_stream_, asio::buffer(msg));
+        ret = co_await asio_util::async_write(*ssl_stream_,
+                                              asio::buffer(msg.first));
+        if (!ret.first) [[likely]] {
+          ret = co_await asio_util::async_write(*ssl_stream_,
+                                                asio::buffer(msg.second));
+        }
       }
       else {
 #endif
-        ret = co_await asio_util::async_write(socket_, asio::buffer(msg));
+        ret = co_await asio_util::async_write(socket_, asio::buffer(msg.first));
+        if (!ret.first) [[likely]] {
+          ret = co_await asio_util::async_write(socket_,
+                                                asio::buffer(msg.second));
+        }
 #ifdef ENABLE_SSL
       }
 #endif
@@ -458,7 +476,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   size_t body_size_ = 256;
   std::vector<char> body_;
   // FIXME: queue's performance can be imporved.
-  std::deque<std::vector<char>> write_queue_;
+  std::deque<std::pair<std::string, std::string>> write_queue_;
   std::errc rsp_err_;
   bool delay_ = false;
 
@@ -476,7 +494,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::any tag_;
   rpc_header header_{};
 
-  internal::router &router_;
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;

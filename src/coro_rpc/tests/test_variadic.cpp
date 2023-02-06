@@ -28,7 +28,7 @@ TEST_CASE("test varadic param") {
   using namespace coro_rpc;
   using namespace std;
 
-  auto server = std::make_unique<coro_rpc::coro_rpc_server>(
+  auto server = std::make_unique<coro_rpc::coro_rpc_server<>>(
       std::thread::hardware_concurrency(), 8808);
   std::thread thrd([&] {
     server->regist_handler<test_func>();

@@ -37,8 +37,8 @@
 #include "coro_connection.hpp"
 #include "coro_rpc/coro_rpc/router.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
+#include "default_config/coro_rpc_config.hpp"
 #include "easylog/easylog.h"
-
 namespace coro_rpc {
 /*!
  * ```cpp
@@ -52,6 +52,8 @@ namespace coro_rpc {
  * }
  * ```
  */
+
+template <typename server_config = config::coro_rpc_default_config>
 class coro_rpc_server {
   //!< Server state
   enum class stat {
@@ -263,7 +265,7 @@ class coro_rpc_server {
 
   template <auto first, auto... functions>
   void regist_handler(class_type_t<decltype(first)> *self) {
-    router_.regist_handler<first, functions...>(self);
+    router_.template regist_handler<first, functions...>(self);
   }
 
   /*!
@@ -292,7 +294,7 @@ class coro_rpc_server {
 
   template <auto... functions>
   void regist_handler() {
-    router_.regist_handler<functions...>();
+    router_.template regist_handler<functions...>();
   }
 
   /*!
@@ -304,7 +306,7 @@ class coro_rpc_server {
 
   template <auto func>
   bool remove_handler() {
-    return router_.remove_handler<func>();
+    return router_.template remove_handler<func>();
   }
 
   void clear_handlers() { router_.clear_handlers(); }
@@ -374,7 +376,7 @@ class coro_rpc_server {
       int64_t conn_id = ++conn_id_;
       ELOGV(INFO, "new client conn_id %d coming", conn_id);
       auto conn = std::make_shared<coro_connection>(
-          io_context, std::move(socket), router_, conn_timeout_duration_);
+          io_context, std::move(socket), conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t &id) {
             std::unique_lock lock(mtx_);
@@ -397,7 +399,7 @@ class coro_rpc_server {
       conn->init_ssl(context_);
     }
 #endif
-    co_await conn->start();
+    co_await conn->start(router_);
   }
 
   void close_acceptor() {
@@ -430,7 +432,7 @@ class coro_rpc_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex mtx_;
 
-  internal::router router_;
+  internal::router<server_config> router_;
 
 #ifdef ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};

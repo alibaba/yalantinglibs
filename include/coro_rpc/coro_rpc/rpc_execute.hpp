@@ -27,21 +27,22 @@
 
 namespace coro_rpc::internal {
 
+template <typename server_config>
 inline auto pack_result(std::errc err, std::string_view err_msg) {
-  return std::make_pair(err, struct_pack::serialize_with_offset(
-                                 /*offset = */ RESPONSE_HEADER_LEN,
+  return std::make_pair(err, server_config::serialize_proto::serialize(
                                  rpc_error{err, std::string{err_msg}}));
 }
 
+template <typename server_config>
 inline auto pack_result(const auto &ret) {
-  return std::make_pair(std::errc{}, struct_pack::serialize_with_offset(
-                                         RESPONSE_HEADER_LEN, ret));
+  return std::make_pair(std::errc{},
+                        server_config::serialize_proto::serialize(ret));
 }
 
+template <typename server_config>
 inline auto pack_result(void) {
   return std::make_pair(std::errc{},
-                        struct_pack::serialize_with_offset(RESPONSE_HEADER_LEN,
-                                                           std::monostate{}));
+                        server_config::serialize_proto::serialize());
 }
 
 template <bool is_conn, typename First>
@@ -60,7 +61,7 @@ auto get_return_type() {
   }
 }
 
-template <auto func, typename Self = void>
+template <typename server_config, auto func, typename Self = void>
 inline auto execute(std::string_view data, rpc_conn &conn,
                     Self *self = nullptr) {
   using T = decltype(func);
@@ -80,21 +81,21 @@ inline auto execute(std::string_view data, rpc_conn &conn,
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
-    struct_pack::errc err{};
+    bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
-      data = data.substr(FUNCTION_ID_LEN);
       if constexpr (size == 1) {
-        err = struct_pack::deserialize_to(std::get<0>(args), data.data(),
-                                          data.size());
+        is_ok = server_config::serialize_proto::deserialize_to(
+            std::get<0>(args), data);
       }
       else {
-        err = struct_pack::deserialize_to(args, data.data(), data.size());
+        is_ok = server_config::serialize_proto::deserialize_to(args, data);
       }
     }
 
-    if (err != struct_pack::errc::ok) [[unlikely]] {
-      return pack_result(std::errc::invalid_argument, "invalid arguments");
+    if (!is_ok) [[unlikely]] {
+      return pack_result<server_config>(std::errc::invalid_argument,
+                                        "invalid arguments");
     }
 
     if constexpr (std::is_void_v<return_type>) {
@@ -129,12 +130,12 @@ inline auto execute(std::string_view data, rpc_conn &conn,
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        return pack_result(std::apply(func, args));
+        return pack_result<server_config>(std::apply(func, args));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
-        return pack_result(
+        return pack_result<server_config>(
             std::apply(func, std::tuple_cat(std::forward_as_tuple(o), args)));
       }
     }
@@ -150,18 +151,18 @@ inline auto execute(std::string_view data, rpc_conn &conn,
     }
     else {
       if constexpr (std::is_void_v<Self>) {
-        return pack_result(func());
+        return pack_result<server_config>(func());
       }
       else {
-        return pack_result((self->*func)());
+        return pack_result<server_config>((self->*func)());
       }
     }
   }
-  return pack_result();
+  return pack_result<server_config>();
 }
 // clang-format off
-template <auto func, typename Self = void>
-inline async_simple::coro::Lazy<std::pair<std::errc, std::vector<char>>>
+template <typename server_config, auto func, typename Self = void>
+inline async_simple::coro::Lazy<std::pair<std::errc, std::string>>
 execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
   using T = decltype(func);
   using param_type = function_parameters_t<T>;
@@ -184,18 +185,16 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
     struct_pack::errc err{};
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
-      data = data.substr(FUNCTION_ID_LEN);
       if constexpr (size == 1) {
-        err = struct_pack::deserialize_to(std::get<0>(args), data.data(),
-                                          data.size());
+        err = struct_pack::deserialize_to(std::get<0>(args), data);
       }
       else {
-        err = struct_pack::deserialize_to(args, data.data(), data.size());
+        err = struct_pack::deserialize_to(args, data);
       }
     }
 
     if (err != struct_pack::errc::ok) [[unlikely]] {
-      co_return pack_result(std::errc::invalid_argument, "invalid arguments");
+      co_return pack_result<server_config>(std::errc::invalid_argument, "invalid arguments");
     }
 
     if constexpr (std::is_void_v<return_type>) {
@@ -233,12 +232,12 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        co_return pack_result(co_await std::apply(func, args));
+        co_return pack_result<server_config>(co_await std::apply(func, args));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
-        co_return pack_result(co_await std::apply(
+        co_return pack_result<server_config>(co_await std::apply(
             func, std::tuple_cat(std::forward_as_tuple(o), args)));
       }
     }
@@ -254,13 +253,13 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
     }
     else {
       if constexpr (std::is_void_v<Self>) {
-        co_return pack_result(co_await func());
+        co_return pack_result<server_config>(co_await func());
       }
       else {
-        co_return pack_result(co_await (self->*func)());
+        co_return pack_result<server_config>(co_await (self->*func)());
       }
     }
   }
-  co_return pack_result();
+  co_return pack_result<server_config>();
 }
 }  // namespace coro_rpc::internal
