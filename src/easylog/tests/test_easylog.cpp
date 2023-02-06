@@ -61,4 +61,18 @@ TEST_CASE("test basic") {
   ELOG_DEBUG << "debug log";
   ELOGD << "debug log";
   CHECK(get_last_line(filename).rfind("debug log") != std::string::npos);
+
+  // test multiple instance
+  std::string other_filename = "other.txt";
+  std::filesystem::remove(other_filename);
+  constexpr size_t InstanceId = 2;
+  easylog::init_log<InstanceId>(Severity::DEBUG, other_filename, false);
+  ELOG(INFO, InstanceId) << "ok in other txt";
+  easylog::flush<InstanceId>();
+  CHECK(get_last_line(other_filename).rfind("ok in other txt") !=
+        std::string::npos);
+  MELOG_INFO(InstanceId) << "test in other";
+  easylog::flush<InstanceId>();
+  CHECK(get_last_line(other_filename).rfind("test in other") !=
+        std::string::npos);
 }
