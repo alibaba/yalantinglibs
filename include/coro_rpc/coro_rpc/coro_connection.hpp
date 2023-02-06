@@ -288,7 +288,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    *
    * @param close_ssl whether to close the ssl stream
    */
-  void sync_close(bool close_ssl = true) {
+  void sync_close() {
     if (has_closed_) {
       return;
     }
@@ -341,7 +341,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     co_await send_data();
   }
 
-  async_simple::coro::Lazy<void> send_data(bool close_ssl = true) {
+  async_simple::coro::Lazy<void> send_data() {
     std::pair<std::error_code, size_t> ret;
     while (!write_queue_.empty()) {
       auto &msg = write_queue_.front();
@@ -352,7 +352,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             "inject action: force_inject_connection_close_socket, conn_id %d, "
             "client_id %d",
             conn_id_, client_id_);
-        co_await close(false);
+        co_await close();
         co_return;
       }
 #endif
@@ -378,7 +378,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
       if (ret.first) [[unlikely]] {
         ELOGV(ERROR, "%s, %s", ret.first.message().data(), "async_write error");
-        co_await close(close_ssl);
+        co_await close();
         co_return;
       }
       write_queue_.pop_front();
@@ -386,7 +386,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (rsp_err_ != err_ok) [[unlikely]] {
       ELOGV(ERROR, "%s, %s", std::make_error_code(rsp_err_).message().data(),
             "rsp_err_");
-      co_await close(false);
+      co_await close();
       co_return;
     }
 #ifdef UNIT_TEST_INJECT
@@ -397,35 +397,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             conn_id_, client_id_);
       // Attention: close ssl stream after read error
       // otherwise, server will crash
-      co_await close(false);
+      co_await close();
       co_return;
     }
 #endif
   }
 
-  async_simple::coro::Lazy<void> close(bool close_ssl = true) {
-    // auto self = shared_from_this();
-#ifdef ENABLE_SSL
-    if (close_ssl) {
-      close_ssl_stream();
-    }
-#endif
+  async_simple::coro::Lazy<void> close() {
     if (has_closed_) {
       co_return;
     }
     close_socket();
     has_closed_ = true;
   }
-
-#ifdef ENABLE_SSL
-  void close_ssl_stream() {
-    if (ssl_stream_) {
-      asio::error_code ec;
-      ssl_stream_->shutdown(ec);
-      ssl_stream_ = nullptr;
-    }
-  }
-#endif
 
   void reset_timer() {
     if (!enable_check_timeout_) {
@@ -446,11 +430,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
 #endif
 
-          close_socket(false);
+          close_socket();
         });
   }
 
-  void close_socket(bool close_ssl = true) {
+  void close_socket() {
     if (has_closed_) {
       return;
     }

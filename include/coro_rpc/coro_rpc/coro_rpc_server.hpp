@@ -199,7 +199,7 @@ class coro_rpc_server {
         for (auto &conn : conns_) {
           conn.second->set_quit_callback(nullptr, 0);
           if (!conn.second->has_closed()) {
-            conn.second->sync_close(false);
+            conn.second->sync_close();
           }
 
           conn.second->wait_quit();
