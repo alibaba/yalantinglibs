@@ -63,6 +63,7 @@ namespace easylog {
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {
+#if defined(NDEBUG) || defined(_WIN32)
     case Severity::TRACE:
       return "TRACE   ";
     case Severity::DEBUG:
@@ -75,6 +76,20 @@ inline std::string_view severity_str(Severity severity) {
       return "ERROR   ";
     case Severity::CRITICAL:
       return "CRITICAL";
+#else
+    case Severity::TRACE:
+      return "TRACE   ";
+    case Severity::DEBUG:
+      return "DEBUG   ";
+    case Severity::INFO:
+      return "INFO    ";
+    case Severity::WARN:
+      return "\x1B[93mWARNING\x1B[0m\x1B[0K ";
+    case Severity::ERROR:
+      return "\x1B[91mERROR\x1B[0m\x1B[0K   ";
+    case Severity::CRITICAL:
+      return "\x1B[97m\x1B[41mCRITICAL\x1B[0m\x1B[0K";
+#endif
     default:
       return "NONE";
   }
