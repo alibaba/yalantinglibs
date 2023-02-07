@@ -126,7 +126,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (ret.first) {
         ELOGV(ERROR, "%s, %s", ret.first.message().data(), "read head error");
         close();
-        ELOGV(ERROR, "hello");
         co_return;
       }
       assert(ret.second == RPC_HEAD_LEN);
