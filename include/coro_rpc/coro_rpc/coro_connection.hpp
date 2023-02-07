@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <any>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <future>
@@ -25,6 +26,7 @@
 #include <variant>
 #include <vector>
 
+#include "asio/buffer.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/asio_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
@@ -342,23 +344,16 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 #endif
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(msg.first),
+                                                asio::buffer(msg.second)};
 #ifdef ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
-        ret = co_await asio_util::async_write(*ssl_stream_,
-                                              asio::buffer(msg.first));
-        if (!ret.first) [[likely]] {
-          ret = co_await asio_util::async_write(*ssl_stream_,
-                                                asio::buffer(msg.second));
-        }
+        ret = co_await asio_util::async_write(*ssl_stream_, buffers);
       }
       else {
 #endif
-        ret = co_await asio_util::async_write(socket_, asio::buffer(msg.first));
-        if (!ret.first) [[likely]] {
-          ret = co_await asio_util::async_write(socket_,
-                                                asio::buffer(msg.second));
-        }
+        ret = co_await asio_util::async_write(socket_, buffers);
 #ifdef ENABLE_SSL
       }
 #endif
