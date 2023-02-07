@@ -18,6 +18,10 @@
 #include <chrono>
 #include <cstring>
 #include <type_traits>
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 #if __has_include(<memory_resource>)
 #include <memory_resource>
 #endif
@@ -27,7 +31,7 @@
 #include <util/meta_string.hpp>
 #include <utility>
 
-#include "../thirdparty/iguana/iguana/detail//dragonbox_to_chars.h"
+#include "iguana/detail/dragonbox_to_chars.h"
 
 #if defined(_WIN32)
 #ifndef _WINDOWS_
@@ -79,7 +83,7 @@ inline std::string_view severity_str(Severity severity) {
 class record_t {
  public:
   record_t(auto tm_point, Severity severity, auto str)
-      : tm_point_(tm_point), severity_(severity), tid_(get_tid()) {
+      : tm_point_(tm_point), severity_(severity), tid_(get_tid_impl()) {
     std::memcpy(buf_, str.data(), str.size());
     buf_len_ = str.size();
   }
@@ -105,8 +109,7 @@ class record_t {
       ss_.append(temp, std::distance(temp, end));
     }
     else if constexpr (std::is_same_v<char, U>) {
-      char buf[2] = {data, 0};
-      ss_.append(buf);
+      ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {
       int val = (int)data;
@@ -149,6 +152,26 @@ class record_t {
     snprintf(&buf[0], size + 1, fmt, args...);
 
     ss_.append(buf);
+  }
+
+  unsigned int get_tid_impl() {
+#ifdef _WIN32
+    return std::hash<std::thread::id>{}(std::this_thread::get_id());
+#elif defined(__linux__)
+    return static_cast<unsigned int>(::syscall(__NR_gettid));
+#elif defined(__FreeBSD__)
+    long tid;
+    syscall(SYS_thr_self, &tid);
+    return static_cast<unsigned int>(tid);
+#elif defined(__rtems__)
+    return rtems_task_self();
+#elif defined(__APPLE__)
+    uint64_t tid64;
+    pthread_threadid_np(NULL, &tid64);
+    return static_cast<unsigned int>(tid64);
+#else
+    return 0;
+#endif
   }
 
   std::chrono::system_clock::time_point tm_point_;

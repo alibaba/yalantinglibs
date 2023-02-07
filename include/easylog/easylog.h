@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 #pragma once
-#ifdef __linux__
-#include <sys/syscall.h>
-#include <unistd.h>
-#endif
-
 #include "appender.hpp"
 
 namespace easylog {
+
+template <size_t Id = 0>
 class logger {
  public:
-  static logger &instance() {
-    static logger instance;
+  static logger<Id> &instance() {
+    static logger<Id> instance;
     return instance;
   }
 
@@ -65,27 +62,6 @@ class logger {
  private:
   logger() = default;
   logger(const logger &) = default;
-
-  unsigned int get_tid() {
-#ifdef _WIN32
-    // return GetCurrentThreadId();
-    return 0;  // TODO: do it later
-#elif defined(__linux__)
-    return static_cast<unsigned int>(::syscall(__NR_gettid));
-#elif defined(__FreeBSD__)
-    long tid;
-    syscall(SYS_thr_self, &tid);
-    return static_cast<unsigned int>(tid);
-#elif defined(__rtems__)
-    return rtems_task_self();
-#elif defined(__APPLE__)
-    uint64_t tid64;
-    pthread_threadid_np(NULL, &tid64);
-    return static_cast<unsigned int>(tid64);
-#else
-    return 0;
-#endif
-  }
 
   template <size_t N>
   size_t get_time_str(char (&buf)[N], const auto &now) {
@@ -136,44 +112,52 @@ class logger {
   appender *appender_ = nullptr;
 };
 
+template <size_t Id = 0>
 inline void init_log(Severity min_severity, const std::string &filename = "",
                      bool enable_console = true, size_t max_file_size = 0,
                      size_t max_files = 0, bool flush_every_time = false) {
-  logger::instance().init(min_severity, enable_console, filename, max_file_size,
-                          max_files, flush_every_time);
+  logger<Id>::instance().init(min_severity, enable_console, filename,
+                              max_file_size, max_files, flush_every_time);
 }
 
-inline void flush() { logger::instance().flush(); }
+template <size_t Id = 0>
+inline void flush() {
+  logger<Id>::instance().flush();
+}
 }  // namespace easylog
 
-#define ELOG_IMPL(severity)                                           \
-  if (!easylog::logger::instance().check_severity(severity)) {        \
+#define ELOG_IMPL(severity, Id, ...)                                  \
+  if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
     ;                                                                 \
   }                                                                   \
   else                                                                \
-    easylog::logger::instance() +=                                    \
+    easylog::logger<Id>::instance() +=                                \
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .ref()
 
-#define ELOG(severity) ELOG_IMPL(Severity::severity)
+#define ELOG(severity, ...) ELOG_IMPL(Severity::severity, __VA_ARGS__, 0)
 
-#define ELOGV_IMPL(severity, fmt, ...)                                \
-  if (!easylog::logger::instance().check_severity(severity)) {        \
+#define ELOGV_IMPL(severity, Id, fmt, ...)                            \
+  if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
     ;                                                                 \
   }                                                                   \
   else {                                                              \
-    easylog::logger::instance() +=                                    \
+    easylog::logger<Id>::instance() +=                                \
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .sprintf(fmt, __VA_ARGS__);                               \
     if (severity == Severity::CRITICAL) {                             \
-      easylog::flush();                                               \
+      easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
     }                                                                 \
   }
 
-#define ELOGV(severity, ...) ELOGV_IMPL(Severity::severity, __VA_ARGS__, "\n")
+#define ELOGV(severity, ...) \
+  ELOGV_IMPL(Severity::severity, 0, __VA_ARGS__, "\n")
+
+#define MELOGV(severity, Id, ...) \
+  ELOGV_IMPL(Severity::severity, Id, __VA_ARGS__, "\n")
 
 #define ELOG_TRACE ELOG(INFO)
 #define ELOG_DEBUG ELOG(DEBUG)
@@ -181,6 +165,13 @@ inline void flush() { logger::instance().flush(); }
 #define ELOG_WARN ELOG(WARN)
 #define ELOG_ERROR ELOG(ERROR)
 #define ELOG_CRITICAL ELOG(CRITICAL)
+
+#define MELOG_TRACE(id) ELOG(INFO, id)
+#define MELOG_DEBUG(id) ELOG(DEBUG, id)
+#define MELOG_INFO(id) ELOG(INFO, id)
+#define MELOG_WARN(id) ELOG(WARN, id)
+#define MELOG_ERROR(id) ELOG(ERROR, id)
+#define MELOG_CRITICAL(id) ELOG(CRITICAL, id)
 
 #define ELOGT ELOG_TRACE
 #define ELOGD ELOG_DEBUG
