@@ -29,8 +29,8 @@ namespace coro_rpc::internal {
 
 template <typename server_config>
 inline auto pack_result(std::errc err, std::string_view err_msg) {
-  return std::make_pair(err, server_config::serialize_proto::serialize(
-                                 rpc_error{err, std::string{err_msg}}));
+  return std::make_pair(err,
+                        server_config::serialize_proto::serialize(err_msg));
 }
 
 template <typename server_config>
