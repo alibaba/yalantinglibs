@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <asio.hpp>
+#include <future>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -48,14 +49,12 @@ class io_context_pool {
     for (std::size_t i = 0; i < threads.size(); ++i) {
       threads[i]->join();
     }
+    promise_.set_value();
   }
 
   void stop() {
     work_.clear();
-
-    for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
-      io_contexts_[i]->stop();
-    }
+    promise_.get_future().wait();
   }
 
   bool has_stop() const { return work_.empty(); }
@@ -87,5 +86,6 @@ class io_context_pool {
   std::vector<io_context_ptr> io_contexts_;
   std::vector<work_ptr> work_;
   std::size_t next_io_context_;
+  std::promise<void> promise_;
 };
 }  // namespace asio_util

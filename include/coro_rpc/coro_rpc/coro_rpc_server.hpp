@@ -197,26 +197,26 @@ class coro_rpc_server {
       {
         std::unique_lock lock(mtx_);
         for (auto &conn : conns_) {
-          conn.second->set_quit_callback(nullptr, 0);
           if (!conn.second->has_closed()) {
-            conn.second->sync_close();
+            conn.second->async_close();
           }
-
-          conn.second->wait_quit();
         }
 
         conns_.clear();
       }
 
+      ELOGV(INFO, "wait for server's thread-pool finish all work.");
       pool_.stop();
+      ELOGV(INFO, "server's thread-pool finished.");
     }
     if (thd_.joinable()) {
       thd_.join();
     }
 
     if (acceptor_thd_.joinable()) {
-      acceptor_ioc_.stop();
+      ELOGV(INFO, "wait for server's acceptor thread finish all work.");
       acceptor_thd_.join();
+      ELOGV(INFO, "server's acceptor thread finished.");
     }
     ELOGV(INFO, "stop coro_rpc_server ok");
     flag_ = stat::stop;
@@ -327,8 +327,6 @@ class coro_rpc_server {
             ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
-      start_accept_promise_.set_value();
-      close_accept_promise_.set_value();
       return std::errc::address_in_use;
     }
 #ifdef _MSC_VER
@@ -345,7 +343,6 @@ class coro_rpc_server {
     port_ = end_point.port();
 
     ELOGV(INFO, "isten port %d successfully", port_.load());
-    start_accept_promise_.set_value();
     return {};
   }
 
@@ -367,7 +364,6 @@ class coro_rpc_server {
       if (error) {
         ELOGV(ERROR, "accept failed, error: %s", error.message().data());
         if (error == asio::error::operation_aborted) {
-          close_accept_promise_.set_value();
           co_return std::errc::io_error;
         }
         continue;
@@ -403,13 +399,11 @@ class coro_rpc_server {
   }
 
   void close_acceptor() {
-    start_accept_promise_.get_future().wait();
     asio::dispatch(acceptor_.get_executor(), [this]() {
       asio::error_code ec;
       acceptor_.cancel(ec);
       acceptor_.close(ec);
     });
-    close_accept_promise_.get_future().wait();
   }
 
   asio_util::io_context_pool pool_;
@@ -421,8 +415,6 @@ class coro_rpc_server {
 
   std::thread thd_;
   std::thread acceptor_thd_;
-  std::promise<void> close_accept_promise_;
-  std::promise<void> start_accept_promise_;
   stat flag_;
 
   std::mutex start_mtx_;

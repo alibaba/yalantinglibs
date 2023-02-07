@@ -70,7 +70,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       ELOGV(INFO, "~async_connection conn_id %d, client_id %d", conn_id_,
             client_id_);
 #endif
-      async_simple::coro::syncAwait(close());
+      close();
     }
   }
 
@@ -96,11 +96,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (shake_ec) {
         ELOGV(ERROR, "handshake failed: %s conn_id %d",
               shake_ec.message().data(), conn_id_);
-        co_await close();
-        co_return;
+        close();
       }
-      ELOGV(INFO, "handshake ok conn_id %d", conn_id_);
-      co_await start_impl(router, *ssl_stream_);
+      else {
+        ELOGV(INFO, "handshake ok conn_id %d", conn_id_);
+        co_await start_impl(router, *ssl_stream_);
+      }
     }
     else {
 #endif
@@ -108,16 +109,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
     }
 #endif
-    if (quit_callback_) {
-      quit_callback_(conn_id_);
-    }
-    promise_.set_value();
   }
   template <typename server_config, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
       internal::router<server_config> &router, Socket &socket) noexcept {
     char head_[RPC_HEAD_LEN];
-    auto self = shared_from_this();
     while (true) {
       reset_timer();
       auto ret = co_await asio_util::async_read(
@@ -129,7 +125,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       // So, no special handling of eof is required.
       if (ret.first) {
         ELOGV(ERROR, "%s, %s", ret.first.message().data(), "read head error");
-        co_await close();
+        close();
         ELOGV(ERROR, "hello");
         co_return;
       }
@@ -139,7 +135,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         ELOGV(ERROR, "%s, %s",
               std::make_error_code(std::errc::protocol_error).message().data(),
               "deserialize error");
-        co_await close();
+        close();
         co_return;
       }
 
@@ -154,18 +150,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
               "inject action: close_socket_after_read_header, conn_id %d, "
               "client_id %d",
               conn_id_, client_id_);
-        co_await close();
+        close();
         co_return;
       }
 #endif
       if (header_.magic != magic_number) [[unlikely]] {
         ELOGV(ERROR, "bad magic number, conn_id %d", conn_id_);
-        co_await close();
+        close();
         co_return;
       }
       if (header_.length < 4) [[unlikely]] {
         ELOGV(ERROR, "bad length: %d, conn_id %d", header_.length, conn_id_);
-        co_await close();
+        close();
         co_return;
       }
 
@@ -179,7 +175,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (ret.first) [[unlikely]] {
         ELOGV(ERROR, "read error: %s, conn_id %d", ret.first.message().data(),
               conn_id_);
-        co_await close();
+        close();
         co_return;
       }
 
@@ -190,13 +186,14 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       auto payload = std::string_view{body_.data() + 4, ret.second - 4};
 
       auto handler = router.get_handler(function_id);
+      auto self = shared_from_this();
       if (!handler) {
         auto coro_handler = router.get_coro_handler(function_id);
         pair = co_await router.route_coro(function_id, coro_handler, payload,
-                                          self);
+                                          std::move(self));
       }
       else {
-        pair = router.route(function_id, handler, payload, self);
+        pair = router.route(function_id, handler, payload, std::move(self));
       }
 
       auto &[err, body_buf] = pair;
@@ -216,7 +213,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
               "client_id %d",
               conn_id_, client_id_);
         co_await asio_util::async_write(socket, asio::buffer(header_buf));
-        co_await close();
+        close();
         co_return;
       }
       if (g_action == inject_action::server_send_bad_rpc_result) {
@@ -233,7 +230,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         }
         write_queue_.emplace_back(std::move(header_buf), std::move(body_buf));
         if (write_queue_.size() == 1) {
-          send_data().start([ec = shared_from_this()](auto &&) {
+          send_data().start([self = shared_from_this()](auto &&) {
           });
         }
         if (err != err_ok) [[unlikely]] {
@@ -260,8 +257,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     resp_header.length = body_buf.size();
     auto header_buf = struct_pack::serialize<std::string>(resp_header);
 
-    auto self = shared_from_this();
-    response(std::move(header_buf), std::move(body_buf), std::move(self))
+    response(std::move(header_buf), std::move(body_buf), shared_from_this())
         .via(&executor_)
         .detach();
   }
@@ -280,32 +276,23 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    */
   bool has_closed() const { return has_closed_; }
 
-  void wait_quit() { promise_.get_future().wait(); }
   /*!
-   * close connection synchronously
+   * close connection asynchronously
    *
    * If the connection has already closed, nothing will happen.
    *
    * @param close_ssl whether to close the ssl stream
    */
-  void sync_close() {
+  void async_close() {
     if (has_closed_) {
       return;
     }
-
-#ifdef UNIT_TEST_INJECT
-    ELOGV(INFO, "sync_close conn_id %d, client_id %d", conn_id_, client_id_);
-#else
-    ELOGV(INFO, "sync_close conn_id %d", conn_id_);
-#endif
-    std::promise<void> promise;
-    close().via(&executor_).start([&](auto &&) {
-      promise.set_value();
+    asio::post(io_context_, [this, self = shared_from_this()] {
+      this->close();
     });
-    promise.get_future().wait();
-
-    io_context_.poll();
   }
+
+  void close_coro() {}
 
   using QuitCallback = std::function<void(const uint64_t &conn_id)>;
   void set_quit_callback(QuitCallback callback, uint64_t conn_id) {
@@ -323,7 +310,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
  private:
   async_simple::coro::Lazy<void> response(std::string header_buf,
                                           std::string body_buf,
-                                          auto self) noexcept {
+                                          rpc_conn self) noexcept {
     if (has_closed()) [[unlikely]] {
       ELOGV(DEBUG, "response_msg failed: connection has been closed");
       co_return;
@@ -352,7 +339,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             "inject action: force_inject_connection_close_socket, conn_id %d, "
             "client_id %d",
             conn_id_, client_id_);
-        co_await close();
+        close();
         co_return;
       }
 #endif
@@ -378,7 +365,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
       if (ret.first) [[unlikely]] {
         ELOGV(ERROR, "%s, %s", ret.first.message().data(), "async_write error");
-        co_await close();
+        close();
         co_return;
       }
       write_queue_.pop_front();
@@ -386,7 +373,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (rsp_err_ != err_ok) [[unlikely]] {
       ELOGV(ERROR, "%s, %s", std::make_error_code(rsp_err_).message().data(),
             "rsp_err_");
-      co_await close();
+      close();
       co_return;
     }
 #ifdef UNIT_TEST_INJECT
@@ -397,17 +384,20 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             conn_id_, client_id_);
       // Attention: close ssl stream after read error
       // otherwise, server will crash
-      co_await close();
+      close();
       co_return;
     }
 #endif
   }
 
-  async_simple::coro::Lazy<void> close() {
+  void close() {
     if (has_closed_) {
-      co_return;
+      return;
     }
     close_socket();
+    if (quit_callback_) {
+      quit_callback_(conn_id_);
+    }
     has_closed_ = true;
   }
 
@@ -417,21 +407,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 
     timer_.expires_from_now(keep_alive_timeout_duration_);
-    timer_.async_wait(
-        [this, self = shared_from_this()](asio::error_code const &ec) {
-          if (ec) {
-            return;
-          }
-
+    timer_.async_wait([this,
+                       self = shared_from_this()](asio::error_code const &ec) {
+      if (!ec) {
 #ifdef UNIT_TEST_INJECT
-          ELOGV(INFO, "close timeout client_id %d conn_id %d", client_id_,
-                conn_id_);
+        ELOGV(INFO, "close timeout client_id %d conn_id %d", client_id_,
+              conn_id_);
 #else
-          ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
+        ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
 #endif
 
-          close_socket();
-        });
+        close_socket();
+      }
+    });
   }
 
   void close_socket() {
@@ -470,7 +458,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   bool enable_check_timeout_ = false;
   asio::steady_timer timer_;
   std::atomic<bool> has_closed_ = false;
-  std::promise<void> promise_;
 
   QuitCallback quit_callback_ = nullptr;
   uint64_t conn_id_ = 0;
