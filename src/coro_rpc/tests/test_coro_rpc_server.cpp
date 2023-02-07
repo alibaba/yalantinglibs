@@ -210,7 +210,7 @@ struct CoroServerTester : ServerTester {
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
   }
-  coro_rpc_server server;
+  coro_rpc_server<> server;
   std::thread thd;
   HelloService hello_service_;
 };

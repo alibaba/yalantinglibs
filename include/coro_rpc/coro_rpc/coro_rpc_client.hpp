@@ -698,7 +698,7 @@ class coro_rpc_client {
   asio_util::AsioExecutor executor_;
   asio::ip::tcp::socket socket_;
   std::vector<std::byte> read_buf_;
-  std::size_t default_read_buf_size_ = 256;
+  constexpr static std::size_t default_read_buf_size_ = 256;
 
 #ifdef ENABLE_SSL
   asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};

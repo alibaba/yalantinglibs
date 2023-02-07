@@ -346,8 +346,8 @@ TEST_CASE("testing client with ssl server") {
     for (auto server_crt : type_list) {
       for (auto server_key : type_list) {
         for (auto dh : type_list) {
-          SSLClientTester<coro_rpc_server>(base_path, port, client_crt,
-                                           server_crt, server_key, dh)
+          SSLClientTester<coro_rpc_server<>>(base_path, port, client_crt,
+                                             server_crt, server_key, dh)
               .run();
         }
       }

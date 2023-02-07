@@ -29,16 +29,18 @@
  * limitations under the License.
  */
 #include <coro_rpc/coro_rpc/router_impl.hpp>
+#include <string_view>
 #include <system_error>
 #include <util/utils.hpp>
 #include <variant>
 
+#include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
 
-coro_rpc::internal::router router;
+coro_rpc::internal::router<coro_rpc::config::coro_rpc_default_config> router;
 
 namespace test_util {
 template <typename T>
@@ -51,12 +53,11 @@ struct RPC_trait<void> {
 };
 template <auto func>
 rpc_result<function_return_type_t<decltype(func)>> get_result(
-    const auto &pair, size_t offset = 0) {
+    const auto &pair) {
   auto [ec, buffer] = pair;
-  std::string_view data(buffer.data() + offset, buffer.size() - offset);
   using R = function_return_type_t<decltype(func)>;
   typename RPC_trait<R>::return_type r;
-  auto res = struct_pack::deserialize_to(r, data);
+  auto res = struct_pack::deserialize_to(r, buffer);
   if (res == struct_pack::errc{}) {
     if constexpr (std::is_same_v<R, void>) {
       return {};
@@ -66,7 +67,7 @@ rpc_result<function_return_type_t<decltype(func)>> get_result(
     }
   }
   rpc_error err;
-  res = struct_pack::deserialize_to(err, data);
+  res = struct_pack::deserialize_to(err, buffer);
   CHECK(res == struct_pack::errc{});
   return rpc_result<R>{unexpect_t{}, std::move(err)};
 }
@@ -75,7 +76,7 @@ template <typename R>
 void check_result(const auto &pair, size_t offset = 0) {
   auto [err, buffer] = pair;
   assert(err == err_ok);
-  std::string_view data(buffer.data() + offset, buffer.size() - offset);
+  std::string_view data(buffer.data(), buffer.size());
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
   if (res != struct_pack::errc{}) {
@@ -104,18 +105,12 @@ template <auto func, typename... Args>
 auto test_route(auto conn, Args &&...args) {
   auto buf = pack(std::forward<Args>(args)...);
   constexpr auto id = func_id<func>();
-  std::vector<char> all;
-  size_t size = FUNCTION_ID_LEN + buf.size();
-  all.resize(size);
-  std::memcpy(all.data(), &id, FUNCTION_ID_LEN);
-  if (size > FUNCTION_ID_LEN) {
-    std::memcpy(all.data() + FUNCTION_ID_LEN, buf.data(), buf.size());
-  }
-
-  auto handler = router.get_handler({all.data(), all.size()});
+  auto handler = router.get_handler(id);
 
   return router.route(
-      handler, {all.data() + g_head_offset, all.size() - g_tail_offset}, conn);
+      id, handler,
+      std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
+      conn);
 }
 
 template <auto func, typename... Args>
@@ -170,18 +165,11 @@ TEST_CASE("testing coro_handler") {
   router.regist_handler<coro_func>();
   auto buf = pack();
   constexpr auto id = func_id<coro_func>();
-  std::vector<char> all;
-  size_t size = FUNCTION_ID_LEN + buf.size();
-  all.resize(size);
-  std::memcpy(all.data(), &id, FUNCTION_ID_LEN);
-  if (size > FUNCTION_ID_LEN) {
-    std::memcpy(all.data() + FUNCTION_ID_LEN, buf.data(), buf.size());
-  }
-
-  auto handler = router.get_coro_handler({all.data(), all.size()});
+  auto handler = router.get_coro_handler(id);
 
   async_simple::coro::syncAwait(router.route_coro(
-      handler, {all.data() + g_head_offset, all.size() - g_tail_offset},
+      id, handler,
+      std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
       coro_conn));
 }
 
@@ -204,7 +192,7 @@ class test_class {
 };
 
 TEST_CASE("testing invalid arguments") {
-  std::pair<std::errc, std::vector<char>> pair{};
+  std::pair<std::errc, std::string> pair{};
 
   SUBCASE("test member functions") {
     test_class obj{};
@@ -230,7 +218,7 @@ TEST_CASE("testing invalid arguments") {
     pair = test_route<&test_class::get_str>(coro_conn, std::string("test"));
     CHECK(pair.first == err_ok);
 
-    auto r = get_result<&test_class::get_str>(pair, RESPONSE_HEADER_LEN);
+    auto r = get_result<&test_class::get_str>(pair);
     CHECK(r.value() == "test");
   }
 
@@ -242,7 +230,7 @@ TEST_CASE("testing invalid arguments") {
 
   pair = test_route<get_str>(coro_conn, std::string("test"));
   CHECK(pair.first == err_ok);
-  auto r = get_result<get_str>(pair, RESPONSE_HEADER_LEN);
+  auto r = get_result<get_str>(pair);
   CHECK(r.value() == "test");
 
   pair = test_route<plus_one>(coro_conn, 42, 42);
@@ -262,7 +250,7 @@ TEST_CASE("testing invalid arguments") {
 }
 
 TEST_CASE("testing invalid buffer") {
-  std::pair<std::errc, std::vector<char>> pair{};
+  std::pair<std::errc, std::string> pair{};
   pair = test_route<plus_one>(coro_conn, 42);
   CHECK(pair.first == err_ok);
 
@@ -284,15 +272,15 @@ void throw_exception_func1() { throw 1; }
 TEST_CASE("testing exceptions") {
   router.regist_handler<throw_exception_func, throw_exception_func1>();
 
-  std::pair<std::errc, std::vector<char>> pair{};
+  std::pair<std::errc, std::string> pair{};
   pair = test_route<throw_exception_func>(coro_conn);
   CHECK(pair.first == std::errc::interrupted);
-  auto r = get_result<throw_exception_func>(pair, RESPONSE_HEADER_LEN);
+  auto r = get_result<throw_exception_func>(pair);
   std::cout << r.error().msg << "\n";
 
   pair = test_route<throw_exception_func1>(coro_conn);
   CHECK(pair.first == std::errc::interrupted);
-  r = get_result<throw_exception_func>(pair, RESPONSE_HEADER_LEN);
+  r = get_result<throw_exception_func>(pair);
   std::cout << r.error().msg << "\n";
 }
 
