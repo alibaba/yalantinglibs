@@ -56,6 +56,17 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 }
 
 TEST_CASE("testing client") {
+  {
+    coro_rpc::coro_rpc_client client;
+    auto lazy_ret = client.connect("", "");
+    auto ret = syncAwait(lazy_ret);
+    CHECK(ret == std::errc::not_connected);
+  }
+  {
+    coro_rpc::coro_rpc_client client;
+    auto ret = client.sync_connect("", "");
+    CHECK(ret == std::errc::not_connected);
+  }
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
