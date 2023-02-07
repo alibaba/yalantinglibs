@@ -407,19 +407,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 
     timer_.expires_from_now(keep_alive_timeout_duration_);
-    timer_.async_wait([this,
-                       self = shared_from_this()](asio::error_code const &ec) {
-      if (!ec) {
+    timer_.async_wait(
+        [this, self = shared_from_this()](asio::error_code const &ec) {
+          if (!ec) {
 #ifdef UNIT_TEST_INJECT
-        ELOGV(INFO, "close timeout client_id %d conn_id %d", client_id_,
-              conn_id_);
+            ELOGV(INFO, "close timeout client_id %d conn_id %d", client_id_,
+                  conn_id_);
 #else
-        ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
+            ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
 #endif
 
-        close_socket();
-      }
-    });
+            close_socket();
+          }
+        });
   }
 
   void close_socket() {
