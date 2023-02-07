@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio)
 include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple)
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/iguana)
 
 add_definitions(-DASIO_HAS_STD_INVOKE_RESULT)
 add_definitions(-DASYNC_SIMPLE_HAS_NOT_AIO)

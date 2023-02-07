@@ -18,7 +18,7 @@ add_executable(test_rpc
         ${TEST_SRCS}
         ${TEST_COMMON}
         )
-target_link_libraries(test_rpc PRIVATE libcoro_rpc doctest)
+target_link_libraries(test_rpc PRIVATE yalantinglibs::coro_rpc doctest)
 target_compile_definitions(test_rpc PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(test_rpc PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 add_custom_command(
@@ -33,7 +33,7 @@ foreach (_test_file ${TEST_SRCS})
             ${TEST_COMMON}
             )
     target_link_libraries(${_test_name}
-            libcoro_rpc
+            yalantinglibs::coro_rpc
             doctest
             )
 if  (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
@@ -59,7 +59,7 @@ foreach (_test_file ${TEST_REGISTER_DUPLICATION_SRCS})
             rpc_service.cpp
             )
     target_link_libraries(${_test_name}
-            libcoro_rpc
+            yalantinglibs::coro_rpc
             doctest
             )
     add_test(${_test_name} ${_test_name})
@@ -69,4 +69,4 @@ foreach (_test_file ${TEST_REGISTER_DUPLICATION_SRCS})
             )
 endforeach ()
 add_executable(test_util test_util.cpp)
-target_link_libraries(test_util PRIVATE libcoro_rpc)
+target_link_libraries(test_util PRIVATE yalantinglibs::coro_rpc)

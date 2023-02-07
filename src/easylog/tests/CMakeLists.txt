@@ -6,4 +6,4 @@ add_executable(test_easylog
         )
 add_test(NAME test_easylog COMMAND test_easylog)
 target_compile_definitions(test_easylog PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-target_link_libraries(test_easylog PRIVATE doctest)
+target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest)

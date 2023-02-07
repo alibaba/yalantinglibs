@@ -15,4 +15,4 @@ add_executable(test_serialize
         )
 add_test(NAME test_serialize COMMAND test_serialize)
 target_compile_definitions(test_serialize PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-target_link_libraries(test_serialize PRIVATE libstruct_pack doctest)
+target_link_libraries(test_serialize PRIVATE yalantinglibs::struct_pack doctest)
