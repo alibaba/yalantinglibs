@@ -35,11 +35,12 @@ namespace coro_rpc {
  *
  * memory layout
  * ```
- * ┌────────┬───────────┬────────────────┬──────────┬─────────┬─────────┐
- * │  magic │  version  │ serialize_type │ msg_type │ seq_num │ length  │
- * ├────────┼───────────┼────────────────┼──────────┼─────────┼─────────┤
- * │   1    │     1     │       1        │    1     │    4    │    4    │
- * └────────┴───────────┴────────────────┴──────────┴─────────┴─────────┘
+ * ┌────────┬───────────┬────────────────┬──────────┬─────────┬─────────┐─────────┐
+ * │  magic │  version  │ serialize_type │ msg_type │ seq_num │ length │reserved
+ * │
+ * ├────────┼───────────┼────────────────┼──────────┼─────────┼─────────┤─────────┤
+ * │   1    │     1     │       1        │    1     │    4    │    4    │    4 │
+ * └────────┴───────────┴────────────────┴──────────┴─────────┴─────────┘─────────┘
  * ```
  */
 struct req_header {
@@ -49,27 +50,20 @@ struct req_header {
   uint8_t msg_type;        //!< message type
   uint32_t seq_num;        //!< sequence number
   uint32_t length;         //!< length of RPC body
+  uint32_t reserved;       //!< reserved field
 };
 
 struct resp_header {
-  uint8_t magic;     //!< magic number
-  uint8_t version;   //!< rpc protocol version
-  uint8_t err_code;  //!< message type
-  uint8_t msg_type;  //!< message type
-  uint32_t seq_num;  //!< sequence number
-  uint32_t length;   //!< length of RPC body
+  uint8_t magic;      //!< magic number
+  uint8_t version;    //!< rpc protocol version
+  uint8_t err_code;   //!< message type
+  uint8_t msg_type;   //!< message type
+  uint32_t seq_num;   //!< sequence number
+  uint32_t length;    //!< length of RPC body
+  uint32_t reserved;  //!< reserved field
 };
 }  // namespace coro_rpc
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<coro_rpc::req_header> =
-    type_info_config::disable;
 
-template <>
-constexpr inline auto enable_type_info<coro_rpc::resp_header> =
-    type_info_config::disable;
-
-};  // namespace struct_pack
 namespace coro_rpc {
 #if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
 template <class T, class E>
@@ -90,10 +84,10 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
-constexpr auto REQ_HEAD_LEN = struct_pack::get_needed_size(req_header{});
+constexpr auto REQ_HEAD_LEN = sizeof(resp_header{});
 static_assert(REQ_HEAD_LEN == 16);
 
-constexpr auto RESP_HEAD_LEN = struct_pack::get_needed_size(resp_header{});
+constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
 static_assert(RESP_HEAD_LEN == 16);
 
 constexpr int FUNCTION_ID_LEN = 4;
