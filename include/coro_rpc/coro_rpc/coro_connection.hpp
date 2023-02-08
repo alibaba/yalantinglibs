@@ -115,11 +115,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename server_config, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
       internal::router<server_config> &router, Socket &socket) noexcept {
-    char head_[REQ_HEAD_LEN];
+    req_header req_head;
     while (true) {
       reset_timer();
       auto ret = co_await asio_util::async_read(
-          socket, asio::buffer(head_, REQ_HEAD_LEN));
+          socket, asio::buffer((char *)&req_head, REQ_HEAD_LEN));
       cancel_timer();
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
@@ -131,15 +131,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
       assert(ret.second == REQ_HEAD_LEN);
-      req_header req_head{};
-      auto errc = struct_pack::deserialize_to(req_head, head_, REQ_HEAD_LEN);
-      if (errc != struct_pack::errc::ok) [[unlikely]] {
-        ELOGV(ERROR, "%s, %s",
-              std::make_error_code(std::errc::protocol_error).message().data(),
-              "deserialize error");
-        close();
-        co_return;
-      }
 
 #ifdef UNIT_TEST_INJECT
       client_id_ = req_head.seq_num;
@@ -209,7 +200,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       resp_head.err_code = static_cast<uint8_t>(err);
       resp_head.length = body_buf.size();
 
-      auto header_buf = struct_pack::serialize<std::string>(resp_head);
+      std::string header_buf;
+      header_buf.resize(RESP_HEAD_LEN);
+      std::memcpy(header_buf.data(), &resp_head, RESP_HEAD_LEN);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -258,13 +251,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 
     auto body_buf = struct_pack::serialize<std::string>(ret);
-    resp_header resp_header{};
+    resp_header resp_head{};
 
-    resp_header.magic = magic_number;
-    resp_header.err_code = 0;
-    resp_header.length = body_buf.size();
+    resp_head.magic = magic_number;
+    resp_head.err_code = 0;
+    resp_head.length = body_buf.size();
 
-    auto header_buf = struct_pack::serialize<std::string>(resp_header);
+    std::string header_buf;
+    header_buf.resize(RESP_HEAD_LEN);
+    std::memcpy(header_buf.data(), &resp_head, RESP_HEAD_LEN);
 
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
         .via(&executor_)

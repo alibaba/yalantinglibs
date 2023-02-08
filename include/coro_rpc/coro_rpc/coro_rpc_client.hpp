@@ -461,20 +461,10 @@ class coro_rpc_client {
         co_return r;
       }
 #endif
-      char head[RESP_HEAD_LEN];
-      ret = co_await asio_util::async_read(socket,
-                                           asio::buffer(head, RESP_HEAD_LEN));
+      resp_header header;
+      ret = co_await asio_util::async_read(
+          socket, asio::buffer((char *)&header, RESP_HEAD_LEN));
       if (!ret.first) {
-        resp_header header{};
-        auto errc = struct_pack::deserialize_to(header, head, RESP_HEAD_LEN);
-        if (errc != struct_pack::errc::ok) [[unlikely]] {
-          ELOGV(ERROR, "deserialize rpc header failed");
-          close();
-          r = rpc_result<R>{
-              unexpect_t{},
-              rpc_error{std::errc::io_error, struct_pack::error_message(errc)}};
-          co_return r;
-        }
         uint32_t body_len = header.length;
         if (body_len > read_buf_.size()) {
           read_buf_.resize(body_len);
@@ -486,7 +476,7 @@ class coro_rpc_client {
           std::ofstream file(
               benchmark_file_path + std::string{get_func_name<func>()} + ".out",
               std::ofstream::binary | std::ofstream::out);
-          file << std::string_view{std::begin(head), RESP_HEAD_LEN};
+          file << std::string_view{(char *)&header, RESP_HEAD_LEN};
           file << std::string_view{(char *)read_buf_.data(), body_len};
           file.close();
 #endif
@@ -537,7 +527,8 @@ class coro_rpc_client {
     }
     std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
 
-    req_header header{magic_number};
+    auto &header = *(req_header *)buffer.data();
+    header.magic = magic_number;
 #ifdef UNIT_TEST_INJECT
     header.seq_num = client_id_;
     if (g_action == inject_action::client_send_bad_magic_num) {
@@ -552,7 +543,6 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     }
 #endif
-    struct_pack::serialize_to((char *)buffer.data(), REQ_HEAD_LEN, header);
     return buffer;
   }
 

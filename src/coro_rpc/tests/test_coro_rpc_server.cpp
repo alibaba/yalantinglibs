@@ -23,6 +23,7 @@
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
+#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
@@ -308,12 +309,11 @@ TEST_CASE("test server write queue") {
   std::vector<std::byte> buffer;
   buffer.resize(offset);
   std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
-  req_header header{magic_number};
+  auto &header = *(req_header *)buffer.data();
+  header.magic = magic_number;
   header.seq_num = g_client_id++;
   ELOGV(INFO, "client_id %d begin to connect %d", header.seq_num, 8820);
   header.length = buffer.size() - REQ_HEAD_LEN;
-  constexpr auto size = struct_pack::get_needed_size(header);
-  struct_pack::serialize_to((char *)buffer.data(), size, header);
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);
@@ -330,16 +330,13 @@ TEST_CASE("test server write queue") {
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {
-    std::byte resp_len_buf[RESP_HEAD_LEN];
+    req_header header;
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESP_HEAD_LEN));
+    read(socket, asio::buffer((char *)&header, RESP_HEAD_LEN));
 
-    req_header header{};
-    [[maybe_unused]] auto errc = struct_pack::deserialize_to(
-        header, (const char *)resp_len_buf, RESP_HEAD_LEN);
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
