@@ -635,7 +635,13 @@ class coro_rpc_client {
     if (thd_.joinable()) {
       work_ = nullptr;
       if (thd_.get_id() == std::this_thread::get_id()) {
-        thd_.detach();
+        // we are now running in inner_io_context_, so destruction it in another
+        // thread
+        std::thread thrd{[ioc = std::move(inner_io_context_),
+                          thd = std::move(thd_)]() mutable {
+          thd.join();
+        }};
+        thrd.detach();
       }
       else {
         thd_.join();
