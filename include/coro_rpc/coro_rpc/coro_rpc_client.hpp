@@ -407,7 +407,7 @@ class coro_rpc_client {
     }
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
+          socket, asio::buffer(buffer.data(), REQ_HEAD_LEN));
       ELOGV(INFO, "client_id %d close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
@@ -417,7 +417,7 @@ class coro_rpc_client {
     else if (g_action ==
              inject_action::client_close_socket_after_send_partial_header) {
       ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN - 1));
+          socket, asio::buffer(buffer.data(), REQ_HEAD_LEN - 1));
       ELOGV(INFO, "client_id %d close socket", client_id_);
       co_await close();
       r = rpc_result<R>{unexpect_t{},
@@ -427,7 +427,7 @@ class coro_rpc_client {
     else if (g_action ==
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await asio_util::async_write(
-          socket, asio::buffer(buffer.data(), RPC_HEAD_LEN));
+          socket, asio::buffer(buffer.data(), REQ_HEAD_LEN));
       ELOGV(INFO, "client_id %d shutdown", client_id_);
       socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R>{unexpect_t{},
@@ -453,13 +453,12 @@ class coro_rpc_client {
         co_return r;
       }
 #endif
-      char head[RESPONSE_HEADER_LEN];
-      ret = co_await asio_util::async_read(
-          socket, asio::buffer(head, RESPONSE_HEADER_LEN));
+      char head[RESP_HEADER_LEN];
+      ret = co_await asio_util::async_read(socket,
+                                           asio::buffer(head, RESP_HEADER_LEN));
       if (!ret.first) {
-        rpc_header header{};
-        auto errc =
-            struct_pack::deserialize_to(header, head, RESPONSE_HEADER_LEN);
+        resp_header header{};
+        auto errc = struct_pack::deserialize_to(header, head, RESP_HEADER_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
           ELOGV(ERROR, "deserialize rpc header failed");
           co_await close();
@@ -468,7 +467,6 @@ class coro_rpc_client {
               rpc_error{std::errc::io_error, struct_pack::error_message(errc)}};
           co_return r;
         }
-
         uint32_t body_len = header.length;
         if (body_len > read_buf_.size()) {
           read_buf_.resize(body_len);
@@ -480,11 +478,12 @@ class coro_rpc_client {
           std::ofstream file(
               benchmark_file_path + std::string{get_func_name<func>()} + ".out",
               std::ofstream::binary | std::ofstream::out);
-          file << std::string_view{std::begin(head), RESPONSE_HEADER_LEN};
+          file << std::string_view{std::begin(head), RESP_HEADER_LEN};
           file << std::string_view{(char *)read_buf_.data(), body_len};
           file.close();
 #endif
-          r = handle_response_buffer<R>(read_buf_.data(), ret.second);
+          r = handle_response_buffer<R>(read_buf_.data(), ret.second,
+                                        std::errc{header.err_code});
           if (!r) {
             co_await close();
           }
@@ -511,7 +510,7 @@ class coro_rpc_client {
   /*
    * buffer layout
    * ┌────────────────┬────────────────┬────────────────┐
-   * │rpc_header      │func_id         │args            │
+   * │req_header      │func_id         │args            │
    * ├────────────────┼────────────────┼────────────────┤
    * │RPC_HEADER_LEN  │FUNCTION_ID_LEN │variable length │
    * └────────────────┴────────────────┴────────────────┘
@@ -520,7 +519,7 @@ class coro_rpc_client {
   std::vector<std::byte> prepare_buffer(Args &&...args) {
     std::vector<std::byte> buffer;
     constexpr auto id = func_id<func>();
-    std::size_t offset = RPC_HEAD_LEN + FUNCTION_ID_LEN;
+    std::size_t offset = REQ_HEAD_LEN + FUNCTION_ID_LEN;
     if constexpr (sizeof...(Args) > 0) {
       using arg_types = function_parameters_t<decltype(func)>;
       pack_to<arg_types>(buffer, offset, std::forward<Args>(args)...);
@@ -528,9 +527,9 @@ class coro_rpc_client {
     else {
       buffer.resize(offset);
     }
-    std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
+    std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
 
-    rpc_header header{magic_number};
+    req_header header{magic_number};
 #ifdef UNIT_TEST_INJECT
     header.seq_num = client_id_;
     if (g_action == inject_action::client_send_bad_magic_num) {
@@ -541,37 +540,42 @@ class coro_rpc_client {
     }
     else {
 #endif
-      header.length = buffer.size() - RPC_HEAD_LEN;
+      header.length = buffer.size() - REQ_HEAD_LEN;
 #ifdef UNIT_TEST_INJECT
     }
 #endif
-    struct_pack::serialize_to((char *)buffer.data(), RPC_HEAD_LEN, header);
+    struct_pack::serialize_to((char *)buffer.data(), REQ_HEAD_LEN, header);
     return buffer;
   }
 
   template <typename T>
-  rpc_result<T> handle_response_buffer(const std::byte *buffer,
-                                       std::size_t len) {
+  rpc_result<T> handle_response_buffer(const std::byte *buffer, std::size_t len,
+                                       std::errc rpc_errc) {
     rpc_return_type_t<T> ret;
-    auto ec = struct_pack::deserialize_to(ret, (const char *)buffer, len);
-    if (ec == struct_pack::errc::ok) {
-      if constexpr (std::is_same_v<T, void>) {
-        return {};
-      }
-      else {
-        return ret;
+    struct_pack::errc ec;
+    rpc_error err;
+    if (rpc_errc == std::errc{}) {
+      ec = struct_pack::deserialize_to(ret, (const char *)buffer, len);
+      if (ec == struct_pack::errc::ok) {
+        if constexpr (std::is_same_v<T, void>) {
+          return {};
+        }
+        else {
+          return std::move(ret);
+        }
       }
     }
     else {
-      rpc_error err;
-      auto ec = struct_pack::deserialize_to(err, (const char *)buffer, len);
-      if (ec != struct_pack::errc::ok) {
-        // if deserialize failed again,
-        // we can do nothing but give an error code.
-        err.code = std::errc::invalid_argument;
+      err.code = rpc_errc;
+      ec = struct_pack::deserialize_to(err.msg, (const char *)buffer, len);
+      if (ec == struct_pack::errc::ok) {
+        return rpc_result<T>{unexpect_t{}, std::move(err)};
       }
-      return rpc_result<T>{unexpect_t{}, std::move(err)};
     }
+    // deserialize failed.
+    err = {std::errc::invalid_argument,
+           "failed to deserialize rpc return value"};
+    return rpc_result<T>{unexpect_t{}, std::move(err)};
   }
 
   template <typename FuncArgs>
@@ -710,5 +714,5 @@ class coro_rpc_client {
 
   uint32_t client_id_ = 0;
   std::atomic<bool> has_closed_ = false;
-};
+};  // namespace coro_rpc
 }  // namespace coro_rpc
