@@ -17,9 +17,11 @@
 
 #include <easylog/easylog.h>
 
+#include <chrono>
 #include <thread>
 
 #include "asio_util/asio_coro_util.hpp"
+#include "async_simple/coro/Sleep.h"
 
 using namespace coro_rpc;
 
@@ -35,6 +37,8 @@ int A_add_B(int a, int b) {
 
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
   ELOGV(INFO, "call coro_echo");
+  co_await async_simple::coro::sleep(std::chrono::milliseconds(100));
+  ELOGV(INFO, "after sleep for a while");
   co_return std::string{sv};
 }
 

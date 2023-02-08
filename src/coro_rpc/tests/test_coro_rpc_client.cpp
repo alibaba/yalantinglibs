@@ -502,7 +502,7 @@ TEST_CASE("testing client call timeout") {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
     coro_rpc_client client(g_client_id++);
-    auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
+    auto ec_lazy = client.connect("127.0.0.1", "8801");
     auto ec = syncAwait(ec_lazy);
     REQUIRE(ec == std::errc{});
     auto ret = client.call_for<hello_timeout>(10ms);
