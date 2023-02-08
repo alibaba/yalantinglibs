@@ -37,8 +37,8 @@
 #include "coro_connection.hpp"
 #include "coro_rpc/coro_rpc/router.hpp"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
+#include "default_config/coro_rpc_config.hpp"
 #include "easylog/easylog.h"
-
 namespace coro_rpc {
 /*!
  * ```cpp
@@ -52,6 +52,8 @@ namespace coro_rpc {
  * }
  * ```
  */
+
+template <typename server_config = config::coro_rpc_default_config>
 class coro_rpc_server {
   //!< Server state
   enum class stat {
@@ -195,26 +197,26 @@ class coro_rpc_server {
       {
         std::unique_lock lock(mtx_);
         for (auto &conn : conns_) {
-          conn.second->set_quit_callback(nullptr, 0);
           if (!conn.second->has_closed()) {
-            conn.second->sync_close(false);
+            conn.second->async_close();
           }
-
-          conn.second->wait_quit();
         }
 
         conns_.clear();
       }
 
+      ELOGV(INFO, "wait for server's thread-pool finish all work.");
       pool_.stop();
+      ELOGV(INFO, "server's thread-pool finished.");
     }
     if (thd_.joinable()) {
       thd_.join();
     }
 
     if (acceptor_thd_.joinable()) {
-      acceptor_ioc_.stop();
+      ELOGV(INFO, "wait for server's acceptor thread finish all work.");
       acceptor_thd_.join();
+      ELOGV(INFO, "server's acceptor thread finished.");
     }
     ELOGV(INFO, "stop coro_rpc_server ok");
     flag_ = stat::stop;
@@ -263,7 +265,7 @@ class coro_rpc_server {
 
   template <auto first, auto... functions>
   void regist_handler(class_type_t<decltype(first)> *self) {
-    router_.regist_handler<first, functions...>(self);
+    router_.template regist_handler<first, functions...>(self);
   }
 
   /*!
@@ -292,7 +294,7 @@ class coro_rpc_server {
 
   template <auto... functions>
   void regist_handler() {
-    router_.regist_handler<functions...>();
+    router_.template regist_handler<functions...>();
   }
 
   /*!
@@ -304,7 +306,7 @@ class coro_rpc_server {
 
   template <auto func>
   bool remove_handler() {
-    return router_.remove_handler<func>();
+    return router_.template remove_handler<func>();
   }
 
   void clear_handlers() { router_.clear_handlers(); }
@@ -325,8 +327,6 @@ class coro_rpc_server {
             ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
-      start_accept_promise_.set_value();
-      close_accept_promise_.set_value();
       return std::errc::address_in_use;
     }
 #ifdef _MSC_VER
@@ -343,7 +343,6 @@ class coro_rpc_server {
     port_ = end_point.port();
 
     ELOGV(INFO, "isten port %d successfully", port_.load());
-    start_accept_promise_.set_value();
     return {};
   }
 
@@ -365,7 +364,6 @@ class coro_rpc_server {
       if (error) {
         ELOGV(ERROR, "accept failed, error: %s", error.message().data());
         if (error == asio::error::operation_aborted) {
-          close_accept_promise_.set_value();
           co_return std::errc::io_error;
         }
         continue;
@@ -374,7 +372,7 @@ class coro_rpc_server {
       int64_t conn_id = ++conn_id_;
       ELOGV(INFO, "new client conn_id %d coming", conn_id);
       auto conn = std::make_shared<coro_connection>(
-          io_context, std::move(socket), router_, conn_timeout_duration_);
+          io_context, std::move(socket), conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t &id) {
             std::unique_lock lock(mtx_);
@@ -397,17 +395,15 @@ class coro_rpc_server {
       conn->init_ssl(context_);
     }
 #endif
-    co_await conn->start();
+    co_await conn->start(router_);
   }
 
   void close_acceptor() {
-    start_accept_promise_.get_future().wait();
     asio::dispatch(acceptor_.get_executor(), [this]() {
       asio::error_code ec;
       acceptor_.cancel(ec);
       acceptor_.close(ec);
     });
-    close_accept_promise_.get_future().wait();
   }
 
   asio_util::io_context_pool pool_;
@@ -419,8 +415,6 @@ class coro_rpc_server {
 
   std::thread thd_;
   std::thread acceptor_thd_;
-  std::promise<void> close_accept_promise_;
-  std::promise<void> start_accept_promise_;
   stat flag_;
 
   std::mutex start_mtx_;
@@ -430,7 +424,7 @@ class coro_rpc_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex mtx_;
 
-  internal::router router_;
+  internal::router<server_config> router_;
 
 #ifdef ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};

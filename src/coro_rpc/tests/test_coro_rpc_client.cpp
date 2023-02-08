@@ -56,6 +56,17 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 }
 
 TEST_CASE("testing client") {
+  {
+    coro_rpc::coro_rpc_client client;
+    auto lazy_ret = client.connect("", "");
+    auto ret = syncAwait(lazy_ret);
+    CHECK(ret == std::errc::not_connected);
+  }
+  {
+    coro_rpc::coro_rpc_client client;
+    auto ret = client.sync_connect("", "");
+    CHECK(ret == std::errc::not_connected);
+  }
   g_action = {};
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
@@ -346,8 +357,8 @@ TEST_CASE("testing client with ssl server") {
     for (auto server_crt : type_list) {
       for (auto server_key : type_list) {
         for (auto dh : type_list) {
-          SSLClientTester<coro_rpc_server>(base_path, port, client_crt,
-                                           server_crt, server_key, dh)
+          SSLClientTester<coro_rpc_server<>>(base_path, port, client_crt,
+                                             server_crt, server_key, dh)
               .run();
         }
       }
@@ -547,12 +558,12 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 //      auto ret = read(socket, asio::buffer(body_.data(), header.length));
 //      REQUIRE(!ret.first);
 //      auto buf = struct_pack::serialize_with_offset(
-//          /*offset = */ RESPONSE_HEADER_LEN, std::monostate{});
-//      *((uint32_t*)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
-//      write(socket, asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
+//          /*offset = */ RESP_HEADER_LEN, std::monostate{});
+//      *((uint32_t*)buf.data()) = buf.size() - RESP_HEADER_LEN;
+//      write(socket, asio::buffer(buf.data(), RESP_HEADER_LEN));
 //      std::this_thread::sleep_for(50ms);
-//      write(socket, asio::buffer(buf.data() + RESPONSE_HEADER_LEN,
-//                                 buf.size() - RESPONSE_HEADER_LEN));
+//      write(socket, asio::buffer(buf.data() + RESP_HEADER_LEN,
+//                                 buf.size() - RESP_HEADER_LEN));
 //      p.set_value();
 //    });
 //    easylog::info("wait for server start");

@@ -17,10 +17,9 @@
 #include <thread>
 
 #include "api/rpc_functions.hpp"
-#include "coro_rpc/coro_rpc/coro_rpc_server.hpp"
 #include "coro_rpc/coro_rpc_server.hpp"
 
-inline int start_server(coro_rpc::coro_rpc_server& server) {
+inline int start_server(coro_rpc::coro_rpc_server<>& server) {
   using namespace coro_rpc;
   server.regist_handler<
       echo_4B, echo_100B, echo_500B, echo_1KB, echo_5KB, echo_10KB, async_io,

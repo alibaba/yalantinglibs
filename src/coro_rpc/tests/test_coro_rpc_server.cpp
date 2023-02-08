@@ -210,7 +210,7 @@ struct CoroServerTester : ServerTester {
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
   }
-  coro_rpc_server server;
+  coro_rpc_server<> server;
   std::thread thd;
   HelloService hello_service_;
 };
@@ -304,14 +304,14 @@ TEST_CASE("test server write queue") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   constexpr auto id = func_id<coro_fun_with_delay_return_void_cost_long_time>();
-  std::size_t offset = RPC_HEAD_LEN + FUNCTION_ID_LEN;
+  std::size_t offset = REQ_HEAD_LEN + FUNCTION_ID_LEN;
   std::vector<std::byte> buffer;
   buffer.resize(offset);
-  std::memcpy(buffer.data() + RPC_HEAD_LEN, &id, FUNCTION_ID_LEN);
-  rpc_header header{magic_number};
+  std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
+  req_header header{magic_number};
   header.seq_num = g_client_id++;
   ELOGV(INFO, "client_id %d begin to connect %d", header.seq_num, 8820);
-  header.length = buffer.size() - RPC_HEAD_LEN;
+  header.length = buffer.size() - REQ_HEAD_LEN;
   constexpr auto size = struct_pack::get_needed_size(header);
   struct_pack::serialize_to((char *)buffer.data(), size, header);
   asio::io_context io_context;
@@ -330,16 +330,16 @@ TEST_CASE("test server write queue") {
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {
-    std::byte resp_len_buf[RESPONSE_HEADER_LEN];
+    std::byte resp_len_buf[RESP_HEADER_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESPONSE_HEADER_LEN));
+    read(socket, asio::buffer(resp_len_buf, RESP_HEADER_LEN));
 
-    rpc_header header{};
+    req_header header{};
     [[maybe_unused]] auto errc = struct_pack::deserialize_to(
-        header, (const char *)resp_len_buf, RESPONSE_HEADER_LEN);
+        header, (const char *)resp_len_buf, RESP_HEADER_LEN);
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

@@ -1,6 +1,6 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 #########################################################################################
-# Example: Use coro_rpc with CMake target libcoro_rpc
+# Example: Use coro_rpc with CMake target coro_rpc
 # After CMake 3.15, all dependencies handled automatically when linking CMake target
 # No other code needed
 #########################################################################################
@@ -8,12 +8,12 @@ add_executable(helloworld_server
         server/main.cpp
         server/rpc_service.cpp
         )
-target_link_libraries(helloworld_server PRIVATE libcoro_rpc)
+target_link_libraries(helloworld_server PRIVATE yalantinglibs::coro_rpc)
 add_executable(helloworld_client client/main.cpp)
-target_link_libraries(helloworld_client PRIVATE libcoro_rpc)
+target_link_libraries(helloworld_client PRIVATE yalantinglibs::coro_rpc)
 
 #########################################################################################
-# Example: Use coro_rpc without CMake target libcoro_rpc
+# Example: Use coro_rpc without CMake target coro_rpc
 # You must
 #     - define macro ASIO_HAS_STD_INVOKE_RESULT and ASYNC_SIMPLE_HAS_NOT_AIO manually
 #     - include coro_rpc folder if needed
@@ -32,10 +32,12 @@ target_compile_definitions(helloworld_client_manually PRIVATE ASYNC_SIMPLE_HAS_N
 target_include_directories(helloworld_server_manually PRIVATE
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/iguana
 )
 target_include_directories(helloworld_client_manually PRIVATE
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
         ${yaLanTingLibs_SOURCE_DIR}/thirdparty/async_simple
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/iguana
 )
 target_link_libraries(helloworld_server_manually -lpthread)
 target_link_libraries(helloworld_client_manually -lpthread)

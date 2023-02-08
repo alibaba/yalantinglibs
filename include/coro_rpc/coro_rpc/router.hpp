@@ -30,14 +30,15 @@ class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 namespace internal {
 
+template <typename server_config>
 class router {
-  std::unordered_map<uint32_t,
-                     std::function<std::pair<std::errc, std::vector<char>>(
-                         std::string_view, rpc_conn &)>>
-      handlers_;
-  std::unordered_map<uint32_t, std::function<async_simple::coro::Lazy<
-                                   std::pair<std::errc, std::vector<char>>>(
+  std::unordered_map<uint32_t, std::function<std::pair<std::errc, std::string>(
                                    std::string_view, rpc_conn &)>>
+      handlers_;
+  std::unordered_map<
+      uint32_t,
+      std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
+          std::string_view, rpc_conn &)>>
       coro_handlers_;
   std::unordered_map<uint32_t, std::string> id2name_;
 
@@ -48,20 +49,18 @@ class router {
   void regist_one_handler();
 
  public:
-  std::function<std::pair<std::errc, std::vector<char>>(std::string_view,
-                                                        rpc_conn &)>
-      *get_handler(std::string_view data);
+  std::function<std::pair<std::errc, std::string>(std::string_view, rpc_conn &)>
+      *get_handler(uint32_t id);
 
-  std::function<async_simple::coro::Lazy<
-      std::pair<std::errc, std::vector<char>>>(std::string_view, rpc_conn &)>
-      *get_coro_handler(std::string_view data);
+  std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
+      std::string_view, rpc_conn &)>
+      *get_coro_handler(uint32_t id);
 
-  async_simple::coro::Lazy<std::pair<std::errc, std::vector<char>>> route_coro(
-      auto handler, std::string_view data, rpc_conn conn);
+  async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
+      uint32_t id, auto handler, std::string_view data, rpc_conn conn);
 
-  std::pair<std::errc, std::vector<char>> route(auto handler,
-                                                std::string_view data,
-                                                rpc_conn conn);
+  std::pair<std::errc, std::string> route(uint32_t id, auto handler,
+                                          std::string_view data, rpc_conn conn);
 
   /*!
    * Register RPC service functions (member function)
