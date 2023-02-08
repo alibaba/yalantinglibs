@@ -12,6 +12,9 @@ target_link_libraries(helloworld_server PRIVATE yalantinglibs::coro_rpc)
 add_executable(helloworld_client client/main.cpp)
 target_link_libraries(helloworld_client PRIVATE yalantinglibs::coro_rpc)
 
+add_executable(helloworld_concurrency_clients concurrency_clients/main.cpp)
+target_link_libraries(helloworld_concurrency_clients PRIVATE yalantinglibs::coro_rpc)
+
 #########################################################################################
 # Example: Use coro_rpc without CMake target coro_rpc
 # You must
