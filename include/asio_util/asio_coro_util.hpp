@@ -41,6 +41,12 @@ class AsioExecutor : public async_simple::Executor {
   async_simple::ExecutorStat stat() const override { return {}; }
 
  private:
+  void schedule(Func func, Duration dur) override {
+    auto timer = std::make_shared<asio::steady_timer>(io_context_, dur);
+    timer->async_wait([fn = std::move(func), timer](auto ec) {
+      fn();
+    });
+  }
   asio::io_context &io_context_;
 };
 
