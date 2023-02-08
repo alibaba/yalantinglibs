@@ -558,12 +558,12 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 //      auto ret = read(socket, asio::buffer(body_.data(), header.length));
 //      REQUIRE(!ret.first);
 //      auto buf = struct_pack::serialize_with_offset(
-//          /*offset = */ RESPONSE_HEADER_LEN, std::monostate{});
-//      *((uint32_t*)buf.data()) = buf.size() - RESPONSE_HEADER_LEN;
-//      write(socket, asio::buffer(buf.data(), RESPONSE_HEADER_LEN));
+//          /*offset = */ RESP_HEADER_LEN, std::monostate{});
+//      *((uint32_t*)buf.data()) = buf.size() - RESP_HEADER_LEN;
+//      write(socket, asio::buffer(buf.data(), RESP_HEADER_LEN));
 //      std::this_thread::sleep_for(50ms);
-//      write(socket, asio::buffer(buf.data() + RESPONSE_HEADER_LEN,
-//                                 buf.size() - RESPONSE_HEADER_LEN));
+//      write(socket, asio::buffer(buf.data() + RESP_HEADER_LEN,
+//                                 buf.size() - RESP_HEADER_LEN));
 //      p.set_value();
 //    });
 //    easylog::info("wait for server start");

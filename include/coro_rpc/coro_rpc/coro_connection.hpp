@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <any>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <future>
@@ -25,6 +26,7 @@
 #include <variant>
 #include <vector>
 
+#include "asio/buffer.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/asio_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
@@ -113,11 +115,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename server_config, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
       internal::router<server_config> &router, Socket &socket) noexcept {
-    char head_[RPC_HEAD_LEN];
+    char head_[REQ_HEAD_LEN];
     while (true) {
       reset_timer();
       auto ret = co_await asio_util::async_read(
-          socket, asio::buffer(head_, RPC_HEAD_LEN));
+          socket, asio::buffer(head_, REQ_HEAD_LEN));
       cancel_timer();
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
@@ -128,8 +130,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         close();
         co_return;
       }
-      assert(ret.second == RPC_HEAD_LEN);
-      auto errc = struct_pack::deserialize_to(header_, head_, RPC_HEAD_LEN);
+      assert(ret.second == REQ_HEAD_LEN);
+      req_header req_head{};
+      auto errc = struct_pack::deserialize_to(req_head, head_, REQ_HEAD_LEN);
       if (errc != struct_pack::errc::ok) [[unlikely]] {
         ELOGV(ERROR, "%s, %s",
               std::make_error_code(std::errc::protocol_error).message().data(),
@@ -139,7 +142,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
 #ifdef UNIT_TEST_INJECT
-      client_id_ = header_.seq_num;
+      client_id_ = req_head.seq_num;
       ELOGV(INFO, "conn_id %d, client_id %d", conn_id_, client_id_);
 #endif
 
@@ -153,24 +156,24 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 #endif
-      if (header_.magic != magic_number) [[unlikely]] {
+      if (req_head.magic != magic_number) [[unlikely]] {
         ELOGV(ERROR, "bad magic number, conn_id %d", conn_id_);
         close();
         co_return;
       }
-      if (header_.length < 4) [[unlikely]] {
-        ELOGV(ERROR, "bad length: %d, conn_id %d", header_.length, conn_id_);
+      if (req_head.length < 4) [[unlikely]] {
+        ELOGV(ERROR, "bad length: %d, conn_id %d", req_head.length, conn_id_);
         close();
         co_return;
       }
 
-      if (header_.length > body_size_) {
-        body_size_ = header_.length;
+      if (req_head.length > body_size_) {
+        body_size_ = req_head.length;
         body_.resize(body_size_);
       }
 
       ret = co_await asio_util::async_read(
-          socket, asio::buffer(body_.data(), header_.length));
+          socket, asio::buffer(body_.data(), req_head.length));
       if (ret.first) [[unlikely]] {
         ELOGV(ERROR, "read error: %s, conn_id %d", ret.first.message().data(),
               conn_id_);
@@ -201,9 +204,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         continue;
       }
 
-      rpc_header resp_header = header_;
-      resp_header.length = body_buf.size();
-      auto header_buf = struct_pack::serialize<std::string>(resp_header);
+      resp_header resp_head{};
+      resp_head.magic = magic_number;
+      resp_head.err_code = static_cast<uint8_t>(err);
+      resp_head.length = body_buf.size();
+
+      auto header_buf = struct_pack::serialize<std::string>(resp_head);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -252,8 +258,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 
     auto body_buf = struct_pack::serialize<std::string>(ret);
-    rpc_header resp_header = header_;
+    resp_header resp_header{};
+
+    resp_header.magic = magic_number;
+    resp_header.err_code = 0;
     resp_header.length = body_buf.size();
+
     auto header_buf = struct_pack::serialize<std::string>(resp_header);
 
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
@@ -342,23 +352,16 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 #endif
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(msg.first),
+                                                asio::buffer(msg.second)};
 #ifdef ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
-        ret = co_await asio_util::async_write(*ssl_stream_,
-                                              asio::buffer(msg.first));
-        if (!ret.first) [[likely]] {
-          ret = co_await asio_util::async_write(*ssl_stream_,
-                                                asio::buffer(msg.second));
-        }
+        ret = co_await asio_util::async_write(*ssl_stream_, buffers);
       }
       else {
 #endif
-        ret = co_await asio_util::async_write(socket_, asio::buffer(msg.first));
-        if (!ret.first) [[likely]] {
-          ret = co_await asio_util::async_write(socket_,
-                                                asio::buffer(msg.second));
-        }
+        ret = co_await asio_util::async_write(socket_, buffers);
 #ifdef ENABLE_SSL
       }
 #endif
@@ -462,7 +465,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   uint64_t conn_id_ = 0;
 
   std::any tag_;
-  rpc_header header_{};
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =

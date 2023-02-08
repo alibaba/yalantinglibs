@@ -42,6 +42,17 @@ using namespace coro_rpc;
 
 coro_rpc::internal::router<coro_rpc::config::coro_rpc_default_config> router;
 
+template <typename T>
+struct rpc_return_type {
+  using type = T;
+};
+template <>
+struct rpc_return_type<void> {
+  using type = std::monostate;
+};
+template <typename T>
+using rpc_return_type_t = typename rpc_return_type<T>::type;
+
 namespace test_util {
 template <typename T>
 struct RPC_trait {
@@ -54,22 +65,33 @@ struct RPC_trait<void> {
 template <auto func>
 rpc_result<function_return_type_t<decltype(func)>> get_result(
     const auto &pair) {
-  auto [ec, buffer] = pair;
-  using R = function_return_type_t<decltype(func)>;
-  typename RPC_trait<R>::return_type r;
-  auto res = struct_pack::deserialize_to(r, buffer);
-  if (res == struct_pack::errc{}) {
-    if constexpr (std::is_same_v<R, void>) {
-      return {};
-    }
-    else {
-      return r;
+  auto &&[rpc_errc, buffer] = pair;
+  using T = function_return_type_t<decltype(func)>;
+  using return_type = rpc_result<function_return_type_t<decltype(func)>>;
+  rpc_return_type_t<T> ret;
+  struct_pack::errc ec;
+  rpc_error err;
+  if (rpc_errc == std::errc{}) {
+    ec = struct_pack::deserialize_to(ret, buffer);
+    if (ec == struct_pack::errc::ok) {
+      if constexpr (std::is_same_v<T, void>) {
+        return {};
+      }
+      else {
+        return std::move(ret);
+      }
     }
   }
-  rpc_error err;
-  res = struct_pack::deserialize_to(err, buffer);
-  CHECK(res == struct_pack::errc{});
-  return rpc_result<R>{unexpect_t{}, std::move(err)};
+  else {
+    err.code = rpc_errc;
+    ec = struct_pack::deserialize_to(err.msg, buffer);
+    if (ec == struct_pack::errc::ok) {
+      return return_type{unexpect_t{}, std::move(err)};
+    }
+  }
+  // deserialize failed.
+  err = {std::errc::invalid_argument, "failed to deserialize rpc return value"};
+  return return_type{unexpect_t{}, std::move(err)};
 }
 
 template <typename R>
@@ -117,7 +139,7 @@ template <auto func, typename... Args>
 void test_route_and_check(auto conn, Args &&...args) {
   auto pair = test_route<func>(conn, std::forward<Args>(args)...);
   using R = function_return_type_t<decltype(func)>;
-  check_result<R>(pair, RESPONSE_HEADER_LEN);
+  check_result<R>(pair, RESP_HEADER_LEN);
 }
 }  // namespace test_util
 
