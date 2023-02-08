@@ -154,4 +154,3 @@ TEST_CASE("file_roll") {
             "he string that should be saved in the file.") !=
         std::string::npos);
 }
-
