@@ -33,7 +33,6 @@
 #include "easylog/easylog.h"
 #include "router.hpp"
 #include "rpc_protocol.h"
-#include "struct_pack/struct_pack.hpp"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
 #endif
@@ -195,14 +194,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         continue;
       }
 
-      resp_header resp_head{};
+      std::string header_buf;
+      header_buf.resize(RESP_HEAD_LEN);
+
+      auto &resp_head = *(resp_header *)header_buf.data();
       resp_head.magic = magic_number;
       resp_head.err_code = static_cast<uint8_t>(err);
       resp_head.length = body_buf.size();
-
-      std::string header_buf;
-      header_buf.resize(RESP_HEAD_LEN);
-      std::memcpy(header_buf.data(), &resp_head, RESP_HEAD_LEN);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -243,33 +241,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @tparam R message type
    * @param ret object of message type
    */
-  template <typename R>
-  void response_msg(const R &ret) {
-    if (has_closed()) [[unlikely]] {
-      ELOGV(DEBUG, "response_msg failed: connection has been closed");
-      return;
-    }
 
-    auto body_buf = struct_pack::serialize<std::string>(ret);
-    resp_header resp_head{};
-
-    resp_head.magic = magic_number;
-    resp_head.err_code = 0;
-    resp_head.length = body_buf.size();
-
+  void response_msg(std::string &&body_buf) {
     std::string header_buf;
     header_buf.resize(RESP_HEAD_LEN);
-    std::memcpy(header_buf.data(), &resp_head, RESP_HEAD_LEN);
+    auto &resp_head = *(resp_header *)header_buf.data();
+
+    resp_head.magic = magic_number;
+    resp_head.length = body_buf.size();
 
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
         .via(&executor_)
         .detach();
   }
-
-  /*!
-   * send empty message to RPC client
-   */
-  void response_msg() { response_msg(std::monostate{}); }
 
   void set_delay(bool b) { delay_ = b; }
 

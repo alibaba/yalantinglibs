@@ -37,12 +37,25 @@ namespace coro_rpc {
  */
 template <typename T>
 concept connection_t = requires(T t) {
-  t.response_msg();
+  t.response_msg(std::string{});
   t.set_delay(true);
   t.has_closed();
 };
 
 class coro_connection;
+
+namespace internal {
+
+template <typename T>
+struct serializer_type {
+  using type = std::string (*)(const T &);
+};
+
+template <>
+struct serializer_type<void> {
+  using type = std::string (*)();
+};
+}  // namespace internal
 /*!
  *
  * @tparam return_msg_type
@@ -53,14 +66,22 @@ class connection {
   std::shared_ptr<conn_t> conn_;
   std::shared_ptr<std::atomic<bool>> has_response_;
 
+  using serializer_type_t =
+      typename internal::serializer_type<return_msg_type>::type;
+
+  serializer_type_t serializer;
+
  public:
   /*!
-   * Construct a connection by a share pointer of Connection Concept instance
-   * @param conn a share pointer, whose template argument satisfied Connection
-   * Concept `conn_t`.
+   * Construct a connection by a share pointer of Connection Concept
+   * instance
+   * @param conn a share pointer, whose template argument satisfied
+   * Connection Concept `conn_t`.
    */
-  connection(std::shared_ptr<conn_t> conn)
-      : conn_(conn), has_response_(std::make_shared<std::atomic<bool>>(false)) {
+  connection(std::shared_ptr<conn_t> conn, serializer_type_t serializer)
+      : conn_(conn),
+        has_response_(std::make_shared<std::atomic<bool>>(false)),
+        serializer(serializer) {
     if (conn_) {
       conn_->set_delay(true);
     }
@@ -87,32 +108,22 @@ class connection {
       ELOGV(ERROR, "response message more than one time");
       return;
     }
-
+    if (has_closed()) [[unlikely]] {
+      ELOGV(DEBUG, "response_msg failed: connection has been closed");
+      return;
+    }
+    std::string msg;
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
-      conn_->response_msg();
+      msg = serializer();
     }
     else {
       static_assert(
           requires { return_msg_type{std::forward<Args>(args)...}; },
           "constructed return_msg_type failed by illegal args");
-      conn_->response_msg(return_msg_type{std::forward<Args>(args)...});
+      msg = serializer(return_msg_type{std::forward<Args>(args)...});
     }
-  }
-
-  /*!
-   * Send empty response message
-   *
-   * If the connection has already sent response message,
-   * an error log will be reported.
-   */
-  void response_msg() {
-    auto old_flag = has_response_->exchange(true);
-    if (old_flag != false) {
-      ELOGV(ERROR, "response message more than one time");
-      return;
-    }
-    conn_->response_msg();
+    conn_->response_msg(std::move(msg));
   }
 
   /*!
@@ -120,7 +131,7 @@ class connection {
    *
    * @return true if closed, otherwise false
    */
-  bool has_closed() const { return conn_->has_close(); }
+  bool has_closed() const { return conn_->has_closed(); }
 
   template <typename T>
   void set_tag(T &&tag) {
