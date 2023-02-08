@@ -177,9 +177,20 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     const std::string &host, const std::string &port) noexcept {
   callback_awaitor<std::error_code> awaitor;
   asio::ip::tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve(host, port);
+  asio::ip::tcp::resolver::iterator iterator;
+  auto ec = co_await awaitor.await_resume([&](auto handler) {
+    resolver.async_resolve(host, port, [&, handler](auto ec, auto it) {
+      iterator = it;
+      handler.set_value_then_resume(ec);
+    });
+  });
+
+  if (ec) {
+    co_return ec;
+  }
+
   co_return co_await awaitor.await_resume([&](auto handler) {
-    asio::async_connect(socket, endpoints,
+    asio::async_connect(socket, iterator,
                         [&, handler](const auto &ec, const auto &) mutable {
                           handler.set_value_then_resume(ec);
                         });

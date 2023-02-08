@@ -51,8 +51,11 @@ inline std::error_code connect(asio::io_context &io_context,
                                const std::string &host,
                                const std::string &port) {
   asio::ip::tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve(host, port);
   std::error_code error;
+  auto endpoints = resolver.resolve(host, port, error);
+  if (error) {
+    return error;
+  }
   asio::connect(socket, endpoints, error);
   return error;
 }
