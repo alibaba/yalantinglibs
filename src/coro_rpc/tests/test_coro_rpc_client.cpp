@@ -550,7 +550,7 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 //      REQUIRE(!ec2);
 //      std::array<std::byte, RPC_HEAD_LEN> head;
 //      read(socket, asio::buffer(head, RPC_HEAD_LEN));
-//      rpc_header header;
+//      req_header header;
 //      auto errc = struct_pack::deserialize_to(header, head);
 //      REQUIRE(errc == std::errc{});
 //      std::vector<std::byte> body_;
@@ -558,12 +558,12 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 //      auto ret = read(socket, asio::buffer(body_.data(), header.length));
 //      REQUIRE(!ret.first);
 //      auto buf = struct_pack::serialize_with_offset(
-//          /*offset = */ RESP_HEADER_LEN, std::monostate{});
-//      *((uint32_t*)buf.data()) = buf.size() - RESP_HEADER_LEN;
-//      write(socket, asio::buffer(buf.data(), RESP_HEADER_LEN));
+//          /*offset = */ RESP_HEAD_LEN, std::monostate{});
+//      *((uint32_t*)buf.data()) = buf.size() - RESP_HEAD_LEN;
+//      write(socket, asio::buffer(buf.data(), RESP_HEAD_LEN));
 //      std::this_thread::sleep_for(50ms);
-//      write(socket, asio::buffer(buf.data() + RESP_HEADER_LEN,
-//                                 buf.size() - RESP_HEADER_LEN));
+//      write(socket, asio::buffer(buf.data() + RESP_HEAD_LEN,
+//                                 buf.size() - RESP_HEAD_LEN));
 //      p.set_value();
 //    });
 //    easylog::info("wait for server start");

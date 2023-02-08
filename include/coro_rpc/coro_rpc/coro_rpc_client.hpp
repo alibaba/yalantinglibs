@@ -453,12 +453,12 @@ class coro_rpc_client {
         co_return r;
       }
 #endif
-      char head[RESP_HEADER_LEN];
+      char head[RESP_HEAD_LEN];
       ret = co_await asio_util::async_read(socket,
-                                           asio::buffer(head, RESP_HEADER_LEN));
+                                           asio::buffer(head, RESP_HEAD_LEN));
       if (!ret.first) {
         resp_header header{};
-        auto errc = struct_pack::deserialize_to(header, head, RESP_HEADER_LEN);
+        auto errc = struct_pack::deserialize_to(header, head, RESP_HEAD_LEN);
         if (errc != struct_pack::errc::ok) [[unlikely]] {
           ELOGV(ERROR, "deserialize rpc header failed");
           co_await close();
@@ -478,7 +478,7 @@ class coro_rpc_client {
           std::ofstream file(
               benchmark_file_path + std::string{get_func_name<func>()} + ".out",
               std::ofstream::binary | std::ofstream::out);
-          file << std::string_view{std::begin(head), RESP_HEADER_LEN};
+          file << std::string_view{std::begin(head), RESP_HEAD_LEN};
           file << std::string_view{(char *)read_buf_.data(), body_len};
           file.close();
 #endif
@@ -512,7 +512,7 @@ class coro_rpc_client {
    * ┌────────────────┬────────────────┬────────────────┐
    * │req_header      │func_id         │args            │
    * ├────────────────┼────────────────┼────────────────┤
-   * │RPC_HEADER_LEN  │FUNCTION_ID_LEN │variable length │
+   * │REQ_HEADER_LEN  │FUNCTION_ID_LEN │variable length │
    * └────────────────┴────────────────┴────────────────┘
    */
   template <auto func, typename... Args>
@@ -659,17 +659,11 @@ class coro_rpc_client {
 
   void stop_inner_io_context() {
     if (thd_.joinable()) {
+      inner_io_context_->stop();
       if (thd_.get_id() == std::this_thread::get_id()) {
-        ELOGV(WARN, "client_id %d avoid join self", client_id_);
-        std::thread([thd = std::move(thd_),
-                     io_ctx = std::move(inner_io_context_)]() mutable {
-          io_ctx->stop();
-          if (thd.joinable())
-            thd.join();
-        }).detach();
+        thd_.detach();
       }
       else {
-        inner_io_context_->stop();
         thd_.join();
       }
     }
