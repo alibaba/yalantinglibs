@@ -334,11 +334,12 @@ class coro_rpc_client {
                                          auto &promise, std::string err_msg) {
     timer.expires_after(duration);
     bool is_timeout = co_await timer.async_await();
+#ifdef UNIT_TEST_INJECT
     ELOGV(INFO, "client_id %d %s, is_timeout_ %d, %d , duration %d ms",
           client_id_, err_msg.data(), is_timeout_, is_timeout,
           std::chrono::duration_cast<std::chrono::milliseconds>(duration)
               .count());
-
+#endif
     if (!is_timeout) {
       promise.setValue(async_simple::Unit());
       co_return false;
