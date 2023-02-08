@@ -93,8 +93,8 @@ using unexpect_t = tl::unexpect_t;
 constexpr auto REQ_HEAD_LEN = struct_pack::get_needed_size(req_header{});
 static_assert(REQ_HEAD_LEN == 16);
 
-constexpr auto RESP_HEADER_LEN = struct_pack::get_needed_size(resp_header{});
-static_assert(RESP_HEADER_LEN == 16);
+constexpr auto RESP_HEAD_LEN = struct_pack::get_needed_size(resp_header{});
+static_assert(RESP_HEAD_LEN == 16);
 
 constexpr int FUNCTION_ID_LEN = 4;
 

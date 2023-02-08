@@ -330,16 +330,16 @@ TEST_CASE("test server write queue") {
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 10; ++i) {
-    std::byte resp_len_buf[RESP_HEADER_LEN];
+    std::byte resp_len_buf[RESP_HEAD_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESP_HEADER_LEN));
+    read(socket, asio::buffer(resp_len_buf, RESP_HEAD_LEN));
 
     req_header header{};
     [[maybe_unused]] auto errc = struct_pack::deserialize_to(
-        header, (const char *)resp_len_buf, RESP_HEADER_LEN);
+        header, (const char *)resp_len_buf, RESP_HEAD_LEN);
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
