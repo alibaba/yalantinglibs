@@ -139,7 +139,7 @@ template <auto func, typename... Args>
 void test_route_and_check(auto conn, Args &&...args) {
   auto pair = test_route<func>(conn, std::forward<Args>(args)...);
   using R = function_return_type_t<decltype(func)>;
-  check_result<R>(pair, RESP_HEADER_LEN);
+  check_result<R>(pair, RESP_HEAD_LEN);
 }
 }  // namespace test_util
 

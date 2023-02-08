@@ -24,7 +24,9 @@ using namespace std::string_literals;
  * \brief helloworld example client code
  */
 
-Lazy<void> show_rpc_call(coro_rpc_client &client) {
+Lazy<void> show_rpc_call() {
+  coro_rpc_client client;
+
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
   assert(ec == err_ok);
   auto ret = co_await client.call<hello_world>();
@@ -65,8 +67,7 @@ Lazy<void> show_rpc_call(coro_rpc_client &client) {
 }
 
 int main() {
-  coro_rpc_client client;
-  syncAwait(show_rpc_call(client));
+  syncAwait(show_rpc_call());
 
   std::cout << "Done!" << std::endl;
   return 0;
