@@ -26,7 +26,7 @@
 #include "easylog/easylog.h"
 #include "rpc_execute.hpp"
 #include "rpc_protocol.h"
-#include "struct_pack/struct_pack.hpp"
+#include "struct_pack/struct_pack/md5_constexpr.hpp"
 #include "util/function_name.h"
 #include "util/type_traits.h"
 namespace coro_rpc::internal {

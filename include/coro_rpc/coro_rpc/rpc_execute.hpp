@@ -103,9 +103,10 @@ inline auto execute(std::string_view data, rpc_conn &conn,
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
           std::apply(func,
-                     std::tuple_cat(std::forward_as_tuple(
-                                        connection<conn_return_type>(conn)),
-                                    args));
+                     std::tuple_cat(
+                         std::forward_as_tuple(connection<conn_return_type>(
+                             conn, server_config::serialize_proto::serialize)),
+                         args));
         }
         else {
           // call void func(args...)
@@ -116,10 +117,13 @@ inline auto execute(std::string_view data, rpc_conn &conn,
         auto &o = *self;
         if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
-          std::apply(func,
-                     std::tuple_cat(std::forward_as_tuple(
-                                        o, connection<conn_return_type>(conn)),
-                                    args));
+          std::apply(
+              func,
+              std::tuple_cat(
+                  std::forward_as_tuple(
+                      o, connection<conn_return_type>(
+                             conn, server_config::serialize_proto::serialize)),
+                  args));
         }
         else {
           // call void o.func(args...)
@@ -182,19 +186,16 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
         std::is_same_v<connection<conn_return_type, coro_connection>, First>;
     auto args = get_args < has_coro_conn_v, param_type > ();
 
-    struct_pack::errc err{};
+    bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
       if constexpr (size == 1) {
-        err = struct_pack::deserialize_to(std::get<0>(args), data);
+        is_ok = server_config::serialize_proto::deserialize_to(
+            std::get<0>(args), data);
       }
       else {
-        err = struct_pack::deserialize_to(args, data);
+        is_ok = server_config::serialize_proto::deserialize_to(args, data);
       }
-    }
-
-    if (err != struct_pack::errc::ok) [[unlikely]] {
-      co_return pack_result<server_config>(std::errc::invalid_argument, "invalid arguments");
     }
 
     if constexpr (std::is_void_v<return_type>) {
@@ -203,7 +204,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
           // call void func(coro_conn, args...)
           co_await std::apply(
               func, std::tuple_cat(
-                        std::forward_as_tuple(connection<conn_return_type>(conn)),
+                        std::forward_as_tuple(connection<conn_return_type>(conn,server_config::serialize_proto::serialize)),
                         args));
         }
         else {
@@ -219,7 +220,7 @@ execute_coro(std::string_view data, rpc_conn &conn, Self *self = nullptr) {
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connection<conn_return_type>(conn)),
+                      o, connection<conn_return_type>(conn,server_config::serialize_proto::serialize)),
                   args));
         }
         else {

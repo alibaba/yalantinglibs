@@ -1,8 +1,6 @@
 #include <struct_pack/struct_pack.hpp>
 #include <variant>
 
-#include "struct_pack/struct_pack/error_code.h"
-
 namespace coro_rpc::config {
 
 struct struct_pack_protocol {

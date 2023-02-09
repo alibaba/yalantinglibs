@@ -18,7 +18,6 @@
 #include <string>
 #include <system_error>
 
-#include "struct_pack/struct_pack.hpp"
 #if __has_include(<expected>) && __cplusplus > 202002L
 #include <expected>
 #if __cpp_lib_expected >= 202202L
