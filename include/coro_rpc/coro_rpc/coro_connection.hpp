@@ -83,9 +83,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 #endif
 
-  template <typename server_config>
+  template <typename rpc_protocol>
   async_simple::coro::Lazy<void> start(
-      internal::router<server_config> &router) noexcept {
+      internal::router<rpc_protocol> &router) noexcept {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
@@ -111,9 +111,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 #endif
   }
-  template <typename server_config, typename Socket>
+  template <typename rpc_protocol, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
-      internal::router<server_config> &router, Socket &socket) noexcept {
+      internal::router<rpc_protocol> &router, Socket &socket) noexcept {
     req_header req_head;
     while (true) {
       reset_timer();
@@ -152,6 +152,14 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 
+      auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
+
+      if (!serialize_proto.has_value()) [[unlikely]] {
+        ELOGV(ERROR, "bad serialize protocol type, conn_id %d", conn_id_);
+        close();
+        co_return;
+      }
+
       if (req_head.length > body_size_) {
         body_size_ = req_head.length;
         body_.resize(body_size_);
@@ -175,11 +183,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (!handler) {
         auto coro_handler = router.get_coro_handler(req_head.function_id);
         pair = co_await router.route_coro(req_head.function_id, coro_handler,
-                                          payload, std::move(self));
+                                          payload, std::move(self),
+                                          serialize_proto.value());
       }
       else {
         pair = router.route(req_head.function_id, handler, payload,
-                            std::move(self));
+                            std::move(self), serialize_proto.value());
       }
 
       auto &[err, body_buf] = pair;

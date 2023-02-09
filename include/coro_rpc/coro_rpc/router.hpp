@@ -30,15 +30,19 @@ class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 namespace internal {
 
-template <typename server_config>
+template <typename rpc_protocol>
 class router {
-  std::unordered_map<uint32_t, std::function<std::pair<std::errc, std::string>(
-                                   std::string_view, rpc_conn &)>>
+  std::unordered_map<
+      uint32_t,
+      std::function<std::pair<std::errc, std::string>(
+          std::string_view, rpc_conn,
+          typename rpc_protocol::supported_serialize_protocols protocols)>>
       handlers_;
   std::unordered_map<
       uint32_t,
       std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
-          std::string_view, rpc_conn &)>>
+          std::string_view, rpc_conn,
+          typename rpc_protocol::supported_serialize_protocols protocols)>>
       coro_handlers_;
   std::unordered_map<uint32_t, std::string> id2name_;
 
@@ -49,18 +53,23 @@ class router {
   void regist_one_handler();
 
  public:
-  std::function<std::pair<std::errc, std::string>(std::string_view, rpc_conn &)>
+  std::function<std::pair<std::errc, std::string>(
+      std::string_view, rpc_conn,
+      typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_handler(uint32_t id);
 
   std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
-      std::string_view, rpc_conn &)>
+      std::string_view, rpc_conn,
+      typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_coro_handler(uint32_t id);
 
   async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
-      uint32_t id, auto handler, std::string_view data, rpc_conn conn);
+      uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+      typename rpc_protocol::supported_serialize_protocols protocols);
 
-  std::pair<std::errc, std::string> route(uint32_t id, auto handler,
-                                          std::string_view data, rpc_conn conn);
+  std::pair<std::errc, std::string> route(
+      uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+      typename rpc_protocol::supported_serialize_protocols protocols);
 
   /*!
    * Register RPC service functions (member function)
