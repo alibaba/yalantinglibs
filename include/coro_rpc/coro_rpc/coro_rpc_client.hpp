@@ -450,6 +450,8 @@ class coro_rpc_client {
     ret = co_await asio_util::async_write(
         socket, asio::buffer(buffer.data(), buffer.size()));
 #endif
+    ELOG_INFO << "client_id " << client_id_
+              << " async_write ok, send result: " << ret.first.value();
     if (!ret.first) {
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::client_close_socket_after_send_payload) {
