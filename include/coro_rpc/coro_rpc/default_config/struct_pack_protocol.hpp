@@ -1,6 +1,4 @@
 #include <struct_pack/struct_pack.hpp>
-#include <variant>
-
 namespace coro_rpc::config {
 
 struct struct_pack_protocol {

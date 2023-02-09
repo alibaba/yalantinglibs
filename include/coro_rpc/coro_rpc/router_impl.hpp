@@ -31,30 +31,34 @@
 #include "util/type_traits.h"
 namespace coro_rpc::internal {
 
-template <typename server_config>
-inline std::function<std::pair<std::errc, std::string>(std::string_view,
-                                                       rpc_conn &)>
-    *router<server_config>::get_handler(uint32_t id) {
+template <typename rpc_protocol>
+inline std::function<std::pair<std::errc, std::string>(
+    std::string_view, rpc_conn,
+    typename rpc_protocol::supported_serialize_protocols protocols)>
+    *router<rpc_protocol>::get_handler(uint32_t id) {
   if (auto it = handlers_.find(id); it != handlers_.end()) {
     return &it->second;
   }
   return nullptr;
 }
 
-template <typename server_config>
-inline std::function<async_simple::coro::Lazy<
-    std::pair<std::errc, std::string>>(std::string_view, rpc_conn &)>
-    *router<server_config>::get_coro_handler(uint32_t id) {
+template <typename rpc_protocol>
+inline std::function<
+    async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
+        std::string_view, rpc_conn,
+        typename rpc_protocol::supported_serialize_protocols protocols)>
+    *router<rpc_protocol>::get_coro_handler(uint32_t id) {
   if (auto it = coro_handlers_.find(id); it != coro_handlers_.end()) {
     return &it->second;
   }
   return nullptr;
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 inline async_simple::coro::Lazy<std::pair<std::errc, std::string>>
-router<server_config>::route_coro(uint32_t id, auto handler,
-                                  std::string_view data, rpc_conn conn) {
+router<rpc_protocol>::route_coro(
+    uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+    typename rpc_protocol::supported_serialize_protocols protocols) {
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
@@ -62,28 +66,30 @@ router<server_config>::route_coro(uint32_t id, auto handler,
         ELOGV(INFO, "route coro function name %s", it->second.data());
       }
 #endif
-      co_return co_await (*handler)(data, conn);
+      co_return co_await (*handler)(data, std::move(conn), protocols);
     } catch (const std::exception &e) {
       ELOGV(ERROR, "the rpc function has exception %s, function id %d",
             e.what(), id);
-      co_return pack_result<server_config>(std::errc::interrupted, e.what());
+      co_return pack_result<rpc_protocol>(std::errc::interrupted, e.what(),
+                                          protocols);
     } catch (...) {
       ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
             id);
-      co_return pack_result<server_config>(std::errc::interrupted,
-                                           "unknown exception");
+      co_return pack_result<rpc_protocol>(std::errc::interrupted,
+                                          "unknown exception", protocols);
     }
   }
   else [[unlikely]] {
     ELOGV(ERROR, "the rpc function not found, function id %d", id);
-    co_return pack_result<server_config>(std::errc::function_not_supported,
-                                         "the function not found");
+    co_return pack_result<rpc_protocol>(std::errc::function_not_supported,
+                                        "the function not found", protocols);
   }
 }
 
-template <typename server_config>
-inline std::pair<std::errc, std::string> router<server_config>::route(
-    uint32_t id, auto handler, std::string_view data, rpc_conn conn) {
+template <typename rpc_protocol>
+inline std::pair<std::errc, std::string> router<rpc_protocol>::route(
+    uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+    typename rpc_protocol::supported_serialize_protocols protocols) {
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
@@ -91,28 +97,29 @@ inline std::pair<std::errc, std::string> router<server_config>::route(
         ELOGV(INFO, "route function name %s", it->second.data());
       }
 #endif
-      return (*handler)(data, conn);
+      return (*handler)(data, std::move(conn), protocols);
     } catch (const std::exception &e) {
       ELOGV(ERROR, "the rpc function has exception %s, function id %d",
             e.what(), id);
-      return pack_result<server_config>(std::errc::interrupted, e.what());
+      return pack_result<rpc_protocol>(std::errc::interrupted, e.what(),
+                                       protocols);
     } catch (...) {
       ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
             id);
-      return pack_result<server_config>(std::errc::interrupted,
-                                        "unknown exception");
+      return pack_result<rpc_protocol>(std::errc::interrupted,
+                                       "unknown exception", protocols);
     }
   }
   else [[unlikely]] {
     ELOGV(ERROR, "the rpc function not found, function id %d", id);
-    return pack_result<server_config>(std::errc::function_not_supported,
-                                      "the function not found");
+    return pack_result<rpc_protocol>(std::errc::function_not_supported,
+                                     "the function not found", protocols);
   }
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 template <auto func, typename Self>
-inline void router<server_config>::regist_one_handler(Self *self) {
+inline void router<rpc_protocol>::regist_one_handler(Self *self) {
   if (self == nullptr) [[unlikely]] {
     ELOGV(CRITICAL, "null connection!");
   }
@@ -124,10 +131,16 @@ inline void router<server_config>::regist_one_handler(Self *self) {
   if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
     auto it = coro_handlers_.emplace(
         id,
-        [self](std::string_view data, rpc_conn conn)
+        [self](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::supported_serialize_protocols protocols)
             -> async_simple::coro::Lazy<std::pair<std::errc, std::string>> {
-          co_return co_await internal::execute_coro<server_config, func>(
-              data, conn, self);
+          co_return co_await std::visit(
+              [data, conn = std::move(conn), self]<typename serialize_protocol>(
+                  const serialize_protocol &obj) mutable {
+                return internal::execute_coro<serialize_protocol, func>(
+                    data, std::move(conn), self);
+              },
+              protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
@@ -135,8 +148,16 @@ inline void router<server_config>::regist_one_handler(Self *self) {
   }
   else {
     auto it = handlers_.emplace(
-        id, [self](std::string_view data, rpc_conn conn) mutable {
-          return internal::execute<server_config, func>(data, conn, self);
+        id,
+        [self](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::supported_serialize_protocols protocols) {
+          return std::visit(
+              [data, conn = std::move(conn), self]<typename serialize_protocol>(
+                  const serialize_protocol &obj) mutable {
+                return internal::execute<serialize_protocol, func>(
+                    data, std::move(conn), self);
+              },
+              protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
@@ -146,9 +167,9 @@ inline void router<server_config>::regist_one_handler(Self *self) {
   id2name_.emplace(id, name);
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 template <auto func>
-inline void router<server_config>::regist_one_handler() {
+inline void router<rpc_protocol>::regist_one_handler() {
   static_assert(!std::is_member_function_pointer_v<decltype(func)>,
                 "register member function but lack of the parent object");
   using return_type = function_return_type_t<decltype(func)>;
@@ -159,19 +180,32 @@ inline void router<server_config>::regist_one_handler() {
   if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
     auto it = coro_handlers_.emplace(
         id,
-        [](std::string_view data, rpc_conn conn)
+        [](std::string_view data, rpc_conn conn,
+           typename rpc_protocol::supported_serialize_protocols protocols)
             -> async_simple::coro::Lazy<std::pair<std::errc, std::string>> {
-          co_return co_await internal::execute_coro<server_config, func>(data,
-                                                                         conn);
+          co_return co_await std::visit(
+              [data, conn = std::move(conn)]<typename serialize_protocol>(
+                  const serialize_protocol &obj) {
+                return internal::execute_coro<serialize_protocol, func>(
+                    data, std::move(conn));
+              },
+              protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
     }
   }
   else {
-    auto it =
-        handlers_.emplace(id, [](std::string_view data, rpc_conn conn) mutable {
-          return internal::execute<server_config, func>(data, conn);
+    auto it = handlers_.emplace(
+        id, [](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::supported_serialize_protocols protocols) {
+          return std::visit(
+              [data, conn = std::move(conn)]<typename serialize_protocol>(
+                  const serialize_protocol &obj) {
+                return internal::execute<serialize_protocol, func>(
+                    data, std::move(conn));
+              },
+              protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
@@ -180,9 +214,9 @@ inline void router<server_config>::regist_one_handler() {
   id2name_.emplace(id, name);
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 template <auto func>
-inline bool router<server_config>::remove_handler() {
+inline bool router<rpc_protocol>::remove_handler() {
   constexpr auto name = get_func_name<func>();
   constexpr auto id =
       struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
@@ -203,23 +237,23 @@ inline bool router<server_config>::remove_handler() {
   }
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 template <auto first, auto... func>
-inline void router<server_config>::regist_handler(
+inline void router<rpc_protocol>::regist_handler(
     class_type_t<decltype(first)> *self) {
   regist_one_handler<first>(self);
   (regist_one_handler<func>(self), ...);
 }
 
-template <typename server_config>
+template <typename rpc_protocol>
 template <auto first, auto... func>
-inline void router<server_config>::regist_handler() {
+inline void router<rpc_protocol>::regist_handler() {
   regist_one_handler<first>();
   (regist_one_handler<func>(), ...);
 }
 
-template <typename server_config>
-inline void router<server_config>::clear_handlers() {
+template <typename rpc_protocol>
+inline void router<rpc_protocol>::clear_handlers() {
   handlers_.clear();
   coro_handlers_.clear();
   id2name_.clear();

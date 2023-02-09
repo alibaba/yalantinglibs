@@ -80,7 +80,7 @@ class coro_rpc_server {
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
-  coro_rpc_server(const server_config &config)
+  coro_rpc_server(const server_config &config = server_config{})
       : pool_(config.thread_num),
         acceptor_(pool_.get_io_context()),
         port_(config.port),
@@ -431,7 +431,7 @@ class coro_rpc_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;
 
-  internal::router<server_config> router_;
+  internal::router<typename server_config::rpc_protocol> router_;
 
   std::atomic<uint16_t> port_;
   std::chrono::steady_clock::duration conn_timeout_duration_;
