@@ -155,6 +155,7 @@ struct ServerTester : TesterConfig {
       }
 
       if (ec == err_ok) {
+        ELOG_INFO << client->get_client_id() << " connect " << port_ << " ok";
         break;
       }
 
@@ -171,6 +172,8 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "%s client_id %d call %s",
           sync_client ? "sync_client" : "async_client", client->get_client_id(),
           coro_rpc::get_func_name<func>().data());
+    ELOG_INFO << "client_id " << client->get_client_id() << " begin to call "
+              << coro_rpc::get_func_name<func>();
     if (sync_client) {
       return client->sync_call<func>(std::forward<Args>(args)...);
     }
@@ -311,6 +314,7 @@ struct ServerTester : TesterConfig {
   void test_heartbeat() {
     auto client = create_client(inject_action::nothing);
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    ELOG_INFO << "begin to call async_hi";
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 

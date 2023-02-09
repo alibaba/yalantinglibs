@@ -25,6 +25,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
+#include "easylog/easylog.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
 
@@ -138,6 +139,7 @@ struct CoroServerTester : ServerTester {
     server.remove_handler<async_hi>();
     auto client = create_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    ELOG_INFO << client->get_client_id() << " begin to call async_hi";
     auto ret = call<async_hi>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
