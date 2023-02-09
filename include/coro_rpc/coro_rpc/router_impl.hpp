@@ -23,6 +23,7 @@
 
 #include "connection.hpp"
 #include "coro_connection.hpp"
+#include "coro_rpc/coro_rpc/router.hpp"
 #include "easylog/easylog.h"
 #include "rpc_execute.hpp"
 #include "rpc_protocol.h"
@@ -117,6 +118,33 @@ inline std::pair<std::errc, std::string> router<rpc_protocol>::route(
   }
 }
 
+// See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100611
+// We use this struct instead of lambda for workaround
+template <auto Func, typename Self>
+struct execute_visitor {
+  std::string_view data;
+  rpc_conn conn;
+  Self *self;
+  template <typename serialize_protocol>
+  async_simple::coro::Lazy<std::pair<std::errc, std::string>> operator()(
+      const serialize_protocol &) {
+    return internal::execute_coro<serialize_protocol, Func>(
+        data, std::move(conn), self);
+  }
+};
+
+template <auto Func>
+struct execute_visitor<Func, void> {
+  std::string_view data;
+  rpc_conn conn;
+  template <typename serialize_protocol>
+  async_simple::coro::Lazy<std::pair<std::errc, std::string>> operator()(
+      const serialize_protocol &) {
+    return internal::execute_coro<serialize_protocol, Func>(data,
+                                                            std::move(conn));
+  }
+};
+
 template <typename rpc_protocol>
 template <auto func, typename Self>
 inline void router<rpc_protocol>::regist_one_handler(Self *self) {
@@ -132,15 +160,9 @@ inline void router<rpc_protocol>::regist_one_handler(Self *self) {
     auto it = coro_handlers_.emplace(
         id,
         [self](std::string_view data, rpc_conn conn,
-               typename rpc_protocol::supported_serialize_protocols protocols)
-            -> async_simple::coro::Lazy<std::pair<std::errc, std::string>> {
-          co_return co_await std::visit(
-              [data, conn = std::move(conn), self]<typename serialize_protocol>(
-                  const serialize_protocol &obj) mutable {
-                return internal::execute_coro<serialize_protocol, func>(
-                    data, std::move(conn), self);
-              },
-              protocols);
+               typename rpc_protocol::supported_serialize_protocols protocols) {
+          execute_visitor<func, Self> visitor{data, std::move(conn), self};
+          return std::visit(visitor, protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
@@ -179,17 +201,10 @@ inline void router<rpc_protocol>::regist_one_handler() {
       struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
   if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
     auto it = coro_handlers_.emplace(
-        id,
-        [](std::string_view data, rpc_conn conn,
-           typename rpc_protocol::supported_serialize_protocols protocols)
-            -> async_simple::coro::Lazy<std::pair<std::errc, std::string>> {
-          co_return co_await std::visit(
-              [data, conn = std::move(conn)]<typename serialize_protocol>(
-                  const serialize_protocol &obj) {
-                return internal::execute_coro<serialize_protocol, func>(
-                    data, std::move(conn));
-              },
-              protocols);
+        id, [](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::supported_serialize_protocols protocols) {
+          execute_visitor<func, void> visitor{data, std::move(conn)};
+          return std::visit(visitor, protocols);
         });
     if (!it.second) {
       ELOGV(CRITICAL, "duplication function %s register!", name.data());
