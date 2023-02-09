@@ -80,7 +80,7 @@ class coro_rpc_server {
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
-  coro_rpc_server(const server_config& config)
+  coro_rpc_server(const server_config &config)
       : pool_(config.thread_num),
         acceptor_(pool_.get_io_context()),
         port_(config.port),
