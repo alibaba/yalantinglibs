@@ -36,7 +36,6 @@ namespace coro_rpc {
  * ```
  * ┌────────┬───────────┬────────────────┬──────────┬─────────┬─────────┐─────────┐
  * │  magic │  version  │ serialize_type │ msg_type │ seq_num │ length │reserved
- * │
  * ├────────┼───────────┼────────────────┼──────────┼─────────┼─────────┤─────────┤
  * │   1    │     1     │       1        │    1     │    4    │    4    │    4 │
  * └────────┴───────────┴────────────────┴──────────┴─────────┴─────────┘─────────┘
@@ -48,6 +47,7 @@ struct req_header {
   uint8_t serialize_type;  //!< serialization type
   uint8_t msg_type;        //!< message type
   uint32_t seq_num;        //!< sequence number
+  uint32_t function_id;    //!< rpc function ID
   uint32_t length;         //!< length of RPC body
   uint32_t reserved;       //!< reserved field
 };
@@ -55,7 +55,7 @@ struct req_header {
 struct resp_header {
   uint8_t magic;      //!< magic number
   uint8_t version;    //!< rpc protocol version
-  uint8_t err_code;   //!< message type
+  uint8_t err_code;   //!< rpc error type
   uint8_t msg_type;   //!< message type
   uint32_t seq_num;   //!< sequence number
   uint32_t length;    //!< length of RPC body
@@ -83,13 +83,11 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
-constexpr auto REQ_HEAD_LEN = sizeof(resp_header{});
-static_assert(REQ_HEAD_LEN == 16);
+constexpr auto REQ_HEAD_LEN = sizeof(req_header{});
+static_assert(REQ_HEAD_LEN == 20);
 
 constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
 static_assert(RESP_HEAD_LEN == 16);
-
-constexpr int FUNCTION_ID_LEN = 4;
 
 constexpr int8_t magic_number = 21;
 

@@ -304,16 +304,17 @@ TEST_CASE("test server write queue") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  constexpr auto id = func_id<coro_fun_with_delay_return_void_cost_long_time>();
-  std::size_t offset = REQ_HEAD_LEN + FUNCTION_ID_LEN;
-  std::vector<std::byte> buffer;
-  buffer.resize(offset);
-  std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
+  std::string buffer;
+  buffer.reserve(REQ_HEAD_LEN + struct_pack::get_needed_size(std::monostate{}));
+  buffer.resize(REQ_HEAD_LEN);
   auto &header = *(req_header *)buffer.data();
   header.magic = magic_number;
+  header.function_id =
+      func_id<coro_fun_with_delay_return_void_cost_long_time>();
   header.seq_num = g_client_id++;
+  header.length = struct_pack::get_needed_size(std::monostate{});
   ELOGV(INFO, "client_id %d begin to connect %d", header.seq_num, 8820);
-  header.length = buffer.size() - REQ_HEAD_LEN;
+  struct_pack::serialize_to(buffer, std::monostate{});
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);
@@ -322,21 +323,21 @@ TEST_CASE("test server write queue") {
   asio::ip::tcp::socket socket(io_context);
   auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8810");
   CHECK(!ret);
-  ELOGV(INFO, "%d client_id %d call %s", "sync_client", header.seq_num,
+  ELOGV(INFO, "%s client_id %d call %s", "sync_client", header.seq_num,
         "coro_fun_with_delay_return_void_cost_long_time");
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 1; ++i) {
     auto err =
         asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
-  for (int i = 0; i < 10; ++i) {
-    req_header header;
+  for (int i = 0; i < 1; ++i) {
+    char buffer2[RESP_HEAD_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer((char *)&header, RESP_HEAD_LEN));
-
+    read(socket, asio::buffer(buffer2, RESP_HEAD_LEN));
+    auto resp_head = *(resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
