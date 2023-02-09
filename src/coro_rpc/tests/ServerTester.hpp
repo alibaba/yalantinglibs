@@ -17,6 +17,7 @@
 #define CORO_RPC_SERVERTESTER_HPP
 #include <async_simple/coro/Lazy.h>
 
+#include <chrono>
 #include <coro_rpc/coro_rpc_client.hpp>
 #include <exception>
 #include <future>
@@ -146,12 +147,28 @@ struct ServerTester : TesterConfig {
       }
 #endif
       g_action = action;
-
+      auto start = std::chrono::steady_clock::now();
       if (sync_client) {
         ec = client->sync_connect("127.0.0.1", port_);
       }
       else {
         ec = syncAwait(client->connect("127.0.0.1", port_));
+      }
+      auto end = std::chrono::steady_clock::now();
+      size_t timeout_mill =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              conn_timeout_duration)
+              .count();
+      if (timeout_mill > 0) {
+        size_t interval =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+                .count();
+
+        if (interval >= timeout_mill) {
+          ELOG_INFO << client->get_client_id()
+                    << " rpc request timeout, will retry, retry times " << i;
+          continue;
+        }
       }
 
       if (ec == err_ok) {
