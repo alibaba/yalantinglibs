@@ -379,7 +379,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (quit_callback_) {
       quit_callback_(conn_id_);
     }
-    has_closed_ = true;
   }
 
   void reset_timer() {
@@ -411,6 +410,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     socket_.close(ignored_ec);
+#ifdef UNIT_TEST_INJECT
+    ELOGV(INFO, "close client_id %d conn_id %d", client_id_, conn_id_);
+#endif
     has_closed_ = true;
   }
 
