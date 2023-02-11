@@ -25,6 +25,9 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#if defined(_WIN32)
+#include <stacktrace>
+#endif
 
 #include "asio/buffer.hpp"
 #include "asio_util/asio_coro_util.hpp"
@@ -411,7 +414,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     socket_.close(ignored_ec);
 #ifdef UNIT_TEST_INJECT
+#if defined(_WIN32)
+    auto trace = std::stacktrace::current();
+    ELOGV(INFO, "close client_id %d conn_id %d stack_trace: %s", client_id_,
+          conn_id_, std::to_string(trace));
+#else
     ELOGV(INFO, "close client_id %d conn_id %d", client_id_, conn_id_);
+#endif
 #endif
     has_closed_ = true;
   }

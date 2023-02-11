@@ -1,6 +1,10 @@
 # Compile Standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    add_compile_options(/std:c++latest)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
 message(STATUS "CXX Standard: ${CMAKE_CXX_STANDARD}")
 
 # Build Type

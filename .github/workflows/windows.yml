@@ -24,7 +24,7 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@v3
 
       - name: Enable Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1.12.0
+        uses: ilammy/msvc-dev-cmd@v1.13.0
         with:
           arch: ${{ matrix.arch }}
 
