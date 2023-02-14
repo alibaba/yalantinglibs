@@ -86,10 +86,12 @@ class logger {
     char buf[32];
     size_t len = get_time_str(buf, record.get_time_point());
 
+#ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
     char arr[1024];
     std::pmr::monotonic_buffer_resource resource(arr, 1024);
     std::pmr::string str{&resource};
+#endif
 #else
     std::string str;
 #endif
