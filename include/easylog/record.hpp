@@ -154,10 +154,12 @@ class record_t {
   void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
 
-#if __has_include(<memory_resource>) && __cpp_lib_memory_resource>=201603L
+#ifdef YLT_ENABLE_PMR
+#if __has_include(<memory_resource>)
     char arr[1024];
     std::pmr::monotonic_buffer_resource resource(arr, 1024);
     std::pmr::string buf{&resource};
+#endif
 #else
     std::string buf;
 #endif
@@ -195,10 +197,12 @@ class record_t {
   char buf_[64] = {};
   size_t buf_len_ = 0;
 
-#if __has_include(<memory_resource>) && __cpp_lib_memory_resource>=201603L
+#ifdef YLT_ENABLE_PMR
+#if __has_include(<memory_resource>)
   char arr_[1024];
   std::pmr::monotonic_buffer_resource resource_;
   std::pmr::string ss_{&resource_};
+#endif
 #else
   std::string ss_;
 #endif
