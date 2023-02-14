@@ -30,6 +30,8 @@ std::string hello_timeout() {
   return "hello";
 }
 
+void function_not_registered() {}
+
 std::string client_hello() { return "client hello"; }
 
 std::string client_hello_not_reg() { return "client hello"; }
