@@ -30,4 +30,4 @@ struct struct_pack_protocol {
     return struct_pack::serialize<std::string>(std::monostate{});
   }
 };
-}  // namespace coro_rpc::config
+}  // namespace coro_rpc::protocol

@@ -62,7 +62,7 @@ router::route_coro(
         ELOGV(INFO, "route coro function name %s", it->second.data());
       }
 #endif
-      auto res = co_await(*handler)(data, std::move(conn), protocols);
+      auto res = co_await (*handler)(data, std::move(conn), protocols);
       if (res.has_value()) [[likely]] {
         co_return make_pair(std::errc{}, std::move(res.value()));
       }
