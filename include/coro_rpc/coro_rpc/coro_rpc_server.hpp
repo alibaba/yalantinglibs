@@ -312,13 +312,6 @@ class coro_rpc_server {
    * false.
    */
 
-  template <auto func>
-  bool remove_handler() {
-    return router_.template remove_handler<func>();
-  }
-
-  void clear_handlers() { router_.clear_handlers(); }
-
  private:
   std::errc listen() {
     ELOGV(INFO, "begin to listen");
