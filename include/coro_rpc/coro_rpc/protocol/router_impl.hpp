@@ -244,7 +244,6 @@ inline void router::regist_one_handler() {
   id2name_.emplace(id, name);
 }
 
-template <typename rpc_protocol>
 template <auto first, auto... func>
 inline void router::regist_handler(class_type_t<decltype(first)> *self) {
   regist_one_handler<first>(self);
@@ -257,4 +256,4 @@ inline void router::regist_handler() {
   (regist_one_handler<func>(), ...);
 }
 
-}  // namespace coro_rpc::internal
+}  // namespace coro_rpc::protocol
