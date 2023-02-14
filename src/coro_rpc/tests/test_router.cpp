@@ -40,7 +40,9 @@
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
 
-coro_rpc::internal::router<coro_rpc::config::coro_rpc_default_config> router;
+coro_rpc::internal::router<
+    coro_rpc::config::coro_rpc_default_config::rpc_protocol>
+    router;
 
 template <typename T>
 struct rpc_return_type {
@@ -132,7 +134,7 @@ auto test_route(auto conn, Args &&...args) {
   return router.route(
       id, handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      conn);
+      conn, std::variant<coro_rpc::config::struct_pack_protocol>{});
 }
 
 template <auto func, typename... Args>
@@ -192,7 +194,7 @@ TEST_CASE("testing coro_handler") {
   async_simple::coro::syncAwait(router.route_coro(
       id, handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      coro_conn));
+      coro_conn, std::variant<coro_rpc::config::struct_pack_protocol>{}));
 }
 
 TEST_CASE("testing not registered func") {

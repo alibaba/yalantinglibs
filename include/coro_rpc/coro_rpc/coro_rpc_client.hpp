@@ -509,17 +509,16 @@ class coro_rpc_client {
   }
   /*
    * buffer layout
-   * ┌────────────────┬────────────────┬────────────────┐
-   * │req_header      │func_id         │args            │
-   * ├────────────────┼────────────────┼────────────────┤
-   * │REQ_HEADER_LEN  │FUNCTION_ID_LEN │variable length │
-   * └────────────────┴────────────────┴────────────────┘
+   * ┌────────────────┬────────────────┐
+   * │req_header      │args            │
+   * ├────────────────┼────────────────┤
+   * │REQ_HEADER_LEN  │variable length │
+   * └────────────────┴────────────────┘
    */
   template <auto func, typename... Args>
   std::vector<std::byte> prepare_buffer(Args &&...args) {
     std::vector<std::byte> buffer;
-    constexpr auto id = func_id<func>();
-    std::size_t offset = REQ_HEAD_LEN + FUNCTION_ID_LEN;
+    std::size_t offset = REQ_HEAD_LEN;
     if constexpr (sizeof...(Args) > 0) {
       using arg_types = function_parameters_t<decltype(func)>;
       pack_to<arg_types>(buffer, offset, std::forward<Args>(args)...);
@@ -527,10 +526,10 @@ class coro_rpc_client {
     else {
       buffer.resize(offset);
     }
-    std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
 
     auto &header = *(req_header *)buffer.data();
     header.magic = magic_number;
+    header.function_id = func_id<func>();
 #ifdef UNIT_TEST_INJECT
     header.seq_num = client_id_;
     if (g_action == inject_action::client_send_bad_magic_num) {

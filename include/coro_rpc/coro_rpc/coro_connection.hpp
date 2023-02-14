@@ -86,9 +86,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 #endif
 
-  template <typename server_config>
+  template <typename rpc_protocol>
   async_simple::coro::Lazy<void> start(
-      internal::router<server_config> &router) noexcept {
+      internal::router<rpc_protocol> &router) noexcept {
 #ifdef ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
@@ -114,9 +114,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 #endif
   }
-  template <typename server_config, typename Socket>
+  template <typename rpc_protocol, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
-      internal::router<server_config> &router, Socket &socket) noexcept {
+      internal::router<rpc_protocol> &router, Socket &socket) noexcept {
     req_header req_head;
     while (true) {
       reset_timer();
@@ -154,8 +154,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         close();
         co_return;
       }
-      if (req_head.length < 4) [[unlikely]] {
-        ELOGV(ERROR, "bad length: %d, conn_id %d", req_head.length, conn_id_);
+
+      auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
+
+      if (!serialize_proto.has_value()) [[unlikely]] {
+        ELOGV(ERROR, "bad serialize protocol type, conn_id %d", conn_id_);
         close();
         co_return;
       }
@@ -176,19 +179,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       std::pair<std::errc, std::string> pair{};
 
-      uint32_t function_id = *(uint32_t *)body_.data();
+      auto payload = std::string_view{body_.data(), ret.second};
 
-      auto payload = std::string_view{body_.data() + 4, ret.second - 4};
-
-      auto handler = router.get_handler(function_id);
+      auto handler = router.get_handler(req_head.function_id);
       auto self = shared_from_this();
       if (!handler) {
-        auto coro_handler = router.get_coro_handler(function_id);
-        pair = co_await router.route_coro(function_id, coro_handler, payload,
-                                          std::move(self));
+        auto coro_handler = router.get_coro_handler(req_head.function_id);
+        pair = co_await router.route_coro(req_head.function_id, coro_handler,
+                                          payload, std::move(self),
+                                          serialize_proto.value());
       }
       else {
-        pair = router.route(function_id, handler, payload, std::move(self));
+        pair = router.route(req_head.function_id, handler, payload,
+                            std::move(self), serialize_proto.value());
       }
 
       auto &[err, body_buf] = pair;

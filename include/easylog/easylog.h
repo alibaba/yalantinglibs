@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 #pragma once
+#include <functional>
+#include <string_view>
+#include <utility>
+#include <vector>
+
 #include "appender.hpp"
 
 namespace easylog {
@@ -29,10 +34,6 @@ class logger {
   void operator+=(const record_t &record) { write(record); }
 
   void write(const record_t &record) {
-    if (record.get_severity() < min_severity_) {
-      return;
-    }
-
     append_format(record);
 
     if (record.get_severity() == Severity::CRITICAL) {
@@ -59,6 +60,10 @@ class logger {
 
   bool check_severity(Severity severity) { return severity >= min_severity_; }
 
+  void add_appender(std::function<void(std::string_view)> fn) {
+    appenders_.emplace_back(std::move(fn));
+  }
+
  private:
   logger() = default;
   logger(const logger &) = default;
@@ -81,10 +86,12 @@ class logger {
     char buf[32];
     size_t len = get_time_str(buf, record.get_time_point());
 
+#ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
     char arr[1024];
     std::pmr::monotonic_buffer_resource resource(arr, 1024);
     std::pmr::string str{&resource};
+#endif
 #else
     std::string str;
 #endif
@@ -105,11 +112,16 @@ class logger {
       std::cout << str;
       std::cout << std::flush;
     }
+
+    for (auto &fn : appenders_) {
+      fn(std::string_view(str));
+    }
   }
 
   Severity min_severity_;
   bool enable_console_ = true;
   appender *appender_ = nullptr;
+  std::vector<std::function<void(std::string_view)>> appenders_;
 };
 
 template <size_t Id = 0>
@@ -123,6 +135,11 @@ inline void init_log(Severity min_severity, const std::string &filename = "",
 template <size_t Id = 0>
 inline void flush() {
   logger<Id>::instance().flush();
+}
+
+template <size_t Id = 0>
+inline void add_appender(std::function<void(std::string_view)> fn) {
+  logger<Id>::instance().add_appender(std::move(fn));
 }
 }  // namespace easylog
 

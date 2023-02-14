@@ -122,7 +122,6 @@ TEST_CASE("testing client") {
     };
     server.regist_handler<hello_timeout>();
     syncAwait(f());
-    server.remove_handler<hello_timeout>();
   }
 
   SUBCASE("call rpc success") {
@@ -137,7 +136,6 @@ TEST_CASE("testing client") {
     };
     server.regist_handler<hello>();
     syncAwait(f());
-    server.remove_handler<hello>();
   }
 
   SUBCASE("call with large buffer") {
@@ -152,7 +150,6 @@ TEST_CASE("testing client") {
     };
     server.regist_handler<large_arg_fun>();
     syncAwait(f());
-    server.remove_handler<large_arg_fun>();
   }
 
   server.stop();
@@ -211,8 +208,6 @@ TEST_CASE("testing client with inject server") {
     };
     syncAwait(f());
   }
-
-  server.remove_handler<hello>();
 
   server.stop();
   io_context.stop();
@@ -386,9 +381,6 @@ TEST_CASE("testing client with eof") {
   g_action = inject_action::client_close_socket_after_send_partial_header;
   ret = client.sync_call<hello>();
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
-
-  server.remove_handler<hello>();
-  server.remove_handler<client_hello>();
 }
 
 TEST_CASE("testing client with shutdown") {
@@ -414,8 +406,6 @@ TEST_CASE("testing client with shutdown") {
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
 
   g_action = {};
-  server.remove_handler<hello>();
-  server.remove_handler<client_hello>();
 }
 TEST_CASE("testing client timeout") {
   // SUBCASE("connect, 0ms timeout") {
@@ -508,9 +498,6 @@ TEST_CASE("testing client call timeout") {
     auto ret = client.call_for<hello_timeout>(10ms);
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-
-    server.remove_handler<hello_timeout>();
-    server.remove_handler<hi>();
   }
   g_action = {};
 }
@@ -576,7 +563,6 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
 //    auto ret = client.call_for<hello>(50ms);
 //    auto val = syncAwait(ret);
 //    CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-//    remove_handler<hello>();
 //    thd.join();
 //    p.get_future().wait();
 //  }

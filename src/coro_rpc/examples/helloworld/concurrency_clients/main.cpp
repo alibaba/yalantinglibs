@@ -33,22 +33,25 @@ std::atomic<uint64_t> qps = 0;
  */
 
 Lazy<void> call_echo(asio::io_context& ioc) {
-  coro_rpc_client client(ioc);
-
-  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
-  assert(ec == err_ok);
   while (true) {
-    auto ret = co_await client.call<echo>("Hello world!"sv);
-    if (!ret) [[unlikely]] {
-      std::cout << "coro_rpc err: " << ret.error().msg << std::endl;
-      co_return;
+    coro_rpc_client client(ioc);
+    for (auto ec = co_await client.connect("127.0.0.1", "8801");
+         ec != err_ok;) {
+      std::cout << "connect failed." << std::endl;
     }
+    while (true) {
+      auto ret = co_await client.call<echo>("Hello world!"sv);
+      if (!ret) [[unlikely]] {
+        std::cout << "coro_rpc err: " << ret.error().msg << std::endl;
+        break;
+      }
 
-    if (ret.value() != "Hello world!"sv) {
-      std::cout << "err echo resp: " << ret.value() << std::endl;
-      co_return;
+      if (ret.value() != "Hello world!"sv) {
+        std::cout << "err echo resp: " << ret.value() << std::endl;
+        break;
+      }
+      ++qps;
     }
-    ++qps;
   }
 }
 

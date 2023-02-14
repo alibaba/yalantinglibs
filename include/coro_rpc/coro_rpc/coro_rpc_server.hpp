@@ -80,6 +80,14 @@ class coro_rpc_server {
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
+  coro_rpc_server(const server_config &config = server_config{})
+      : pool_(config.thread_num),
+        acceptor_(pool_.get_io_context()),
+        port_(config.port),
+        executor_(pool_.get_io_context()),
+        conn_timeout_duration_(config.conn_timeout_duration),
+        flag_{stat::init} {}
+
   ~coro_rpc_server() {
     ELOGV(INFO, "coro_rpc_server will quit");
     stop();
@@ -195,7 +203,7 @@ class coro_rpc_server {
     close_acceptor();
     if (flag_ == stat::started) {
       {
-        std::unique_lock lock(mtx_);
+        std::unique_lock lock(conns_mtx_);
         for (auto &conn : conns_) {
           if (!conn.second->has_closed()) {
             conn.second->async_close();
@@ -304,13 +312,6 @@ class coro_rpc_server {
    * false.
    */
 
-  template <auto func>
-  bool remove_handler() {
-    return router_.template remove_handler<func>();
-  }
-
-  void clear_handlers() { router_.clear_handlers(); }
-
  private:
   std::errc listen() {
     ELOGV(INFO, "begin to listen");
@@ -342,7 +343,7 @@ class coro_rpc_server {
     }
     port_ = end_point.port();
 
-    ELOGV(INFO, "isten port %d successfully", port_.load());
+    ELOGV(INFO, "listen port %d successfully", port_.load());
     return {};
   }
 
@@ -375,13 +376,13 @@ class coro_rpc_server {
           io_context, std::move(socket), conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t &id) {
-            std::unique_lock lock(mtx_);
+            std::unique_lock lock(conns_mtx_);
             conns_.erase(id);
           },
           conn_id);
 
       {
-        std::unique_lock lock(mtx_);
+        std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
 
@@ -407,11 +408,10 @@ class coro_rpc_server {
   }
 
   asio_util::io_context_pool pool_;
-  asio::io_context acceptor_ioc_;
   asio::ip::tcp::acceptor acceptor_;
-  std::atomic<uint16_t> port_;
+
+  asio::io_context acceptor_ioc_;
   asio_util::AsioExecutor executor_;
-  std::chrono::steady_clock::duration conn_timeout_duration_;
 
   std::thread thd_;
   std::thread acceptor_thd_;
@@ -422,9 +422,12 @@ class coro_rpc_server {
 
   uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
-  std::mutex mtx_;
+  std::mutex conns_mtx_;
 
-  internal::router<server_config> router_;
+  internal::router<typename server_config::rpc_protocol> router_;
+
+  std::atomic<uint16_t> port_;
+  std::chrono::steady_clock::duration conn_timeout_duration_;
 
 #ifdef ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};
