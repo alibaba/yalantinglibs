@@ -17,4 +17,4 @@
 
 #include <coro_rpc/coro_rpc/connection.hpp>
 #include <coro_rpc/coro_rpc/coro_connection.hpp>
-#include <coro_rpc/coro_rpc/router_impl.hpp>
+#include <coro_rpc/coro_rpc/protocol/router_impl.hpp>

@@ -22,14 +22,13 @@
 
 #include "connection.hpp"
 #include "coro_connection.hpp"
-#include "rpc_protocol.h"
 #include "util/type_traits.h"
 
 namespace coro_rpc::internal {
 
 template <typename rpc_protocol>
 inline auto pack_result(
-    std::errc err, std::string_view err_msg,
+    const typename rpc_protocol::rpc_error_code &err, std::string_view err_msg,
     const typename rpc_protocol::supported_serialize_protocols
         &serialize_protocol) {
   return std::visit(
@@ -40,20 +39,6 @@ inline auto pack_result(
       serialize_protocol);
 }
 
-template <typename serialize_proto>
-inline auto pack_result(std::errc err, std::string_view err_msg) {
-  return std::make_pair(err, serialize_proto::serialize(err_msg));
-}
-
-template <typename serialize_proto>
-inline auto pack_result(const auto &ret) {
-  return std::make_pair(std::errc{}, serialize_proto::serialize(ret));
-}
-
-template <typename serialize_proto>
-inline auto pack_result(void) {
-  return std::make_pair(std::errc{}, serialize_proto::serialize());
-}
 
 template <bool is_conn, typename First>
 auto get_return_type() {
@@ -70,10 +55,10 @@ auto get_return_type() {
     return First{};
   }
 }
-
+using rpc_conn = std::shared_ptr<coro_connection>;
 template <typename serialize_proto, auto func, typename Self = void>
-inline auto execute(std::string_view data, rpc_conn conn,
-                    Self *self = nullptr) {
+inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
+                                          Self *self = nullptr) {
   using T = decltype(func);
   using param_type = function_parameters_t<T>;
   using return_type = function_return_type_t<T>;
@@ -103,8 +88,7 @@ inline auto execute(std::string_view data, rpc_conn conn,
     }
 
     if (!is_ok) [[unlikely]] {
-      return pack_result<serialize_proto>(std::errc::invalid_argument,
-                                          "invalid arguments");
+      return std::nullopt;
     }
 
     if constexpr (std::is_void_v<return_type>) {
@@ -142,12 +126,12 @@ inline auto execute(std::string_view data, rpc_conn conn,
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        return pack_result<serialize_proto>(std::apply(func, args));
+        return serialize_proto::serialize(std::apply(func, args));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
-        return pack_result<serialize_proto>(
+        return serialize_proto::serialize(
             std::apply(func, std::tuple_cat(std::forward_as_tuple(o), args)));
       }
     }
@@ -163,18 +147,18 @@ inline auto execute(std::string_view data, rpc_conn conn,
     }
     else {
       if constexpr (std::is_void_v<Self>) {
-        return pack_result<serialize_proto>(func());
+        return serialize_proto::serialize(func());
       }
       else {
-        return pack_result<serialize_proto>((self->*func)());
+        return serialize_proto::serialize((self->*func)());
       }
     }
   }
-  return pack_result<serialize_proto>();
+  return serialize_proto::serialize();
 }
 // clang-format off
 template <typename serialize_proto, auto func, typename Self = void>
-inline async_simple::coro::Lazy<std::pair<std::errc, std::string>>
+inline async_simple::coro::Lazy<std::optional<std::string>>
 execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
   using T = decltype(func);
   using param_type = function_parameters_t<T>;
@@ -241,12 +225,12 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        co_return pack_result<serialize_proto>(co_await std::apply(func, args));
+        co_return serialize_proto::serialize(co_await std::apply(func, args));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
-        co_return pack_result<serialize_proto>(co_await std::apply(
+        co_return serialize_proto::serialize(co_await std::apply(
             func, std::tuple_cat(std::forward_as_tuple(o), args)));
       }
     }
@@ -262,13 +246,13 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
     }
     else {
       if constexpr (std::is_void_v<Self>) {
-        co_return pack_result<serialize_proto>(co_await func());
+        co_return serialize_proto::serialize(co_await func());
       }
       else {
-        co_return pack_result<serialize_proto>(co_await (self->*func)());
+        co_return serialize_proto::serialize(co_await (self->*func)());
       }
     }
   }
-  co_return pack_result<serialize_proto>();
+  co_return serialize_proto::serialize();
 }
 }  // namespace coro_rpc::internal

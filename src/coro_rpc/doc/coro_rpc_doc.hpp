@@ -176,7 +176,7 @@ struct rpc_error {
  *
  * Lazy<void> show_rpc_call(coro_rpc_client &client) {
  *   auto ec = co_await client.connect("127.0.0.1", "8801");
- *   assert(ec == err_ok);
+ *   assert(ec == std::errc{});
  *   auto result = co_await client.call<hello_coro_rpc>();
  *   if (!result) {
  *     std::cout << "err: " << result.error().msg << std::endl;

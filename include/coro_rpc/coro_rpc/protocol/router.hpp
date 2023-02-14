@@ -24,23 +24,24 @@
 #include <variant>
 #include <vector>
 
+#include "coro_rpc_protocol.hpp"
+
 namespace coro_rpc {
 
 class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
-namespace internal {
+namespace protocol {
 
-template <typename rpc_protocol>
 class router {
+  using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
   std::unordered_map<
-      uint32_t,
-      std::function<std::pair<std::errc, std::string>(
-          std::string_view, rpc_conn,
-          typename rpc_protocol::supported_serialize_protocols protocols)>>
+      uint32_t, std::function<std::optional<std::string>(
+                    std::string_view, rpc_conn,
+                    rpc_protocol::supported_serialize_protocols protocols)>>
       handlers_;
   std::unordered_map<
       uint32_t,
-      std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
+      std::function<async_simple::coro::Lazy<std::optional<std::string>>(
           std::string_view, rpc_conn,
           typename rpc_protocol::supported_serialize_protocols protocols)>>
       coro_handlers_;
@@ -53,22 +54,24 @@ class router {
   void regist_one_handler();
 
  public:
-  std::function<std::pair<std::errc, std::string>(
+  std::function<std::optional<std::string>(
       std::string_view, rpc_conn,
       typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_handler(uint32_t id);
 
-  std::function<async_simple::coro::Lazy<std::pair<std::errc, std::string>>(
+  std::function<async_simple::coro::Lazy<std::optional<std::string>>(
       std::string_view, rpc_conn,
       typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_coro_handler(uint32_t id);
 
   async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
-      uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+      rpc_protocol::req_header &header, auto handler, std::string_view data,
+      rpc_conn conn,
       typename rpc_protocol::supported_serialize_protocols protocols);
 
   std::pair<std::errc, std::string> route(
-      uint32_t id, auto handler, std::string_view data, rpc_conn conn,
+      rpc_protocol::req_header &header, auto handler, std::string_view data,
+      rpc_conn conn,
       typename rpc_protocol::supported_serialize_protocols protocols);
 
   /*!
@@ -143,5 +146,5 @@ class router {
   void clear_handlers();
 };
 
-}  // namespace internal
+}  // namespace protocol
 }  // namespace coro_rpc

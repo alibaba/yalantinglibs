@@ -24,7 +24,6 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "easylog/easylog.h"
-#include "rpc_protocol.h"
 #include "util/type_traits.h"
 
 namespace coro_rpc {
@@ -65,11 +64,10 @@ template <typename return_msg_type, connection_t conn_t = coro_connection>
 class connection {
   std::shared_ptr<conn_t> conn_;
   std::shared_ptr<std::atomic<bool>> has_response_;
-
   using serializer_type_t =
       typename internal::serializer_type<return_msg_type>::type;
-
   serializer_type_t serializer;
+  std::string req_header_buf_;
 
  public:
   /*!

@@ -23,7 +23,6 @@
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
@@ -296,6 +295,7 @@ TEST_CASE("test server accept error") {
 }
 
 TEST_CASE("test server write queue") {
+  using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
   ELOGV(INFO, "run server write queue");
   g_action = {};
   coro_rpc_server server(2, 8810);
@@ -305,10 +305,11 @@ TEST_CASE("test server write queue") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   std::string buffer;
-  buffer.reserve(REQ_HEAD_LEN + struct_pack::get_needed_size(std::monostate{}));
-  buffer.resize(REQ_HEAD_LEN);
-  auto &header = *(req_header *)buffer.data();
-  header.magic = magic_number;
+  buffer.reserve(coro_rpc_protocol::REQ_HEAD_LEN +
+                 struct_pack::get_needed_size(std::monostate{}));
+  buffer.resize(coro_rpc_protocol::REQ_HEAD_LEN);
+  auto &header = *(coro_rpc_protocol::req_header *)buffer.data();
+  header.magic = coro_rpc_protocol::magic_number;
   header.function_id =
       func_id<coro_fun_with_delay_return_void_cost_long_time>();
   header.seq_num = g_client_id++;
@@ -331,13 +332,13 @@ TEST_CASE("test server write queue") {
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 1; ++i) {
-    char buffer2[RESP_HEAD_LEN];
+    char buffer2[coro_rpc_protocol::RESP_HEAD_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(buffer2, RESP_HEAD_LEN));
-    auto resp_head = *(resp_header *)buffer2;
+    read(socket, asio::buffer(buffer2, coro_rpc_protocol::RESP_HEAD_LEN));
+    auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

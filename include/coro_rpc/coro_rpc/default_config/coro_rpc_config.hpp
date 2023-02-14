@@ -19,7 +19,7 @@
 #include <chrono>
 #include <thread>
 
-#include "coro_rpc_protocol.hpp"
+#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 
 namespace coro_rpc::config {
 
@@ -31,7 +31,7 @@ struct coro_rpc_config_base {
 };
 
 struct coro_rpc_default_config : public coro_rpc_config_base {
-  using rpc_protocol = coro_rpc_protocol;
+  using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 };
 
 }  // namespace coro_rpc::config
