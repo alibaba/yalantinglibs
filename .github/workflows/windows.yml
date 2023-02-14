@@ -14,7 +14,7 @@ jobs:
       matrix:
         mode: [ Debug ] #[ Release, Debug ]
         arch: [ amd64, x86 ] #[ amd64,x86 ]
-        toolset: [ 17.4.4 ]
+        toolset: [ 19.4.4 ]
         ssl: [ OFF ] #[ ON, OFF ]
 
     steps:
