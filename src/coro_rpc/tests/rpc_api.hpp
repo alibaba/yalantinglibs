@@ -24,6 +24,7 @@ std::string hello_timeout();
 std::string client_hello();
 std::string client_hello_not_reg();
 std::string large_arg_fun(std::string data);
+void function_not_registered();
 int long_run_func(int val);
 std::string async_hi();
 void coro_fun_with_delay_return_void(

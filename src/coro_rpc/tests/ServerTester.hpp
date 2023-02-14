@@ -107,7 +107,6 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run test: heartbeat=%d, ssl=%d", enable_heartbeat, use_ssl);
     register_all_function();
     test_all();
-    remove_all_rpc_function();
   }
   virtual void test_all() {
     test_connect_timeout();
