@@ -244,28 +244,7 @@ inline void router::regist_one_handler() {
   id2name_.emplace(id, name);
 }
 
-template <auto func>
-inline bool router::remove_handler() {
-  constexpr auto name = get_func_name<func>();
-  constexpr auto id =
-      struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
-
-  id2name_.erase(id);
-
-  auto it = handlers_.find(id);
-  if (it != handlers_.end()) {
-    return handlers_.erase(id);
-  }
-  else {
-    auto coro_it = coro_handlers_.find(id);
-    if (coro_it != coro_handlers_.end()) {
-      return coro_handlers_.erase(id);
-    }
-
-    return false;
-  }
-}
-
+template <typename rpc_protocol>
 template <auto first, auto... func>
 inline void router::regist_handler(class_type_t<decltype(first)> *self) {
   regist_one_handler<first>(self);
@@ -278,10 +257,4 @@ inline void router::regist_handler() {
   (regist_one_handler<func>(), ...);
 }
 
-inline void router::clear_handlers() {
-  handlers_.clear();
-  coro_handlers_.clear();
-  id2name_.clear();
-}
-
-}  // namespace coro_rpc::protocol
+}  // namespace coro_rpc::internal

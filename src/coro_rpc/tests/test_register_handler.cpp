@@ -55,8 +55,6 @@ using namespace coro_rpc;
 //       CHECK(WEXITSTATUS(status) == 1);
 //     }
 //   }
-//   remove_handler<hi>();
-//   remove_handler<&HelloService::hello>();
 // }
 
 // TEST_CASE("register with nullptr") {

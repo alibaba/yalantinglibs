@@ -117,37 +117,22 @@ struct CoroServerTester : ServerTester {
     server.regist_handler<get_coro_value>();
     server.regist_handler<&CoroServerTester::get_value>(this);
   }
-  void remove_all_rpc_function() override {
-    ELOGV(INFO, "run %s", __func__);
-    test_server_start_again();
-    ServerTester::remove_all_rpc_function();
-    server.remove_handler<coro_fun_with_delay_return_void>();
-    server.remove_handler<coro_fun_with_delay_return_void_twice>();
-    server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    server.remove_handler<coro_fun_with_delay_return_string>();
-    server.remove_handler<coro_fun_with_delay_return_string_twice>();
-    server.remove_handler<coro_func>();
-    server.remove_handler<&HelloService::coro_func>();
-    server.remove_handler<get_coro_value>();
-    server.remove_handler<&CoroServerTester::get_value>();
-  }
 
   void test_function_not_registered() {
     g_action = {};
-    server.remove_handler<async_hi>();
     auto client = create_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    auto ret = call<async_hi>(client);
+    auto ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     REQUIRE(client->has_closed() == true);
-    ret = call<async_hi>(client);
+    ret = call<function_not_registered>(client);
     CHECK(client->has_closed() == true);
-    ret = call<async_hi>(client);
+    ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
     CHECK(client->has_closed() == true);
-    server.regist_handler<async_hi>();
+    server.regist_handler<function_not_registered>();
   }
 
   void test_server_start_again() {
@@ -290,7 +275,6 @@ TEST_CASE("test server accept error") {
   ret = syncAwait(client.call<hi>());
   CHECK(!ret);
   REQUIRE(client.has_closed() == true);
-  server.remove_handler<hi>();
   g_action = {};
 }
 
@@ -299,7 +283,6 @@ TEST_CASE("test server write queue") {
   ELOGV(INFO, "run server write queue");
   g_action = {};
   coro_rpc_server server(2, 8810);
-  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
   server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
   server.async_start().start([](auto &&) {
   });
@@ -358,7 +341,6 @@ TEST_CASE("test server write queue") {
   io_context.stop();
   thd.join();
   server.stop();
-  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
 }
 
 TEST_CASE("testing coro rpc write error") {
@@ -382,5 +364,4 @@ TEST_CASE("testing coro rpc write error") {
       std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
-  server.remove_handler<hi>();
 }

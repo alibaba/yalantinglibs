@@ -132,18 +132,6 @@ class router {
 
   template <auto first, auto... func>
   void regist_handler();
-
-  /*!
-   * Remove registered RPC function
-   * @tparam func the address of RPC function. e.g. `&foo::bar`, `foobar`
-   * @return true, if the function existed and removed success. otherwise,
-   * false.
-   */
-
-  template <auto func>
-  bool remove_handler();
-
-  void clear_handlers();
 };
 
 }  // namespace protocol
