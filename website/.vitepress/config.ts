@@ -76,7 +76,8 @@ function sidebarGuide() {
       text: 'how to use?',
       collapsible: true,
       items: [
-        {text: 'Use as Git Submodule', link: '/guide/how-to-use-as-git-submodule'}
+        {text: 'Use as Git Submodule', link: '/guide/how-to-use-as-git-submodule'},
+        {text: 'Use by CMake find_package', link: '/guide/how-to-use-by-cmake-find_package'}
       ]
     },
     {
