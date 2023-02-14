@@ -58,7 +58,7 @@ router::route_coro(
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
-      if (auto it = id2name_.find(id); it != id2name_.end()) {
+      if (auto it = id2name_.find(header.function_id); it != id2name_.end()) {
         ELOGV(INFO, "route coro function name %s", it->second.data());
       }
 #endif
@@ -100,7 +100,7 @@ inline std::pair<std::errc, std::string> router::route(
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
-      if (auto it = id2name_.find(id); it != id2name_.end()) {
+      if (auto it = id2name_.find(header.function_id); it != id2name_.end()) {
         ELOGV(INFO, "route function name %s", it->second.data());
       }
 #endif
