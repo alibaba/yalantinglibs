@@ -137,9 +137,9 @@ auto test_route(auto conn, Args &&...args) {
   header.function_id = id;
 
   return router.route(
-      header, handler,
+      handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      conn, std::variant<coro_rpc::protocol::struct_pack_protocol>{});
+      conn, header, std::variant<coro_rpc::protocol::struct_pack_protocol>{});
 }
 
 template <auto func, typename... Args>
@@ -200,9 +200,10 @@ TEST_CASE("testing coro_handler") {
   header.function_id = id;
 
   async_simple::coro::syncAwait(router.route_coro(
-      header, handler,
+      handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      coro_conn, std::variant<coro_rpc::protocol::struct_pack_protocol>{}));
+      coro_conn, header,
+      std::variant<coro_rpc::protocol::struct_pack_protocol>{}));
 }
 
 TEST_CASE("testing not registered func") {

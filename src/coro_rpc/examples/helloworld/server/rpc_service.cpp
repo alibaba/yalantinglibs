@@ -44,10 +44,11 @@ async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
   co_return std::string{sv};
 }
 
-void hello_with_delay(connection</*response type:*/ std::string> conn) {
+void hello_with_delay(connection</*response type:*/ std::string> conn,
+                      std::string hello) {
   ELOGV(INFO, "call HelloServer hello_with_delay");
-  std::thread([conn]() mutable {
-    conn.response_msg("hello_with_delay");
+  std::thread([conn, hello = std::move(hello)]() mutable {
+    conn.response_msg(hello);
   }).detach();
 }
 
@@ -57,9 +58,10 @@ std::string HelloService::hello() {
 }
 
 void HelloService::hello_with_delay(
-    coro_rpc::connection</*response type:*/ std::string> conn) {
+    coro_rpc::connection</*response type:*/ std::string> conn,
+    std::string hello) {
   ELOGV(INFO, "call HelloServer::hello_with_delay");
-  std::thread([conn]() mutable {
+  std::thread([conn, hello = std::move(hello)]() mutable {
     conn.response_msg("HelloService::hello_with_delay");
   }).detach();
   return;

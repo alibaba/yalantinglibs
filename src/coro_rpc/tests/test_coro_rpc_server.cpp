@@ -113,7 +113,14 @@ struct CoroServerTester : ServerTester {
     server.regist_handler<coro_fun_with_delay_return_string>();
     server.regist_handler<coro_fun_with_delay_return_string_twice>();
     server.regist_handler<coro_func>();
-    server.regist_handler<&HelloService::coro_func>(&hello_service_);
+    server.regist_handler<coro_func_return_void>();
+    server.regist_handler<coro_func_delay_return_int>();
+    server.regist_handler<coro_func_delay_return_void>();
+    server.regist_handler<&HelloService::coro_func,
+                          &HelloService::coro_func_return_void,
+                          &HelloService::coro_func_delay_return_void,
+                          &HelloService::coro_func_delay_return_int>(
+        &hello_service_);
     server.regist_handler<get_coro_value>();
     server.regist_handler<&CoroServerTester::get_value>(this);
   }
@@ -194,6 +201,29 @@ struct CoroServerTester : ServerTester {
 
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
+
+    auto ret4 = this->template call<coro_func_return_void>(client, 42);
+    CHECK(ret4.has_value());
+
+    auto ret5 =
+        this->template call<&HelloService::coro_func_return_void>(client, 42);
+    CHECK(ret5.has_value());
+
+    auto ret6 = this->template
+    call<&HelloService::coro_func_delay_return_void>(
+        client, 42);
+    CHECK(ret6.has_value());
+
+    auto ret7 = this->template
+    call<&HelloService::coro_func_delay_return_int>(
+        client, 42);
+    CHECK(ret7.value() == 42);
+
+    auto ret8 = this->template call<coro_func_delay_return_void>(client, 42);
+    CHECK(ret8.has_value());
+
+    auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
+    CHECK(ret9.value() == 42);
   }
   coro_rpc_server<> server;
   std::thread thd;

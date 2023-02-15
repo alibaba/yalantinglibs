@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <variant>
 
 #include "connection.hpp"
@@ -39,7 +40,6 @@ inline auto pack_result(
       serialize_protocol);
 }
 
-
 template <bool is_conn, typename First>
 auto get_return_type() {
   if constexpr (is_conn) {
@@ -55,10 +55,30 @@ auto get_return_type() {
     return First{};
   }
 }
+
+template <typename rpc_protocol, typename serialize_proto,
+          typename conn_return_type>
+struct connection_responser {
+  typename rpc_protocol::req_header req_head;
+  void operator()(rpc_conn &&conn, conn_return_type &&ret) {
+    conn->response_msg<rpc_protocol>(serialize_proto::serialize(ret), req_head);
+  }
+};
+
+template <typename rpc_protocol, typename serialize_proto>
+struct connection_responser<rpc_protocol, serialize_proto, void> {
+  typename rpc_protocol::req_header req_head;
+  void operator()(rpc_conn &&conn) {
+    conn->response_msg<rpc_protocol>(serialize_proto::serialize(), req_head);
+  }
+};
+
 using rpc_conn = std::shared_ptr<coro_connection>;
-template <typename serialize_proto, auto func, typename Self = void>
-inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
-                                          Self *self = nullptr) {
+template <typename rpc_protocol, typename serialize_proto, auto func,
+          typename Self = void>
+inline std::optional<std::string> execute(
+    std::string_view data, rpc_conn conn,
+    typename rpc_protocol::req_header &req_head, Self *self = nullptr) {
   using T = decltype(func);
   using param_type = function_parameters_t<T>;
   using return_type = function_return_type_t<T>;
@@ -73,7 +93,7 @@ inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_same_v<connection<conn_return_type, coro_connection>, First>;
+        std::is_same_v<connection<conn_return_type>, First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
@@ -95,11 +115,14 @@ inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
       if constexpr (std::is_void_v<Self>) {
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
-          std::apply(
-              func,
-              std::tuple_cat(std::forward_as_tuple(connection<conn_return_type>(
-                                 std::move(conn), serialize_proto::serialize)),
-                             args));
+          std::apply(func,
+                     std::tuple_cat(
+                         std::forward_as_tuple(connection<conn_return_type>(
+                             std::move(conn),
+                             connection_responser<rpc_protocol, serialize_proto,
+                                                  conn_return_type>{
+                                 std::move(req_head)})),
+                         args));
         }
         else {
           // call void func(args...)
@@ -110,12 +133,16 @@ inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
         auto &o = *self;
         if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
-          std::apply(func,
-                     std::tuple_cat(std::forward_as_tuple(
-                                        o, connection<conn_return_type>(
-                                               std::move(conn),
-                                               serialize_proto::serialize)),
-                                    args));
+          std::apply(
+              func,
+              std::tuple_cat(
+                  std::forward_as_tuple(
+                      o, connection<conn_return_type>(
+                             std::move(conn),
+                             connection_responser<rpc_protocol, serialize_proto,
+                                                  conn_return_type>{
+                                 std::move(req_head)})),
+                  args));
         }
         else {
           // call void o.func(args...)
@@ -156,10 +183,12 @@ inline std::optional<std::string> execute(std::string_view data, rpc_conn conn,
   }
   return serialize_proto::serialize();
 }
-// clang-format off
-template <typename serialize_proto, auto func, typename Self = void>
-inline async_simple::coro::Lazy<std::optional<std::string>>
-execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
+
+template <typename rpc_protocol, typename serialize_proto, auto func,
+          typename Self = void>
+inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
+    std::string_view data, rpc_conn conn,
+    typename rpc_protocol::req_header &req_head, Self *self = nullptr) {
   using T = decltype(func);
   using param_type = function_parameters_t<T>;
   using return_type =
@@ -175,15 +204,14 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_same_v<connection<conn_return_type, coro_connection>, First>;
-    auto args = get_args < has_coro_conn_v, param_type > ();
+        std::is_same_v<connection<conn_return_type>, First>;
+    auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
       if constexpr (size == 1) {
-        is_ok = serialize_proto::deserialize_to(
-            std::get<0>(args), data);
+        is_ok = serialize_proto::deserialize_to(std::get<0>(args), data);
       }
       else {
         is_ok = serialize_proto::deserialize_to(args, data);
@@ -196,7 +224,11 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
           // call void func(coro_conn, args...)
           co_await std::apply(
               func, std::tuple_cat(
-                        std::forward_as_tuple(connection<conn_return_type>(std::move(conn),serialize_proto::serialize)),
+                        std::forward_as_tuple(connection<conn_return_type>(
+                            std::move(conn),
+                            connection_responser<rpc_protocol, serialize_proto,
+                                                 conn_return_type>{
+                                std::move(req_head)})),
                         args));
         }
         else {
@@ -212,7 +244,11 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connection<conn_return_type>(std::move(conn),serialize_proto::serialize_proto::serialize)),
+                      o, connection<conn_return_type>(
+                             std::move(conn),
+                             connection_responser<rpc_protocol, serialize_proto,
+                                                  conn_return_type>{
+                                 std::move(req_head)})),
                   args));
         }
         else {
@@ -241,7 +277,7 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
         co_await func();
       }
       else {
-        co_await (self->*func)();
+        co_await(self->*func)();
       }
     }
     else {
@@ -249,7 +285,7 @@ execute_coro(std::string_view data, rpc_conn conn, Self *self = nullptr) {
         co_return serialize_proto::serialize(co_await func());
       }
       else {
-        co_return serialize_proto::serialize(co_await (self->*func)());
+        co_return serialize_proto::serialize(co_await(self->*func)());
       }
     }
   }

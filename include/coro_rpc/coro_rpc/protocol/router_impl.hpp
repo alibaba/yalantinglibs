@@ -32,7 +32,7 @@
 namespace coro_rpc::protocol {
 inline auto router::get_handler(uint32_t id)
     -> std::function<std::optional<std::string>(
-        std::string_view, rpc_conn,
+        std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
         typename rpc_protocol::supported_serialize_protocols protocols)> * {
   if (auto it = handlers_.find(id); it != handlers_.end()) {
     return &it->second;
@@ -42,7 +42,7 @@ inline auto router::get_handler(uint32_t id)
 
 inline auto router::get_coro_handler(uint32_t id)
     -> std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-        std::string_view, rpc_conn,
+        std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
         typename rpc_protocol::supported_serialize_protocols protocols)> * {
   if (auto it = coro_handlers_.find(id); it != coro_handlers_.end()) {
     return &it->second;
@@ -52,8 +52,8 @@ inline auto router::get_coro_handler(uint32_t id)
 
 inline async_simple::coro::Lazy<std::pair<std::errc, std::string>>
 router::route_coro(
-    rpc_protocol::req_header &header, auto handler, std::string_view data,
-    rpc_conn conn,
+    auto handler, std::string_view data, rpc_conn conn,
+    rpc_protocol::req_header &header,
     typename rpc_protocol::supported_serialize_protocols protocols) {
   if (handler) [[likely]] {
     try {
@@ -62,7 +62,7 @@ router::route_coro(
         ELOGV(INFO, "route coro function name %s", it->second.data());
       }
 #endif
-      auto res = co_await (*handler)(data, std::move(conn), protocols);
+      auto res = co_await(*handler)(data, std::move(conn), header, protocols);
       if (res.has_value()) [[likely]] {
         co_return make_pair(std::errc{}, std::move(res.value()));
       }
@@ -94,8 +94,8 @@ router::route_coro(
 }
 
 inline std::pair<std::errc, std::string> router::route(
-    rpc_protocol::req_header &header, auto handler, std::string_view data,
-    rpc_conn conn,
+    auto handler, std::string_view data, rpc_conn conn,
+    rpc_protocol::req_header &header,
     typename rpc_protocol::supported_serialize_protocols protocols) {
   if (handler) [[likely]] {
     try {
@@ -104,7 +104,7 @@ inline std::pair<std::errc, std::string> router::route(
         ELOGV(INFO, "route function name %s", it->second.data());
       }
 #endif
-      auto res = (*handler)(data, std::move(conn), protocols);
+      auto res = (*handler)(data, std::move(conn), header, protocols);
       if (res.has_value()) [[likely]] {
         return {std::errc{}, std::move(res.value())};
       }
@@ -137,28 +137,30 @@ inline std::pair<std::errc, std::string> router::route(
 
 // See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100611
 // We use this struct instead of lambda for workaround
-template <auto Func, typename Self>
+template <typename rpc_protocol, auto Func, typename Self>
 struct execute_visitor {
   std::string_view data;
   rpc_conn conn;
+  typename rpc_protocol::req_header &req_head;
   Self *self;
   template <typename serialize_protocol>
   async_simple::coro::Lazy<std::optional<std::string>> operator()(
       const serialize_protocol &) {
-    return internal::execute_coro<serialize_protocol, Func>(
-        data, std::move(conn), self);
+    return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
+        data, std::move(conn), req_head, self);
   }
 };
 
-template <auto Func>
-struct execute_visitor<Func, void> {
+template <typename rpc_protocol, auto Func>
+struct execute_visitor<rpc_protocol, Func, void> {
   std::string_view data;
   rpc_conn conn;
+  typename rpc_protocol::req_header &req_head;
   template <typename serialize_protocol>
   async_simple::coro::Lazy<std::optional<std::string>> operator()(
       const serialize_protocol &) {
-    return internal::execute_coro<serialize_protocol, Func>(data,
-                                                            std::move(conn));
+    return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
+        data, std::move(conn), req_head);
   }
 };
 
@@ -176,8 +178,10 @@ inline void router::regist_one_handler(Self *self) {
     auto it = coro_handlers_.emplace(
         id,
         [self](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::req_header &req_head,
                typename rpc_protocol::supported_serialize_protocols protocols) {
-          execute_visitor<func, Self> visitor{data, std::move(conn), self};
+          execute_visitor<rpc_protocol, func, Self> visitor{
+              data, std::move(conn), req_head, self};
           return std::visit(visitor, protocols);
         });
     if (!it.second) {
@@ -188,12 +192,15 @@ inline void router::regist_one_handler(Self *self) {
     auto it = handlers_.emplace(
         id,
         [self](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::req_header &req_head,
                typename rpc_protocol::supported_serialize_protocols protocols) {
           return std::visit(
-              [data, conn = std::move(conn), self]<typename serialize_protocol>(
+              [data, conn = std::move(conn), self,
+               &req_head]<typename serialize_protocol>(
                   const serialize_protocol &obj) mutable {
-                return internal::execute<serialize_protocol, func>(
-                    data, std::move(conn), self);
+                return internal::execute<rpc_protocol, serialize_protocol,
+                                         func>(data, std::move(conn), req_head,
+                                               self);
               },
               protocols);
         });
@@ -217,8 +224,10 @@ inline void router::regist_one_handler() {
   if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
     auto it = coro_handlers_.emplace(
         id, [](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::req_header &req_head,
                typename rpc_protocol::supported_serialize_protocols protocols) {
-          execute_visitor<func, void> visitor{data, std::move(conn)};
+          execute_visitor<rpc_protocol, func, void> visitor{
+              data, std::move(conn), req_head};
           return std::visit(visitor, protocols);
         });
     if (!it.second) {
@@ -228,12 +237,14 @@ inline void router::regist_one_handler() {
   else {
     auto it = handlers_.emplace(
         id, [](std::string_view data, rpc_conn conn,
+               typename rpc_protocol::req_header &req_head,
                typename rpc_protocol::supported_serialize_protocols protocols) {
           return std::visit(
-              [data, conn = std::move(conn)]<typename serialize_protocol>(
+              [data, conn = std::move(conn),
+               &req_head]<typename serialize_protocol>(
                   const serialize_protocol &obj) {
-                return internal::execute<serialize_protocol, func>(
-                    data, std::move(conn));
+                return internal::execute<rpc_protocol, serialize_protocol,
+                                         func>(data, std::move(conn), req_head);
               },
               protocols);
         });

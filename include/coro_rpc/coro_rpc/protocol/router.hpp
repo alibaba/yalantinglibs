@@ -35,15 +35,16 @@ namespace protocol {
 class router {
   using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
   std::unordered_map<
-      uint32_t, std::function<std::optional<std::string>(
-                    std::string_view, rpc_conn,
-                    rpc_protocol::supported_serialize_protocols protocols)>>
+      uint32_t,
+      std::function<std::optional<std::string>(
+          std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
+          rpc_protocol::supported_serialize_protocols protocols)>>
       handlers_;
   std::unordered_map<
       uint32_t,
       std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-          std::string_view, rpc_conn,
-          typename rpc_protocol::supported_serialize_protocols protocols)>>
+          std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
+          rpc_protocol::supported_serialize_protocols protocols)>>
       coro_handlers_;
   std::unordered_map<uint32_t, std::string> id2name_;
 
@@ -55,23 +56,23 @@ class router {
 
  public:
   std::function<std::optional<std::string>(
-      std::string_view, rpc_conn,
+      std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
       typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_handler(uint32_t id);
 
   std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-      std::string_view, rpc_conn,
+      std::string_view, rpc_conn, rpc_protocol::req_header &req_head,
       typename rpc_protocol::supported_serialize_protocols protocols)>
       *get_coro_handler(uint32_t id);
 
   async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
-      rpc_protocol::req_header &header, auto handler, std::string_view data,
-      rpc_conn conn,
+      auto handler, std::string_view data, rpc_conn conn,
+      rpc_protocol::req_header &header,
       typename rpc_protocol::supported_serialize_protocols protocols);
 
   std::pair<std::errc, std::string> route(
-      rpc_protocol::req_header &header, auto handler, std::string_view data,
-      rpc_conn conn,
+      auto handler, std::string_view data, rpc_conn conn,
+      rpc_protocol::req_header &header,
       typename rpc_protocol::supported_serialize_protocols protocols);
 
   /*!

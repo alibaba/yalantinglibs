@@ -170,12 +170,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       auto handler = router.get_handler(key);
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
-        pair = co_await router.route_coro(req_head, coro_handler, payload,
-                                          shared_from_this(),
+        pair = co_await router.route_coro(coro_handler, payload,
+                                          shared_from_this(), req_head,
                                           serialize_proto.value());
       }
       else {
-        pair = router.route(req_head, handler, payload, shared_from_this(),
+        pair = router.route(handler, payload, shared_from_this(), req_head,
                             serialize_proto.value());
       }
 
@@ -185,7 +185,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         continue;
       }
 
-      std::string header_buf = rpc_protocol::write_head(resp_buf, resp_err);
+      std::string header_buf =
+          rpc_protocol::write_head(resp_buf, req_head, resp_err);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -227,11 +228,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
 
-  void response_msg(std::string &&body_buf) {
-    using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
-
-    std::string header_buf = rpc_protocol::write_head(body_buf);
-
+  template <typename rpc_protocol>
+  void response_msg(std::string &&body_buf,
+                    const typename rpc_protocol::req_header &req_head) {
+    std::string header_buf = rpc_protocol::write_head(body_buf, req_head);
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
         .via(&executor_)
         .detach();

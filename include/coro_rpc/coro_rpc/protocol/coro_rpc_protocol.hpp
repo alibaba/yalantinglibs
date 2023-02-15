@@ -125,6 +125,7 @@ struct coro_rpc_protocol {
   }
 
   static std::string write_head(const std::string& resp_buf,
+                                const req_header& req_header,
                                 const rpc_error_code& ec = rpc_error_code{}) {
     std::string header_buf;
     header_buf.resize(RESP_HEAD_LEN);
