@@ -250,7 +250,7 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<
-      coro_rpc_protocol::rpc_result<decltype(get_return_type<func>())>>
+      rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol>>
   call(Args... args) {
     return call_for<func>(std::chrono::seconds(5), std::move(args)...);
   }
@@ -268,7 +268,7 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<
-      coro_rpc_protocol::rpc_result<decltype(get_return_type<func>())>>
+      rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol>>
   call_for(auto duration, Args... args) {
     using R = decltype(get_return_type<func>());
 
@@ -276,7 +276,7 @@ class coro_rpc_client {
       ELOGV(ERROR,
             "a closed client is not allowed call again, please create a new "
             "client");
-      auto ret = coro_rpc_protocol::rpc_result<R>{
+      auto ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
           coro_rpc_protocol::rpc_error{
               std::errc::io_error,
@@ -284,10 +284,10 @@ class coro_rpc_client {
       co_return ret;
     }
 
-    coro_rpc_protocol::rpc_result<R> ret;
+    rpc_result<R, coro_rpc_protocol> ret;
 #ifdef ENABLE_SSL
     if (!ssl_init_ret_) {
-      ret = coro_rpc_protocol::rpc_result<R>{
+      ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::not_connected,
                                                      "not connected"}};
       co_return ret;
@@ -318,7 +318,7 @@ class coro_rpc_client {
     timer.cancel(err_code);
 
     if (is_timeout_) {
-      ret = coro_rpc_protocol::rpc_result<R>{
+      ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::timed_out,
                                                      "rpc call timed out"}};
     }
@@ -405,12 +405,12 @@ class coro_rpc_client {
 
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<
-      coro_rpc_protocol::rpc_result<decltype(get_return_type<func>())>>
+      rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol>>
   call_impl(Socket &socket, Args... args) {
     using R = decltype(get_return_type<func>());
 
     auto buffer = prepare_buffer<func>(std::move(args)...);
-    coro_rpc_protocol::rpc_result<R> r{};
+    rpc_result<R, coro_rpc_protocol> r{};
 #ifdef GENERATE_BENCHMARK_DATA
     std::ofstream file(
         benchmark_file_path + std::string{get_func_name<func>()} + ".in",
@@ -428,7 +428,7 @@ class coro_rpc_client {
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
       ELOGV(INFO, "client_id %d close socket", client_id_);
       close();
-      r = coro_rpc_protocol::rpc_result<R>{
+      r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::io_error,
                                                      ret.first.message()}};
       co_return r;
@@ -440,7 +440,7 @@ class coro_rpc_client {
           asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN - 1));
       ELOGV(INFO, "client_id %d close socket", client_id_);
       close();
-      r = coro_rpc_protocol::rpc_result<R>{
+      r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::io_error,
                                                      ret.first.message()}};
       co_return r;
@@ -451,7 +451,7 @@ class coro_rpc_client {
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
       ELOGV(INFO, "client_id %d shutdown", client_id_);
       socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
-      r = coro_rpc_protocol::rpc_result<R>{
+      r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::io_error,
                                                      ret.first.message()}};
       co_return r;
@@ -469,7 +469,7 @@ class coro_rpc_client {
       if (g_action == inject_action::client_close_socket_after_send_payload) {
         ELOGV(INFO, "client_id %d client_close_socket_after_send_payload",
               client_id_);
-        r = coro_rpc_protocol::rpc_result<R>{
+        r = rpc_result<R, coro_rpc_protocol>{
             unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::io_error,
                                                        ret.first.message()}};
         close();
@@ -512,12 +512,12 @@ class coro_rpc_client {
     }
 #endif
     if (is_timeout_) {
-      r = coro_rpc_protocol::rpc_result<R>{
+      r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{
                             .code = std::errc::timed_out, .msg = {}}};
     }
     else {
-      r = coro_rpc_protocol::rpc_result<R>{
+      r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
           coro_rpc_protocol::rpc_error{.code = std::errc::io_error,
                                        .msg = ret.first.message()}};
@@ -566,7 +566,7 @@ class coro_rpc_client {
   }
 
   template <typename T>
-  coro_rpc_protocol::rpc_result<T> handle_response_buffer(
+  rpc_result<T, coro_rpc_protocol> handle_response_buffer(
       const std::byte *buffer, std::size_t len, std::errc rpc_errc) {
     rpc_return_type_t<T> ret;
     struct_pack::errc ec;
@@ -586,13 +586,13 @@ class coro_rpc_client {
       err.code = rpc_errc;
       ec = struct_pack::deserialize_to(err.msg, (const char *)buffer, len);
       if (ec == struct_pack::errc::ok) {
-        return coro_rpc_protocol::rpc_result<T>{unexpect_t{}, std::move(err)};
+        return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
       }
     }
     // deserialize failed.
     err = {std::errc::invalid_argument,
            "failed to deserialize rpc return value"};
-    return coro_rpc_protocol::rpc_result<T>{unexpect_t{}, std::move(err)};
+    return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
   }
 
   template <typename FuncArgs>
@@ -672,7 +672,7 @@ class coro_rpc_client {
   }
 
   template <auto func, typename... Args>
-  coro_rpc_protocol::rpc_result<decltype(get_return_type<func>())> sync_call(
+  rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol> sync_call(
       Args &&...args) {
     return async_simple::coro::syncAwait(
         call<func>(std::forward<Args>(args)...));

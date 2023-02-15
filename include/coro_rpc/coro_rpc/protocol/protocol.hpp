@@ -24,11 +24,14 @@
 #include "async_simple/coro/Lazy.h"
 #include "easylog/easylog.h"
 #include "struct_pack_protocol.hpp"
-namespace coro_rpc::protocol {
+
+namespace coro_rpc {
+namespace protocol {
 
 class router;
 
 struct coro_rpc_protocol {
+ public:
   /*!
    * RPC header
    *
@@ -64,28 +67,7 @@ struct coro_rpc_protocol {
     uint32_t reserved;  //!< reserved field
   };
 
-  constexpr static inline int8_t magic_number = 21;
-
-  /*!
-   * RPC error
-   *
-   * The `rpc_error` struct holds the error code `code` and error message `msg`.
-   */
-  struct rpc_error {
-    std::errc code;   //!< error code
-    std::string msg;  //!< error message
-  };
-
-  template <typename T>
-  using rpc_result = expected<T, rpc_error>;
-
   using rpc_error_code = std::errc;
-
-  static constexpr auto REQ_HEAD_LEN = sizeof(req_header{});
-  static_assert(REQ_HEAD_LEN == 20);
-
-  static constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
-  static_assert(RESP_HEAD_LEN == 16);
 
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
   using router_key_t = uint32_t;
@@ -135,5 +117,25 @@ struct coro_rpc_protocol {
     resp_head.length = resp_buf.size();
     return header_buf;
   }
+
+  /*!
+   * The RPC error for client
+   *
+   * The `rpc_error` struct holds the error code `code` and error message `msg`.
+   */
+  struct rpc_error {
+    std::errc code;   //!< error code
+    std::string msg;  //!< error message
+  };
+
+  // internal variable
+  constexpr static inline int8_t magic_number = 21;
+
+  static constexpr auto REQ_HEAD_LEN = sizeof(req_header{});
+  static_assert(REQ_HEAD_LEN == 20);
+
+  static constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
+  static_assert(RESP_HEAD_LEN == 16);
 };
-}  // namespace coro_rpc::protocol
+}  // namespace protocol
+}  // namespace coro_rpc
