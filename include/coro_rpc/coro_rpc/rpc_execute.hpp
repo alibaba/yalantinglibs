@@ -279,7 +279,9 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
         co_await func();
       }
       else {
-        co_await(self->*func)();
+        // clang-format off
+        co_await (self->*func)();
+        // clang-format on
       }
     }
     else {
@@ -287,7 +289,9 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
         co_return serialize_proto::serialize(co_await func());
       }
       else {
-        co_return serialize_proto::serialize(co_await(self->*func)());
+        // clang-format off
+        co_return serialize_proto::serialize(co_await (self->*func)());
+        // clang-format on
       }
     }
   }

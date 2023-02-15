@@ -209,13 +209,11 @@ struct CoroServerTester : ServerTester {
         this->template call<&HelloService::coro_func_return_void>(client, 42);
     CHECK(ret5.has_value());
 
-    auto ret6 = this->template
-    call<&HelloService::coro_func_delay_return_void>(
+    auto ret6 = this->template call<&HelloService::coro_func_delay_return_void>(
         client, 42);
     CHECK(ret6.has_value());
 
-    auto ret7 = this->template
-    call<&HelloService::coro_func_delay_return_int>(
+    auto ret7 = this->template call<&HelloService::coro_func_delay_return_int>(
         client, 42);
     CHECK(ret7.value() == 42);
 

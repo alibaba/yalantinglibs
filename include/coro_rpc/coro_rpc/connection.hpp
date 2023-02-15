@@ -41,7 +41,7 @@ concept connection_t = requires(T t) {
   t.set_delay(true);
   t.has_closed();
 };
-
+// clang-format off
 namespace internal {
 
   template <typename T>
@@ -53,8 +53,9 @@ namespace internal {
   struct response_handler<void> {
     using type = std::function<void(rpc_conn &&)>;
   };
+  
 }  // namespace internal
-
+// clang-format on
 /*!
  *
  * @tparam return_msg_type
