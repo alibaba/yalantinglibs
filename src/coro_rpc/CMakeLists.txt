@@ -29,6 +29,11 @@ if (ENABLE_SSL)
     target_compile_definitions(coro_rpc INTERFACE ENABLE_SSL)
     target_link_libraries(coro_rpc INTERFACE OpenSSL::SSL OpenSSL::Crypto)
 endif ()
+option(ENABLE_PMR "Enable pmr support" OFF)
+if (ENABLE_PMR)
+    message(STATUS "Use std::pmr")
+    target_compile_definitions(coro_rpc INTERFACE YLT_ENABLE_PMR)
+endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # When using coro_rpc_client, only remote function declarations are required.
     # Generally speaking, RPC function declaration and definition are divided.
