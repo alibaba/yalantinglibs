@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v3
+        uses: seanmiddleditch/gha-setup-ninja@master
 
       - name: Enable Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1.12.0
