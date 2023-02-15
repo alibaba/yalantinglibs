@@ -37,7 +37,7 @@
 #include <variant>
 
 #include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
-#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
+#include "coro_rpc/coro_rpc/protocol/protocol.hpp"
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;

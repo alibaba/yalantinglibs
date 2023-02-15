@@ -30,7 +30,6 @@
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/asio_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
-#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "easylog/easylog.h"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"

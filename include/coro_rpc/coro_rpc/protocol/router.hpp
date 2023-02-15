@@ -24,12 +24,12 @@
 #include <variant>
 #include <vector>
 
-#include "coro_rpc_protocol.hpp"
+#include "protocol.hpp"
 
 namespace coro_rpc {
-
 class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
+
 namespace protocol {
 
 class router {

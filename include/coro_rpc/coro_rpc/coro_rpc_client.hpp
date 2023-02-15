@@ -32,7 +32,7 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "common_service.hpp"
 #include "coro_rpc/coro_rpc/connection.hpp"
-#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
+#include "coro_rpc/coro_rpc/protocol/protocol.hpp"
 #include "easylog/easylog.h"
 #include "expected.hpp"
 #include "struct_pack/struct_pack.hpp"
