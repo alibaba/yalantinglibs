@@ -63,7 +63,7 @@ namespace internal {
 template <typename return_msg_type>
 class connection {
   std::shared_ptr<coro_connection> conn_;
-  std::shared_ptr<std::atomic<bool>> has_response_;
+  std::unique_ptr<std::atomic<bool>> has_response_;
   using response_handler_t =
       typename internal::response_handler<return_msg_type>::type;
   response_handler_t response_handler_;
@@ -77,13 +77,23 @@ class connection {
   connection(std::shared_ptr<coro_connection> conn,
              response_handler_t &&response_handler)
       : conn_(std::move(conn)),
-        has_response_(std::make_shared<std::atomic<bool>>(false)),
+        has_response_(std::make_unique<std::atomic<bool>>(false)),
         response_handler_(std::move(response_handler)) {
     if (conn_) {
       conn_->set_delay(true);
     }
   };
   connection() = delete;
+  connection(const connection &conn) = delete;
+  connection(connection &&conn) = default;
+  ~connection() {
+    if (has_response_ && conn_ && !*has_response_) [[unlikely]] {
+      ELOGV(ERROR,
+            "We must send reply to client by call response_msg method"
+            "before coro_rpc::connection<T> destruction!");
+      conn_->async_close();
+    }
+  }
 
   using return_type = return_msg_type;
 

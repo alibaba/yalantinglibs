@@ -122,11 +122,11 @@ inline std::optional<std::string> execute(
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{
                                  std::move(req_head)})),
-                         args));
+                         std::move(args)));
         }
         else {
           // call void func(args...)
-          std::apply(func, args);
+          std::apply(func, std::move(args));
         }
       }
       else {
@@ -142,24 +142,25 @@ inline std::optional<std::string> execute(
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{
                                  std::move(req_head)})),
-                  args));
+                  std::move(args)));
         }
         else {
           // call void o.func(args...)
-          std::apply(func, std::tuple_cat(std::forward_as_tuple(o), args));
+          std::apply(func,
+                     std::tuple_cat(std::forward_as_tuple(o), std::move(args)));
         }
       }
     }
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        return serialize_proto::serialize(std::apply(func, args));
+        return serialize_proto::serialize(std::apply(func, std::move(args)));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
-        return serialize_proto::serialize(
-            std::apply(func, std::tuple_cat(std::forward_as_tuple(o), args)));
+        return serialize_proto::serialize(std::apply(
+            func, std::tuple_cat(std::forward_as_tuple(o), std::move(args))));
       }
     }
   }
@@ -229,11 +230,11 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
                             connection_responser<rpc_protocol, serialize_proto,
                                                  conn_return_type>{
                                 std::move(req_head)})),
-                        args));
+                        std::move(args)));
         }
         else {
           // call void func(args...)
-          co_await std::apply(func, args);
+          co_await std::apply(func, std::move(args));
         }
       }
       else {
@@ -249,25 +250,26 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{
                                  std::move(req_head)})),
-                  args));
+                  std::move(args)));
         }
         else {
           // call void o.func(args...)
-          co_await std::apply(func,
-                              std::tuple_cat(std::forward_as_tuple(o), args));
+          co_await std::apply(
+              func, std::tuple_cat(std::forward_as_tuple(o), std::move(args)));
         }
       }
     }
     else {
       if constexpr (std::is_void_v<Self>) {
         // call return_type func(args...)
-        co_return serialize_proto::serialize(co_await std::apply(func, args));
+        co_return serialize_proto::serialize(
+            co_await std::apply(func, std::move(args)));
       }
       else {
         auto &o = *self;
         // call return_type o.func(args...)
         co_return serialize_proto::serialize(co_await std::apply(
-            func, std::tuple_cat(std::forward_as_tuple(o), args)));
+            func, std::tuple_cat(std::forward_as_tuple(o), std::move(args))));
       }
     }
   }
