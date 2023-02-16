@@ -24,7 +24,7 @@ jobs:
           sudo apt-get install libssl-dev
 
       - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v3
+        uses: seanmiddleditch/gha-setup-ninja@master
 
       - name: Configure CMake
         run: CXX=g++ CC=gcc cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}} -G Ninja
