@@ -124,7 +124,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
       // So, no special handling of eof is required.
       if (ec) {
-        ELOGV(ERROR, "%s, %s", ec.message().data(), "read head error");
+        ELOGV(INFO, "connection %d close: %s", conn_id_, ec.message().data());
         close();
         co_return;
       }
