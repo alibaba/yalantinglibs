@@ -114,8 +114,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
       typename rpc_protocol::router &router, Socket &socket) noexcept {
+    typename rpc_protocol::req_header req_head;
     while (true) {
-      typename rpc_protocol::req_header req_head;
       reset_timer();
       auto ec = co_await rpc_protocol::read_head(socket, req_head);
       cancel_timer();
