@@ -288,7 +288,7 @@ class router {
       ELOGV(ERROR, "the rpc function not registered, function ID: %s",
             ss.str().data());
       return std::make_pair(std::errc::function_not_supported,
-                               "the rpc function not registered"s);
+                            "the rpc function not registered"s);
     }
   }
 
