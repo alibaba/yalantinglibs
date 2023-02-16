@@ -28,8 +28,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <coro_rpc/coro_rpc/protocol/router.hpp>
-#include <coro_rpc/coro_rpc/protocol/router_impl.hpp>
 #include <iostream>
 #include <string_view>
 #include <system_error>
@@ -37,12 +35,12 @@
 #include <variant>
 
 #include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
-#include "coro_rpc/coro_rpc/protocol/protocol.hpp"
+#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
 
-coro_rpc::protocol::router router;
+coro_rpc::protocol::router<coro_rpc::protocol::coro_rpc_protocol> router;
 
 template <typename T>
 struct rpc_return_type {
