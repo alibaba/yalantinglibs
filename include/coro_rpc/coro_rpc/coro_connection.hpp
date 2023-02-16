@@ -115,6 +115,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> start_impl(
       typename rpc_protocol::router &router, Socket &socket) noexcept {
     typename rpc_protocol::req_header req_head;
+    std::string resp_error_msg;
     while (true) {
       reset_timer();
       auto ec = co_await rpc_protocol::read_head(socket, req_head);
@@ -183,9 +184,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         delay_ = false;
         continue;
       }
-
-      std::string header_buf =
-          rpc_protocol::write_head(resp_buf, req_head, resp_err);
+      resp_error_msg.clear();
+      if (resp_err != std::errc{}) {
+        std::swap(resp_buf, resp_error_msg);
+      }
+      std::string header_buf = rpc_protocol::prepare_response(
+          resp_buf, req_head, resp_err, resp_error_msg);
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_send_length) {
@@ -230,7 +234,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol>
   void response_msg(std::string &&body_buf,
                     const typename rpc_protocol::req_header &req_head) {
-    std::string header_buf = rpc_protocol::write_head(body_buf, req_head);
+    std::string header_buf = rpc_protocol::prepare_response(body_buf, req_head);
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
         .via(&executor_)
         .detach();

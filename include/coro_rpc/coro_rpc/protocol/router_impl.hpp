@@ -55,6 +55,7 @@ router::route_coro(
     auto handler, std::string_view data, rpc_conn conn,
     rpc_protocol::req_header &header,
     typename rpc_protocol::supported_serialize_protocols protocols) {
+  using namespace std::string_literals;
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
@@ -66,32 +67,29 @@ router::route_coro(
       auto res = co_await (*handler)(data, std::move(conn), header, protocols);
       // clang-format on
       if (res.has_value()) [[likely]] {
-        co_return make_pair(std::errc{}, std::move(res.value()));
+        co_return std::make_pair(std::errc{}, std::move(res.value()));
       }
       else {  // deserialize failed
         ELOGV(ERROR, "the rpc payload deserialize failed, function id %d",
               header.function_id);
-        co_return internal::pack_result<rpc_protocol>(
-            std::errc::invalid_argument, "invalid rpc function arguments",
-            protocols);
+        co_return std::make_pair(std::errc::invalid_argument,
+                                 "invalid rpc function arguments"s);
       }
     } catch (const std::exception &e) {
       ELOGV(ERROR, "the rpc function has exception %s, function id %d",
             e.what(), header.function_id);
-      co_return internal::pack_result<rpc_protocol>(std::errc::interrupted,
-                                                    e.what(), protocols);
+      co_return std::make_pair(std::errc::interrupted, e.what());
     } catch (...) {
       ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
             header.function_id);
-      co_return internal::pack_result<rpc_protocol>(
-          std::errc::interrupted, "unknown exception", protocols);
+      co_return std::make_pair(std::errc::interrupted, "unknown exception"s);
     }
   }
   else [[unlikely]] {
     ELOGV(ERROR, "the rpc function not found, function id %d",
           header.function_id);
-    co_return internal::pack_result<rpc_protocol>(
-        std::errc::function_not_supported, "the function not found", protocols);
+    co_return std::make_pair(std::errc::function_not_supported,
+                             "the function not found"s);
   }
 }
 
@@ -99,6 +97,7 @@ inline std::pair<std::errc, std::string> router::route(
     auto handler, std::string_view data, rpc_conn conn,
     rpc_protocol::req_header &header,
     typename rpc_protocol::supported_serialize_protocols protocols) {
+  using namespace std::string_literals;
   if (handler) [[likely]] {
     try {
 #ifndef NDEBUG
@@ -108,35 +107,32 @@ inline std::pair<std::errc, std::string> router::route(
 #endif
       auto res = (*handler)(data, std::move(conn), header, protocols);
       if (res.has_value()) [[likely]] {
-        return {std::errc{}, std::move(res.value())};
+        return std::make_pair(std::errc{}, std::move(res.value()));
       }
       else {  // deserialize failed
         ELOGV(ERROR, "the rpc payload deserialize failed, function id %d",
               header.function_id);
-        return internal::pack_result<rpc_protocol>(
-            std::errc::invalid_argument, "invalid rpc function arguments",
-            protocols);
+        return std::make_pair(std::errc::invalid_argument,
+                              "invalid rpc function arguments"s);
       }
     } catch (const std::exception &e) {
       ELOGV(ERROR, "the rpc function has exception %s, function id %d",
             e.what(), header.function_id);
-      return internal::pack_result<rpc_protocol>(std::errc::interrupted,
-                                                 e.what(), protocols);
+      return std::make_pair(std::errc::interrupted, e.what());
     } catch (...) {
       ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
             header.function_id);
-      return internal::pack_result<rpc_protocol>(
-          std::errc::interrupted, "unknown exception", protocols);
+      return std::make_pair(std::errc::interrupted,
+                            "unknown rpc function exception"s);
     }
   }
   else [[unlikely]] {
     ELOGV(ERROR, "the rpc function not found, function id %d",
           header.function_id);
-    return internal::pack_result<rpc_protocol>(
-        std::errc::function_not_supported, "the function not found", protocols);
+    return std::make_pair(std::errc::function_not_supported,
+                          "the function not found"s);
   }
 }
-
 // See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100611
 // We use this struct instead of lambda for workaround
 template <typename rpc_protocol, auto Func, typename Self>

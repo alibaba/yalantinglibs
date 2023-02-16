@@ -23,6 +23,7 @@
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "easylog/easylog.h"
+#include "struct_pack/struct_pack.hpp"
 #include "struct_pack_protocol.hpp"
 
 namespace coro_rpc {
@@ -67,8 +68,6 @@ struct coro_rpc_protocol {
     uint32_t reserved;  //!< reserved field
   };
 
-  using rpc_error_code = std::errc;
-
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
   using router_key_t = uint32_t;
   using router = coro_rpc::protocol::router;
@@ -83,17 +82,21 @@ struct coro_rpc_protocol {
     }
   };
 
-  static uint32_t get_route_key(req_header& req_header) {
+  static router_key_t get_route_key(req_header& req_header) {
     return req_header.function_id;
   };
 
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
       Socket& socket, req_header& req_head) {
+    // TODO: add a connection-level buffer in parameter to reuse memory
     auto [ec, _] = co_await asio_util::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
-    if (ec || req_head.magic != magic_number) [[unlikely]] {
+    if (ec) [[unlikely]] {
       co_return std::move(ec);
+    }
+    else if (req_head.magic != magic_number) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
     }
     co_return std::error_code{};
   }
@@ -106,15 +109,20 @@ struct coro_rpc_protocol {
     co_return ec;
   }
 
-  static std::string write_head(const std::string& resp_buf,
-                                const req_header& req_header,
-                                const rpc_error_code& ec = rpc_error_code{}) {
+  static std::string prepare_response(std::string& rpc_result,
+                                      const req_header& req_header,
+                                      std::errc rpc_err_code = {},
+                                      std::string_view err_msg = {}) {
     std::string header_buf;
     header_buf.resize(RESP_HEAD_LEN);
     auto& resp_head = *(resp_header*)header_buf.data();
     resp_head.magic = magic_number;
-    resp_head.err_code = static_cast<uint8_t>(ec);
-    resp_head.length = resp_buf.size();
+    resp_head.err_code = static_cast<uint8_t>(rpc_err_code);
+    if (rpc_err_code != std::errc{}) [[unlikely]] {
+      assert(rpc_result.empty());
+      struct_pack::serialize_to(rpc_result, err_msg);
+    }
+    resp_head.length = rpc_result.size();
     return header_buf;
   }
 

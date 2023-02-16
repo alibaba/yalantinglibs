@@ -28,19 +28,6 @@
 
 namespace coro_rpc::internal {
 
-template <typename rpc_protocol>
-inline auto pack_result(
-    const typename rpc_protocol::rpc_error_code &err, std::string_view err_msg,
-    const typename rpc_protocol::supported_serialize_protocols
-        &serialize_protocol) {
-  return std::visit(
-      [err,
-       err_msg]<typename serialize_protocol_t>(const serialize_protocol_t &) {
-        return std::make_pair(err, serialize_protocol_t::serialize(err_msg));
-      },
-      serialize_protocol);
-}
-
 template <bool is_conn, typename First>
 auto get_return_type() {
   if constexpr (is_conn) {
