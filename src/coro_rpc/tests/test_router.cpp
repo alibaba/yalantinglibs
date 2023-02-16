@@ -137,7 +137,8 @@ auto test_route(auto conn, Args &&...args) {
   return router.route(
       handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      conn, header, std::variant<coro_rpc::protocol::struct_pack_protocol>{});
+      conn, header, std::variant<coro_rpc::protocol::struct_pack_protocol>{},
+      id);
 }
 
 template <auto func, typename... Args>
@@ -201,7 +202,7 @@ TEST_CASE("testing coro_handler") {
       handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
       coro_conn, header,
-      std::variant<coro_rpc::protocol::struct_pack_protocol>{}));
+      std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id));
 }
 
 TEST_CASE("testing not registered func") {

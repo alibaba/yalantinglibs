@@ -172,11 +172,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         auto coro_handler = router.get_coro_handler(key);
         pair = co_await router.route_coro(coro_handler, payload,
                                           shared_from_this(), req_head,
-                                          serialize_proto.value());
+                                          serialize_proto.value(), key);
       }
       else {
         pair = router.route(handler, payload, shared_from_this(), req_head,
-                            serialize_proto.value());
+                            serialize_proto.value(), key);
       }
 
       auto &[resp_err, resp_buf] = pair;

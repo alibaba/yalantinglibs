@@ -68,7 +68,7 @@ struct coro_rpc_protocol {
   };
 
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
-  using router_key_t = uint32_t;
+  using route_key_t = uint32_t;
   using router = coro_rpc::protocol::router<coro_rpc_protocol>;
 
   static std::optional<supported_serialize_protocols> get_serialize_protocol(
@@ -81,7 +81,7 @@ struct coro_rpc_protocol {
     }
   };
 
-  static router_key_t get_route_key(req_header& req_header) {
+  static route_key_t get_route_key(req_header& req_header) {
     return req_header.function_id;
   };
 

@@ -19,6 +19,7 @@
 
 #include <functional>
 #include <memory>
+#include <sstream>
 #include <string_view>
 #include <unordered_map>
 #include <variant>
@@ -49,13 +50,22 @@ class router {
           typename rpc_protocol::req_header &req_head,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
-  std::unordered_map<typename rpc_protocol::router_key_t, router_handler_t>
+  std::unordered_map<typename rpc_protocol::route_key_t, router_handler_t>
       handlers_;
-  std::unordered_map<typename rpc_protocol::router_key_t, coro_router_handler_t>
+  std::unordered_map<typename rpc_protocol::route_key_t, coro_router_handler_t>
       coro_handlers_;
-  std::unordered_map<typename rpc_protocol::router_key_t, std::string> id2name_;
+  std::unordered_map<typename rpc_protocol::route_key_t, std::string> id2name_;
 
  private:
+  const std::string &get_name(typename rpc_protocol::route_key_t key) {
+    static std::string empty_string;
+    if (auto it = id2name_.find(key); it != id2name_.end()) {
+      return it->second;
+    }
+    else
+      return empty_string;
+  }
+
   // See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100611
   // We use this struct instead of lambda for workaround
   template <auto Func, typename Self>
@@ -199,14 +209,14 @@ class router {
   async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
       auto handler, std::string_view data, rpc_conn conn,
       typename rpc_protocol::req_header &header,
-      typename rpc_protocol::supported_serialize_protocols protocols) {
+      typename rpc_protocol::supported_serialize_protocols protocols,
+      const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
     if (handler) [[likely]] {
       try {
 #ifndef NDEBUG
-        if (auto it = id2name_.find(header.function_id); it != id2name_.end()) {
-          ELOGV(INFO, "route coro function name %s", it->second.data());
-        }
+        ELOGV(INFO, "route function name: %s", get_name(route_key).data());
+
 #endif
         // clang-format off
       auto res = co_await (*handler)(data, std::move(conn), header, protocols);
@@ -215,67 +225,70 @@ class router {
           co_return std::make_pair(std::errc{}, std::move(res.value()));
         }
         else {  // deserialize failed
-          ELOGV(ERROR, "the rpc payload deserialize failed, function id %d",
-                header.function_id);
+          ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+                get_name(route_key).data());
           co_return std::make_pair(std::errc::invalid_argument,
                                    "invalid rpc function arguments"s);
         }
       } catch (const std::exception &e) {
-        ELOGV(ERROR, "the rpc function has exception %s, function id %d",
-              e.what(), header.function_id);
+        ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
+              get_name(route_key).data());
         co_return std::make_pair(std::errc::interrupted, e.what());
       } catch (...) {
-        ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
-              header.function_id);
+        ELOGV(ERROR, "unknown exception in rpc function: %s",
+              get_name(route_key).data());
         co_return std::make_pair(std::errc::interrupted, "unknown exception"s);
       }
     }
-    else [[unlikely]] {
-      ELOGV(ERROR, "the rpc function not found, function id %d",
-            header.function_id);
+    else {
+      std::ostringstream ss;
+      ss << route_key;
+      ELOGV(ERROR, "the rpc function not registered, function ID: %s",
+            ss.str().data());
       co_return std::make_pair(std::errc::function_not_supported,
-                               "the function not found"s);
+                               "the rpc function not registered"s);
     }
   }
 
   std::pair<std::errc, std::string> route(
       auto handler, std::string_view data, rpc_conn conn,
       typename rpc_protocol::req_header &header,
-      typename rpc_protocol::supported_serialize_protocols protocols) {
+      typename rpc_protocol::supported_serialize_protocols protocols,
+      const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
     if (handler) [[likely]] {
       try {
 #ifndef NDEBUG
-        if (auto it = id2name_.find(header.function_id); it != id2name_.end()) {
-          ELOGV(INFO, "route function name %s", it->second.data());
-        }
+        ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 #endif
         auto res = (*handler)(data, std::move(conn), header, protocols);
         if (res.has_value()) [[likely]] {
           return std::make_pair(std::errc{}, std::move(res.value()));
         }
         else {  // deserialize failed
-          ELOGV(ERROR, "the rpc payload deserialize failed, function id %d",
-                header.function_id);
+          ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+                get_name(route_key).data());
           return std::make_pair(std::errc::invalid_argument,
                                 "invalid rpc function arguments"s);
         }
       } catch (const std::exception &e) {
-        ELOGV(ERROR, "the rpc function has exception %s, function id %d",
-              e.what(), header.function_id);
+        ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
+              get_name(route_key).data());
         return std::make_pair(std::errc::interrupted, e.what());
       } catch (...) {
-        ELOGV(ERROR, "the rpc function has unknown exception, function id %d",
-              header.function_id);
+        ELOGV(ERROR, "unknown exception in rpc function: %s",
+              get_name(route_key).data());
         return std::make_pair(std::errc::interrupted,
                               "unknown rpc function exception"s);
       }
     }
-    else [[unlikely]] {
-      ELOGV(ERROR, "the rpc function not found, function id %d",
-            header.function_id);
+    else {
+      std::ostringstream ss;
+      ss << route_key;
+      ELOGV(ERROR, "the rpc function not registered, function ID: %s",
+            ss.str().data());
       return std::make_pair(std::errc::function_not_supported,
-                            "the function not found"s);
+                               "the rpc function not registered"s);
     }
   }
 
