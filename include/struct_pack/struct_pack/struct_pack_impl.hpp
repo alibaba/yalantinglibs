@@ -1858,14 +1858,14 @@ class unpacker {
     constexpr bool has_compatible =
         check_if_compatible_element_exist<decltype(get_types(Type{}))>();
     if constexpr (has_compatible) {
-      data_len = reader_.tellg();
+      data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
     if (err_code != struct_pack::errc{}) [[unlikely]] {
       return err_code;
     }
     if constexpr (has_compatible) {
-      data_len += buffer_len;
+      data_len_ += buffer_len;
     }
     switch (size_type_) {
       case 0:
@@ -1910,7 +1910,7 @@ class unpacker {
     constexpr bool has_compatible =
         check_if_compatible_element_exist<decltype(get_types(Type{}))>();
     if constexpr (has_compatible) {
-      data_len = reader_.tellg();
+      data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
     len = buffer_len;
@@ -1918,7 +1918,7 @@ class unpacker {
       return err_code;
     }
     if constexpr (has_compatible) {
-      data_len += buffer_len;
+      data_len_ += buffer_len;
     }
     switch (size_type_) {
       case 0:
@@ -1966,7 +1966,7 @@ class unpacker {
     constexpr bool has_compatible =
         check_if_compatible_element_exist<decltype(get_types(Type{}))>();
     if constexpr (has_compatible) {
-      data_len = reader_.tellg();
+      data_len_ = reader_.tellg();
     }
 
     auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
@@ -1974,7 +1974,7 @@ class unpacker {
       return err_code;
     }
     if constexpr (has_compatible) {
-      data_len += buffer_len;
+      data_len_ += buffer_len;
     }
     switch (size_type_) {
       case 0:
@@ -2396,7 +2396,7 @@ class unpacker {
     else if constexpr (exist_compatible_member<type, version>) {
       if constexpr (id == type_id::compatible_t) {
         if constexpr (version == type::version_number) {
-          if (reader_.tellg() >= data_len) {
+          if (reader_.tellg() >= data_len_) {
             size_type_ = UCHAR_MAX;  // Just notice that this is not a real
                                      // error, this is a flag for exit.
             return struct_pack::errc::no_buffer_space;
@@ -2567,7 +2567,7 @@ class unpacker {
   }
 
  public:
-  std::size_t data_len;
+  std::size_t data_len_;
 
  private:
   Reader &reader_;
