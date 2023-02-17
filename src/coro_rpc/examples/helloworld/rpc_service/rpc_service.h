@@ -27,7 +27,6 @@ int A_add_B(int a, int b);
 void hello_with_delay(coro_rpc::connection<std::string> conn,
                       std::string hello);
 std::string_view echo(std::string_view sv);
-std::string echo0(std::string s);
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv);
 
 class HelloService {
