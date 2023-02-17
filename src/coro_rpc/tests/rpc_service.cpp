@@ -46,61 +46,52 @@ int long_run_func(int val) {
   return val;
 }
 
-template <typename Conn>
-void fun_with_delay_return_void(coro_rpc::connection<void, Conn> conn) {
+void fun_with_delay_return_void(coro_rpc::connection<void> conn) {
   conn.response_msg();
 }
 
-template <typename Conn>
-void fun_with_delay_return_string(
-    coro_rpc::connection<std::string, Conn> conn) {
+void fun_with_delay_return_string(coro_rpc::connection<std::string> conn) {
   conn.response_msg("string"s);
 }
 
-template <typename Conn>
-void fun_with_delay_return_void_twice(coro_rpc::connection<void, Conn> conn) {
+void fun_with_delay_return_void_twice(coro_rpc::connection<void> conn) {
   conn.response_msg();
   conn.response_msg();
 }
 
-template <typename Conn>
 void fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string, Conn> conn) {
+    coro_rpc::connection<std::string> conn) {
   conn.response_msg("string"s);
   conn.response_msg("string"s);
 }
-void coro_fun_with_delay_return_void(
-    coro_rpc::connection<void, coro_connection> conn) {
-  fun_with_delay_return_void(conn);
+void coro_fun_with_delay_return_void(coro_rpc::connection<void> conn) {
+  fun_with_delay_return_void(std::move(conn));
 }
 
-void coro_fun_with_delay_return_string(
-    coro_rpc::connection<std::string, coro_connection> conn) {
-  fun_with_delay_return_string(conn);
+void coro_fun_with_delay_return_string(coro_rpc::connection<std::string> conn) {
+  fun_with_delay_return_string(std::move(conn));
 }
 
-void coro_fun_with_delay_return_void_twice(
-    coro_rpc::connection<void, coro_connection> conn) {
-  fun_with_delay_return_void_twice(conn);
+void coro_fun_with_delay_return_void_twice(coro_rpc::connection<void> conn) {
+  fun_with_delay_return_void_twice(std::move(conn));
 }
 
 void coro_fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string, coro_connection> conn) {
-  fun_with_delay_return_string_twice(conn);
+    coro_rpc::connection<std::string> conn) {
+  fun_with_delay_return_string_twice(std::move(conn));
 }
 
-template <typename Conn>
 void fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void, Conn> conn) {
-  std::thread([conn]() mutable {
+    coro_rpc::connection<void> conn) {
+  std::thread([conn = std::move(conn)]() mutable {
     std::this_thread::sleep_for(400ms);
     conn.response_msg();
   }).detach();
 }
 
 void coro_fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void, coro_rpc::coro_connection> conn) {
-  fun_with_delay_return_void_cost_long_time(conn);
+    coro_rpc::connection<void> conn) {
+  fun_with_delay_return_void_cost_long_time(std::move(conn));
 }
 
 std::string async_hi() { return "async hi"; }

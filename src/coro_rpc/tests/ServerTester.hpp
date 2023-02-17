@@ -153,16 +153,16 @@ struct ServerTester : TesterConfig {
         ec = syncAwait(client->connect("127.0.0.1", port_));
       }
 
-      if (ec == err_ok) {
+      if (ec == std::errc{}) {
         break;
       }
 
       ELOGV(INFO, "retry times %d", retry);
     }
 
-    REQUIRE_MESSAGE(ec == err_ok, std::to_string(client->get_client_id())
-                                      .append(" not connected ")
-                                      .append(conf_str_));
+    REQUIRE_MESSAGE(ec == std::errc{}, std::to_string(client->get_client_id())
+                                           .append(" not connected ")
+                                           .append(conf_str_));
     return client;
   }
   template <auto func, typename... Args>

@@ -15,7 +15,7 @@
  */
 #pragma once
 #include <struct_pack/struct_pack.hpp>
-namespace coro_rpc::config {
+namespace coro_rpc::protocol {
 
 struct struct_pack_protocol {
   template <typename T>
@@ -30,4 +30,4 @@ struct struct_pack_protocol {
     return struct_pack::serialize<std::string>(std::monostate{});
   }
 };
-}  // namespace coro_rpc::config
+}  // namespace coro_rpc::protocol

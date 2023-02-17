@@ -27,22 +27,44 @@ std::string large_arg_fun(std::string data);
 void function_not_registered();
 int long_run_func(int val);
 std::string async_hi();
-void coro_fun_with_delay_return_void(
-    coro_rpc::connection<void, coro_rpc::coro_connection> conn);
-void coro_fun_with_delay_return_string(
-    coro_rpc::connection<std::string, coro_rpc::coro_connection> conn);
-void coro_fun_with_delay_return_void_twice(
-    coro_rpc::connection<void, coro_rpc::coro_connection> conn);
+void coro_fun_with_delay_return_void(coro_rpc::connection<void> conn);
+void coro_fun_with_delay_return_string(coro_rpc::connection<std::string> conn);
+void coro_fun_with_delay_return_void_twice(coro_rpc::connection<void> conn);
 void coro_fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string, coro_rpc::coro_connection> conn);
+    coro_rpc::connection<std::string> conn);
 void coro_fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void, coro_rpc::coro_connection> conn);
+    coro_rpc::connection<void> conn);
+inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
+  co_return;
+}
 inline async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
+inline async_simple::coro::Lazy<void> coro_func_delay_return_int(
+    coro_rpc::connection<int> conn, int i) {
+  conn.response_msg(i);
+  co_return;
+}
+inline async_simple::coro::Lazy<void> coro_func_delay_return_void(
+    coro_rpc::connection<void> conn, int i) {
+  conn.response_msg();
+  co_return;
+}
+
 class HelloService {
  public:
   std::string hello();
   static std::string static_hello();
   async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
+  async_simple::coro::Lazy<void> coro_func_return_void(int i) { co_return; }
+  async_simple::coro::Lazy<void> coro_func_delay_return_int(
+      coro_rpc::connection<int> conn, int i) {
+    conn.response_msg(i);
+    co_return;
+  }
+  async_simple::coro::Lazy<void> coro_func_delay_return_void(
+      coro_rpc::connection<void> conn, int i) {
+    conn.response_msg();
+    co_return;
+  }
 
  private:
 };

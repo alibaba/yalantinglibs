@@ -23,7 +23,6 @@
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
@@ -114,7 +113,14 @@ struct CoroServerTester : ServerTester {
     server.regist_handler<coro_fun_with_delay_return_string>();
     server.regist_handler<coro_fun_with_delay_return_string_twice>();
     server.regist_handler<coro_func>();
-    server.regist_handler<&HelloService::coro_func>(&hello_service_);
+    server.regist_handler<coro_func_return_void>();
+    server.regist_handler<coro_func_delay_return_int>();
+    server.regist_handler<coro_func_delay_return_void>();
+    server.regist_handler<&HelloService::coro_func,
+                          &HelloService::coro_func_return_void,
+                          &HelloService::coro_func_delay_return_void,
+                          &HelloService::coro_func_delay_return_int>(
+        &hello_service_);
     server.regist_handler<get_coro_value>();
     server.regist_handler<&CoroServerTester::get_value>(this);
   }
@@ -195,6 +201,27 @@ struct CoroServerTester : ServerTester {
 
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
+
+    auto ret4 = this->template call<coro_func_return_void>(client, 42);
+    CHECK(ret4.has_value());
+
+    auto ret5 =
+        this->template call<&HelloService::coro_func_return_void>(client, 42);
+    CHECK(ret5.has_value());
+
+    auto ret6 = this->template call<&HelloService::coro_func_delay_return_void>(
+        client, 42);
+    CHECK(ret6.has_value());
+
+    auto ret7 = this->template call<&HelloService::coro_func_delay_return_int>(
+        client, 42);
+    CHECK(ret7.value() == 42);
+
+    auto ret8 = this->template call<coro_func_delay_return_void>(client, 42);
+    CHECK(ret8.has_value());
+
+    auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
+    CHECK(ret9.value() == 42);
   }
   coro_rpc_server<> server;
   std::thread thd;
@@ -280,6 +307,7 @@ TEST_CASE("test server accept error") {
 }
 
 TEST_CASE("test server write queue") {
+  using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
   ELOGV(INFO, "run server write queue");
   g_action = {};
   coro_rpc_server server(2, 8810);
@@ -288,10 +316,11 @@ TEST_CASE("test server write queue") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
   std::string buffer;
-  buffer.reserve(REQ_HEAD_LEN + struct_pack::get_needed_size(std::monostate{}));
-  buffer.resize(REQ_HEAD_LEN);
-  auto &header = *(req_header *)buffer.data();
-  header.magic = magic_number;
+  buffer.reserve(coro_rpc_protocol::REQ_HEAD_LEN +
+                 struct_pack::get_needed_size(std::monostate{}));
+  buffer.resize(coro_rpc_protocol::REQ_HEAD_LEN);
+  auto &header = *(coro_rpc_protocol::req_header *)buffer.data();
+  header.magic = coro_rpc_protocol::magic_number;
   header.function_id =
       func_id<coro_fun_with_delay_return_void_cost_long_time>();
   header.seq_num = g_client_id++;
@@ -314,13 +343,13 @@ TEST_CASE("test server write queue") {
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 1; ++i) {
-    char buffer2[RESP_HEAD_LEN];
+    char buffer2[coro_rpc_protocol::RESP_HEAD_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(buffer2, RESP_HEAD_LEN));
-    auto resp_head = *(resp_header *)buffer2;
+    read(socket, asio::buffer(buffer2, coro_rpc_protocol::RESP_HEAD_LEN));
+    auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

@@ -44,10 +44,17 @@ async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
   co_return std::string{sv};
 }
 
-void hello_with_delay(connection</*response type:*/ std::string> conn) {
+void hello_with_delay(connection</*response type:*/ std::string> conn,
+                      std::string hello) {
   ELOGV(INFO, "call HelloServer hello_with_delay");
-  std::thread([conn]() mutable {
-    conn.response_msg("hello_with_delay");
+  // create a new thread
+  std::thread([conn = std::move(conn), hello = std::move(hello)]() mutable {
+    // do some heavy work in this thread that won't block the io-thread,
+    std::cout << "running heavy work..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds{1});
+    // Remember response before connection destruction! Or the connect will
+    // be closed.
+    conn.response_msg(hello);
   }).detach();
 }
 
@@ -57,9 +64,10 @@ std::string HelloService::hello() {
 }
 
 void HelloService::hello_with_delay(
-    coro_rpc::connection</*response type:*/ std::string> conn) {
+    coro_rpc::connection</*response type:*/ std::string> conn,
+    std::string hello) {
   ELOGV(INFO, "call HelloServer::hello_with_delay");
-  std::thread([conn]() mutable {
+  std::thread([conn = std::move(conn), hello = std::move(hello)]() mutable {
     conn.response_msg("HelloService::hello_with_delay");
   }).detach();
   return;

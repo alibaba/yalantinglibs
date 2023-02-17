@@ -36,7 +36,7 @@ Lazy<void> call_echo(asio::io_context& ioc) {
   while (true) {
     coro_rpc_client client(ioc);
     for (auto ec = co_await client.connect("127.0.0.1", "8801");
-         ec != err_ok;) {
+         ec != std::errc{};) {
       std::cout << "connect failed." << std::endl;
     }
     while (true) {

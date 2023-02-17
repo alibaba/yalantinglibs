@@ -35,8 +35,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
-#include "coro_rpc/coro_rpc/router.hpp"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "default_config/coro_rpc_config.hpp"
 #include "easylog/easylog.h"
 namespace coro_rpc {
@@ -121,7 +119,7 @@ class coro_rpc_server {
       }
 
       ec = listen();
-      if (ec == err_ok) {
+      if (ec == std::errc{}) {
         thd_ = std::thread([this] {
           pool_.run();
         });
@@ -138,7 +136,7 @@ class coro_rpc_server {
 
     cond_.notify_all();
 
-    if (ec == err_ok) {
+    if (ec == std::errc{}) {
       async_simple::coro::syncAwait(accept());
     }
     return ec;
@@ -181,7 +179,7 @@ class coro_rpc_server {
     }
 
     cond_.notify_all();
-    if (ec == err_ok) {
+    if (ec == std::errc{}) {
       co_await accept();
     }
     co_return ec;
@@ -396,7 +394,8 @@ class coro_rpc_server {
       conn->init_ssl(context_);
     }
 #endif
-    co_await conn->start(router_);
+    co_await conn->template start<typename server_config::rpc_protocol>(
+        router_);
   }
 
   void close_acceptor() {
@@ -424,7 +423,7 @@ class coro_rpc_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;
 
-  internal::router<typename server_config::rpc_protocol> router_;
+  typename server_config::rpc_protocol::router router_;
 
   std::atomic<uint16_t> port_;
   std::chrono::steady_clock::duration conn_timeout_duration_;

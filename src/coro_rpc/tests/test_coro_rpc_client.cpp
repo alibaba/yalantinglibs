@@ -26,7 +26,6 @@
 
 #include "asio/io_context.hpp"
 #include "asio_util/asio_coro_util.hpp"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "struct_pack/struct_pack.hpp"
@@ -51,7 +50,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 #endif
   auto ec = co_await client->connect("127.0.0.1", port);
-  REQUIRE_MESSAGE(ec == err_ok, make_error_code(ec).message());
+  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
   co_return client;
 }
 

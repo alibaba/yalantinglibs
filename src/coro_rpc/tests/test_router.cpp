@@ -28,21 +28,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <coro_rpc/coro_rpc/router_impl.hpp>
+#include <iostream>
 #include <string_view>
 #include <system_error>
 #include <util/utils.hpp>
 #include <variant>
 
 #include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
-#include "coro_rpc/coro_rpc/rpc_protocol.h"
+#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
 
-coro_rpc::internal::router<
-    coro_rpc::config::coro_rpc_default_config::rpc_protocol>
-    router;
+coro_rpc::protocol::router<coro_rpc::protocol::coro_rpc_protocol> router;
 
 template <typename T>
 struct rpc_return_type {
@@ -64,15 +62,17 @@ template <>
 struct RPC_trait<void> {
   using return_type = std::monostate;
 };
+using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 template <auto func>
-rpc_result<function_return_type_t<decltype(func)>> get_result(
-    const auto &pair) {
+rpc_result<function_return_type_t<decltype(func)>, coro_rpc_protocol>
+get_result(const auto &pair) {
   auto &&[rpc_errc, buffer] = pair;
   using T = function_return_type_t<decltype(func)>;
-  using return_type = rpc_result<function_return_type_t<decltype(func)>>;
+  using return_type =
+      rpc_result<function_return_type_t<decltype(func)>, coro_rpc_protocol>;
   rpc_return_type_t<T> ret;
   struct_pack::errc ec;
-  rpc_error err;
+  coro_rpc_protocol::rpc_error err;
   if (rpc_errc == std::errc{}) {
     ec = struct_pack::deserialize_to(ret, buffer);
     if (ec == struct_pack::errc::ok) {
@@ -99,12 +99,12 @@ rpc_result<function_return_type_t<decltype(func)>> get_result(
 template <typename R>
 void check_result(const auto &pair, size_t offset = 0) {
   auto [err, buffer] = pair;
-  assert(err == err_ok);
+  assert(err == std::errc{});
   std::string_view data(buffer.data(), buffer.size());
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
   if (res != struct_pack::errc{}) {
-    rpc_error r;
+    coro_rpc_protocol::rpc_error r;
     auto res = struct_pack::deserialize_to(r, data);
     CHECK(res == struct_pack::errc{});
   }
@@ -131,17 +131,21 @@ auto test_route(auto conn, Args &&...args) {
   constexpr auto id = func_id<func>();
   auto handler = router.get_handler(id);
 
+  coro_rpc::protocol::coro_rpc_protocol::req_header header;
+  header.function_id = id;
+
   return router.route(
-      id, handler,
+      handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      conn, std::variant<coro_rpc::config::struct_pack_protocol>{});
+      conn, header, std::variant<coro_rpc::protocol::struct_pack_protocol>{},
+      id);
 }
 
 template <auto func, typename... Args>
 void test_route_and_check(auto conn, Args &&...args) {
   auto pair = test_route<func>(conn, std::forward<Args>(args)...);
   using R = function_return_type_t<decltype(func)>;
-  check_result<R>(pair, RESP_HEAD_LEN);
+  check_result<R>(pair, coro_rpc_protocol::RESP_HEAD_LEN);
 }
 }  // namespace test_util
 
@@ -191,10 +195,14 @@ TEST_CASE("testing coro_handler") {
   constexpr auto id = func_id<coro_func>();
   auto handler = router.get_coro_handler(id);
 
+  coro_rpc::protocol::coro_rpc_protocol::req_header header;
+  header.function_id = id;
+
   async_simple::coro::syncAwait(router.route_coro(
-      id, handler,
+      handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      coro_conn, std::variant<coro_rpc::config::struct_pack_protocol>{}));
+      coro_conn, header,
+      std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id));
 }
 
 TEST_CASE("testing not registered func") {
@@ -225,7 +233,7 @@ TEST_CASE("testing invalid arguments") {
     CHECK(pair.first == std::errc::function_not_supported);
 
     pair = test_route<&test_class::plus_one>(coro_conn, 42);
-    CHECK(pair.first == err_ok);
+    CHECK(pair.first == std::errc{});
 
     pair = test_route<&test_class::plus_one>(coro_conn);
     CHECK(pair.first == std::errc::invalid_argument);
@@ -240,7 +248,7 @@ TEST_CASE("testing invalid arguments") {
     CHECK(pair.first == std::errc::invalid_argument);
 
     pair = test_route<&test_class::get_str>(coro_conn, std::string("test"));
-    CHECK(pair.first == err_ok);
+    CHECK(pair.first == std::errc{});
 
     auto r = get_result<&test_class::get_str>(pair);
     CHECK(r.value() == "test");
@@ -253,7 +261,7 @@ TEST_CASE("testing invalid arguments") {
   CHECK(pair.first == std::errc::invalid_argument);
 
   pair = test_route<get_str>(coro_conn, std::string("test"));
-  CHECK(pair.first == err_ok);
+  CHECK(pair.first == std::errc{});
   auto r = get_result<get_str>(pair);
   CHECK(r.value() == "test");
 
@@ -264,7 +272,7 @@ TEST_CASE("testing invalid arguments") {
   CHECK(pair.first == std::errc::invalid_argument);
 
   pair = test_route<plus_one>(coro_conn, 42);
-  CHECK(pair.first == err_ok);
+  CHECK(pair.first == std::errc{});
 
   pair = test_route<plus_one>(coro_conn, std::string("invalid arguments"));
   CHECK(pair.first == std::errc::invalid_argument);
@@ -276,7 +284,7 @@ TEST_CASE("testing invalid arguments") {
 TEST_CASE("testing invalid buffer") {
   std::pair<std::errc, std::string> pair{};
   pair = test_route<plus_one>(coro_conn, 42);
-  CHECK(pair.first == err_ok);
+  CHECK(pair.first == std::errc{});
 
   g_head_offset = 2;
   pair = test_route<plus_one>(coro_conn, 42);

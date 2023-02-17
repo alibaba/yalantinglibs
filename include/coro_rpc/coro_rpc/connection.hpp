@@ -23,8 +23,8 @@
 #include <utility>
 
 #include "async_simple/coro/Lazy.h"
+#include "coro_connection.hpp"
 #include "easylog/easylog.h"
-#include "rpc_protocol.h"
 #include "util/type_traits.h"
 
 namespace coro_rpc {
@@ -41,52 +41,60 @@ concept connection_t = requires(T t) {
   t.set_delay(true);
   t.has_closed();
 };
-
-class coro_connection;
-
+// clang-format off
 namespace internal {
 
-template <typename T>
-struct serializer_type {
-  using type = std::string (*)(const T &);
-};
+  template <typename T>
+  struct response_handler {
+    using type = std::function<void(rpc_conn &&, T &&)>;
+  };
 
-template <>
-struct serializer_type<void> {
-  using type = std::string (*)();
-};
+  template <>
+  struct response_handler<void> {
+    using type = std::function<void(rpc_conn &&)>;
+  };
+  
 }  // namespace internal
+// clang-format on
 /*!
  *
  * @tparam return_msg_type
- * @tparam conn_t
+ * @tparam coro_connection
  */
-template <typename return_msg_type, connection_t conn_t = coro_connection>
+template <typename return_msg_type>
 class connection {
-  std::shared_ptr<conn_t> conn_;
-  std::shared_ptr<std::atomic<bool>> has_response_;
-
-  using serializer_type_t =
-      typename internal::serializer_type<return_msg_type>::type;
-
-  serializer_type_t serializer;
+  std::shared_ptr<coro_connection> conn_;
+  std::unique_ptr<std::atomic<bool>> has_response_;
+  using response_handler_t =
+      typename internal::response_handler<return_msg_type>::type;
+  response_handler_t response_handler_;
 
  public:
   /*!
    * Construct a connection by a share pointer of Connection Concept
    * instance
-   * @param conn a share pointer, whose template argument satisfied
-   * Connection Concept `conn_t`.
+   * @param a share pointer for coro_connection
    */
-  connection(std::shared_ptr<conn_t> conn, serializer_type_t serializer)
-      : conn_(conn),
-        has_response_(std::make_shared<std::atomic<bool>>(false)),
-        serializer(serializer) {
+  connection(std::shared_ptr<coro_connection> conn,
+             response_handler_t &&response_handler)
+      : conn_(std::move(conn)),
+        has_response_(std::make_unique<std::atomic<bool>>(false)),
+        response_handler_(std::move(response_handler)) {
     if (conn_) {
       conn_->set_delay(true);
     }
   };
   connection() = delete;
+  connection(const connection &conn) = delete;
+  connection(connection &&conn) = default;
+  ~connection() {
+    if (has_response_ && conn_ && !*has_response_) [[unlikely]] {
+      ELOGV(ERROR,
+            "We must send reply to client by call response_msg method"
+            "before coro_rpc::connection<T> destruction!");
+      conn_->async_close();
+    }
+  }
 
   using return_type = return_msg_type;
 
@@ -103,27 +111,41 @@ class connection {
    */
   template <typename... Args>
   void response_msg(Args &&...args) {
-    auto old_flag = has_response_->exchange(true);
-    if (old_flag != false) {
-      ELOGV(ERROR, "response message more than one time");
-      return;
-    }
-    if (has_closed()) [[unlikely]] {
-      ELOGV(DEBUG, "response_msg failed: connection has been closed");
-      return;
-    }
-    std::string msg;
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
-      msg = serializer();
+
+      auto old_flag = has_response_->exchange(true);
+      if (old_flag != false) {
+        ELOGV(ERROR, "response message more than one time");
+        return;
+      }
+
+      if (has_closed()) [[unlikely]] {
+        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        return;
+      }
+
+      response_handler_(std::move(conn_));
     }
     else {
       static_assert(
           requires { return_msg_type{std::forward<Args>(args)...}; },
           "constructed return_msg_type failed by illegal args");
-      msg = serializer(return_msg_type{std::forward<Args>(args)...});
+      return_msg_type ret{std::forward<Args>(args)...};
+
+      auto old_flag = has_response_->exchange(true);
+      if (old_flag != false) {
+        ELOGV(ERROR, "response message more than one time");
+        return;
+      }
+
+      if (has_closed()) [[unlikely]] {
+        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        return;
+      }
+
+      response_handler_(std::move(conn_), std::move(ret));
     }
-    conn_->response_msg(std::move(msg));
   }
 
   /*!
