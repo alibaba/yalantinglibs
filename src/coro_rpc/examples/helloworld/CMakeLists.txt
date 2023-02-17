@@ -15,7 +15,7 @@ target_link_libraries(helloworld_client PRIVATE yalantinglibs::coro_rpc)
 add_executable(helloworld_concurrency_clients concurrency_clients/main.cpp)
 target_link_libraries(helloworld_concurrency_clients PRIVATE yalantinglibs::coro_rpc)
 
-option(USE_OTHER_RPC "coro_rpc extend to support other rpc" ON)
+option(USE_OTHER_RPC "coro_rpc extend to support other rpc" OFF)
 if (USE_OTHER_RPC)
 add_executable(helloworld_other_rpc_server
         extend_to_support_other_rpc_server/main.cpp
