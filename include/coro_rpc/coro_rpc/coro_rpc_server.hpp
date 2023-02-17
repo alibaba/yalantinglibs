@@ -34,8 +34,8 @@
 #include "asio_util/io_context_pool.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "common_service.hpp"
+#include "config/rpc_config.hpp"
 #include "coro_connection.hpp"
-#include "default_config/coro_rpc_config.hpp"
 #include "easylog/easylog.h"
 namespace coro_rpc {
 /*!

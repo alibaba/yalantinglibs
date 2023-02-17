@@ -34,7 +34,7 @@
 #include <util/utils.hpp>
 #include <variant>
 
-#include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
+#include "coro_rpc/coro_rpc/config/rpc_config.hpp"
 #include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
