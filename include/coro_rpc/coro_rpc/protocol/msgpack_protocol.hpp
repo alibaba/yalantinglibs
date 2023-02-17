@@ -14,28 +14,38 @@
  * limitations under the License.
  */
 #pragma once
-#include <struct_pack/struct_pack.hpp>
-namespace coro_rpc::protocol {
 
-struct struct_pack_protocol {
+#include <msgpack.hpp>
+#include <string_view>
+#include <tuple>
+#include <type_traits>
+
+namespace coro_rpc::protocol {
+struct msgpack_protocol {
   template <typename T>
   static bool deserialize_to(T& t, std::string_view buffer) {
-    struct_pack::errc ok{};
-    if constexpr (std::tuple_size_v<T> == 1) {
-      ok = struct_pack::deserialize_to(std::get<0>(t), buffer);
-    }
-    else {
-      ok = struct_pack::deserialize_to(t, buffer);
+    try {
+      msgpack::unpacked unpack;
+      msgpack::unpack(unpack, buffer.data(), buffer.size());
+      t = unpack.get().as<T>();
+    } catch (...) {
+      throw std::invalid_argument("unpack failed: Args not match!");
+      return false;
     }
 
-    return ok == struct_pack::errc::ok;
+    return true;
   }
   template <typename T>
   static std::string serialize(const T& t) {
-    return struct_pack::serialize<std::string>(t);
+    msgpack::sbuffer buffer;
+    msgpack::pack(buffer, std::make_tuple(0, t));
+    std::string str(buffer.data(), buffer.size());
+    return str;
   }
   static std::string serialize() {
-    return struct_pack::serialize<std::string>(std::monostate{});
+    msgpack::sbuffer buffer(4);
+    msgpack::pack(buffer, 0);
+    return buffer.data();
   }
 };
 }  // namespace coro_rpc::protocol

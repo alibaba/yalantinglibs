@@ -87,12 +87,7 @@ inline std::optional<std::string> execute(
     bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
-      if constexpr (size == 1) {
-        is_ok = serialize_proto::deserialize_to(std::get<0>(args), data);
-      }
-      else {
-        is_ok = serialize_proto::deserialize_to(args, data);
-      }
+      is_ok = serialize_proto::deserialize_to(args, data);
     }
 
     if (!is_ok) [[unlikely]] {
@@ -199,12 +194,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
     bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
     if constexpr (size > 0) {
-      if constexpr (size == 1) {
-        is_ok = serialize_proto::deserialize_to(std::get<0>(args), data);
-      }
-      else {
-        is_ok = serialize_proto::deserialize_to(args, data);
-      }
+      is_ok = serialize_proto::deserialize_to(args, data);
     }
 
     if constexpr (std::is_void_v<return_type>) {

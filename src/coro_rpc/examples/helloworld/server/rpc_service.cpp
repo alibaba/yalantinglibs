@@ -36,6 +36,7 @@ int A_add_B(int a, int b) {
 }
 
 std::string_view echo(std::string_view sv) { return sv; }
+std::string echo0(std::string s) { return s; }
 
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
   ELOGV(INFO, "call coro_echo");
