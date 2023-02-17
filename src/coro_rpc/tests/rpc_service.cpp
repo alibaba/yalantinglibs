@@ -84,7 +84,7 @@ void coro_fun_with_delay_return_string_twice(
 void fun_with_delay_return_void_cost_long_time(
     coro_rpc::connection<void> conn) {
   std::thread([conn = std::move(conn)]() mutable {
-    std::this_thread::sleep_for(400ms);
+    std::this_thread::sleep_for(700ms);
     conn.response_msg();
   }).detach();
 }
