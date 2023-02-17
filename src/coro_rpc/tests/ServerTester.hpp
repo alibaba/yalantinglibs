@@ -127,7 +127,7 @@ struct ServerTester : TesterConfig {
   std::shared_ptr<coro_rpc_client> create_client(
       inject_action action = inject_action::nothing) {
     std::shared_ptr<coro_rpc_client> client;
-    // sometimes, connect will take more than conn_timeout_duration(300ms), so
+    // sometimes, connect will take more than conn_timeout_duration(500ms), so
     // retry 3 times to make sure connect ok.
     std::errc ec;
     int retry = 4;
@@ -186,7 +186,7 @@ struct ServerTester : TesterConfig {
   void test_function_registered() {
     g_action = {};
 
-    // because heartbeat timeout is 300ms, sometimes the client closed because
+    // because heartbeat timeout is 500ms, sometimes the client closed because
     // of timeout, so retry call.
     int retry = 4;
     for (int i = 0; i < retry; i++) {
@@ -313,7 +313,7 @@ struct ServerTester : TesterConfig {
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 
-    std::this_thread::sleep_for(400ms);
+    std::this_thread::sleep_for(700ms);
 
     ret = call<async_hi>(client);
     if (enable_heartbeat) {
