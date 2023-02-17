@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,24 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#include "rpc_service.h"
+
+#include <easylog/easylog.h>
 
 #include <chrono>
 #include <thread>
 
-#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
+#include "asio_util/asio_coro_util.hpp"
+#include "async_simple/coro/Sleep.h"
 
-namespace coro_rpc::config {
+using namespace coro_rpc;
 
-struct coro_rpc_config_base {
-  uint16_t port = 8801;
-  unsigned thread_num = std::thread::hardware_concurrency();
-  std::chrono::steady_clock::duration conn_timeout_duration =
-      std::chrono::seconds{0};
-};
+std::string hello_world() {
+  ELOGV(INFO, "call helloworld");
+  return "hello_world";
+}
 
-struct coro_rpc_default_config : public coro_rpc_config_base {
-  using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
-};
+int add(int a, int b) {
+  ELOGV(INFO, "call A+B");
+  return a + b;
+}
 
-}  // namespace coro_rpc::config
+std::string echo(std::string s) { return s; }
+
+std::string HelloService::hello() {
+  ELOGV(INFO, "call HelloServer::hello");
+  return "HelloService::hello";
+}
+
+std::string HelloService::echo(std::string s) { return s; }

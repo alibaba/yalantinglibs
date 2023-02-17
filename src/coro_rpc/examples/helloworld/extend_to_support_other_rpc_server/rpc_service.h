@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,24 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef CORO_RPC_RPC_API_HPP
+#define CORO_RPC_RPC_API_HPP
 
-#include <chrono>
-#include <thread>
+#include <coro_rpc/rpc_connection.hpp>
+#include <string>
+#include <string_view>
 
-#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
+#include "async_simple/coro/Lazy.h"
 
-namespace coro_rpc::config {
+std::string hello_world();
+int add(int a, int b);
+std::string echo(std::string s);
 
-struct coro_rpc_config_base {
-  uint16_t port = 8801;
-  unsigned thread_num = std::thread::hardware_concurrency();
-  std::chrono::steady_clock::duration conn_timeout_duration =
-      std::chrono::seconds{0};
+class HelloService {
+ public:
+  std::string hello();
+  std::string echo(std::string s);
 };
 
-struct coro_rpc_default_config : public coro_rpc_config_base {
-  using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
-};
-
-}  // namespace coro_rpc::config
+#endif  // CORO_RPC_RPC_API_HPP

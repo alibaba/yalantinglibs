@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#pragma once
 #if __has_include(<expected>) && __cplusplus > 202002L
 #include <expected>
 #if __cpp_lib_expected >= 202202L
