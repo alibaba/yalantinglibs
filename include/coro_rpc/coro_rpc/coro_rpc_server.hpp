@@ -74,7 +74,6 @@ class coro_rpc_server {
       : pool_(thread_num),
         acceptor_(pool_.get_io_context()),
         port_(port),
-        executor_(pool_.get_io_context()),
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
@@ -82,7 +81,6 @@ class coro_rpc_server {
       : pool_(config.thread_num),
         acceptor_(pool_.get_io_context()),
         port_(config.port),
-        executor_(pool_.get_io_context()),
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init} {}
 
@@ -235,12 +233,6 @@ class coro_rpc_server {
   uint16_t port() const { return port_; };
 
   /*!
-   * Get inner executor
-   * @return
-   */
-  auto &get_executor() { return executor_; }
-
-  /*!
    * Register RPC service functions (member function)
    *
    * Before RPC server started, all RPC service functions must be registered.
@@ -383,8 +375,8 @@ class coro_rpc_server {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
-
-      start_one(conn).via(&executor_).detach();
+      start_one(conn).start([](auto &&) {
+      });
     }
   }
 
@@ -410,7 +402,6 @@ class coro_rpc_server {
   asio::ip::tcp::acceptor acceptor_;
 
   asio::io_context acceptor_ioc_;
-  asio_util::AsioExecutor executor_;
 
   std::thread thd_;
   std::thread acceptor_thd_;
