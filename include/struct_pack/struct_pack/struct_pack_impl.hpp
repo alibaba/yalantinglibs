@@ -262,7 +262,7 @@ struct is_trivial_serializable {
  public:
   static inline constexpr bool value = is_trivial_serializable::solve();
 };
-
+// clang-format off
 template <typename Type>
 concept trivially_copyable_container =
     continuous_container<Type> &&
@@ -270,7 +270,6 @@ concept trivially_copyable_container =
       requires is_trivial_serializable<typename Type::value_type>::value;
     };
 
-// clang-format off
 template <typename T>
 concept struct_pack_byte = std::is_same_v<char, T>
                            || std::is_same_v<unsigned char, T>
@@ -1039,11 +1038,11 @@ consteval bool check_if_compatible_element_exist() {
 template <typename T, uint64_t version = 0>
 concept exist_compatible_member =
     check_if_compatible_element_exist<decltype(get_types<T>()), version>();
-
+// clang-format off
 template <typename T, uint64_t version = 0>
 concept unexist_compatible_member = !
 exist_compatible_member<decltype(get_types<T>()), version>;
-
+// clang-format on
 template <typename Args, typename... ParentArgs>
 constexpr std::size_t calculate_compatible_version_size();
 
