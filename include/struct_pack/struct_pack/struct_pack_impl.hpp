@@ -180,8 +180,8 @@ constexpr inline bool is_trivial_tuple = false;
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 
-template <class U>
-constexpr auto get_types(U &&t) {
+template <typename U>
+constexpr auto get_types() {
   using T = std::remove_cvref_t<U>;
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
@@ -201,7 +201,7 @@ constexpr auto get_types(U &&t) {
   else if constexpr (std::is_aggregate_v<T>) {
     // clang-format off
     return visit_members(
-        std::forward<U>(t), [&]<typename... Args>(Args &&
+        std::forward<U>(T{}), [&]<typename... Args>(Args &&
                                                   ...) CONSTEXPR_INLINE_LAMBDA {
           return std::tuple<std::remove_cvref_t<Args>...>{};
         });
@@ -247,7 +247,7 @@ struct is_trivial_serializable {
       (std::make_index_sequence<std::tuple_size_v<T>>{});
     }
     else if constexpr (std::is_class_v<T>) {
-      using T_ = decltype(get_types(T{}));
+      using T_ = decltype(get_types<T>());
       return []<std::size_t... I>(std::index_sequence<I...>)
           CONSTEXPR_INLINE_LAMBDA {
         return (is_trivial_serializable<std::tuple_element_t<I, T_>>::value &&
@@ -262,14 +262,14 @@ struct is_trivial_serializable {
  public:
   static inline constexpr bool value = is_trivial_serializable::solve();
 };
-
-template <typename Type>
-concept trivially_copyable_container = continuous_container<Type> &&
-    requires(Type container) {
-  requires is_trivial_serializable<typename Type::value_type>::value;
-};
-
 // clang-format off
+template <typename Type>
+concept trivially_copyable_container =
+    continuous_container<Type> &&
+    requires(Type container) {
+      requires is_trivial_serializable<typename Type::value_type>::value;
+    };
+
 template <typename T>
 concept struct_pack_byte = std::is_same_v<char, T>
                            || std::is_same_v<unsigned char, T>
@@ -653,7 +653,7 @@ consteval decltype(auto) get_type_literal() {
   constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
   if constexpr (id == type_id::non_trivial_class_t ||
                 id == type_id::trivial_class_t) {
-    using Args = decltype(get_types(Arg{}));
+    using Args = decltype(get_types<Arg>());
     constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
         std::make_index_sequence<std::tuple_size_v<Args>>());
     if constexpr (is_trivial_serializable<Arg>::value) {
@@ -833,7 +833,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
   else {
     if constexpr (id == type_id::non_trivial_class_t ||
                   id == type_id::trivial_class_t) {
-      using subArgs = decltype(get_types(T{}));
+      using subArgs = decltype(get_types<T>());
       return check_if_compatible_element_exist_impl<version, subArgs, T,
                                                     ParentArgs...>(
           std::make_index_sequence<std::tuple_size_v<subArgs>>());
@@ -1036,14 +1036,13 @@ consteval bool check_if_compatible_element_exist() {
 }
 
 template <typename T, uint64_t version = 0>
-concept exist_compatible_member = check_if_compatible_element_exist<
-    decltype(get_types(std::remove_cvref_t<T>{})), version>();
-
+concept exist_compatible_member =
+    check_if_compatible_element_exist<decltype(get_types<T>()), version>();
+// clang-format off
 template <typename T, uint64_t version = 0>
-concept unexist_compatible_member =
-    !exist_compatible_member<decltype(get_types(std::remove_cvref_t<T>{})),
-                             version>;
-
+concept unexist_compatible_member = !
+exist_compatible_member<decltype(get_types<T>()), version>;
+// clang-format on
 template <typename Args, typename... ParentArgs>
 constexpr std::size_t calculate_compatible_version_size();
 
@@ -1076,7 +1075,7 @@ constexpr std::size_t calculate_compatible_version_size() {
   else {
     if constexpr (id == type_id::non_trivial_class_t ||
                   id == type_id::trivial_class_t) {
-      using subArgs = decltype(get_types(T{}));
+      using subArgs = decltype(get_types<T>());
       return calculate_compatible_version_size<subArgs, T, ParentArgs...>(
           std::make_index_sequence<std::tuple_size_v<subArgs>>());
     }
@@ -1154,7 +1153,7 @@ constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
   else {
     if constexpr (id == type_id::non_trivial_class_t ||
                   id == type_id::trivial_class_t) {
-      using subArgs = decltype(get_types(T{}));
+      using subArgs = decltype(get_types<T>());
       get_compatible_version_numbers<subArgs, T, ParentArgs...>(
           buffer, sz, std::make_index_sequence<std::tuple_size_v<subArgs>>());
     }
@@ -1377,9 +1376,8 @@ class packer {
   template <typename T, typename... Args>
   static consteval uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
-      return get_types_code<
-          std::remove_cvref_t<T>,
-          std::remove_cvref_t<decltype(get_types(std::declval<T>()))>>();
+      return get_types_code<std::remove_cvref_t<T>,
+                            std::remove_cvref_t<decltype(get_types<T>())>>();
     }
     else {
       return get_types_code<
@@ -1783,9 +1781,7 @@ class unpacker {
 
   template <typename U, size_t I, size_t... Is>
   STRUCT_PACK_INLINE struct_pack::errc deserialize_compatible_fields(
-      std::tuple_element_t<
-          I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>
-          &field,
+      std::tuple_element_t<I, decltype(get_types<U>())> &field,
       std::index_sequence<Is...>) {
     using T = std::remove_cvref_t<U>;
     using Type = get_args_type<T>;
@@ -1856,7 +1852,7 @@ class unpacker {
   STRUCT_PACK_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
     using Type = get_args_type<T, Args...>;
     constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types(Type{}))>();
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
     if constexpr (has_compatible) {
       data_len_ = reader_.tellg();
     }
@@ -1908,7 +1904,7 @@ class unpacker {
                                                             Args &...args) {
     using Type = get_args_type<T, Args...>;
     constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types(Type{}))>();
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
     if constexpr (has_compatible) {
       data_len_ = reader_.tellg();
     }
@@ -1957,14 +1953,12 @@ class unpacker {
 
   template <typename U, size_t I>
   STRUCT_PACK_INLINE struct_pack::errc get_field(
-      std::tuple_element_t<
-          I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>
-          &field) {
+      std::tuple_element_t<I, decltype(get_types<U>())> &field) {
     using T = std::remove_cvref_t<U>;
     using Type = get_args_type<T>;
 
     constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types(Type{}))>();
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
     if constexpr (has_compatible) {
       data_len_ = reader_.tellg();
     }
@@ -2013,9 +2007,7 @@ class unpacker {
 
   template <std::size_t size_type, uint64_t version, typename U, size_t I>
   STRUCT_PACK_INLINE struct_pack::errc get_field_impl(
-      std::tuple_element_t<
-          I, decltype(get_types(std::declval<std::remove_cvref_t<U>>()))>
-          &field) {
+      std::tuple_element_t<I, decltype(get_types<U>())> &field) {
     using T = std::remove_cvref_t<U>;
 
     T t;
@@ -2104,7 +2096,7 @@ class unpacker {
       return {struct_pack::errc::no_buffer_space, 0};
     }
     constexpr uint32_t types_code =
-        get_types_code<T, decltype(get_types(std::declval<T>()))>();
+        get_types_code<T, decltype(get_types<T>())>();
     if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
       return {struct_pack::errc::invalid_buffer, 0};
     }

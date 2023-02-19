@@ -142,8 +142,8 @@ STRUCT_PACK_INLINE consteval std::uint32_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   std::uint32_t ret;
   if constexpr (sizeof...(Args) == 1) {
-    ret = detail::get_types_code<Args..., decltype(detail::get_types(
-                                              std::declval<Args...>()))>();
+    ret = detail::get_types_code<Args...,
+                                 decltype(detail::get_types<Args...>())>();
   }
   else {
     ret = detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
@@ -157,7 +157,7 @@ template <typename... Args>
 STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
-    using Types = decltype(detail::get_types(Args{}...));
+    using Types = decltype(detail::get_types<Args...>());
     return detail::get_types_literal<Args..., Types>(
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
@@ -412,8 +412,7 @@ template <typename T, typename... Args>
 template <typename T, size_t I, typename Field, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc get_field_to(Field &dst,
                                                                 const View &v) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   static_assert(std::is_same_v<Field, T_Field>,
                 "The dst's type is not correct. It should be as same as the "
                 "T's Ith field's type");
@@ -426,8 +425,7 @@ template <typename T, size_t I, typename Field, detail::deserialize_view View>
 template <typename T, size_t I, typename Field>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc get_field_to(
     Field &dst, const char *data, size_t size) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   static_assert(std::is_same_v<Field, T_Field>,
                 "The dst's type is not correct. It should be as same as the "
                 "T's Ith field's type");
@@ -439,8 +437,7 @@ template <typename T, size_t I, typename Field>
 template <typename T, size_t I, typename Field, struct_pack::reader_t Reader>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc get_field_to(
     Field &dst, Reader &reader) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   static_assert(std::is_same_v<Field, T_Field>,
                 "The dst's type is not correct. It should be as same as the "
                 "T's Ith field's type");
@@ -450,8 +447,7 @@ template <typename T, size_t I, typename Field, struct_pack::reader_t Reader>
 
 template <typename T, size_t I, detail::deserialize_view View>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const View &v) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
   if (auto ec = get_field_to<T, I>(ret.value(), v); ec != struct_pack::errc{})
       [[unlikely]] {
@@ -462,8 +458,7 @@ template <typename T, size_t I, detail::deserialize_view View>
 
 template <typename T, size_t I>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const char *data, size_t size) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
   if (auto ec = get_field_to<T, I>(ret.value(), data, size);
       ec != struct_pack::errc{}) [[unlikely]] {
@@ -474,8 +469,7 @@ template <typename T, size_t I>
 
 template <typename T, size_t I, struct_pack::reader_t Reader>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(Reader &reader) {
-  using T_Field =
-      std::tuple_element_t<I, decltype(detail::get_types(std::declval<T>()))>;
+  using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
   if (auto ec = get_field_to<T, I>(ret.value(), reader);
       ec != struct_pack::errc{}) [[unlikely]] {
