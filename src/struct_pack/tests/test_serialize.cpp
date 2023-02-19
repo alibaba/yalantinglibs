@@ -548,25 +548,23 @@ TEST_CASE("test get type code") {
   }
 
   SUBCASE("test get_types") {
-    person p;
-    nested_object nested;
     using namespace struct_pack::detail;
-    auto t = get_types(p);
+    auto t = get_types<person>();
     static_assert(std::is_same_v<std::tuple<int, std::string>, decltype(t)>);
 
-    auto t1 = get_types(std::tuple<int, std::string>{});
+    auto t1 = get_types<std::tuple<int, std::string>>();
     static_assert(std::is_same_v<std::tuple<int, std::string>, decltype(t1)>);
 
-    auto t2 = get_types(int(1));
+    auto t2 = get_types<int>();
     static_assert(std::is_same_v<std::tuple<int>, decltype(t2)>);
 
-    auto t3 = get_types(std::vector<int>{});
+    auto t3 = get_types<std::vector<int>>();
     static_assert(std::is_same_v<std::tuple<std::vector<int>>, decltype(t3)>);
 
-    static_assert(
-        std::is_same_v<decltype(get_types(p)), std::tuple<int, std::string>>);
+    static_assert(std::is_same_v<decltype(get_types<person>()),
+                                 std::tuple<int, std::string>>);
     static_assert(std::is_same_v<
-                  decltype(get_types(nested)),
+                  decltype(get_types<nested_object>()),
                   std::tuple<int, std::string, person, complicated_object>>);
   }
 
