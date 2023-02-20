@@ -194,19 +194,7 @@ doctest is put in tests folder.
 
 # How to generate document
 
-For English document, run
-
-```shell
-doxygen Doxyfile
-```
-All files generated in `docs/en`.
-
-For Chinese document, run
-
-```shell
-doxygen Doxyfile_cn
-```
-All files generated in `docs/cn`.
+see [Build Website](website/README.md)
 
 # How to Contribute
 1. Create an issue in the issue template.
