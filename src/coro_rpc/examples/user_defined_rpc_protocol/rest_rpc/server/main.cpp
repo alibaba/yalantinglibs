@@ -23,6 +23,7 @@ using namespace async_simple;
 using namespace async_simple::coro;
 
 /*
+  // TODO: add user-defined rpc client
   // use rest_rpc(https://github.com/qicosmos/rest_rpc) client to test:
   #include <rest_rpc.hpp>
   void test_rest_rpc_client(){
