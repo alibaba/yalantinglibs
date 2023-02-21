@@ -13,14 +13,17 @@ else()
   # else find installed yalantinglibs
     find_package(yalantinglibs REQUIRED)
     find_package(Threads)
+    find_package(Msgpack)
 endif()
-add_executable(file_server
-        file_server/main.cpp
-        file_server/rpc_service.cpp
-        )
-target_link_libraries(file_server PRIVATE yalantinglibs::coro_rpc)
-add_executable(file_client file_client/main.cpp)
-target_link_libraries(file_client PRIVATE yalantinglibs::coro_rpc)
+
+add_executable(rest_rpc_server
+  server/main.cpp
+  server/rpc_service.cpp
+)
+target_link_libraries(rest_rpc_server PRIVATE yalantinglibs::coro_rpc )
+target_link_libraries(rest_rpc_server PRIVATE msgpackc-cxx)
+target_compile_definitions(rest_rpc_server PRIVATE HAVE_MSGPACK)
+target_compile_definitions(rest_rpc_server PRIVATE MSGPACK_NO_BOOST)
 
 if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
   # if is the subproject of yalantinglibs

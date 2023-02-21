@@ -24,8 +24,8 @@
 #include <ostream>
 #include <sstream>
 
+// It's easy to use struct_pack, just include it!
 #include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 
 struct fwrite_stream {
   FILE* file;

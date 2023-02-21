@@ -39,7 +39,7 @@ English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/
 
 ```cpp
 // rpc_service.hpp
-inline std::string echo(std::string str) { return str; }
+inline std::string_view echo(std::string_view str) { return str; }
 ```
 
 2.register rpc function and start a server
@@ -140,7 +140,7 @@ int main() {
 A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
 See [async_simple](https://github.com/alibaba/async_simple)
 
-## Quick Start of coro_rpc
+## Quick Start
 
 - clone repo
 
@@ -148,12 +148,16 @@ See [async_simple](https://github.com/alibaba/async_simple)
 git clone https://github.com/alibaba/yalantinglibs.git
 ```
 
-- build with cmake
+- build & install
 
 ```shell
+cd yalantinglibs
 mkdir build && cd build
-cmake ..
+cmake .. 
+# You can use those option to skip build unit-test & benchmark & example: 
+# cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
 make -j
+make install
 ```
 
 - run tests
@@ -162,6 +166,22 @@ make -j
 cd tests
 ctest .
 ```
+
+- start your coding
+
+### coro_rpc
+
+```shell
+cd yalantinglibs/src/coro_rpc/examples/helloworld
+mkdir build && cd build
+cmake ..
+make -j
+# For more detail, see Cmakelist.txt in helloworld.
+```
+
+### struct_pack
+
+TODO
 
 ## Benchmark
 
@@ -177,20 +197,39 @@ options:
 | ----------------- | ------------------------------------------------ | ------- |
 | CMAKE_BUILD_TYPE  | build type                                       | Release |
 | BUILD_WITH_LIBCXX | Build with libc++                                | OFF     |
+| BUILD_EXAMPLES    | Build examples                                   | ON      |
+| BUILD_BENCHMARK   | Build benchmark                                  | ON      | 
+| BUILD_UNIT_TESTS  | Build unit test                                  | ON      |
 | USE_CONAN         | Use conan package manager to handle dependencies | OFF     |
 | ENABLE_SSL        | Enable ssl support                               | OFF     |
 | ENABLE_IO_URING   | Enable io_uring support                          | OFF     |
 
 ## Dependencies
 
-- [doctest](https://github.com/doctest/doctest)
+We use doctest for unit test. 
+All third-party dependencies are put in include/thirdparty.
+
+### coro_rpc
+
+- [struct_pack](https://github.com/alibaba/yalantinglibs)
+- [easylog](https://github.com/alibaba/yalantinglibs)
 - [asio](https://github.com/chriskohlhoff/asio)
 - openssl (optional)
-- [async_simple](https://github.com/alibaba/async_simple)
+### struct_pack
+
+No dependency.
+
+### struct_json
+
 - [iguana](https://github.com/qicosmos/iguana)
 
-Currently, asio and frozen are put in thirdparty folder.
-doctest is put in tests folder.
+### struct_pb
+
+TODO
+
+### easylog
+
+No dependency.
 
 # How to generate document
 
