@@ -7,6 +7,7 @@ rm -rf guide
 mkdir guide
 cd guide
 cp ../how-to-use-as-git-submodule.md how-to-use-as-git-submodule.md
+cp ../how-to-use-by-cmake-find_package.md how-to-use-by-cmake-find_package.md
 cp ../../README.md what-is-yalantinglibs.md
 cp ../../src/struct_pack/doc/Introduction_EN.md struct-pack-intro.md
 cp ../../src/struct_pack/doc/struct_pack_layout_EN.md struct-pack-layout.md
