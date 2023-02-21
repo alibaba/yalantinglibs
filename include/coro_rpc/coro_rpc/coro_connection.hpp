@@ -36,11 +36,6 @@
 #endif
 namespace coro_rpc {
 
-template <typename T, typename Head>
-concept has_pretreatment = requires(Head &req_head) {
-  T::pretreatment(req_head);
-};
-
 template <typename T>
 concept apply_user_buf = requires() {
   requires std::is_same_v<std::string_view,
@@ -174,12 +169,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       else {
         ec = co_await rpc_protocol::read_payload(socket, req_head, body_);
         payload = std::string_view{body_.data(), body_.size()};
-      }
-
-      // maybe need to pretreatment before route
-      if constexpr (has_pretreatment<rpc_protocol,
-                                     typename rpc_protocol::req_header>) {
-        rpc_protocol::pretreatment(req_head);
       }
 
       if (ec) [[unlikely]] {
