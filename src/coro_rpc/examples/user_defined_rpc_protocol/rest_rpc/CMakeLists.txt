@@ -13,8 +13,9 @@ else()
   # else find installed yalantinglibs
     find_package(yalantinglibs REQUIRED)
     find_package(Threads)
-    find_package(Msgpack)
 endif()
+
+find_package(Msgpack)
 
 add_executable(rest_rpc_server
   server/main.cpp

@@ -190,6 +190,7 @@ async_simple::coro::Lazy<void> coro_func() {
 }
 
 TEST_CASE("testing coro_handler") {
+  router.register_handler<coro_func>(1);
   router.register_handler<coro_func>();
   auto buf = pack();
   constexpr auto id = func_id<coro_func>();
@@ -228,6 +229,7 @@ TEST_CASE("testing invalid arguments") {
 
   SUBCASE("test member functions") {
     test_class obj{};
+    router.register_handler<&test_class::plus_one>(&obj, 2);
     router.register_handler<&test_class::plus_one, &test_class::get_str>(&obj);
     pair = test_route<plus_one>(coro_conn, 42);
     CHECK(pair.first == std::errc::function_not_supported);

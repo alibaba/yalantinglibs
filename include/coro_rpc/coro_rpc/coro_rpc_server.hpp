@@ -266,6 +266,11 @@ class coro_rpc_server {
     router_.template register_handler<first, functions...>(self);
   }
 
+  template <auto first>
+  void register_handler(class_type_t<decltype(first)> *self, const auto &key) {
+    router_.template register_handler<first>(self, key);
+  }
+
   /*!
    * Register RPC service functions (non-member function)
    *
@@ -293,6 +298,11 @@ class coro_rpc_server {
   template <auto... functions>
   void register_handler() {
     router_.template register_handler<functions...>();
+  }
+
+  template <auto func>
+  void register_handler(const auto &key) {
+    router_.template register_handler<func>(key);
   }
 
   /*!
