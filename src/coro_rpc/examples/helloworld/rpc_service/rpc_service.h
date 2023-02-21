@@ -34,8 +34,6 @@ class HelloService {
   std::string hello();
   void hello_with_delay(coro_rpc::connection<std::string> conn,
                         std::string hello);
-
- private:
 };
 
 #endif  // CORO_RPC_RPC_API_HPP

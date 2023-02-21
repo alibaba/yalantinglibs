@@ -23,6 +23,7 @@ using namespace async_simple;
 using namespace async_simple::coro;
 
 /*
+  // TODO: add user-defined rpc client
   // use rest_rpc(https://github.com/qicosmos/rest_rpc) client to test:
   #include <rest_rpc.hpp>
   void test_rest_rpc_client(){
@@ -55,11 +56,11 @@ int main() {
       std::thread::hardware_concurrency(), 8801);
 
   // regist normal function for rpc
-  server.regist_handler<hello_world, add, echo>();
+  server.register_handler<hello_world, add, echo>();
 
   // regist member function for rpc
   HelloService hello_service;
-  server.regist_handler<&HelloService::hello, &HelloService::echo>(
+  server.register_handler<&HelloService::hello, &HelloService::echo>(
       &hello_service);
 
   auto ec = server.start();

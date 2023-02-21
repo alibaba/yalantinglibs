@@ -119,7 +119,7 @@ TEST_CASE("testing client") {
       CHECK_MESSAGE(ret.error().code == std::errc::timed_out, ret.error().msg);
       co_return;
     };
-    server.regist_handler<hello_timeout>();
+    server.register_handler<hello_timeout>();
     syncAwait(f());
   }
 
@@ -133,7 +133,7 @@ TEST_CASE("testing client") {
       CHECK(ret.value() == std::string("hello"));
       co_return;
     };
-    server.regist_handler<hello>();
+    server.register_handler<hello>();
     syncAwait(f());
   }
 
@@ -147,7 +147,7 @@ TEST_CASE("testing client") {
       CHECK(ret.value() == arg);
       co_return;
     };
-    server.regist_handler<large_arg_fun>();
+    server.register_handler<large_arg_fun>();
     syncAwait(f());
   }
 
@@ -174,7 +174,7 @@ TEST_CASE("testing client with inject server") {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
 
-  server.regist_handler<hello>();
+  server.register_handler<hello>();
 
   SUBCASE("server run ok") {
     g_action = {};
@@ -236,7 +236,7 @@ class SSLClientTester {
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
     server.init_ssl_context(config);
-    server.template regist_handler<hi>();
+    server.template register_handler<hi>();
     server.async_start().start([](auto&&) {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -370,7 +370,7 @@ TEST_CASE("testing client with eof") {
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
 
-  server.regist_handler<hello, client_hello>();
+  server.register_handler<hello, client_hello>();
   auto ret = client.sync_call<hello>();
   CHECK(ret.value() == "hello"s);
 
@@ -391,7 +391,7 @@ TEST_CASE("testing client with shutdown") {
   coro_rpc_client client(g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
-  server.regist_handler<hello, client_hello>();
+  server.register_handler<hello, client_hello>();
 
   g_action = inject_action::nothing;
   auto ret = client.sync_call<hello>();
@@ -485,8 +485,8 @@ TEST_CASE("testing client call timeout") {
     g_action = {};
     coro_rpc_server server(2, 8801);
 
-    server.regist_handler<hello_timeout>();
-    server.regist_handler<hi>();
+    server.register_handler<hello_timeout>();
+    server.register_handler<hi>();
     server.async_start().start([](auto&&) {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");

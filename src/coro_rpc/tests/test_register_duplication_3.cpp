@@ -20,8 +20,8 @@ using namespace coro_rpc;
 int main() {
   coro_rpc_server server(1, 9001);
   HelloService s;
-  server.regist_handler<&HelloService::hello>(&s);
-  server.regist_handler<&HelloService::hello>(&s);
+  server.register_handler<&HelloService::hello>(&s);
+  server.register_handler<&HelloService::hello>(&s);
   assert(false && "can not reach");
   return 0;
 }

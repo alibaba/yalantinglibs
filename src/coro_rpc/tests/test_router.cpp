@@ -190,7 +190,7 @@ async_simple::coro::Lazy<void> coro_func() {
 }
 
 TEST_CASE("testing coro_handler") {
-  router.regist_handler<coro_func>();
+  router.register_handler<coro_func>();
   auto buf = pack();
   constexpr auto id = func_id<coro_func>();
   auto handler = router.get_coro_handler(id);
@@ -228,7 +228,7 @@ TEST_CASE("testing invalid arguments") {
 
   SUBCASE("test member functions") {
     test_class obj{};
-    router.regist_handler<&test_class::plus_one, &test_class::get_str>(&obj);
+    router.register_handler<&test_class::plus_one, &test_class::get_str>(&obj);
     pair = test_route<plus_one>(coro_conn, 42);
     CHECK(pair.first == std::errc::function_not_supported);
 
@@ -254,8 +254,8 @@ TEST_CASE("testing invalid arguments") {
     CHECK(r.value() == "test");
   }
 
-  router.regist_handler<plus_one>();
-  router.regist_handler<get_str>();
+  router.register_handler<plus_one>();
+  router.register_handler<get_str>();
 
   pair = test_route<get_str>(coro_conn, "test");
   CHECK(pair.first == std::errc::invalid_argument);
@@ -302,7 +302,7 @@ void throw_exception_func() { throw std::runtime_error("runtime error"); }
 void throw_exception_func1() { throw 1; }
 
 TEST_CASE("testing exceptions") {
-  router.regist_handler<throw_exception_func, throw_exception_func1>();
+  router.register_handler<throw_exception_func, throw_exception_func1>();
 
   std::pair<std::errc, std::string> pair{};
   pair = test_route<throw_exception_func>(coro_conn);
@@ -317,7 +317,7 @@ TEST_CASE("testing exceptions") {
 }
 
 TEST_CASE("testing object arguments") {
-  router.regist_handler<get_person>();
+  router.register_handler<get_person>();
 
   person p{1, "tom"};
   auto buf = struct_pack::serialize(p);
@@ -326,23 +326,23 @@ TEST_CASE("testing object arguments") {
   REQUIRE(ec == struct_pack::errc{});
   test_route_and_check<get_person>(coro_conn, p);
 
-  router.regist_handler<get_person1>();
+  router.register_handler<get_person1>();
   test_route_and_check<get_person1>(coro_conn, p, 42, std::string("jerry"));
 }
 
 TEST_CASE("testing basic rpc register and route") {
-  router.regist_handler<bar>();
-  router.regist_handler<bar3>();
+  router.register_handler<bar>();
+  router.register_handler<bar3>();
 
-  router.regist_handler<foo, foo1, foo2>();
+  router.register_handler<foo, foo1, foo2>();
 
   test_route_and_check<foo>(coro_conn, 42);
   test_route_and_check<foo1>(coro_conn, 42);
   test_route_and_check<foo2>(coro_conn);
 
   SUBCASE("test static functions") {
-    router.regist_handler<plus_two>();
-    router.regist_handler<test_class::plus_two>();
+    router.register_handler<plus_two>();
+    router.register_handler<test_class::plus_two>();
 
     test_route_and_check<plus_two>(coro_conn, 42, 42);
     test_route_and_check<test_class::plus_two>(coro_conn, 42, 42);

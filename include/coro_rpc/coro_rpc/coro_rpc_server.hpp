@@ -262,8 +262,8 @@ class coro_rpc_server {
    */
 
   template <auto first, auto... functions>
-  void regist_handler(class_type_t<decltype(first)> *self) {
-    router_.template regist_handler<first, functions...>(self);
+  void register_handler(class_type_t<decltype(first)> *self) {
+    router_.template register_handler<first, functions...>(self);
   }
 
   /*!
@@ -291,8 +291,8 @@ class coro_rpc_server {
    */
 
   template <auto... functions>
-  void regist_handler() {
-    router_.template regist_handler<functions...>();
+  void register_handler() {
+    router_.template register_handler<functions...>();
   }
 
   /*!

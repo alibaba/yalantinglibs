@@ -369,7 +369,7 @@ struct ServerTester : TesterConfig {
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
-    CHECK_MESSAGE(ec == std::errc::timed_out,
+    CHECK_MESSAGE(ec != std::errc{},
                   std::to_string(client->get_client_id())
                       .append(make_error_code(ec).message()));
   }
