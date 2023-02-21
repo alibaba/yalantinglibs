@@ -31,7 +31,7 @@ TEST_CASE("test varadic param") {
   auto server = std::make_unique<coro_rpc::coro_rpc_server<>>(
       std::thread::hardware_concurrency(), 8808);
   std::thread thrd([&] {
-    server->regist_handler<test_func>();
+    server->register_handler<test_func>();
     try {
       auto ec = server->start();
       REQUIRE(ec == std::errc{});

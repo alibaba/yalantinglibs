@@ -19,8 +19,8 @@
 using namespace coro_rpc;
 int main() {
   coro_rpc_server server(1, 9001);
-  server.regist_handler<hi>();
-  server.regist_handler<hi>();
+  server.register_handler<hi>();
+  server.register_handler<hi>();
   assert(false && "can not reach");
   return 0;
 }
