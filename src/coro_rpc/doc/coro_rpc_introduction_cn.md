@@ -305,14 +305,13 @@ coro_rpc已经考虑到了这个问题，coro_rpc认为rpc任务分为实时任�
 将之前实时任务改成延时任务
 
 ```cpp
-#include <coro_rpc/connection.hpp>
-#include <coro_rpc/coro_rpc_server.hpp>
+#include <coro_rpc/context.hpp>
 
 //实时任务，io线程中实时处理和发送结果
 std::string echo(std::string str) { return str; }
 
 //延时任务，在另外的独立线程中处理并发送结果
-void delay_echo(coro_connection<std::string> conn, std::string str) {
+void delay_echo(coro_rpc::context<std::string> conn, std::string str) {
   std::thread([conn, str]{
     conn.response_msg(str); //在独立线程中发送rpc结果
   }).detach();

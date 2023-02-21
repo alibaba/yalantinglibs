@@ -22,7 +22,7 @@
 #include <type_traits>
 #include <variant>
 
-#include "connection.hpp"
+#include "context.hpp"
 #include "coro_connection.hpp"
 #include "util/type_traits.h"
 
@@ -73,7 +73,7 @@ inline std::optional<std::string> execute(
 
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, connection>::value;
+    constexpr bool is_conn = requires { typename First::return_type; };
     if constexpr (is_conn) {
       static_assert(std::is_void_v<return_type>,
                     "The return_type must be void");
@@ -81,7 +81,7 @@ inline std::optional<std::string> execute(
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_same_v<connection<conn_return_type>, First>;
+        std::is_convertible_v<context<conn_return_type>, First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
@@ -100,7 +100,7 @@ inline std::optional<std::string> execute(
           // call void func(coro_conn, args...)
           std::apply(func,
                      std::tuple_cat(
-                         std::forward_as_tuple(connection<conn_return_type>(
+                         std::forward_as_tuple(context<conn_return_type>(
                              std::move(conn),
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{
@@ -120,7 +120,7 @@ inline std::optional<std::string> execute(
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connection<conn_return_type>(
+                      o, context<conn_return_type>(
                              std::move(conn),
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{
@@ -180,7 +180,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
 
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, connection>::value;
+    constexpr bool is_conn = is_specialization<First, context>::value;
     if constexpr (is_conn) {
       static_assert(std::is_void_v<return_type>,
                     "The return_type must be void");
@@ -188,7 +188,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_same_v<connection<conn_return_type>, First>;
+        std::is_same_v<context<conn_return_type>, First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
@@ -203,7 +203,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
           // call void func(coro_conn, args...)
           co_await std::apply(
               func, std::tuple_cat(
-                        std::forward_as_tuple(connection<conn_return_type>(
+                        std::forward_as_tuple(context<conn_return_type>(
                             std::move(conn),
                             connection_responser<rpc_protocol, serialize_proto,
                                                  conn_return_type>{
@@ -223,7 +223,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, connection<conn_return_type>(
+                      o, context<conn_return_type>(
                              std::move(conn),
                              connection_responser<rpc_protocol, serialize_proto,
                                                   conn_return_type>{

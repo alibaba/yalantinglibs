@@ -87,6 +87,8 @@ struct CoroServerTester : ServerTester {
     test_server_send_bad_rpc_result();
     test_server_send_no_body();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void>();
+    this->test_call_with_delay_func<
+        coro_fun_with_user_define_connection_type>();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void_twice>();
     this->test_call_with_delay_func_client_read_length_error<
         coro_fun_with_delay_return_void>();
@@ -107,6 +109,7 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&ns_login::LoginService::login>(&login_service_);
     server.register_handler<&HelloService::hello>(&hello_service_);
     server.register_handler<hello>();
+    server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
     server.register_handler<coro_fun_with_delay_return_void_twice>();
     server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();

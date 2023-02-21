@@ -30,17 +30,7 @@
 namespace coro_rpc {
 
 // TODO: Add more require
-/*!
- * \concept connection_t
- * Connection Concept
- * @tparam T
- */
-template <typename T>
-concept connection_t = requires(T t) {
-  t.response_msg(std::string{});
-  t.set_delay(true);
-  t.has_closed();
-};
+
 // clang-format off
 namespace internal {
 
@@ -62,7 +52,7 @@ namespace internal {
  * @tparam coro_connection
  */
 template <typename return_msg_type>
-class connection {
+class context {
   std::shared_ptr<coro_connection> conn_;
   std::unique_ptr<std::atomic<bool>> has_response_;
   using response_handler_t =
@@ -71,12 +61,12 @@ class connection {
 
  public:
   /*!
-   * Construct a connection by a share pointer of Connection Concept
+   * Construct a context by a share pointer of context Concept
    * instance
    * @param a share pointer for coro_connection
    */
-  connection(std::shared_ptr<coro_connection> conn,
-             response_handler_t &&response_handler)
+  context(std::shared_ptr<coro_connection> conn,
+          response_handler_t &&response_handler)
       : conn_(std::move(conn)),
         has_response_(std::make_unique<std::atomic<bool>>(false)),
         response_handler_(std::move(response_handler)) {
@@ -84,14 +74,14 @@ class connection {
       conn_->set_delay(true);
     }
   };
-  connection() = delete;
-  connection(const connection &conn) = delete;
-  connection(connection &&conn) = default;
-  ~connection() {
+  context() = delete;
+  context(const context &conn) = delete;
+  context(context &&conn) = default;
+  ~context() {
     if (has_response_ && conn_ && !*has_response_) [[unlikely]] {
       ELOGV(ERROR,
             "We must send reply to client by call response_msg method"
-            "before coro_rpc::connection<T> destruction!");
+            "before coro_rpc::context<T> destruction!");
       conn_->async_close();
     }
   }
@@ -188,7 +178,7 @@ inline auto get_return_type() {
   }
   else {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, connection>::value;
+    constexpr bool is_conn = is_specialization<First, context>::value;
 
     if constexpr (is_conn) {
       using U = typename First::return_type;
