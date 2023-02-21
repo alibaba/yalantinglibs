@@ -46,43 +46,45 @@ int long_run_func(int val) {
   return val;
 }
 
-void fun_with_delay_return_void(coro_rpc::connection<void> conn) {
+void coro_fun_with_user_define_connection_type(my_context conn) {
+  conn.ctx_.response_msg();
+}
+
+void fun_with_delay_return_void(coro_rpc::context<void> conn) {
   conn.response_msg();
 }
 
-void fun_with_delay_return_string(coro_rpc::connection<std::string> conn) {
+void fun_with_delay_return_string(coro_rpc::context<std::string> conn) {
   conn.response_msg("string"s);
 }
 
-void fun_with_delay_return_void_twice(coro_rpc::connection<void> conn) {
+void fun_with_delay_return_void_twice(coro_rpc::context<void> conn) {
   conn.response_msg();
   conn.response_msg();
 }
 
-void fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string> conn) {
+void fun_with_delay_return_string_twice(coro_rpc::context<std::string> conn) {
   conn.response_msg("string"s);
   conn.response_msg("string"s);
 }
-void coro_fun_with_delay_return_void(coro_rpc::connection<void> conn) {
+void coro_fun_with_delay_return_void(coro_rpc::context<void> conn) {
   fun_with_delay_return_void(std::move(conn));
 }
 
-void coro_fun_with_delay_return_string(coro_rpc::connection<std::string> conn) {
+void coro_fun_with_delay_return_string(coro_rpc::context<std::string> conn) {
   fun_with_delay_return_string(std::move(conn));
 }
 
-void coro_fun_with_delay_return_void_twice(coro_rpc::connection<void> conn) {
+void coro_fun_with_delay_return_void_twice(coro_rpc::context<void> conn) {
   fun_with_delay_return_void_twice(std::move(conn));
 }
 
 void coro_fun_with_delay_return_string_twice(
-    coro_rpc::connection<std::string> conn) {
+    coro_rpc::context<std::string> conn) {
   fun_with_delay_return_string_twice(std::move(conn));
 }
 
-void fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void> conn) {
+void fun_with_delay_return_void_cost_long_time(coro_rpc::context<void> conn) {
   std::thread([conn = std::move(conn)]() mutable {
     std::this_thread::sleep_for(700ms);
     conn.response_msg();
@@ -90,7 +92,7 @@ void fun_with_delay_return_void_cost_long_time(
 }
 
 void coro_fun_with_delay_return_void_cost_long_time(
-    coro_rpc::connection<void> conn) {
+    coro_rpc::context<void> conn) {
   fun_with_delay_return_void_cost_long_time(std::move(conn));
 }
 

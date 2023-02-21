@@ -48,9 +48,9 @@ inline void monsterFunc(Monster monster) { return; }
 
 inline void ValidateRequestFunc(ValidateRequest req) { return; }
 
-inline void heavy_calculate(coro_rpc::connection<int> conn, int a) {
+inline void heavy_calculate(coro_rpc::context<int> conn, int a) {
   [&ioc = pool.get_io_context()](
-      int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
+      int a, coro_rpc::context<int> conn) -> async_simple::coro::Lazy<void> {
     std::vector<int> ar;
     ar.reserve(10001);
     for (int i = 0; i < 10000; ++i) ar.push_back((std::max)(a, rand()));
@@ -59,14 +59,14 @@ inline void heavy_calculate(coro_rpc::connection<int> conn, int a) {
     conn.response_msg(ar[0]);
     co_return;
   }(a, std::move(conn))
-                                                    .start([](auto &&e) {
-                                                    });
+                                                 .start([](auto &&e) {
+                                                 });
   return;
 }
 
 inline std::string download_10KB(int a) { return std::string(10000, 'A'); }
 
-inline void long_tail_heavy_calculate(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_heavy_calculate(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {
@@ -77,21 +77,21 @@ inline void long_tail_heavy_calculate(coro_rpc::connection<int> conn, int a) {
   }
 }
 
-inline void async_io(coro_rpc::connection<int> conn, int a) {
+inline void async_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
   [&ioc = pool.get_io_context()](
-      int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
+      int a, coro_rpc::context<int> conn) -> async_simple::coro::Lazy<void> {
     auto timer = asio_util::period_timer(ioc);
     timer.expires_after(10ms);
     co_await timer.async_await();
     conn.response_msg(a);
   }(a, std::move(conn))
-                                                    .start([](auto &&e) {
-                                                    });
+                                                 .start([](auto &&e) {
+                                                 });
   return;
 }
 
-inline void long_tail_async_io(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_async_io(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {
@@ -103,7 +103,7 @@ inline void long_tail_async_io(coro_rpc::connection<int> conn, int a) {
   return;
 }
 
-inline void block_io(coro_rpc::connection<int> conn, int a) {
+inline void block_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
   asio::post(pool.get_io_context(), [conn = std::move(conn), a]() mutable {
     std::this_thread::sleep_for(50ms);
@@ -112,7 +112,7 @@ inline void block_io(coro_rpc::connection<int> conn, int a) {
   return;
 }
 
-inline void long_tail_block_io(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_block_io(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {

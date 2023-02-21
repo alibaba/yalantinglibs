@@ -4,7 +4,7 @@
 
 std::string echo(std::string str) { return str; }
 
-void upload_file(coro_rpc::connection<std::errc> conn, file_part part) {
+void upload_file(coro_rpc::context<std::errc> conn, file_part part) {
   std::shared_ptr<std::ofstream> stream = nullptr;
   if (!conn.get_tag().has_value()) {
     stream = std::make_shared<std::ofstream>();
@@ -29,7 +29,7 @@ void upload_file(coro_rpc::connection<std::errc> conn, file_part part) {
   conn.response_msg(std::errc{});
 }
 
-void download_file(coro_rpc::connection<response_part> conn,
+void download_file(coro_rpc::context<response_part> conn,
                    std::string filename) {
   std::shared_ptr<std::ifstream> stream = nullptr;
   if (!conn.get_tag().has_value()) {
