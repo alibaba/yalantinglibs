@@ -233,7 +233,7 @@ No dependency.
 
 # How to generate document
 
-see [Build Website](website/README.md)
+see [Build Website](https://alibaba.github.io/yalantinglibs/README.html)
 
 # How to Contribute
 1. Create an issue in the issue template.
