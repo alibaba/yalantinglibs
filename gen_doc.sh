@@ -39,8 +39,25 @@ cp ../../../src/coro_rpc/doc/coro_rpc_introduction_cn.md coro-rpc-intro.md
 cp -r ../../guide/images .
 cp -r ../../guide/src .
 
-cd "$ROOT_DIR" || exit 1
+# cd "$ROOT_DIR" || exit 1
+cd "$ROOT_DIR"
 yarn docs:build
 doxygen Doxyfile
 doxygen Doxyfile_cn
-echo 'Done!'
+echo 'Generate Done!'
+
+function handle_style(){
+    for file in `ls $1`
+    do
+        if [ -d $1"/"$file ]
+        then
+            handle_style $1"/"$file
+        else
+            if [[ $file = *.html ]];then
+                sed -i 's/class="VPContent" id="VPContent"/class="VPContent has-sidebar" id="VPContent"/g' $1"/"$file
+            fi
+        fi
+    done
+}
+handle_style $(pwd)/docs/zh
+echo "Fix Style Done!"
