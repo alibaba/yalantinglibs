@@ -102,27 +102,27 @@ struct CoroServerTester : ServerTester {
   void register_all_function() override {
     g_action = {};
     ELOGV(INFO, "run %s", __func__);
-    server.regist_handler<async_hi, large_arg_fun, client_hello>();
-    server.regist_handler<long_run_func>();
-    server.regist_handler<&ns_login::LoginService::login>(&login_service_);
-    server.regist_handler<&HelloService::hello>(&hello_service_);
-    server.regist_handler<hello>();
-    server.regist_handler<coro_fun_with_delay_return_void>();
-    server.regist_handler<coro_fun_with_delay_return_void_twice>();
-    server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    server.regist_handler<coro_fun_with_delay_return_string>();
-    server.regist_handler<coro_fun_with_delay_return_string_twice>();
-    server.regist_handler<coro_func>();
-    server.regist_handler<coro_func_return_void>();
-    server.regist_handler<coro_func_delay_return_int>();
-    server.regist_handler<coro_func_delay_return_void>();
-    server.regist_handler<&HelloService::coro_func,
-                          &HelloService::coro_func_return_void,
-                          &HelloService::coro_func_delay_return_void,
-                          &HelloService::coro_func_delay_return_int>(
+    server.register_handler<async_hi, large_arg_fun, client_hello>();
+    server.register_handler<long_run_func>();
+    server.register_handler<&ns_login::LoginService::login>(&login_service_);
+    server.register_handler<&HelloService::hello>(&hello_service_);
+    server.register_handler<hello>();
+    server.register_handler<coro_fun_with_delay_return_void>();
+    server.register_handler<coro_fun_with_delay_return_void_twice>();
+    server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
+    server.register_handler<coro_fun_with_delay_return_string>();
+    server.register_handler<coro_fun_with_delay_return_string_twice>();
+    server.register_handler<coro_func>();
+    server.register_handler<coro_func_return_void>();
+    server.register_handler<coro_func_delay_return_int>();
+    server.register_handler<coro_func_delay_return_void>();
+    server.register_handler<&HelloService::coro_func,
+                            &HelloService::coro_func_return_void,
+                            &HelloService::coro_func_delay_return_void,
+                            &HelloService::coro_func_delay_return_int>(
         &hello_service_);
-    server.regist_handler<get_coro_value>();
-    server.regist_handler<&CoroServerTester::get_value>(this);
+    server.register_handler<get_coro_value>();
+    server.register_handler<&CoroServerTester::get_value>(this);
   }
 
   void test_function_not_registered() {
@@ -139,7 +139,7 @@ struct CoroServerTester : ServerTester {
     ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
     CHECK(client->has_closed() == true);
-    server.regist_handler<function_not_registered>();
+    server.register_handler<function_not_registered>();
   }
 
   void test_server_start_again() {
@@ -281,7 +281,7 @@ TEST_CASE("test server accept error") {
   ELOGV(INFO, "run test server accept error");
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
-  server.regist_handler<hi>();
+  server.register_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -311,7 +311,7 @@ TEST_CASE("test server write queue") {
   ELOGV(INFO, "run server write queue");
   g_action = {};
   coro_rpc_server server(2, 8810);
-  server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
+  server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -375,7 +375,7 @@ TEST_CASE("testing coro rpc write error") {
   ELOGV(INFO, "run testing coro rpc write error");
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);
-  server.regist_handler<hi>();
+  server.register_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");

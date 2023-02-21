@@ -41,7 +41,7 @@ inline std::string echo(std::string str) { return str; }
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.regist_handler<echo>(); // register rpc function
+  server.register_handler<echo>(); // register rpc function
   server.start(); // start the server and blocking wait
 }
 ```
@@ -112,10 +112,10 @@ And in server, we define the following:
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
 
-  server.regist_handler<hello, get_value, get_person>();//register the RPC functions of any signature 
+  server.register_handler<hello, get_value, get_person>();//register the RPC functions of any signature 
 
   dummy d{};
-  server.regist_handler<&dummy::echo>(&d); //register the member functions
+  server.register_handler<&dummy::echo>(&d); //register the member functions
 
   server.start(); // start the server
 }
@@ -318,7 +318,7 @@ std::string hello() { return "hello coro_rpc"; }
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.regist_handler<hello>();
+  server.register_handler<hello>();
   server.start();
 }
 ```
@@ -331,7 +331,7 @@ std::string hello() { return "hello coro_rpc"; }
 
 int main() {
   async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.regist_handler<hello, echo>();
+  server.register_handler<hello, echo>();
   server.start();
 }
 ```
