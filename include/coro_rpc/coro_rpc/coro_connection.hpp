@@ -35,6 +35,18 @@
 #include "inject_action.hpp"
 #endif
 namespace coro_rpc {
+
+template <typename T, typename Head>
+concept has_pretreatment = requires(Head &req_head) {
+  T::pretreatment(req_head);
+};
+
+template <typename T>
+concept apply_user_buf = requires() {
+  requires std::is_same_v<std::string_view,
+                          typename std::remove_cvref_t<T>::buffer_type>;
+};
+
 class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 /*!
@@ -153,8 +165,23 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 
-      // read payload
-      ec = co_await rpc_protocol::read_payload(socket, req_head, body_);
+      // rpc_protocol::buffer_type maybe from user, default from framework.
+      constexpr bool apply_user_buf_v = apply_user_buf<rpc_protocol>;
+      static_assert(!apply_user_buf_v, "error");
+      if constexpr (apply_user_buf_v) {
+        ec =
+            co_await rpc_protocol::read_payload(socket, req_head, user_cb_str_);
+      }
+      else {
+        ec = co_await rpc_protocol::read_payload(socket, req_head, body_);
+      }
+
+      // maybe need to pretreatment before route
+      if constexpr (has_pretreatment<rpc_protocol,
+                                     typename rpc_protocol::req_header>) {
+        rpc_protocol::pretreatment(req_head);
+      }
+
       if (ec) [[unlikely]] {
         ELOGV(ERROR, "read error: %s, conn_id %d", ec.message().data(),
               conn_id_);
@@ -164,7 +191,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       std::pair<std::errc, std::string> pair{};
 
-      auto payload = std::string_view{body_.data(), body_.size()};
+      auto payload = apply_user_buf_v
+                         ? user_cb_str_
+                         : std::string_view{body_.data(), body_.size()};
 
       auto key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
@@ -429,6 +458,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   uint64_t conn_id_ = 0;
 
   std::any tag_;
+
+  std::string_view user_cb_str_;
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
