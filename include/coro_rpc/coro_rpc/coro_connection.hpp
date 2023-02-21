@@ -167,7 +167,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       // rpc_protocol::buffer_type maybe from user, default from framework.
       constexpr bool apply_user_buf_v = apply_user_buf<rpc_protocol>;
-      static_assert(!apply_user_buf_v, "error");
       if constexpr (apply_user_buf_v) {
         ec =
             co_await rpc_protocol::read_payload(socket, req_head, user_cb_str_);
