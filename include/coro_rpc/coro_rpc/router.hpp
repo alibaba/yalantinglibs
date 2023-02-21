@@ -35,6 +35,10 @@ class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 
 namespace protocol {
+template <typename T, auto func>
+concept has_gen_register_key = requires() {
+  T::template gen_register_key<func>();
+};
 
 template <typename rpc_protocol,
           template <typename...> typename map_t = std::unordered_map>
@@ -50,14 +54,13 @@ class router {
           typename rpc_protocol::req_header &req_head,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
-  std::unordered_map<typename rpc_protocol::route_key_t, router_handler_t>
-      handlers_;
-  std::unordered_map<typename rpc_protocol::route_key_t, coro_router_handler_t>
-      coro_handlers_;
-  std::unordered_map<typename rpc_protocol::route_key_t, std::string> id2name_;
+  using route_key = typename rpc_protocol::route_key_t;
+  std::unordered_map<route_key, router_handler_t> handlers_;
+  std::unordered_map<route_key, coro_router_handler_t> coro_handlers_;
+  std::unordered_map<route_key, std::string> id2name_;
 
  private:
-  const std::string &get_name(typename rpc_protocol::route_key_t key) {
+  const std::string &get_name(const route_key &key) {
     static std::string empty_string;
     if (auto it = id2name_.find(key); it != id2name_.end()) {
       return it->second;
@@ -94,19 +97,44 @@ class router {
           data, std::move(conn), req_head);
     }
   };
+
   template <auto func, typename Self>
   void regist_one_handler(Self *self) {
     if (self == nullptr) [[unlikely]] {
       ELOGV(CRITICAL, "null connection!");
     }
 
+    route_key key{};
+
+    if constexpr (has_gen_register_key<rpc_protocol, func>) {
+      key = rpc_protocol::template gen_register_key<func>();
+    }
+    else {
+      key = auto_gen_register_key<func>();
+    }
+
+    regist_one_handler_impl<func>(self, key);
+  }
+
+  template <auto func>
+  static constexpr route_key auto_gen_register_key() {
     constexpr auto name = get_func_name<func>();
     constexpr auto id =
         struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
+    return id;
+  }
+
+  template <auto func, typename Self>
+  void regist_one_handler_impl(Self *self, const route_key &key) {
+    if (self == nullptr) [[unlikely]] {
+      ELOGV(CRITICAL, "null connection!");
+    }
+
+    constexpr auto name = get_func_name<func>();
     using return_type = function_return_type_t<decltype(func)>;
     if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
       auto it = coro_handlers_.emplace(
-          id,
+          key,
           [self](
               std::string_view data, rpc_conn conn,
               typename rpc_protocol::req_header &req_head,
@@ -121,7 +149,7 @@ class router {
     }
     else {
       auto it = handlers_.emplace(
-          id,
+          key,
           [self](
               std::string_view data, rpc_conn conn,
               typename rpc_protocol::req_header &req_head,
@@ -141,26 +169,36 @@ class router {
       }
     }
 
-    id2name_.emplace(id, name);
+    id2name_.emplace(key, name);
   }
 
   template <auto func>
   void regist_one_handler() {
+    route_key key{};
+    if constexpr (has_gen_register_key<rpc_protocol, func>) {
+      key = rpc_protocol::template gen_register_key<func>();
+    }
+    else {
+      key = auto_gen_register_key<func>();
+    }
+    regist_one_handler_impl<func>(key);
+  }
+
+  template <auto func>
+  void regist_one_handler_impl(const route_key &key) {
     static_assert(!std::is_member_function_pointer_v<decltype(func)>,
                   "register member function but lack of the parent object");
     using return_type = function_return_type_t<decltype(func)>;
 
     constexpr auto name = get_func_name<func>();
-    constexpr auto id =
-        struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
     if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
-      auto it = coro_handlers_.emplace(id, [](std::string_view data,
-                                              rpc_conn conn,
-                                              typename rpc_protocol::req_header
-                                                  &req_head,
-                                              typename rpc_protocol::
-                                                  supported_serialize_protocols
-                                                      protocols) {
+      auto it = coro_handlers_.emplace(key, [](std::string_view data,
+                                               rpc_conn conn,
+                                               typename rpc_protocol::req_header
+                                                   &req_head,
+                                               typename rpc_protocol::
+                                                   supported_serialize_protocols
+                                                       protocols) {
         execute_visitor<func, void> visitor{data, std::move(conn), req_head};
         return std::visit(visitor, protocols);
       });
@@ -170,7 +208,7 @@ class router {
     }
     else {
       auto it = handlers_.emplace(
-          id,
+          key,
           [](std::string_view data, rpc_conn conn,
              typename rpc_protocol::req_header &req_head,
              typename rpc_protocol::supported_serialize_protocols protocols) {
@@ -188,7 +226,7 @@ class router {
         ELOGV(CRITICAL, "duplication function %s register!", name.data());
       }
     }
-    id2name_.emplace(id, name);
+    id2name_.emplace(key, name);
   }
 
  public:
@@ -327,6 +365,12 @@ class router {
     (regist_one_handler<func>(self), ...);
   }
 
+  template <auto func>
+  void register_handler(class_type_t<decltype(func)> *self,
+                        const route_key &key) {
+    regist_one_handler_impl<func>(self, key);
+  }
+
   /*!
    * Register RPC service functions (non-member function)
    *
@@ -355,6 +399,11 @@ class router {
   void register_handler() {
     regist_one_handler<first>();
     (regist_one_handler<func>(), ...);
+  }
+
+  template <auto func>
+  void register_handler(const route_key &key) {
+    regist_one_handler_impl<func>(key);
   }
 };
 

@@ -37,6 +37,13 @@ struct rest_rpc_protocol {
   using router = coro_rpc::protocol::router<rest_rpc_protocol>;
   using route_key_t = uint32_t;
 
+  template <auto func>
+  static route_key_t gen_register_key() {
+    auto name = get_func_name<func>();
+    auto id = struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
+    return id;
+  }
+
   static route_key_t get_route_key(req_header& req_header) {
     return req_header.func_id;
   };

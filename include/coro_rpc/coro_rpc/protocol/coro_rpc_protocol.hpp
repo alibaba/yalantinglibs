@@ -67,6 +67,8 @@ struct coro_rpc_protocol {
     uint32_t reserved;  //!< reserved field
   };
 
+  using buffer_type = std::vector<char>;
+
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
   using route_key_t = uint32_t;
   using router = coro_rpc::protocol::router<coro_rpc_protocol>;
@@ -100,9 +102,9 @@ struct coro_rpc_protocol {
     co_return std::error_code{};
   }
 
-  template <typename Socket, typename Buffer>
+  template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_payload(
-      Socket& socket, req_header& req_head, Buffer& buffer) {
+      Socket& socket, req_header& req_head, buffer_type& buffer) {
     buffer.resize(req_head.length);
     auto [ec, _] = co_await asio_util::async_read(socket, asio::buffer(buffer));
     co_return ec;
