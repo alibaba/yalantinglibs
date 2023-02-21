@@ -35,6 +35,10 @@ class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 
 namespace protocol {
+template <typename T, auto func>
+concept has_gen_register_key = requires() {
+  T::template gen_register_key<func>();
+};
 
 template <typename rpc_protocol,
           template <typename...> typename map_t = std::unordered_map>
@@ -56,7 +60,7 @@ class router {
   std::unordered_map<route_key, std::string> id2name_;
 
  private:
-  const std::string &get_name(route_key key) {
+  const std::string &get_name(const route_key &key) {
     static std::string empty_string;
     if (auto it = id2name_.find(key); it != id2name_.end()) {
       return it->second;
@@ -100,8 +104,24 @@ class router {
       ELOGV(CRITICAL, "null connection!");
     }
 
-    route_key key = rpc_protocol::template gen_register_key<func>();
+    route_key key{};
+
+    if constexpr (has_gen_register_key<rpc_protocol, func>) {
+      key = rpc_protocol::template gen_register_key<func>();
+    }
+    else {
+      key = auto_gen_register_key<func>();
+    }
+
     regist_one_handler_impl<func>(self, key);
+  }
+
+  template <auto func>
+  static constexpr route_key auto_gen_register_key() {
+    constexpr auto name = get_func_name<func>();
+    constexpr auto id =
+        struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
+    return id;
   }
 
   template <auto func, typename Self>
@@ -154,7 +174,13 @@ class router {
 
   template <auto func>
   void regist_one_handler() {
-    route_key key = rpc_protocol::template gen_register_key<func>();
+    route_key key{};
+    if constexpr (has_gen_register_key<rpc_protocol, func>) {
+      key = rpc_protocol::template gen_register_key<func>();
+    }
+    else {
+      key = auto_gen_register_key<func>();
+    }
     regist_one_handler_impl<func>(key);
   }
 
@@ -335,6 +361,9 @@ class router {
 
   template <auto first, auto... func>
   void register_handler(class_type_t<decltype(first)> *self) {
+    static_assert(
+        !has_gen_register_key<rpc_protocol, first>,
+        "should use key from gen_register_key, because you have defined it");
     regist_one_handler<first>(self);
     (regist_one_handler<func>(self), ...);
   }
@@ -371,6 +400,9 @@ class router {
 
   template <auto first, auto... func>
   void register_handler() {
+    static_assert(
+        !has_gen_register_key<rpc_protocol, first>,
+        "should use key from gen_register_key, because you have defined it");
     regist_one_handler<first>();
     (regist_one_handler<func>(), ...);
   }

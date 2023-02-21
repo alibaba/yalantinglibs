@@ -83,14 +83,6 @@ struct coro_rpc_protocol {
     }
   };
 
-  template <auto func>
-  static constexpr route_key_t gen_register_key() {
-    constexpr auto name = get_func_name<func>();
-    constexpr auto id =
-        struct_pack::MD5::MD5Hash32Constexpr(name.data(), name.length());
-    return id;
-  }
-
   static route_key_t get_route_key(req_header& req_header) {
     return req_header.function_id;
   };
