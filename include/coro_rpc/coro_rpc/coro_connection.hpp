@@ -165,14 +165,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 
+      std::string_view payload{};
       // rpc_protocol::buffer_type maybe from user, default from framework.
       constexpr bool apply_user_buf_v = apply_user_buf<rpc_protocol>;
       if constexpr (apply_user_buf_v) {
-        ec =
-            co_await rpc_protocol::read_payload(socket, req_head, user_cb_str_);
+        ec = co_await rpc_protocol::read_payload(socket, req_head, payload);
       }
       else {
         ec = co_await rpc_protocol::read_payload(socket, req_head, body_);
+        payload = std::string_view{body_.data(), body_.size()};
       }
 
       // maybe need to pretreatment before route
@@ -189,10 +190,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
       std::pair<std::errc, std::string> pair{};
-
-      auto payload = apply_user_buf_v
-                         ? user_cb_str_
-                         : std::string_view{body_.data(), body_.size()};
 
       auto key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
@@ -457,8 +454,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   uint64_t conn_id_ = 0;
 
   std::any tag_;
-
-  std::string_view user_cb_str_;
 
 #ifdef ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
