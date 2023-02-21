@@ -38,7 +38,7 @@ namespace coro_rpc {
  *
  * int main(){
  *   coro_rpc_server server(std::thread::hardware_concurrency(), 9000);
- *   server.regist_handler<hello_coro_rpc>();
+ *   server.register_handler<hello_coro_rpc>();
  *   server.start();
  * }
  * ```
@@ -110,11 +110,11 @@ class coro_rpc_server {
    * int main() {
    *   coro_rpc_server server;
    *
-   *   server.regist_handler<hello>(); //一次注册一个RPC函数
-   *   server.regist_handler<get_str, add>(); //一次注册多个RPC函数
+   *   server.register_handler<hello>(); //一次注册一个RPC函数
+   *   server.register_handler<get_str, add>(); //一次注册多个RPC函数
    *
    *   test_class obj{};
-   *   server.regist_handler<&test_class::plus_one,
+   *   server.register_handler<&test_class::plus_one,
    * &test_class::get_str>(&obj);//注册成员函数
    * }
    * ```
@@ -123,7 +123,7 @@ class coro_rpc_server {
    * @tparam func
    */
   template <auto first, auto... func>
-  void regist_handler();
+  void register_handler();
 
   /*!
    * \ingroup coro_rpc
@@ -136,7 +136,7 @@ class coro_rpc_server {
    * @param self 成员函数对应的对象指针
    */
   template <auto first, auto... func>
-  void regist_handler(class_type_t<decltype(first)> *self);
+  void register_handler(class_type_t<decltype(first)> *self);
 };
 
 /*!

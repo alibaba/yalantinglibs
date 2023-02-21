@@ -322,7 +322,7 @@ class router {
    */
 
   template <auto first, auto... func>
-  void regist_handler(class_type_t<decltype(first)> *self) {
+  void register_handler(class_type_t<decltype(first)> *self) {
     regist_one_handler<first>(self);
     (regist_one_handler<func>(self), ...);
   }
@@ -352,7 +352,7 @@ class router {
    */
 
   template <auto first, auto... func>
-  void regist_handler() {
+  void register_handler() {
     regist_one_handler<first>();
     (regist_one_handler<func>(), ...);
   }

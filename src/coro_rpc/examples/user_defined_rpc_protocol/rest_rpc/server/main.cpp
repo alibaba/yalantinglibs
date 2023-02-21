@@ -56,11 +56,11 @@ int main() {
       std::thread::hardware_concurrency(), 8801);
 
   // regist normal function for rpc
-  server.regist_handler<hello_world, add, echo>();
+  server.register_handler<hello_world, add, echo>();
 
   // regist member function for rpc
   HelloService hello_service;
-  server.regist_handler<&HelloService::hello, &HelloService::echo>(
+  server.register_handler<&HelloService::hello, &HelloService::echo>(
       &hello_service);
 
   auto ec = server.start();

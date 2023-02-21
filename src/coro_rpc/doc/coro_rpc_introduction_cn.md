@@ -48,7 +48,7 @@ int main() {
   // 初始化服务器
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
 
-  server.regist_handler<echo>(); // 注册rpc函数
+  server.register_handler<echo>(); // 注册rpc函数
 
   server.start(); // 启动server并阻塞等待
 }
@@ -124,10 +124,10 @@ int main() {
 
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
 
-  server.regist_handler<hello, get_value, get_person>();//注册任意参数类型的普通函数
+  server.register_handler<hello, get_value, get_person>();//注册任意参数类型的普通函数
 
   dummy d{};
-  server.regist_handler<&dummy::echo>(&d); //注册成员函数
+  server.register_handler<&dummy::echo>(&d); //注册成员函数
 
   server.start(); // 启动server
 }
@@ -331,7 +331,7 @@ std::string hello() { return "hello coro_rpc"; }
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.regist_handler<hello>();
+  server.register_handler<hello>();
 
   server.start();
 }
@@ -345,7 +345,7 @@ std::string hello() { return "hello coro_rpc"; }
 
 int main() {
   async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.regist_handler<hello>();
+  server.register_handler<hello>();
   server.start();
 }
 ```
