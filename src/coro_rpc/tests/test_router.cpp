@@ -150,10 +150,10 @@ void test_route_and_check(auto conn, Args &&...args) {
 }  // namespace test_util
 
 void foo(int val) { std::cout << "foo " << val << "\n"; }
-void foo1(coro_rpc::connection<void> conn, int val) {
+void foo1(coro_rpc::context<void> conn, int val) {
   std::cout << "foo1 " << val << "\n";
 }
-void foo2(coro_rpc::connection<void> conn) {
+void foo2(coro_rpc::context<void> conn) {
   std::cout << "foo2 "
             << "\n";
 }
@@ -360,12 +360,11 @@ TEST_CASE("test get_return_type in connection") {
   }
   SUBCASE("return void") {
     static_assert(
-        std::is_same_v<decltype(get_return_type<true, connection<void>>()),
-                       void>);
+        std::is_same_v<decltype(get_return_type<true, context<void>>()), void>);
   }
   SUBCASE("return std::string") {
-    static_assert(std::is_same_v<
-                  decltype(get_return_type<true, connection<std::string>>()),
-                  std::string>);
+    static_assert(
+        std::is_same_v<decltype(get_return_type<true, context<std::string>>()),
+                       std::string>);
   }
 }

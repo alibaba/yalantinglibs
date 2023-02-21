@@ -31,7 +31,7 @@
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
 #include "common_service.hpp"
-#include "coro_rpc/coro_rpc/connection.hpp"
+#include "coro_rpc/coro_rpc/context.hpp"
 #include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "easylog/easylog.h"
 #include "expected.hpp"
@@ -366,7 +366,7 @@ class coro_rpc_client {
     using param_type = function_parameters_t<Function>;
     if constexpr (!std::is_void_v<param_type>) {
       using First = std::tuple_element_t<0, param_type>;
-      constexpr bool is_conn = is_specialization<First, connection>::value;
+      constexpr bool is_conn = requires { typename First::return_type; };
 
       if constexpr (std::is_member_function_pointer_v<Function>) {
         using Self = class_type_t<Function>;
@@ -598,7 +598,7 @@ class coro_rpc_client {
   template <typename FuncArgs>
   auto get_func_args() {
     using First = std::tuple_element_t<0, FuncArgs>;
-    constexpr bool has_conn_v = is_specialization<First, connection>::value;
+    constexpr bool has_conn_v = is_specialization<First, context>::value;
     return get_args<has_conn_v, FuncArgs>();
   }
 
