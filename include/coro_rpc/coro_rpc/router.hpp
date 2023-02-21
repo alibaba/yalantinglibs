@@ -361,9 +361,6 @@ class router {
 
   template <auto first, auto... func>
   void register_handler(class_type_t<decltype(first)> *self) {
-    static_assert(
-        !has_gen_register_key<rpc_protocol, first>,
-        "should use key from gen_register_key, because you have defined it");
     regist_one_handler<first>(self);
     (regist_one_handler<func>(self), ...);
   }
@@ -400,9 +397,6 @@ class router {
 
   template <auto first, auto... func>
   void register_handler() {
-    static_assert(
-        !has_gen_register_key<rpc_protocol, first>,
-        "should use key from gen_register_key, because you have defined it");
     regist_one_handler<first>();
     (regist_one_handler<func>(), ...);
   }
