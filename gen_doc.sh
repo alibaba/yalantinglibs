@@ -1,3 +1,4 @@
+set -e
 ROOT_DIR=$(pwd)
 rm -rf docs
 mkdir docs
@@ -47,17 +48,21 @@ doxygen Doxyfile_cn
 echo 'Generate Done!'
 
 function handle_style(){
+    echo "handle folder $1"
     for file in `ls $1`
     do
-        if [ -d $1"/"$file ]
+        # fix bad flag in substitute command: '/'
+        fname="$1/$file"
+        echo "handle file $fname"
+        if [ -d $fname ]
         then
-            handle_style $1"/"$file
+            handle_style "$1/$file"
         else
             if [[ $file = *.html ]];then
-                sed -i 's/class="VPContent" id="VPContent"/class="VPContent has-sidebar" id="VPContent"/g' $1"/"$file
+                sed -i.bak 's/class="VPContent" id="VPContent"/class="VPContent has-sidebar" id="VPContent"/g' "$fname"
             fi
         fi
     done
 }
-handle_style $(pwd)/docs/zh
+handle_style "$(pwd)/docs/zh"
 echo "Fix Style Done!"
