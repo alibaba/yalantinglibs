@@ -18,13 +18,18 @@
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#include <asio.hpp>
 #include <chrono>
 #include <deque>
 
 #ifdef ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
+
+#include <asio/connect.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/read.hpp>
+#include <asio/read_until.hpp>
+#include <asio/write.hpp>
 
 namespace asio_util {
 
@@ -36,6 +41,12 @@ class AsioExecutor : public async_simple::Executor {
     asio::post(io_context_, std::move(func));
     return true;
   }
+
+  virtual bool checkin(Func func, void *ctx) override {
+    asio::post(*(asio::io_context *)ctx, func);
+    return true;
+  }
+  virtual void *checkout() override { return &io_context_; }
 
   bool currentThreadInExecutor() const override { return false; }
 
@@ -50,6 +61,11 @@ class AsioExecutor : public async_simple::Executor {
   }
   asio::io_context &io_context_;
 };
+
+inline asio::io_context &get_io_context(async_simple::Executor *executor) {
+  assert(executor != nullptr);
+  return *(asio::io_context *)executor->checkout();
+}
 
 template <typename Arg, typename Derived>
 class callback_awaitor_base {
@@ -207,10 +223,9 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
-  asio::io_context &io_context =
-      static_cast<asio::io_context &>(socket.get_executor().context());
+  auto &executor = socket.get_executor();
   co_return co_await awaitor.await_resume([&](auto handler) {
-    asio::post(io_context, [&, handler]() {
+    asio::post(executor, [&, handler]() {
       asio::error_code ignored_ec;
       socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket.close(ignored_ec);

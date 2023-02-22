@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #pragma once
-#include <asio.hpp>
+#include <asio/io_context.hpp>
 #include <future>
 #include <memory>
 #include <thread>

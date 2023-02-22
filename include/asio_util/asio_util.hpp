@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 #pragma once
-#include <asio.hpp>
+#include <asio/connect.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/read.hpp>
+#include <asio/write.hpp>
 
 namespace asio_util {
 template <typename Socket, typename AsioBuffer>

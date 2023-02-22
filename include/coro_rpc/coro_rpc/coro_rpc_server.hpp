@@ -385,8 +385,7 @@ class coro_rpc_server {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
-      start_one(conn).start([](auto &&) {
-      });
+      start_one(conn).via(&conn->get_executor()).detach();
     }
   }
 

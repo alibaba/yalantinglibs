@@ -58,8 +58,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   coro_connection(asio::io_context &io_context, asio::ip::tcp::socket socket,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
-      : io_context_(io_context),
-        executor_(io_context),
+      : executor_(io_context),
         socket_(std::move(socket)),
         resp_err_(std::errc{}),
         timer_(io_context) {
@@ -274,7 +273,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (has_closed_) {
       return;
     }
-    asio::post(io_context_, [this, self = shared_from_this()] {
+    executor_.schedule([this, self = shared_from_this()] {
       this->close();
     });
   }
@@ -293,6 +292,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   std::any get_tag() { return tag_; }
+
+  auto &get_executor() { return executor_; }
 
  private:
   async_simple::coro::Lazy<void> response(std::string header_buf,
@@ -422,7 +423,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
 
-  asio::io_context &io_context_;
   asio_util::AsioExecutor executor_;
   asio::ip::tcp::socket socket_;
   constexpr static size_t body_default_size_ = 256;
