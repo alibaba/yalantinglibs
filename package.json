@@ -13,6 +13,6 @@
   "scripts": {
     "docs:dev": "vitepress dev website",
     "docs:build": "vitepress build website",
-    "docs:priview": "vitepress preview website"
+    "docs:serve": "vitepress serve website --port 8080"
   }
 }
