@@ -22,6 +22,9 @@
 
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/coro/Sleep.h"
+#include "coro_rpc/coro_rpc/coro_connection.hpp"
+#include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
+#include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 
 using namespace coro_rpc;
 

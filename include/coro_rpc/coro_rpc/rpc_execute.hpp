@@ -49,26 +49,34 @@ auto get_return_type() {
 
 template <typename rpc_protocol, typename serialize_proto,
           typename conn_return_type>
-struct connection_responser {
-  typename rpc_protocol::req_header req_head;
-  void operator()(rpc_conn &&conn, conn_return_type &&ret) {
+struct connection_responser
+    : public internal::response_handler<conn_return_type> {
+  typename rpc_protocol::req_header req_head_;
+  connection_responser(typename rpc_protocol::req_header &&req_head)
+      : req_head_(std::move(req_head)) {}
+  virtual void *get_req_header() noexcept override { return &req_head_; }
+  virtual void operator()(rpc_conn &&conn, conn_return_type &&ret) override {
     if constexpr (has_get_reserve_size<rpc_protocol, rpc_conn>) {
       conn->response_msg<rpc_protocol>(
           serialize_proto::serialize(ret, rpc_protocol::get_reserve_size(conn)),
-          req_head);
+          req_head_);
     }
     else {
       conn->response_msg<rpc_protocol>(serialize_proto::serialize(ret),
-                                       req_head);
+                                       req_head_);
     }
   }
 };
 
 template <typename rpc_protocol, typename serialize_proto>
-struct connection_responser<rpc_protocol, serialize_proto, void> {
-  typename rpc_protocol::req_header req_head;
-  void operator()(rpc_conn &&conn) {
-    conn->response_msg<rpc_protocol>(serialize_proto::serialize(), req_head);
+struct connection_responser<rpc_protocol, serialize_proto, void>
+    : public internal::response_handler<void> {
+  typename rpc_protocol::req_header req_head_;
+  connection_responser(typename rpc_protocol::req_header &&req_head)
+      : req_head_(std::move(req_head)) {}
+  virtual void *get_req_header() noexcept override { return &req_head_; }
+  virtual void operator()(rpc_conn &&conn) override {
+    conn->response_msg<rpc_protocol>(serialize_proto::serialize(), req_head_);
   }
 };
 
@@ -109,14 +117,15 @@ inline std::optional<std::string> execute(
       if constexpr (std::is_void_v<Self>) {
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
-          std::apply(func,
-                     std::tuple_cat(
-                         std::forward_as_tuple(context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
-                         std::move(args)));
+          std::apply(
+              func,
+              std::tuple_cat(
+                  std::forward_as_tuple(context<conn_return_type>(
+                      std::move(conn),
+                      std::make_unique<connection_responser<
+                          rpc_protocol, serialize_proto, conn_return_type>>(
+                          std::move(req_head)))),
+                  std::move(args)));
         }
         else {
           // call void func(args...)
@@ -131,11 +140,12 @@ inline std::optional<std::string> execute(
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
+                      o,
+                      context<conn_return_type>(
+                          std::move(conn),
+                          std::make_unique<connection_responser<
+                              rpc_protocol, serialize_proto, conn_return_type>>(
+                              std::move(req_head)))),
                   std::move(args)));
         }
         else {
@@ -240,13 +250,14 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
           co_await std::apply(
-              func, std::tuple_cat(
-                        std::forward_as_tuple(context<conn_return_type>(
-                            std::move(conn),
-                            connection_responser<rpc_protocol, serialize_proto,
-                                                 conn_return_type>{
-                                std::move(req_head)})),
-                        std::move(args)));
+              func,
+              std::tuple_cat(
+                  std::forward_as_tuple(context<conn_return_type>(
+                      std::move(conn),
+                      std::make_unique<connection_responser<
+                          rpc_protocol, serialize_proto, conn_return_type>>(
+                          std::move(req_head)))),
+                  std::move(args)));
         }
         else {
           // call void func(args...)
@@ -261,11 +272,12 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
               func,
               std::tuple_cat(
                   std::forward_as_tuple(
-                      o, context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
+                      o,
+                      context<conn_return_type>(
+                          std::move(conn),
+                          std::make_unique<connection_responser<
+                              rpc_protocol, serialize_proto, conn_return_type>>(
+                              std::move(req_head)))),
                   std::move(args)));
         }
         else {

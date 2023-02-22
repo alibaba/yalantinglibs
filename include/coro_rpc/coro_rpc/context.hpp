@@ -36,12 +36,17 @@ namespace internal {
 
   template <typename T>
   struct response_handler {
-    using type = std::function<void(rpc_conn &&, T &&)>;
+    std::any req_head;
+    virtual void* get_req_header() noexcept =0;
+    virtual void operator()(rpc_conn&&, T&&)=0;
+    virtual ~response_handler()=default;
   };
 
-  template <>
+  template<>
   struct response_handler<void> {
-    using type = std::function<void(rpc_conn &&)>;
+    virtual void* get_req_header() noexcept =0;
+    virtual void operator()(rpc_conn&&)=0;
+    virtual ~response_handler()=default;
   };
   
 }  // namespace internal
@@ -56,7 +61,7 @@ class context {
   std::shared_ptr<coro_connection> conn_;
   std::unique_ptr<std::atomic<bool>> has_response_;
   using response_handler_t =
-      typename internal::response_handler<return_msg_type>::type;
+      std::unique_ptr<typename internal::response_handler<return_msg_type>>;
   response_handler_t response_handler_;
 
  public:
@@ -115,7 +120,7 @@ class context {
         return;
       }
 
-      response_handler_(std::move(conn_));
+      (*response_handler_.get())(std::move(conn_));
     }
     else {
       static_assert(
@@ -134,7 +139,7 @@ class context {
         return;
       }
 
-      response_handler_(std::move(conn_), std::move(ret));
+      (*response_handler_.get())(std::move(conn_), std::move(ret));
     }
   }
 
@@ -151,6 +156,11 @@ class context {
   }
 
   std::any get_tag() { return conn_->get_tag(); }
+
+  template <typename T>
+  T &get_req_header() {
+    return *(T *)response_handler_->get_req_header();
+  }
 };
 
 template <typename T>
