@@ -50,8 +50,8 @@ inline std::string_view echo(std::string_view str) { return str; }
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.register_handler<echo>();
-  server.start();
+  server.register_handler<echo>(); // register function echo
+  server.start(); // start the server & block
 }
 ```
 
@@ -63,9 +63,9 @@ int main() {
 
 Lazy<void> test_client() {
   coro_rpc_client client;
-  co_await client.connect("localhost", /*port =*/"9000");
+  co_await client.connect("localhost", /*port =*/"9000"); // connect to the server
 
-  auto r = co_await client.call<echo>("hello coro_rpc"); //传参数调用rpc函数
+  auto r = co_await client.call<echo>("hello coro_rpc"); // call remote function echo
   std::cout << r.result.value() << "\n"; //will print "hello coro_rpc"
 }
 
