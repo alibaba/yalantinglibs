@@ -1,8 +1,5 @@
 var concepts =
 [
-    [ "coro_rpc", null, [
-      [ "connection_t", "conceptcoro__rpc_1_1connection__t.html", null ]
-    ] ],
     [ "struct_pack", null, [
       [ "detail", null, [
         [ "trivially_copyable_container", "conceptstruct__pack_1_1detail_1_1trivially__copyable__container.html", null ],

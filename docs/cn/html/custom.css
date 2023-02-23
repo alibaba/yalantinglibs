@@ -75,7 +75,7 @@
 
 html.dark-mode .darkmode_inverted_image img, /* < doxygen 1.9.3 */
 html.dark-mode .darkmode_inverted_image object[type="image/svg+xml"] /* doxygen 1.9.3 */ {
-    filter: brightness(87%) hue-rotate(180deg) invert();
+    filter: brightness(89%) hue-rotate(180deg) invert();
 }
 
 .bordered_image {

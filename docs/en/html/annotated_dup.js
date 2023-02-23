@@ -10,7 +10,7 @@ var annotated_dup =
       [ "protocol", null, [
         [ "router", "classcoro__rpc_1_1protocol_1_1router.html", "classcoro__rpc_1_1protocol_1_1router" ]
       ] ],
-      [ "connection", "classcoro__rpc_1_1connection.html", "classcoro__rpc_1_1connection" ],
+      [ "context", "classcoro__rpc_1_1context.html", "classcoro__rpc_1_1context" ],
       [ "coro_connection", "classcoro__rpc_1_1coro__connection.html", "classcoro__rpc_1_1coro__connection" ],
       [ "coro_rpc_client", "classcoro__rpc_1_1coro__rpc__client.html", "classcoro__rpc_1_1coro__rpc__client" ],
       [ "coro_rpc_server", "classcoro__rpc_1_1coro__rpc__server.html", "classcoro__rpc_1_1coro__rpc__server" ],

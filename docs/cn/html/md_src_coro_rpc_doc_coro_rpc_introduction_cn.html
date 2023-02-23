@@ -398,14 +398,13 @@ coro_rpc更多特色</h1>
 <p>前面展示的例子里没有看到如何将rpc函数的结果response到客户端，因为默认情况下coro_rpc框架会帮助用户自动的将rpc函数的结果自动序列化并发送到客户端，让用户完全无感知，只需要专注于业务逻辑。需要说明的是这种场景下，rpc函数的业务逻辑是在io线程中执行的，这适合对于实时性要求较高的场景下使用，缺点是会阻塞IO线程。如果用户不希望在io线程中去执行业务逻辑，而是放到线程或线程池中去执行并延迟发送消息该怎么做呢？</p>
 <p>coro_rpc已经考虑到了这个问题，coro_rpc认为rpc任务分为实时任务和延时的任务，实时任务在io线程中执行完成后立即发送给客户端，实时性最好，延时最低；延时任务则可以放到独立线程中执行，延时处理，在未来某个时刻再将结果发送给客户端；coro_rpc同时支持这两种任务。</p>
 <p>将之前实时任务改成延时任务</p>
-<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;coro_rpc/connection.hpp&gt;</span></div>
-<div class="line"><span class="preprocessor">#include &lt;coro_rpc/coro_rpc_server.hpp&gt;</span></div>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;coro_rpc/context.hpp&gt;</span></div>
 <div class="line"> </div>
 <div class="line"><span class="comment">//实时任务，io线程中实时处理和发送结果</span></div>
 <div class="line">std::string echo(std::string str) { <span class="keywordflow">return</span> str; }</div>
 <div class="line"> </div>
 <div class="line"><span class="comment">//延时任务，在另外的独立线程中处理并发送结果</span></div>
-<div class="line"><span class="keywordtype">void</span> delay_echo(coro_connection&lt;std::string&gt; conn, std::string str) {</div>
+<div class="line"><span class="keywordtype">void</span> delay_echo(coro_rpc::context&lt;std::string&gt; conn, std::string str) {</div>
 <div class="line">  std::thread([conn, str]{</div>
 <div class="line">    conn.response_msg(str); <span class="comment">//在独立线程中发送rpc结果</span></div>
 <div class="line">  }).detach();</div>

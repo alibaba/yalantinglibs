@@ -182,7 +182,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="preprocessor">#include &lt;type_traits&gt;</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span><span class="preprocessor">#include &lt;variant&gt;</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &quot;connection.hpp&quot;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &quot;context.hpp&quot;</span></div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &quot;coro_connection.hpp&quot;</span></div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &quot;util/type_traits.h&quot;</span></div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
@@ -233,7 +233,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span> </div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>  <span class="keywordflow">if</span> <span class="keyword">constexpr</span> (!std::is_void_v&lt;param_type&gt;) {</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    <span class="keyword">using </span>First = std::tuple_element_t&lt;0, param_type&gt;;</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> is_conn = is_specialization&lt;First, connection&gt;::value;</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> is_conn = <span class="keyword">requires</span> { <span class="keyword">typename</span> First::return_type; };</div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="keywordflow">if</span> <span class="keyword">constexpr</span> (is_conn) {</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>      <span class="keyword">static_assert</span>(std::is_void_v&lt;return_type&gt;,</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>                    <span class="stringliteral">&quot;The return_type must be void&quot;</span>);</div>
@@ -241,7 +241,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span> </div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <span class="keyword">using </span>conn_return_type = <span class="keyword">decltype</span>(get_return_type&lt;is_conn, First&gt;());</div>
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> has_coro_conn_v =</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>        std::is_same_v&lt;connection&lt;conn_return_type&gt;, First&gt;;</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>        std::is_convertible_v&lt;context&lt;conn_return_type&gt;, First&gt;;</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    <span class="keyword">auto</span> args = get_args&lt;has_coro_conn_v, param_type&gt;();</div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span> </div>
 <div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordtype">bool</span> is_ok = <span class="keyword">true</span>;</div>
@@ -260,7 +260,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>          <span class="comment">// call void func(coro_conn, args...)</span></div>
 <div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>          std::apply(func,</div>
 <div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>                     std::tuple_cat(</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>                         std::forward_as_tuple(connection&lt;conn_return_type&gt;(</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>                         std::forward_as_tuple(context&lt;conn_return_type&gt;(</div>
 <div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>                             std::move(conn),</div>
 <div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>                             connection_responser&lt;rpc_protocol, serialize_proto,</div>
 <div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>                                                  conn_return_type&gt;{</div>
@@ -280,7 +280,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>              func,</div>
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>              std::tuple_cat(</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>                  std::forward_as_tuple(</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>                      o, connection&lt;conn_return_type&gt;(</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>                      o, context&lt;conn_return_type&gt;(</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>                             std::move(conn),</div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>                             connection_responser&lt;rpc_protocol, serialize_proto,</div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>                                                  conn_return_type&gt;{</div>
@@ -340,7 +340,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span> </div>
 <div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>  <span class="keywordflow">if</span> <span class="keyword">constexpr</span> (!std::is_void_v&lt;param_type&gt;) {</div>
 <div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>    <span class="keyword">using </span>First = std::tuple_element_t&lt;0, param_type&gt;;</div>
-<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> is_conn = is_specialization&lt;First, connection&gt;::value;</div>
+<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> is_conn = is_specialization&lt;First, context&gt;::value;</div>
 <div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    <span class="keywordflow">if</span> <span class="keyword">constexpr</span> (is_conn) {</div>
 <div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>      <span class="keyword">static_assert</span>(std::is_void_v&lt;return_type&gt;,</div>
 <div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>                    <span class="stringliteral">&quot;The return_type must be void&quot;</span>);</div>
@@ -348,7 +348,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span> </div>
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keyword">using </span>conn_return_type = <span class="keyword">decltype</span>(get_return_type&lt;is_conn, First&gt;());</div>
 <div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> has_coro_conn_v =</div>
-<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        std::is_same_v&lt;connection&lt;conn_return_type&gt;, First&gt;;</div>
+<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        std::is_same_v&lt;context&lt;conn_return_type&gt;, First&gt;;</div>
 <div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    <span class="keyword">auto</span> args = get_args&lt;has_coro_conn_v, param_type&gt;();</div>
 <div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span> </div>
 <div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>    <span class="keywordtype">bool</span> is_ok = <span class="keyword">true</span>;</div>
@@ -363,7 +363,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>          <span class="comment">// call void func(coro_conn, args...)</span></div>
 <div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>          <span class="keyword">co_await</span> std::apply(</div>
 <div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>              func, std::tuple_cat(</div>
-<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>                        std::forward_as_tuple(connection&lt;conn_return_type&gt;(</div>
+<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>                        std::forward_as_tuple(context&lt;conn_return_type&gt;(</div>
 <div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>                            std::move(conn),</div>
 <div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>                            connection_responser&lt;rpc_protocol, serialize_proto,</div>
 <div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>                                                 conn_return_type&gt;{</div>
@@ -383,7 +383,7 @@ $(document).ready(function(){initNavTree('rpc__execute_8hpp_source.html',''); in
 <div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span>              func,</div>
 <div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span>              std::tuple_cat(</div>
 <div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span>                  std::forward_as_tuple(</div>
-<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>                      o, connection&lt;conn_return_type&gt;(</div>
+<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>                      o, context&lt;conn_return_type&gt;(</div>
 <div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>                             std::move(conn),</div>
 <div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span>                             connection_responser&lt;rpc_protocol, serialize_proto,</div>
 <div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span>                                                  conn_return_type&gt;{</div>

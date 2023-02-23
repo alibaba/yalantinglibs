@@ -1,8 +1,8 @@
 var hierarchy =
 [
-    [ "coro_rpc::connection< return_msg_type >", "classcoro__rpc_1_1connection.html", null ],
     [ "coro_rpc::internal::connection_responser< rpc_protocol, serialize_proto, conn_return_type >", "structcoro__rpc_1_1internal_1_1connection__responser.html", null ],
     [ "coro_rpc::internal::connection_responser< rpc_protocol, serialize_proto, void >", "structcoro__rpc_1_1internal_1_1connection__responser_3_01rpc__protocol_00_01serialize__proto_00_01void_01_4.html", null ],
+    [ "coro_rpc::context< return_msg_type >", "classcoro__rpc_1_1context.html", null ],
     [ "coro_rpc::coro_rpc_client", "classcoro__rpc_1_1coro__rpc__client.html", null ],
     [ "coro_rpc::coro_rpc_server< server_config >", "classcoro__rpc_1_1coro__rpc__server.html", null ],
     [ "std::enable_shared_from_this", null, [
