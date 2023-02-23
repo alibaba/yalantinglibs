@@ -21,23 +21,13 @@ export default {
   head: [],
 
   themeConfig: {
-    locales: {
-      "/": {
-        nav: nav(),
-        sidebar: {
-          "/guide/": sidebarGuide(),
-        },
-      },
-      "/zh/": {
-        nav: nav(),
-        sidebar: {
-          "/zh/guide/": sidebarGuideZh(),
-        },
-        selectLanguageName: '简体中文',
-        selectLanguageText: '选择语言',
-        selectLanguageAriaLabel: '选择语言',
-      }
+    nav: nav(),
+
+    sidebar: {
+      "/guide/": sidebarGuide(),
+      '/zh/guide/': sidebarGuideZh(),
     },
+
     socialLinks: [
       {icon: 'github', link: 'https://github.com/alibaba/yalantinglibs'}
     ],
