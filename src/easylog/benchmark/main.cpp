@@ -66,7 +66,8 @@ void test_glog() {
 
 void test_easylog() {
   std::filesystem::remove("easylog.txt");
-  easylog::init_log(Severity::DEBUG, "easylog.txt", false, 1024 * 1024, 1);
+  easylog::init_log(Severity::DEBUG, "easylog.txt", false, 1024 * 1024, 1,
+                    false);
   {
     ScopedTimer timer("easylog");
     for (int i = 0; i < 5000; i++)
@@ -74,7 +75,19 @@ void test_easylog() {
   }
 }
 
+void test_async_easylog() {
+  std::filesystem::remove("async_easylog.txt");
+  easylog::init_log<1>(Severity::DEBUG, "async_easylog.txt", false, 1024 * 1024,
+                       1, false, true);
+  {
+    ScopedTimer timer("async_easylog");
+    for (int i = 0; i < 5000; i++)
+      ELOG(INFO, 1) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+  }
+}
+
 int main() {
   test_glog();
   test_easylog();
+  test_async_easylog();
 }

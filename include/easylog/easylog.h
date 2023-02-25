@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "appender.hpp"
+#include "thread_pool.h"
 
 namespace easylog {
 
@@ -31,7 +32,22 @@ class logger {
     return instance;
   }
 
-  void operator+=(const record_t &record) { write(record); }
+  void async_write(const record_t &record) {
+    thread_pool::instance().async(
+        [this, async_record = std::make_shared<record_t>(record)] {
+          write(*async_record);
+          return true;
+        });
+  }
+
+  void operator+=(const record_t &record) {
+    if (enbale_async_write_) {
+      async_write(record);
+    }
+    else {
+      write(record);
+    }
+  }
 
   void write(const record_t &record) {
     append_format(record);
@@ -50,12 +66,13 @@ class logger {
 
   void init(Severity min_severity, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
-            bool flush_every_time) {
+            bool flush_every_time, bool enable_async_write) {
     static appender appender(filename, max_file_size, max_files,
                              flush_every_time);
     appender_ = &appender;
     min_severity_ = min_severity;
     enable_console_ = enable_console;
+    enbale_async_write_ = enable_async_write;
   }
 
   bool check_severity(Severity severity) { return severity >= min_severity_; }
@@ -120,6 +137,7 @@ class logger {
 
   Severity min_severity_;
   bool enable_console_ = true;
+  bool enbale_async_write_ = false;
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
 };
@@ -127,9 +145,15 @@ class logger {
 template <size_t Id = 0>
 inline void init_log(Severity min_severity, const std::string &filename = "",
                      bool enable_console = true, size_t max_file_size = 0,
-                     size_t max_files = 0, bool flush_every_time = false) {
+                     size_t max_files = 0, bool flush_every_time = false,
+                     bool enable_async_write = false) {
+  if (enable_async_write) {
+    thread_pool::instance().init(1);
+  }
+
   logger<Id>::instance().init(min_severity, enable_console, filename,
-                              max_file_size, max_files, flush_every_time);
+                              max_file_size, max_files, flush_every_time,
+                              enable_async_write);
 }
 
 template <size_t Id = 0>

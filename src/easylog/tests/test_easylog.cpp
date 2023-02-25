@@ -154,3 +154,14 @@ TEST_CASE("file_roll") {
             "he string that should be saved in the file.") !=
         std::string::npos);
 }
+
+TEST_CASE("async_write") {
+  std::string async_write_file = "async_write.txt";
+  std::filesystem::remove(async_write_file);
+  constexpr size_t SeventhId = 7;
+  easylog::init_log<SeventhId>(Severity::DEBUG, async_write_file, true,
+                               1024 * 1024, 1, false, true);
+  for (int i = 0; i < 50; i++)
+    ELOG(INFO, SeventhId) << "Hello, it is a long string test! " << 42 << 21
+                          << 2.5;
+}
