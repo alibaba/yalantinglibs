@@ -20,7 +20,9 @@
 #include <functional>
 #include <memory>
 #include <thread>
-#include <vector>
+#include <list>
+#include <mutex>
+#include <condition_variable>
 
 namespace easylog {
 
