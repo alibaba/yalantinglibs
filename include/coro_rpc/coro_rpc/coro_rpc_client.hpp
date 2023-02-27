@@ -598,7 +598,7 @@ class coro_rpc_client {
   template <typename FuncArgs>
   auto get_func_args() {
     using First = std::tuple_element_t<0, FuncArgs>;
-    constexpr bool has_conn_v = is_specialization<First, context>::value;
+    constexpr bool has_conn_v = requires { typename First::return_type; };
     return get_args<has_conn_v, FuncArgs>();
   }
 

@@ -18,10 +18,12 @@
 #include <chrono>
 #include <thread>
 
+#include "coro_rpc/coro_rpc/context.hpp"
 #include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 
-namespace coro_rpc::config {
+namespace coro_rpc {
 
+namespace config {
 struct coro_rpc_config_base {
   uint16_t port = 8801;
   unsigned thread_num = std::thread::hardware_concurrency();
@@ -32,5 +34,9 @@ struct coro_rpc_config_base {
 struct coro_rpc_default_config : public coro_rpc_config_base {
   using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 };
+}  // namespace config
 
-}  // namespace coro_rpc::config
+template <typename return_msg_type>
+using context = coro_rpc::context_base<return_msg_type,
+                                       coro_rpc::protocol::coro_rpc_protocol>;
+}  // namespace coro_rpc
