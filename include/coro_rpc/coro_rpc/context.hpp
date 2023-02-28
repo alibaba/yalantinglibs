@@ -21,6 +21,7 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include "async_simple/coro/Lazy.h"
 #include "coro_connection.hpp"
@@ -28,36 +29,21 @@
 #include "util/type_traits.h"
 
 namespace coro_rpc {
-
-// TODO: Add more require
-
-// clang-format off
-namespace internal {
-
-  template <typename T>
-  struct response_handler {
-    using type = std::function<void(rpc_conn &&, T &&)>;
-  };
-
-  template <>
-  struct response_handler<void> {
-    using type = std::function<void(rpc_conn &&)>;
-  };
-  
-}  // namespace internal
-// clang-format on
+template <typename T, typename Conn>
+concept has_get_reserve_size = requires(Conn &&conn) {
+  T::get_reserve_size(conn);
+};
 /*!
  *
  * @tparam return_msg_type
  * @tparam coro_connection
  */
-template <typename return_msg_type>
-class context {
+template <typename return_msg_type, typename rpc_protocol>
+class context_base {
+ protected:
   std::shared_ptr<coro_connection> conn_;
   std::unique_ptr<std::atomic<bool>> has_response_;
-  using response_handler_t =
-      typename internal::response_handler<return_msg_type>::type;
-  response_handler_t response_handler_;
+  typename rpc_protocol::req_header req_head_;
 
  public:
   /*!
@@ -65,19 +51,19 @@ class context {
    * instance
    * @param a share pointer for coro_connection
    */
-  context(std::shared_ptr<coro_connection> conn,
-          response_handler_t &&response_handler)
+  context_base(std::shared_ptr<coro_connection> &&conn,
+               typename rpc_protocol::req_header &&req_head)
       : conn_(std::move(conn)),
         has_response_(std::make_unique<std::atomic<bool>>(false)),
-        response_handler_(std::move(response_handler)) {
+        req_head_(std::move(req_head)) {
     if (conn_) {
       conn_->set_delay(true);
     }
   };
-  context() = delete;
-  context(const context &conn) = delete;
-  context(context &&conn) = default;
-  ~context() {
+  context_base() = delete;
+  context_base(const context_base &conn) = delete;
+  context_base(context_base &&conn) = default;
+  ~context_base() {
     if (has_response_ && conn_ && !*has_response_) [[unlikely]] {
       ELOGV(ERROR,
             "We must send reply to client by call response_msg method"
@@ -114,8 +100,12 @@ class context {
         ELOGV(DEBUG, "response_msg failed: connection has been closed");
         return;
       }
-
-      response_handler_(std::move(conn_));
+      std::visit(
+          [&]<typename serialize_proto>(const serialize_proto &) {
+            conn_->response_msg<rpc_protocol>(serialize_proto::serialize(),
+                                              req_head_);
+          },
+          *rpc_protocol::get_serialize_protocol(req_head_));
     }
     else {
       static_assert(
@@ -134,7 +124,25 @@ class context {
         return;
       }
 
-      response_handler_(std::move(conn_), std::move(ret));
+      if constexpr (has_get_reserve_size<rpc_protocol, rpc_conn>) {
+        std::visit(
+            [&]<typename serialize_proto>(const serialize_proto &) {
+              conn_->response_msg<rpc_protocol>(
+                  serialize_proto::serialize(
+                      ret, rpc_protocol::get_reserve_size(conn_)),
+                  req_head_);
+            },
+            *rpc_protocol::get_serialize_protocol(req_head_));
+      }
+      else {
+        std::visit(
+            [&]<typename serialize_proto>(const serialize_proto &) {
+              conn_->response_msg<rpc_protocol>(serialize_proto::serialize(ret),
+                                                req_head_);
+            },
+            *rpc_protocol::get_serialize_protocol(req_head_));
+      }
+      // response_handler_(std::move(conn_), std::move(ret));
     }
   }
 
@@ -178,7 +186,7 @@ inline auto get_return_type() {
   }
   else {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, context>::value;
+    constexpr bool is_conn = is_specialization<First, context_base>::value;
 
     if constexpr (is_conn) {
       using U = typename First::return_type;
