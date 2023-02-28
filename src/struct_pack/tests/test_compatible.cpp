@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 #include "struct_pack/struct_pack/struct_pack_impl.hpp"
@@ -8,20 +10,9 @@ using namespace struct_pack;
 struct compatible12;
 struct compatible1 {
   struct_pack::compatible<int> c;
+  std::unique_ptr<compatible12> i;
   friend bool operator<(const compatible1& self, const compatible1& other) {
-    if (self.c.has_value()) {
-      if (other.c.has_value()) {
-        return self.c.value() < other.c.value();
-      }
-      else {
-        return false;
-      }
-    }
-    else if (other.c.has_value()) {
-      return true;
-    }
-    else
-      return false;
+    return false;
   }
 };
 
@@ -29,12 +20,18 @@ struct compatible2 {
   std::string a;
   compatible1 comp;
   std::string b;
+  friend bool operator<(const compatible2& self, const compatible2& other) {
+    return false;
+  }
 };
 
 struct compatible3 {
   std::string a;
   std::tuple<int, double, compatible2, char> comp;
   std::string b;
+  friend bool operator<(const compatible3& self, const compatible3& other) {
+    return false;
+  }
 };
 
 struct compatible4 {
@@ -46,9 +43,54 @@ struct compatible4 {
   }
 };
 
+struct compatible5 {
+  std::string a;
+  std::vector<compatible4> comp;
+  std::string b;
+  friend bool operator<(const compatible5&, const compatible5&) {
+    return false;
+  }
+};
+
+struct compatible6 {
+  std::string a;
+  std::list<compatible5> comp;
+  std::string b;
+  friend bool operator<(const compatible6&, const compatible6&) {
+    return false;
+  }
+};
+
+struct compatible7 {
+  std::string a;
+  std::set<compatible6> comp;
+  std::string b;
+  friend bool operator<(const compatible7&, const compatible7&) {
+    return false;
+  }
+};
+
+struct compatible8 {
+  std::string a;
+  std::map<compatible7, int> comp;
+  std::string b;
+  friend bool operator<(const compatible8&, const compatible8&) {
+    return false;
+  }
+};
+
+struct compatible9 {
+  std::string a;
+  std::map<int, compatible8> comp;
+  std::string b;
+  friend bool operator<(const compatible9&, const compatible9&) {
+    return false;
+  }
+};
+
 struct compatible10 {
   std::string a;
-  std::vector<compatible4> j;
+  std::vector<compatible9> j;
   std::string b;
 };
 
@@ -60,7 +102,7 @@ struct compatible11 {
 
 struct compatible12 {
   std::string a;
-  std::unique_ptr<compatible10> j;
+  std::unique_ptr<compatible11> j;
   std::string b;
 };
 
@@ -74,6 +116,16 @@ TEST_CASE("test compatible check") {
   static_assert(struct_pack::detail::exist_compatible_member<compatible3>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible4>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible5>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible6>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible7>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible8>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible9>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible10>,
                 "check compatible failed");

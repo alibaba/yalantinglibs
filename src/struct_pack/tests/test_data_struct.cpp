@@ -540,11 +540,11 @@ TEST_CASE("test unique_ptr") {
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list>>();
     std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
-    CHECK(sv == std::string{
-                    (char)type_id::optional_t, (char)type_id::trivial_class_t,
-                    (char)type_id::optional_t, (char)type_id::circle_flag,
-                    (char)129, (char)type_id::string_t, (char)type_id::char_8_t,
-                    (char)type_id::int32_t, (char)type_id::type_end_flag});
+    CHECK(sv ==
+          std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
+                      (char)type_id::circle_flag, (char)129,
+                      (char)type_id::string_t, (char)type_id::char_8_t,
+                      (char)type_id::int32_t, (char)type_id::type_end_flag});
     CHECK(*result.value() == *result.value());
   }
   SUBCASE("test list2") {
@@ -566,13 +566,12 @@ TEST_CASE("test unique_ptr") {
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list2>>();
     std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
-    CHECK(sv ==
-          std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
-                      (char)type_id::trivial_class_t, (char)type_id::optional_t,
-                      (char)type_id::circle_flag, (char)130,
-                      (char)type_id::string_t, (char)type_id::char_8_t,
-                      (char)type_id::int32_t, (char)type_id::type_end_flag,
-                      (char)type_id::type_end_flag});
+    CHECK(sv == std::string{
+                    (char)type_id::optional_t, (char)type_id::trivial_class_t,
+                    (char)type_id::trivial_class_t, (char)type_id::circle_flag,
+                    (char)130, (char)type_id::string_t, (char)type_id::char_8_t,
+                    (char)type_id::int32_t, (char)type_id::type_end_flag,
+                    (char)type_id::type_end_flag});
     CHECK(*result.value() == *result.value());
   }
   SUBCASE("test tree") {

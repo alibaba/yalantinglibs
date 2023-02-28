@@ -343,3 +343,49 @@ TEST_CASE("testing long long") {
     CHECK(res.value() == 1ull);
   }
 }
+
+struct Node {
+  int Type;
+  bool IsArray;
+  std::list<uint32_t> Dimensions;
+  bool IsStructure;
+  std::string TypeName;
+  uint16_t Index;
+  bool BoolValue;
+  std::string StringValue;
+  float FloatValue;
+  double DoubleValue;
+  int16_t Int16Value;
+  int32_t Int32Value;
+  int64_t Int64Value;
+  uint16_t UInt16Value;
+  uint32_t UInt32Value;
+  uint64_t UInt64Value;
+  std::list<Node> Values;  // Recursive member
+  friend bool operator==(const Node& a, const Node& b) = default;
+};
+
+TEST_CASE("testing long long") {
+  Node node = {
+      .Type = 1,
+      .IsArray = false,
+      .Dimensions = {1, 2, 3},
+      .IsStructure = true,
+      .TypeName = "Hello",
+      .Index = 1141,
+      .Values = {
+          Node{.Type = 1, .Index = 2},
+          Node{.Type = 3, .Index = 7, .Values = {Node{.Index = 41}}},
+          Node{.Type = 1, .Index = 2, .Values = {Node{.Index = 41}}},
+          Node{.Type = 1,
+               .Index = 2,
+               .Values = {Node{
+                   .Index = 41,
+                   .Values = {Node{.Index = 14, .Values = {Node{.Index = 1}}},
+                              Node{.Index = 12}, Node{.Index = 123},
+                              Node{.Index = 11123}}}}},
+      }};
+  auto buffer = struct_pack::serialize(node);
+  auto node2 = struct_pack::deserialize<Node>(buffer);
+  CHECK(node2.value() == node);
+}

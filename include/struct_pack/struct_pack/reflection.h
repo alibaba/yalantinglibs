@@ -22,6 +22,7 @@
 #include <tuple>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 #if __has_include(<span>)
 #include <span>
@@ -246,6 +247,11 @@ namespace detail {
   template <typename T>
   concept is_compatible = is_compatible_v<T>;
 
+  struct UniversalVectorType {
+    template <typename T>
+    operator std::vector<T>();
+  };
+
   struct UniversalType {
     template <typename T>
     operator T();
@@ -275,6 +281,12 @@ namespace detail {
 
   template <typename T, typename... Args>
   consteval std::size_t member_count_impl() {
+    if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
+      return member_count_impl<T, Args..., UniversalVectorType>();
+    }
+    if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
+      return member_count_impl<T, Args..., UniversalType>();
+    }
     if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
       return member_count_impl<T, Args..., UniversalType>();
     }
