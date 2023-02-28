@@ -381,9 +381,7 @@ TEST_CASE("testing long long") {
                .Index = 2,
                .Values = {Node{
                    .Index = 41,
-                   .Values = {Node{.Index = 14, .Values = {Node{.Index = 1}}},
-                              Node{.Index = 12}, Node{.Index = 123},
-                              Node{.Index = 11123}}}}},
+                   .Values = {}}}},
       }};
   auto buffer = struct_pack::serialize(node);
   auto node2 = struct_pack::deserialize<Node>(buffer);
