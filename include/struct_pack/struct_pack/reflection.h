@@ -284,10 +284,7 @@ namespace detail {
     if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
       return member_count_impl<T, Args..., UniversalVectorType>();
     }
-    if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
-      return member_count_impl<T, Args..., UniversalType>();
-    }
-    if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
+    else if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
       return member_count_impl<T, Args..., UniversalType>();
     }
     else if constexpr (requires {
