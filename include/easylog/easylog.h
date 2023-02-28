@@ -85,6 +85,8 @@ class logger {
   logger() = default;
   logger(const logger &) = default;
 
+  ~logger() { thread_pool::instance().quit(); }
+
   template <size_t N>
   size_t get_time_str(char (&buf)[N], const auto &now) {
     const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);

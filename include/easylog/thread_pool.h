@@ -17,12 +17,12 @@
 #pragma once
 
 #include <chrono>
-#include <functional>
-#include <memory>
-#include <thread>
-#include <list>
-#include <mutex>
 #include <condition_variable>
+#include <functional>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 namespace easylog {
 
@@ -90,15 +90,13 @@ class thread_pool {
     }
   }
 
-  void async(Task &&task) {
-    queue_.enqueue(std::make_unique<Task>(std::move(task)));
-  }
+  void quit() {
+    std::lock_guard<std::mutex> lock(mutex_);
 
- private:
-  thread_pool() = default;
-  thread_pool(const thread_pool &) = default;
+    if (threads_.empty()) {
+      return;
+    }
 
-  ~thread_pool() {
     for (size_t i = 0; i < threads_.size(); i++) {
       async([]() {
         return false;
@@ -108,7 +106,17 @@ class thread_pool {
     for (auto &t : threads_) {
       t.join();
     }
+
+    threads_.clear();
   }
+
+  void async(Task &&task) {
+    queue_.enqueue(std::make_unique<Task>(std::move(task)));
+  }
+
+ private:
+  thread_pool() = default;
+  thread_pool(const thread_pool &) = default;
 
   blocking_queue<item_type> queue_;
 
