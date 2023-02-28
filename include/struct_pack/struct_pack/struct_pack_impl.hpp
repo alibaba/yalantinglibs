@@ -624,7 +624,7 @@ consteval std::size_t check_circle() {
   using types_tuple = std::tuple<ParentArgs...>;
   if constexpr (sizeof...(ParentArgs)) {
     return []<std::size_t... I>(std::index_sequence<I...>) {
-      return std::max(
+      return (std::max)(
           {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
                                                                       : 0)...});
     }
