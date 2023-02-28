@@ -365,24 +365,21 @@ struct Node {
   friend bool operator==(const Node& a, const Node& b) = default;
 };
 
-TEST_CASE("testing long long") {
-  Node node = {
-      .Type = 1,
-      .IsArray = false,
-      .Dimensions = {1, 2, 3},
-      .IsStructure = true,
-      .TypeName = "Hello",
-      .Index = 1141,
-      .Values = {
-          Node{.Type = 1, .Index = 2},
-          Node{.Type = 3, .Index = 7, .Values = {Node{.Index = 41}}},
-          Node{.Type = 1, .Index = 2, .Values = {Node{.Index = 41}}},
-          Node{.Type = 1,
-               .Index = 2,
-               .Values = {Node{
-                   .Index = 41,
-                   .Values = {}}}},
-      }};
+TEST_CASE("testing recursive type") {
+  Node node = {.Type = 1,
+               .IsArray = false,
+               .Dimensions = {1, 2, 3},
+               .IsStructure = true,
+               .TypeName = "Hello",
+               .Index = 1141,
+               .Values = {
+                   Node{.Type = 1, .Index = 2},
+                   Node{.Type = 3, .Index = 7, .Values = {Node{.Index = 41}}},
+                   Node{.Type = 1, .Index = 2, .Values = {Node{.Index = 41}}},
+                   Node{.Type = 1,
+                        .Index = 2,
+                        .Values = {Node{.Index = 41, .Values = {}}}},
+               }};
   auto buffer = struct_pack::serialize(node);
   auto node2 = struct_pack::deserialize<Node>(buffer);
   CHECK(node2.value() == node);
