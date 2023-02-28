@@ -1418,7 +1418,7 @@ class packer {
   }
 
   template <std::size_t size_type, uint64_t version>
-  constexpr void STRUCT_PACK_INLINE serialize_one(const auto &item) {
+  constexpr void inline serialize_one(const auto &item) {
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
@@ -2130,7 +2130,7 @@ class unpacker {
   }
 
   template <size_t size_type, uint64_t version, bool NotSkip>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one(auto &item) {
+  constexpr struct_pack::errc inline deserialize_one(auto &item) {
     struct_pack::errc code{};
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
