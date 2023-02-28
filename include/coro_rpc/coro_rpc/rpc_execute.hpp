@@ -27,10 +27,8 @@
 #include "util/type_traits.h"
 
 namespace coro_rpc::internal {
-template <typename T, typename Conn>
-concept has_get_reserve_size = requires(Conn &&conn) {
-  T::get_reserve_size(conn);
-};
+// TODO: remove this later
+
 template <bool is_conn, typename First>
 auto get_return_type() {
   if constexpr (is_conn) {
@@ -46,31 +44,6 @@ auto get_return_type() {
     return First{};
   }
 }
-
-template <typename rpc_protocol, typename serialize_proto,
-          typename conn_return_type>
-struct connection_responser {
-  typename rpc_protocol::req_header req_head;
-  void operator()(rpc_conn &&conn, conn_return_type &&ret) {
-    if constexpr (has_get_reserve_size<rpc_protocol, rpc_conn>) {
-      conn->response_msg<rpc_protocol>(
-          serialize_proto::serialize(ret, rpc_protocol::get_reserve_size(conn)),
-          req_head);
-    }
-    else {
-      conn->response_msg<rpc_protocol>(serialize_proto::serialize(ret),
-                                       req_head);
-    }
-  }
-};
-
-template <typename rpc_protocol, typename serialize_proto>
-struct connection_responser<rpc_protocol, serialize_proto, void> {
-  typename rpc_protocol::req_header req_head;
-  void operator()(rpc_conn &&conn) {
-    conn->response_msg<rpc_protocol>(serialize_proto::serialize(), req_head);
-  }
-};
 
 using rpc_conn = std::shared_ptr<coro_connection>;
 template <typename rpc_protocol, typename serialize_proto, auto func,
@@ -92,7 +65,8 @@ inline std::optional<std::string> execute(
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_convertible_v<context<conn_return_type>, First>;
+        std::is_convertible_v<context_base<conn_return_type, rpc_protocol>,
+                              First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
@@ -109,14 +83,11 @@ inline std::optional<std::string> execute(
       if constexpr (std::is_void_v<Self>) {
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
-          std::apply(func,
-                     std::tuple_cat(
-                         std::forward_as_tuple(context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
-                         std::move(args)));
+          std::apply(func, std::tuple_cat(
+                               std::forward_as_tuple(
+                                   context_base<conn_return_type, rpc_protocol>(
+                                       std::move(conn), std::move(req_head))),
+                               std::move(args)));
         }
         else {
           // call void func(args...)
@@ -127,16 +98,12 @@ inline std::optional<std::string> execute(
         auto &o = *self;
         if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
-          std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      o, context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
-                  std::move(args)));
+          std::apply(func,
+                     std::tuple_cat(
+                         std::forward_as_tuple(
+                             o, context_base<conn_return_type, rpc_protocol>(
+                                    std::move(conn), std::move(req_head))),
+                         std::move(args)));
         }
         else {
           // call void o.func(args...)
@@ -218,7 +185,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
 
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, context>::value;
+    constexpr bool is_conn = requires { typename First::return_type; };
     if constexpr (is_conn) {
       static_assert(std::is_void_v<return_type>,
                     "The return_type must be void");
@@ -226,7 +193,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
 
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
-        std::is_same_v<context<conn_return_type>, First>;
+        std::is_same_v<context_base<conn_return_type, rpc_protocol>, First>;
     auto args = get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
@@ -240,13 +207,11 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
         if constexpr (has_coro_conn_v) {
           // call void func(coro_conn, args...)
           co_await std::apply(
-              func, std::tuple_cat(
-                        std::forward_as_tuple(context<conn_return_type>(
-                            std::move(conn),
-                            connection_responser<rpc_protocol, serialize_proto,
-                                                 conn_return_type>{
-                                std::move(req_head)})),
-                        std::move(args)));
+              func,
+              std::tuple_cat(std::forward_as_tuple(
+                                 context_base<conn_return_type, rpc_protocol>(
+                                     std::move(conn), std::move(req_head))),
+                             std::move(args)));
         }
         else {
           // call void func(args...)
@@ -258,15 +223,11 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
         if constexpr (has_coro_conn_v) {
           // call void o.func(coro_conn, args...)
           co_await std::apply(
-              func,
-              std::tuple_cat(
-                  std::forward_as_tuple(
-                      o, context<conn_return_type>(
-                             std::move(conn),
-                             connection_responser<rpc_protocol, serialize_proto,
-                                                  conn_return_type>{
-                                 std::move(req_head)})),
-                  std::move(args)));
+              func, std::tuple_cat(
+                        std::forward_as_tuple(
+                            o, context_base<conn_return_type, rpc_protocol>(
+                                   std::move(conn), std::move(req_head))),
+                        std::move(args)));
         }
         else {
           // call void o.func(args...)

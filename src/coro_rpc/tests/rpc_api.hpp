@@ -19,7 +19,6 @@
 #include <string>
 #include <thread>
 
-#include "coro_rpc/coro_rpc/coro_connection.hpp"
 void hi();
 std::string hello();
 std::string hello_timeout();
