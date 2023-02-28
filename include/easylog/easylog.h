@@ -67,9 +67,8 @@ class logger {
   void init(Severity min_severity, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time, bool enable_async_write) {
-    static appender appender(filename, max_file_size, max_files,
-                             flush_every_time);
-    appender_ = &appender;
+    appender_ = std::make_unique<appender>(filename, max_file_size, max_files,
+                                           flush_every_time);
     min_severity_ = min_severity;
     enable_console_ = enable_console;
     enbale_async_write_ = enable_async_write;
@@ -140,7 +139,7 @@ class logger {
   Severity min_severity_;
   bool enable_console_ = true;
   bool enbale_async_write_ = false;
-  appender *appender_ = nullptr;
+  std::unique_ptr<appender> appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
 };
 
