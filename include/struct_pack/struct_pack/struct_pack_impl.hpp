@@ -962,9 +962,9 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (optional<type>) {
+  else if constexpr (optional<type> || unique_ptr<type>) {
     ret.total = sizeof(char);
-    if (item.has_value()) {
+    if (item) {
       ret += calculate_one_size(*item);
     }
   }
@@ -1000,15 +1000,6 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   }
   else {
     static_assert(!sizeof(type), "the type is not supported yet");
-  }
-  return ret;
-}
-
-template <unique_ptr T>
-constexpr size_info inline calculate_one_size(const T &item) {
-  size_info ret{.total = sizeof(char), .size_cnt = 0, .max_size = 0};
-  if (item != nullptr) {
-    ret += calculate_one_size(*item);
   }
   return ret;
 }
