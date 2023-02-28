@@ -620,14 +620,13 @@ consteval decltype(auto) get_size_literal() {
   }
 }
 template <typename arg, typename... ParentArgs>
-consteval std::size_t check_cycle() {
+consteval std::size_t check_circle() {
   using types_tuple = std::tuple<ParentArgs...>;
   if constexpr (sizeof...(ParentArgs)) {
     return []<std::size_t... I>(std::index_sequence<I...>) {
-      std::size_t ret = (std::max)(
+      return (std::max)(
           {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
                                                                       : 0)...});
-      return ret;
     }
     (std::make_index_sequence<sizeof...(ParentArgs)>());
   }
@@ -649,95 +648,93 @@ consteval decltype(auto) get_variant_literal(std::index_sequence<I...>);
 
 template <typename Arg, typename... ParentArgs>
 consteval decltype(auto) get_type_literal() {
-  constexpr auto id = get_type_id<Arg>();
-  constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
-  if constexpr (id == type_id::non_trivial_class_t ||
-                id == type_id::trivial_class_t) {
-    using Args = decltype(get_types<Arg>());
-    constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
-        std::make_index_sequence<std::tuple_size_v<Args>>());
-    if constexpr (is_trivial_serializable<Arg>::value) {
-      static_assert(
-          min_align<Arg>() == '0' || min_align<Arg>() <= max_align<Arg>(),
-          "#pragma pack may decrease the alignment of a class, however, "
-          "it cannot make a class over aligned.");
-      constexpr auto end =
-          string_literal<char, 3>{{static_cast<char>(min_align<Arg>()),
-                                   static_cast<char>(max_align<Arg>()),
-                                   static_cast<char>(type_id::type_end_flag)}};
-      return ret + body + end;
+  constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
+  if constexpr (has_cycle) {
+    static_assert(has_cycle >= 2);
+    return string_literal<char, 1>{{static_cast<char>(type_id::circle_flag)}} +
+           get_size_literal<has_cycle - 2>();
+  }
+  else {
+    constexpr auto id = get_type_id<Arg>();
+    constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
+    if constexpr (id == type_id::non_trivial_class_t ||
+                  id == type_id::trivial_class_t) {
+      using Args = decltype(get_types<Arg>());
+      constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
+          std::make_index_sequence<std::tuple_size_v<Args>>());
+      if constexpr (is_trivial_serializable<Arg>::value) {
+        static_assert(
+            min_align<Arg>() == '0' || min_align<Arg>() <= max_align<Arg>(),
+            "#pragma pack may decrease the alignment of a class, however, "
+            "it cannot make a class over aligned.");
+        constexpr auto end = string_literal<char, 3>{
+            {static_cast<char>(min_align<Arg>()),
+             static_cast<char>(max_align<Arg>()),
+             static_cast<char>(type_id::type_end_flag)}};
+        return ret + body + end;
+      }
+      else {
+        constexpr auto end = string_literal<char, 1>{
+            {static_cast<char>(type_id::type_end_flag)}};
+        return ret + body + end;
+      }
     }
-    else {
+    else if constexpr (id == type_id::variant_t) {
+      constexpr auto sz = std::variant_size_v<Arg>;
+      static_assert(sz > 0, "empty param of std::variant is not allowed!");
+      static_assert(sz < 256, "too many alternative type in variant!");
+      constexpr auto body = get_variant_literal<Arg, ParentArgs...>(
+          std::make_index_sequence<std::variant_size_v<Arg>>());
       constexpr auto end =
           string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
       return ret + body + end;
     }
-  }
-  else if constexpr (id == type_id::variant_t) {
-    constexpr auto sz = std::variant_size_v<Arg>;
-    static_assert(sz > 0, "empty param of std::variant is not allowed!");
-    static_assert(sz < 256, "too many alternative type in variant!");
-    constexpr auto body = get_variant_literal<Arg>(
-        std::make_index_sequence<std::variant_size_v<Arg>>());
-    constexpr auto end =
-        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
-    return ret + body + end;
-  }
-  else if constexpr (id == type_id::array_t) {
-    constexpr auto sz =
-        sizeof(Arg) /
-        sizeof(decltype(std::declval<
-                        Arg>()[0]));  // std::size(std::declval<Arg>());
-    return ret +
-           get_type_literal<
-               std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
-               ParentArgs...>() +
-           get_size_literal<sz>();
-  }
-  else if constexpr (unique_ptr<Arg>) {
-    // detect cycle in graph
-    constexpr std::size_t has_cycle =
-        check_cycle<typename Arg::element_type, ParentArgs...>();
-    if constexpr (has_cycle) {
+    else if constexpr (id == type_id::array_t) {
+      constexpr auto sz =
+          sizeof(Arg) /
+          sizeof(decltype(std::declval<
+                          Arg>()[0]));  // std::size(std::declval<Arg>());
       return ret +
-             string_literal<char, 1>{
-                 {static_cast<char>(type_id::circle_flag)}} +
-             get_size_literal<has_cycle - 1>();
+             get_type_literal<
+                 std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
+                 ParentArgs...>() +
+             get_size_literal<sz>();
     }
-    else {
+    else if constexpr (unique_ptr<Arg>) {
       return ret +
              get_type_literal<std::remove_cvref_t<typename Arg::element_type>,
                               Arg, ParentArgs...>();
     }
-  }
-  else if constexpr (id == type_id::container_t || id == type_id::optional_t ||
-                     id == type_id::string_t) {
-    return ret + get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
-                                  Arg, ParentArgs...>();
-  }
-  else if constexpr (id == type_id::set_container_t) {
-    return ret + get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
-                                  Arg, ParentArgs...>();
-  }
-  else if constexpr (id == type_id::map_container_t) {
-    return ret +
-           get_type_literal<std::remove_cvref_t<typename Arg::key_type>, Arg,
-                            ParentArgs...>() +
-           get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>, Arg,
-                            ParentArgs...>();
-  }
-  else if constexpr (id == type_id::expected_t) {
-    return ret +
-           get_type_literal<std::remove_cvref_t<typename Arg::value_type>, Arg,
-                            ParentArgs...>() +
-           get_type_literal<std::remove_cvref_t<typename Arg::error_type>, Arg,
-                            ParentArgs...>();
-  }
-  else if constexpr (id != type_id::compatible_t) {
-    return ret;
-  }
-  else {
-    return string_literal<char, 0>{};
+    else if constexpr (id == type_id::container_t ||
+                       id == type_id::optional_t || id == type_id::string_t) {
+      return ret +
+             get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+                              Arg, ParentArgs...>();
+    }
+    else if constexpr (id == type_id::set_container_t) {
+      return ret + get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+                                    Arg, ParentArgs...>();
+    }
+    else if constexpr (id == type_id::map_container_t) {
+      return ret +
+             get_type_literal<std::remove_cvref_t<typename Arg::key_type>, Arg,
+                              ParentArgs...>() +
+             get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>,
+                              Arg, ParentArgs...>();
+    }
+    else if constexpr (id == type_id::expected_t) {
+      return ret +
+             get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+                              Arg, ParentArgs...>() +
+             get_type_literal<std::remove_cvref_t<typename Arg::error_type>,
+                              Arg, ParentArgs...>();
+    }
+    else if constexpr (id != type_id::compatible_t) {
+      return ret;
+    }
+    else {
+      return string_literal<char, 0>{};
+    }
   }
 }
 
@@ -827,7 +824,10 @@ template <uint64_t version, typename Arg, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper() {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
-  if constexpr (id == type_id::compatible_t) {
+  if constexpr (check_circle<Arg, ParentArgs...>()) {
+    return false;
+  }
+  else if constexpr (id == type_id::compatible_t) {
     return T::version_number == version;
   }
   else {
@@ -840,11 +840,8 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        if constexpr (check_cycle<typename T::element_type, ParentArgs...>())
-          return false;
-        else
-          return check_if_compatible_element_exist_impl_helper<
-              version, typename T::element_type, T, ParentArgs...>();
+        return check_if_compatible_element_exist_impl_helper<
+            version, typename T::element_type, T, ParentArgs...>();
       }
       else {
         return check_if_compatible_element_exist_impl_helper<
@@ -915,7 +912,7 @@ constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const T &item, const Args &...items);
 
 template <typename T>
-constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
+constexpr size_info inline calculate_one_size(const T &item) {
   constexpr auto id = get_type_id<std::remove_cvref_t<T>>();
   static_assert(id != detail::type_id::type_end_flag);
   using type = std::remove_cvref_t<decltype(item)>;
@@ -962,9 +959,9 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (optional<type>) {
+  else if constexpr (optional<type> || unique_ptr<type>) {
     ret.total = sizeof(char);
-    if (item.has_value()) {
+    if (item) {
       ret += calculate_one_size(*item);
     }
   }
@@ -1000,15 +997,6 @@ constexpr size_info STRUCT_PACK_INLINE calculate_one_size(const T &item) {
   }
   else {
     static_assert(!sizeof(type), "the type is not supported yet");
-  }
-  return ret;
-}
-
-template <unique_ptr T>
-constexpr size_info inline calculate_one_size(const T &item) {
-  size_info ret{.total = sizeof(char), .size_cnt = 0, .max_size = 0};
-  if (item != nullptr) {
-    ret += calculate_one_size(*item);
   }
   return ret;
 }
@@ -1069,7 +1057,9 @@ constexpr std::size_t calculate_compatible_version_size() {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   std::size_t sz = 0;
-  if constexpr (id == type_id::compatible_t) {
+  if constexpr (check_circle<T, ParentArgs...>())
+    sz = 0;
+  else if constexpr (id == type_id::compatible_t) {
     sz = 1;
   }
   else {
@@ -1081,11 +1071,8 @@ constexpr std::size_t calculate_compatible_version_size() {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        if constexpr (check_cycle<typename T::element_type, ParentArgs...>())
-          sz = 0;
-        else
-          sz = calculate_compatible_version_size<typename T::element_type, T,
-                                                 ParentArgs...>();
+        sz = calculate_compatible_version_size<typename T::element_type, T,
+                                               ParentArgs...>();
       }
       else {
         sz = calculate_compatible_version_size<typename T::value_type, T,
@@ -1147,7 +1134,9 @@ template <typename Arg, typename... ParentArgs>
 constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
-  if constexpr (id == type_id::compatible_t) {
+  if constexpr (check_circle<T, ParentArgs...>())
+    ;
+  else if constexpr (id == type_id::compatible_t) {
     buffer[sz++] = T::version_number;
   }
   else {
@@ -1159,9 +1148,8 @@ constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        if constexpr (!check_cycle<typename T::element_type, ParentArgs...>())
-          get_compatible_version_numbers<typename T::element_type, T,
-                                         ParentArgs...>(buffer, sz);
+        get_compatible_version_numbers<typename T::element_type, T,
+                                       ParentArgs...>(buffer, sz);
       }
       else {
         get_compatible_version_numbers<typename T::value_type, T,
@@ -1430,7 +1418,7 @@ class packer {
   }
 
   template <std::size_t size_type, uint64_t version>
-  constexpr void STRUCT_PACK_INLINE serialize_one(const auto &item) {
+  constexpr void inline serialize_one(const auto &item) {
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
@@ -2142,7 +2130,7 @@ class unpacker {
   }
 
   template <size_t size_type, uint64_t version, bool NotSkip>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one(auto &item) {
+  constexpr struct_pack::errc inline deserialize_one(auto &item) {
     struct_pack::errc code{};
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
