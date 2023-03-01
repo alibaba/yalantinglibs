@@ -90,7 +90,15 @@ class thread_pool {
     }
   }
 
-  void quit() {
+  void async(Task &&task) {
+    queue_.enqueue(std::make_unique<Task>(std::move(task)));
+  }
+
+ private:
+  thread_pool() = default;
+  thread_pool(const thread_pool &) = default;
+
+  ~thread_pool() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (threads_.empty()) {
@@ -109,14 +117,6 @@ class thread_pool {
 
     threads_.clear();
   }
-
-  void async(Task &&task) {
-    queue_.enqueue(std::make_unique<Task>(std::move(task)));
-  }
-
- private:
-  thread_pool() = default;
-  thread_pool(const thread_pool &) = default;
 
   blocking_queue<item_type> queue_;
 
