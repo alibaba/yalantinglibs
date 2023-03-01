@@ -71,7 +71,7 @@ class logger {
   }
 
   void flush() {
-    if (log_->append) {
+    if (log_ && log_->append) {
       log_->append->flush();
     }
   }
@@ -88,11 +88,16 @@ class logger {
   }
 
   bool check_severity(Severity severity) {
-    return severity >= log_->min_severity;
+    if (log_) {
+      return severity >= log_->min_severity;
+    }
+    return false;
   }
 
   void add_appender(std::function<void(std::string_view)> fn) {
-    log_->appenders.emplace_back(std::move(fn));
+    if (log_) {
+      log_->appenders.emplace_back(std::move(fn));
+    }
   }
 
  private:
@@ -149,7 +154,7 @@ class logger {
     }
   }
 
-  std::shared_ptr<log> log_;
+  std::shared_ptr<log> log_ = nullptr;
 };
 
 template <size_t Id = 0>
