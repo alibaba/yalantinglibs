@@ -421,6 +421,32 @@ void init_tree(my_tree *tree, int depth = 0) {
   }
 }
 
+struct test_unique_ptr {
+  int a;
+  std::vector<std::unique_ptr<test_unique_ptr>> b;
+  friend bool operator==(const test_unique_ptr &a, const test_unique_ptr &b) {
+    if (a.a != b.a)
+      return false;
+    if (a.b.size() != b.b.size())
+      return false;
+    for (size_t i = 0; i < a.b.size(); ++i) {
+      if (a.b[i] == nullptr && b.b[i] == nullptr) {
+      }
+      else if (a.b[i] != nullptr && b.b[i] != nullptr) {
+        if (*a.b[i] == *b.b[i]) {
+        }
+        else {
+          return false;
+        }
+      }
+      else {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
 TEST_CASE("test unique_ptr") {
   SUBCASE("nullptr") {
     auto buffer = struct_pack::serialize(std::unique_ptr<int>{nullptr});
@@ -514,11 +540,11 @@ TEST_CASE("test unique_ptr") {
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list>>();
     std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
-    CHECK(sv == std::string{
-                    (char)type_id::optional_t, (char)type_id::trivial_class_t,
-                    (char)type_id::optional_t, (char)type_id::circle_flag,
-                    (char)129, (char)type_id::string_t, (char)type_id::char_8_t,
-                    (char)type_id::int32_t, (char)type_id::type_end_flag});
+    CHECK(sv ==
+          std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
+                      (char)type_id::circle_flag, (char)129,
+                      (char)type_id::string_t, (char)type_id::char_8_t,
+                      (char)type_id::int32_t, (char)type_id::type_end_flag});
     CHECK(*result.value() == *result.value());
   }
   SUBCASE("test list2") {
@@ -540,13 +566,12 @@ TEST_CASE("test unique_ptr") {
     auto literal = struct_pack::get_type_literal<std::unique_ptr<my_list2>>();
     std::string_view sv{literal.data(), literal.size()};
     using struct_pack::detail::type_id;
-    CHECK(sv ==
-          std::string{(char)type_id::optional_t, (char)type_id::trivial_class_t,
-                      (char)type_id::trivial_class_t, (char)type_id::optional_t,
-                      (char)type_id::circle_flag, (char)130,
-                      (char)type_id::string_t, (char)type_id::char_8_t,
-                      (char)type_id::int32_t, (char)type_id::type_end_flag,
-                      (char)type_id::type_end_flag});
+    CHECK(sv == std::string{
+                    (char)type_id::optional_t, (char)type_id::trivial_class_t,
+                    (char)type_id::trivial_class_t, (char)type_id::circle_flag,
+                    (char)130, (char)type_id::string_t, (char)type_id::char_8_t,
+                    (char)type_id::int32_t, (char)type_id::type_end_flag,
+                    (char)type_id::type_end_flag});
     CHECK(*result.value() == *result.value());
   }
   SUBCASE("test tree") {
@@ -569,5 +594,29 @@ TEST_CASE("test unique_ptr") {
     static_assert(
         struct_pack::detail::unique_ptr<std::unique_ptr<int[]>> == false,
         "We don't support unique_ptr to array now.");
+  }
+  SUBCASE("test unique_ptr self-reference") {
+    test_unique_ptr p;
+    p.a = 123;
+    p.b.push_back(std::make_unique<test_unique_ptr>(test_unique_ptr{456}));
+    p.b.back()->a = 1456;
+    p.b.back()->b.push_back(nullptr);
+
+    p.b.push_back(std::make_unique<test_unique_ptr>(test_unique_ptr{789}));
+    p.b.back()->a = 1789;
+    p.b.back()->b.push_back(
+        std::make_unique<test_unique_ptr>(test_unique_ptr{11789}));
+
+    p.b.push_back(std::make_unique<test_unique_ptr>(test_unique_ptr{123}));
+    p.b.back()->a = 1123;
+    p.b.back()->b.push_back(
+        std::make_unique<test_unique_ptr>(test_unique_ptr{11123}));
+    p.b.back()->b.push_back(
+        std::make_unique<test_unique_ptr>(test_unique_ptr{12123}));
+
+    auto buffer = struct_pack::serialize(p);
+    auto p2 = struct_pack::deserialize<test_unique_ptr>(buffer);
+    CHECK(p2.has_value());
+    CHECK(p2.value() == p);
   }
 }
