@@ -338,7 +338,7 @@ Processor: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 ## Forward/backward compatibility
 
-If current message type no longer meets all you needs - say, you'd like the object to have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T>` and be appended **at the end of the object**. <br />Let's take struct `person` as an example:
+If current message type no longer meets all you needs - say, you'd like the object to have an extra field, the compatibility should not be broken so that the old object could be correctly parsed with the new type definition. In struct_pack, any new fields you added must be of type `struct_pack::compatible<T, version_number>`. <br />And the version number should be incremental each time you update the struct. Let's take struct `person` as an example:
 
 ```cpp
 struct person {
@@ -346,15 +346,33 @@ struct person {
   std::string name;
 };
 
-struct person1 {
+struct person_v0 {
   int age;
   std::string name;
-  struct_pack::compatible<int32_t> id;
-  struct_pack::compatible<bool> maybe;
+  struct_pack::compatible<bool> maybe; //default version number is 0
+};
+
+struct person_v1 {
+  int age;
+  std::string name;
+  struct_pack::compatible<int32_t,20230101> id; // version number is 20230101
+  struct_pack::compatible<bool> maybe; 
+  struct_pack::compatible<std::string,20230101> password; // version number is 20230101
+};
+
+struct person_v2 {
+  int age;
+  std::string name;
+  struct_pack::compatible<int32_t,20230101> id; 
+  struct_pack::compatible<bool> maybe; 
+  struct_pack::compatible<std::string,20230101> password;
+  struct_pack::compatible<double,20230402> salary; //the version number should be incremental. So 20230402 > 20230101
 };
 ```
 
-struct_pack ensures that the two classes can be safely converted to each other by serialization and deserialization, thus achieving forward/backward compatibility.
+struct_pack ensures that those version of struct person can be safely converted to each other by serialization and deserialization, thus achieving forward/backward compatibility.
+
+Remember，if the version number is not incremental, struct_pack can't achieve the compatibility. Thus struct_pack skip the type check for compatible field, the convert is undefined behavior!
 
 ## Why is struct_pack faster?
 

@@ -63,33 +63,93 @@ namespace struct_pack {
  *
  * struct person_v2 {
  *   int age;
+ *   struct_pack::compatible<bool, 20210101> id; // version number is 20210101
+ *   struct_pack::compatible<double, 20210101> salary;
  *   std::string name;
- *   struct_pack::compatible<bool> id;
+ * };
+ *
+ * struct person_v3 {
+ *   int age;
+ *   struct_pack::compatible<std::string, 20210302> nickname; // new version
+ * number is bigger than 20210101 struct_pack::compatible<bool, 20210101> id;
+ *   struct_pack::compatible<double, 20210101> salary;
+ *   std::string name;
  * };
  * ```
  *
- * Note that extension fields can only be added at the end!
- * Otherwise, compile-time error reported.
+ * `struct_pack::compatible<T, version_number>` can be null, thus ensuring
+ * forward and backward compatibility.
+ *
+ * For example, serialize person_v2, and then deserialize it according to
+ * person_v1, the extra fields will be directly ignored during deserialization.
+ * If person_v1 is serialized and then deserialized according to person_v2, the
+ * compatibale fields in person_v2 are all null values.
+ *
+ * The default value of version_number in `struct_pack::compatible<T,
+ * version_number>` is 0.
+ *
+ * ```cpp
+ * person_v2 p2{20, "tom", 114.1, "tom"};
+ * auto buf = struct_pack::serialize(p2);
+ *
+ * person_v1 p1;
+ * // deserialize person_v2 as person_v1
+ * auto ec = struct_pack::deserialize_to(p1, buf.data(), buf.size());
+ * CHECK(ec == std::errc{});
+ *
+ * auto buf1 = struct_pack::serialize(p1);
+ * person_v2 p3;
+ * // deserialize person_v1 as person_v2
+ * auto ec = struct_pack::deserialize_to(p3, buf1.data(), buf1.size());
+ * CHECK(ec == std::errc{});
+ * ```
+ *
+ * When you update your struct:
+ * 1. The new compatible field's version number should bigger than last changed.
+ * 2. Don't remove or change any old field.
  *
  * For example,
  *
  * ```cpp
- * struct person2 {
- *   int age;
- *   struct_pack::compatible<int32_t> id;
- *   std::string name;
- *   struct_pack::compatible<bool> maybe;
+ * struct loginRequest_V1
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<string> verification_code;
  * };
- * person2 p = {.age=1,.id=1,.name="Hello",.maybe=false};
- * auto data = struct_pack::serialize(p);
+ *
+ * struct loginRequest_V2
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<network::ip> ip_address;
+ * };
+ *
+ * auto data=struct_pack::serialize(loginRequest_V1{});
+ * loginRequest_V2 req;
+ * struct_pack::deserialize_to(req, data); // undefined behavior!
+ *
  * ```
  *
- * compile error
+ * ```cpp
+ * struct loginRequest_V1
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<string, 20210101> verification_code;
+ * };
  *
- * ```
- * error: static_assert failed, "The position of compatible<T> in struct is not
- * allowed!"
- * ```
+ * struct loginRequest_V2
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<string, 20210101> verification_code;
+ *   struct_pack::compatible<network::ip, 20000101> ip_address;
+ * };
+ *
+ * auto data=struct_pack::serialize(loginRequest_V1{});
+ * loginRequest_V2 req;
+ * struct_pack::deserialize_to(req, data);  // undefined behavior!
  *
  * The value of compatible can be empty.
  *

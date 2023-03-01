@@ -250,13 +250,15 @@ std::tuple<int,std::string>
 
 这两者是不同的类型，前者是平凡的结构体，而后者是非平凡的。
 
-## 复合类型
+## 兼容类型
 
-指的是`struct_pack::compatible<T>`类型，这是一种特殊的类型，从C++语言的角度上看，它和`std::optional`类型类似，但是它在struct_pack语言中的语义十分特殊：表示添加一个可向前/向后兼容的类型。
+指的是`struct_pack::compatible<T, version_number>`类型，这是一种特殊的类型，从C++语言的角度上看，它和`std::optional`类型类似，但是它在struct_pack语言中的语义十分特殊：表示添加一个可向前/向后兼容的类型。
 
-struct_pack保证对象中新增的`compatible<T>`字段，序列化后的二进制数据可以被安全的反序列化为旧版本的对象，多余的数据会被舍弃。
+struct_pack保证对象中新增的`compatible<T, version_number>`字段，序列化后的二进制数据可以被安全的反序列化为旧版本的对象，多余的数据会被舍弃。
 
-struct_pack同样保证旧版本的对象，序列化后的二进制数据可以被安全的反序列化为添加了`compatible<T>`字段的新版本对象。这些新字段反序列化的结果将是空值（`std::nullopt`）。
+struct_pack同样保证旧版本的对象，序列化后的二进制数据可以被安全的反序列化为添加了`compatible<T, version_number>`字段的新版本对象。这些新字段反序列化的结果将是空值（`std::nullopt`）。
+
+默认的version_number为0。
 
 例如，我们定义一个新版本的`person`：
 
@@ -295,10 +297,10 @@ assert(res->nick_name.has_value()==false);
 
 注意，在修改字段的过程中，如果想保证兼容性，必须遵循只增不改原则：
 
-1. 只增：只添加新字段，且新字段都是`struct_pack::compatible<T>`类型）。
-2. 不该：不修改/删除旧的字段（即使旧的字段是`struct_pack::compatible<T>`类型）。
+1. 只增：新添加的字段必须是`struct_pack::compatible<T, version_number>`类型，且version_number必须大于上一次填入的版本号。
+2. 不该：不修改/删除任何一个旧的字段。
 
-如果犯了这样的错误，大部分情况下struct_pack都能安全返回错误码。然而，如果删去/修改了旧的`struct_pack::compatible<T>`类型，不但无法保证兼容性，还会导致在两个不同版本之间序列化/反序列化的做法变为**未定义行为**！
+如果删去/修改了旧的`struct_pack::compatible<T, version_number>`类型，或者新增的`struct_pack::compatible<T, version_number>`类型版本号不是递增的，则两个结构体不能相互兼容，并且在两个不同版本之间序列化/反序列化的行为是**未定义**的！
 
 # struct_pack的类型信息和类型哈希
 

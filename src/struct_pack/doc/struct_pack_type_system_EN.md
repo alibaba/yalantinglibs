@@ -13,29 +13,29 @@ Basic types are signed and unsigned fixed-length integers, floating-point number
 characters, boolean types, and null types. The following table lists all the basic types
 supported by `struct_pack`.
 
-| Type                      | Meaning                                     | code                                        |
-| ------------------------- | ------------------------------------------- | ------------------------------------------- |
-| int8_t                    | Signed fixed-length 8-bit integer           | complementary code                          |
-| int16_t                   | Signed fixed-length 16-bit integer          | complementary cod                           |
-| int32_t                   | Signed fixed-length 32-bit integer          | complementary cod                           |
-| int64_t                   | Signed fixed-length 64-bit integer          | complementary cod                           |
-| uint8_t                   | Unsigned fixed-length 8-bit integer         | Original Code                               |
-| uint16_t                  | Unsigned fixed-length 16-bit integer        | Original Code                               |
-| uint32_t                  | Unsigned fixed-length 32-bit integer        | Original Code                               |
-| uint64_t                  | Unsigned fixed-length 64-bit integer        | Original Code                               |
-| struct_pack::var_uint32_t | Unsigned variable-length 32-bit integer     | `varint` variable length code               |
-| struct_pack::var_uint64_t | Unsigned variable-length 64-bit integer     | `varint` variable length code               |
-| struct_pack::var_int32_t  | Signed variable-length 32-bit integers      | `varint`+`zigzag` variable length encoding  |
-| struct_pack::var_int64_t  | Signed variable-length 64-bit integers      | `varint`+`zigzag` variable length encoding  |
-| float                     | Fixed-length 32-bit floating-point number   | IEEE-754 single-precision encoding          |
-| double                    | Fixed-length 64-bit floating-point number   | IEEE-754 double precision encoding          |
-| char8_t                   | 8-bit characters                            | Original Code                               |
-| char16_t                  | 16-bit characters                           | Original Code                               |
-| char32_t                  | 32-bit characters                           | Original Code                               |
-| wchar_t                   | wchar characters(depends on platform)       | Original Code                               |
-| bool                      | boolean                                     | Original Code                               |
-| enum/enum class           | enumeration types                           | Original Code                               |
-| std::monostate            | empty type                                  | N/A                                         |
+| Type                      | Meaning                                   | code                                       |
+| ------------------------- | ----------------------------------------- | ------------------------------------------ |
+| int8_t                    | Signed fixed-length 8-bit integer         | complementary code                         |
+| int16_t                   | Signed fixed-length 16-bit integer        | complementary cod                          |
+| int32_t                   | Signed fixed-length 32-bit integer        | complementary cod                          |
+| int64_t                   | Signed fixed-length 64-bit integer        | complementary cod                          |
+| uint8_t                   | Unsigned fixed-length 8-bit integer       | Original Code                              |
+| uint16_t                  | Unsigned fixed-length 16-bit integer      | Original Code                              |
+| uint32_t                  | Unsigned fixed-length 32-bit integer      | Original Code                              |
+| uint64_t                  | Unsigned fixed-length 64-bit integer      | Original Code                              |
+| struct_pack::var_uint32_t | Unsigned variable-length 32-bit integer   | `varint` variable length code              |
+| struct_pack::var_uint64_t | Unsigned variable-length 64-bit integer   | `varint` variable length code              |
+| struct_pack::var_int32_t  | Signed variable-length 32-bit integers    | `varint`+`zigzag` variable length encoding |
+| struct_pack::var_int64_t  | Signed variable-length 64-bit integers    | `varint`+`zigzag` variable length encoding |
+| float                     | Fixed-length 32-bit floating-point number | IEEE-754 single-precision encoding         |
+| double                    | Fixed-length 64-bit floating-point number | IEEE-754 double precision encoding         |
+| char8_t                   | 8-bit characters                          | Original Code                              |
+| char16_t                  | 16-bit characters                         | Original Code                              |
+| char32_t                  | 32-bit characters                         | Original Code                              |
+| wchar_t                   | wchar characters(depends on platform)     | Original Code                              |
+| bool                      | boolean                                   | Original Code                              |
+| enum/enum class           | enumeration types                         | Original Code                              |
+| std::monostate            | empty type                                | N/A                                        |
 
 ## constrained types
 
@@ -43,17 +43,17 @@ A constraint type is a specific data structure that satisfies a certain constrai
 constraint type whether it is a class provided by the standard library or a class provided by a third-party library
 struct_pack supports the following constraint types.
 
-| Type Name     | Meaning                                                     | Examples                                                                                                                            |
-| ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| container     | sequential container of elements                            | std::vector, std::list, std::deque, folly::flat_vector                                                                              |
-| set_container | set types of keys                                           | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                                            |
-| map_container | map types of key-value pairs                                | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                                             |
-| string        | string                                                      | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
-| array         | Array type with determined length at compile time           | C built-in array, std::array                                                                                                        |
-| optional      | optional                                                    | std::optional, boost::optional                                                                                                      |
-| variant       | variant                                                     | std::variant                                                                                                                        |
-| expected      | expected, containing expected results or error codes        | std::expected, tl::expected                                                                                                         |
-| unique_ptr    | unique_ptr, a pointer with exclusive ownership              | std::unique_ptr                                                                                                                     |
+| Type Name     | Meaning                                              | Examples                                                                                                                            |
+| ------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| container     | sequential container of elements                     | std::vector, std::list, std::deque, folly::flat_vector                                                                              |
+| set_container | set types of keys                                    | std::set, std::unordered_set, std::multiset, boost::container::flat_set,                                                            |
+| map_container | map types of key-value pairs                         | std::map, std::unordered_map, std::multimap, boost::container::flat_map                                                             |
+| string        | string                                               | std::string, std::string_view, folly::string, boost::container::string, std::wstring, std::u8string, std::u16string, std::u32string |
+| array         | Array type with determined length at compile time    | C built-in array, std::array                                                                                                        |
+| optional      | optional                                             | std::optional, boost::optional                                                                                                      |
+| variant       | variant                                              | std::variant                                                                                                                        |
+| expected      | expected, containing expected results or error codes | std::expected, tl::expected                                                                                                         |
+| unique_ptr    | unique_ptr, a pointer with exclusive ownership       | std::unique_ptr                                                                                                                     |
 
 We will demonstrate the constraints for each type so that users could define data structures of their own based on such constraints. 
 
@@ -232,13 +232,15 @@ std::tuple<int,std::string>
 ```
 is a non-trivial struct.
 
-## Composite type
+## Compatible Type
 
-This refers to `struct_pack::compatible<T>`. This is a special data type kind of identical to `std::optional` in cpp. In `struct_pack` it is dedicated for the forward/backward compatibility purpose.
+This refers to `struct_pack::compatible<T, version_number>`. This is a special data type kind of identical to `std::optional` in cpp. In `struct_pack` it is dedicated for the forward/backward compatibility purpose.
 
-All new added fields in `struct_pack` must be of `compatible<T>` type, so that a new type with `compatible<T>` could be safely deserialized to the old version of the object.
+All new added fields in `struct_pack` must be of `compatible<T, version_number>` type, so that a new type with `compatible<T, version_number>` could be safely deserialized to the old version of the object.
 
-Meanwhile, data buffer of an old object, could be safely deserialized to a new version object with new `compatible<T>` fields defined.
+Meanwhile, data buffer of an old object, could be safely deserialized to a new version object with new `compatible<T, version_number>` fields defined.
+
+The default version_number is 0.
 
 For example, we updates the definition of `person`:
 
@@ -270,13 +272,13 @@ assert(res->name=="Betty");
 assert(res->nick_name.has_value()==false);
 ```
 
-NOTE: All `T` in `struct_pack::compatible<T>` must be legal `struct_pack` type.
+NOTE: All `T` in `struct_pack::compatible<T, version_number>` must be legal `struct_pack` type.
 
 For compatibility, all modified fields between versions should follow the rules:
-1. Only add new fields and all new added fields must be of type `struct_pack::compatible<T>`
-2. Old fields must not be modified or deleted, even it is of type `struct_pack::compatible<T>`
+1. Only add new fields and all new added fields must be of type `struct_pack::compatible<T,  version_number>`. The new compatible fields should have larger version number.
+2. Old fields must not be modified or deleted, even if it is type `struct_pack::compatible<T, version_number>`
 
-If compatibility is broken between versions, `struct_pack` will return an error_code safely. However, if you delete/modify the old `struct_pack::compatible<T>` fields, it will lead to undefined behaviors when serialize/deserialize between versions.
+If compatibility is broken between versions, `struct_pack` will return an error_code safely. However, if you delete/modify the old `struct_pack::compatible<T, version_number>` fields, it will lead to undefined behaviors when serialize/deserialize between versions.
 
 # Type information and type hash
 
