@@ -354,7 +354,7 @@ CPU: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 ## 向前/向后兼容性
 
-当对象增加新的字段时，怎么保证兼容新旧对象的解析呢？当用户需要添加字段时，只需要在**新对象末尾**
+当对象增加新的字段时，怎么保证兼容新旧对象的解析呢？当用户需要添加字段时，只需要在
 增加新的 `struct_pack::compatible<T>` 字段即可。<br />以person对象为例：
 
 ```cpp
@@ -363,15 +363,34 @@ struct person {
   std::string name;
 };
 
-struct person1 {
+struct person_v0 {
   int age;
   std::string name;
-  struct_pack::compatible<int32_t> id;
-  struct_pack::compatible<bool> maybe;
+  struct_pack::compatible<bool> maybe; //版本号默认为0
+};
+
+struct person_v1 {
+  int age;
+  std::string name;
+  struct_pack::compatible<int32_t,20230101> id; //版本号为20230101
+  struct_pack::compatible<bool> maybe; 
+  struct_pack::compatible<std::string,20230101> password; //版本号为20230101
+};
+
+struct person_v2 {
+  int age;
+  std::string name;
+  struct_pack::compatible<int32_t,20230101> id; 
+  struct_pack::compatible<bool> maybe; 
+  struct_pack::compatible<std::string,20230101> password;
+  struct_pack::compatible<double,20230402> salary; //版本号应该递增。故新填入的版本号20230402大于20230101
 };
 ```
 
-struct_pack保证这两个类可以通过序列化和反序列化实现安全的相互转换，从而实现了向前/向后的兼容性。
+
+struct_pack保证上述的这四个类型之间，可以通过序列化和反序列化安全的相互转换到任何一个其他类型，从而实现了向前/向后的兼容性。
+
+注意，如果版本号不递增，则struct_pack不能保证不同版本结构体之间的兼容性。由于struct_pack不检查compatible字段的类型，因此这种情况下的类型转换是未定义行为！
 
 ## 为什么struct_pack更快？
 

@@ -121,57 +121,40 @@ namespace struct_pack {
  * struct person_v2 {
  *   int age;
  *   std::string name;
- *   struct_pack::compatible<std::size_t> id;
+ *   struct_pack::compatible<std::size_t, 20210101> id; //20210101为版本号
  * };
  * ```
  *
- * 注意，compatibale字段只能添加到结构体的末尾！否则会导致编译错误。例如，假设有以下代码：
- *
- * ```cpp
- * struct person2 {
- *   int age;
- *   struct_pack::compatible<int32_t> id;
- *   std::string name;
- *   struct_pack::compatible<std::size_t> id2;
- * };
- * person2 p = {.id=1,.age=1,.name="Hello",.id2=514};
- * auto data = struct_pack::serialize(p);
- * ```
- *
- * 则编译时会直接报错：
- *
- * ```
- * error: static_assert failed, "The position of compatible<T> in struct is not
- * allowed!"
- * ```
- *
- * `struct_pack::compatible<T>`
+ * `struct_pack::compatible<T, version_number>`
  * 可以为空值，从而保证向前和向后的兼容性。
- * 例如，序列化person1，然后将其按照person来反序列化，多传输的字段在反序列化时将会被直接忽略。
- * 反过来说，序列化person，再将其按照person1来反序列化，则解析出的person1中的compatibale字段均为空值。
+ * 例如，序列化person_v2，然后将其按照person_v1来反序列化，多余的字段在反序列化时将会被直接忽略。
+ * 反过来说，序列化person_v1，再将其按照person_v2来反序列化，则解析出的person_v2中的compatibale字段均为空值。
+ *
+ * compatible字段的版本号可以省略，默认版本号为0。
  *
  * ```cpp
- * person_v2 p2{20, "tom", 1, false};
+ * person_v2 p2{20, "tom", 114.1, "tom"};
  * auto buf = struct_pack::serialize(p2);
  *
  * person_v1 p1;
- * // person_v2按person_v1反序列化
+ * // deserialize person_v2 as person_v1
  * auto ec = struct_pack::deserialize_to(p1, buf.data(), buf.size());
  * CHECK(ec == std::errc{});
  *
  * auto buf1 = struct_pack::serialize(p1);
- * person_v1 p3;
- * // person_v1按照person_v2反序列化
+ * person_v2 p3;
+ * // deserialize person_v1 as person_v2
  * auto ec = struct_pack::deserialize_to(p3, buf1.data(), buf1.size());
  * CHECK(ec == std::errc{});
  * ```
  *
- * 升级接口时应注意保持 **只增不改** 原则：
- * 1. 只允许在原有的类末尾增加`struct_pack::compatible<T>`字段。
- * 2. 不允许改变上一版接口中的任何字段。
+ * 升级接口时应注意保持 **版本号递增** 原则：
+ * 1.
+ * 新增加的compatible字段的版本号，应该大于上一次增加的compatible字段的版本号。
+ * 2.
+ * 不得移除原来的任何一个compatible字段（移除非compatible字段也会出错，但这种错误是可以被类型校验检查出来的）
  *
- * 假如违反这一原则，大部分情况下会引发编译错误。
- * 但是，如果修改了类末尾的 compatible<T> 字段, 那么可能会引发未定义行为。
+ * 假如违反这一原则，那么可能会引发未定义行为。
  * 例如：
  *
  * ```cpp
@@ -187,6 +170,29 @@ namespace struct_pack {
  *   string user_name;
  *   string pass_word;
  *   struct_pack::compatible<network::ip> ip_address;
+ * };
+ *
+ * auto data=struct_pack::serialize(loginRequest_V1{});
+ * loginRequest_V2 req;
+ * //该行为是未定义的！
+ * struct_pack::deserialize_to(req, data);
+ *
+ * ```
+ *
+ * ```cpp
+ * struct loginRequest_V1
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<string, 20210101> verification_code;
+ * };
+ *
+ * struct loginRequest_V2
+ * {
+ *   string user_name;
+ *   string pass_word;
+ *   struct_pack::compatible<string, 20210101> verification_code;
+ *   struct_pack::compatible<network::ip, 20000101> ip_address;
  * };
  *
  * auto data=struct_pack::serialize(loginRequest_V1{});

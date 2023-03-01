@@ -284,9 +284,14 @@ For backward/forward compatibility, new added fields are of type `struct_pack::c
 
 During deserialization, unknown `compatible<T>` fields are omitted and skipped. For `compatible<T>` fields not present, it is desensitized as empty value.
 
-Each `compatible<T>` are placed in the same order as they are defined in the structure. And each `compatible<T>` field is encoded in the same way as `optional<T>` field.s
+The `compatible<T>` are arranged in the following order:
+1. By version number from smallest to largest
+2. If the version numbers are the same, the order is same as they are defined in the structure.
 
-For example, 
+Each `compatible<T>` field is encoded in the same way as `optional<T>` field.
+
+For example:
+
 ```cpp
 struct person {
   int age;
