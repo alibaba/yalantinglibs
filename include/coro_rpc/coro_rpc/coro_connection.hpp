@@ -60,10 +60,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   coro_connection(executor_t executor, asio::ip::tcp::socket socket,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
-      : socket_(std::move(socket)), resp_err_(std::errc{}), timer_(executor) {
-    executor_ =
-        std::make_unique<asio_util::AsyncSimpleExecutorWrapper<executor_t>>(
-            executor);
+      : executor_(
+            std::make_unique<asio_util::ExecutorWrapper<executor_t>>(executor)),
+        socket_(std::move(socket)),
+        resp_err_(std::errc{}),
+        timer_(executor) {
     body_.resize(body_default_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
       return;

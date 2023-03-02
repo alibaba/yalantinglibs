@@ -34,12 +34,12 @@
 namespace asio_util {
 
 template <typename ExecutorImpl>
-class AsyncSimpleExecutorWrapper : public async_simple::Executor {
+class ExecutorWrapper : public async_simple::Executor {
  private:
   ExecutorImpl executor_;
 
  public:
-  AsyncSimpleExecutorWrapper(ExecutorImpl executor) : executor_(executor) {}
+  ExecutorWrapper(ExecutorImpl executor) : executor_(executor) {}
 
   using context_t = std::remove_cvref_t<decltype(executor_.context())>;
 
@@ -61,7 +61,7 @@ class AsyncSimpleExecutorWrapper : public async_simple::Executor {
 
   context_t &context() { return executor_.context(); }
 
-  auto get_raw_executor() { return executor_; }
+  auto get_executor() { return executor_; }
 
  private:
   void schedule(Func func, Duration dur) override {

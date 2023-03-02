@@ -32,12 +32,7 @@ inline async_simple::coro::Lazy<typename ExecutorImpl::executor_type>
 get_executor() {
   auto executor = co_await async_simple::CurrentExecutor{};
   assert(executor != nullptr);
-  co_return((ExecutorImpl *)executor->checkout())->get_executor();
-}
-
-inline asio::io_context &get_io_context(async_simple::Executor *executor) {
-  assert(executor != nullptr);
-  return *(asio::io_context *)executor->checkout();
+  co_return static_cast<ExecutorImpl *>(executor->checkout())->get_executor();
 }
 
 class io_context_pool {
