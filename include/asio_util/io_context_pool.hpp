@@ -14,15 +14,30 @@
  * limitations under the License.
  */
 #pragma once
+#include <async_simple/Executor.h>
+
 #include <asio/io_context.hpp>
 #include <future>
 #include <memory>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
+#include "async_simple/coro/Lazy.h"
+
 namespace asio_util {
+
+template <typename ExecutorImpl>
+inline async_simple::coro::Lazy<typename ExecutorImpl::executor_type>
+get_executor() {
+  auto executor = co_await async_simple::CurrentExecutor{};
+  assert(executor != nullptr);
+  co_return static_cast<ExecutorImpl *>(executor->checkout())->get_executor();
+}
+
 class io_context_pool {
  public:
+  using executor_type = asio::io_context::executor_type;
   explicit io_context_pool(std::size_t pool_size) : next_io_context_(0) {
     if (pool_size == 0) {
       pool_size = 1;  // set default value as 1
@@ -61,22 +76,13 @@ class io_context_pool {
 
   size_t current_io_context() { return next_io_context_ - 1; }
 
-  asio::io_context &get_io_context() {
+  asio::io_context::executor_type get_executor() {
     asio::io_context &io_context = *io_contexts_[next_io_context_];
     ++next_io_context_;
     if (next_io_context_ == io_contexts_.size()) {
       next_io_context_ = 0;
     }
-    return io_context;
-  }
-
-  std::shared_ptr<asio::io_context> get_io_context_ptr() {
-    auto io_context = io_contexts_[next_io_context_];
-    ++next_io_context_;
-    if (next_io_context_ == io_contexts_.size()) {
-      next_io_context_ = 0;
-    }
-    return io_context;
+    return io_context.get_executor();
   }
 
  private:

@@ -44,7 +44,8 @@ class ClientTester {
 static unsigned short coro_rpc_server_port = 8803;
 Lazy<std::shared_ptr<coro_rpc_client>> create_client(
     asio::io_context& io_context, std::string port) {
-  auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
+  auto client = std::make_shared<coro_rpc_client>(io_context.get_executor(),
+                                                  g_client_id++);
 #ifdef ENABLE_SSL
   bool ok = client->init_ssl("../openssl_files", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
@@ -270,7 +271,8 @@ class SSLClientTester {
     ELOGV(INFO, "%s %s", msg.data(), path.data());
   }
   void run() {
-    auto client = std::make_shared<coro_rpc_client>(io_context, g_client_id++);
+    auto client = std::make_shared<coro_rpc_client>(io_context.get_executor(),
+                                                    g_client_id++);
     bool ok = client->init_ssl(base_path, client_crt_path);
     if (client_crt == ssl_type::fake || client_crt == ssl_type::no) {
       REQUIRE(ok == false);
