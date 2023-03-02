@@ -49,11 +49,12 @@ inline std::error_code accept(asio::ip::tcp::acceptor &a,
   return error;
 }
 
-inline std::error_code connect(asio::io_context &io_context,
+template <typename executor_t>
+inline std::error_code connect(executor_t &executor,
                                asio::ip::tcp::socket &socket,
                                const std::string &host,
                                const std::string &port) {
-  asio::ip::tcp::resolver resolver(io_context);
+  asio::ip::tcp::resolver resolver(executor);
   std::error_code error;
   auto endpoints = resolver.resolve(host, port, error);
   if (error) {

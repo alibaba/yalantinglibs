@@ -72,7 +72,7 @@ class coro_rpc_server {
                   std::chrono::steady_clock::duration conn_timeout_duration =
                       std::chrono::seconds(0))
       : pool_(thread_num),
-        acceptor_(pool_.get_io_context()),
+        acceptor_(pool_.get_executor()),
         port_(port),
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
@@ -121,9 +121,6 @@ class coro_rpc_server {
         thd_ = std::thread([this] {
           pool_.run();
         });
-        acceptor_thd_ = std::thread([this] {
-          acceptor_ioc_.run();
-        });
 
         flag_ = stat::started;
       }
@@ -163,12 +160,13 @@ class coro_rpc_server {
 
       ec = listen();
       if (ec == std::errc{}) {
-        thd_ = std::thread([this] {
-          pool_.run();
-        });
-        acceptor_thd_ = std::thread([this] {
-          acceptor_ioc_.run();
-        });
+        if constexpr (requires(typename server_config::executor_pool_t & pool) {
+                        pool.run();
+                      }) {
+          thd_ = std::thread([this] {
+            pool_.run();
+          });
+        }
         flag_ = stat::started;
       }
       else {
@@ -217,11 +215,6 @@ class coro_rpc_server {
       thd_.join();
     }
 
-    if (acceptor_thd_.joinable()) {
-      ELOGV(INFO, "wait for server's acceptor thread finish all work.");
-      acceptor_thd_.join();
-      ELOGV(INFO, "server's acceptor thread finished.");
-    }
     ELOGV(INFO, "stop coro_rpc_server ok");
     flag_ = stat::stop;
   }
@@ -349,8 +342,8 @@ class coro_rpc_server {
 
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
-      auto &io_context = pool_.get_io_context();
-      asio::ip::tcp::socket socket(io_context);
+      auto executor = pool_.get_executor();
+      asio::ip::tcp::socket socket(executor);
       auto error = co_await asio_util::async_accept(acceptor_, socket);
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_server_accept_error) {
@@ -372,8 +365,8 @@ class coro_rpc_server {
 
       int64_t conn_id = ++conn_id_;
       ELOGV(INFO, "new client conn_id %d coming", conn_id);
-      auto conn = std::make_shared<coro_connection>(
-          io_context, std::move(socket), conn_timeout_duration_);
+      auto conn = std::make_shared<coro_connection>(executor, std::move(socket),
+                                                    conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t &id) {
             std::unique_lock lock(conns_mtx_);
@@ -407,13 +400,10 @@ class coro_rpc_server {
     });
   }
 
-  asio_util::io_context_pool pool_;
+  typename server_config::executor_pool_t pool_;
   asio::ip::tcp::acceptor acceptor_;
 
-  asio::io_context acceptor_ioc_;
-
   std::thread thd_;
-  std::thread acceptor_thd_;
   stat flag_;
 
   std::mutex start_mtx_;
