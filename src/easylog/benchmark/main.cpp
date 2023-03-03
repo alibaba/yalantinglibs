@@ -71,7 +71,7 @@ void test_easylog() {
   {
     ScopedTimer timer("easylog");
     for (int i = 0; i < 5000; i++)
-      ELOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+      MELOGV(INFO, 0, "Hello, it is a long string test! Hello World");
   }
 }
 
@@ -82,7 +82,7 @@ void test_async_easylog() {
   {
     ScopedTimer timer("async_easylog");
     for (int i = 0; i < 5000; i++)
-      ELOG(INFO, 1) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+      MELOGV(INFO, 1, "Hello, it is a long string test!  Hello World");
   }
 }
 

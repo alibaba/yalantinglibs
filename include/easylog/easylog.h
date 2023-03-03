@@ -40,26 +40,20 @@ class logger {
     return instance;
   }
 
-  void async_write(const record_t &record) {
+  void async_write(std::shared_ptr<record_t> record) {
     auto weak_ptr = log_->weak_from_this();
-    thread_pool::instance().async(
-        [this, weak_ptr, async_record = std::make_shared<record_t>(record)] {
-          auto strong_ptr = weak_ptr.lock();
-          if (strong_ptr) {
-            write(*async_record);
-          }
-          return true;
-        });
+    thread_pool::instance().async([this, weak_ptr, record] {
+      auto strong_ptr = weak_ptr.lock();
+      if (strong_ptr) {
+        write(*record);
+      }
+      return true;
+    });
   }
 
-  void operator+=(const record_t &record) {
-    if (log_->enbale_async_write) {
-      async_write(record);
-    }
-    else {
-      write(record);
-    }
-  }
+  void operator+=(const record_t &record) { write(record); }
+
+  void operator+=(std::shared_ptr<record_t> record) { async_write(record); }
 
   void write(const record_t &record) {
     append_format(record);
@@ -90,6 +84,13 @@ class logger {
   bool check_severity(Severity severity) {
     if (log_) {
       return severity >= log_->min_severity;
+    }
+    return false;
+  }
+
+  bool check_async_write() {
+    if (log_) {
+      return log_->enbale_async_write;
     }
     return false;
   }
@@ -194,19 +195,28 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 
 #define ELOG(severity, ...) ELOG_IMPL(Severity::severity, __VA_ARGS__, 0)
 
-#define ELOGV_IMPL(severity, Id, fmt, ...)                            \
-  if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
-    ;                                                                 \
-  }                                                                   \
-  else {                                                              \
-    easylog::logger<Id>::instance() +=                                \
-        easylog::record_t(std::chrono::system_clock::now(), severity, \
-                          GET_STRING(__FILE__, __LINE__))             \
-            .sprintf(fmt, __VA_ARGS__);                               \
-    if (severity == Severity::CRITICAL) {                             \
-      easylog::flush<Id>();                                           \
-      std::exit(EXIT_FAILURE);                                        \
-    }                                                                 \
+#define ELOGV_IMPL(severity, Id, fmt, ...)                              \
+  if (!easylog::logger<Id>::instance().check_severity(severity)) {      \
+    ;                                                                   \
+  }                                                                     \
+  else {                                                                \
+    if (!easylog::logger<Id>::instance().check_async_write()) {         \
+      easylog::logger<Id>::instance() +=                                \
+          easylog::record_t(std::chrono::system_clock::now(), severity, \
+                            GET_STRING(__FILE__, __LINE__))             \
+              .sprintf(fmt, __VA_ARGS__);                               \
+    }                                                                   \
+    else {                                                              \
+      auto record = std::make_shared<easylog::record_t>(                \
+          std::chrono::system_clock::now(), severity,                   \
+          GET_STRING(__FILE__, __LINE__));                              \
+      record->sprintf(fmt, __VA_ARGS__);                                \
+      easylog::logger<Id>::instance() += record;                        \
+    }                                                                   \
+    if (severity == Severity::CRITICAL) {                               \
+      easylog::flush<Id>();                                             \
+      std::exit(EXIT_FAILURE);                                          \
+    }                                                                   \
   }
 
 #define ELOGV(severity, ...) \

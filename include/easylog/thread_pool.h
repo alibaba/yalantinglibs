@@ -96,7 +96,6 @@ class thread_pool {
 
  private:
   thread_pool() = default;
-  thread_pool(const thread_pool &) = default;
 
   ~thread_pool() {
     std::lock_guard<std::mutex> lock(mutex_);
