@@ -29,6 +29,7 @@
 #include "asio/buffer.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/asio_util.hpp"
+#include "async_simple/Executor.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "easylog/easylog.h"
 #ifdef UNIT_TEST_INJECT
@@ -55,13 +56,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param socket
    * @param timeout_duration
    */
-  coro_connection(asio::io_context &io_context, asio::ip::tcp::socket socket,
+  template <typename executor_t>
+  coro_connection(executor_t executor, asio::ip::tcp::socket socket,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
-      : executor_(io_context),
+      : executor_(
+            std::make_unique<asio_util::ExecutorWrapper<executor_t>>(executor)),
         socket_(std::move(socket)),
         resp_err_(std::errc{}),
-        timer_(io_context) {
+        timer_(executor) {
     body_.resize(body_default_size_);
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
@@ -249,7 +252,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                     const typename rpc_protocol::req_header &req_head) {
     std::string header_buf = rpc_protocol::prepare_response(body_buf, req_head);
     response(std::move(header_buf), std::move(body_buf), shared_from_this())
-        .via(&executor_)
+        .via(executor_.get())
         .detach();
   }
 
@@ -273,7 +276,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (has_closed_) {
       return;
     }
-    executor_.schedule([this, self = shared_from_this()] {
+    executor_->schedule([this, self = shared_from_this()] {
       this->close();
     });
   }
@@ -293,7 +296,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   std::any get_tag() { return tag_; }
 
-  auto &get_executor() { return executor_; }
+  auto &get_executor() { return *executor_; }
 
  private:
   async_simple::coro::Lazy<void> response(std::string header_buf,
@@ -423,7 +426,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
 
-  asio_util::AsioExecutor executor_;
+  std::unique_ptr<async_simple::Executor> executor_;
   asio::ip::tcp::socket socket_;
   constexpr static size_t body_default_size_ = 256;
   std::vector<char> body_;

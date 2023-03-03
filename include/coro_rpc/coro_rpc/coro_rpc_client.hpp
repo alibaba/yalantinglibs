@@ -97,11 +97,9 @@ class coro_rpc_client {
    * Create client with io_context
    * @param io_context asio io_context, async event handler
    */
-  coro_rpc_client(asio::io_context &io_context, uint32_t client_id = 0)
-      : io_context_ptr_(&io_context),
-        executor_(io_context),
-        socket_(io_context),
-        client_id_(client_id) {
+  coro_rpc_client(asio::io_context::executor_type executor,
+                  uint32_t client_id = 0)
+      : executor_wrapper_(executor), socket_(executor), client_id_(client_id) {
     read_buf_.resize(default_read_buf_size_);
   }
 
@@ -110,14 +108,13 @@ class coro_rpc_client {
    */
   coro_rpc_client(uint32_t client_id = 0)
       : inner_io_context_(std::make_unique<asio::io_context>()),
-        io_context_ptr_(inner_io_context_.get()),
-        executor_(*inner_io_context_),
-        socket_(*inner_io_context_),
+        executor_wrapper_(inner_io_context_->get_executor()),
+        socket_(inner_io_context_->get_executor()),
         client_id_(client_id) {
     std::promise<void> promise;
     thd_ = std::thread([this, &promise] {
       work_ = std::make_unique<asio::io_context::work>(*inner_io_context_);
-      asio::post(*io_context_ptr_, [&] {
+      asio::post(executor_wrapper_.get_executor(), [&] {
         promise.set_value();
       });
       inner_io_context_->run();
@@ -161,13 +158,13 @@ class coro_rpc_client {
 
     ELOGV(INFO, "client_id %d begin to connect %s", client_id_, port.data());
     async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(get_io_context());
+    asio_util::period_timer timer(executor_wrapper_.get_executor());
     timeout(timer, timeout_duration, promise, "connect timer canceled")
-        .via(&executor_)
+        .via(&executor_wrapper_)
         .detach();
 
-    std::error_code ec = co_await asio_util::async_connect(get_io_context(),
-                                                           socket_, host, port);
+    std::error_code ec = co_await asio_util::async_connect(
+        executor_wrapper_.get_executor(), socket_, host, port);
     std::error_code err_code;
     timer.cancel(err_code);
 
@@ -297,9 +294,9 @@ class coro_rpc_client {
     static_check<func, Args...>();
 
     async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(get_io_context());
+    asio_util::period_timer timer(executor_wrapper_.get_executor());
     timeout(timer, duration, promise, "rpc call timer canceled")
-        .via(&executor_)
+        .via(&executor_wrapper_)
         .detach();
 
 #ifdef ENABLE_SSL
@@ -334,7 +331,7 @@ class coro_rpc_client {
   /*!
    * Get inner executor
    */
-  auto &get_executor() { return executor_; }
+  auto &get_executor() { return executor_wrapper_; }
 
   uint32_t get_client_id() const { return client_id_; }
 
@@ -660,11 +657,6 @@ class coro_rpc_client {
     return;
   }
 
-  asio::io_context &get_io_context() {
-    assert(io_context_ptr_);
-    return *io_context_ptr_;
-  }
-
 #ifdef UNIT_TEST_INJECT
  public:
   std::errc sync_connect(const std::string &host, const std::string &port) {
@@ -681,9 +673,8 @@ class coro_rpc_client {
  private:
   std::unique_ptr<asio::io_context> inner_io_context_;
   std::unique_ptr<asio::io_context::work> work_;
-  asio::io_context *io_context_ptr_ = nullptr;
   std::thread thd_;
-  asio_util::AsioExecutor executor_;
+  asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
   asio::ip::tcp::socket socket_;
   std::vector<std::byte> read_buf_;
   constexpr static std::size_t default_read_buf_size_ = 256;

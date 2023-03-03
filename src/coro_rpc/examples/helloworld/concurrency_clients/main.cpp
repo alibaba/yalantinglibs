@@ -32,9 +32,9 @@ std::atomic<uint64_t> qps = 0;
  * \brief demo for run concurrency clients
  */
 
-Lazy<void> call_echo(asio::io_context& ioc) {
+Lazy<void> call_echo(asio::io_context::executor_type executor) {
   while (true) {
-    coro_rpc_client client(ioc);
+    coro_rpc_client client(executor);
     for (auto ec = co_await client.connect("127.0.0.1", "8801");
          ec != std::errc{};) {
       std::cout << "connect failed." << std::endl;
@@ -55,7 +55,7 @@ Lazy<void> call_echo(asio::io_context& ioc) {
   }
 }
 
-Lazy<void> qps_watcher(asio::io_context& ioc) {
+Lazy<void> qps_watcher(asio::io_context::executor_type ioc) {
   using namespace std::chrono_literals;
   asio_util::period_timer timer(ioc);
   while (true) {
@@ -72,10 +72,10 @@ int main() {
   asio_util::io_context_pool pool(thread_cnt);
   // total client cnt = thread_cnt * 20;
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
-    call_echo(pool.get_io_context()).start([](auto&&) {
+    call_echo(pool.get_executor()).start([](auto&&) {
     });
   }
-  qps_watcher(pool.get_io_context()).start([](auto&&) {
+  qps_watcher(pool.get_executor()).start([](auto&&) {
   });
   pool.run();
   std::cout << "Done!" << std::endl;

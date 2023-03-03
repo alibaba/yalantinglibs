@@ -133,7 +133,8 @@ struct ServerTester : TesterConfig {
     int retry = 4;
     for (int i = 0; i < retry; i++) {
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
+                                                   g_client_id++);
       }
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
@@ -349,7 +350,8 @@ struct ServerTester : TesterConfig {
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
+                                                   g_client_id++);
       }
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
