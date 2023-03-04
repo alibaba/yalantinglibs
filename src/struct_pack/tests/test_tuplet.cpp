@@ -57,18 +57,17 @@ struct struct_with_empty {
   int c;
 };
 
-static_assert(offsetof(struct_with_empty, b) == (has_no_unique_address)
-                  ? 0
-                  : sizeof(int));
+static_assert(offsetof(struct_with_empty, b) ==
+              ((has_no_unique_address) ? 0 : sizeof(int)));
 static_assert(sizeof(struct_with_empty) ==
               (has_no_unique_address ? (sizeof(int) * 2) : (sizeof(int) * 4)));
 
 // c's offset is different with cl + [[msvc::no_unique_address]] than gcc/clang
 // with [[no_unique_address]].
 static_assert(offsetof(struct_with_empty, c) ==
-                      (has_no_unique_address && !is_cl_or_clang_cl)
-                  ? sizeof(int)
-                  : 2 * sizeof(int));
+              ((has_no_unique_address && !is_cl_or_clang_cl)
+                   ? sizeof(int)
+                   : 2 * sizeof(int)));
 
 template <typename Tuple>
 void test_tuple_alignment() {
