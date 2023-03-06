@@ -24,16 +24,20 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#if __has_include(<span>)
 #include <span>
+
+#include "meta_string.hpp"
+#include "string_finder.hpp"
+#endif
+
 #include <string_view>
 #include <type_traits>
 #include <utility>
 
-#include "meta_string.hpp"
-#include "string_finder.hpp"
-
 namespace refvalue {
 namespace detail {
+#if __has_include(<span>)
 template <meta_string Signature>
 struct parse_qualified_function_name {
 #if defined(_MSC_VER) && defined(_WIN64)
@@ -129,6 +133,7 @@ struct parse_qualified_function_name {
 template <meta_string Signature>
 inline constexpr auto&& parse_qualified_function_name_v =
     parse_qualified_function_name<Signature>::value;
+#endif
 
 template <auto Func>
 consteval auto qualified_name_of_impl() noexcept {
@@ -154,15 +159,18 @@ consteval auto qualified_name_of_impl() noexcept {
   // Skips the possible '&' token for GCC and Clang.
   constexpr auto prefix_size = signature.find(keyword) + keyword.size();
   constexpr auto additional_size = signature[prefix_size] == '&' ? 1 : 0;
-  constexpr auto intermediate = signature.substr(
-      prefix_size + additional_size,
-      signature.size() - prefix_size - additional_size - suffix_size);
+  constexpr size_t pos = prefix_size + additional_size;
+  constexpr size_t len =
+      signature.size() - prefix_size - additional_size - suffix_size;
+  constexpr auto result = signature.substr(pos, len);
 
-  constexpr meta_string result{std::span<const char, intermediate.size()>{
-      intermediate.data(), intermediate.size()}};
-
-  return remove_v<detail::parse_qualified_function_name_v<result>,
-                  anonymous_namespace>;
+  constexpr size_t rpos = result.rfind(anonymous_namespace);
+  if constexpr (rpos != std::string_view::npos) {
+    return result.substr(rpos + anonymous_namespace.size());
+  }
+  else {
+    return result;
+  }
 }
 }  // namespace detail
 
@@ -174,6 +182,7 @@ struct qualified_name_of {
 template <auto Func>
 inline constexpr auto&& qualified_name_of_v = qualified_name_of<Func>::value;
 
+#if __has_include(<span>)
 template <auto Func>
 struct name_of {
   static constexpr auto value = [] {
@@ -194,5 +203,5 @@ struct name_of {
 
 template <auto Func>
 inline constexpr auto&& name_of_v = name_of<Func>::value;
-
+#endif
 }  // namespace refvalue
