@@ -111,10 +111,9 @@ struct parse_qualified_function_name {
 
     // Finds the end index of the function name before the top-level left
     // "<" or "(" indicating the start of the template or function arguments.
-    constexpr auto function_name_start_index =
-        (std::max)(start_index,
-                   find_significant_index<find_mode_type::full_match_reverse>(
-                       "::"));
+    constexpr auto function_name_start_index = (std::max)(
+        start_index,
+        find_significant_index<find_mode_type::full_match_reverse>("::"));
 
     constexpr auto end_index = find_significant_index<find_mode_type::any_of>(
         "<(", 1,
@@ -151,7 +150,7 @@ constexpr auto qualified_name_of_impl() noexcept {
   constexpr std::string_view anonymous_namespace{"(anonymous namespace)::"};
 #elif defined(__GNUC__)
   constexpr std::size_t suffix_size{1};
-  constexpr std::string_view keyword{"[Func = "};
+  constexpr std::string_view keyword{"Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
   constexpr std::string_view anonymous_namespace{"{anonymous}::"};
 #else
