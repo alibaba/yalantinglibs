@@ -173,6 +173,9 @@ constexpr auto qualified_name_of_impl() noexcept {
     if constexpr (right != std::string_view::npos) {
       return str.substr(0, right);
     }
+    else {
+      return str;
+    }
   }
   else {
     constexpr size_t left = result.find("l ") + 2;
@@ -181,8 +184,13 @@ constexpr auto qualified_name_of_impl() noexcept {
       if constexpr (right != std::string_view::npos) {
         return result.substr(left, right - left);
       }
+      else {
+        return result;
+      }
     }
-    return result;
+    else {
+      return result;
+    }
   }
 }
 }  // namespace detail
