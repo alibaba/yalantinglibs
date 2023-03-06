@@ -142,17 +142,17 @@ consteval auto qualified_name_of_impl() noexcept {
   constexpr std::string_view keyword{
       "refvalue::detail::qualified_name_of_impl<"};
   constexpr std::string_view signature{__FUNCSIG__};
-  constexpr meta_string anonymous_namespace{"`anonymous-namespace'::"};
+  constexpr std::string_view anonymous_namespace{"`anonymous-namespace'::"};
 #elif defined(__clang__)
   constexpr std::size_t suffix_size{1};
   constexpr std::string_view keyword{"[Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
-  constexpr meta_string anonymous_namespace{"(anonymous namespace)::"};
+  constexpr std::string_view anonymous_namespace{"(anonymous namespace)::"};
 #elif defined(__GNUC__)
   constexpr std::size_t suffix_size{1};
   constexpr std::string_view keyword{"[with auto Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
-  constexpr meta_string anonymous_namespace{"{anonymous}::"};
+  constexpr std::string_view anonymous_namespace{"{anonymous}::"};
 #else
 #error "Unsupported compiler."
 #endif
