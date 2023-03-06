@@ -24,14 +24,6 @@
 
 namespace easylog {
 
-struct log : public std::enable_shared_from_this<log> {
-  Severity min_severity;
-  bool enable_console = true;
-  bool enbale_async_write = false;
-  std::unique_ptr<appender> append = nullptr;
-  std::vector<std::function<void(std::string_view)>> appenders;
-};
-
 template <size_t Id = 0>
 class logger {
  public:
@@ -41,12 +33,8 @@ class logger {
   }
 
   void async_write(std::shared_ptr<record_t> record) {
-    auto weak_ptr = log_->weak_from_this();
-    thread_pool::instance().async([this, weak_ptr, record] {
-      auto strong_ptr = weak_ptr.lock();
-      if (strong_ptr) {
-        write(*record);
-      }
+    thread_pool::instance().async([this, record] {
+      write(*record);
       return true;
     });
   }
@@ -64,46 +52,31 @@ class logger {
     }
   }
 
-  void flush() {
-    if (log_ && log_->append) {
-      log_->append->flush();
-    }
-  }
+  void flush() { appender_->flush(); }
 
   void init(Severity min_severity, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time, bool enable_async_write) {
-    log_ = std::make_shared<log>();
-    log_->append = std::make_unique<appender>(filename, max_file_size,
-                                              max_files, flush_every_time);
-    log_->min_severity = min_severity;
-    log_->enable_console = enable_console;
-    log_->enbale_async_write = enable_async_write;
+    appender_ = std::make_unique<appender>(filename, max_file_size, max_files,
+                                           flush_every_time);
+    min_severity_ = min_severity;
+    enable_console_ = enable_console;
+    enbale_async_write_ = enable_async_write;
   }
 
-  bool check_severity(Severity severity) {
-    if (log_) {
-      return severity >= log_->min_severity;
-    }
-    return false;
-  }
+  bool check_severity(Severity severity) { return severity >= min_severity_; }
 
-  bool check_async_write() {
-    if (log_) {
-      return log_->enbale_async_write;
-    }
-    return false;
-  }
+  bool check_async_write() { return enbale_async_write_; }
 
   void add_appender(std::function<void(std::string_view)> fn) {
-    if (log_) {
-      log_->appenders.emplace_back(std::move(fn));
-    }
+    appenders_.emplace_back(std::move(fn));
   }
 
  private:
   logger() = default;
   logger(const logger &) = default;
+
+  ~logger() { thread_pool::instance().quit(); }
 
   template <size_t N>
   size_t get_time_str(char (&buf)[N], const auto &now) {
@@ -141,21 +114,25 @@ class logger {
     str.append(record.get_file_str());
     str.append(record.get_message()).append("\n");
 
-    if (log_->append) {
-      log_->append->write(str);
+    if (appender_) {
+      appender_->write(str);
     }
 
-    if (log_->enable_console) {
+    if (enable_console_) {
       std::cout << str;
       std::cout << std::flush;
     }
 
-    for (auto &fn : log_->appenders) {
+    for (auto &fn : appenders_) {
       fn(std::string_view(str));
     }
   }
 
-  std::shared_ptr<log> log_ = nullptr;
+  Severity min_severity_;
+  bool enable_console_ = true;
+  bool enbale_async_write_ = false;
+  std::unique_ptr<appender> appender_ = nullptr;
+  std::vector<std::function<void(std::string_view)>> appenders_;
 };
 
 template <size_t Id = 0>

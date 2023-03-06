@@ -59,6 +59,11 @@ class blocking_queue {
     return queue_.size();
   }
 
+  void clear() {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    queue_.clear();
+  }
+
  private:
   std::mutex queue_mutex_;
   std::condition_variable push_cv_;
@@ -90,19 +95,14 @@ class thread_pool {
     }
   }
 
-  void async(Task &&task) {
-    queue_.enqueue(std::make_unique<Task>(std::move(task)));
-  }
-
- private:
-  thread_pool() = default;
-
-  ~thread_pool() {
+  void quit() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (threads_.empty()) {
       return;
     }
+
+    queue_.clear();
 
     for (size_t i = 0; i < threads_.size(); i++) {
       async([]() {
@@ -116,6 +116,13 @@ class thread_pool {
 
     threads_.clear();
   }
+
+  void async(Task &&task) {
+    queue_.enqueue(std::make_unique<Task>(std::move(task)));
+  }
+
+ private:
+  thread_pool() = default;
 
   blocking_queue<item_type> queue_;
 
