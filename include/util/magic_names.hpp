@@ -137,7 +137,7 @@ inline constexpr auto&& parse_qualified_function_name_v =
 #endif
 
 template <auto Func>
-consteval auto qualified_name_of_impl() noexcept {
+constexpr auto qualified_name_of_impl() noexcept {
 #ifdef _MSC_VER
   constexpr std::size_t suffix_size{16};
   constexpr std::string_view keyword{
@@ -151,7 +151,7 @@ consteval auto qualified_name_of_impl() noexcept {
   constexpr std::string_view anonymous_namespace{"(anonymous namespace)::"};
 #elif defined(__GNUC__)
   constexpr std::size_t suffix_size{1};
-  constexpr std::string_view keyword{"[with auto Func = "};
+  constexpr std::string_view keyword{"[Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
   constexpr std::string_view anonymous_namespace{"{anonymous}::"};
 #else
