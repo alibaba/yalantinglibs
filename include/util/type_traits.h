@@ -17,6 +17,19 @@
 #include <functional>
 #include <memory>
 
+#ifdef __GLIBCXX__
+#if __GLIBCXX__ < 20200825
+namespace std {
+template <class T>
+struct remove_cvref {
+  typedef std::remove_cv_t<std::remove_reference_t<T>> type;
+};
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+}  // namespace std
+#endif
+#endif
+
 namespace coro_rpc {
 template <typename Function>
 struct function_traits;
