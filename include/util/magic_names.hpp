@@ -111,9 +111,10 @@ struct parse_qualified_function_name {
 
     // Finds the end index of the function name before the top-level left
     // "<" or "(" indicating the start of the template or function arguments.
-    constexpr auto function_name_start_index = (std::max)(
-        start_index,
-        find_significant_index<find_mode_type::full_match_reverse>("::"));
+    constexpr auto function_name_start_index =
+        (std::max)(start_index,
+                   find_significant_index<find_mode_type::full_match_reverse>(
+                       "::"));
 
     constexpr auto end_index = find_significant_index<find_mode_type::any_of>(
         "<(", 1,
@@ -159,16 +160,28 @@ consteval auto qualified_name_of_impl() noexcept {
   // Skips the possible '&' token for GCC and Clang.
   constexpr auto prefix_size = signature.find(keyword) + keyword.size();
   constexpr auto additional_size = signature[prefix_size] == '&' ? 1 : 0;
-  constexpr size_t pos = prefix_size + additional_size;
-  constexpr size_t len =
-      signature.size() - prefix_size - additional_size - suffix_size;
-  constexpr auto result = signature.substr(pos, len);
+  constexpr auto intermediate = signature.substr(
+      prefix_size + additional_size,
+      signature.size() - prefix_size - additional_size - suffix_size);
 
+  constexpr std::string_view result = intermediate;
   constexpr size_t rpos = result.rfind(anonymous_namespace);
   if constexpr (rpos != std::string_view::npos) {
-    return result.substr(rpos + anonymous_namespace.size());
+    constexpr std::string_view str =
+        result.substr(rpos + anonymous_namespace.size());
+    constexpr size_t right = str.find('(');
+    if constexpr (right != std::string_view::npos) {
+      return str.substr(0, right);
+    }
   }
   else {
+    constexpr size_t left = result.find("l ") + 2;
+    constexpr size_t right = result.find('(');
+    if constexpr (left != std::string_view::npos) {
+      if constexpr (right != std::string_view::npos) {
+        return result.substr(left, right - left);
+      }
+    }
     return result;
   }
 }
