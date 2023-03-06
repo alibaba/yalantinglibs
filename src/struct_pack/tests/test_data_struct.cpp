@@ -261,7 +261,7 @@ void test_c_array(auto &v) {
   REQUIRE(ec == struct_pack::errc{});
 
   auto size = std::extent_v<T>;
-  for (int i = 0; i < size; ++i) {
+  for (decltype(size) i = 0; i < size; ++i) {
     CHECK(v[i] == v1[i]);
   }
 }

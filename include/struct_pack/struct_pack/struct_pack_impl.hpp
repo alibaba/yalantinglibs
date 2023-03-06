@@ -2436,9 +2436,12 @@ class unpacker {
     else if constexpr (exist_compatible_member<type, version>) {
       if constexpr (id == type_id::compatible_t) {
         if constexpr (version == type::version_number) {
-          if (reader_.tellg() >= data_len_) {
-            size_type_ = UCHAR_MAX;  // Just notice that this is not a real
-                                     // error, this is a flag for exit.
+          auto pos = reader_.tellg();
+          if ((std::size_t)pos >= data_len_) {
+            if (std::is_unsigned_v<decltype(pos)> || pos >= 0) {
+              size_type_ = UCHAR_MAX;  // Just notice that this is not a real
+                                       // error, this is a flag for exit.
+            }
             return struct_pack::errc::no_buffer_space;
           }
           bool has_value;
@@ -2489,7 +2492,6 @@ class unpacker {
           // how to deserialize it quickly?
         }
         else {
-          using value_type = typename type::value_type;
           if constexpr (NotSkip) {
             for (auto &i : item) {
               code = deserialize_one<size_type, version, NotSkip>(i);
