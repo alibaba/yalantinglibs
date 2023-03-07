@@ -16,10 +16,10 @@
 #pragma once
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
+#include <util/type_traits.h>
 
 #include <chrono>
 #include <deque>
-#include <type_traits>
 
 #ifdef ENABLE_SSL
 #include <asio/ssl.hpp>

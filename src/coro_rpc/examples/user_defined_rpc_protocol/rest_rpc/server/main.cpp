@@ -16,7 +16,7 @@
 #include <coro_rpc/coro_rpc_server.hpp>
 #include <thread>
 
-#include "rest_rpc_protocol.hpp"
+#include "../config/rest_rpc_protocol.hpp"
 #include "rpc_service.h"
 using namespace coro_rpc;
 using namespace async_simple;
@@ -52,7 +52,7 @@ using namespace async_simple::coro;
 */
 int main() {
   // start rpc server
-  coro_rpc_server<config::rest_rpc_config> server(
+  coro_rpc_server_base<config::rest_rpc_config> server(
       std::thread::hardware_concurrency(), 8801);
 
   // regist normal function for rpc

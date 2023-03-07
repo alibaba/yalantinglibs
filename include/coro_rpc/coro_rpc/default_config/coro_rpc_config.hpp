@@ -21,6 +21,7 @@
 #include "asio_util/io_context_pool.hpp"
 #include "coro_rpc/coro_rpc/context.hpp"
 #include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
+#include "coro_rpc/coro_rpc_server.hpp"
 
 namespace coro_rpc {
 
@@ -41,4 +42,6 @@ struct coro_rpc_default_config : public coro_rpc_config_base {
 template <typename return_msg_type>
 using context = coro_rpc::context_base<return_msg_type,
                                        coro_rpc::protocol::coro_rpc_protocol>;
+
+using coro_rpc_server = coro_rpc_server_base<config::coro_rpc_default_config>;
 }  // namespace coro_rpc

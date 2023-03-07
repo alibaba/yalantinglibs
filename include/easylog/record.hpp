@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 #pragma once
+#include <util/type_traits.h>
+
 #include <charconv>
 #include <chrono>
 #include <cstring>
-#include <type_traits>
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>

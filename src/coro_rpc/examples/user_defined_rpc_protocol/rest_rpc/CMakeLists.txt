@@ -28,7 +28,6 @@ else()
   target_link_libraries(rest_rpc_server PRIVATE yalantinglibs::coro_rpc -lstdc++fs)
 endif()
 
-target_link_libraries(rest_rpc_server PRIVATE msgpackc-cxx)
 target_compile_definitions(rest_rpc_server PRIVATE HAVE_MSGPACK)
 target_compile_definitions(rest_rpc_server PRIVATE MSGPACK_NO_BOOST)
 

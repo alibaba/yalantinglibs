@@ -259,12 +259,12 @@ class LazyBase {
     }
 
    private:
-    template <std::same_as<std::coroutine_handle<>> R>
+    template <typename T2 = T, std::enable_if_t<!std::is_void_v<T2>, int> = 0>
     auto awaitSuspendImpl() noexcept {
       return this->_handle;
     }
 
-    template <std::same_as<void> R>
+    template <typename T2 = T, std::enable_if_t<std::is_void_v<T2>, int> = 0>
     auto awaitSuspendImpl() noexcept {
       // executor schedule performed
       auto& pr = this->_handle.promise();

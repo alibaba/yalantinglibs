@@ -16,7 +16,7 @@
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
 
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp>
 #include <string>
 #include <string_view>
 
