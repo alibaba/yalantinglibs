@@ -42,6 +42,9 @@ using namespace async_simple::coro;
     auto r2 = client.call<std::string>("hello_world");
     std::cout << r2 << std::endl;
 
+    auto ret = client.call<std::string>("hello_with_delay");
+    std::cout << ret << std::endl;
+
     auto r3 = client.call<std::string>("HelloService::hello");
     std::cout << r2 << std::endl;
 
