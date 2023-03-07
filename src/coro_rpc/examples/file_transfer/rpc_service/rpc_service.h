@@ -1,6 +1,6 @@
 #pragma once
 
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 #include <fstream>
 #include <string>
 using namespace coro_rpc;

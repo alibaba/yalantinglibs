@@ -35,7 +35,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
-#include "default_config/coro_rpc_config.hpp"
 #include "easylog/easylog.h"
 namespace coro_rpc {
 /*!
@@ -51,8 +50,8 @@ namespace coro_rpc {
  * ```
  */
 
-template <typename server_config = config::coro_rpc_default_config>
-class coro_rpc_server {
+template <typename server_config>
+class coro_rpc_server_base {
   //!< Server state
   enum class stat {
     init = 0,  // server hasn't started/stopped.
@@ -68,23 +67,23 @@ class coro_rpc_server {
    * @param conn_timeout_duration client connection timeout. 0 for no timeout.
    *                              default no timeout.
    */
-  coro_rpc_server(size_t thread_num, unsigned short port,
-                  std::chrono::steady_clock::duration conn_timeout_duration =
-                      std::chrono::seconds(0))
+  coro_rpc_server_base(size_t thread_num, unsigned short port,
+                       std::chrono::steady_clock::duration
+                           conn_timeout_duration = std::chrono::seconds(0))
       : pool_(thread_num),
         acceptor_(pool_.get_executor()),
         port_(port),
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
 
-  coro_rpc_server(const server_config &config = server_config{})
+  coro_rpc_server_base(const server_config &config = server_config{})
       : pool_(config.thread_num),
         acceptor_(pool_.get_io_context()),
         port_(config.port),
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init} {}
 
-  ~coro_rpc_server() {
+  ~coro_rpc_server_base() {
     ELOGV(INFO, "coro_rpc_server will quit");
     stop();
   }

@@ -226,7 +226,7 @@ struct CoroServerTester : ServerTester {
     auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
     CHECK(ret9.value() == 42);
   }
-  coro_rpc_server<> server;
+  coro_rpc_server server;
   std::thread thd;
   HelloService hello_service_;
 };

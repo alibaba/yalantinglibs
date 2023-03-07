@@ -16,15 +16,16 @@
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
 
-#include <coro_rpc/rpc_connection.hpp>
 #include <string>
 #include <string_view>
 
-#include "async_simple/coro/Lazy.h"
+#include "config/rest_rpc_protocol.hpp"
 
 std::string hello_world();
 int add(int a, int b);
 std::string echo(std::string s);
+void hello_with_delay(coro_rpc::rest_rpc_context<std::string> conn,
+                      std::string hello);
 
 class HelloService {
  public:

@@ -75,9 +75,8 @@ inline std::optional<std::string> execute(
       is_ok = serialize_proto::deserialize_to(args, data);
     }
 
-    if (!is_ok) [[unlikely]] {
-      return std::nullopt;
-    }
+    if (!is_ok)
+      AS_UNLIKELY { return std::nullopt; }
 
     if constexpr (std::is_void_v<return_type>) {
       if constexpr (std::is_void_v<Self>) {

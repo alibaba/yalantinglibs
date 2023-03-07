@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include <coro_rpc/coro_rpc_server.hpp>
-#include <thread>
 
 #include "rpc_service/rpc_service.h"
 using namespace coro_rpc;

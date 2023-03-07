@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 #include <coro_rpc/coro_rpc_server.hpp>
-#include <thread>
 
-#include "rest_rpc_protocol.hpp"
+#include "../config/rest_rpc_protocol.hpp"
 #include "rpc_service.h"
 using namespace coro_rpc;
 using namespace async_simple;
@@ -43,6 +42,9 @@ using namespace async_simple::coro;
     auto r2 = client.call<std::string>("hello_world");
     std::cout << r2 << std::endl;
 
+    auto ret = client.call<std::string>("hello_with_delay");
+    std::cout << ret << std::endl;
+
     auto r3 = client.call<std::string>("HelloService::hello");
     std::cout << r2 << std::endl;
 
@@ -52,7 +54,7 @@ using namespace async_simple::coro;
 */
 int main() {
   // start rpc server
-  coro_rpc_server<config::rest_rpc_config> server(
+  coro_rpc_server_base<config::rest_rpc_config> server(
       std::thread::hardware_concurrency(), 8801);
 
   // regist normal function for rpc

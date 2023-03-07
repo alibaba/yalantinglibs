@@ -64,12 +64,13 @@ class context_base {
   context_base(const context_base &conn) = delete;
   context_base(context_base &&conn) = default;
   ~context_base() {
-    if (has_response_ && conn_ && !*has_response_) [[unlikely]] {
-      ELOGV(ERROR,
-            "We must send reply to client by call response_msg method"
-            "before coro_rpc::context<T> destruction!");
-      conn_->async_close();
-    }
+    if (has_response_ && conn_ && !*has_response_)
+      AS_UNLIKELY {
+        ELOGV(ERROR,
+              "We must send reply to client by call response_msg method"
+              "before coro_rpc::context<T> destruction!");
+        conn_->async_close();
+      }
   }
 
   using return_type = return_msg_type;
@@ -96,10 +97,11 @@ class context_base {
         return;
       }
 
-      if (has_closed()) [[unlikely]] {
-        ELOGV(DEBUG, "response_msg failed: connection has been closed");
-        return;
-      }
+      if (has_closed())
+        AS_UNLIKELY {
+          ELOGV(DEBUG, "response_msg failed: connection has been closed");
+          return;
+        }
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             conn_->response_msg<rpc_protocol>(serialize_proto::serialize(),
@@ -119,10 +121,11 @@ class context_base {
         return;
       }
 
-      if (has_closed()) [[unlikely]] {
-        ELOGV(DEBUG, "response_msg failed: connection has been closed");
-        return;
-      }
+      if (has_closed())
+        AS_UNLIKELY {
+          ELOGV(DEBUG, "response_msg failed: connection has been closed");
+          return;
+        }
 
       if constexpr (has_get_reserve_size<rpc_protocol, rpc_conn>) {
         std::visit(

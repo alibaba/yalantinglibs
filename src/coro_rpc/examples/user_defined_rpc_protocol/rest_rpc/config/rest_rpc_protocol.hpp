@@ -17,7 +17,7 @@
 
 #include <variant>
 
-#include "coro_rpc/coro_rpc/default_config/coro_rpc_config.hpp"
+#include "asio_util/io_context_pool.hpp"
 #include "coro_rpc/coro_rpc/router.hpp"
 #include "msgpack_protocol.hpp"
 
@@ -58,12 +58,10 @@ struct rest_rpc_protocol {
       Socket& socket, req_header& req_head) {
     auto [ec, _] = co_await asio_util::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
-    if (ec) [[unlikely]] {
-      co_return std::move(ec);
-    }
-    else if (req_head.magic != magic_number) [[unlikely]] {
-      co_return std::make_error_code(std::errc::protocol_error);
-    }
+    if (ec)
+      AS_UNLIKELY { co_return std::move(ec); }
+    else if (req_head.magic != magic_number)
+      AS_UNLIKELY { co_return std::make_error_code(std::errc::protocol_error); }
     co_return std::error_code{};
   }
 
@@ -95,7 +93,19 @@ struct rest_rpc_protocol {
 }  // namespace coro_rpc
 
 namespace coro_rpc::config {
-struct rest_rpc_config : public coro_rpc_config_base {
+struct rest_rpc_config {
+  uint16_t port = 8801;
+  unsigned thread_num = std::thread::hardware_concurrency();
+  std::chrono::steady_clock::duration conn_timeout_duration =
+      std::chrono::seconds{0};
   using rpc_protocol = coro_rpc::protocol::rest_rpc_protocol;
+  using executor_pool_t = asio_util::io_context_pool;
 };
 }  // namespace coro_rpc::config
+
+namespace coro_rpc {
+template <typename return_msg_type>
+using rest_rpc_context =
+    coro_rpc::context_base<return_msg_type,
+                           coro_rpc::protocol::rest_rpc_protocol>;
+}

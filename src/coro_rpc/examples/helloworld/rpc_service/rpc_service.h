@@ -16,11 +16,9 @@
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
 
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 #include <string>
 #include <string_view>
-
-#include "async_simple/coro/Lazy.h"
 
 std::string hello_world();
 int A_add_B(int a, int b);
