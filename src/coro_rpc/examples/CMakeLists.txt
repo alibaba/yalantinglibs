@@ -3,7 +3,7 @@ add_subdirectory(helloworld)
 add_subdirectory(file_transfer)
 add_subdirectory(nested_rpc_call)
 
-option(CORO_RPC_USE_OTHER_RPC "coro_rpc extend to support other rpc" ON)
+option(CORO_RPC_USE_OTHER_RPC "coro_rpc extend to support other rpc" OFF)
 if (CORO_RPC_USE_OTHER_RPC)
   add_subdirectory(user_defined_rpc_protocol/rest_rpc)
 endif()
