@@ -97,5 +97,6 @@ struct rest_rpc_protocol {
 namespace coro_rpc::config {
 struct rest_rpc_config : public coro_rpc_config_base {
   using rpc_protocol = coro_rpc::protocol::rest_rpc_protocol;
+  using executor_pool_t = asio_util::io_context_pool;
 };
 }  // namespace coro_rpc::config

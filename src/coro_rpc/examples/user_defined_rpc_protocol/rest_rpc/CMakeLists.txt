@@ -21,7 +21,13 @@ add_executable(rest_rpc_server
   server/main.cpp
   server/rpc_service.cpp
 )
-target_link_libraries(rest_rpc_server PRIVATE yalantinglibs::coro_rpc )
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  target_link_libraries(rest_rpc_server PRIVATE yalantinglibs::coro_rpc )
+else()
+  target_link_libraries(rest_rpc_server PRIVATE yalantinglibs::coro_rpc -lstdc++fs)
+endif()
+
 target_link_libraries(rest_rpc_server PRIVATE msgpackc-cxx)
 target_compile_definitions(rest_rpc_server PRIVATE HAVE_MSGPACK)
 target_compile_definitions(rest_rpc_server PRIVATE MSGPACK_NO_BOOST)

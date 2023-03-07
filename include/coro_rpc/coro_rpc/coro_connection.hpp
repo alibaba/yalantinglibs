@@ -156,11 +156,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
       auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
 
-      if (!serialize_proto.has_value()) [[unlikely]] {
-        ELOGV(ERROR, "bad serialize protocol type, conn_id %d", conn_id_);
-        close();
-        co_return;
-      }
+      if (!serialize_proto.has_value())
+        AS_UNLIKELY {
+          ELOGV(ERROR, "bad serialize protocol type, conn_id %d", conn_id_);
+          close();
+          co_return;
+        }
 
       std::string_view payload{};
       // rpc_protocol::buffer_type maybe from user, default from framework.
@@ -173,12 +174,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         payload = std::string_view{body_.data(), body_.size()};
       }
 
-      if (ec) [[unlikely]] {
-        ELOGV(ERROR, "read error: %s, conn_id %d", ec.message().data(),
-              conn_id_);
-        close();
-        co_return;
-      }
+      if (ec)
+        AS_UNLIKELY {
+          ELOGV(ERROR, "read error: %s, conn_id %d", ec.message().data(),
+                conn_id_);
+          close();
+          co_return;
+        }
 
       std::pair<std::errc, std::string> pair{};
 
@@ -225,19 +227,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         resp_buf[0] = resp_buf[0] + 1;
       }
 #endif
-      if (resp_err_ == std::errc{}) [[likely]] {
-        if (resp_err != std::errc{}) [[unlikely]] {
-          resp_err_ = resp_err;
+      if (resp_err_ == std::errc{})
+        AS_LIKELY {
+          if (resp_err != std::errc{})
+            AS_UNLIKELY { resp_err_ = resp_err; }
+          write_queue_.emplace_back(std::move(header_buf), std::move(resp_buf));
+          if (write_queue_.size() == 1) {
+            send_data().start([self = shared_from_this()](auto &&) {
+            });
+          }
+          if (resp_err != std::errc{})
+            AS_UNLIKELY { co_return; }
         }
-        write_queue_.emplace_back(std::move(header_buf), std::move(resp_buf));
-        if (write_queue_.size() == 1) {
-          send_data().start([self = shared_from_this()](auto &&) {
-          });
-        }
-        if (resp_err != std::errc{}) [[unlikely]] {
-          co_return;
-        }
-      }
     }
   }
   /*!
@@ -302,10 +303,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> response(std::string header_buf,
                                           std::string body_buf,
                                           rpc_conn self) noexcept {
-    if (has_closed()) [[unlikely]] {
-      ELOGV(DEBUG, "response_msg failed: connection has been closed");
-      co_return;
-    }
+    if (has_closed())
+      AS_UNLIKELY {
+        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        co_return;
+      }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
       ELOGV(WARN, "inject action: close_socket_after_send_length");
@@ -347,19 +349,22 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
       }
 #endif
-      if (ret.first) [[unlikely]] {
-        ELOGV(ERROR, "%s, %s", ret.first.message().data(), "async_write error");
+      if (ret.first)
+        AS_UNLIKELY {
+          ELOGV(ERROR, "%s, %s", ret.first.message().data(),
+                "async_write error");
+          close();
+          co_return;
+        }
+      write_queue_.pop_front();
+    }
+    if (resp_err_ != std::errc{})
+      AS_UNLIKELY {
+        ELOGV(ERROR, "%s, %s", std::make_error_code(resp_err_).message().data(),
+              "resp_err_");
         close();
         co_return;
       }
-      write_queue_.pop_front();
-    }
-    if (resp_err_ != std::errc{}) [[unlikely]] {
-      ELOGV(ERROR, "%s, %s", std::make_error_code(resp_err_).message().data(),
-            "resp_err_");
-      close();
-      co_return;
-    }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
       ELOGV(INFO,

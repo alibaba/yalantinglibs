@@ -75,9 +75,8 @@ struct coro_rpc_protocol {
 
   static std::optional<supported_serialize_protocols> get_serialize_protocol(
       req_header& req_header) {
-    if (req_header.serialize_type == 0) [[likely]] {
-      return struct_pack_protocol{};
-    }
+    if (req_header.serialize_type == 0)
+      AS_LIKELY { return struct_pack_protocol{}; }
     else {
       return std::nullopt;
     }
@@ -93,12 +92,10 @@ struct coro_rpc_protocol {
     // TODO: add a connection-level buffer in parameter to reuse memory
     auto [ec, _] = co_await asio_util::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
-    if (ec) [[unlikely]] {
-      co_return std::move(ec);
-    }
-    else if (req_head.magic != magic_number) [[unlikely]] {
-      co_return std::make_error_code(std::errc::protocol_error);
-    }
+    if (ec)
+      AS_UNLIKELY { co_return std::move(ec); }
+    else if (req_head.magic != magic_number)
+      AS_UNLIKELY { co_return std::make_error_code(std::errc::protocol_error); }
     co_return std::error_code{};
   }
 
@@ -119,10 +116,11 @@ struct coro_rpc_protocol {
     auto& resp_head = *(resp_header*)header_buf.data();
     resp_head.magic = magic_number;
     resp_head.err_code = static_cast<uint8_t>(rpc_err_code);
-    if (rpc_err_code != std::errc{}) [[unlikely]] {
-      assert(rpc_result.empty());
-      struct_pack::serialize_to(rpc_result, err_msg);
-    }
+    if (rpc_err_code != std::errc{})
+      AS_UNLIKELY {
+        assert(rpc_result.empty());
+        struct_pack::serialize_to(rpc_result, err_msg);
+      }
     resp_head.length = rpc_result.size();
     return header_buf;
   }

@@ -149,12 +149,14 @@ class coro_rpc_client {
       co_return std::errc::not_connected;
     }
 #endif
-    if (has_closed_) [[unlikely]] {
-      ELOGV(ERROR,
+    if (has_closed_)
+      AS_UNLIKELY {
+        ELOGV(
+            ERROR,
             "a closed client is not allowed connect again, please create a new "
             "client");
-      co_return std::errc::io_error;
-    }
+        co_return std::errc::io_error;
+      }
 
     ELOGV(INFO, "client_id %d begin to connect %s", client_id_, port.data());
     async_simple::Promise<async_simple::Unit> promise;
@@ -269,17 +271,18 @@ class coro_rpc_client {
   call_for(auto duration, Args... args) {
     using R = decltype(get_return_type<func>());
 
-    if (has_closed_) [[unlikely]] {
-      ELOGV(ERROR,
-            "a closed client is not allowed call again, please create a new "
-            "client");
-      auto ret = rpc_result<R, coro_rpc_protocol>{
-          unexpect_t{},
-          coro_rpc_protocol::rpc_error{
-              std::errc::io_error,
-              "client has been closed, please create a new client"}};
-      co_return ret;
-    }
+    if (has_closed_)
+      AS_UNLIKELY {
+        ELOGV(ERROR,
+              "a closed client is not allowed call again, please create a new "
+              "client");
+        auto ret = rpc_result<R, coro_rpc_protocol>{
+            unexpect_t{},
+            coro_rpc_protocol::rpc_error{
+                std::errc::io_error,
+                "client has been closed, please create a new client"}};
+        co_return ret;
+      }
 
     rpc_result<R, coro_rpc_protocol> ret;
 #ifdef ENABLE_SSL

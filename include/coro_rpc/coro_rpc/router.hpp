@@ -100,9 +100,8 @@ class router {
 
   template <auto func, typename Self>
   void regist_one_handler(Self *self) {
-    if (self == nullptr) [[unlikely]] {
-      ELOGV(CRITICAL, "null connection!");
-    }
+    if (self == nullptr)
+      AS_UNLIKELY { ELOGV(CRITICAL, "null connection!"); }
 
     route_key key{};
 
@@ -126,9 +125,8 @@ class router {
 
   template <auto func, typename Self>
   void regist_one_handler_impl(Self *self, const route_key &key) {
-    if (self == nullptr) [[unlikely]] {
-      ELOGV(CRITICAL, "null connection!");
-    }
+    if (self == nullptr)
+      AS_UNLIKELY { ELOGV(CRITICAL, "null connection!"); }
 
     constexpr auto name = get_func_name<func>();
     using return_type = function_return_type_t<decltype(func)>;
@@ -250,34 +248,37 @@ class router {
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
-    if (handler) [[likely]] {
-      try {
+    if (handler)
+      AS_LIKELY {
+        try {
 #ifndef NDEBUG
-        ELOGV(INFO, "route function name: %s", get_name(route_key).data());
+          ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 
 #endif
-        // clang-format off
+          // clang-format off
       auto res = co_await (*handler)(data, std::move(conn), header, protocols);
-        // clang-format on
-        if (res.has_value()) [[likely]] {
-          co_return std::make_pair(std::errc{}, std::move(res.value()));
-        }
-        else {  // deserialize failed
-          ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+          // clang-format on
+          if (res.has_value())
+            AS_LIKELY {
+              co_return std::make_pair(std::errc{}, std::move(res.value()));
+            }
+          else {  // deserialize failed
+            ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+                  get_name(route_key).data());
+            co_return std::make_pair(std::errc::invalid_argument,
+                                     "invalid rpc function arguments"s);
+          }
+        } catch (const std::exception &e) {
+          ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
-          co_return std::make_pair(std::errc::invalid_argument,
-                                   "invalid rpc function arguments"s);
+          co_return std::make_pair(std::errc::interrupted, e.what());
+        } catch (...) {
+          ELOGV(ERROR, "unknown exception in rpc function: %s",
+                get_name(route_key).data());
+          co_return std::make_pair(std::errc::interrupted,
+                                   "unknown exception"s);
         }
-      } catch (const std::exception &e) {
-        ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
-              get_name(route_key).data());
-        co_return std::make_pair(std::errc::interrupted, e.what());
-      } catch (...) {
-        ELOGV(ERROR, "unknown exception in rpc function: %s",
-              get_name(route_key).data());
-        co_return std::make_pair(std::errc::interrupted, "unknown exception"s);
       }
-    }
     else {
       std::ostringstream ss;
       ss << route_key;
@@ -294,32 +295,34 @@ class router {
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
-    if (handler) [[likely]] {
-      try {
+    if (handler)
+      AS_LIKELY {
+        try {
 #ifndef NDEBUG
-        ELOGV(INFO, "route function name: %s", get_name(route_key).data());
+          ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 #endif
-        auto res = (*handler)(data, std::move(conn), header, protocols);
-        if (res.has_value()) [[likely]] {
-          return std::make_pair(std::errc{}, std::move(res.value()));
-        }
-        else {  // deserialize failed
-          ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+          auto res = (*handler)(data, std::move(conn), header, protocols);
+          if (res.has_value())
+            AS_LIKELY {
+              return std::make_pair(std::errc{}, std::move(res.value()));
+            }
+          else {  // deserialize failed
+            ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
+                  get_name(route_key).data());
+            return std::make_pair(std::errc::invalid_argument,
+                                  "invalid rpc function arguments"s);
+          }
+        } catch (const std::exception &e) {
+          ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
-          return std::make_pair(std::errc::invalid_argument,
-                                "invalid rpc function arguments"s);
+          return std::make_pair(std::errc::interrupted, e.what());
+        } catch (...) {
+          ELOGV(ERROR, "unknown exception in rpc function: %s",
+                get_name(route_key).data());
+          return std::make_pair(std::errc::interrupted,
+                                "unknown rpc function exception"s);
         }
-      } catch (const std::exception &e) {
-        ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
-              get_name(route_key).data());
-        return std::make_pair(std::errc::interrupted, e.what());
-      } catch (...) {
-        ELOGV(ERROR, "unknown exception in rpc function: %s",
-              get_name(route_key).data());
-        return std::make_pair(std::errc::interrupted,
-                              "unknown rpc function exception"s);
       }
-    }
     else {
       std::ostringstream ss;
       ss << route_key;
