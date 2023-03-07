@@ -39,9 +39,5 @@ struct coro_rpc_default_config : public coro_rpc_config_base {
 };
 }  // namespace config
 
-template <typename return_msg_type>
-using context = coro_rpc::context_base<return_msg_type,
-                                       coro_rpc::protocol::coro_rpc_protocol>;
-
 using coro_rpc_server = coro_rpc_server_base<config::coro_rpc_default_config>;
 }  // namespace coro_rpc

@@ -15,7 +15,7 @@
  */
 #include <coro_rpc/coro_rpc_client.hpp>
 #include <coro_rpc/coro_rpc_server.hpp>
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 
 #include "doctest.h"
 using namespace coro_rpc;

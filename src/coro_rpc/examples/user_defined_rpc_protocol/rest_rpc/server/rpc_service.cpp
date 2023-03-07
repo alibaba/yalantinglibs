@@ -20,9 +20,6 @@
 #include <chrono>
 #include <thread>
 
-#include "asio_util/asio_coro_util.hpp"
-#include "async_simple/coro/Sleep.h"
-
 using namespace coro_rpc;
 
 std::string hello_world() {

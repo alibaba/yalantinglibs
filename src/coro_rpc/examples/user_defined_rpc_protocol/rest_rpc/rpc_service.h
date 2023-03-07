@@ -19,7 +19,6 @@
 #include <string>
 #include <string_view>
 
-#include "async_simple/coro/Lazy.h"
 #include "config/rest_rpc_protocol.hpp"
 
 std::string hello_world();

@@ -34,10 +34,8 @@
  */
 #include <string_view>
 
-#include "asio/io_context.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "asio_util/io_context_pool.hpp"
-#include "async_simple/Executor.h"
 #include "coro_rpc/coro_rpc/coro_rpc_client.hpp"
 
 inline std::string_view echo(std::string_view sv) { return sv; }

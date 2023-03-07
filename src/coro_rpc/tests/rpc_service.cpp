@@ -15,7 +15,7 @@
  */
 #include <easylog/easylog.h>
 
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 
 #include "rpc_api.hpp"
 

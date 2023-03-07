@@ -15,7 +15,7 @@
  */
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 #include <string>
 #include <thread>
 
