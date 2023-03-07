@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #pragma once
+#include <asio.hpp>
+#include <asio/thread_pool.hpp>
 #include <functional>
 #include <string_view>
 #include <utility>
@@ -31,7 +33,16 @@ class logger {
     return instance;
   }
 
-  void operator+=(const record_t &record) { write(record); }
+  void operator+=(record_t &&record) {
+    if (async_mode_) {
+      asio::post(pool_, [this, record = std::move(record)]() mutable {
+        write(record);
+      });
+    }
+    else {
+      write(record);
+    }
+  }
 
   void write(const record_t &record) {
     append_format(record);
@@ -63,6 +74,13 @@ class logger {
   void add_appender(std::function<void(std::string_view)> fn) {
     appenders_.emplace_back(std::move(fn));
   }
+
+  void drain() {
+    if (async_mode_) {
+      pool_.wait();
+    }
+  }
+  void enable_async() { async_mode_ = true; }
 
  private:
   logger() = default;
@@ -104,17 +122,17 @@ class logger {
     str.append(record.get_file_str());
     str.append(record.get_message()).append("\n");
 
-    if (appender_) {
-      appender_->write(str);
-    }
+    appender_->write(str);
 
     if (enable_console_) {
       std::cout << str;
       std::cout << std::flush;
     }
 
-    for (auto &fn : appenders_) {
-      fn(std::string_view(str));
+    if (!appenders_.empty()) {
+      for (auto &fn : appenders_) {
+        fn(std::string_view(str));
+      }
     }
   }
 
@@ -122,6 +140,8 @@ class logger {
   bool enable_console_ = true;
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
+  bool async_mode_ = false;
+  asio::thread_pool pool_{1};
 };
 
 template <size_t Id = 0>
@@ -130,6 +150,16 @@ inline void init_log(Severity min_severity, const std::string &filename = "",
                      size_t max_files = 0, bool flush_every_time = false) {
   logger<Id>::instance().init(min_severity, enable_console, filename,
                               max_file_size, max_files, flush_every_time);
+}
+
+template <size_t Id = 0>
+void drain() {
+  logger<Id>::instance().drain();
+}
+
+template <size_t Id = 0>
+void enable_async() {
+  logger<Id>::instance().enable_async();
 }
 
 template <size_t Id = 0>

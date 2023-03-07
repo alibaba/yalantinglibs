@@ -47,19 +47,23 @@ class ScopedTimer {
   uint64_t *m_ns = nullptr;
 };
 
+bool first_init = true;
 void test_glog() {
 #ifdef HAVE_GLOG
   std::filesystem::remove("glog.txt");
-  FLAGS_log_dir = ".";
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_timestamp_in_logfile_name = false;
-  google::SetLogDestination(google::INFO, "glog.txt");
-  google::InitGoogleLogging("glog");
+  if (first_init) {
+    FLAGS_log_dir = ".";
+    FLAGS_minloglevel = google::GLOG_INFO;
+    FLAGS_timestamp_in_logfile_name = false;
+    google::SetLogDestination(google::INFO, "glog.txt");
+    google::InitGoogleLogging("glog");
+    first_init = false;
+  }
 
   {
     ScopedTimer timer("glog   ");
-    for (int i = 0; i < 5000; i++)
-      LOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+    for (int i = 0; i < 10000; i++)
+      LOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5 << i;
   }
 #endif
 }
@@ -67,14 +71,19 @@ void test_glog() {
 void test_easylog() {
   std::filesystem::remove("easylog.txt");
   easylog::init_log(Severity::DEBUG, "easylog.txt", false, 1024 * 1024, 1);
+  easylog::enable_async();
   {
     ScopedTimer timer("easylog");
-    for (int i = 0; i < 5000; i++)
-      ELOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+    for (int i = 0; i < 10000; i++)
+      ELOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5 << i;
+
+    easylog::drain();
   }
 }
 
 int main() {
-  test_glog();
-  test_easylog();
+  for (int i = 0; i < 10; i++) {
+    test_glog();
+    test_easylog();
+  }
 }

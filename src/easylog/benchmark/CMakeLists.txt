@@ -11,3 +11,7 @@ if (glog_FOUND)
   target_compile_definitions(easylog_benchmark PRIVATE HAVE_GLOG)
   target_link_libraries(easylog_benchmark PRIVATE glog::glog)
 endif ()
+
+target_include_directories(easylog_benchmark PRIVATE
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
+)

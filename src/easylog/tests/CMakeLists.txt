@@ -7,8 +7,11 @@ add_executable(test_easylog
 add_test(NAME test_easylog COMMAND test_easylog)
 target_compile_definitions(test_easylog PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest)
+        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog pthread doctest)
 else()
-        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest -lstdc++fs)
+        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog pthread doctest -lstdc++fs)
 endif()
 
+target_include_directories(test_easylog PRIVATE
+        ${yaLanTingLibs_SOURCE_DIR}/thirdparty/asio
+)

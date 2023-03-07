@@ -104,6 +104,9 @@ class record_t {
     buf_len_ = str.size();
   }
 
+  record_t(const record_t &) = delete;
+  record_t(record_t &&) = default;
+
   Severity get_severity() const { return severity_; }
 
   const char *get_message() const { return ss_.data(); }
@@ -114,10 +117,10 @@ class record_t {
 
   auto get_time_point() const { return tm_point_; }
 
-  record_t &ref() { return *this; }
+  record_t &&ref() { return std::move(*this); }
 
   template <typename T>
-  record_t &operator<<(const T &data) {
+  record_t &&operator<<(const T &data) {
     using U = std::remove_cvref_t<T>;
     if constexpr (std::is_floating_point_v<U>) {
       char temp[40];
@@ -140,14 +143,14 @@ class record_t {
       ss_.append(data);
     }
 
-    return *this;
+    return std::move(*this);
   }
 
   template <typename... Args>
-  record_t &sprintf(const char *fmt, Args... args) {
+  record_t &&sprintf(const char *fmt, Args... args) {
     printf_string_format(fmt, args...);
 
-    return *this;
+    return std::move(*this);
   }
 
  private:
