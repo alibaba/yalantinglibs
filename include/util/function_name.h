@@ -19,7 +19,7 @@
 #include "magic_names.hpp"
 namespace coro_rpc {
 template <auto func>
-consteval std::string_view get_func_name() {
+constexpr std::string_view get_func_name() {
   return std::string_view{refvalue::qualified_name_of_v<func>};
 };
 }  // namespace coro_rpc

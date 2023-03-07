@@ -24,16 +24,20 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#if __has_include(<span>)
 #include <span>
+
+#include "meta_string.hpp"
+#include "string_finder.hpp"
+#endif
+
 #include <string_view>
 #include <type_traits>
 #include <utility>
 
-#include "meta_string.hpp"
-#include "string_finder.hpp"
-
 namespace refvalue {
 namespace detail {
+#if __has_include(<span>)
 template <meta_string Signature>
 struct parse_qualified_function_name {
 #if defined(_MSC_VER) && defined(_WIN64)
@@ -129,25 +133,26 @@ struct parse_qualified_function_name {
 template <meta_string Signature>
 inline constexpr auto&& parse_qualified_function_name_v =
     parse_qualified_function_name<Signature>::value;
+#endif
 
 template <auto Func>
-consteval auto qualified_name_of_impl() noexcept {
+constexpr auto qualified_name_of_impl() noexcept {
 #ifdef _MSC_VER
   constexpr std::size_t suffix_size{16};
   constexpr std::string_view keyword{
       "refvalue::detail::qualified_name_of_impl<"};
   constexpr std::string_view signature{__FUNCSIG__};
-  constexpr meta_string anonymous_namespace{"`anonymous-namespace'::"};
+  constexpr std::string_view anonymous_namespace{"`anonymous-namespace'::"};
 #elif defined(__clang__)
   constexpr std::size_t suffix_size{1};
   constexpr std::string_view keyword{"[Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
-  constexpr meta_string anonymous_namespace{"(anonymous namespace)::"};
+  constexpr std::string_view anonymous_namespace{"(anonymous namespace)::"};
 #elif defined(__GNUC__)
   constexpr std::size_t suffix_size{1};
-  constexpr std::string_view keyword{"[with auto Func = "};
+  constexpr std::string_view keyword{"Func = "};
   constexpr std::string_view signature{__PRETTY_FUNCTION__};
-  constexpr meta_string anonymous_namespace{"{anonymous}::"};
+  constexpr std::string_view anonymous_namespace{"{anonymous}::"};
 #else
 #error "Unsupported compiler."
 #endif
@@ -158,11 +163,34 @@ consteval auto qualified_name_of_impl() noexcept {
       prefix_size + additional_size,
       signature.size() - prefix_size - additional_size - suffix_size);
 
-  constexpr meta_string result{std::span<const char, intermediate.size()>{
-      intermediate.data(), intermediate.size()}};
-
-  return remove_v<detail::parse_qualified_function_name_v<result>,
-                  anonymous_namespace>;
+  constexpr std::string_view result = intermediate;
+  constexpr size_t rpos = result.rfind(anonymous_namespace);
+  if constexpr (rpos != std::string_view::npos) {
+    constexpr std::string_view str =
+        result.substr(rpos + anonymous_namespace.size());
+    constexpr size_t right = str.find('(');
+    if constexpr (right != std::string_view::npos) {
+      return str.substr(0, right);
+    }
+    else {
+      return str;
+    }
+  }
+  else {
+    constexpr size_t left = result.find("l ") + 2;
+    constexpr size_t right = result.find('(');
+    if constexpr (left != std::string_view::npos) {
+      if constexpr (right != std::string_view::npos) {
+        return result.substr(left, right - left);
+      }
+      else {
+        return result;
+      }
+    }
+    else {
+      return result;
+    }
+  }
 }
 }  // namespace detail
 
@@ -174,6 +202,7 @@ struct qualified_name_of {
 template <auto Func>
 inline constexpr auto&& qualified_name_of_v = qualified_name_of<Func>::value;
 
+#if __has_include(<span>)
 template <auto Func>
 struct name_of {
   static constexpr auto value = [] {
@@ -194,5 +223,5 @@ struct name_of {
 
 template <auto Func>
 inline constexpr auto&& name_of_v = name_of<Func>::value;
-
+#endif
 }  // namespace refvalue

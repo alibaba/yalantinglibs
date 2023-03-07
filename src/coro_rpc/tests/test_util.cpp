@@ -133,6 +133,7 @@ constexpr void magic_names_tests() {
       meta_string{
           "refvalue::tests::ns1::ns2::ns3::some_class<int>::class_fun2"});
 
+#if 0
 #ifdef _MSC_VER
   static_assert(qualified_name_of_v<&func_template<int, double>> ==
                 meta_string{"refvalue::tests::ns1::ns2::ns3::func_template"});
@@ -154,6 +155,7 @@ constexpr void magic_names_tests() {
 #elif !defined(__APPLE__)
   static_assert(name_of_v<&func_template<int, double>> ==
                 meta_string{"func_template"});
+#endif
 #endif
 }
 

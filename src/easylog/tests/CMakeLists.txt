@@ -6,4 +6,9 @@ add_executable(test_easylog
         )
 add_test(NAME test_easylog COMMAND test_easylog)
 target_compile_definitions(test_easylog PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest)
+else()
+        target_link_libraries(test_easylog PRIVATE yalantinglibs::easylog doctest -lstdc++fs)
+endif()
+
