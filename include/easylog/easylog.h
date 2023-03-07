@@ -122,7 +122,9 @@ class logger {
     str.append(record.get_file_str());
     str.append(record.get_message()).append("\n");
 
-    appender_->write(str);
+    if (appender_) {
+      appender_->write(str);
+    }
 
     if (enable_console_) {
       std::cout << str;
