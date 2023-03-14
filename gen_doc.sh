@@ -14,7 +14,7 @@ cp ../../src/struct_pack/doc/Introduction_EN.md struct-pack-intro.md
 cp ../../src/struct_pack/doc/struct_pack_layout_EN.md struct-pack-layout.md
 cp ../../src/struct_pack/doc/struct_pack_type_system_EN.md struct-pack-type-system.md
 cp ../../src/struct_pb/doc/*.md .
-cp ../../src/coro_rpc/doc/coro_rpc_introduction_EN.md coro-rpc-intro.md
+cp ../../src/coro_rpc/doc/coro_rpc_introduction_en.md coro-rpc-intro.md
 
 mkdir -p src/coro_rpc/doc/images
 cp ../../src/coro_rpc/doc/images/yalantinglibs_ding_talk_group.png src/coro_rpc/doc/images
