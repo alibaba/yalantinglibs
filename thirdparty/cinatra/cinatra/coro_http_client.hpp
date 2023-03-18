@@ -88,7 +88,7 @@ class coro_http_client {
     });
   }
 
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
   [[nodiscard]] bool init_ssl(const std::string &base_path,
                               const std::string &cert_file,
                               int verify_mode = asio::ssl::verify_none,
@@ -466,7 +466,7 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<std::error_code> handle_shake() {
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     if (use_ssl_) {
       if (ssl_stream_ == nullptr) {
         co_return std::make_error_code(std::errc::not_a_stream);
@@ -483,7 +483,7 @@ class coro_http_client {
       co_return std::error_code{};
     }
 #else
-    // please open CINATRA_ENABLE_SSL before request https!
+    // please open ENABLE_SSL before request https!
     co_return std::make_error_code(std::errc::protocol_error);
 #endif
   }
@@ -1016,14 +1016,14 @@ class coro_http_client {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &buffer, size_t size_to_read) noexcept {
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     if (use_ssl_) {
       return asio_util::async_read(*ssl_stream_, buffer, size_to_read);
     }
     else {
 #endif
       return asio_util::async_read(socket_, buffer, size_to_read);
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     }
 #endif
   }
@@ -1031,14 +1031,14 @@ class coro_http_client {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     if (use_ssl_) {
       return asio_util::async_write(*ssl_stream_, buffer);
     }
     else {
 #endif
       return asio_util::async_write(socket_, buffer);
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     }
 #endif
   }
@@ -1046,14 +1046,14 @@ class coro_http_client {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     if (use_ssl_) {
       return asio_util::async_read_until(*ssl_stream_, buffer, delim);
     }
     else {
 #endif
       return asio_util::async_read_until(socket_, buffer, delim);
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
     }
 #endif
   }
@@ -1108,7 +1108,7 @@ class coro_http_client {
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
 
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
   asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
