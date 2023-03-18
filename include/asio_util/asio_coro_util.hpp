@@ -16,7 +16,6 @@
 #pragma once
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
-#include <util/type_traits.h>
 
 #include <chrono>
 #include <deque>
@@ -33,7 +32,7 @@
 
 namespace asio_util {
 
-template <typename ExecutorImpl>
+template <typename ExecutorImpl = asio::io_context::executor_type>
 class ExecutorWrapper : public async_simple::Executor {
  private:
   ExecutorImpl executor_;
@@ -165,6 +164,7 @@ async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
     });
   });
 }
+
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
@@ -173,6 +173,18 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     asio::async_read(socket, buffer, [&, handler](const auto &ec, auto size) {
       handler.set_value_then_resume(ec, size);
     });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+    Socket &socket, AsioBuffer &buffer, size_t size_to_read) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_read(socket, buffer, asio::transfer_exactly(size_to_read),
+                     [&, handler](const auto &ec, auto size) {
+                       handler.set_value_then_resume(ec, size);
+                     });
   });
 }
 

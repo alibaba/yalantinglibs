@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, coro_rpc and async_simple </h6>
+<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, struct_pb, coro_rpc, coro_http and async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -8,7 +8,7 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, coro_rpc and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
+yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_pb, coro_rpc, coro_http and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
@@ -135,6 +135,81 @@ int main() {
   struct_json::from_json(p1, str);
 }
 ```
+
+## coro_http_client
+
+coro_http_client is a C++20 coroutine http(https) client, include: get/post, websocket, multipart file upload, chunked and ranges download etc.
+
+### get/post
+```c++
+#include "coro_http/coro_http_client.h"
+using namespace ylt;
+
+async_simple::coro::Lazy<void> get_post(coro_http_client &client) {
+  std::string uri = "http://www.example.com";
+  auto result = co_await client.async_get(uri);
+  std::cout << result.status << "\n";
+  
+  result = co_await client.async_post(uri, "hello", req_content_type::string);
+  std::cout << result.status << "\n";
+}
+
+int main() {
+  coro_http_client client{};
+  async_simple::coro::syncAwait(get_post(client));
+}
+```
+
+### websocket
+```c++
+async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
+  client.on_ws_close([](std::string_view reason) {
+    std::cout << "web socket close " << reason << std::endl;
+  });
+  
+  client.on_ws_msg([](resp_data data) {
+    std::cout << data.resp_body << std::endl;
+  });
+
+  // connect to your websocket server.
+  bool r = co_await client.async_connect("ws://example.com/ws");
+  if (!r) {
+    co_return;
+  }
+
+  co_await client.async_send_ws("hello websocket");
+  co_await client.async_send_ws("test again", /*need_mask = */ false);
+  co_await client.async_send_ws_close("ws close reason");
+}
+```
+
+### upload/download
+```c++
+async_simple::coro::Lazy<void> upload_files(coro_http_client &client) {
+  std::string uri = "http://example.com";
+  
+  client.add_str_part("hello", "world");
+  client.add_str_part("key", "value");
+  client.add_file_part("test", "test.jpg");
+  auto result = co_await client.async_upload(uri);
+  std::cout << result.status << "\n";
+  
+  result = co_await client.async_upload(uri, "test", "test.jpg");
+}
+
+async_simple::coro::Lazy<void> download_files(coro_http_client &client) {
+  // chunked download
+  auto result = co_await client.async_download("http://example.com/test.jpg",
+                                               "myfile.jpg");
+  std::cout << result.status << "\n";
+  
+  // ranges download
+  result = co_await client.async_download("http://example.com/test.txt",
+                                               "myfile.txt", "1-10,11-16");
+  std::cout << result.status << "\n";
+}
+```
+
 ## async_simple
 
 A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
