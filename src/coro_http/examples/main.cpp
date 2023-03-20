@@ -68,13 +68,11 @@ async_simple::coro::Lazy<void> test_async_ssl_client(
 #ifdef ENABLE_SSL
   std::string uri2 = "https://www.baidu.com";
   std::string uri3 = "https://cn.bing.com";
-  coro_http_client client{};
   client.init_ssl("../../include/cinatra", "server.crt");
-  data = co_await client.async_get(uri2);
-  print(data.status);
-
+  auto data = co_await client.async_get(uri2);
+  std::cout << data.status << std::endl;
   data = co_await client.async_get(uri3);
-  print(data.status);
+  std::cout << data.status << std::endl;
 #endif
   co_return;
 }

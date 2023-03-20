@@ -18,7 +18,7 @@ option(ENABLE_SSL "Enable ssl support" OFF)
 if (ENABLE_SSL)
     message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
-    target_compile_definitions(coro_http INTERFACE CINATRA_ENABLE_SSL)
+    target_compile_definitions(coro_http INTERFACE CINATRA_ENABLE_SSL ENABLE_SSL)
     target_link_libraries(coro_http INTERFACE OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
