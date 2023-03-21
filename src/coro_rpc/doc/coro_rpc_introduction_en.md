@@ -52,7 +52,7 @@ As demonstrated above, it is also very convenient to build a client. There's not
 
 The server/client implementation shows the usability and core features of coro_rpc. Also, it shows us the core concept of RPC: that users can invoke remote methods in a way with local functions, and users will focus their efforts on RPC functions.
 
-Another usability of coro_rpc is that: there are barely any constraints on the RPC function itself. One could define an RPC function with any number of parameters. The parameters' should be a legal type for struct_pack. (See [struct pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)). The serialization/deserialization procedures are transparent to users and the RPC framework will take care of them automatically.
+Another usability of coro_rpc is that: there are barely any constraints on the RPC function itself. One could define an RPC function with any number of parameters. The parameters' type should be legal for struct_pack. (See [struct pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)). The serialization/deserialization procedures are transparent to users and the RPC framework will take care of them automatically.
 
 ## RPC with any parameters
 
