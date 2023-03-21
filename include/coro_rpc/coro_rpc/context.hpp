@@ -37,9 +37,8 @@ namespace coro_rpc {
 template <typename return_msg_type, typename rpc_protocol>
 class context_base {
  protected:
-  std::shared_ptr<context_info_t<rpc_protocol>> self;
-
-  typename rpc_protocol::req_header &get_req_head() { return self->req_head_; }
+  std::shared_ptr<context_info_t<rpc_protocol>> self_;
+  typename rpc_protocol::req_header &get_req_head() { return self_->req_head_; }
 
  public:
   /*!
@@ -48,14 +47,13 @@ class context_base {
    * @param a share pointer for coro_connection
    */
   context_base(std::shared_ptr<context_info_t<rpc_protocol>> context_info)
-      : self(std::move(context_info)) {
-    if (self->conn_) {
-      self->conn_->set_rpc_call_type(coro_connection::rpc_call_type::callback);
+      : self_(std::move(context_info)) {
+    if (self_->conn_) {
+      self_->conn_->set_rpc_call_type(
+          coro_connection::rpc_call_type::callback_started);
     }
   };
   context_base() = default;
-  context_base(const context_base &conn) = default;
-  context_base(context_base &&conn) = default;
 
   using return_type = return_msg_type;
 
@@ -75,11 +73,12 @@ class context_base {
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
 
-      auto old_flag = self->has_response_.exchange(true);
-      if (old_flag != false) {
-        ELOGV(ERROR, "response message more than one time");
-        return;
-      }
+      auto old_flag = self_->has_response_.exchange(true);
+      if (old_flag != false)
+        AS_UNLIKELY {
+          ELOGV(ERROR, "response message more than one time");
+          return;
+        }
 
       if (has_closed())
         AS_UNLIKELY {
@@ -88,10 +87,11 @@ class context_base {
         }
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
-            self->conn_->template response_msg<rpc_protocol>(
-                serialize_proto::serialize(), self->req_head_, self->is_delay);
+            self_->conn_->template response_msg<rpc_protocol>(
+                serialize_proto::serialize(), self_->req_head_,
+                self_->is_delay_);
           },
-          *rpc_protocol::get_serialize_protocol(self->req_head_));
+          *rpc_protocol::get_serialize_protocol(self_->req_head_));
     }
     else {
       static_assert(
@@ -99,11 +99,12 @@ class context_base {
           "constructed return_msg_type failed by illegal args");
       return_msg_type ret{std::forward<Args>(args)...};
 
-      auto old_flag = self->has_response_.exchange(true);
-      if (old_flag != false) {
-        ELOGV(ERROR, "response message more than one time");
-        return;
-      }
+      auto old_flag = self_->has_response_.exchange(true);
+      if (old_flag != false)
+        AS_UNLIKELY {
+          ELOGV(ERROR, "response message more than one time");
+          return;
+        }
 
       if (has_closed())
         AS_UNLIKELY {
@@ -113,11 +114,11 @@ class context_base {
 
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
-            self->conn_->template response_msg<rpc_protocol>(
-                serialize_proto::serialize(ret), self->req_head_,
-                self->is_delay);
+            self_->conn_->template response_msg<rpc_protocol>(
+                serialize_proto::serialize(ret), self_->req_head_,
+                self_->is_delay_);
           },
-          *rpc_protocol::get_serialize_protocol(self->req_head_));
+          *rpc_protocol::get_serialize_protocol(self_->req_head_));
 
       // response_handler_(std::move(conn_), std::move(ret));
     }
@@ -128,20 +129,20 @@ class context_base {
    *
    * @return true if closed, otherwise false
    */
-  bool has_closed() const { return self->conn_->has_closed(); }
+  bool has_closed() const { return self_->conn_->has_closed(); }
 
   void set_delay() {
-    self->is_delay = true;
-    self->conn_->set_rpc_call_type(
+    self_->is_delay_ = true;
+    self_->conn_->set_rpc_call_type(
         coro_connection::rpc_call_type::callback_with_delay);
   }
 
   template <typename T>
   void set_tag(T &&tag) {
-    self->conn_->set_tag(std::forward<T>(tag));
+    self_->conn_->set_tag(std::forward<T>(tag));
   }
 
-  std::any get_tag() { return self->conn_->get_tag(); }
+  std::any get_tag() { return self_->conn_->get_tag(); }
 };
 
 template <typename T>

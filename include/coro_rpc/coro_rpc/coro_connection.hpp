@@ -52,9 +52,25 @@ class context_info_t;
  * TODO: add doc
  */
 
+[[noreturn]] inline void unreachable() {
+  // Uses compiler specific extensions if possible.
+  // Even if no extension is used, undefined behavior is still raised by
+  // an empty function body and the noreturn attribute.
+#ifdef __GNUC__  // GCC, Clang, ICC
+  __builtin_unreachable();
+#elif defined(_MSC_VER)  // msvc
+  __assume(false);
+#endif
+}
+
 class coro_connection : public std::enable_shared_from_this<coro_connection> {
  public:
-  enum rpc_call_type { non_callback, callback, callback_with_delay };
+  enum rpc_call_type {
+    non_callback,
+    callback_with_delay,
+    callback_finished,
+    callback_started,
+  };
 
   /*!
    *
@@ -205,27 +221,31 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
       auto &[resp_err, resp_buf] = pair;
-      if (rpc_call_type_ == rpc_call_type::callback_with_delay) {
-        ++delay_resp_cnt;
-        rpc_call_type_ = rpc_call_type::non_callback;
-        context_info =
-            std::make_shared<context_info_t<rpc_protocol>>(shared_from_this());
-        continue;
+      switch (rpc_call_type_) {
+        default:
+          unreachable();
+        case rpc_call_type::non_callback:
+          break;
+        case rpc_call_type::callback_with_delay:
+          ++delay_resp_cnt;
+          rpc_call_type_ = rpc_call_type::non_callback;
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+              shared_from_this());
+          continue;
+        case rpc_call_type::callback_finished:
+          continue;
+        case rpc_call_type::callback_started:
+          asio_util::callback_awaitor<void> awaitor;
+          rpc_call_type_ = rpc_call_type::callback_finished;
+          co_await awaitor.await_resume([this](auto handler) {
+            this->callback_awaitor_handler_ = std::move(handler);
+          });
+          context_info->has_response_ = false;
+          continue;
       }
-      else if (rpc_call_type_ == rpc_call_type::callback) {
-        asio_util::callback_awaitor<void> awaitor;
-        co_await awaitor.await_resume([this](auto handler) {
-          this->callback_awaitor_handler_ = std::move(handler);
-        });
-        context_info->has_response_ = false;
-        rpc_call_type_ = rpc_call_type::non_callback;
-        continue;
-      }
-
       resp_error_msg.clear();
-      if (resp_err != std::errc{}) {
-        std::swap(resp_buf, resp_error_msg);
-      }
+      if (resp_err != std::errc{})
+        AS_UNLIKELY { std::swap(resp_buf, resp_error_msg); }
       std::string header_buf = rpc_protocol::prepare_response(
           resp_buf, req_head, resp_err, resp_error_msg);
 
@@ -260,7 +280,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             AS_UNLIKELY { break; }
         }
     }
-    context_info->has_response_ = true;
   }
   /*!
    * send `ret` to RPC client
@@ -347,7 +366,15 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       co_await send_data();
     }
     if (!is_delay) {
-      callback_awaitor_handler_.resume();
+      if (rpc_call_type_ == rpc_call_type::callback_finished) {
+        // the function start_impl is waiting for resume.
+        callback_awaitor_handler_.resume();
+      }
+      else {
+        assert(rpc_call_type_ == rpc_call_type::callback_started);
+        // the function start_impl is not waiting for resume.
+        rpc_call_type_ = rpc_call_type::callback_finished;
+      }
     }
   }
 
@@ -461,8 +488,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
 
-  asio_util::callback_awaitor_base<void, asio_util::callback_awaitor<void>>::
-      awaitor_handler callback_awaitor_handler_{nullptr};
+  asio_util::callback_awaitor<void>::awaitor_handler callback_awaitor_handler_{
+      nullptr};
   std::unique_ptr<async_simple::Executor> executor_;
   asio::ip::tcp::socket socket_;
   // FIXME: queue's performance can be imporved.
@@ -496,23 +523,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 template <typename rpc_protocol>
 struct context_info_t {
   constexpr static size_t body_default_size_ = 256;
-
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::vector<char> body_;
   std::atomic<bool> has_response_ = false;
-  bool is_delay = false;
+  bool is_delay_ = false;
   context_info_t(std::shared_ptr<coro_connection> &&conn)
       : conn_(std::move(conn)) {}
-  ~context_info_t() {
-    if (!has_response_ && conn_)
-      AS_UNLIKELY {
-        ELOGV(ERROR,
-              "We must send reply to client by call response_msg method"
-              "before coro_rpc::context<T> destruction!");
-        conn_->async_close();
-      }
-  }
 };
 
 }  // namespace coro_rpc
