@@ -44,6 +44,7 @@ class context_base {
   std::shared_ptr<coro_connection> conn_;
   std::unique_ptr<std::atomic<bool>> has_response_;
   typename rpc_protocol::req_header req_head_;
+  bool is_delay = false;
 
  public:
   /*!
@@ -57,7 +58,7 @@ class context_base {
         has_response_(std::make_unique<std::atomic<bool>>(false)),
         req_head_(std::move(req_head)) {
     if (conn_) {
-      conn_->set_delay(true);
+      conn_->set_rpc_call_type(coro_connection::rpc_call_type::callback);
     }
   };
   context_base() = delete;
@@ -105,7 +106,7 @@ class context_base {
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             conn_->response_msg<rpc_protocol>(serialize_proto::serialize(),
-                                              req_head_);
+                                              req_head_, is_delay);
           },
           *rpc_protocol::get_serialize_protocol(req_head_));
     }
@@ -133,7 +134,7 @@ class context_base {
               conn_->response_msg<rpc_protocol>(
                   serialize_proto::serialize(
                       ret, rpc_protocol::get_reserve_size(conn_)),
-                  req_head_);
+                  req_head_, is_delay);
             },
             *rpc_protocol::get_serialize_protocol(req_head_));
       }
@@ -141,7 +142,7 @@ class context_base {
         std::visit(
             [&]<typename serialize_proto>(const serialize_proto &) {
               conn_->response_msg<rpc_protocol>(serialize_proto::serialize(ret),
-                                                req_head_);
+                                                req_head_, is_delay);
             },
             *rpc_protocol::get_serialize_protocol(req_head_));
       }
@@ -155,6 +156,12 @@ class context_base {
    * @return true if closed, otherwise false
    */
   bool has_closed() const { return conn_->has_closed(); }
+
+  void set_delay() {
+    is_delay = true;
+    conn_->set_rpc_call_type(
+        coro_connection::rpc_call_type::callback_with_delay);
+  }
 
   template <typename T>
   void set_tag(T &&tag) {

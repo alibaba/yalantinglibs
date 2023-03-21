@@ -33,6 +33,10 @@ int main() {
       .register_handler<&HelloService::hello, &HelloService::hello_with_delay>(
           &hello_service);
 
-  auto ec = server.start();
-  return ec == std::errc{};
+  server.async_start().start([](auto &&) {
+    
+  });
+  std::getchar();
+  server.stop();
+  return 0;
 }

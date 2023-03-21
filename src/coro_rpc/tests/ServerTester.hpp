@@ -22,6 +22,7 @@
 #include <future>
 #include <ostream>
 #include <string>
+#include <thread>
 
 #include "doctest.h"
 #include "easylog/easylog.h"
@@ -412,12 +413,15 @@ struct ServerTester : TesterConfig {
   };
 
   template <auto func, typename... Args>
-  void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
+  void test_call_with_delay_func_server_timeout(Args... args) {
     g_action = {};
     auto client = this->create_client();
     ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
           client->get_client_id());
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
+    REQUIRE(ret);
+    std::this_thread::sleep_for(700ms);
+    ret = this->call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,

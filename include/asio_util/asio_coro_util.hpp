@@ -82,7 +82,7 @@ class callback_awaitor_base {
     constexpr bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> handle) noexcept {
       awaitor.coro_ = handle;
-      op(awaitor_handler{awaitor});
+      op(awaitor_handler{&awaitor});
     }
     auto coAwait(async_simple::Executor *executor) const noexcept {
       return *this;
@@ -104,7 +104,11 @@ class callback_awaitor_base {
  public:
   class awaitor_handler {
    public:
-    awaitor_handler(Derived &obj) : obj(obj) {}
+    awaitor_handler(Derived *obj) : obj(obj) {}
+    awaitor_handler(awaitor_handler &&) = default;
+    awaitor_handler(const awaitor_handler &) = default;
+    awaitor_handler &operator=(const awaitor_handler &) = default;
+    awaitor_handler &operator=(awaitor_handler &&) = default;
     template <typename... Args>
     void set_value_then_resume(Args &&...args) const {
       set_value(std::forward<Args>(args)...);
@@ -113,13 +117,13 @@ class callback_awaitor_base {
     template <typename... Args>
     void set_value(Args &&...args) const {
       if constexpr (!std::is_void_v<Arg>) {
-        obj.arg_ = {std::forward<Args>(args)...};
+        obj->arg_ = {std::forward<Args>(args)...};
       }
     }
-    void resume() const { obj.coro_.resume(); }
+    void resume() const { obj->coro_.resume(); }
 
    private:
-    Derived &obj;
+    Derived *obj;
   };
   template <typename Op>
   callback_awaitor_impl<Op> await_resume(const Op &op) noexcept {

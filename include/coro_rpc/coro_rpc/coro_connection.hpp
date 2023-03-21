@@ -50,6 +50,8 @@ using rpc_conn = std::shared_ptr<coro_connection>;
  */
 class coro_connection : public std::enable_shared_from_this<coro_connection> {
  public:
+  enum rpc_call_type { non_callback, callback, callback_with_delay };
+
   /*!
    *
    * @param io_context
@@ -198,10 +200,20 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
       auto &[resp_err, resp_buf] = pair;
-      if (delay_) {
-        delay_ = false;
+      if (rpc_call_type_ == rpc_call_type::callback_with_delay) {
+        ++delay_resp_cnt;
+        rpc_call_type_ = rpc_call_type::non_callback;
         continue;
       }
+      else if (rpc_call_type_ == rpc_call_type::callback) {
+        asio_util::callback_awaitor<void> awaitor;
+        co_await awaitor.await_resume([this](auto handler) {
+          this->callback_awaitor_handler_ = std::move(handler);
+        });
+        rpc_call_type_ = rpc_call_type::non_callback;
+        continue;
+      }
+
       resp_error_msg.clear();
       if (resp_err != std::errc{}) {
         std::swap(resp_buf, resp_error_msg);
@@ -250,14 +262,16 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   template <typename rpc_protocol>
   void response_msg(std::string &&body_buf,
-                    const typename rpc_protocol::req_header &req_head) {
+                    const typename rpc_protocol::req_header &req_head,
+                    bool is_delay) {
     std::string header_buf = rpc_protocol::prepare_response(body_buf, req_head);
-    response(std::move(header_buf), std::move(body_buf), shared_from_this())
+    response(std::move(header_buf), std::move(body_buf), shared_from_this(),
+             is_delay)
         .via(executor_.get())
         .detach();
   }
 
-  void set_delay(bool b) { delay_ = b; }
+  void set_rpc_call_type(enum rpc_call_type r) { rpc_call_type_ = r; }
 
   /*!
    * Check the connection has closed or not
@@ -301,8 +315,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
  private:
   async_simple::coro::Lazy<void> response(std::string header_buf,
-                                          std::string body_buf,
-                                          rpc_conn self) noexcept {
+                                          std::string body_buf, rpc_conn self,
+                                          bool is_delay) noexcept {
     if (has_closed())
       AS_UNLIKELY {
         ELOGV(DEBUG, "response_msg failed: connection has been closed");
@@ -315,10 +329,17 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 #endif
     write_queue_.emplace_back(std::move(header_buf), std::move(body_buf));
-    if (write_queue_.size() > 1) {
-      co_return;
+    if (is_delay) {
+      --delay_resp_cnt;
+      assert(delay_resp_cnt >= 0);
+      reset_timer();
     }
-    co_await send_data();
+    if (write_queue_.size() == 1) {
+      co_await send_data();
+    }
+    if (!is_delay) {
+      callback_awaitor_handler_.resume();
+    }
   }
 
   async_simple::coro::Lazy<void> send_data() {
@@ -391,7 +412,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   void reset_timer() {
-    if (!enable_check_timeout_) {
+    if (!enable_check_timeout_ || delay_resp_cnt != 0) {
       return;
     }
 
@@ -430,7 +451,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     asio::error_code ec;
     timer_.cancel(ec);
   }
-
+  asio_util::callback_awaitor_base<void, asio_util::callback_awaitor<void>>::
+      awaitor_handler callback_awaitor_handler_{nullptr};
   std::unique_ptr<async_simple::Executor> executor_;
   asio::ip::tcp::socket socket_;
   constexpr static size_t body_default_size_ = 256;
@@ -438,7 +460,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   // FIXME: queue's performance can be imporved.
   std::deque<std::pair<std::string, std::string>> write_queue_;
   std::errc resp_err_;
-  bool delay_ = false;
+  rpc_call_type rpc_call_type_ = non_callback;
 
   // if don't get any message in keep_alive_timeout_duration_, the connection
   // will be closed when enable_check_timeout_ is true.
@@ -449,6 +471,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   QuitCallback quit_callback_ = nullptr;
   uint64_t conn_id_ = 0;
+  uint64_t delay_resp_cnt = 0;
 
   std::any tag_;
 
