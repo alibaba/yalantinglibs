@@ -43,13 +43,25 @@ class ExecutorWrapper : public async_simple::Executor {
   using context_t = std::remove_cvref_t<decltype(executor_.context())>;
 
   virtual bool schedule(Func func) override {
-    asio::post(executor_, std::move(func));
+    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
+      executor_.post(std::move(func));
+    }
+    else {
+      asio::post(executor_, std::move(func));
+    }
+
     return true;
   }
 
   virtual bool checkin(Func func, void *ctx) override {
     using context_t = std::remove_cvref_t<decltype(executor_.context())>;
-    asio::post(*(context_t *)ctx, func);
+    auto &executor = *(context_t *)ctx;
+    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
+      executor.post(std::move(func));
+    }
+    else {
+      asio::post(executor, std::move(func));
+    }
     return true;
   }
   virtual void *checkout() override { return &executor_.context(); }
