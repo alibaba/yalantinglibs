@@ -116,6 +116,7 @@ struct coro_rpc_protocol {
     header_buf.resize(RESP_HEAD_LEN);
     auto& resp_head = *(resp_header*)header_buf.data();
     resp_head.magic = magic_number;
+    resp_head.seq_num = req_header.seq_num;
     resp_head.err_code = static_cast<uint8_t>(rpc_err_code);
     if (rpc_err_code != std::errc{})
       AS_UNLIKELY {

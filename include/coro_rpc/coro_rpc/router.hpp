@@ -31,8 +31,9 @@
 #include "util/function_name.h"
 
 namespace coro_rpc {
-class coro_connection;
-using rpc_conn = std::shared_ptr<coro_connection>;
+
+template <typename rpc_protocol>
+using rpc_context = std::shared_ptr<context_info_t<rpc_protocol>>;
 
 namespace protocol {
 template <typename T, auto func>
@@ -45,13 +46,12 @@ template <typename rpc_protocol,
 
 class router {
   using router_handler_t = std::function<std::optional<std::string>(
-      std::string_view, rpc_conn, typename rpc_protocol::req_header &req_head,
+      std::string_view, rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using coro_router_handler_t =
       std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-          std::string_view, rpc_conn,
-          typename rpc_protocol::req_header &req_head,
+          std::string_view, rpc_context<rpc_protocol> &context_info,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using route_key = typename rpc_protocol::route_key_t;
@@ -74,27 +74,25 @@ class router {
   template <auto Func, typename Self>
   struct execute_visitor {
     std::string_view data;
-    rpc_conn conn;
-    typename rpc_protocol::req_header &req_head;
+    rpc_context<rpc_protocol> &context_info;
     Self *self;
     template <typename serialize_protocol>
     async_simple::coro::Lazy<std::optional<std::string>> operator()(
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
-          data, std::move(conn), req_head, self);
+          data, context_info, self);
     }
   };
 
   template <auto Func>
   struct execute_visitor<Func, void> {
     std::string_view data;
-    rpc_conn conn;
-    typename rpc_protocol::req_header &req_head;
+    rpc_context<rpc_protocol> &context_info;
     template <typename serialize_protocol>
     async_simple::coro::Lazy<std::optional<std::string>> operator()(
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
-          data, std::move(conn), req_head);
+          data, context_info);
     }
   };
 
@@ -134,11 +132,9 @@ class router {
       auto it = coro_handlers_.emplace(
           key,
           [self](
-              std::string_view data, rpc_conn conn,
-              typename rpc_protocol::req_header &req_head,
+              std::string_view data, rpc_context<rpc_protocol> &context_info,
               typename rpc_protocol::supported_serialize_protocols protocols) {
-            execute_visitor<func, Self> visitor{data, std::move(conn), req_head,
-                                                self};
+            execute_visitor<func, Self> visitor{data, context_info, self};
             return std::visit(visitor, protocols);
           });
       if (!it.second) {
@@ -149,16 +145,13 @@ class router {
       auto it = handlers_.emplace(
           key,
           [self](
-              std::string_view data, rpc_conn conn,
-              typename rpc_protocol::req_header &req_head,
+              std::string_view data, rpc_context<rpc_protocol> &context_info,
               typename rpc_protocol::supported_serialize_protocols protocols) {
             return std::visit(
-                [data, conn = std::move(conn), self,
-                 &req_head]<typename serialize_protocol>(
+                [data, &context_info, self]<typename serialize_protocol>(
                     const serialize_protocol &obj) mutable {
                   return internal::execute<rpc_protocol, serialize_protocol,
-                                           func>(data, std::move(conn),
-                                                 req_head, self);
+                                           func>(data, context_info, self);
                 },
                 protocols);
           });
@@ -190,16 +183,13 @@ class router {
 
     constexpr auto name = get_func_name<func>();
     if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
-      auto it = coro_handlers_.emplace(key, [](std::string_view data,
-                                               rpc_conn conn,
-                                               typename rpc_protocol::req_header
-                                                   &req_head,
-                                               typename rpc_protocol::
-                                                   supported_serialize_protocols
-                                                       protocols) {
-        execute_visitor<func, void> visitor{data, std::move(conn), req_head};
-        return std::visit(visitor, protocols);
-      });
+      auto it = coro_handlers_.emplace(
+          key,
+          [](std::string_view data, rpc_context<rpc_protocol> &context_info,
+             typename rpc_protocol::supported_serialize_protocols protocols) {
+            execute_visitor<func, void> visitor{data, context_info};
+            return std::visit(visitor, protocols);
+          });
       if (!it.second) {
         ELOGV(CRITICAL, "duplication function %s register!", name.data());
       }
@@ -207,16 +197,13 @@ class router {
     else {
       auto it = handlers_.emplace(
           key,
-          [](std::string_view data, rpc_conn conn,
-             typename rpc_protocol::req_header &req_head,
+          [](std::string_view data, rpc_context<rpc_protocol> &context_info,
              typename rpc_protocol::supported_serialize_protocols protocols) {
             return std::visit(
-                [data, conn = std::move(conn),
-                 &req_head]<typename serialize_protocol>(
-                    const serialize_protocol &obj) {
+                [data, &context_info]<typename serialize_protocol>(
+                    const serialize_protocol &obj) mutable {
                   return internal::execute<rpc_protocol, serialize_protocol,
-                                           func>(data, std::move(conn),
-                                                 req_head);
+                                           func>(data, context_info);
                 },
                 protocols);
           });
@@ -243,8 +230,8 @@ class router {
   }
 
   async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
-      auto handler, std::string_view data, rpc_conn conn,
-      typename rpc_protocol::req_header &header,
+      auto handler, std::string_view data,
+      rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
@@ -256,7 +243,7 @@ class router {
 
 #endif
           // clang-format off
-      auto res = co_await (*handler)(data, std::move(conn), header, protocols);
+      auto res = co_await (*handler)(data, context_info, protocols);
           // clang-format on
           if (res.has_value())
             AS_LIKELY {
@@ -290,8 +277,8 @@ class router {
   }
 
   std::pair<std::errc, std::string> route(
-      auto handler, std::string_view data, rpc_conn conn,
-      typename rpc_protocol::req_header &header,
+      auto handler, std::string_view data,
+      rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
@@ -301,7 +288,7 @@ class router {
 #ifndef NDEBUG
           ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 #endif
-          auto res = (*handler)(data, std::move(conn), header, protocols);
+          auto res = (*handler)(data, context_info, protocols);
           if (res.has_value())
             AS_LIKELY {
               return std::make_pair(std::errc{}, std::move(res.value()));

@@ -95,7 +95,7 @@ struct CoroServerTester : ServerTester {
     this->test_call_with_delay_func_client_read_body_error<
         coro_fun_with_delay_return_void>();
     if (enable_heartbeat) {
-      this->test_call_with_delay_func_server_timeout_due_to_heartbeat<
+      this->test_call_with_delay_func_server_timeout<
           coro_fun_with_delay_return_void_cost_long_time>();
     }
     this->test_call_with_delay_func<coro_fun_with_delay_return_string>();
