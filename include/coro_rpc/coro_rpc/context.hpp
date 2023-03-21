@@ -29,10 +29,6 @@
 #include "util/type_traits.h"
 
 namespace coro_rpc {
-template <typename T, typename Conn>
-concept has_get_reserve_size = requires(Conn &&conn) {
-  T::get_reserve_size(conn);
-};
 /*!
  *
  * @tparam return_msg_type
@@ -41,10 +37,9 @@ concept has_get_reserve_size = requires(Conn &&conn) {
 template <typename return_msg_type, typename rpc_protocol>
 class context_base {
  protected:
-  std::shared_ptr<coro_connection> conn_;
-  std::unique_ptr<std::atomic<bool>> has_response_;
-  typename rpc_protocol::req_header req_head_;
-  bool is_delay = false;
+  std::shared_ptr<context_info_t<rpc_protocol>> self;
+
+  typename rpc_protocol::req_header &get_req_head() { return self->req_head_; }
 
  public:
   /*!
@@ -52,27 +47,15 @@ class context_base {
    * instance
    * @param a share pointer for coro_connection
    */
-  context_base(std::shared_ptr<coro_connection> &&conn,
-               typename rpc_protocol::req_header &&req_head)
-      : conn_(std::move(conn)),
-        has_response_(std::make_unique<std::atomic<bool>>(false)),
-        req_head_(std::move(req_head)) {
-    if (conn_) {
-      conn_->set_rpc_call_type(coro_connection::rpc_call_type::callback);
+  context_base(std::shared_ptr<context_info_t<rpc_protocol>> context_info)
+      : self(std::move(context_info)) {
+    if (self->conn_) {
+      self->conn_->set_rpc_call_type(coro_connection::rpc_call_type::callback);
     }
   };
-  context_base() = delete;
-  context_base(const context_base &conn) = delete;
+  context_base() = default;
+  context_base(const context_base &conn) = default;
   context_base(context_base &&conn) = default;
-  ~context_base() {
-    if (has_response_ && conn_ && !*has_response_)
-      AS_UNLIKELY {
-        ELOGV(ERROR,
-              "We must send reply to client by call response_msg method"
-              "before coro_rpc::context<T> destruction!");
-        conn_->async_close();
-      }
-  }
 
   using return_type = return_msg_type;
 
@@ -92,7 +75,7 @@ class context_base {
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
 
-      auto old_flag = has_response_->exchange(true);
+      auto old_flag = self->has_response_.exchange(true);
       if (old_flag != false) {
         ELOGV(ERROR, "response message more than one time");
         return;
@@ -105,10 +88,10 @@ class context_base {
         }
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
-            conn_->response_msg<rpc_protocol>(serialize_proto::serialize(),
-                                              req_head_, is_delay);
+            self->conn_->template response_msg<rpc_protocol>(
+                serialize_proto::serialize(), self->req_head_, self->is_delay);
           },
-          *rpc_protocol::get_serialize_protocol(req_head_));
+          *rpc_protocol::get_serialize_protocol(self->req_head_));
     }
     else {
       static_assert(
@@ -116,7 +99,7 @@ class context_base {
           "constructed return_msg_type failed by illegal args");
       return_msg_type ret{std::forward<Args>(args)...};
 
-      auto old_flag = has_response_->exchange(true);
+      auto old_flag = self->has_response_.exchange(true);
       if (old_flag != false) {
         ELOGV(ERROR, "response message more than one time");
         return;
@@ -128,24 +111,14 @@ class context_base {
           return;
         }
 
-      if constexpr (has_get_reserve_size<rpc_protocol, rpc_conn>) {
-        std::visit(
-            [&]<typename serialize_proto>(const serialize_proto &) {
-              conn_->response_msg<rpc_protocol>(
-                  serialize_proto::serialize(
-                      ret, rpc_protocol::get_reserve_size(conn_)),
-                  req_head_, is_delay);
-            },
-            *rpc_protocol::get_serialize_protocol(req_head_));
-      }
-      else {
-        std::visit(
-            [&]<typename serialize_proto>(const serialize_proto &) {
-              conn_->response_msg<rpc_protocol>(serialize_proto::serialize(ret),
-                                                req_head_, is_delay);
-            },
-            *rpc_protocol::get_serialize_protocol(req_head_));
-      }
+      std::visit(
+          [&]<typename serialize_proto>(const serialize_proto &) {
+            self->conn_->template response_msg<rpc_protocol>(
+                serialize_proto::serialize(ret), self->req_head_,
+                self->is_delay);
+          },
+          *rpc_protocol::get_serialize_protocol(self->req_head_));
+
       // response_handler_(std::move(conn_), std::move(ret));
     }
   }
@@ -155,20 +128,20 @@ class context_base {
    *
    * @return true if closed, otherwise false
    */
-  bool has_closed() const { return conn_->has_closed(); }
+  bool has_closed() const { return self->conn_->has_closed(); }
 
   void set_delay() {
-    is_delay = true;
-    conn_->set_rpc_call_type(
+    self->is_delay = true;
+    self->conn_->set_rpc_call_type(
         coro_connection::rpc_call_type::callback_with_delay);
   }
 
   template <typename T>
   void set_tag(T &&tag) {
-    conn_->set_tag(std::forward<T>(tag));
+    self->conn_->set_tag(std::forward<T>(tag));
   }
 
-  std::any get_tag() { return conn_->get_tag(); }
+  std::any get_tag() { return self->conn_->get_tag(); }
 };
 
 template <typename T>
