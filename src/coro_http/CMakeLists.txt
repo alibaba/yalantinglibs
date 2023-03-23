@@ -7,7 +7,7 @@ target_include_directories(coro_http INTERFACE
         $<INSTALL_INTERFACE:include/yalantinglibs>
         )
 
-target_link_libraries(coro_rpc INTERFACE
+target_link_libraries(coro_http INTERFACE
         Threads::Threads
         $<BUILD_INTERFACE:asio::asio>
         $<BUILD_INTERFACE:async_simple::async_simple_header_only>
