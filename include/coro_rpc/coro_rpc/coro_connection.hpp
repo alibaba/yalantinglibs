@@ -241,6 +241,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             this->callback_awaitor_handler_ = std::move(handler);
           });
           context_info->has_response_ = false;
+          rpc_call_type_ = rpc_call_type::non_callback;
           continue;
       }
       resp_error_msg.clear();
