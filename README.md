@@ -215,6 +215,13 @@ async_simple::coro::Lazy<void> download_files(coro_http_client &client) {
 A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
 See [async_simple](https://github.com/alibaba/async_simple)
 
+## compiler requirements
+
+make sure you have such compilers:
+- clang11 and libstdc++-8 above; 
+- or gcc10 and g++10 above; 
+- or msvc2019 above
+
 ## Quick Start
 
 - clone repo
@@ -231,14 +238,13 @@ mkdir build && cd build
 cmake .. 
 # You can use those option to skip build unit-test & benchmark & example: 
 # cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
-make -j
+make
 make install
 ```
 
 - run tests
 
 ```shell
-cd tests
 ctest .
 ```
 
@@ -250,7 +256,7 @@ ctest .
 cd yalantinglibs/src/coro_rpc/examples/helloworld
 mkdir build && cd build
 cmake ..
-make -j
+make
 # For more detail, see Cmakelist.txt in helloworld.
 ```
 
