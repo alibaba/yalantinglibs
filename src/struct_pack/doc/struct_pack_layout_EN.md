@@ -280,7 +280,7 @@ It is an empty type and encoded as zero length.
 
 # 4. Unknown fields(Optional)
 
-For backward/forward compatibility, new added fields are of type `struct_pack::compatible<T>`  be appended at the end of the object. If `compatible<T>` is present, the total data size **must** be stored in the meta information.
+For backward/forward compatibility, new fields of type `struct_pack::compatible<T>` will be appended at the end of the object. If `compatible<T>` is present, the total data size **must** be stored in the meta information.
 
 During deserialization, unknown `compatible<T>` fields are omitted and skipped. For `compatible<T>` fields not present, it is desensitized as empty value.
 

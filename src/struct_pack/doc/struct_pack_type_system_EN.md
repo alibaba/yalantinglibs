@@ -238,7 +238,7 @@ This refers to `struct_pack::compatible<T, version_number>`. This is a special d
 
 All new added fields in `struct_pack` must be of `compatible<T, version_number>` type, so that a new type with `compatible<T, version_number>` could be safely deserialized to the old version of the object.
 
-Meanwhile, data buffer of an old object, could be safely deserialized to a new version object with new `compatible<T, version_number>` fields defined.
+Meanwhile, the buffer of an old object, could be safely deserialized to a new version object with new `compatible<T, version_number>` fields defined.
 
 The default version_number is 0.
 
@@ -278,7 +278,7 @@ For compatibility, all modified fields between versions should follow the rules:
 1. Only add new fields and all new added fields must be of type `struct_pack::compatible<T,  version_number>`. The new compatible fields should have larger version number.
 2. Old fields must not be modified or deleted, even if it is type `struct_pack::compatible<T, version_number>`
 
-If compatibility is broken between versions, `struct_pack` will return an error_code safely. However, if you delete/modify the old `struct_pack::compatible<T, version_number>` fields, it will lead to undefined behaviors when serialize/deserialize between versions.
+If compatibility is broken between versions, in most cases, `struct_pack` will return an error_code safely. However, if you delete/modify the old `struct_pack::compatible<T, version_number>` fields, it will lead to undefined behaviors when serialize/deserialize between different versions.
 
 # Type information and type hash
 
