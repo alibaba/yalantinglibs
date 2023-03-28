@@ -40,6 +40,12 @@
 #define CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
 #endif
 
+#if defined STRUCT_PACK_OPTIMIZE
+#define STRUCT_PACK_MAY_INLINE STRUCT_PACK_INLINE
+#else
+#define STRUCT_PACK_MAY_INLINE inline
+#endif
+
 namespace struct_pack {
 
 template <typename T>
