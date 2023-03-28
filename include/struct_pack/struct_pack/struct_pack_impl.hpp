@@ -240,6 +240,11 @@ constexpr inline bool is_trivial_tuple = false;
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 
+template <typename T>
+[[noreturn]] constexpr T declval() {
+  unreachable();
+}
+
 template <typename U>
 constexpr auto get_types() {
   using T = std::remove_cvref_t<U>;
@@ -247,23 +252,24 @@ constexpr auto get_types() {
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
                 unique_ptr<T> || variant<T> || expected<T> || array<T> ||
                 c_array<T> || std::is_same_v<std::monostate, T>) {
-    return std::tuple<T>{};
+    return declval<std::tuple<T>>();
   }
   else if constexpr (tuple<T>) {
-    return T{};
+    return declval<T>();
   }
   else if constexpr (is_trivial_tuple<T>) {
-    return T{};
+    return declval<T>();
   }
   else if constexpr (pair<T>) {
-    return std::tuple<typename T::first_type, typename T::second_type>{};
+    return declval<
+        std::tuple<typename T::first_type, typename T::second_type>>();
   }
   else if constexpr (std::is_aggregate_v<T>) {
     // clang-format off
     return visit_members(
-        std::forward<U>(T{}), [&]<typename... Args>(Args &&
-                                                  ...) CONSTEXPR_INLINE_LAMBDA {
-          return std::tuple<std::remove_cvref_t<Args>...>{};
+        declval<T>(), []<typename... Args>(Args &&
+                                                  ...) constexpr {
+          return declval<std::tuple<std::remove_cvref_t<Args>...>>();
         });
     // clang-format on
   }
@@ -567,7 +573,7 @@ consteval type_id get_type_id() {
   else if constexpr (string<T>) {
     return type_id::string_t;
   }
-  else if constexpr (array<T> || c_array<T>) {
+  else if constexpr (array<T> || c_array<T> || static_span<T>) {
     return type_id::array_t;
   }
   else if constexpr (map_container<T>) {
@@ -695,6 +701,26 @@ consteval std::size_t check_circle() {
   }
 }
 
+template <typename T>
+struct get_array_element {
+  using type = typename T::value_type;
+};
+
+template <typename T, std::size_t sz>
+struct get_array_element<T[sz]> {
+  using type = T;
+};
+
+template <typename T>
+std::size_t consteval get_array_size() {
+  if constexpr (array<T> || c_array<T>) {
+    return sizeof(T) / sizeof(typename get_array_element<T>::type);
+  }
+  else {
+    return T::extent;
+  }
+}
+
 // This help function is just to improve unit test coverage. :)
 // The original lambada in `get_type_literal` is a compile-time expression.
 // Currently, the unit test coverage tools like
@@ -750,10 +776,8 @@ consteval decltype(auto) get_type_literal() {
       return ret + body + end;
     }
     else if constexpr (id == type_id::array_t) {
-      constexpr auto sz =
-          sizeof(Arg) /
-          sizeof(decltype(std::declval<
-                          Arg>()[0]));  // std::size(std::declval<Arg>());
+      constexpr auto sz = get_array_size<Arg>();
+      static_assert(sz > 0, "The array's size must greater than zero!");
       return ret +
              get_type_literal<
                  std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
@@ -910,7 +934,8 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     }
     else if constexpr (id == type_id::array_t) {
       return check_if_compatible_element_exist_impl_helper<
-          version, std::remove_cvref_t<decltype(T{}[0])>, T, ParentArgs...>();
+          version, std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          ParentArgs...>();
     }
     else if constexpr (id == type_id::map_container_t) {
       return check_if_compatible_element_exist_impl_helper<
@@ -978,7 +1003,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   using type = std::remove_cvref_t<decltype(item)>;
   static_assert(!std::is_pointer_v<type>);
   size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
-  if constexpr (std::is_same_v<type, std::monostate>) {
+  if constexpr (id == type_id::monostate_t) {
   }
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
     ret.total = sizeof(type);
@@ -986,7 +1011,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   else if constexpr (detail::varint_t<type>) {
     ret.total = detail::calculate_varint_size(item);
   }
-  else if constexpr (c_array<type> || array<type>) {
+  else if constexpr (id == type_id::array_t) {
     if constexpr (is_trivial_serializable<type>::value) {
       ret.total = sizeof(type);
     }
@@ -1141,7 +1166,8 @@ constexpr std::size_t calculate_compatible_version_size() {
     }
     else if constexpr (id == type_id::array_t) {
       return calculate_compatible_version_size<
-          std::remove_cvref_t<decltype(T{}[0])>, T, ParentArgs...>();
+          std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          ParentArgs...>();
     }
     else if constexpr (id == type_id::map_container_t) {
       return calculate_compatible_version_size<typename T::key_type, T,
@@ -1217,8 +1243,9 @@ constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
       }
     }
     else if constexpr (id == type_id::array_t) {
-      get_compatible_version_numbers<std::remove_cvref_t<decltype(T{}[0])>, T,
-                                     ParentArgs...>(buffer, sz);
+      get_compatible_version_numbers<
+          std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::map_container_t) {
       get_compatible_version_numbers<typename T::key_type, T, ParentArgs...>(
@@ -1495,7 +1522,7 @@ class packer {
       else if constexpr (detail::varint_t<type>) {
         detail::serialize_varint(writer_, item);
       }
-      else if constexpr (c_array<type> || array<type>) {
+      else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value) {
           writer_.write((char *)&item, sizeof(type));
         }
@@ -1612,7 +1639,7 @@ class packer {
           }
         }
       }
-      else if constexpr (c_array<type> || array<type>) {
+      else if constexpr (id == type_id::array_t) {
         for (const auto &i : item) {
           serialize_one<size_type, version>(i);
         }
@@ -2215,7 +2242,7 @@ class unpacker {
       else if constexpr (detail::varint_t<type>) {
         code = detail::deserialize_varint<NotSkip>(reader_, item);
       }
-      else if constexpr (array<type> || c_array<type>) {
+      else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value) {
           if constexpr (NotSkip) {
             if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
@@ -2308,11 +2335,11 @@ class unpacker {
           if constexpr (trivially_copyable_container<type>) {
             size_t mem_sz = size * sizeof(value_type);
             if constexpr (NotSkip) {
-              if constexpr (string_view<type>) {
+              if constexpr (string_view<type> || dynamic_span<type>) {
                 static_assert(
                     view_reader_t<Reader>,
                     "The Reader isn't a view_reader, can't deserialize "
-                    "a string_view");
+                    "a string_view/span");
                 const char *view = reader_.read_view(mem_sz);
                 if (view == nullptr) [[unlikely]] {
                   return struct_pack::errc::no_buffer_space;
@@ -2336,11 +2363,18 @@ class unpacker {
           }
           else {
             if constexpr (NotSkip) {
-              item.resize(size);
-              for (auto &i : item) {
-                code = deserialize_one<size_type, version, NotSkip>(i);
-                if (code != struct_pack::errc{}) [[unlikely]] {
-                  return code;
+              if constexpr (dynamic_span<type>) {
+                static_assert(!dynamic_span<type>,
+                              "It's illegal to deserialize a span<T> which T "
+                              "is a non-trival-serializable type.");
+              }
+              else {
+                item.resize(size);
+                for (auto &i : item) {
+                  code = deserialize_one<size_type, version, NotSkip>(i);
+                  if (code != struct_pack::errc{}) [[unlikely]] {
+                    return code;
+                  }
                 }
               }
             }
@@ -2457,7 +2491,7 @@ class unpacker {
           }
         }
       }
-      else if constexpr (array<type> || c_array<type>) {
+      else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
           code = deserialize_one<size_type, version, NotSkip>(i);
           if (code != struct_pack::errc{}) [[unlikely]] {
