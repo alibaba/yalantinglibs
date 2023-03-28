@@ -127,11 +127,14 @@ namespace detail {
     t=Type{(typename Type::value_type*)nullptr ,std::size_t{} };
     t.subspan(std::size_t{},std::size_t{});
   };
-  template <typename Type>
-  concept dynamic_span = span<Type> && std::is_same_v<std::integral_constant<std::size_t,Type::extent>,std::integral_constant<std::size_t,std::numeric_limits<std::size_t>::max()>>;
+
+
 
   template <typename Type>
-  concept static_span = span<Type> && !std::is_same_v<std::integral_constant<std::size_t,Type::extent>,std::integral_constant<std::size_t,std::numeric_limits<std::size_t>::max()>>;
+  concept dynamic_span = span<Type> && std::is_same_v<std::integral_constant<std::size_t,Type::extent>,std::integral_constant<std::size_t,SIZE_MAX>>;
+
+  template <typename Type>
+  concept static_span = span<Type> && !dynamic_span<Type>;
 
 
 #if __cpp_lib_span >= 202002L
