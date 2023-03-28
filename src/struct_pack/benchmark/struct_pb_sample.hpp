@@ -114,6 +114,7 @@ struct struct_pb_sample_t : public base_sample {
         buffer_.resize(sz);
         struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(),
                                           sample);
+        no_op(buffer_);
       }
     }
 
@@ -142,6 +143,7 @@ struct struct_pb_sample_t : public base_sample {
             vec[i], buffer_.data(), buffer_.size());
         assert(ok);
       }
+      no_op((char*)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
 
