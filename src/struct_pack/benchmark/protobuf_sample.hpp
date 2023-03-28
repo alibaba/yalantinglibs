@@ -17,6 +17,7 @@
 #include "ScopedTimer.hpp"
 #include "benchmark.pb.h"
 #include "config.hpp"
+#include "no_op.h"
 #include "sample.hpp"
 namespace protobuf_sample {
 auto create_rects(size_t object_count) {
@@ -180,6 +181,7 @@ struct protobuf_sample_t : public base_sample {
         for (int i = 0; i < ITERATIONS; ++i) {
           buffer_.clear();
           sample.SerializeToString(&buffer_);
+          no_op(buffer_);
         }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
@@ -206,6 +208,7 @@ struct protobuf_sample_t : public base_sample {
       for (int i = 0; i < ITERATIONS; ++i) {
         vec[i].ParseFromString(buffer_);
       }
+      no_op((char *)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

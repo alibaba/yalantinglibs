@@ -1711,9 +1711,9 @@ class packer {
 
 template <serialize_config conf = serialize_config{},
           struct_pack::writer_t Writer, typename... Args>
-STRUCT_PACK_INLINE void serialize_to(Writer &writer,
-                                     const serialize_buffer_size &info,
-                                     const Args &...args) {
+STRUCT_PACK_MAY_INLINE void serialize_to(Writer &writer,
+                                         const serialize_buffer_size &info,
+                                         const Args &...args) {
   static_assert(sizeof...(args) > 0);
   detail::packer<Writer, detail::get_args_type<Args...>> o(writer, info);
   switch ((info.metainfo() & 0b11000) >> 3) {
@@ -1792,6 +1792,163 @@ class unpacker {
 
   STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {}
 
+  template <typename T, typename... Args>
+  STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
+    using Type = get_args_type<T, Args...>;
+    constexpr bool has_compatible =
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
+    if constexpr (has_compatible) {
+      data_len_ = reader_.tellg();
+    }
+    auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
+    if (err_code != struct_pack::errc{}) [[unlikely]] {
+      return err_code;
+    }
+    if constexpr (has_compatible) {
+      data_len_ += buffer_len;
+    }
+    switch (size_type_) {
+      case 0:
+        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
+        break;
+#ifdef STRUCT_PACK_OPTIMIZE
+      case 1:
+        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        break;
+      case 2:
+        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
+        break;
+      case 3:
+        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
+        break;
+#else
+      case 1:
+      case 2:
+      case 3:
+        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        break;
+#endif
+      default:
+        unreachable();
+    }
+    if constexpr (has_compatible) {
+      if (err_code != errc::ok) [[unlikely]] {
+        return err_code;
+      }
+      constexpr std::size_t sz = compatible_version_number<Type>.size();
+      err_code = deserialize_compatibles<T, Args...>(
+          t, args..., std::make_index_sequence<sz>{});
+    }
+    return err_code;
+  }
+
+  template <typename T, typename... Args>
+  STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize_with_len(
+      std::size_t &len, T &t, Args &...args) {
+    using Type = get_args_type<T, Args...>;
+    constexpr bool has_compatible =
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
+    if constexpr (has_compatible) {
+      data_len_ = reader_.tellg();
+    }
+    auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
+    len = buffer_len;
+    if (err_code != struct_pack::errc{}) [[unlikely]] {
+      return err_code;
+    }
+    if constexpr (has_compatible) {
+      data_len_ += buffer_len;
+    }
+    switch (size_type_) {
+      case 0:
+        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
+        break;
+#ifdef STRUCT_PACK_OPTIMIZE
+      case 1:
+        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        break;
+      case 2:
+        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
+        break;
+      case 3:
+        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
+        break;
+#else
+      case 1:
+      case 2:
+      case 3:
+        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        break;
+#endif
+      default:
+        unreachable();
+    }
+    if constexpr (has_compatible) {
+      if (err_code != errc::ok) [[unlikely]] {
+        return err_code;
+      }
+      constexpr std::size_t sz = compatible_version_number<Type>.size();
+      err_code = deserialize_compatibles<T, Args...>(
+          t, args..., std::make_index_sequence<sz>{});
+    }
+    return err_code;
+  }
+
+  template <typename U, size_t I>
+  STRUCT_PACK_MAY_INLINE struct_pack::errc get_field(
+      std::tuple_element_t<I, decltype(get_types<U>())> &field) {
+    using T = std::remove_cvref_t<U>;
+    using Type = get_args_type<T>;
+
+    constexpr bool has_compatible =
+        check_if_compatible_element_exist<decltype(get_types<Type>())>();
+    if constexpr (has_compatible) {
+      data_len_ = reader_.tellg();
+    }
+
+    auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
+    if (err_code != struct_pack::errc{}) [[unlikely]] {
+      return err_code;
+    }
+    if constexpr (has_compatible) {
+      data_len_ += buffer_len;
+    }
+    switch (size_type_) {
+      case 0:
+        err_code = get_field_impl<1, UINT64_MAX, U, I>(field);
+        break;
+#ifdef STRUCT_PACK_OPTIMIZE
+      case 1:
+        err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
+        break;
+      case 2:
+        err_code = get_field_impl<4, UINT64_MAX, U, I>(field);
+        break;
+      case 3:
+        err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
+        break;
+#else
+      case 1:
+      case 2:
+      case 3:
+        err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
+        break;
+#endif
+      default:
+        unreachable();
+    }
+    if constexpr (has_compatible) {
+      if (err_code != errc::ok) [[unlikely]] {
+        return err_code;
+      }
+      constexpr std::size_t sz = compatible_version_number<Type>.size();
+      err_code = deserialize_compatible_fields<U, I>(
+          field, std::make_index_sequence<sz>{});
+    }
+    return err_code;
+  }
+
+ private:
   template <typename T, typename... Args, size_t... I>
   STRUCT_PACK_INLINE struct_pack::errc deserialize_compatibles(
       T &t, Args &...args, std::index_sequence<I...>) {
@@ -1923,163 +2080,6 @@ class unpacker {
     return err_code;
   }
 
-  template <typename T, typename... Args>
-  STRUCT_PACK_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
-    using Type = get_args_type<T, Args...>;
-    constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types<Type>())>();
-    if constexpr (has_compatible) {
-      data_len_ = reader_.tellg();
-    }
-    auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
-      return err_code;
-    }
-    if constexpr (has_compatible) {
-      data_len_ += buffer_len;
-    }
-    switch (size_type_) {
-      case 0:
-        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
-        break;
-#ifdef STRUCT_PACK_OPTIMIZE
-      case 1:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
-        break;
-      case 2:
-        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
-        break;
-      case 3:
-        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
-        break;
-#else
-      case 1:
-      case 2:
-      case 3:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
-        break;
-#endif
-      default:
-        unreachable();
-    }
-    if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
-        return err_code;
-      }
-      constexpr std::size_t sz = compatible_version_number<Type>.size();
-      err_code = deserialize_compatibles<T, Args...>(
-          t, args..., std::make_index_sequence<sz>{});
-    }
-    return err_code;
-  }
-
-  template <typename T, typename... Args>
-  STRUCT_PACK_INLINE struct_pack::errc deserialize_with_len(std::size_t &len,
-                                                            T &t,
-                                                            Args &...args) {
-    using Type = get_args_type<T, Args...>;
-    constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types<Type>())>();
-    if constexpr (has_compatible) {
-      data_len_ = reader_.tellg();
-    }
-    auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    len = buffer_len;
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
-      return err_code;
-    }
-    if constexpr (has_compatible) {
-      data_len_ += buffer_len;
-    }
-    switch (size_type_) {
-      case 0:
-        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
-        break;
-#ifdef STRUCT_PACK_OPTIMIZE
-      case 1:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
-        break;
-      case 2:
-        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
-        break;
-      case 3:
-        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
-        break;
-#else
-      case 1:
-      case 2:
-      case 3:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
-        break;
-#endif
-      default:
-        unreachable();
-    }
-    if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
-        return err_code;
-      }
-      constexpr std::size_t sz = compatible_version_number<Type>.size();
-      err_code = deserialize_compatibles<T, Args...>(
-          t, args..., std::make_index_sequence<sz>{});
-    }
-    return err_code;
-  }
-
-  template <typename U, size_t I>
-  STRUCT_PACK_INLINE struct_pack::errc get_field(
-      std::tuple_element_t<I, decltype(get_types<U>())> &field) {
-    using T = std::remove_cvref_t<U>;
-    using Type = get_args_type<T>;
-
-    constexpr bool has_compatible =
-        check_if_compatible_element_exist<decltype(get_types<Type>())>();
-    if constexpr (has_compatible) {
-      data_len_ = reader_.tellg();
-    }
-
-    auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
-      return err_code;
-    }
-    if constexpr (has_compatible) {
-      data_len_ += buffer_len;
-    }
-    switch (size_type_) {
-      case 0:
-        err_code = get_field_impl<1, UINT64_MAX, U, I>(field);
-        break;
-#ifdef STRUCT_PACK_OPTIMIZE
-      case 1:
-        err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
-        break;
-      case 2:
-        err_code = get_field_impl<4, UINT64_MAX, U, I>(field);
-        break;
-      case 3:
-        err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
-        break;
-#else
-      case 1:
-      case 2:
-      case 3:
-        err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
-        break;
-#endif
-      default:
-        unreachable();
-    }
-    if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
-        return err_code;
-      }
-      constexpr std::size_t sz = compatible_version_number<Type>.size();
-      err_code = deserialize_compatible_fields<U, I>(
-          field, std::make_index_sequence<sz>{});
-    }
-    return err_code;
-  }
-
   template <std::size_t size_type, uint64_t version, typename U, size_t I>
   STRUCT_PACK_INLINE struct_pack::errc get_field_impl(
       std::tuple_element_t<I, decltype(get_types<U>())> &field) {
@@ -2108,7 +2108,6 @@ class unpacker {
     return err_code;
   }
 
- private:
   template <size_t index, typename size_type, typename version,
             typename NotSkip>
   struct variant_construct_helper {

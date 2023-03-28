@@ -59,6 +59,7 @@ struct message_pack_sample : public base_sample {
         for (int i = 0; i < ITERATIONS; ++i) {
           buffer_.clear();
           msgpack::pack(buffer_, sample);
+          no_op(buffer_.data());
         }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
@@ -86,6 +87,7 @@ struct message_pack_sample : public base_sample {
         msgpack::unpack(vec[i], buffer_.data(), buffer_.size());
         vec[i].get().as<T>();
       }
+      no_op((char *)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

@@ -87,6 +87,7 @@ struct struct_pack_sample : public base_sample {
         for (int i = 0; i < ITERATIONS; ++i) {
           buffer_.clear();
           struct_pack::serialize_to(buffer_, sample);
+          no_op(buffer_);
         }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
@@ -113,6 +114,7 @@ struct struct_pack_sample : public base_sample {
       for (int i = 0; i < ITERATIONS; ++i) {
         [[maybe_unused]] auto ec = struct_pack::deserialize_to(vec[i], buffer_);
       }
+      no_op((char *)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }
