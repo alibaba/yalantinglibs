@@ -14,6 +14,6 @@ DisableFormat: true
 # Ignore json file
 Language: Json
 DisableFormat: true
-
+---
 Language: Proto
 DisableFormat: true
