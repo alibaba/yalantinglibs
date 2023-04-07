@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "config.hpp"
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
 #endif

@@ -1,4 +1,4 @@
-find_package(glog)
+find_package(glog QUIET)
 
 add_executable(easylog_benchmark
         main.cpp

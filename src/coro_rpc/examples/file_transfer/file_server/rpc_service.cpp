@@ -1,4 +1,4 @@
-#include "../rpc_service/rpc_service.h"
+#include "rpc_service/rpc_service.h"
 
 #include <filesystem>
 

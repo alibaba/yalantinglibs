@@ -4,8 +4,8 @@
 #include <system_error>
 #include <type_traits>
 
-#include "error_code.h"
-#include "reflection.h"
+#include "struct_pack/struct_pack/error_code.h"
+#include "struct_pack/struct_pack/reflection.h"
 namespace struct_pack {
 
 namespace detail {
