@@ -1,0 +1,9 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+cc_binary(
+    name = "serialize_example",
+    srcs = ["serialize/serialize.cpp"],
+    deps = [
+    "//:struct_pack"
+    ],
+    copts = ["-std=c++20"]
+)

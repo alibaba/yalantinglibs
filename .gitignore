@@ -52,3 +52,4 @@ node_modules
 
 # Bazel
 bazel-*
+!BUILD.bazel
