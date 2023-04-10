@@ -1,31 +1,38 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
 cc_binary(
     name = "struct_pack_benchmark",
     srcs = glob([
-    "generated_code/*.cc",
-    "generated_code/*.h"
-    ])
-    + [
-    "config.hpp",
-    "data_def.hpp",
-    "no_op.cpp",
-    "no_op.h",
-    "sample.hpp",
-    "ScopedTimer.hpp",
-    "struct_pack_sample.hpp"
-    ],
-    deps = [
-    "//:struct_pack",
-    "//:struct_pb",
+        "generated_code/*.cc",
+        "generated_code/*.h",
+    ]) + [
+        "ScopedTimer.hpp",
+        "benchmark.cpp",
+        "config.hpp",
+        "data_def.hpp",
+        "no_op.cpp",
+        "no_op.h",
+        "sample.hpp",
+        "struct_pack_sample.hpp",
     ],
     copts = ["-std=c++20"],
-    defines = ["STRUCT_PACK_OPTIMIZE"]
+    defines = ["STRUCT_PACK_OPTIMIZE"],
+    deps = [
+        "//:struct_pack",
+        "//:struct_pb",
+    ],
 )
+
 cc_library(
     name = "struct_pack_benchmark_config_header",
-    hdrs = ["config.hpp",
-    "struct_pb_sample.hpp",
-    "ScopedTimer.hpp", "no_op.h", "data_def.hpp", "sample.hpp"],
+    hdrs = [
+        "ScopedTimer.hpp",
+        "config.hpp",
+        "data_def.hpp",
+        "no_op.h",
+        "sample.hpp",
+        "struct_pb_sample.hpp",
+    ],
     includes = ["src/struct_pack/benchmark"],
-    visibility = ["//visibility:public"]
+    visibility = ["//visibility:public"],
 )
