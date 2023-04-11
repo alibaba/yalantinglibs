@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <iostream>
 
-#include "../rpc_service/rpc_service.h"
+#include "rpc_service/rpc_service.h"
 
 async_simple::coro::Lazy<void> test(coro_rpc::coro_rpc_client &client,
                                     auto filename) {

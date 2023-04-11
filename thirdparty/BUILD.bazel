@@ -1,0 +1,60 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+cc_library(
+    name = "doctest",
+    hdrs = ["doctest/doctest.h"],
+    includes = ["doctest"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "async_simple",
+    hdrs = glob([
+        "async_simple/async_simple/*.h",
+        "async_simple/async_simple/coro/*.h",
+        "async_simple/async_simple/executors/*.h",
+        "async_simple/async_simple/experimental/*.h",
+        "async_simple/async_simple/util/*.h",
+    ]),
+    includes = ["async_simple"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "asio",
+    hdrs = glob([
+        "asio/**/*.hpp",
+        "asio/**/*.ipp",
+    ]),
+    includes = ["asio"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "frozen",
+    hdrs = glob([
+        "frozen/**/*.h",
+    ]),
+    includes = ["frozen"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "iguana",
+    hdrs = glob([
+        "iguana/**/*.hpp",
+        "iguana/**/*.h",
+    ]),
+    includes = ["iguana"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "cinatra",
+    hdrs = glob([
+        "cinatra/**/*.hpp",
+        "cinatra/**/*.h",
+    ]),
+    includes = ["cinatra"],
+    visibility = ["//visibility:public"],
+)

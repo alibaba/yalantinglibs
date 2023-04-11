@@ -16,7 +16,7 @@
 #pragma once
 #include <string_view>
 
-#include "magic_names.hpp"
+#include "util/magic_names.hpp"
 namespace coro_rpc {
 template <auto func>
 constexpr std::string_view get_func_name() {

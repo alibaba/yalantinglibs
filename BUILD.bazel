@@ -1,0 +1,88 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+cc_library(
+    name = "struct_pack",
+    hdrs = glob([
+        "include/util/expected.hpp",
+        "include/struct_pack/struct_pack/*.hpp",
+        "include/struct_pack/struct_pack/*.h",
+    ]) + ["include/struct_pack/struct_pack.hpp"],
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "struct_pb",
+    hdrs = glob([
+        "include/struct_pb/struct_pb/*.hpp",
+    ]) + ["include/struct_pb/struct_pb.hpp"],
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "struct_json",
+    hdrs = glob([
+        "include/struct_json/*.h",
+    ]),
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//thirdparty:frozen",
+        "//thirdparty:iguana",
+    ],
+)
+
+cc_library(
+    name = "easylog",
+    hdrs = glob([
+        "include/easylog/*.hpp",
+        "include/easylog/*.h",
+    ]) + [
+        "include/util/dragonbox.h",
+        "include/util/dragonbox_to_chars.h",
+        "include/util/meta_string.hpp",
+        "include/util/type_traits.h",
+    ],
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "coro_rpc",
+    hdrs = glob([
+        "include/coro_rpc/**/*.hpp",
+        "include/asio_util/*.hpp",
+        "include/util/*.hpp",
+        "include/util/*.h",
+    ]),
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:easylog",
+        "//:struct_pack",
+        "//thirdparty:asio",
+        "//thirdparty:async_simple",
+    ],
+)
+
+cc_library(
+    name = "coro_http",
+    hdrs = glob([
+        "include/coro_http/*.h",
+        "include/asio_util/*.hpp",
+    ]),
+    include_prefix = "include",
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//thirdparty:asio",
+        "//thirdparty:async_simple",
+        "//thirdparty:cinatra",
+    ],
+)

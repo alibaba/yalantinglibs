@@ -27,8 +27,8 @@
 #if __has_include(<span>)
 #include <span>
 
-#include "meta_string.hpp"
-#include "string_finder.hpp"
+#include "util/meta_string.hpp"
+#include "util/string_finder.hpp"
 #endif
 
 #include <string_view>

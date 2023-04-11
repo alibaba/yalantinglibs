@@ -33,7 +33,7 @@ else ()
 endif ()
 
 # TODO
-find_package(Msgpack)
+find_package(Msgpack QUIET)
 if (Msgpack_FOUND)
     message(STATUS "Msgpack_FOUND: ${Msgpack_FOUND}")
     target_link_libraries(struct_pack_benchmark PRIVATE msgpackc-cxx)
