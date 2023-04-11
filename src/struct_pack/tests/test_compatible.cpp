@@ -874,6 +874,7 @@ struct compatible_with_trival_field_v0 {
   int a[4];
   char aa;
   double b[2];
+  char cc;
   friend bool operator==(const compatible_with_trival_field_v0&,
                          const compatible_with_trival_field_v0&) = default;
 };
@@ -881,6 +882,7 @@ struct compatible_with_trival_field_v1 {
   int a[4];
   char aa;
   double b[2];
+  char cc;
   struct_pack::compatible<std::string, 114514> c;
   friend bool operator==(const compatible_with_trival_field_v1&,
                          const compatible_with_trival_field_v1&) = default;
@@ -891,6 +893,7 @@ struct compatible_with_trival_field_v2 {
   int a[4];
   char aa;
   double b[2];
+  char cc;
   struct_pack::compatible<std::string, 114514> c;
   friend bool operator==(const compatible_with_trival_field_v2&,
                          const compatible_with_trival_field_v2&) = default;
@@ -902,6 +905,7 @@ struct compatible_with_trival_field_v3 {
   char aa;
   struct_pack::compatible<int, 114516> e;
   double b[2];
+  char cc;
   struct_pack::compatible<std::string, 114514> c;
   friend bool operator==(const compatible_with_trival_field_v3&,
                          const compatible_with_trival_field_v3&) = default;
@@ -917,11 +921,10 @@ struct nested_trival_v0 {
   T f;
   char g[10];
   int h[3];
+  char z;
   friend bool operator==(const nested_trival_v0<T>&,
                          const nested_trival_v0<T>&) = default;
 };
-
-
 
 auto i2 = struct_pack::detail::align::calculate_padding_size<
     nested_trival_v0<compatible_with_trival_field_v1>>();
@@ -937,6 +940,7 @@ struct nested_trival_v1 {
   char g[10];
   struct_pack::compatible<int, 114516> i;
   int h[3];
+  char z;
   friend bool operator==(const nested_trival_v1<T>&,
                          const nested_trival_v1<T>&) = default;
 };
@@ -953,6 +957,7 @@ struct nested_trival_v2 {
   char g[10];
   struct_pack::compatible<int, 114516> i;
   int h[3];
+  char z;
   friend bool operator==(const nested_trival_v2<T>&,
                          const nested_trival_v2<T>&) = default;
 };
@@ -969,14 +974,13 @@ struct nested_trival_v3 {
   char g[10];
   struct_pack::compatible<int, 114516> i;
   int h[3];
+  char z;
   struct_pack::compatible<std::string, 114516> k;
   friend bool operator==(const nested_trival_v3<T>&,
                          const nested_trival_v3<T>&) = default;
 };
 
-
-
-TEST_CASE("test compatible_with_version") {
+TEST_CASE("test trival_serialzable_obj_with_compatible") {
   nested_trival_v0<compatible_with_trival_field_v0> to = {
       .a = 113,
       .b = 123.322134213,
@@ -985,9 +989,11 @@ TEST_CASE("test compatible_with_version") {
       .e = INT64_MAX - 1,
       .f = {{123343, 7984321, 1987432, 1984327},
             'I',
-            {798214321.98743, 821304.084321}},
+            {798214321.98743, 821304.084321},
+            'Q'},
       .g = "HELLOHIHI",
-      .h = {14, 1023213, 1432143231}};
+      .h = {14, 1023213, 1432143231},
+      .z = 'G'};
   auto op = [&](auto from) {
     from = {.a = 113,
             .b = 123.322134213,
@@ -996,9 +1002,11 @@ TEST_CASE("test compatible_with_version") {
             .e = INT64_MAX - 1,
             .f = {.a = {123343, 7984321, 1987432, 1984327},
                   .aa = 'I',
-                  .b = {798214321.98743, 821304.084321}},
+                  .b = {798214321.98743, 821304.084321},
+                  .cc = 'Q'},
             .g = "HELLOHIHI",
-            .h = {14, 1023213, 1432143231}};
+            .h = {14, 1023213, 1432143231},
+            .z = 'G'};
     {
       auto buffer = struct_pack::serialize(from);
       auto result = struct_pack::deserialize<decltype(to)>(buffer);
@@ -1065,5 +1073,79 @@ TEST_CASE("test compatible_with_version") {
     SUBCASE("test innner v3") {
       op(nested_trival_v3<compatible_with_trival_field_v3>{});
     }
+  }
+}
+struct A_v1 {
+  double a;
+  struct B {
+    double a;
+    struct C {
+      double a;
+      struct D {
+        double a;
+        struct E {
+          double a;
+          char c;
+        } b;
+        char c;
+      } b;
+      char c;
+    } b;
+    char c;
+  } b;
+  char c;
+};
+
+struct A_v2 {
+  double a;
+  struct B {
+    double a;
+    struct C {
+      double a;
+      struct D {
+        double a;
+        struct E {
+          double a;
+          struct_pack::compatible<int> b;
+          char c;
+        } b;
+        char c;
+      } b;
+      char c;
+    } b;
+    char c;
+  } b;
+  char c;
+};
+
+TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
+  A_v1 a_v1 = {
+      .a = .123,
+      .b = {.a = 123.12,
+            .b = {.a = 123.324,
+                  .b = {.a = 213, .b = {.a = 123.53, .c = 'A'}, .c = 'B'},
+                  .c = 'C'},
+            .c = 'D'},
+      .c = 'E'};
+  A_v2 a_v2 = {
+      .a = .123,
+      .b = {.a = 123.12,
+            .b = {.a = 123.324,
+                  .b = {.a = 213,
+                        .b = {.a = 123.53, .b = std::nullopt, .c = 'A'},
+                        .c = 'B'},
+                  .c = 'C'},
+            .c = 'D'},
+      .c = 'E'};
+  {
+    auto buffer = struct_pack::serialize(a_v1);
+    auto result = struct_pack::deserialize<A_v2>(buffer);
+    CHECK(result.has_value());
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v2);
+    auto result = struct_pack::deserialize<A_v1>(buffer);
+    CHECK(result.has_value());
+    CHECK(memcmp(&result.value(), &a_v1, sizeof(A_v1)) == 0);
   }
 }

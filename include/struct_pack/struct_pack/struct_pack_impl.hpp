@@ -857,7 +857,7 @@ struct calculate_padding_size_impl {
       if constexpr (is_trivial_serializable<T>::value)
         offset += sizeof(T);
       else {
-        for_each<decltype(get_types<T>()), calculate_trival_obj_size>(offset);
+        for_each<T, calculate_trival_obj_size>(offset);
         static_assert(is_trivial_serializable<T, true>::value);
       }
     }
@@ -869,8 +869,7 @@ constexpr auto calculate_padding_size() {
   constexpr auto id = get_type_id<T>();
   std::array<std::size_t, struct_pack::members_count<T> + 1> padding_size{};
   std::size_t offset = 0;
-  for_each<decltype(get_types<T>()), calculate_padding_size_impl>(offset,
-                                                                  padding_size);
+  for_each<T, calculate_padding_size_impl>(offset, padding_size);
   if (offset % align::alignment_v<T>) {
     padding_size[struct_pack::members_count<T>] =
         align::alignment_v<T> - offset % align::alignment_v<T>;
@@ -899,7 +898,15 @@ struct calculate_trival_obj_size {
       total += total_padding_size<P>;
     }
     if constexpr (!is_compatible_v<T>) {
-      total += sizeof(T);
+      if constexpr (is_trivial_serializable<T>::value) {
+        total += sizeof(T);
+      }
+      else {
+        static_assert(is_trivial_serializable<T, true>::value);
+        std::size_t offset = 0;
+        for_each<T, calculate_trival_obj_size>(offset);
+        total += offset;
+      }
     }
   }
 };

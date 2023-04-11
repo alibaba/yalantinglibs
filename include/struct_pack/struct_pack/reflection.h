@@ -52,13 +52,17 @@
 namespace struct_pack {
 namespace detail {
 
-template <typename T, template <typename , typename , std::size_t > typename Op,
+template <typename U>
+constexpr auto get_types();
+
+template <typename T, template <typename, typename, std::size_t> typename Op,
           typename... Contexts>
 constexpr void for_each(Contexts &...contexts) {
+  using type = decltype(get_types<T>());
   [&]<std::size_t... I>(std::index_sequence<I...>) {
-    (Op<T, std::tuple_element_t<I, T>, I>{}(contexts...), ...);
+    (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), ...);
   }
-  (std::make_index_sequence<std::tuple_size_v<T>>());
+  (std::make_index_sequence<std::tuple_size_v<type>>());
 }
 
 template <typename T>
