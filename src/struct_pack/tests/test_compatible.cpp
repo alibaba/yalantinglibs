@@ -869,3 +869,201 @@ TEST_CASE("test compatible_with_version") {
     CHECK(result == obj_20230110_empty_1);
   }
 }
+
+struct compatible_with_trival_field_v0 {
+  int a[4];
+  char aa;
+  double b[2];
+  friend bool operator==(const compatible_with_trival_field_v0&,
+                         const compatible_with_trival_field_v0&) = default;
+};
+struct compatible_with_trival_field_v1 {
+  int a[4];
+  char aa;
+  double b[2];
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v1&,
+                         const compatible_with_trival_field_v1&) = default;
+};
+
+struct compatible_with_trival_field_v2 {
+  struct_pack::compatible<double, 114515> d;
+  int a[4];
+  char aa;
+  double b[2];
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v2&,
+                         const compatible_with_trival_field_v2&) = default;
+};
+
+struct compatible_with_trival_field_v3 {
+  struct_pack::compatible<double, 114515> d;
+  int a[4];
+  char aa;
+  struct_pack::compatible<int, 114516> e;
+  double b[2];
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v3&,
+                         const compatible_with_trival_field_v3&) = default;
+};
+
+template <typename T>
+struct nested_trival_v0 {
+  int a;
+  double b;
+  char c;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  int h[3];
+  friend bool operator==(const nested_trival_v0<T>&,
+                         const nested_trival_v0<T>&) = default;
+};
+
+
+
+auto i2 = struct_pack::detail::align::calculate_padding_size<
+    nested_trival_v0<compatible_with_trival_field_v1>>();
+
+template <typename T>
+struct nested_trival_v1 {
+  int a;
+  double b;
+  char c;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  friend bool operator==(const nested_trival_v1<T>&,
+                         const nested_trival_v1<T>&) = default;
+};
+
+template <typename T>
+struct nested_trival_v2 {
+  int a;
+  double b;
+  char c;
+  struct_pack::compatible<double, 114516> j;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  friend bool operator==(const nested_trival_v2<T>&,
+                         const nested_trival_v2<T>&) = default;
+};
+
+template <typename T>
+struct nested_trival_v3 {
+  int a;
+  double b;
+  char c;
+  struct_pack::compatible<double, 114516> j;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  struct_pack::compatible<std::string, 114516> k;
+  friend bool operator==(const nested_trival_v3<T>&,
+                         const nested_trival_v3<T>&) = default;
+};
+
+
+
+TEST_CASE("test compatible_with_version") {
+  nested_trival_v0<compatible_with_trival_field_v0> to = {
+      .a = 113,
+      .b = 123.322134213,
+      .c = 'H',
+      .d = 890432.1,
+      .e = INT64_MAX - 1,
+      .f = {{123343, 7984321, 1987432, 1984327},
+            'I',
+            {798214321.98743, 821304.084321}},
+      .g = "HELLOHIHI",
+      .h = {14, 1023213, 1432143231}};
+  auto op = [&](auto from) {
+    from = {.a = 113,
+            .b = 123.322134213,
+            .c = 'H',
+            .d = 890432.1,
+            .e = INT64_MAX - 1,
+            .f = {.a = {123343, 7984321, 1987432, 1984327},
+                  .aa = 'I',
+                  .b = {798214321.98743, 821304.084321}},
+            .g = "HELLOHIHI",
+            .h = {14, 1023213, 1432143231}};
+    {
+      auto buffer = struct_pack::serialize(from);
+      auto result = struct_pack::deserialize<decltype(to)>(buffer);
+      CHECK(result == to);
+    }
+    {
+      auto buffer = struct_pack::serialize(to);
+      auto result = struct_pack::deserialize<decltype(from)>(buffer);
+      CHECK(result == from);
+    }
+  };
+  SUBCASE("test outer v0") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v0<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v0<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v0<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v0<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v1") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v1<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v1<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v1<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v1<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v2") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v2<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v2<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v2<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v2<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v3") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v3<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v3<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v3<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v3<compatible_with_trival_field_v3>{});
+    }
+  }
+}

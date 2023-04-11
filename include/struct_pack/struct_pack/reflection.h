@@ -22,8 +22,11 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
+
+#include "struct_pack/struct_pack/struct_pack_impl.hpp"
 
 #if __has_include(<span>)
 #include <span>
@@ -47,11 +50,31 @@
 #endif
 
 namespace struct_pack {
+namespace detail {
+
+template <typename T, template <typename , typename , std::size_t > typename Op,
+          typename... Contexts>
+constexpr void for_each(Contexts &...contexts) {
+  [&]<std::size_t... I>(std::index_sequence<I...>) {
+    (Op<T, std::tuple_element_t<I, T>, I>{}(contexts...), ...);
+  }
+  (std::make_index_sequence<std::tuple_size_v<T>>());
+}
 
 template <typename T>
-constexpr std::size_t members_count = 0;
+consteval std::size_t members_count();
 template <typename T>
-constexpr std::size_t min_alignment = 0;
+consteval std::size_t pack_align();
+template <typename T>
+consteval std::size_t alignment();
+}  // namespace detail
+
+template <typename T>
+constexpr std::size_t members_count = detail::members_count<T>();
+template <typename T>
+constexpr std::size_t pack_alignment_v = 0;
+template <typename T>
+constexpr std::size_t alignment_v = 0;
 
 template <typename T>
 concept writer_t = requires(T t) {
@@ -302,32 +325,32 @@ namespace detail {
   };
 
   template <typename T, typename... Args>
-  consteval std::size_t member_count_impl() {
+  consteval std::size_t members_count_impl() {
     if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
-      return member_count_impl<T, Args..., UniversalVectorType>();
+      return members_count_impl<T, Args..., UniversalVectorType>();
     }
     else if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
-      return member_count_impl<T, Args..., UniversalType>();
+      return members_count_impl<T, Args..., UniversalType>();
     }
     else if constexpr (requires {
                          T{{Args{}}..., {UniversalOptionalType{}}};
                        } == true) {
-      return member_count_impl<T, Args..., UniversalOptionalType>();
+      return members_count_impl<T, Args..., UniversalOptionalType>();
     }
     else if constexpr (requires {
                          T{{Args{}}..., {UniversalIntegralType{}}};
                        } == true) {
-      return member_count_impl<T, Args..., UniversalIntegralType>();
+      return members_count_impl<T, Args..., UniversalIntegralType>();
     }
     else if constexpr (requires {
                          T{{Args{}}..., {UniversalNullptrType{}}};
                        } == true) {
-      return member_count_impl<T, Args..., UniversalNullptrType>();
+      return members_count_impl<T, Args..., UniversalNullptrType>();
     }
     else if constexpr (requires {
                          T{{Args{}}..., {UniversalCompatibleType{}}};
                        } == true) {
-      return member_count_impl<T, Args..., UniversalCompatibleType>();
+      return members_count_impl<T, Args..., UniversalCompatibleType>();
     }
     else {
       return sizeof...(Args);
@@ -335,35 +358,13 @@ namespace detail {
   }
 
   template <typename T>
-  consteval std::size_t member_count() {
-    if constexpr (struct_pack::members_count < T >> 0) {
-      return struct_pack::members_count<T>;
-    }
-    else if constexpr (tuple_size<T>) {
+  consteval std::size_t members_count() {
+    if constexpr (tuple_size<T>) {
       return std::tuple_size<T>::value;
     }
     else {
-      return member_count_impl<T>();
+      return members_count_impl<T>();
     }
-  }
-  // add extension like `members_count`
-  template <typename T>
-  consteval std::size_t min_align() {
-    if constexpr (struct_pack::min_alignment < T >> 0) {
-      return struct_pack::min_alignment<T>;
-    }
-    else {
-      // don't use \0 as 0
-      // due to \0 is a special flag for struct_pack
-      // '0' ascii code is 48
-      return '0';
-    }
-  }
-  // similar to `min_align`
-  template <typename T>
-  consteval std::size_t max_align() {
-    static_assert(std::alignment_of_v<T> > 0);
-    return std::alignment_of_v<T>;
   }
 
   constexpr static auto MaxVisitMembers = 64;
@@ -371,7 +372,7 @@ namespace detail {
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(auto &&object,
                                                             auto &&visitor) {
     using type = std::remove_cvref_t<decltype(object)>;
-    constexpr auto Count = member_count<type>();
+    constexpr auto Count = struct_pack::members_count<type>;
     if constexpr (Count == 0 && std::is_class_v<type> &&
                   !std::is_same_v<type, std::monostate>) {
       static_assert(!sizeof(type), "empty struct/class is not allowed!");
