@@ -828,7 +828,9 @@ consteval std::size_t alignment_impl() {
     if constexpr (is_trivial_serializable<T>::value) {
       return default_alignment_v<T>;
     }
-    return pack_alignment_v<T>;
+    else {
+      return pack_alignment_v<T>;
+    }
   }
 }
 
