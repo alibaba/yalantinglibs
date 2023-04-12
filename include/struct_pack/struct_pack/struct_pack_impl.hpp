@@ -278,19 +278,23 @@ constexpr auto get_types() {
   }
 }
 
-template <typename T>
+template <typename T, bool ignore_compatible_field = false>
 struct is_trivial_serializable {
  private:
   static constexpr bool solve() {
+    if constexpr (is_compatible_v<T> && ignore_compatible_field) {
+      return true;
+    }
     if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
       return true;
     }
     else if constexpr (array<T>) {
-      return is_trivial_serializable<typename T::value_type>::value;
+      return is_trivial_serializable<typename T::value_type,
+                                     ignore_compatible_field>::value;
     }
     else if constexpr (c_array<T>) {
-      return is_trivial_serializable<
-          typename std::remove_all_extents<T>::type>::value;
+      return is_trivial_serializable<typename std::remove_all_extents<T>::type,
+                                     ignore_compatible_field>::value;
     }
     else if constexpr (!pair<T> && tuple<T> && !is_trivial_tuple<T>) {
       return false;
@@ -301,13 +305,16 @@ struct is_trivial_serializable {
       return false;
     }
     else if constexpr (pair<T>) {
-      return is_trivial_serializable<typename T::first_type>::value &&
-             is_trivial_serializable<typename T::second_type>::value;
+      return is_trivial_serializable<typename T::first_type,
+                                     ignore_compatible_field>::value &&
+             is_trivial_serializable<typename T::second_type,
+                                     ignore_compatible_field>::value;
     }
     else if constexpr (is_trivial_tuple<T>) {
       return []<std::size_t... I>(std::index_sequence<I...>)
           CONSTEXPR_INLINE_LAMBDA {
-        return (is_trivial_serializable<std::tuple_element_t<I, T>>::value &&
+        return (is_trivial_serializable<std::tuple_element_t<I, T>,
+                                        ignore_compatible_field>::value &&
                 ...);
       }
       (std::make_index_sequence<std::tuple_size_v<T>>{});
@@ -316,7 +323,8 @@ struct is_trivial_serializable {
       using T_ = decltype(get_types<T>());
       return []<std::size_t... I>(std::index_sequence<I...>)
           CONSTEXPR_INLINE_LAMBDA {
-        return (is_trivial_serializable<std::tuple_element_t<I, T_>>::value &&
+        return (is_trivial_serializable<std::tuple_element_t<I, T_>,
+                                        ignore_compatible_field>::value &&
                 ...);
       }
       (std::make_index_sequence<std::tuple_size_v<T_>>{});
@@ -721,6 +729,191 @@ std::size_t consteval get_array_size() {
   }
 }
 
+struct size_info {
+  std::size_t total;
+  std::size_t size_cnt;
+  std::size_t max_size;
+  constexpr size_info &operator+=(const size_info &other) {
+    this->total += other.total;
+    this->size_cnt += other.size_cnt;
+    this->max_size = (std::max)(this->max_size, other.max_size);
+    return *this;
+  }
+  constexpr size_info operator+(const size_info &other) {
+    return {this->total + other.total, this->size_cnt += other.size_cnt,
+            (std::max)(this->max_size, other.max_size)};
+  }
+};
+template <typename T>
+constexpr size_info inline calculate_one_size(const T &item);
+
+namespace align {
+
+template <typename T>
+consteval std::size_t alignment_impl();
+
+template <typename T>
+constexpr std::size_t alignment_v = alignment_impl<T>();
+
+template <typename T>
+consteval std::size_t default_alignment() {
+  using type = decltype(get_types<T>());
+  if constexpr (!is_trivial_serializable<T>::value) {
+    return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+      return (std::max)(
+          {(is_compatible_v<std::remove_cvref_t<std::tuple_element_t<I, type>>>
+                ? std::size_t{0}
+                : align::alignment_v<
+                      std::remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+    }
+    (std::make_index_sequence<std::tuple_size_v<type>>());
+  }
+  else {
+    return std::alignment_of_v<T>;
+  }
+}
+template <typename T>
+constexpr std::size_t default_alignment_v = default_alignment<T>();
+
+template <typename T>
+consteval std::size_t alignment_impl();
+
+template <typename T>
+consteval std::size_t pack_alignment_impl() {
+  static_assert(std::is_class_v<T>);
+  constexpr auto ret = struct_pack::pack_alignment_v<T>;
+  static_assert(ret == 0 || ret == 1 || ret == 2 || ret == 4 || ret == 8 ||
+                ret == 16);
+  if constexpr (ret == 0) {
+    using type = decltype(get_types<T>());
+    return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+      return (std::max)(
+          {(is_compatible_v<std::remove_cvref_t<std::tuple_element_t<I, type>>>
+                ? std::size_t{0}
+                : align::alignment_v<
+                      std::remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+    }
+    (std::make_index_sequence<std::tuple_size_v<type>>());
+  }
+  else {
+    return ret;
+  }
+}
+
+template <typename T>
+constexpr std::size_t pack_alignment_v = pack_alignment_impl<T>();
+
+template <typename T>
+consteval std::size_t alignment_impl() {
+  if constexpr (struct_pack::alignment_v<T> == 0 &&
+                struct_pack::pack_alignment_v<T> == 0) {
+    return default_alignment_v<T>;
+  }
+  else if constexpr (struct_pack::alignment_v<T> != 0) {
+    if constexpr (is_trivial_serializable<T>::value) {
+      static_assert(default_alignment_v<T> == alignment_v<T>);
+    }
+    constexpr auto ret = struct_pack::alignment_v<T>;
+    static_assert(
+        [](std::size_t align) constexpr {
+          while (align % 2 == 0) {
+            align /= 2;
+          }
+          return align == 1;
+        }(ret),
+        "alignment should be power of 2");
+    return ret;
+  }
+  else {
+    if constexpr (is_trivial_serializable<T>::value) {
+      return default_alignment_v<T>;
+    }
+    else {
+      return pack_alignment_v<T>;
+    }
+  }
+}
+
+template <typename P, typename T, std::size_t I>
+struct calculate_trival_obj_size;
+
+template <typename P, typename T, std::size_t I>
+struct calculate_padding_size_impl {
+  constexpr void operator()(
+      std::size_t &offset,
+      std::array<std::size_t, struct_pack::members_count<P> + 1>
+          &padding_size) {
+    if constexpr (is_compatible_v<T>) {
+      padding_size[I] = 0;
+    }
+    else {
+      if (offset % align::alignment_v<T>) {
+        padding_size[I] =
+            (std::min)(align::pack_alignment_v<P> - 1,
+                       align::alignment_v<T> - offset % align::alignment_v<T>);
+      }
+      else {
+        padding_size[I] = 0;
+      }
+      offset += padding_size[I];
+      if constexpr (is_trivial_serializable<T>::value)
+        offset += sizeof(T);
+      else {
+        for_each<T, calculate_trival_obj_size>(offset);
+        static_assert(is_trivial_serializable<T, true>::value);
+      }
+    }
+  }
+};
+
+template <typename T>
+constexpr auto calculate_padding_size() {
+  constexpr auto id = get_type_id<T>();
+  std::array<std::size_t, struct_pack::members_count<T> + 1> padding_size{};
+  std::size_t offset = 0;
+  for_each<T, calculate_padding_size_impl>(offset, padding_size);
+  if (offset % align::alignment_v<T>) {
+    padding_size[struct_pack::members_count<T>] =
+        align::alignment_v<T> - offset % align::alignment_v<T>;
+  }
+  else {
+    padding_size[struct_pack::members_count<T>] = 0;
+  }
+  return padding_size;
+}
+template <typename T>
+constexpr std::array<std::size_t, struct_pack::members_count<T> + 1>
+    padding_size = calculate_padding_size<T>();
+template <typename T>
+constexpr std::size_t total_padding_size = []() CONSTEXPR_INLINE_LAMBDA {
+  std::size_t sum = 0;
+  for (auto &e : padding_size<T>) {
+    sum += e;
+  }
+  return sum;
+}();
+
+template <typename P, typename T, std::size_t I>
+struct calculate_trival_obj_size {
+  constexpr void operator()(std::size_t &total) {
+    if constexpr (I == 0) {
+      total += total_padding_size<P>;
+    }
+    if constexpr (!is_compatible_v<T>) {
+      if constexpr (is_trivial_serializable<T>::value) {
+        total += sizeof(T);
+      }
+      else {
+        static_assert(is_trivial_serializable<T, true>::value);
+        std::size_t offset = 0;
+        for_each<T, calculate_trival_obj_size>(offset);
+        total += offset;
+      }
+    }
+  }
+};
+}  // namespace align
+
 // This help function is just to improve unit test coverage. :)
 // The original lambada in `get_type_literal` is a compile-time expression.
 // Currently, the unit test coverage tools like
@@ -748,16 +941,14 @@ consteval decltype(auto) get_type_literal() {
       using Args = decltype(get_types<Arg>());
       constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
           std::make_index_sequence<std::tuple_size_v<Args>>());
-      if constexpr (is_trivial_serializable<Arg>::value) {
-        static_assert(
-            min_align<Arg>() == '0' || min_align<Arg>() <= max_align<Arg>(),
-            "#pragma pack may decrease the alignment of a class, however, "
-            "it cannot make a class over aligned.");
-        constexpr auto end = string_literal<char, 3>{
-            {static_cast<char>(min_align<Arg>()),
-             static_cast<char>(max_align<Arg>()),
-             static_cast<char>(type_id::type_end_flag)}};
-        return ret + body + end;
+      if constexpr (is_trivial_serializable<Arg, true>::value) {
+        static_assert(align::pack_alignment_v<Arg> <= align::alignment_v<Arg>,
+                      "If you add #pragma_pack to a struct, please specify the "
+                      "struct_pack::pack_alignment_v<T>.");
+        constexpr auto end = string_literal<char, 1>{
+            {static_cast<char>(type_id::type_end_flag)}};
+        return ret + body + get_size_literal<align::pack_alignment_v<Arg>>() +
+               get_size_literal<align::alignment_v<Arg>>() + end;
       }
       else {
         constexpr auto end = string_literal<char, 1>{
@@ -848,23 +1039,21 @@ consteval decltype(auto) get_types_literal_impl() {
 template <typename T, typename... Args>
 consteval decltype(auto) get_types_literal() {
   constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
+  constexpr auto end =
+      string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
   if constexpr (root_id == type_id::non_trivial_class_t ||
                 root_id == type_id::trivial_class_t) {
     constexpr auto begin =
         string_literal<char, 1>{{static_cast<char>(root_id)}};
     constexpr auto body = get_types_literal_impl<T, Args...>();
-    if constexpr (is_trivial_serializable<T>::value) {
-      static_assert(min_align<T>() == '0' || min_align<T>() <= max_align<T>(),
-                    "#pragma pack may decrease the alignment of a class, "
-                    "however, it cannot make a class over aligned.");
-      constexpr auto end = string_literal<char, 3>{
-          {static_cast<char>(min_align<T>()), static_cast<char>(max_align<T>()),
-           static_cast<char>(type_id::type_end_flag)}};
-      return begin + body + end;
+    if constexpr (is_trivial_serializable<T, true>::value) {
+      static_assert(align::pack_alignment_v<T> <= align::alignment_v<T>,
+                    "If you add #pragma_pack to a struct, please specify the "
+                    "struct_pack::pack_alignment_v<T>.");
+      return begin + body + get_size_literal<align::pack_alignment_v<T>>() +
+             get_size_literal<align::alignment_v<T>>() + end;
     }
     else {
-      constexpr auto end =
-          string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
       return begin + body + end;
     }
   }
@@ -976,22 +1165,6 @@ consteval uint32_t get_types_code(std::index_sequence<I...>) {
   return get_types_code_impl<T, std::tuple_element_t<I, Tuple>...>();
 }
 
-struct size_info {
-  std::size_t total;
-  std::size_t size_cnt;
-  std::size_t max_size;
-  constexpr size_info &operator+=(const size_info &other) {
-    this->total += other.total;
-    this->size_cnt += other.size_cnt;
-    this->max_size = (std::max)(this->max_size, other.max_size);
-    return *this;
-  }
-  constexpr size_info operator+(const size_info &other) {
-    return {this->total + other.total, this->size_cnt += other.size_cnt,
-            (std::max)(this->max_size, other.max_size)};
-  }
-};
-
 template <typename T, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const T &item, const Args &...items);
@@ -1073,6 +1246,12 @@ constexpr size_info inline calculate_one_size(const T &item) {
       static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
     if constexpr (is_trivial_serializable<type>::value) {
       ret.total = sizeof(type);
+    }
+    else if constexpr (is_trivial_serializable<type, true>::value) {
+      visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+        ret += calculate_payload_size(items...);
+        ret.total += align::total_padding_size<type>;
+      });
     }
     else {
       visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -1503,6 +1682,12 @@ class packer {
       serialize_many<size_type, version>(items...);
     }
   }
+  constexpr void STRUCT_PACK_INLINE write_padding(std::size_t sz) {
+    if (sz > 0) {
+      constexpr char buf = 0;
+      for (std::size_t i = 0; i < sz; ++i) writer_.write(&buf, 1);
+    }
+  }
 
   template <std::size_t size_type, uint64_t version>
   constexpr void inline serialize_one(const auto &item) {
@@ -1618,6 +1803,17 @@ class packer {
           static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
         if constexpr (is_trivial_serializable<type>::value) {
           writer_.write((char *)&item, sizeof(type));
+        }
+        else if constexpr (is_trivial_serializable<type, true>::value) {
+          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+            int i = 1;
+            (
+                [&]() {
+                  serialize_one<size_type, version>(items);
+                  write_padding(align::padding_size<type>[i++]);
+                }(),
+                ...);
+          });
         }
         else {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -2215,6 +2411,16 @@ class unpacker {
     return deserialize_many<size_type, version, NotSkip>(items...);
   }
 
+  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  ignore_padding(std::size_t sz) {
+    if (sz > 0) {
+      return reader_.ignore(sz) ? errc{} : errc::no_buffer_space;
+    }
+    else {
+      return errc{};
+    }
+  }
+
   template <size_t size_type, uint64_t version, bool NotSkip>
   constexpr struct_pack::errc inline deserialize_one(auto &item) {
     struct_pack::errc code{};
@@ -2455,6 +2661,23 @@ class unpacker {
             return reader_.ignore(sizeof(type)) ? errc{}
                                                 : errc::no_buffer_space;
           }
+        }
+        else if constexpr (is_trivial_serializable<type, true>::value) {
+          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+            int i = 1;
+            [[maybe_unused]] bool op =
+                ((
+                     [&]() {
+                       if (code = deserialize_one<size_type, version, NotSkip>(
+                               items);
+                           code == errc::ok) [[likely]] {
+                         code = ignore_padding(align::padding_size<type>[i]);
+                         ++i;
+                       }
+                     }(),
+                     code == errc::ok) &&
+                 ...);
+          });
         }
         else {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {

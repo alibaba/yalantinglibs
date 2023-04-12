@@ -207,7 +207,7 @@ TEST_CASE("testing std::array") {
 TEST_CASE("test_trivial_copy_tuple") {
   tuplet::tuple tp = tuplet::make_tuple(1, 2);
 
-  constexpr auto count = detail::member_count<decltype(tp)>();
+  constexpr auto count = detail::members_count<decltype(tp)>();
   static_assert(count == 2);
 
   static_assert(std::is_same_v<decltype(tp), tuplet::tuple<int, int>>);
