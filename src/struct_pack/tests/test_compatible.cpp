@@ -1117,7 +1117,13 @@ struct A_v2 {
   } b;
   char c;
 };
-
+bool test_equal(const auto& v1, const auto& v2) {
+  return v1.a == v2.a && v1.c == v2.c &&
+         (v1.b.a == v2.b.a && v1.b.c == v2.b.c &&
+          (v1.b.b.a == v2.b.b.a && v1.b.b.c == v2.b.b.c &&
+           (v1.b.b.b.a == v2.b.b.b.a && v1.b.b.b.c == v2.b.b.b.c &&
+            (v1.b.b.b.b.a == v2.b.b.b.b.a && v1.b.b.b.b.c == v2.b.b.b.b.c))));
+}
 TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
   A_v1 a_v1 = {
       .a = .123,
@@ -1141,11 +1147,13 @@ TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
     auto buffer = struct_pack::serialize(a_v1);
     auto result = struct_pack::deserialize<A_v2>(buffer);
     CHECK(result.has_value());
+    CHECK(test_equal(result.value(),a_v2));
+    CHECK(result->b.b.b.b.b == std::nullopt);
   }
   {
     auto buffer = struct_pack::serialize(a_v2);
     auto result = struct_pack::deserialize<A_v1>(buffer);
     CHECK(result.has_value());
-    CHECK(memcmp(&result.value(), &a_v1, sizeof(A_v1)) == 0);
+    CHECK(test_equal(result.value(), a_v1));
   }
 }
