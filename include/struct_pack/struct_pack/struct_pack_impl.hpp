@@ -850,7 +850,7 @@ struct calculate_padding_size_impl {
       if (offset % align::alignment_v<T>) {
         padding_size[I] =
             (std::min)(align::pack_alignment_v<P> - 1,
-                     align::alignment_v<T> - offset % align::alignment_v<T>);
+                       align::alignment_v<T> - offset % align::alignment_v<T>);
       }
       else {
         padding_size[I] = 0;
