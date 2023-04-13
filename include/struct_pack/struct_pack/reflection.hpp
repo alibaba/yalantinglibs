@@ -30,22 +30,8 @@
 #include <span>
 #endif
 
-#if defined __clang__
-#define STRUCT_PACK_INLINE __attribute__((always_inline)) inline
-#define CONSTEXPR_INLINE_LAMBDA __attribute__((always_inline)) constexpr
-#elif defined _MSC_VER
-#define STRUCT_PACK_INLINE __forceinline
-#define CONSTEXPR_INLINE_LAMBDA constexpr
-#else
-#define STRUCT_PACK_INLINE __attribute__((always_inline)) inline
-#define CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
-#endif
-
-#if defined STRUCT_PACK_OPTIMIZE
-#define STRUCT_PACK_MAY_INLINE STRUCT_PACK_INLINE
-#else
-#define STRUCT_PACK_MAY_INLINE inline
-#endif
+#include "marco.h"
+#include "trivial_view.hpp"
 
 namespace struct_pack {
 namespace detail {
@@ -274,6 +260,15 @@ namespace detail {
     optional.operator*();
     typename std::remove_cvref_t<Type>::value_type;
   };
+
+  template <typename Type>
+  constexpr inline bool is_trivial_view_v = false;
+
+  template <typename Type>
+  constexpr inline bool is_trivial_view_v<trivial_view<Type>> = true;
+
+  template <typename Type>
+  concept trivial_view=is_trivial_view_v<Type>;
 
 
   template <typename Type>

@@ -36,15 +36,17 @@
 #include <vector>
 
 #include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/error_code.h"
+#include "struct_pack/struct_pack/error_code.hpp"
 #include "struct_pack/struct_pack/md5_constexpr.hpp"
+#include "struct_pack/struct_pack/reflection.hpp"
+#include "struct_pack/struct_pack/trivial_view.hpp"
 #include "struct_pack/struct_pack/tuple.hpp"
 #include "struct_pack/struct_pack/varint.hpp"
 
 static_assert(std::endian::native == std::endian::little,
               "only support little endian now");
 
-#include "reflection.h"
+#include "reflection.hpp"
 
 namespace struct_pack {
 
@@ -868,7 +870,6 @@ struct calculate_padding_size_impl {
 
 template <typename T>
 constexpr auto calculate_padding_size() {
-  constexpr auto id = get_type_id<T>();
   std::array<std::size_t, struct_pack::members_count<T> + 1> padding_size{};
   std::size_t offset = 0;
   for_each<T, calculate_padding_size_impl>(offset, padding_size);
@@ -1013,6 +1014,11 @@ consteval decltype(auto) get_type_literal() {
   }
 }
 
+template <trivial_view Arg, typename... ParentArgs>
+consteval decltype(auto) get_type_literal() {
+  return get_type_literal<typename Arg::value_type, ParentArgs...>();
+}
+
 template <typename Args, typename... ParentArgs, std::size_t... I>
 consteval decltype(auto) get_type_literal(std::index_sequence<I...>) {
   return ((get_type_literal<std::remove_cvref_t<std::tuple_element_t<I, Args>>,
@@ -1060,6 +1066,11 @@ consteval decltype(auto) get_types_literal() {
   else {
     return get_types_literal_impl<void, Args...>();
   }
+}
+
+template <trivial_view T, typename... Args>
+consteval decltype(auto) get_types_literal() {
+  return get_types_literal<T::value_type, Args...>();
 }
 
 template <typename T, typename Tuple, std::size_t... I>
@@ -1152,6 +1163,12 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
       return false;
     }
   }
+}
+
+template <uint64_t version, trivial_view Arg, typename... ParentArgs>
+constexpr bool check_if_compatible_element_exist_impl_helper() {
+  return check_if_compatible_element_exist_impl_helper<version, Arg,
+                                                       ParentArgs...>();
 }
 
 template <typename T, typename... Args>
@@ -1265,6 +1282,11 @@ constexpr size_info inline calculate_one_size(const T &item) {
   return ret;
 }
 
+template <trivial_view T>
+constexpr size_info inline calculate_one_size(const T &item) {
+  return calculate_one_size(item.get());
+}
+
 template <typename T, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const T &item, const Args &...items) {
@@ -1373,6 +1395,11 @@ constexpr std::size_t calculate_compatible_version_size() {
   return sz;
 }
 
+template <trivial_view Arg, typename... ParentArgs>
+constexpr std::size_t calculate_compatible_version_size() {
+  return 0;
+}
+
 template <typename Args, typename... ParentArgs>
 constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz);
 
@@ -1449,6 +1476,11 @@ constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
     }
   }
 }
+
+template <trivial_view Arg, typename... ParentArgs>
+constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
+  return;
+};
 
 template <std::size_t sz>
 constexpr void STRUCT_PACK_INLINE
@@ -1897,6 +1929,11 @@ class packer {
         serialize_one<size_type, version>(*item);
       }
     }
+  }
+
+  template <std::size_t size_type, uint64_t version, trivial_view T>
+  constexpr void inline serialize_one(const T &item) {
+    serialize_one<size_type, version>(item.get());
   }
 
   template <typename T>
@@ -2825,6 +2862,21 @@ class unpacker {
       deserialize_one<size_type, version, NotSkip>(*item);
     }
     return struct_pack::errc{};
+  }
+
+  template <size_t size_type, uint64_t version, bool NotSkip, trivial_view T>
+  constexpr struct_pack::errc inline deserialize_one(T &item) {
+    static_assert(view_reader_t<Reader>,
+                  "The Reader isn't a view_reader, can't deserialize "
+                  "a trivial_view<T>");
+    if (const char *view = reader_.read_view(sizeof(typename T::value_type));
+        view == nullptr) [[likely]] {
+      item = *reinterpret_cast<typename T::value_type *>(view);
+      return errc::ok;
+    }
+    else {
+      return errc::no_buffer_space;
+    }
   }
 
   // partial deserialize_to

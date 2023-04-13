@@ -19,7 +19,6 @@
 
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/reflection.h"
 using namespace struct_pack;
 using namespace doctest;
 // clang-format off

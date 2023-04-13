@@ -25,8 +25,6 @@
 #include <utility>
 #include <variant>
 
-#include "struct_pack/struct_pack/error_code.h"
-
 #define private public
 #include "struct_pack/struct_pack.hpp"
 #undef private
