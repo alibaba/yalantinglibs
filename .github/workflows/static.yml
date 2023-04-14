@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  websiteDir: "${{github.workspace}}"
+  websiteDir: "${{github.workspace}}/website"
 
 jobs:
   # Single deploy job since we're just deploying

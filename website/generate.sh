@@ -10,7 +10,7 @@ if [ ! -d "doxygen-awesome-css" ]; then
 fi
 
 # delete website's static dir generated before
-rm -r dist
+rm -rf dist
 mkdir dist
 
 # Commands without errors : copy images from english to chinese dir
