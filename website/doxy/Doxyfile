@@ -3,7 +3,7 @@ GENERATE_HTML=yes
 GENERATE_LATEX=no
 INPUT=include/struct_pack include/coro_rpc include/coro_rpc/coro_rpc \
       include/struct_pack/struct_pack/struct_pack_impl.hpp \
-      src/coro_rpc/doc/coro_rpc_introduction_EN.md
+      ../docs/coro_rpc/coro_rpc_introduction.md
 
 GENERATE_TREEVIEW      = YES # required!
 DISABLE_INDEX          = NO
@@ -23,4 +23,4 @@ HTML_HEADER            = header.html
 IMAGE_PATH             = src/coro_rpc/doc/images src/struct_pack/doc/images
 EXAMPLE_PATH           = src/coro_rpc/examples
 EXAMPLE_RECURSIVE      = YES
-OUTPUT_DIRECTORY       = docs/en
+OUTPUT_DIRECTORY       = dist/en
