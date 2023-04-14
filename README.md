@@ -323,14 +323,6 @@ see [Build Website](https://alibaba.github.io/yalantinglibs/README.html)
 4. Choose one or more reviewers from contributors: (e.g., qicosmos, poor-circle, PikachuHyA).
 5. Get approved and merged.
 
-# Discussion group
-
-DingTalk group
-
-<center>
-<img src="./src/coro_rpc/doc/images/yalantinglibs_ding_talk_group.png" alt="dingtalk" width="200" height="200" align="bottom" />
-</center>
-
 # License
 
 yaLanTingLibs is distributed under the Apache License (Version 2.0)
