@@ -66,6 +66,6 @@ finished...
 Done!
 ```
 
-the config of vitepress is `website/.vitepress/config.ts`
+the config of vitepress is `website/.vitepress/config/index.ts`
 
 the config of doxygen is `Doxyfile` and `Doxyfile_cn`
