@@ -15,22 +15,32 @@
  */
 #pragma once
 
-#include <functional>
-template <typename T>
+#include "reflection.hpp"
+
+namespace struct_pack {
+template <detail::trivial_serializable T>
 struct trivial_view {
  private:
-  std::reference_wrapper<T> ref;
+  const T* ref;
 
  public:
-  trivial_view(T& t) { ref = t; };
+  trivial_view(const T& t) : ref(&t){};
   trivial_view(const trivial_view&) = default;
   trivial_view(trivial_view&&) = default;
-  trivial_view() = default;
+  trivial_view() : ref(nullptr){};
 
   trivial_view& operator=(const trivial_view&) = default;
   trivial_view& operator=(trivial_view&&) = default;
 
   using value_type = T;
 
-  T& get() { return ref.get(); }
+  const T& get() const {
+    assert(ref != nullptr);
+    return *ref;
+  }
+  const T* operator->() const {
+    assert(ref != nullptr);
+    return ref;
+  }
 };
+}  // namespace struct_pack

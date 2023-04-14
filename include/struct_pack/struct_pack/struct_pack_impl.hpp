@@ -236,9 +236,6 @@ namespace detail {
 #endif
 }
 
-template <typename T>
-constexpr inline bool is_trivial_tuple = false;
-
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 
@@ -280,64 +277,6 @@ constexpr auto get_types() {
   }
 }
 
-template <typename T, bool ignore_compatible_field = false>
-struct is_trivial_serializable {
- private:
-  static constexpr bool solve() {
-    if constexpr (is_compatible_v<T> && ignore_compatible_field) {
-      return true;
-    }
-    if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
-      return true;
-    }
-    else if constexpr (array<T>) {
-      return is_trivial_serializable<typename T::value_type,
-                                     ignore_compatible_field>::value;
-    }
-    else if constexpr (c_array<T>) {
-      return is_trivial_serializable<typename std::remove_all_extents<T>::type,
-                                     ignore_compatible_field>::value;
-    }
-    else if constexpr (!pair<T> && tuple<T> && !is_trivial_tuple<T>) {
-      return false;
-    }
-    else if constexpr (container<T> || optional<T> || variant<T> ||
-                       unique_ptr<T> || expected<T> || container_adapter<T> ||
-                       varint_t<T>) {
-      return false;
-    }
-    else if constexpr (pair<T>) {
-      return is_trivial_serializable<typename T::first_type,
-                                     ignore_compatible_field>::value &&
-             is_trivial_serializable<typename T::second_type,
-                                     ignore_compatible_field>::value;
-    }
-    else if constexpr (is_trivial_tuple<T>) {
-      return []<std::size_t... I>(std::index_sequence<I...>)
-          CONSTEXPR_INLINE_LAMBDA {
-        return (is_trivial_serializable<std::tuple_element_t<I, T>,
-                                        ignore_compatible_field>::value &&
-                ...);
-      }
-      (std::make_index_sequence<std::tuple_size_v<T>>{});
-    }
-    else if constexpr (std::is_class_v<T>) {
-      using T_ = decltype(get_types<T>());
-      return []<std::size_t... I>(std::index_sequence<I...>)
-          CONSTEXPR_INLINE_LAMBDA {
-        return (is_trivial_serializable<std::tuple_element_t<I, T_>,
-                                        ignore_compatible_field>::value &&
-                ...);
-      }
-      (std::make_index_sequence<std::tuple_size_v<T_>>{});
-    }
-    else
-      return false;
-  }
-
- public:
-  static inline constexpr bool value = is_trivial_serializable::solve();
-};
 // clang-format off
 template <typename Type>
 concept trivially_copyable_container =
@@ -759,8 +698,8 @@ constexpr std::size_t alignment_v = alignment_impl<T>();
 
 template <typename T>
 consteval std::size_t default_alignment() {
-  using type = decltype(get_types<T>());
-  if constexpr (!is_trivial_serializable<T>::value) {
+  if constexpr (!is_trivial_serializable<T>::value && !is_trivial_view_v<T>) {
+    using type = decltype(get_types<T>());
     return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
       return (std::max)(
           {(is_compatible_v<std::remove_cvref_t<std::tuple_element_t<I, type>>>
@@ -769,6 +708,9 @@ consteval std::size_t default_alignment() {
                       std::remove_cvref_t<std::tuple_element_t<I, type>>>)...});
     }
     (std::make_index_sequence<std::tuple_size_v<type>>());
+  }
+  else if constexpr (is_trivial_view_v<T>) {
+    return std::alignment_of_v<typename T::value_type>;
   }
   else {
     return std::alignment_of_v<T>;
@@ -783,6 +725,7 @@ consteval std::size_t alignment_impl();
 template <typename T>
 consteval std::size_t pack_alignment_impl() {
   static_assert(std::is_class_v<T>);
+  static_assert(!is_trivial_view_v<T>);
   constexpr auto ret = struct_pack::pack_alignment_v<T>;
   static_assert(ret == 0 || ret == 1 || ret == 2 || ret == 4 || ret == 8 ||
                 ret == 16);
@@ -848,6 +791,10 @@ struct calculate_padding_size_impl {
     if constexpr (is_compatible_v<T>) {
       padding_size[I] = 0;
     }
+    else if constexpr (is_trivial_view_v<T>) {
+      calculate_padding_size_impl<P, typename T::value_type, I>{}(offset,
+                                                                  padding_size);
+    }
     else {
       if (offset % align::alignment_v<T>) {
         padding_size[I] =
@@ -903,6 +850,9 @@ struct calculate_trival_obj_size {
     if constexpr (!is_compatible_v<T>) {
       if constexpr (is_trivial_serializable<T>::value) {
         total += sizeof(T);
+      }
+      else if constexpr (is_trivial_view_v<T>) {
+        total += sizeof(typename T::value_type);
       }
       else {
         static_assert(is_trivial_serializable<T, true>::value);
@@ -1082,6 +1032,9 @@ consteval decltype(auto) get_types_literal(std::index_sequence<I...>) {
 template <uint64_t version, typename Args, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper();
 
+template <uint64_t version, trivial_view Arg, typename... ParentArgs>
+constexpr bool check_if_compatible_element_exist_impl_helper();
+
 // This help function is just to improve unit test coverage. :)
 // Same as `get_type_literal_help_coverage`
 template <uint64_t version, typename Args, typename... ParentArgs,
@@ -1167,8 +1120,8 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
 
 template <uint64_t version, trivial_view Arg, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper() {
-  return check_if_compatible_element_exist_impl_helper<version, Arg,
-                                                       ParentArgs...>();
+  return check_if_compatible_element_exist_impl_helper<
+      version, typename Arg::value_type, ParentArgs...>();
 }
 
 template <typename T, typename... Args>
@@ -2586,7 +2539,7 @@ class unpacker {
                 if (view == nullptr) [[unlikely]] {
                   return struct_pack::errc::no_buffer_space;
                 }
-                item = {(value_type *)view, size};
+                item = {(value_type *)(view), size};
               }
               else {
                 if (mem_sz >= PTRDIFF_MAX) [[unlikely]]
@@ -2870,8 +2823,8 @@ class unpacker {
                   "The Reader isn't a view_reader, can't deserialize "
                   "a trivial_view<T>");
     if (const char *view = reader_.read_view(sizeof(typename T::value_type));
-        view == nullptr) [[likely]] {
-      item = *reinterpret_cast<typename T::value_type *>(view);
+        view != nullptr) [[likely]] {
+      item = *reinterpret_cast<const typename T::value_type *>(view);
       return errc::ok;
     }
     else {

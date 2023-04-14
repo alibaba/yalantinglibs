@@ -31,7 +31,6 @@
 #endif
 
 #include "marco.h"
-#include "trivial_view.hpp"
 
 namespace struct_pack {
 namespace detail {
@@ -164,9 +163,6 @@ namespace detail {
 
 #else
 
-#include <string>
-#include <vector>
-
   template <typename Type>
   constexpr inline bool is_std_basic_string_v = false;
 
@@ -261,14 +257,6 @@ namespace detail {
     typename std::remove_cvref_t<Type>::value_type;
   };
 
-  template <typename Type>
-  constexpr inline bool is_trivial_view_v = false;
-
-  template <typename Type>
-  constexpr inline bool is_trivial_view_v<trivial_view<Type>> = true;
-
-  template <typename Type>
-  concept trivial_view=is_trivial_view_v<Type>;
 
 
   template <typename Type>
@@ -288,6 +276,102 @@ namespace detail {
 
   template <typename T>
   concept is_compatible = is_compatible_v<T>;
+
+  template <typename T>
+  constexpr inline bool is_trivial_tuple = false;
+
+  template <typename T>
+  class varint;
+
+  template <typename T>
+  class sint;
+
+  template <typename T>
+  concept varintable_t =
+      std::is_same_v<T, varint<int32_t>> || std::is_same_v<T, varint<int64_t>> ||
+      std::is_same_v<T, varint<uint32_t>> || std::is_same_v<T, varint<uint64_t>>;
+  template <typename T>
+  concept sintable_t =
+      std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
+
+  template <typename T>
+  concept varint_t = varintable_t<T> || sintable_t<T>;
+
+  
+  template <typename Type>
+  constexpr inline bool is_trivial_view_v = false;
+
+  template <typename Type>
+  concept trivial_view = is_trivial_view_v<Type>;
+
+  template <typename T, bool ignore_compatible_field = false>
+  struct is_trivial_serializable {
+    private:
+      static constexpr bool solve() {
+        if constexpr (is_compatible_v<T> || trivial_view<T>) {
+          return ignore_compatible_field;
+        }
+        else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
+          return true;
+        }
+        else if constexpr (array<T>) {
+          return is_trivial_serializable<typename T::value_type,
+                                        ignore_compatible_field>::value;
+        }
+        else if constexpr (c_array<T>) {
+          return is_trivial_serializable<typename std::remove_all_extents<T>::type,
+                                        ignore_compatible_field>::value;
+        }
+        else if constexpr (!pair<T> && tuple<T> && !is_trivial_tuple<T>) {
+          return false;
+        }
+        else if constexpr (container<T> || optional<T> || variant<T> ||
+                          unique_ptr<T> || expected<T> || container_adapter<T> ||
+                          varint_t<T>) {
+          return false;
+        }
+        else if constexpr (pair<T>) {
+          return is_trivial_serializable<typename T::first_type,
+                                        ignore_compatible_field>::value &&
+                is_trivial_serializable<typename T::second_type,
+                                        ignore_compatible_field>::value;
+        }
+        else if constexpr (is_trivial_tuple<T>) {
+          return []<std::size_t... I>(std::index_sequence<I...>)
+              CONSTEXPR_INLINE_LAMBDA {
+            return (is_trivial_serializable<std::tuple_element_t<I, T>,
+                                            ignore_compatible_field>::value &&
+                    ...);
+          }
+          (std::make_index_sequence<std::tuple_size_v<T>>{});
+        }
+        else if constexpr (std::is_class_v<T>) {
+          using T_ = decltype(get_types<T>());
+          return []<std::size_t... I>(std::index_sequence<I...>)
+              CONSTEXPR_INLINE_LAMBDA {
+            return (is_trivial_serializable<std::tuple_element_t<I, T_>,
+                                            ignore_compatible_field>::value &&
+                    ...);
+          }
+          (std::make_index_sequence<std::tuple_size_v<T_>>{});
+        }
+        else
+          return false;
+      }
+
+    public:
+      static inline constexpr bool value = is_trivial_serializable::solve();
+  };
+
+  template<typename T>
+  concept trivial_serializable=is_trivial_serializable<T>::value;
+}
+template <detail::trivial_serializable T>
+struct trivial_view;
+namespace detail {
+
+  template <typename Type>
+  constexpr inline bool is_trivial_view_v<struct_pack::trivial_view<Type>> = true;
 
   struct UniversalVectorType {
     template <typename T>

@@ -97,17 +97,6 @@ template <typename T, typename U>
   return static_cast<T>((u >> 1U)) ^ static_cast<U>(-static_cast<T>(u & 1U));
 }
 
-template <typename T>
-concept varintable_t =
-    std::is_same_v<T, varint<int32_t>> || std::is_same_v<T, varint<int64_t>> ||
-    std::is_same_v<T, varint<uint32_t>> || std::is_same_v<T, varint<uint64_t>>;
-template <typename T>
-concept sintable_t =
-    std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
-
-template <typename T>
-concept varint_t = varintable_t<T> || sintable_t<T>;
-
 template <typename U, typename T, unsigned Shift>
 [[nodiscard]] STRUCT_PACK_INLINE U encode_zigzag(T t) {
   return (static_cast<U>(t) << 1U) ^

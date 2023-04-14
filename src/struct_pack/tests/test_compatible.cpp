@@ -926,7 +926,7 @@ struct nested_trival_v0 {
                          const nested_trival_v0<T>&) = default;
 };
 
-auto i2 = struct_pack::detail::align::calculate_padding_size<
+constexpr auto i2 = struct_pack::detail::align::calculate_padding_size<
     nested_trival_v0<compatible_with_trival_field_v1>>();
 
 template <typename T>

@@ -384,3 +384,179 @@ TEST_CASE("testing recursive type") {
   auto node2 = struct_pack::deserialize<Node>(buffer);
   CHECK(node2.value() == node);
 }
+namespace trival_test {
+struct B {
+  double a;
+  struct C {
+    int a;
+    struct D {
+      short a;
+      struct E {
+        char a;
+        int b;
+        char c;
+        int d;
+      } b;
+      double d;
+      char c;
+    } b;
+    char d;
+    char c;
+  } b;
+  std::array<int64_t, 10000> d;
+  char c;
+} b;
+struct A_v1 {
+  char a;
+  B b;
+  char c;
+};
+
+struct A_v2 {
+  char a;
+  struct B {
+    double a;
+    struct C {
+      int a;
+      struct D {
+        short a;
+        struct E {
+          char a;
+          int b;
+          char c;
+          struct_pack::trivial_view<int> d;
+        } b;
+        struct_pack::trivial_view<double> d;
+        char c;
+      } b;
+      struct_pack::trivial_view<char> d;
+      char c;
+    } b;
+    struct_pack::trivial_view<std::array<int64_t, 10000>> d;
+    char c;
+  } b;
+  char c;
+};
+
+struct A_v3 {
+  char a;
+  struct_pack::trivial_view<B> b;
+  char c;
+};
+}  // namespace trival_test
+
+constexpr bool test = struct_pack::detail::trivial_view<
+    struct_pack::trivial_view<std::array<long, 10000>>>;
+
+bool test_equal(const trival_test::A_v1& v1, const trival_test::A_v1& v2) {
+  return v1.a == v2.a && v1.c == v2.c &&
+         (v1.b.a == v2.b.a && v1.b.c == v2.b.c && v1.b.d == v2.b.d &&
+          (v1.b.b.a == v2.b.b.a && v1.b.b.c == v2.b.b.c &&
+           v1.b.b.d == v2.b.b.d &&
+           (v1.b.b.b.a == v2.b.b.b.a && v1.b.b.b.c == v2.b.b.b.c &&
+            v1.b.b.b.d == v2.b.b.b.d &&
+            (v1.b.b.b.b.a == v2.b.b.b.b.a && v1.b.b.b.b.c == v2.b.b.b.b.c &&
+             v1.b.b.b.b.d == v2.b.b.b.b.d))));
+}
+
+bool test_equal(const trival_test::A_v2& v1, const trival_test::A_v2& v2) {
+  return v1.a == v2.a && v1.c == v2.c &&
+         (v1.b.a == v2.b.a && v1.b.c == v2.b.c &&
+          v1.b.d.get() == v2.b.d.get() &&
+          (v1.b.b.a == v2.b.b.a && v1.b.b.c == v2.b.b.c &&
+           v1.b.b.d.get() == v2.b.b.d.get() &&
+           (v1.b.b.b.a == v2.b.b.b.a && v1.b.b.b.c == v2.b.b.b.c &&
+            v1.b.b.b.d.get() == v2.b.b.b.d.get() &&
+            (v1.b.b.b.b.a == v2.b.b.b.b.a && v1.b.b.b.b.c == v2.b.b.b.b.c &&
+             v1.b.b.b.b.d.get() == v2.b.b.b.b.d.get()))));
+}
+
+bool test_equal(const trival_test::A_v3& v1, const trival_test::A_v3& v2) {
+  return v1.a == v2.a && v1.c == v2.c &&
+         (v1.b->a == v2.b->a && v1.b->c == v2.b->c && v1.b->d == v2.b->d &&
+          (v1.b->b.a == v2.b->b.a && v1.b->b.c == v2.b->b.c &&
+           v1.b->b.d == v2.b->b.d &&
+           (v1.b->b.b.a == v2.b->b.b.a && v1.b->b.b.c == v2.b->b.b.c &&
+            v1.b->b.b.d == v2.b->b.b.d &&
+            (v1.b->b.b.b.a == v2.b->b.b.b.a && v1.b->b.b.b.c == v2.b->b.b.b.c &&
+             v1.b->b.b.b.d == v2.b->b.b.b.d))));
+}
+
+TEST_CASE("testing trivial_view type") {
+  trival_test::A_v1 a_v1 = {
+      .a = 'A',
+      .b = {.a = 123.12,
+            .b = {.a = 1232132,
+                  .b = {.a = 12331,
+                        .b = {.a = 'G', .b = 114515, .c = 'A', .d = 104},
+
+                        .d = 104.1423,
+                        .c = 'B'},
+                  .d = 'A',
+                  .c = 'C'},
+            .d = {123, 3214, 2134, 3214, 1324, 3214890, 184320, 832140, 321984},
+            .c = 'D'},
+      .c = 'E'};
+  trival_test::A_v2 a_v2 = {.a = 'A',
+                            .b = {.a = 123.12,
+                                  .b = {.a = 1232132,
+                                        .b = {.a = 12331,
+                                              .b = {.a = 'G',
+                                                    .b = 114515,
+                                                    .c = 'A',
+                                                    .d = a_v1.b.b.b.b.d},
+                                              .d = a_v1.b.b.b.d,
+                                              .c = 'B'},
+                                        .d = a_v1.b.b.d,
+                                        .c = 'C'},
+                                  .d = a_v1.b.d,
+                                  .c = 'D'},
+                            .c = 'E'};
+  trival_test::A_v3 a_v3 = {.a = 'A', .b = a_v1.b, .c = 'E'};
+  constexpr auto cnt = struct_pack::members_count<trival_test::A_v2>;
+  {
+    std::vector<char> buffer = struct_pack::serialize(a_v1);
+    auto result = struct_pack::deserialize<trival_test::A_v1>(buffer);
+    CHECK(test_equal(result.value(), a_v1));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v2);
+    auto result = struct_pack::deserialize<trival_test::A_v1>(buffer);
+    CHECK(test_equal(result.value(), a_v1));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v3);
+    auto result = struct_pack::deserialize<trival_test::A_v1>(buffer);
+    CHECK(test_equal(result.value(), a_v1));
+  }
+  {
+    std::vector<char> buffer = struct_pack::serialize(a_v1);
+    auto result = struct_pack::deserialize<trival_test::A_v2>(buffer);
+    CHECK(test_equal(result.value(), a_v2));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v2);
+    auto result = struct_pack::deserialize<trival_test::A_v2>(buffer);
+    CHECK(test_equal(result.value(), a_v2));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v3);
+    auto result = struct_pack::deserialize<trival_test::A_v2>(buffer);
+    CHECK(test_equal(result.value(), a_v2));
+  }
+  {
+    std::vector<char> buffer = struct_pack::serialize(a_v1);
+    auto result = struct_pack::deserialize<trival_test::A_v3>(buffer);
+    CHECK(test_equal(result.value(), a_v3));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v2);
+    auto result = struct_pack::deserialize<trival_test::A_v3>(buffer);
+    CHECK(test_equal(result.value(), a_v3));
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v3);
+    auto result = struct_pack::deserialize<trival_test::A_v3>(buffer);
+    CHECK(test_equal(result.value(), a_v3));
+  }
+};
