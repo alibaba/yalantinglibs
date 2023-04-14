@@ -25,4 +25,4 @@ HTML_HEADER            = doxy/header.html
 IMAGE_PATH             = docs/coro_rpc/images docs/struct_pack/images
 EXAMPLE_PATH           = ../src/coro_rpc/examples
 EXAMPLE_RECURSIVE      = YES
-OUTPUT_DIRECTORY       = dist/en
+OUTPUT_DIRECTORY       = dist/doxygen_en
