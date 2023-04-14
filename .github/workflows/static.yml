@@ -4,7 +4,7 @@ name: Deploy static content to Pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: [ "main" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -20,6 +20,9 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
+env:
+  websiteDir: "${{github.workspace}}"
+
 jobs:
   # Single deploy job since we're just deploying
   deploy:
@@ -28,26 +31,26 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Install
-        run: sudo apt-get install doxygen graphviz
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Pages
         uses: actions/configure-pages@v3
-      - name: Clone doxygen-awesome-css
-        run: git clone https://github.com/jothepro/doxygen-awesome-css.git
-        working-directory: ${{github.workspace}}
+      - name: Install package
+        run: sudo apt-get install doxygen graphviz
       - name: Yarn Install
         run: yarn install
-        working-directory: ${{github.workspace}}
+        working-directory: ${{env.websiteDir}}
+      - name: Clone doxygen-awesome-css
+        run: git clone https://github.com/jothepro/doxygen-awesome-css.git
+        working-directory: ${{env.websiteDir}}
       - name: Build Website
-        run: bash gen_doc.sh ${{github.workspace}}
-        working-directory: ${{github.workspace}}
+        run: bash generate.sh
+        working-directory: ${{env.websiteDir}}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: 'docs'
+          path: 'website/dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
