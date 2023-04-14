@@ -1,10 +1,11 @@
 PROJECT_NAME=yaLanTingLibs
 GENERATE_HTML=yes
 GENERATE_LATEX=no
-INPUT=src/coro_rpc/doc/coro_rpc_doc.hpp \
-      src/coro_rpc/doc/coro_rpc_introduction_cn.md \
-      src/struct_pack/doc/struct_pack_doc.hpp \
-      src/struct_pack/doc/Introduction_CN.md
+INPUT=../include/struct_pack \
+      ../include/coro_rpc \
+      ../include/coro_rpc/coro_rpc \
+      ../include/struct_pack/struct_pack/struct_pack_impl.hpp \
+      docs/coro_rpc/coro_rpc_introduction.md
 
 GENERATE_TREEVIEW      = YES # required!
 DISABLE_INDEX          = NO
@@ -20,9 +21,8 @@ HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js 
                          doxygen-awesome-css/doxygen-awesome-paragraph-link.js \
                          doxygen-awesome-css/doxygen-custom/toggle-alternative-theme.js \
                          doxygen-awesome-css/doxygen-awesome-interactive-toc.js
-HTML_HEADER            = header.html
-IMAGE_PATH             = src/coro_rpc/doc/images src/struct_pack/doc/images
-EXAMPLE_PATH           = src/coro_rpc/examples
+HTML_HEADER            = doxy/header.html
+IMAGE_PATH             = docs/coro_rpc/images docs/struct_pack/images
+EXAMPLE_PATH           = ../src/coro_rpc/examples
 EXAMPLE_RECURSIVE      = YES
-OUTPUT_LANGUAGE        = Chinese
-OUTPUT_DIRECTORY       = docs/cn
+OUTPUT_DIRECTORY       = dist/en
