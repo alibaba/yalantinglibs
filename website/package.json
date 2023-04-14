@@ -7,12 +7,12 @@
   "author": "alibaba",
   "license": "MIT",
   "devDependencies": {
-    "vitepress": "^1.0.0-alpha.56",
-    "vue": "^3.2.45"
+    "vitepress": "1.0.0-alpha.65",
+    "vue": "3.2.47"
   },
   "scripts": {
-    "docs:dev": "vitepress dev website",
-    "docs:build": "vitepress build website",
-    "docs:priview": "vitepress preview website"
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:priview": "vitepress preview"
   }
 }
