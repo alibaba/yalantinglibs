@@ -13,6 +13,6 @@
   "scripts": {
     "docs:dev": "vitepress dev",
     "docs:build": "vitepress build",
-    "docs:priview": "vitepress preview"
+    "docs:preview": "vitepress preview"
   }
 }
