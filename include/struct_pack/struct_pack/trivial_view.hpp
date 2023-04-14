@@ -17,6 +17,62 @@
 
 #include "reflection.hpp"
 
+/*!
+ * \ingroup struct_pack
+ * \struct trivial_view
+ * \brief
+ * trivial_view<T> is a view for trivial struct. It's equals T in type system.
+ * It can decrease memory copy in proto initialization/deserialization
+ *
+ * For example:
+ *
+ * ```cpp
+ * struct Data {
+ *   int x[10000],y[10000],z[10000];
+ * };
+ *
+ * struct Proto {
+ *   std::string name;
+ *   Data data;
+ * };
+ * void serialzie(std::string_view name, Data& data) {
+ *   Proto proto={.name = name, .data = data};
+ *   // heavy cost in initialization.
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<Proto>(data);
+ *   // memory copy in deserialization.
+ *   assert(result->name == name && result->data == data);
+ * }
+ * ```
+ *
+ * The solution: use view type:
+ * ```cpp
+ * struct ProtoView {
+ *   std::string_view name;
+ *   struct_pack::trivial_view<Data> data;
+ * };
+ * void serialzie(std::string_view name, Data& data) {
+ *   ProtoView proto={.name = name, .data = data};
+ *   // zero-copy initialization.
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<ProtoView>(data);
+ *   // zero-copy deserialization.
+ *   assert(result->name == name && result->data.get() == data);
+ * }
+ * ```
+ * trivial_view<T> has same memory as T. So it's legal to serialize T then
+ * deserialize to trivial_view<T>
+ * ```cpp
+ * void serialzie(Proto& proto) {
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<ProtoView>(data);
+ *   // zero-copy deserialization.
+ *   assert(result->name == name && result->data.get() == data);
+ * }
+ * ```
+ *
+ */
+
 namespace struct_pack {
 template <detail::trivial_serializable T>
 struct trivial_view {

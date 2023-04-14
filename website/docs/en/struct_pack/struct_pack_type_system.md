@@ -202,35 +202,76 @@ If the value of this object is a null pointer, struct_pack will compress it.
 ## Struct 
 
 `struct_pack` supports `struct`. Up to **64** fields are supported and nested fields are supported too. All members
-should be of valid `struct_pack` type. There are two types of `struct`:
+should be of valid `struct_pack` type. There are two kinds of `struct`:
 
-### trivial structs
+### struct/class/std::pair/tuplet::tuple
 
-Ordinary structs refer to cpp `struct/class`, `std::pair` and `tuplet::tuple`.
-
-For example:
+For example: 
 
 ```cpp
 struct person {
   int age;
   std::string name;
-  std::pair<int,std::string>
+};
 ```
-
+and
+```cpp
+std::pair<int,std::string>
+```
+and
 ```cpp
 tuplet::tuple<int,std::string>
 ```
 
-### Non-trivial Structs
+Those types are same type in struct_pack.
 
-This refers to std::tuples, which for historical reasons have a different memory layout than ordinary structs, and for optimization reasons we distinguish them from ordinary structs in the type system. For example:
+### std::tuple
+
+For historical reasons, `std::tuple<T...>` have a different memory layout than ordinary structs, and for optimization reasons we distinguish them from ordinary structs in the type system. For example:
 
 For instance:
 
 ```cpp
 std::tuple<int,std::string>
 ```
-is a non-trivial struct.
+are different types with `person` in struct_pack.
+
+
+### trivial struct
+
+If there is a struct/class/std::pair/tuplet::tuple, and all the field of this type is a trivial type, then this type is a trivial struct in struct_pack.
+
+A trivial type is :
+1. fundamental type.
+2. array type, and the value type is also a trivial type.
+3. `trivial_view<T>`, which T is a trivial type.
+4. trivial struct.
+
+the trivial struct's type info include its memory alignment size. 
+
+If two trivial struct has different memory alignment size, they are different type and struct_pack can check it in deserialization.
+
+For example:
+
+```cpp
+#pragma pack(1)
+struct foo {
+  int a;
+  double b;
+};
+#pragma()
+struct bar {
+  int a;
+  double b;
+};
+void test() {
+  foo f{};
+  auto buffer = struct_pack::serialize(f);
+  auto result = struct_pack::deserialize<bar>(buffer);
+  // foo and bar are different types.
+  assert(result.has_value() == false);
+}
+```
 
 ## Compatible Type
 
