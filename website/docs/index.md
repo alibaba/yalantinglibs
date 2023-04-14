@@ -10,7 +10,7 @@ hero:
   actions:
     - theme: brand
       text: Get Started
-      link: /guide/what-is-yalantinglibs
+      link: /guide/what_is_yalantinglibs
     - theme: alt
       text: View on GitHub
       link: https://github.com/alibaba/yalantinglibs.git
