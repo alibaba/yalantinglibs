@@ -9,6 +9,4 @@ jobs:
   build_by_clang:
 
     runs-on: ubuntu-22.04
-
-    steps:
-        - uses: sunflower-knight/yalantinglibs/.github/workflows/linux_clang.yml@main
+    uses: sunflower-knight/yalantinglibs/.github/workflows/linux_clang.yml@main
