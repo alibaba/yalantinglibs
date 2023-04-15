@@ -1,14 +1,17 @@
 name: Ubuntu 22.04 (clang)
 
 on:
-#  push:
-#    branches: [ main, develop ]
-#  pull_request:
-#    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
   workflow_call:
 
+env:
+  ccache: ON
+
 jobs:
-  clang:
+  ubuntu_clang:
     strategy:
       matrix:
         mode: [ Release, Debug ]
@@ -22,16 +25,22 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Dependencies
-        run: |
-          sudo apt-get install openssl
-          sudo apt-get install libssl-dev
+        run: sudo apt-get install openssl libssl-dev
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: Configure CMake
-        run: CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} -G Ninja
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
 
+      - name: Configure
+        run: |
+          CXX=clang++ CC=clang 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DUSE_CCACHE=${{env.ccache}}
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
@@ -39,7 +48,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
 
-  clang_pb:
+  ubuntu_clang_pb:
     strategy:
       matrix:
         mode: [ Release, Debug ]
@@ -54,22 +63,25 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-get install openssl
-          sudo apt-get install libssl-dev
+          sudo apt-get install openssl libssl-dev
           sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v3
 
       - name: Check protoc
-        run: |
-          protoc --version
+        run: protoc --version
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
       - name: Configure
         run: |
-          rm -rf ${{github.workspace}}/build
-          CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -DCMAKE_INSTALL_PREFIX="$(pwd)/installed"
-
+          CXX=clang++ CC=clang 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DUSE_CCACHE=${{env.ccache}}
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
