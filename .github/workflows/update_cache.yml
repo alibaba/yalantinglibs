@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  buildAll:
+  build_by_clang:
+
     runs-on: ubuntu-22.04
 
     steps:
