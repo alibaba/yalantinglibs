@@ -2,10 +2,10 @@ name: Windows Server 2022
 
 on:
   workflow_call:
-#  push:
-#    branches: [ main, develop ]
-#  pull_request:
-#    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
 
 jobs:
   windows_msvc:

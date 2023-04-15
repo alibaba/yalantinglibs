@@ -1,10 +1,10 @@
 name: Ubuntu 22.04 (gcc)
 
 on:
-#  push:
-#    branches: [ main, develop ]
-#  pull_request:
-#    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
   workflow_call:
 
 env:
