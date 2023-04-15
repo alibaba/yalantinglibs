@@ -37,13 +37,10 @@ jobs:
 
       - name: Configure CMake
         run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}\build -DUSE_CCACHE=ON
-        shell: bash
 
       - name: Build
         run: cmake --build ${{github.workspace}}\build
-        shell: bash
 
       - name: Test
         working-directory: ${{github.workspace}}\build
         run: ctest -C ${{matrix.mode}} -j 1 -V
-        shell: bash
