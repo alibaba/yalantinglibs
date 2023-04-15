@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_by_clang:
-
-    runs-on: ubuntu-22.04
-    uses: sunflower-knight/yalantinglibs/.github/workflows/linux_clang.yml@main
+  clang_ubuntu:
+    uses: ./.github/workflows/linux_clang.yml@main
+  gcc_ubuntu:
+    uses: ./.github/workflows/linux_gcc.yml@main
