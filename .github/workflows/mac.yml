@@ -1,11 +1,11 @@
 name: macOS Monterey 12
 
-on:
-  workflow_call:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+#on:
+#  workflow_call:
+#  push:
+#    branches: [ main, develop ]
+#  pull_request:
+#    branches: [ main, develop ]
 
 jobs:
   mac_clang:
@@ -39,7 +39,7 @@ jobs:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
 
       - name: Configure CMake
-        run: OPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}}
+        run: OPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
