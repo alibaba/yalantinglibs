@@ -33,12 +33,13 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-arch-${{ matrix.arch}}
+          variant: sccache # Use Sccache for stable Windows support.
 
       - name: Configure CMake
         run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}/build -DUSE_CCACHE=ON
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
+        run: cmake --build ${{github.workspace}}/build
 
       - name: Test
         working-directory: ${{github.workspace}}/build
