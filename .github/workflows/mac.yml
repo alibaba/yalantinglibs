@@ -1,10 +1,11 @@
 name: macOS Monterey 12
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+  workflow_call:
+#  push:
+#    branches: [ main, develop ]
+#  pull_request:
+#    branches: [ main, develop ]
 
 jobs:
   mac_clang:
