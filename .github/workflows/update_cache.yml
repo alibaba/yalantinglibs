@@ -7,6 +7,6 @@ on:
 
 jobs:
   clang_ubuntu:
-    uses: ./.github/workflows/linux_clang.yml@main
+    uses: ./.github/workflows/linux_clang.yml
   gcc_ubuntu:
-    uses: ./.github/workflows/linux_gcc.yml@main
+    uses: ./.github/workflows/linux_gcc.yml
