@@ -6,82 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_by_clang:
-    strategy:
-      matrix:
-        mode: [ Release, Debug ]
-        libcxx: [ OFF ]
-        ssl: [ ON, OFF ]
-
-
+  buildAll:
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Install Dependencies
-        run: sudo apt-get install openssl libssl-dev
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.mode}}-ssl-${{ matrix.ssl}}
-
-      - name: Configure CMake
-        run: |
-          CXX=clang++ CC=clang 
-          cmake -B ${{github.workspace}}/build \
-                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
-                -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
-                -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}} \
-                -G Ninja
-
-      - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
-
-  build_by_clang_pb:
-    strategy:
-      matrix:
-        mode: [ Release, Debug ]
-        libcxx: [ OFF ]
-        ssl: [ ON, OFF ]
-
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get install openssl libssl-dev
-          sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v3
-
-      - name: Check protoc
-        run: protoc --version
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.mode}}-ssl-${{ matrix.ssl}}
-
-      - name: Configure
-        run: |
-          CXX=clang++ CC=clang 
-          cmake -B ${{github.workspace}}/build \
-                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
-                -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
-                -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}} \
-                -G Ninja 
-
-      - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+      - name: call reuse clang
+        uses: sunflower-knight/yalantinglibs/.github/workflows/linux_clang.yml@main
