@@ -8,30 +8,32 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
+[中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
+
 yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_pb, easylog, coro_rpc, coro_http and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
 | OS (Compiler Version)                          | Status                                                                                                    |
 |------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_clang.yml/badge.svg?branch=main) |
-| Ubuntu 22.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_gcc.yml/badge.svg?branch=main)   |
-| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)          |
-| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)      |
+| Ubuntu 22.04 (clang 14.0.0)                    | ![ubuntu-clang](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_clang.yml/badge.svg?branch=main) |
+| Ubuntu 22.04 (gcc 11.2.0)                      | ![ubuntu-gcc](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_gcc.yml/badge.svg?branch=main)   |
+| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![macos-clang](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
+| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win-msvc](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
 
 ## coro_rpc
 
-Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene. coro_rpc is a header only library.
+Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 0.4M QPS per thread in pipeline mode. coro_rpc is a header only library.
 
 You can finish a rpc server and rpc client in 5 minutes!
 
-[English Introduction](https://alibaba.github.io/yalantinglibs/guide/coro-rpc-intro.html) | [中文简介](https://alibaba.github.io/yalantinglibs/zh/guide/coro-rpc-intro.html)  
+[English Introduction](https://alibaba.github.io/yalantinglibs/en/coro_rpc/coro_rpc_introduction.html)
 
-English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
+[English API] (TODO)
 
-[Talk](https://alibaba.github.io/yalantinglibs/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
+[Talk (Chinese)](https://alibaba.github.io/yalantinglibs/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
 
-[Video](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 04:55:08 of the video record.
+[Video (Chinese)](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 04:55:08 of the video record.
 
 ### quick example
 
@@ -81,17 +83,18 @@ Based on compile-time reflection, very easy to use, high performance serializati
 
 Only one line code to finish serialization and deserialization, 10-50x faster than protobuf.
 
-[English Introduction](https://alibaba.github.io/yalantinglibs/guide/struct-pack-intro.html) | [中文简介](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)
+[English Introduction](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html)
 
-English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
+[English API] (TODO)
 
-[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://alibaba.github.io/yalantinglibs/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
+[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://alibaba.github.io/yalantinglibs/resource/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
-[Slides](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
 
 [(Video) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://www.youtube.com/watch?v=myhB8ZlwOlE)  on cppcon2022
 
-[Video](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the video record.
+[(Slides)(Chinese)](https://alibaba.github.io/yalantinglibs/resource/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
+
+[(Video)(Chinese)](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the video record.
 
 ### quick example
 ```cpp
@@ -110,7 +113,7 @@ std::vector<char> buffer = struct_pack::serialize(person1);
 // one line code deserialization
 auto person2 = deserialize<person>(buffer);
 ```
-See more examples [here](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/examples).
+See more examples [here](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#serialization).
 
 ## struct_json
 reflection-based json lib, very easy to do struct to json and json to struct.
@@ -136,9 +139,9 @@ int main() {
 }
 ```
 
-## coro_http_client
+## coro_http
 
-coro_http_client is a C++20 coroutine http(https) client, include: get/post, websocket, multipart file upload, chunked and ranges download etc.
+coro_http is a C++20 coroutine http(https) client, include: get/post, websocket, multipart file upload, chunked and ranges download etc.
 
 ### get/post
 ```c++
@@ -220,7 +223,7 @@ See [async_simple](https://github.com/alibaba/async_simple)
 make sure you have such compilers:
 - clang11 and libstdc++-8 above; 
 - or gcc10 and g++10 above; 
-- or msvc2019 above
+- msvc 14.29 或更高版本。
 
 ## Quick Start
 
@@ -230,7 +233,7 @@ make sure you have such compilers:
 git clone https://github.com/alibaba/yalantinglibs.git
 ```
 
-- build & install
+- build, test & install (linux/macos)
 
 ```shell
 cd yalantinglibs
@@ -238,17 +241,18 @@ mkdir build && cd build
 cmake .. 
 # You can use those option to skip build unit-test & benchmark & example: 
 # cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
-make
-make install
+make # if your machine has enough memory, use `make -j` to speed up
+ctest . # run tests
+make install 
 ```
 
-- run tests
+- build & test( windows)
 
-```shell
-ctest .
-```
+You can use the IDE which support CMake to build & test the source, such as Visual Studio/Clion/Visual Studio Code.
 
 - start your coding
+
+Here is the sample code, you can start your project on this.
 
 ### coro_rpc
 
@@ -269,7 +273,7 @@ TODO
 options:
 
 ```bash
-./benchmark_client [threads] [client_pre_thread] [pipeline_size] [host] [port] [test_data_path] [test_time] [warm_up_time]
+./benchmark_client # [threads = hardware counts] [client_pre_thread = 20] [pipeline_size = 1] [host = 127.0.0.1] [port = 9000] [test_data_path = ./test_data/echo_test] [test_seconds = 30] [warm_up_seconds = 5]
 ```
 
 ## Build Options
@@ -314,7 +318,7 @@ No dependency.
 
 # How to generate document
 
-see [Build Website](https://alibaba.github.io/yalantinglibs/README.html)
+see [Build Website](https://github.com/alibaba/yalantinglibs/blob/main/website/README.md)
 
 # How to Contribute
 1. Create an issue in the issue template.
