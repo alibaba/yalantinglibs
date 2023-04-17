@@ -82,6 +82,7 @@ struct trivial_view {
   const T* ref;
 
  public:
+  trivial_view(const T* t) : ref(t){};
   trivial_view(const T& t) : ref(&t){};
   trivial_view(const trivial_view&) = default;
   trivial_view(trivial_view&&) = default;

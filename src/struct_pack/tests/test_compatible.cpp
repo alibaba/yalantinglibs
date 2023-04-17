@@ -875,8 +875,11 @@ struct compatible_with_trival_field_v0 {
   char aa;
   double b[2];
   char cc;
-  friend bool operator==(const compatible_with_trival_field_v0&,
-                         const compatible_with_trival_field_v0&) = default;
+  friend bool operator==(const compatible_with_trival_field_v0& t,
+                         const compatible_with_trival_field_v0& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc;
+  }
 };
 struct compatible_with_trival_field_v1 {
   int a[4];
@@ -884,8 +887,11 @@ struct compatible_with_trival_field_v1 {
   double b[2];
   char cc;
   struct_pack::compatible<std::string, 114514> c;
-  friend bool operator==(const compatible_with_trival_field_v1&,
-                         const compatible_with_trival_field_v1&) = default;
+  friend bool operator==(const compatible_with_trival_field_v1& t,
+                         const compatible_with_trival_field_v1& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c;
+  };
 };
 
 struct compatible_with_trival_field_v2 {
@@ -895,8 +901,12 @@ struct compatible_with_trival_field_v2 {
   double b[2];
   char cc;
   struct_pack::compatible<std::string, 114514> c;
-  friend bool operator==(const compatible_with_trival_field_v2&,
-                         const compatible_with_trival_field_v2&) = default;
+  friend bool operator==(const compatible_with_trival_field_v2& t,
+                         const compatible_with_trival_field_v2& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
+           t.d == o.d;
+  };
 };
 
 struct compatible_with_trival_field_v3 {
@@ -907,8 +917,12 @@ struct compatible_with_trival_field_v3 {
   double b[2];
   char cc;
   struct_pack::compatible<std::string, 114514> c;
-  friend bool operator==(const compatible_with_trival_field_v3&,
-                         const compatible_with_trival_field_v3&) = default;
+  friend bool operator==(const compatible_with_trival_field_v3& t,
+                         const compatible_with_trival_field_v3& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
+           t.d == o.d && t.e == o.e;
+  };
 };
 
 template <typename T>
@@ -922,8 +936,12 @@ struct nested_trival_v0 {
   char g[10];
   int h[3];
   char z;
-  friend bool operator==(const nested_trival_v0<T>&,
-                         const nested_trival_v0<T>&) = default;
+  friend bool operator==(const nested_trival_v0<T>& t,
+                         const nested_trival_v0<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z;
+  }
 };
 
 constexpr auto i2 = struct_pack::detail::align::calculate_padding_size<
@@ -941,8 +959,14 @@ struct nested_trival_v1 {
   struct_pack::compatible<int, 114516> i;
   int h[3];
   char z;
-  friend bool operator==(const nested_trival_v1<T>&,
-                         const nested_trival_v1<T>&) = default;
+  friend bool operator==(const nested_trival_v1<T>& t,
+                         const nested_trival_v1<T>& o) {
+    bool test = t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d &&
+                t.e == o.e && t.f == o.f &&
+                memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+                memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i;
+    return test;
+  }
 };
 
 template <typename T>
@@ -958,8 +982,13 @@ struct nested_trival_v2 {
   struct_pack::compatible<int, 114516> i;
   int h[3];
   char z;
-  friend bool operator==(const nested_trival_v2<T>&,
-                         const nested_trival_v2<T>&) = default;
+  friend bool operator==(const nested_trival_v2<T>& t,
+                         const nested_trival_v2<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
+           t.j == o.j;
+  }
 };
 
 template <typename T>
@@ -976,8 +1005,13 @@ struct nested_trival_v3 {
   int h[3];
   char z;
   struct_pack::compatible<std::string, 114516> k;
-  friend bool operator==(const nested_trival_v3<T>&,
-                         const nested_trival_v3<T>&) = default;
+  friend bool operator==(const nested_trival_v3<T>& t,
+                         const nested_trival_v3<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
+           t.j == o.j && t.k == o.k;
+  }
 };
 
 TEST_CASE("test trival_serialzable_obj_with_compatible") {
@@ -991,7 +1025,7 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
             'I',
             {798214321.98743, 821304.084321},
             'Q'},
-      .g = "HELLOHIHI",
+      .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
       .h = {14, 1023213, 1432143231},
       .z = 'G'};
   auto op = [&](auto from) {
@@ -1004,13 +1038,14 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
                   .aa = 'I',
                   .b = {798214321.98743, 821304.084321},
                   .cc = 'Q'},
-            .g = "HELLOHIHI",
+            .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
             .h = {14, 1023213, 1432143231},
             .z = 'G'};
     {
       auto buffer = struct_pack::serialize(from);
       auto result = struct_pack::deserialize<decltype(to)>(buffer);
-      CHECK(result == to);
+      auto val = result.value();
+      CHECK(result.value() == to);
     }
     {
       auto buffer = struct_pack::serialize(to);
