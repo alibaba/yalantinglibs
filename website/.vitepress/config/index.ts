@@ -28,7 +28,7 @@ export default defineConfig(
         },
         //Locales config and theme-specify
         locales: {
-            'root': <any>en_LocaleConfig,
+            'en': <any>en_LocaleConfig,
             'zh': <any>zh_LocaleConfig,
         },
     }
