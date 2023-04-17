@@ -106,6 +106,65 @@ namespace struct_pack {
 
 /*!
  * \ingroup struct_pack
+ * \struct trivial_view
+ * \brief
+ * trivial_view<T> 是一个平凡结构体的视图，在类型系统上等价于T。
+ * 其作用是减少赋值/反序列化过程中的内存拷贝。
+ *
+ * 例如，假如有一个巨大的结构体Data
+ *
+ * ```cpp
+ * struct Data {
+ *   int x[10000],y[10000],z[10000];
+ * };
+ *
+ * 假设有协议：
+ * ```cpp
+ * struct Proto {
+ *   std::string name;
+ *   Data data;
+ * };
+ * void serialzie(std::string_view name, Data& data) {
+ *   Proto proto={.name = name, .data = data};
+ *   //从已有的数据构造对象时，需要花费大量时间拷贝
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<Proto>(data);
+ *   //反序列化时，需要花费大量时间拷贝
+ *   assert(result->name == name && result->data == data);
+ * }
+ * ```
+ *
+ * 可以发现，构造/反序列化时拷贝代价很大。
+ * 如何解决？我们可以改用视图：
+ * ```cpp
+ * struct ProtoView {
+ *   std::string_view name;
+ *   struct_pack::trivial_view<Data> data;
+ * };
+ * void serialzie(std::string_view name, Data& data) {
+ *   ProtoView proto={.name = name, .data = data};
+ *   //从已有的数据构造对象时，可以做到zero-copy
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<ProtoView>(data);
+ *   //反序列化是zero-copy的。
+ *   assert(result->name == name && result->data.get() == data);
+ * }
+ * ```
+ * 由于在类型系统上trivial_view<T>等价于T，故两者在内存布局上等价。
+ * 因此，序列化其中一者再反序列化到另外一者是合法的。
+ * ```cpp
+ * void serialzie(Proto& proto) {
+ *   auto buffer = struct_pack::serialize(proto);
+ *   auto result = struct_pack::deserialize<ProtoView>(data);
+ *   //反序列化是zero-copy的。
+ *   assert(result->name == name && result->data.get() == data);
+ * }
+ * ```
+ *
+ */
+
+/*!
+ * \ingroup struct_pack
  * \struct compatible
  * \brief
  * 这个类使用上类似于std::optional<T>，但其语义是添加一个能够保持向前兼容的字段。

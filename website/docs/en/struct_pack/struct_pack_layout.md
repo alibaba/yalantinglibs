@@ -102,9 +102,13 @@ Serialization results of all known data fields could be found in this payload.
 
 ## 3.1 Structural data
 
-Structural data types(such as struct, class, pair, tuple and so on) is a data container of defined data field. In struct_pack, all data fields in one struct are Sequential placed in the memory in the order of their definition in struct, and no more additional information required in this kind of memory layout. 
+Structural data types(such as struct, class, pair, tuple and so on) is a data container of defined data field. It only includes its members' information, and no more additional information required. 
 
-For example, if we define a struct person as bellow:
+### non-trivial struct
+
+If there has at least one non-trivial field in struct, or the struct is a `std::tuple<T...>`, this struct is a non-trivial struct.
+
+For example, if we define type `person` as bellow:
 ```cpp
 struct person {
   int age;
@@ -129,7 +133,68 @@ And serialization of one `person{.age=24,.name=std::string{256,'A'}}` object in 
 ![](./images/layout/release_person_long_name.svg)
 where the meta information header is `0x08`, which indicates a `size_type` length of `2` bytes.
 
+### trivial struct
 
+If all the fields in struct is trivial type, and the struct is not `std::tuple<T...>`, this struct is a trivial struct.
+
+A trivial type is :
+1. fundamental type.
+2. array type, and the value type is also a trivial type.
+3. `trivial_view<T>`, which T is a trivial type.
+4. trivial struct.
+
+The layout of trivial struct in struct_pack is as same as the C-style struct memory layout.
+
+### memory alignment
+
+The trivial struct's layout may be affected by memory alignment. So we should keep the same alignment when serialize/deserialize a trivial struct.
+
+struct_pack support two grammar to specify the alignment:
+
+The first one is add `alignas` at the struct declartion:
+```cpp
+struct alignas(4) foo {
+  char a,b,c;
+};
+static_assert(sizeof(foo) == 4);
+```
+We don't support use alignas at the field in the struct declartion now.
+
+The second one is `#pragma pack`:
+```cpp
+#pragma pack(1)
+struct foo {
+  char a;
+  int b;
+};
+#pragma pack()
+static_assert(sizeof(foo) == 5);
+```
+
+Remember, when use `#pragma pack`, we should specify the variable `struct_pack::pack_alignment<T>` as the `pack` value. 
+ ```cpp
+template<>
+constexpr std::size_t struct_pack::pack_alignment<foo> = 1;
+```
+
+When we use `alignas` and `#pragma pack` in the same time, we also need specify the variable `struct_pack::alignment<T>` as the `alignas` value。
+```cpp
+#pragma pack(1)
+struct alignas(8) foo {
+  char a;
+  int b;
+};
+#pragma pack()
+static_assert(sizeof(foo) == 8);
+static_assert(offsetof(foo,b) == 2);
+
+template<>
+constexpr std::size_t struct_pack::pack_alignment<foo> = 1;
+
+template<>
+constexpr std::size_t struct_pack::alignment<foo> = 8;
+
+```
 
 ## 3.2 fundamental types
 
@@ -205,7 +270,7 @@ Most data structures are supported in struct_pack and each of them has its dedic
 
 ### fixed-length arrays
 
-For C-style array, C++ `std::array` or user-defined arrays, array length information is not stored because it is known in compile time. All elements are encoded by individually coding the elements of the array in their natural order, 0 through n -1.
+For C-style array, C++ `std::array`, `std::span<T,size>` or user-defined arrays, array length information is not stored because it is known in compile time. All elements are encoded by individually coding the elements of the array in their natural order, 0 through n -1.
 
 For instance, serialization of `std::array<int,2>{24,42}` is encoded as the figure bellow:
 
@@ -213,7 +278,7 @@ For instance, serialization of `std::array<int,2>{24,42}` is encoded as the figu
 
 ### sequential containers
 
-For Sequential containers such as `std::vector`,`std::deque`,`std::list`,`std::string` or any user-defined structures, the serialization begins with the number of elements of `size_type`, then all elements are encoded in their natural order.
+For Sequential containers such as `std::vector`,`std::deque`,`std::list`,`std::string`,`std::string_view`,`std::span<T>` or any user-defined structures, the serialization begins with the number of elements of `size_type`, then all elements are encoded in their natural order.
 
 For example, an `std::string{"Hello"}` could be encoded as bellow:
 

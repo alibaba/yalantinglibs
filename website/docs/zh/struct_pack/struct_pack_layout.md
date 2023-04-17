@@ -92,7 +92,15 @@ struct person {
 
 ## 3.1 结构体字段
 
-结构体(struct,class,pair,tuple...)，是一系列字段的组合。在struct_pack的内存布局中，结构体本身并不包含额外的信息，所有的成员字段按从低到高的顺序排布就组成了整个结构体的内存布局。
+
+结构体(struct,class,pair,tuple...)，是一系列字段的组合。在struct_pack的内存布局中，结构体本身并不包含额外的信息，其内容只是成员字段的组合。
+
+
+### 非平凡结构体
+
+如果结构体内至少有一个非平凡的字段，或者该结构体是一个`std::tuple<T...>`, 那么这个结构体就是一个非平凡的结构体。
+
+其内存布局为：结构体的所有字段，按其定义顺序，从低到高紧密排列。
 
 例如, 我们定义一个person类型:
 ```cpp
@@ -114,12 +122,85 @@ struct person {
 
 上图元信息头为`0x04`，代表元信息含类型信息。
 
-
 在release模式下，序列化`person{.age=24,.name=std::string{256,'A'}}`对象，默认得到的结果为：
 
 ![](./images/layout/release_person_long_name.svg)
 
 上图元信息头为`0x08`，代表`size_type`的长度为`2`。
+
+### 平凡结构体
+
+假如结构体内所有的字段都是平凡的，且该结构体不是`std::tuple<T...>`, 那么这个结构体就是一个平凡的结构体。
+
+平凡字段的类型必须是下面几种类型中的一种：
+1. 基本类型
+2. 定长数组类型，且数组的元素类型是平凡结构体
+3. trivial_view<T>类型，且T是平凡类型
+4. 平凡结构体
+
+平凡结构体的内存布局等价于其对应的C语言结构体在内存中的布局。
+
+例如：
+```cpp
+struct foo {
+  int a;
+  double b;
+};
+该结构体序列化后的内存布局等价于其在C语言结构体中的内存布局。
+```
+
+### 内存对齐
+
+平凡结构体的内存布局可能会受到内存对齐的影响。因此序列化/反序列化平凡结构体时，需要保证其内存对齐一致。
+
+struct_pack允许用户自定义结构体的内存对齐，方便用户压缩空间，或是处理内存对齐有关的问题。
+
+struct_pack支持两种指定内存对齐的语法。
+
+第一种是在结构体声明的顶部中添加`alignas`: 
+```cpp
+struct alignas(4) foo {
+  char a,b,c;
+};
+static_assert(sizeof(foo) == 4);
+```
+注意，我们目前不支持直接在字段声明上添加alignas。
+
+第二种是`#pragma pack`:
+```cpp
+#pragma pack(1)
+struct foo {
+  char a;
+  int b;
+};
+#pragma pack()
+static_assert(sizeof(foo) == 5);
+```
+
+使用`#pragma pack`时需要特化变量`struct_pack::pack_alignment<T>`为pack指定的对齐值。
+```cpp
+template<>
+constexpr std::size_t struct_pack::pack_alignment<foo> = 1;
+```
+
+当同时使用`alignas`和`#pragma pack`时，还需要指定`struct_pack::alignment<T>`为alignas指定的对齐值。
+```cpp
+#pragma pack(1)
+struct alignas(8) foo {
+  char a;
+  int b;
+};
+#pragma pack()
+static_assert(sizeof(foo) == 8);
+static_assert(offsetof(foo,b) == 2);
+
+template<>
+constexpr std::size_t struct_pack::pack_alignment<foo> = 1;
+
+template<>
+constexpr std::size_t struct_pack::alignment<foo> = 8;
+
+```
 
 
 ## 3.2 基本类型字段
@@ -207,7 +288,7 @@ struct_pack支持多种数据结构，不同的数据结构有着不同的内存
 
 ### 定长数组字段
 
-包含C-style的数组类型或C++的`std::array`类型，或类型的自定义数据结构。
+包含C-style的数组类型或, `std::array`类型，`std::span<T,size>`类型，或类似的自定义数据结构。
 
 该字段的内存布局不包含长度信息（长度信息在编译期已知）。其布局为数组的成员按从低到高的顺序依次排列。
 
@@ -217,7 +298,7 @@ struct_pack支持多种数据结构，不同的数据结构有着不同的内存
 
 ### `container`字段
 
-包含顺序容器和字符串类型，如`std::vector`,`std::deque`,`std::list`，`std::string`或类似的自定义数据结构。
+包含顺序容器和字符串类型，如`std::vector`,`std::deque`,`std::list`，`std::string`, `std::string_view`, `std::span<T>`或类似的自定义数据结构。
 
 该字段的内存布局，首先是一个`size_type`大小的长度字段，该字段为无符号整数，编码类型为原码。接着是若干个`container`的成员，按下标从小到大排布。其数量由长度字段决定。
 

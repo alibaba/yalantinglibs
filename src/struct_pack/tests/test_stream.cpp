@@ -4,7 +4,6 @@
 
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
-#include "struct_pack/struct_pack/error_code.h"
 #include "test_struct.hpp"
 
 TEST_CASE("test serialize_to/deserialize file") {

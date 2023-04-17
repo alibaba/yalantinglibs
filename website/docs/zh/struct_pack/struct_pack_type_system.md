@@ -203,13 +203,11 @@ concept unique_ptr = requires(Type ptr) {
 
 ## 结构体
 
-struct_pack支持结构体类型。结构体内可以包含最多64个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的
+struct_pack支持结构体类型。结构体内可以包含最多64个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
 
-struct_pack将结构体分为两类：
+struct_pack将结构体分为两种：
 
-### 平凡结构体
-
-包括C++语言中原生的`struct/class`, `std::pair`和`tuplet::tuple`。
+### struct/class/std::pair/tuplet::tuple
 
 例如：
 
@@ -229,9 +227,9 @@ tuplet::tuple<int,std::string>
 ```
 在 struct_pack中被视作相同的类型。
 
-### 非平凡结构体
+### std::tuple
 
-指std::tuple，由于历史原因，其内存布局和普通的struct不同，出于优化考虑，我们在类型系统中将其和平凡结构体区分开来。
+由于历史原因，其内存布局和普通的struct不同，因此我们在类型系统中将其视作不同的类型。
 
 例如:
 
@@ -248,7 +246,44 @@ struct person {
 std::tuple<int,std::string>
 ```
 
-这两者是不同的类型，前者是平凡的结构体，而后者是非平凡的。
+这两者是不同的类型。
+
+### 平凡结构体
+
+假如一个类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，则该类型被视为平凡结构体类型。
+
+平凡字段是下面几种类型中的一种：
+1. 基本类型
+2. 定长数组类型，且数组的元素类型是平凡结构体
+3. trivial_view<T>类型，且T是平凡类型
+4. 平凡结构体
+
+平凡结构体的特点是，它的类型信息不但含有各字段的类型信息，还包含了该类型的内存对齐值。
+
+
+struct_pack认为具有不同对齐的平凡结构体是不同的类型，并可以在反序列化时安全的检查出错误。
+例如：
+
+```cpp
+#pragma pack(1)
+struct foo {
+  int a;
+  double b;
+};
+#pragma()
+struct bar {
+  int a;
+  double b;
+};
+void test() {
+  foo f{};
+  auto buffer = struct_pack::serialize(f);
+  auto result = struct_pack::deserialize<bar>(buffer);
+  // foo和 bar是不同的类型，因为其内存对齐不同，导致其内存布局也不同。
+  assert(result.has_value() == false);
+}
+```
+
 
 ## 兼容类型
 
