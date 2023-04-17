@@ -12,12 +12,12 @@ yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, s
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
-| OS (Compiler Version)                          | Status                                                                                                   |
-|------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_clang.yml/badge.svg?branch=main) |
-| Ubuntu 22.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/linux_gcc.yml/badge.svg?branch=main)   |
-| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
-| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
+| OS (Compiler Version)                          | Status                                                                                                    |
+|------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_clang.yml/badge.svg?branch=main) |
+| Ubuntu 22.04 (gcc 11.2.0)                      | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/ubuntu_gcc.yml/badge.svg?branch=main)   |
+| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)          |
+| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)      |
 
 ## coro_rpc
 
