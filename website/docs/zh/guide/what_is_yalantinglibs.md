@@ -329,4 +329,4 @@ TODO
 
 yaLanTingLibs 基于 Apache License (Version 2.0) 开发。
 本产品包含了许多基于其他开源许可证的第三方组件。
-你可以查看[NOTICE文件](/NOTICE)来了解更多信息。
+你可以查看[NOTICE文件](https://github.com/alibaba/yalantinglibs/blob/main/NOTICE)来了解更多信息。
