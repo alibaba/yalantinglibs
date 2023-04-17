@@ -89,6 +89,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
     complicated_object v1{};
     auto ec = deserialize_to(v1, ret.data(), ret.size());
     auto pair = get_field<complicated_object, 2>(ret.data(), ret.size());
+    CHECK(ec == struct_pack::errc{});
     CHECK(pair);
     CHECK(pair.value() == "hello");
     pair = get_field<complicated_object, 2>(ret);
@@ -124,10 +125,8 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
     CHECK(res2 == v.o);
 
     auto res = get_field_to<complicated_object, 14>(res2, ret.data(), 24);
-    CHECK(ec == struct_pack::errc{});
-    if (ec != struct_pack::errc{}) {
-      CHECK(ec == struct_pack::errc::no_buffer_space);
-    }
+
+    CHECK(res == struct_pack::errc::no_buffer_space);
   }
 }
 
@@ -445,9 +444,6 @@ struct A_v3 {
 };
 }  // namespace trival_test
 
-constexpr bool test = struct_pack::detail::trivial_view<
-    struct_pack::trivial_view<std::array<long, 10000>>>;
-
 bool test_equal(const trival_test::A_v1& v1, const trival_test::A_v1& v2) {
   return v1.a == v2.a && v1.c == v2.c &&
          (v1.b.a == v2.b.a && v1.b.c == v2.b.c && v1.b.d == v2.b.d &&
@@ -513,7 +509,6 @@ TEST_CASE("testing trivial_view type") {
                                   .c = 'D'},
                             .c = 'E'};
   trival_test::A_v3 a_v3 = {.a = 'A', .b = a_v1.b, .c = 'E'};
-  constexpr auto cnt = struct_pack::members_count<trival_test::A_v2>;
   {
     std::vector<char> buffer = struct_pack::serialize(a_v1);
     auto result = struct_pack::deserialize<trival_test::A_v1>(buffer);

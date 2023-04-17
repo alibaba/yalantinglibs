@@ -944,8 +944,9 @@ struct nested_trival_v0 {
   }
 };
 
-constexpr auto i2 = struct_pack::detail::align::calculate_padding_size<
-    nested_trival_v0<compatible_with_trival_field_v1>>();
+[[maybe_unused]] constexpr auto i2 =
+    struct_pack::detail::align::calculate_padding_size<
+        nested_trival_v0<compatible_with_trival_field_v1>>();
 
 template <typename T>
 struct nested_trival_v1 {
@@ -1044,7 +1045,6 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
     {
       auto buffer = struct_pack::serialize(from);
       auto result = struct_pack::deserialize<decltype(to)>(buffer);
-      auto val = result.value();
       CHECK(result.value() == to);
     }
     {
