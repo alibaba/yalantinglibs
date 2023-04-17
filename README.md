@@ -27,9 +27,9 @@ Very easy-to-use, coroutine-based, high performance rpc framework with C++20, mo
 
 You can finish a rpc server and rpc client in 5 minutes!
 
-[English Introduction](https://alibaba.github.io/yalantinglibs/guide/coro-rpc-intro.html) | [中文简介](https://alibaba.github.io/yalantinglibs/zh/guide/coro-rpc-intro.html)  
+[English Introduction](https://alibaba.github.io/yalantinglibs/en/coro_rpc/coro_rpc_introduction.html)
 
-English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
+[English API] (TODO)
 
 [Talk (Chinese)](https://alibaba.github.io/yalantinglibs/coro_rpc_introduction_purecpp_talk.pdf) of coro_rpc on purecpp conference.
 
@@ -83,16 +83,16 @@ Based on compile-time reflection, very easy to use, high performance serializati
 
 Only one line code to finish serialization and deserialization, 10-50x faster than protobuf.
 
-[English Introduction](https://alibaba.github.io/yalantinglibs/guide/struct-pack-intro.html) | [中文简介](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)
+[English Introduction](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html)
 
-English API(TODO) | [中文API](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
+[English API] (TODO)
 
-[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://alibaba.github.io/yalantinglibs/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
+[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://alibaba.github.io/yalantinglibs/resource/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) of struct_pack on CppCon2022
 
 
 [(Video) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://www.youtube.com/watch?v=myhB8ZlwOlE)  on cppcon2022
 
-[(Slides)(Chinese)](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
+[(Slides)(Chinese)](https://alibaba.github.io/yalantinglibs/resource/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
 
 [(Video)(Chinese)](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the video record.
 
@@ -113,7 +113,7 @@ std::vector<char> buffer = struct_pack::serialize(person1);
 // one line code deserialization
 auto person2 = deserialize<person>(buffer);
 ```
-See more examples [here](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/examples).
+See more examples [here](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#serialization).
 
 ## struct_json
 reflection-based json lib, very easy to do struct to json and json to struct.
@@ -318,7 +318,7 @@ No dependency.
 
 # How to generate document
 
-see [Build Website](https://alibaba.github.io/yalantinglibs/README.html)
+see [Build Website](https://github.com/alibaba/yalantinglibs/blob/main/website/README.md)
 
 # How to Contribute
 1. Create an issue in the issue template.

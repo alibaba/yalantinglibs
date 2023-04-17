@@ -25,11 +25,11 @@ coro是一个高度易用, head-only，基于协程的C++20高性能rpc框架库
 
 你可以在几分钟之内就构建一个高性能的rpc服务端和客户端！
 
-[简介](https://alibaba.github.io/yalantinglibs/zh/guide/coro-rpc-intro.html)  
+[简介](https://alibaba.github.io/yalantinglibs/zh/coro_rpc/coro_rpc_introduction.html)  
 
 [API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
 
-[Purecpp 演讲稿](https://alibaba.github.io/yalantinglibs/coro_rpc_introduction_purecpp_talk.pdf).
+[Purecpp 演讲稿](https://alibaba.github.io/yalantinglibs/resource/coro_rpc_introduction_purecpp_talk.pdf).
 
 [Purecpp 会议视频](https://live.csdn.net/room/csdnlive1/bKFbKP7T)，从04:55:08开始。
 
@@ -79,15 +79,15 @@ int main() {
 
 struct_pack是一个基于编译期反射，易用且高性能的序列化库，head-only。一行代码即可完成序列化/反序列化。性能远超protobuf等传统序列化库。
 
-[简介与设计文档](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)
+[简介与设计文档](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html)
 
-[API文档](https://alibaba.github.io/yalantinglibs/cn/html/group__struct__pack.html)
+[API文档](https://alibaba.github.io/yalantinglibs/doxygen_cn/html/group__struct__pack.html)
 
-[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++20](https://alibaba.github.io/yalantinglibs/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) CppCon2022 的演讲稿。
+[(Slides) A Faster Serialization Library Based on Compile-time Reflection and C++20](https://alibaba.github.io/yalantinglibs/resource/A%20Faster%20Serialization%20Library%20Based%20on%20Compile-time%20Reflection%20and%20C++%2020.pdf) CppCon2022 的演讲稿。
 
 [(Video)  A Faster Serialization Library Based on Compile-time Reflection and C++20](https://www.youtube.com/watch?v=myhB8ZlwOlE) CppCon2022 的演讲视频。
 
-[(Slides) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://alibaba.github.io/yalantinglibs/struct_pack_introduce_CN.pdf) Purecpp的演讲稿。
+[(Slides) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://alibaba.github.io/yalantinglibs/resource/struct_pack_introduce_CN.pdf) Purecpp的演讲稿。
 
 [(Video) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://live.csdn.net/room/csdnlive1/bKFbKP7T) Purecpp的演讲视频, 从 01:32:20 开始
 
@@ -109,7 +109,7 @@ std::vector<char> buffer = struct_pack::serialize(person1);
 // 一行代码反序列化
 auto person2 = deserialize<person>(buffer);
 ```
-更多示例[请见](https://github.com/alibaba/yalantinglibs/tree/main/src/struct_pack/examples).
+更多示例[请见](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%BA%8F%E5%88%97%E5%8C%96).
 
 ## struct_json
 基于反射的json库，轻松实现结构体和json之间的映射。
@@ -316,7 +316,7 @@ TODO
 
 # 如何生成文档
 
-请见[生成网站](https://alibaba.github.io/yalantinglibs/README.html)
+请见[生成网站](https://github.com/alibaba/yalantinglibs/blob/main/website/README.md)
 
 # 如何贡献代码
 1. 根据issue模板提交一个issue。
