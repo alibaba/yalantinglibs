@@ -141,7 +141,7 @@ int main() {
 coro_http_client is a C++20 coroutine http(https) client, include: get/post, websocket, multipart file upload, chunked and ranges download etc.
 
 ### get/post
-```c++
+```cpp
 #include "coro_http/coro_http_client.h"
 using namespace ylt;
 
@@ -161,7 +161,7 @@ int main() {
 ```
 
 ### websocket
-```c++
+```cpp
 async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
@@ -184,7 +184,7 @@ async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
 ```
 
 ### upload/download
-```c++
+```cpp
 async_simple::coro::Lazy<void> upload_files(coro_http_client &client) {
   std::string uri = "http://example.com";
   
