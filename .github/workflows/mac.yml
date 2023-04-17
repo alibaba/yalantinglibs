@@ -1,13 +1,14 @@
 name: macOS Monterey 12
 
 on:
+  workflow_call:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
 
 jobs:
-  build_on_mac:
+  mac_clang:
     strategy:
       matrix:
         mode: [ Debug ]  #mode: [Release, Debug]
@@ -27,14 +28,18 @@ jobs:
         run: HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install openssl protobuf
 
       - name: Check protoc
-        run: |
-          protoc --version
+        run: protoc --version
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+
       - name: Configure CMake
-        run: OPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}} -G Ninja
+        run: OPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
