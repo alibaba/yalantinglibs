@@ -25,11 +25,6 @@ if (Protobuf_FOUND)
             )
 
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
-else ()
-    target_sources(struct_pack_benchmark PRIVATE
-            generated_code/benchmark.struct_pb.cc
-            generated_code/benchmark.struct_pb.h
-            )
 endif ()
 
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
