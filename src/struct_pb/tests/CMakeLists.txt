@@ -53,17 +53,4 @@ if (Protobuf_FOUND)
             ${STRUCT_PB_PROTO_SRCS2}
             ${STRUCT_PB_PROTO_HDRS2}
             )
-else()
-    target_sources(test_struct_pb PRIVATE
-            generated_code/test_pb.struct_pb.cc
-            generated_code/test_pb.struct_pb.h
-            generated_code/test_bad_identifiers.struct_pb.cc
-            generated_code/test_bad_identifiers.struct_pb.h
-            generated_code/test_large_enum_value.struct_pb.cc
-            generated_code/test_large_enum_value.struct_pb.h
-            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code/benchmark.struct_pb.cc
-            ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code/benchmark.struct_pb.h
-            )
-    target_include_directories(test_struct_pb PRIVATE generated_code)
-    target_include_directories(test_struct_pb PRIVATE ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark/generated_code)
 endif ()
