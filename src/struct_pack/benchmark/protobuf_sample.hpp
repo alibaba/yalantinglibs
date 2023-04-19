@@ -16,7 +16,9 @@
 
 #include "ScopedTimer.hpp"
 #include "config.hpp"
+#ifdef HAVE_PROTOBUF
 #include "data_def.pb.h"
+#endif
 #include "no_op.h"
 #include "sample.hpp"
 namespace protobuf_sample {
