@@ -10,39 +10,61 @@
 #include "sample.hpp"
 #include "struct_pack/struct_pack.hpp"
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<person> = type_info_config::disable;
-};
+inline auto create_rects(size_t object_count) {
+  rect<int32_t> rc{1, 11, 1111, 111111};
+  std::vector<rect<int32_t>> v{};
+  for (int i = 0; i < object_count; i++) {
+    v.push_back(rc);
+  }
+  return v;
+}
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<std::vector<person>> =
-    type_info_config::disable;
-};
+inline auto create_persons(size_t object_count) {
+  std::vector<person> v{};
+  person p{.age = 24, .name = "tom", .id = 432798, .salary = 65536.42};
+  for (int i = 0; i < object_count; i++) {
+    v.push_back(p);
+  }
+  return v;
+}
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<rect<int32_t>> =
-    type_info_config::disable;
-};
+inline std::vector<Monster> create_monsters(size_t object_count) {
+  std::vector<Monster> v{};
+  Monster m = {
+      .pos = {1, 2, 3},
+      .mana = 16,
+      .hp = 24,
+      .name = "it is a test",
+      .inventory = "\1\2\3\4",
+      .color = Color::Red,
+      .weapons = {{"gun", 42}, {"shotgun", 56}},
+      .equipped = {"air craft", 67},
+      .path = {{7, 8, 9}, {71, 81, 91}},
+  };
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<std::vector<rect<int32_t>>> =
-    type_info_config::disable;
-};
+  Monster m1 = {
+      .pos = {11, 22, 33},
+      .mana = 161,
+      .hp = 241,
+      .name = "it is a test, ok",
+      .inventory = "\24\25\26\24",
+      .color = Color::Red,
+      .weapons = {{"gun", 421}, {"shotgun", 561}},
+      .equipped = {"air craft", 671},
+      .path = {{71, 82, 93}, {711, 821, 931}},
+  };
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<Monster> = type_info_config::disable;
-};
+  for (int i = 0; i < object_count / 2; i++) {
+    v.push_back(m);
+    v.push_back(m1);
+  }
 
-namespace struct_pack {
-template <>
-constexpr inline auto enable_type_info<std::vector<Monster>> =
-    type_info_config::disable;
-};
+  if (object_count % 2 == 1) {
+    v.push_back(m);
+  }
+
+  return v;
+}
 
 struct struct_pack_sample : public base_sample {
   static inline constexpr LibType lib_type = LibType::STRUCT_PACK;

@@ -15,6 +15,10 @@
  */
 #pragma once
 
+#if __has_include(<msgpack.hpp>)
+#define HAVE_MSGPACK 1
+#endif
+
 #ifdef HAVE_MSGPACK
 #include <msgpack.hpp>
 #endif
@@ -26,9 +30,9 @@
 #include <valarray>
 #include <vector>
 struct person {
-  int32_t id;
+  int32_t age;
   std::string name;
-  int age;
+  int32_t id;
   double salary;
 #ifdef HAVE_MSGPACK
   MSGPACK_DEFINE(id, name, age, salary);
@@ -97,59 +101,3 @@ struct Monster {
                  equipped, path);
 #endif
 };
-
-inline auto create_rects(size_t object_count) {
-  rect<int32_t> rc{65536, 65536, 65536, 65536};
-  std::vector<rect<int32_t>> v{};
-  for (int i = 0; i < object_count; i++) {
-    v.push_back(rc);
-  }
-  return v;
-}
-
-inline auto create_persons(size_t object_count) {
-  std::vector<person> v{};
-  person p{65536, "tom", 65536, 65536.42};
-  for (int i = 0; i < object_count; i++) {
-    v.push_back(p);
-  }
-  return v;
-}
-
-inline std::vector<Monster> create_monsters(size_t object_count) {
-  std::vector<Monster> v{};
-  Monster m = {
-      .pos = {1, 2, 3},
-      .mana = 16,
-      .hp = 24,
-      .name = "it is a test",
-      .inventory = "\1\2\3\4",
-      .color = Color::Red,
-      .weapons = {{"gun", 42}, {"mission", 56}},
-      .equipped = {"air craft", 67},
-      .path = {{7, 8, 9}},
-  };
-
-  Monster m1 = {
-      .pos = {11, 22, 33},
-      .mana = 161,
-      .hp = 241,
-      .name = "it is a test, ok",
-      .inventory = "\24\25\26\24",
-      .color = Color::Red,
-      .weapons = {{"gun", 421}, {"mission", 561}},
-      .equipped = {"air craft", 671},
-      .path = {{71, 82, 93}},
-  };
-
-  for (int i = 0; i < object_count / 2; i++) {
-    v.push_back(m);
-    v.push_back(m1);
-  }
-
-  if (object_count % 2 == 1) {
-    v.push_back(m);
-  }
-
-  return v;
-}

@@ -5,7 +5,7 @@
 #include <valarray>
 
 #include "ScopedTimer.hpp"
-#include "benchmark.struct_pb.h"
+#include "data_def.struct_pb.h"
 #include "no_op.h"
 #include "sample.hpp"
 namespace struct_pb_sample {

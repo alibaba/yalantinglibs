@@ -38,8 +38,8 @@ struct base_sample {
     return it->second;
   }
 
-  auto get_ser_time_elapsed_map() { return ser_time_elapsed_map_; }
-  auto get_deser_time_elapsed_map() { return deser_time_elapsed_map_; }
+  auto &get_ser_time_elapsed_map() { return ser_time_elapsed_map_; }
+  auto &get_deser_time_elapsed_map() { return deser_time_elapsed_map_; }
 
  protected:
   std::unordered_map<SampleType, size_t> buf_size_map_;

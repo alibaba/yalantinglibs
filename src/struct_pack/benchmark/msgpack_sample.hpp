@@ -3,6 +3,8 @@
 #include <memory>
 #include <vector>
 
+#include "msgpack.hpp"
+
 #include "ScopedTimer.hpp"
 #include "config.hpp"
 #include "data_def.hpp"

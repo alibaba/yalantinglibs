@@ -15,8 +15,8 @@
  */
 
 #include "ScopedTimer.hpp"
-#include "benchmark.pb.h"
 #include "config.hpp"
+#include "data_def.pb.h"
 #include "no_op.h"
 #include "sample.hpp"
 namespace protobuf_sample {
@@ -24,10 +24,10 @@ auto create_rects(size_t object_count) {
   mygame::rect32s rcs{};
   for (int i = 0; i < object_count; i++) {
     mygame::rect32 *rc = rcs.add_rect32_list();
-    rc->set_height(65536);
-    rc->set_width(65536);
-    rc->set_x(65536);
-    rc->set_y(65536);
+    rc->set_height(1);
+    rc->set_width(11);
+    rc->set_x(1111);
+    rc->set_y(111111);
   }
   return rcs;
 }
@@ -36,9 +36,9 @@ mygame::persons create_persons(size_t object_count) {
   mygame::persons ps;
   for (int i = 0; i < object_count; i++) {
     auto *p = ps.add_person_list();
-    p->set_age(65536);
+    p->set_age(24);
     p->set_name("tom");
-    p->set_id(65536);
+    p->set_id(432798);
     p->set_salary(65536.42);
   }
   return ps;
@@ -73,6 +73,10 @@ mygame::Monsters create_monsters(size_t object_count) {
       p1->set_x(7);
       p1->set_y(8);
       p1->set_z(9);
+      auto p2 = m->add_path();
+      p1->set_x(71);
+      p1->set_y(81);
+      p1->set_z(91);
     }
     {
       auto m = Monsters.add_monsters();
@@ -90,7 +94,7 @@ mygame::Monsters create_monsters(size_t object_count) {
       w1->set_name("gun");
       w1->set_damage(421);
       auto w2 = m->add_weapons();
-      w2->set_name("mission");
+      w2->set_name("shotgun");
       w2->set_damage(561);
       auto w3 = new mygame::Weapon;
       w3->set_name("air craft");
@@ -100,6 +104,10 @@ mygame::Monsters create_monsters(size_t object_count) {
       p1->set_x(71);
       p1->set_y(82);
       p1->set_z(93);
+      auto p2 = m->add_path();
+      p2->set_x(711);
+      p2->set_y(821);
+      p2->set_z(931);
     }
   }
 
