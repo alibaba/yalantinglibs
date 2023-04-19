@@ -13,20 +13,25 @@ enum class LibType {
   STRUCT_PB,
   MSGPACK,
   PROTOBUF,
+  FLATBUFFER,
 };
 enum class SampleType { RECT, RECTS, PERSON, PERSONS, MONSTER, MONSTERS };
 
 inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
-    {SampleType::RECT, "1 rect"},       {SampleType::RECTS, "many rects"},
-    {SampleType::PERSON, "1 person"},   {SampleType::PERSONS, "many persons"},
-    {SampleType::MONSTER, "1 monster"}, {SampleType::MONSTERS, "many monsters"},
+    {SampleType::RECT, "1 rect"},
+    {SampleType::RECTS, std::to_string(OBJECT_COUNT) + " rects"},
+    {SampleType::PERSON, "1 person"},
+    {SampleType::PERSONS, std::to_string(OBJECT_COUNT) + " persons"},
+    {SampleType::MONSTER, "1 monster"},
+    {SampleType::MONSTERS, std::to_string(OBJECT_COUNT) + " monsters"},
 };
 
 inline const std::unordered_map<LibType, std::string> g_lib_name_map = {
     {LibType::STRUCT_PACK, "struct_pack"},
     {LibType::STRUCT_PB, "struct_pb"},
     {LibType::MSGPACK, "msgpack"},
-    {LibType::PROTOBUF, "protobuf"}};
+    {LibType::PROTOBUF, "protobuf"},
+    {LibType::FLATBUFFER, "flatbuffer"}};
 
 inline const std::vector<SampleType> g_sample_type_vec = {
     SampleType::RECT,    SampleType::RECTS,   SampleType::PERSON,

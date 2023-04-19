@@ -24,7 +24,8 @@ class ScopedTimer {
     size_t len = strlen(m_name);
     std::string space = get_space_str(len, 39);
 
-    std::cout << m_name << " : " << space << dur.count() << " ns\n";
+    std::cout << m_name << " : " << space << dur.count() / ITERATIONS
+              << " ns\n";
   }
 
  private:

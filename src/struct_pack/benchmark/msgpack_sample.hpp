@@ -6,6 +6,7 @@
 #include "ScopedTimer.hpp"
 #include "config.hpp"
 #include "data_def.hpp"
+#include "msgpack.hpp"
 #include "no_op.h"
 #include "sample.hpp"
 struct tbuffer : public std::vector<char> {
