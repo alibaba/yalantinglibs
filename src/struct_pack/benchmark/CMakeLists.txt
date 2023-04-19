@@ -36,7 +36,7 @@ endif ()
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
 target_compile_definitions(struct_pack_benchmark PRIVATE STRUCT_PACK_OPTIMIZE)
 
-find_package(Flatbuffers REQUIRED)
+find_package(Flatbuffers)
 if (Flatbuffers_FOUND)
     message(STATUS "Flatbuffers_FOUND: ${Flatbuffers_FOUND}")
     add_custom_command(
