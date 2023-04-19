@@ -2,10 +2,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 cc_binary(
     name = "struct_pack_benchmark",
-    srcs = glob([
-        "generated_code/*.cc",
-        "generated_code/*.h",
-    ]) + [
+    srcs = [
         "ScopedTimer.hpp",
         "benchmark.cpp",
         "config.hpp",
