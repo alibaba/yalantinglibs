@@ -5,9 +5,13 @@
 #include <valarray>
 
 #include "ScopedTimer.hpp"
-#include "data_def.struct_pb.h"
 #include "no_op.h"
 #include "sample.hpp"
+
+#ifdef HAVE_FLATBUFFER
+#include "data_def.struct_pb.h"
+#endif
+
 namespace struct_pb_sample {
 
 auto create_rects(std::size_t object_count) {
