@@ -30,7 +30,6 @@ else ()
             generated_code/benchmark.struct_pb.cc
             generated_code/benchmark.struct_pb.h
             )
-    target_include_directories(struct_pack_benchmark PRIVATE generated_code)
 endif ()
 
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
