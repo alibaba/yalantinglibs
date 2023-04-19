@@ -19,7 +19,7 @@ if (Protobuf_FOUND)
     protobuf_generate_cpp(PROTO_SRCS
             PROTO_HDRS
             test_pb.proto
-            benchmark.proto
+            data_def.proto
             )
     target_include_directories(test_struct_pb PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
     target_sources(test_struct_pb PRIVATE
@@ -37,7 +37,7 @@ if (Protobuf_FOUND)
             )
     protobuf_generate_struct_pb(STRUCT_PB_TEST_BENCHMARK_PROTO_SRCS
             STRUCT_PB_TEST_BENCHMARK_PROTO_HDRS
-            benchmark.proto
+            data_def.proto
             OPTION "namespace=struct_pb_sample"
             )
     target_sources(test_struct_pb PRIVATE

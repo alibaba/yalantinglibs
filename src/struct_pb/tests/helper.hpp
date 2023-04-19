@@ -1,7 +1,7 @@
 #pragma once
 #include <optional>
 
-#include "benchmark.struct_pb.h"
+#include "data_def.struct_pb.h"
 #include "hex_printer.hpp"
 #include "struct_pb/struct_pb.hpp"
 #include "test_pb.struct_pb.h"

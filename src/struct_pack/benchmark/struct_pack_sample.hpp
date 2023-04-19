@@ -21,7 +21,7 @@ inline auto create_rects(size_t object_count) {
 
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
-  person p{.age = 24, .name = "tom", .id = 432798, .salary = 65536.42};
+  person p{.id = 432798, .name = "tom", .age = 24, .salary = 65536.42};
   for (int i = 0; i < object_count; i++) {
     v.push_back(p);
   }

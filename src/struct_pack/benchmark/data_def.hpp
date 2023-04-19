@@ -30,9 +30,9 @@
 #include <valarray>
 #include <vector>
 struct person {
-  int32_t age;
-  std::string name;
   int32_t id;
+  std::string name;
+  int age;
   double salary;
 #ifdef HAVE_MSGPACK
   MSGPACK_DEFINE(id, name, age, salary);
