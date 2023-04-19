@@ -8,7 +8,7 @@
 #include "no_op.h"
 #include "sample.hpp"
 
-#ifdef HAVE_FLATBUFFER
+#ifdef HAVE_PROTOBUF
 #include "data_def.struct_pb.h"
 #endif
 

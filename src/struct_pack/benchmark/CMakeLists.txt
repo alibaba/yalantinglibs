@@ -39,12 +39,10 @@ target_compile_definitions(struct_pack_benchmark PRIVATE STRUCT_PACK_OPTIMIZE)
 find_package(Flatbuffers)
 if (Flatbuffers_FOUND)
     message(STATUS "Flatbuffers_FOUND: ${Flatbuffers_FOUND}")
-    add_custom_command(
-            TARGET struct_pack_benchmark PRE_BUILD
+    execute_process(
             COMMAND flatc ./data_def.fbs --cpp
             COMMENT "generate flatbuffer"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            VERBATIM
     )
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_FLATBUFFER)
 endif()
