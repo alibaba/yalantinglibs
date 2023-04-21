@@ -146,7 +146,7 @@ coro_http is a C++20 coroutine http(https) client, include: get/post, websocket,
 ### get/post
 ```c++
 #include "coro_http/coro_http_client.h"
-using namespace ylt;
+using namespace coro_http;
 
 async_simple::coro::Lazy<void> get_post(coro_http_client &client) {
   std::string uri = "http://www.example.com";
