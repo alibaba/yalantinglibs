@@ -65,7 +65,7 @@ async_simple::coro::Lazy<void> test_async_client(
 
 async_simple::coro::Lazy<void> test_async_ssl_client(
     coro_http::coro_http_client &client) {
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
   std::string uri2 = "https://www.baidu.com";
   std::string uri3 = "https://cn.bing.com";
   [[maybe_unused]] auto ec =

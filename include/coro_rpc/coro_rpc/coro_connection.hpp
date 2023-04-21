@@ -105,7 +105,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
   }
 
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
   void init_ssl(asio::ssl::context &ssl_ctx) {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         socket_, ssl_ctx);
@@ -116,7 +116,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol>
   async_simple::coro::Lazy<void> start(
       typename rpc_protocol::router &router) noexcept {
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
       ELOGV(INFO, "begin to handshake conn_id %d", conn_id_);
@@ -137,7 +137,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     else {
 #endif
       co_await start_impl<rpc_protocol>(router, socket_);
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
     }
 #endif
   }
@@ -396,7 +396,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
       std::array<asio::const_buffer, 2> buffers{asio::buffer(msg.first),
                                                 asio::buffer(msg.second)};
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
         ret = co_await asio_util::async_write(*ssl_stream_, buffers);
@@ -404,7 +404,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       else {
 #endif
         ret = co_await asio_util::async_write(socket_, buffers);
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
       }
 #endif
       if (ret.first)
@@ -511,7 +511,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   std::any tag_;
 
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
       nullptr;
   bool use_ssl_ = false;
