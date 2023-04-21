@@ -20,7 +20,7 @@
 void test_sync_client() {
   {
     std::string uri = "http://www.baidu.com";
-    ylt::coro_http_client client{};
+    coro_http::coro_http_client client{};
     auto result = client.get(uri);
     if (result.net_err) {
       std::cout << result.net_err.message() << "\n";
@@ -28,12 +28,12 @@ void test_sync_client() {
     std::cout << result.status << "\n";
     std::cout << result.resp_body << "\n";
 
-    result = client.post(uri, "hello", ylt::req_content_type::json);
+    result = client.post(uri, "hello", coro_http::req_content_type::json);
     std::cout << result.status << "\n";
   }
 
   {
-    ylt::coro_http_client client{};
+    coro_http::coro_http_client client{};
     std::string uri = "http://cn.bing.com";
     auto result = client.get(uri);
     if (result.net_err) {
@@ -41,13 +41,13 @@ void test_sync_client() {
     }
     std::cout << result.status << "\n";
 
-    result = client.post(uri, "hello", ylt::req_content_type::json);
+    result = client.post(uri, "hello", coro_http::req_content_type::json);
     std::cout << result.status << "\n";
   }
 }
 
 async_simple::coro::Lazy<void> test_async_client(
-    ylt::coro_http_client &client) {
+    coro_http::coro_http_client &client) {
   std::string uri = "http://www.baidu.com";
   auto result = co_await client.async_get(uri);
   if (result.net_err) {
@@ -58,13 +58,13 @@ async_simple::coro::Lazy<void> test_async_client(
   result = co_await client.async_get(uri);
   std::cout << result.status << "\n";
 
-  result =
-      co_await client.async_post(uri, "hello", ylt::req_content_type::string);
+  result = co_await client.async_post(uri, "hello",
+                                      coro_http::req_content_type::string);
   std::cout << result.status << "\n";
 }
 
 async_simple::coro::Lazy<void> test_async_ssl_client(
-    ylt::coro_http_client &client) {
+    coro_http::coro_http_client &client) {
 #ifdef ENABLE_SSL
   std::string uri2 = "https://www.baidu.com";
   std::string uri3 = "https://cn.bing.com";
@@ -78,11 +78,12 @@ async_simple::coro::Lazy<void> test_async_ssl_client(
   co_return;
 }
 
-async_simple::coro::Lazy<void> test_websocket(ylt::coro_http_client &client) {
+async_simple::coro::Lazy<void> test_websocket(
+    coro_http::coro_http_client &client) {
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
   });
-  client.on_ws_msg([](ylt::resp_data data) {
+  client.on_ws_msg([](coro_http::resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
       return;
@@ -105,7 +106,8 @@ async_simple::coro::Lazy<void> test_websocket(ylt::coro_http_client &client) {
   std::cout << result.net_err << "\n";
 }
 
-async_simple::coro::Lazy<void> upload_files(ylt::coro_http_client &client) {
+async_simple::coro::Lazy<void> upload_files(
+    coro_http::coro_http_client &client) {
   client.add_str_part("hello", "world");
   client.add_str_part("key", "value");
   client.add_file_part("test", "test.jpg");
@@ -118,14 +120,15 @@ async_simple::coro::Lazy<void> upload_files(ylt::coro_http_client &client) {
   std::cout << result.status << "\n";
 }
 
-async_simple::coro::Lazy<void> download_files(ylt::coro_http_client &client) {
+async_simple::coro::Lazy<void> download_files(
+    coro_http::coro_http_client &client) {
   auto result = co_await client.async_download("http://example.com/test.jpg",
                                                "myfile.jpg");
   std::cout << result.status << "\n";
 }
 
 async_simple::coro::Lazy<void> ranges_download_files(
-    ylt::coro_http_client &client) {
+    coro_http::coro_http_client &client) {
   auto result = co_await client.async_download("http://example.com/test.txt",
                                                "myfile.txt", "1-10,11-16");
   std::cout << result.status << "\n";
@@ -134,24 +137,24 @@ async_simple::coro::Lazy<void> ranges_download_files(
 int main() {
   test_sync_client();
 
-  ylt::coro_http_client client{};
+  coro_http::coro_http_client client{};
   async_simple::coro::syncAwait(test_async_client(client));
 
-  ylt::coro_http_client ssl_client{};
+  coro_http::coro_http_client ssl_client{};
   async_simple::coro::syncAwait(test_async_ssl_client(ssl_client));
 
-  ylt::coro_http_client ws_client{};
+  coro_http::coro_http_client ws_client{};
   async_simple::coro::syncAwait(test_websocket(ws_client));
 
-  ylt::coro_http_client upload_client{};
+  coro_http::coro_http_client upload_client{};
   upload_client.set_timeout(std::chrono::seconds(3));
   async_simple::coro::syncAwait(upload_files(upload_client));
 
-  ylt::coro_http_client download_client{};
+  coro_http::coro_http_client download_client{};
   download_client.set_timeout(std::chrono::seconds(3));
   async_simple::coro::syncAwait(download_files(download_client));
 
-  ylt::coro_http_client ranges_download_client{};
+  coro_http::coro_http_client ranges_download_client{};
   ranges_download_client.set_timeout(std::chrono::seconds(3));
   async_simple::coro::syncAwait(ranges_download_files(ranges_download_client));
 }

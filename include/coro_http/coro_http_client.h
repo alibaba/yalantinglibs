@@ -16,8 +16,8 @@
 #pragma once
 #include <cinatra/coro_http_client.hpp>
 
-namespace ylt {
+namespace coro_http {
 using coro_http_client = cinatra::coro_http_client;
 using req_content_type = cinatra::req_content_type;
 using resp_data = cinatra::resp_data;
-}  // namespace ylt
+}  // namespace coro_http
