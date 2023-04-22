@@ -37,7 +37,7 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-arch-${{ matrix.arch}}
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
       - name: Build
         run: cmake --build ${{github.workspace}}\build
       - name: Test
