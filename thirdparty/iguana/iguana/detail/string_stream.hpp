@@ -12,4 +12,4 @@ using string_stream = std::pmr::string;
 #else
 using string_stream = std::string;
 #endif
-} // namespace iguana
+}  // namespace iguana

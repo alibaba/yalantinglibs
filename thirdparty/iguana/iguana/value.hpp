@@ -65,14 +65,16 @@ struct basic_json_value
 
   // if type is not match, will throw exception, if pass std::error_code, won't
   // throw exception
-  template <typename T> T get() const {
+  template <typename T>
+  T get() const {
     try {
       return std::get<T>(*this);
     } catch (std::exception &e) {
       auto it = type_map_.find(this->index());
       if (it == type_map_.end()) {
         throw std::invalid_argument("undefined type");
-      } else {
+      }
+      else {
         throw std::invalid_argument(it->second);
       }
     } catch (...) {
@@ -80,7 +82,8 @@ struct basic_json_value
     }
   }
 
-  template <typename T> T get(std::error_code &ec) const {
+  template <typename T>
+  T get(std::error_code &ec) const {
     try {
       return get<T>();
     } catch (std::exception &e) {
@@ -89,13 +92,15 @@ struct basic_json_value
     }
   }
 
-  template <typename T> std::error_code get_to(T &v) const {
+  template <typename T>
+  std::error_code get_to(T &v) const {
     std::error_code ec;
     v = get<T>(ec);
     return ec;
   }
 
-  template <typename T> T at(const std::string &key) {
+  template <typename T>
+  T at(const std::string &key) {
     const auto &map = get<object_type>();
     auto it = map.find(key);
     if (it == map.end()) {
@@ -104,7 +109,8 @@ struct basic_json_value
     return it->second.template get<T>();
   }
 
-  template <typename T> T at(const std::string &key, std::error_code &ec) {
+  template <typename T>
+  T at(const std::string &key, std::error_code &ec) {
     const auto &map = get<object_type>(ec);
     if (ec) {
       return T{};
@@ -118,7 +124,8 @@ struct basic_json_value
     return it->second.template get<T>(ec);
   }
 
-  template <typename T> T at(size_t idx) {
+  template <typename T>
+  T at(size_t idx) {
     const auto &arr = get<array_type>();
     if (idx >= arr.size()) {
       throw std::out_of_range("idx is out of range");
@@ -126,7 +133,8 @@ struct basic_json_value
     return arr[idx].template get<T>();
   }
 
-  template <typename T> T at(size_t idx, std::error_code &ec) {
+  template <typename T>
+  T at(size_t idx, std::error_code &ec) {
     const auto &arr = get<array_type>(ec);
     if (ec) {
       return T{};
@@ -184,4 +192,4 @@ void swap(basic_json_value<CharT> &lhs, basic_json_value<CharT> &rhs) noexcept {
   lhs.swap(rhs);
 }
 
-} // namespace iguana
+}  // namespace iguana

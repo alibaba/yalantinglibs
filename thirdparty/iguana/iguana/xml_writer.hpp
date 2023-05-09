@@ -4,14 +4,16 @@
 
 #ifndef IGUANA_XML17_HPP
 #define IGUANA_XML17_HPP
-#include "reflection.hpp"
-#include "type_traits.hpp"
+#include <string.h>
+
 #include <algorithm>
 #include <cctype>
 #include <functional>
 #include <msstl/charconv.hpp>
 #include <rapidxml_print.hpp>
-#include <string.h>
+
+#include "reflection.hpp"
+#include "type_traits.hpp"
 
 namespace iguana {
 // to xml
@@ -30,15 +32,18 @@ inline std::enable_if_t<std::is_arithmetic_v<T>> render_xml_value(Stream &ss,
   ss.append(temp, n);
 }
 
-template <typename Stream> inline void render_xml_value(Stream &ss, bool s) {
+template <typename Stream>
+inline void render_xml_value(Stream &ss, bool s) {
   if (s) {
     ss.append("true");
-  } else {
+  }
+  else {
     ss.append("false");
   }
 }
 
-template <typename Stream> inline void render_xml_value(Stream &ss, char s) {
+template <typename Stream>
+inline void render_xml_value(Stream &ss, char s) {
   ss.push_back(s);
 }
 
@@ -65,14 +70,16 @@ inline void render_xml_value(Stream &ss, const any_t &t) {
   ss.append(t.get_value().data(), t.get_value().size());
 }
 
-template <typename Stream> inline void render_tail(Stream &ss, const char *s) {
+template <typename Stream>
+inline void render_tail(Stream &ss, const char *s) {
   ss.push_back('<');
   ss.push_back('/');
   ss.append(s, strlen(s));
   ss.push_back('>');
 }
 
-template <typename Stream> inline void render_head(Stream &ss, const char *s) {
+template <typename Stream>
+inline void render_head(Stream &ss, const char *s) {
   ss.push_back('<');
   ss.append(s, strlen(s));
   ss.push_back('>');
@@ -98,7 +105,8 @@ inline void render_xml_node(Stream &ss, std::string_view name, T &&item) {
     render_xml_attr(ss, name, item.second);
     render_xml_value(ss, item.first);
     render_tail(ss, name.data());
-  } else {
+  }
+  else {
     render_head(ss, name.data());
     render_xml_value(ss, std::forward<T>(item));
     render_tail(ss, name.data());
@@ -111,7 +119,8 @@ inline void render_xml_value0(Stream &ss, const T &v, std::string_view name) {
     using item_type = std::decay_t<decltype(item)>;
     if constexpr (is_reflection_v<item_type>) {
       to_xml_impl(ss, item, name);
-    } else {
+    }
+    else {
       render_xml_node(ss, name, item);
     }
   }
@@ -126,7 +135,8 @@ inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
   if constexpr (Idx != iguana::get_value<std::decay_t<T>>()) {
     auto attr_value = get<Idx>(t);
     render_xml_attr(s, name, attr_value);
-  } else {
+  }
+  else {
     s.append("<").append(name).append(">");
   }
   for_each(std::forward<T>(t), [&t, &s](const auto v, auto i) {
@@ -140,23 +150,28 @@ inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
     if constexpr (!is_reflection<type_v>::value) {
       if constexpr (is_map_container<type_u>::value) {
         return;
-      } else if constexpr (is_namespace_v<type_u>) {
+      }
+      else if constexpr (is_namespace_v<type_u>) {
         constexpr auto name = get_name<T, Idx>();
         auto index_ul = find_underline(name.data());
         std::string ns(name.data(), name.size());
         ns[index_ul] = ':';
         if constexpr (is_reflection<typename type_u::value_type>::value) {
           to_xml_impl(s, (t.*v).get(), ns);
-        } else {
+        }
+        else {
           render_xml_node(s, ns, (t.*v).get());
         }
-      } else if constexpr (!is_str_v<type_u> && is_container<type_u>::value) {
+      }
+      else if constexpr (!is_str_v<type_u> && is_container<type_u>::value) {
         std::string_view sv = get_name<T, Idx>().data();
         render_xml_value0(s, t.*v, sv);
-      } else {
+      }
+      else {
         render_xml_node(s, get_name<T, Idx>().data(), t.*v);
       }
-    } else {
+    }
+    else {
       to_xml_impl(s, t.*v, get_name<T, Idx>().data());
     }
   });
@@ -188,5 +203,5 @@ inline bool to_xml_pretty(Stream &s, T &&t) {
 
   return r;
 }
-} // namespace iguana
-#endif // IGUANA_XML17_HPP
+}  // namespace iguana
+#endif  // IGUANA_XML17_HPP

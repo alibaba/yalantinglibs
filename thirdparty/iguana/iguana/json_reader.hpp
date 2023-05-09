@@ -1,8 +1,4 @@
 #pragma once
-#include "detail/fast_float.h"
-#include "detail/utf.hpp"
-#include "json_util.hpp"
-#include "reflection.hpp"
 #include <charconv>
 #include <filesystem>
 #include <forward_list>
@@ -10,7 +6,11 @@
 #include <string_view>
 #include <type_traits>
 
+#include "detail/fast_float.h"
+#include "detail/utf.hpp"
 #include "error_code.h"
+#include "json_util.hpp"
+#include "reflection.hpp"
 #include "value.hpp"
 
 namespace iguana {
@@ -38,7 +38,8 @@ concept enum_type_t = std::is_enum_v<std::decay_t<T>>;
 template <class T>
 concept str_t = std::convertible_to<std::decay_t<T>, std::string_view>;
 
-template <typename Type> constexpr inline bool is_std_vector_v = false;
+template <typename Type>
+constexpr inline bool is_std_vector_v = false;
 
 template <typename... args>
 constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
@@ -98,11 +99,13 @@ template <typename T>
 concept json_byte = std::is_same_v<char, T> ||
     std::is_same_v<unsigned char, T> || std::is_same_v<std::byte, T>;
 
-template <typename Type> constexpr inline bool is_std_list_v = false;
+template <typename Type>
+constexpr inline bool is_std_list_v = false;
 template <typename... args>
 constexpr inline bool is_std_list_v<std::list<args...>> = true;
 
-template <typename Type> constexpr inline bool is_std_deque_v = false;
+template <typename Type>
+constexpr inline bool is_std_deque_v = false;
 template <typename... args>
 constexpr inline bool is_std_deque_v<std::deque<args...>> = true;
 
@@ -140,7 +143,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
       if (ec != std::errc{}) [[unlikely]]
         throw std::runtime_error("Failed to parse number");
       it += (p - &*it);
-    } else {
+    }
+    else {
       const auto size = std::distance(it, end);
       const auto start = &*it;
       auto [p, ec] = std::from_chars(start, start + size, value);
@@ -148,7 +152,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
         throw std::runtime_error("Failed to parse number");
       it += (p - &*it);
     }
-  } else {
+  }
+  else {
     double num;
     char buffer[256];
     size_t i{};
@@ -215,8 +220,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
 
   // growth portion
   if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
-    value.clear(); // Single append on unescaped strings so overwrite opt isnt
-                   // as important
+    value.clear();  // Single append on unescaped strings so overwrite opt isnt
+                    // as important
     auto start = it;
     while (it < end) {
       skip_till_escape_or_qoute(it, end);
@@ -224,24 +229,27 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
         value.append(&*start, static_cast<size_t>(std::distance(start, it)));
         ++it;
         return;
-      } else {
+      }
+      else {
         // Must be an escape
         // TODO propperly handle this
         value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-        ++it; // skip first escape
+        ++it;  // skip first escape
         if (*it == 'u') {
           ++it;
           auto code_point = parse_unicode_hex4(it);
           encode_utf8(value, code_point);
           start = it;
-        } else {
-          value.push_back(*it); // add the escaped character
+        }
+        else {
+          value.push_back(*it);  // add the escaped character
           ++it;
           start = it;
         }
       }
     }
-  } else {
+  }
+  else {
     while (it != end) {
       switch (*it) {
         [[unlikely]] case '\\' : {
@@ -299,10 +307,12 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     if (*it == ',') [[likely]] {
       ++it;
       skip_ws(it, end);
-    } else if (*it == ']') {
+    }
+    else if (*it == ']') {
       ++it;
       return;
-    } else [[unlikely]] {
+    }
+    else [[unlikely]] {
       throw std::runtime_error("Expected ]");
     }
   }
@@ -327,7 +337,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     using value_type = typename std::remove_cv_t<U>::value_type;
     if constexpr (refletable<value_type>) {
       from_json(value.emplace_back(), it, end);
-    } else {
+    }
+    else {
       parse_item(value.emplace_back(), it, end);
     }
 
@@ -348,7 +359,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     if (*it == '}') [[unlikely]] {
       ++it;
       return;
-    } else if (first) [[unlikely]]
+    }
+    else if (first) [[unlikely]]
       first = false;
     else [[likely]] {
       match<','>(it, end);
@@ -362,7 +374,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
 
     if constexpr (std::is_same_v<typename T::key_type, std::string>) {
       parse_item(value[key], it, end);
-    } else {
+    }
+    else {
       static thread_local typename T::key_type key_value{};
       parse_item(key_value, key.begin(), key.end());
       parse_item(value[key_value], it, end);
@@ -399,21 +412,23 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
 
   if (it < end) [[likely]] {
     switch (*it) {
-    case 't': {
-      ++it;
-      match<"rue">(it, end);
-      value = true;
-      break;
+      case 't': {
+        ++it;
+        match<"rue">(it, end);
+        value = true;
+        break;
+      }
+      case 'f': {
+        ++it;
+        match<"alse">(it, end);
+        value = false;
+        break;
+      }
+        [[unlikely]] default
+            : throw std::runtime_error("Expected true or false");
     }
-    case 'f': {
-      ++it;
-      match<"alse">(it, end);
-      value = false;
-      break;
-    }
-      [[unlikely]] default : throw std::runtime_error("Expected true or false");
-    }
-  } else [[unlikely]] {
+  }
+  else [[unlikely]] {
     throw std::runtime_error("Expected true or false");
   }
 }
@@ -437,12 +452,14 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
         ++it;
       }
     }
-  } else {
+  }
+  else {
     using value_type = typename T::value_type;
     value_type t;
     if constexpr (str_t<value_type>) {
       parse_item(t, it, end, true);
-    } else {
+    }
+    else {
       parse_item(t, it, end);
     }
 
@@ -468,32 +485,32 @@ IGUANA_INLINE void skip_object_value(auto &&it, auto &&end) {
   skip_ws(it, end);
   while (it != end) {
     switch (*it) {
-    case '{':
-      skip_until_closed<'{', '}'>(it, end);
-      break;
-    case '[':
-      skip_until_closed<'[', ']'>(it, end);
-      break;
-    case '"':
-      skip_string(it, end);
-      break;
-    case '/':
-      skip_comment(it, end);
-      continue;
-    case ',':
-    case '}':
-    case ']':
-      break;
-    default: {
-      ++it;
-      continue;
-    }
+      case '{':
+        skip_until_closed<'{', '}'>(it, end);
+        break;
+      case '[':
+        skip_until_closed<'[', ']'>(it, end);
+        break;
+      case '"':
+        skip_string(it, end);
+        break;
+      case '/':
+        skip_comment(it, end);
+        continue;
+      case ',':
+      case '}':
+      case ']':
+        break;
+      default: {
+        ++it;
+        continue;
+      }
     }
 
     break;
   }
 }
-} // namespace detail
+}  // namespace detail
 
 template <refletable T, typename It>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
@@ -506,7 +523,8 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
     if (*it == '}') [[unlikely]] {
       ++it;
       return;
-    } else if (first) [[unlikely]]
+    }
+    else if (first) [[unlikely]]
       first = false;
     else [[likely]] {
       match<','>(it, end);
@@ -528,7 +546,8 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
           static thread_local std::string static_key{};
           detail::parse_item(static_key, it, end, true);
           key = static_key;
-        } else [[likely]] {
+        }
+        else [[likely]] {
           key = std::string_view{&*start,
                                  static_cast<size_t>(std::distance(start, it))};
           if (key[0] == '@') [[unlikely]] {
@@ -536,7 +555,8 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
           }
           ++it;
         }
-      } else {
+      }
+      else {
         static thread_local std::string static_key{};
         detail::parse_item(static_key, it, end, true);
         key = static_key;
@@ -554,12 +574,14 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
                 using V = std::decay_t<decltype(member_ptr)>;
                 if constexpr (std::is_member_pointer_v<V>) {
                   detail::parse_item(value.*member_ptr, it, end);
-                } else {
+                }
+                else {
                   static_assert(!sizeof(V), "type not supported");
                 }
               },
               member_it->second);
-        } else [[unlikely]] {
+        }
+        else [[unlikely]] {
 #ifdef THROW_UNKNOWN_KEY
           throw std::runtime_error("Unknown key: " + std::string(key));
 #else
@@ -621,7 +643,8 @@ IGUANA_INLINE void from_json(T &value, const Byte *data, size_t size,
   }
 }
 
-template <typename It> void parse(jvalue &result, It &&it, It &&end);
+template <typename It>
+void parse(jvalue &result, It &&it, It &&end);
 
 template <typename It>
 inline void parse_array(jarray &result, It &&it, It &&end) {
@@ -684,52 +707,53 @@ inline void parse_object(jobject &result, It &&it, It &&end) {
   }
 }
 
-template <typename It> inline void parse(jvalue &result, It &&it, It &&end) {
+template <typename It>
+inline void parse(jvalue &result, It &&it, It &&end) {
   skip_ws(it, end);
   switch (*it) {
-  case 'n':
-    match<"null">(it, end);
-    result.template emplace<std::nullptr_t>();
-    break;
+    case 'n':
+      match<"null">(it, end);
+      result.template emplace<std::nullptr_t>();
+      break;
 
-  case 'f':
-  case 't':
-    detail::parse_item(result.template emplace<bool>(), it, end);
-    break;
-  case '0':
-  case '1':
-  case '2':
-  case '3':
-  case '4':
-  case '5':
-  case '6':
-  case '7':
-  case '8':
-  case '9':
-  case '-': {
-    double d{};
-    detail::parse_item(d, it, end);
-    if (static_cast<int>(d) == d)
-      result.emplace<int>(d);
-    else
-      result.emplace<double>(d);
-    break;
-  }
-  case '"':
-    result.template emplace<std::string>();
-    detail::parse_item(std::get<std::string>(result), it, end);
-    break;
-  case '[':
-    result.template emplace<jarray>();
-    parse_array(std::get<jarray>(result), it, end);
-    break;
-  case '{': {
-    result.template emplace<jobject>();
-    parse_object(std::get<jobject>(result), it, end);
-    break;
-  }
-  default:
-    throw std::runtime_error("parse failed");
+    case 'f':
+    case 't':
+      detail::parse_item(result.template emplace<bool>(), it, end);
+      break;
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+    case '-': {
+      double d{};
+      detail::parse_item(d, it, end);
+      if (static_cast<int>(d) == d)
+        result.emplace<int>(d);
+      else
+        result.emplace<double>(d);
+      break;
+    }
+    case '"':
+      result.template emplace<std::string>();
+      detail::parse_item(std::get<std::string>(result), it, end);
+      break;
+    case '[':
+      result.template emplace<jarray>();
+      parse_array(std::get<jarray>(result), it, end);
+      break;
+    case '{': {
+      result.template emplace<jobject>();
+      parse_object(std::get<jobject>(result), it, end);
+      break;
+    }
+    default:
+      throw std::runtime_error("parse failed");
   }
 
   skip_ws(it, end);
@@ -763,9 +787,10 @@ inline void parse(T &result, const View &view, std::error_code &ec) noexcept {
 
 template <typename T, typename It>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
-  static_assert(!sizeof(T), "The type is not support, please check if you have "
-                            "defined REFLECTION for the type, otherwise the "
-                            "type is not supported now!");
+  static_assert(!sizeof(T),
+                "The type is not support, please check if you have "
+                "defined REFLECTION for the type, otherwise the "
+                "type is not supported now!");
 }
 
 IGUANA_INLINE std::string json_file_content(const std::string &filename) {
@@ -805,4 +830,4 @@ IGUANA_INLINE void from_json_file(T &value, const std::string &filename,
   }
 }
 
-} // namespace iguana
+}  // namespace iguana

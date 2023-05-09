@@ -7,7 +7,7 @@
 namespace iguana {
 
 class iguana_category : public std::error_category {
-public:
+ public:
   virtual const char *name() const noexcept override {
     return "iguana::category";
   }
@@ -24,7 +24,8 @@ public:
   int add_message(const std::string &msg) {
     if (auto it = err_map_.find(msg); it != err_map_.end()) {
       return it->second;
-    } else {
+    }
+    else {
       err_++;
       err_map_.emplace(msg, err_);
       return err_;
@@ -54,26 +55,27 @@ enum class dom_errc {
 };
 
 class iguana_dom_category : public std::error_category {
-public:
+ public:
   virtual const char *name() const noexcept override {
     return "iguana::dom_category";
   }
   virtual std::string message(int err_val) const override {
     switch (static_cast<dom_errc>(err_val)) {
-    case dom_errc::ok:
-      return "ok";
-    case dom_errc::wrong_type: {
-      auto it = detail_msg_map_.find(dom_errc::wrong_type);
-      if (it != detail_msg_map_.end()) {
-        return std::string("wrong type, ")
-            .append("real type is ")
-            .append(it->second);
-      } else {
-        return "wrong type";
+      case dom_errc::ok:
+        return "ok";
+      case dom_errc::wrong_type: {
+        auto it = detail_msg_map_.find(dom_errc::wrong_type);
+        if (it != detail_msg_map_.end()) {
+          return std::string("wrong type, ")
+              .append("real type is ")
+              .append(it->second);
+        }
+        else {
+          return "wrong type";
+        }
       }
-    }
-    default:
-      return "(unrecognized error)";
+      default:
+        return "(unrecognized error)";
     }
   }
 
@@ -95,4 +97,4 @@ inline std::error_code make_error_code(iguana::dom_errc err,
 
   return std::error_code((int)err, instance);
 }
-} // namespace iguana
+}  // namespace iguana

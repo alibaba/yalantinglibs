@@ -1,6 +1,4 @@
 #pragma once
-#include "reflection.hpp"
-#include "type_traits.hpp"
 #include <algorithm>
 #include <cctype>
 #include <functional>
@@ -10,8 +8,12 @@
 #include <string>
 #include <type_traits>
 
+#include "reflection.hpp"
+#include "type_traits.hpp"
+
 namespace iguana {
-template <typename T> void do_read(rapidxml::xml_node<char> *node, T &&t);
+template <typename T>
+void do_read(rapidxml::xml_node<char> *node, T &&t);
 
 constexpr inline size_t find_underline(const char *str) {
   const char *c = str;
@@ -23,7 +25,8 @@ constexpr inline size_t find_underline(const char *str) {
   return c - str;
 }
 
-template <typename T> inline T parse_num(std::string_view value) {
+template <typename T>
+inline T parse_num(std::string_view value) {
   if constexpr (std::is_arithmetic_v<T>) {
     T num;
     auto [p, ec] =
@@ -36,20 +39,23 @@ template <typename T> inline T parse_num(std::string_view value) {
       throw std::invalid_argument("Failed to parse number");
 
     return num;
-  } else {
+  }
+  else {
     static_assert(!sizeof(T), "don't support this type");
   }
 }
 
 class any_t {
-public:
+ public:
   explicit any_t(std::string_view value) : value_(value) {}
   explicit any_t() {}
-  template <typename T> std::pair<bool, T> get() const {
+  template <typename T>
+  std::pair<bool, T> get() const {
     if constexpr (std::is_same_v<T, std::string> ||
                   std::is_same_v<T, std::string_view>) {
       return std::make_pair(true, T{value_});
-    } else if constexpr (std::is_arithmetic_v<T>) {
+    }
+    else if constexpr (std::is_arithmetic_v<T>) {
       T num;
       try {
         num = parse_num<T>(value_);
@@ -58,25 +64,27 @@ public:
         std::cout << "parse num failed, reason: " << e.what() << "\n";
         return std::make_pair(false, T{});
       }
-    } else {
+    }
+    else {
       static_assert(!sizeof(T), "don't support this type!!");
     }
   }
 
   std::string_view get_value() const { return value_; }
 
-private:
+ private:
   std::string_view value_;
 };
 
-template <typename T> class namespace_t {
-public:
+template <typename T>
+class namespace_t {
+ public:
   using value_type = T;
   explicit namespace_t(T &&value) : value_(std::forward<T>(value)) {}
   explicit namespace_t() {}
   const T &get() const { return value_; }
 
-private:
+ private:
   T value_;
 };
 
@@ -93,10 +101,12 @@ inline void parse_attribute(rapidxml::xml_node<char> *node, T &t) {
     std::string_view value(attr->value(), attr->value_size());
     if constexpr (is_str_v<value_type> || std::is_same_v<any_t, value_type>) {
       value_item = value_type{value};
-    } else if constexpr (std::is_arithmetic_v<value_type> &&
-                         !std::is_same_v<bool, value_type>) {
+    }
+    else if constexpr (std::is_arithmetic_v<value_type> &&
+                       !std::is_same_v<bool, value_type>) {
       value_item = parse_num<value_type>(value);
-    } else {
+    }
+    else {
       static_assert(!sizeof(value_type), "value type not supported");
     }
     t.emplace(key_type(attr->name(), attr->name_size()), std::move(value_item));
@@ -111,42 +121,53 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   if constexpr (std::is_same_v<char, U>) {
     if (!value.empty())
       t = value.back();
-  } else if constexpr (std::is_arithmetic_v<U>) {
+  }
+  else if constexpr (std::is_arithmetic_v<U>) {
     if constexpr (std::is_same_v<bool, U>) {
       if (value == "true" || value == "True") {
         t = true;
-      } else if (value == "false" || value == "False") {
+      }
+      else if (value == "false" || value == "False") {
         t = false;
-      } else {
+      }
+      else {
         throw std::invalid_argument("Failed to parse bool");
       }
-    } else {
+    }
+    else {
       t = parse_num<U>(value);
     }
-  } else if constexpr (is_str_v<U>) {
+  }
+  else if constexpr (is_str_v<U>) {
     t = U{value};
-  } else if constexpr (is_reflection_v<U>) {
+  }
+  else if constexpr (is_reflection_v<U>) {
     do_read(node, t);
-  } else if constexpr (is_std_optinal_v<U>) {
+  }
+  else if constexpr (is_std_optinal_v<U>) {
     if (!value.empty()) {
       using value_type = typename U::value_type;
       value_type opt;
       parse_item(node, opt, value);
       t = std::move(opt);
     }
-  } else if constexpr (is_std_pair_v<U>) {
+  }
+  else if constexpr (is_std_pair_v<U>) {
     parse_item(node, t.first, value);
     parse_attribute(node, t.second);
-  } else if constexpr (is_namespace_v<U>) {
+  }
+  else if constexpr (is_namespace_v<U>) {
     using value_type = typename U::value_type;
     value_type ns;
     if constexpr (is_reflection_v<value_type>) {
       do_read(node, ns);
-    } else {
+    }
+    else {
       parse_item(node, ns, value);
     }
     t = T{std::move(ns)};
-  } else {
+  }
+  else {
     static_assert(!sizeof(T), "don't support this type!!");
   }
 }
@@ -170,7 +191,8 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
       std::string_view str = key.data();
       if constexpr (is_map_container<item_type>::value) {
         parse_attribute(node, t.*member_ptr);
-      } else {
+      }
+      else {
         rapidxml::xml_node<char> *n = nullptr;
         if constexpr (is_namespace_v<item_type>) {
           constexpr auto index_ul = find_underline(key.data());
@@ -179,7 +201,8 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
           std::string ns(key.data(), key.size());
           ns[index_ul] = ':';
           n = node->first_node(ns.data());
-        } else {
+        }
+        else {
           n = node->first_node(str.data());
         }
         if (n) {
@@ -196,16 +219,18 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
               (t.*member_ptr).push_back(std::move(item));
               n = n->next_sibling();
             }
-
-          } else {
+          }
+          else {
             parse_item(n, t.*member_ptr,
                        std::string_view(n->value(), n->value_size()));
           }
-        } else {
+        }
+        else {
           std::cout << str << " not found\n";
         }
       }
-    } else {
+    }
+    else {
       static_assert(!sizeof(member_ptr_type), "type not supported");
     }
   });
@@ -229,4 +254,4 @@ inline bool from_xml(T &&t, char *buf) {
 
   return false;
 }
-} // namespace iguana
+}  // namespace iguana
