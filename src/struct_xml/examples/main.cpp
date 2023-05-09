@@ -10,7 +10,7 @@ struct Owner_t {
 };
 REFLECTION(Owner_t, ID, DisplayName);
 
-struct Contents {
+struct Contents_t {
   std::string_view Key;
   std::string_view LastModified;
   std::string_view ETag;
@@ -19,7 +19,8 @@ struct Contents {
   std::string_view StorageClass;
   Owner_t Owner;
 };
-REFLECTION(Contents, Key, LastModified, ETag, Type, Size, StorageClass, Owner);
+REFLECTION(Contents_t, Key, LastModified, ETag, Type, Size, StorageClass,
+           Owner);
 
 struct ListBucketResult {
   std::string_view Name;
@@ -28,7 +29,7 @@ struct ListBucketResult {
   int MaxKeys;
   std::string_view Delimiter;
   bool IsTruncated;
-  std::vector<Contents> Contents;
+  std::vector<Contents_t> Contents;
   //  std::unordered_map<std::string, std::string> __attr;
 };
 REFLECTION(ListBucketResult, Name, Prefix, Marker, MaxKeys, Delimiter,
