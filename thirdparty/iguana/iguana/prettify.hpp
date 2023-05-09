@@ -16,87 +16,86 @@ enum class general_state : uint32_t {
 inline void prettify_normal_state(const char c, auto &out, uint32_t &indent,
                                   auto nl, general_state &state) noexcept {
   switch (c) {
-    case ',':
-      out += c;
-      nl();
-      break;
-    case '[':
-      out += c;
-      ++indent;
-      nl();
-      break;
-    case ']':
-      --indent;
-      nl();
-      out += c;
-      break;
-    case '{':
-      out += c;
-      ++indent;
-      nl();
-      break;
-    case '}':
-      --indent;
-      nl();
-      out += c;
-      break;
-    case '\\':
-      out += c;
-      state = general_state::ESCAPED;
-      break;
-    case '\"':
-      out += c;
-      state = general_state::STRING;
-      break;
-    case '/':
-      out += " /";
-      state = general_state::BEFORE_ASTERISK;
-      break;
-    case ':':
-      out += ": ";
-      break;
-    case ' ':
-    case '\n':
-    case '\r':
-    case '\t':
-      break;
-    default:
-      out += c;
-      break;
+  case ',':
+    out += c;
+    nl();
+    break;
+  case '[':
+    out += c;
+    ++indent;
+    nl();
+    break;
+  case ']':
+    --indent;
+    nl();
+    out += c;
+    break;
+  case '{':
+    out += c;
+    ++indent;
+    nl();
+    break;
+  case '}':
+    --indent;
+    nl();
+    out += c;
+    break;
+  case '\\':
+    out += c;
+    state = general_state::ESCAPED;
+    break;
+  case '\"':
+    out += c;
+    state = general_state::STRING;
+    break;
+  case '/':
+    out += " /";
+    state = general_state::BEFORE_ASTERISK;
+    break;
+  case ':':
+    out += ": ";
+    break;
+  case ' ':
+  case '\n':
+  case '\r':
+  case '\t':
+    break;
+  default:
+    out += c;
+    break;
   }
 }
 
 inline void prettify_other_states(const char c, general_state &state) noexcept {
   switch (state) {
-    case general_state::ESCAPED:
+  case general_state::ESCAPED:
+    state = general_state::NORMAL;
+    break;
+  case general_state::STRING:
+    if (c == '"') {
       state = general_state::NORMAL;
-      break;
-    case general_state::STRING:
-      if (c == '"') {
-        state = general_state::NORMAL;
-      }
-      break;
-    case general_state::BEFORE_ASTERISK:
+    }
+    break;
+  case general_state::BEFORE_ASTERISK:
+    state = general_state::COMMENT;
+    break;
+  case general_state::COMMENT:
+    if (c == '*') {
+      state = general_state::BEFORE_FSLASH;
+    }
+    break;
+  case general_state::BEFORE_FSLASH:
+    if (c == '/') {
+      state = general_state::NORMAL;
+    } else {
       state = general_state::COMMENT;
-      break;
-    case general_state::COMMENT:
-      if (c == '*') {
-        state = general_state::BEFORE_FSLASH;
-      }
-      break;
-    case general_state::BEFORE_FSLASH:
-      if (c == '/') {
-        state = general_state::NORMAL;
-      }
-      else {
-        state = general_state::COMMENT;
-      }
-      break;
-    default:
-      break;
+    }
+    break;
+  default:
+    break;
   }
 }
-}  // namespace detail
+} // namespace detail
 
 /// <summary>
 /// pretty print a JSON string
@@ -121,8 +120,7 @@ inline void prettify(const auto &in, auto &out, const bool tabs = false,
     if (state == general_state::NORMAL) {
       prettify_normal_state(c, out, indent, nl, state);
       continue;
-    }
-    else {
+    } else {
       out += c;
       prettify_other_states(c, state);
     }
@@ -138,4 +136,4 @@ inline std::string prettify(const auto &in, const bool tabs = false,
   prettify(in, out, tabs, indent_size);
   return out;
 }
-}  // namespace iguana
+} // namespace iguana
