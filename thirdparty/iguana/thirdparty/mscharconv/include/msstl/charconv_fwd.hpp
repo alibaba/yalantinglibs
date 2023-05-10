@@ -110,4 +110,4 @@ MSCHARCONV_API from_chars_result
 from_chars(const char *first, const char *last, long double &val,
            chars_format fmt = chars_format::general) noexcept;
 
-} // namespace msstl
+}  // namespace msstl

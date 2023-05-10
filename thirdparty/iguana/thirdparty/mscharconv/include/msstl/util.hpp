@@ -24,4 +24,4 @@ bool from_string(std::string_view str, T &out) {
   return ret.ptr == end;
 }
 
-} // namespace msstl::util
+}  // namespace msstl::util

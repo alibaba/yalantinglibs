@@ -139,9 +139,9 @@ class xml_document;
 //! Enumeration listing all node types produced by the parser.
 //! Use xml_node::type() function to query node type.
 enum node_type {
-  node_document,  //!< A document node. Name and value are empty.
-  node_element,   //!< An element node. Name contains element name. Value
-                 //!< contains text of first data node.
+  node_document,     //!< A document node. Name and value are empty.
+  node_element,      //!< An element node. Name contains element name. Value
+                     //!< contains text of first data node.
   node_data,         //!< A data node. Name is empty. Value contains data text.
   node_cdata,        //!< A CDATA node. Name is empty. Value contains data text.
   node_comment,      //!< A comment node. Name is empty. Value contains comment
