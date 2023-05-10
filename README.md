@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, struct_pb, easylog, coro_rpc, coro_http and async_simple </h6>
+<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http and async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -10,7 +10,7 @@
 
 [中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_pb, easylog, coro_rpc, coro_http and [async_simple](https://github.com/alibaba/async_simple), more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
+yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
@@ -136,6 +136,40 @@ int main() {
 
   person p1;
   struct_json::from_json(p1, str);
+}
+```
+
+## struct_xml
+reflection-based xml lib, very easy to do struct to xml and xml to struct.
+
+### quick example
+```cpp
+#include "struct_xml/xml_reader.h"
+#include "struct_xml/xml_writer.h"
+
+struct person {
+  std::string name;
+  int age;
+};
+REFLECTION(person, name, age);
+
+void basic_usage() {
+  std::string xml = R"(
+<person>
+    <name>tom</name>
+    <age>20</age>
+</person>
+)";
+
+  person p;
+  bool r = struct_xml::from_xml(p, xml.data());
+  assert(r);
+  assert(p.name == "tom" && p.age == 20);
+
+  std::string str;
+  r = struct_xml::to_xml_pretty(str, p);
+  assert(r);
+  std::cout << str;
 }
 ```
 

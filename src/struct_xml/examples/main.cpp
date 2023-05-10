@@ -124,7 +124,33 @@ void attribute() {
   assert(b.__attr["price"] == 79.9f);
 }
 
+struct person {
+  std::string name;
+  int age;
+};
+REFLECTION(person, name, age);
+
+void basic_usage() {
+  std::string xml = R"(
+<person>
+    <name>tom</name>
+    <age>20</age>
+</person>
+)";
+
+  person p;
+  bool r = struct_xml::from_xml(p, xml.data());
+  assert(r);
+  assert(p.name == "tom" && p.age == 20);
+
+  std::string str;
+  r = struct_xml::to_xml_pretty(str, p);
+  assert(r);
+  std::cout << str;
+}
+
 int main() {
+  basic_usage();
   nested_xml();
   attribute();
 }
