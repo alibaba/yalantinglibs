@@ -20,8 +20,8 @@ namespace rapidxml {
 // Printing flags
 
 const int print_no_indenting =
-    0x1; //!< Printer flag instructing the printer to suppress indenting of XML.
-         //!< See print() function.
+    0x1;  //!< Printer flag instructing the printer to suppress indenting of
+          //!< XML. See print() function.
 
 ///////////////////////////////////////////////////////////////////////
 // Internal
@@ -35,8 +35,7 @@ namespace internal {
 // Copy characters from given range to given output iterator
 template <class OutIt, class Ch>
 inline OutIt copy_chars(const Ch *begin, const Ch *end, OutIt out) {
-  while (begin != end)
-    *out++ = *begin++;
+  while (begin != end) *out++ = *begin++;
   return out;
 }
 
@@ -47,49 +46,50 @@ inline OutIt copy_and_expand_chars(const Ch *begin, const Ch *end, Ch noexpand,
                                    OutIt out) {
   while (begin != end) {
     if (*begin == noexpand) {
-      *out++ = *begin; // No expansion, copy character
-    } else {
+      *out++ = *begin;  // No expansion, copy character
+    }
+    else {
       switch (*begin) {
-      case Ch('<'):
-        *out++ = Ch('&');
-        *out++ = Ch('l');
-        *out++ = Ch('t');
-        *out++ = Ch(';');
-        break;
-      case Ch('>'):
-        *out++ = Ch('&');
-        *out++ = Ch('g');
-        *out++ = Ch('t');
-        *out++ = Ch(';');
-        break;
-      case Ch('\''):
-        *out++ = Ch('&');
-        *out++ = Ch('a');
-        *out++ = Ch('p');
-        *out++ = Ch('o');
-        *out++ = Ch('s');
-        *out++ = Ch(';');
-        break;
-      case Ch('"'):
-        *out++ = Ch('&');
-        *out++ = Ch('q');
-        *out++ = Ch('u');
-        *out++ = Ch('o');
-        *out++ = Ch('t');
-        *out++ = Ch(';');
-        break;
-      case Ch('&'):
-        *out++ = Ch('&');
-        *out++ = Ch('a');
-        *out++ = Ch('m');
-        *out++ = Ch('p');
-        *out++ = Ch(';');
-        break;
-      default:
-        *out++ = *begin; // No expansion, copy character
+        case Ch('<'):
+          *out++ = Ch('&');
+          *out++ = Ch('l');
+          *out++ = Ch('t');
+          *out++ = Ch(';');
+          break;
+        case Ch('>'):
+          *out++ = Ch('&');
+          *out++ = Ch('g');
+          *out++ = Ch('t');
+          *out++ = Ch(';');
+          break;
+        case Ch('\''):
+          *out++ = Ch('&');
+          *out++ = Ch('a');
+          *out++ = Ch('p');
+          *out++ = Ch('o');
+          *out++ = Ch('s');
+          *out++ = Ch(';');
+          break;
+        case Ch('"'):
+          *out++ = Ch('&');
+          *out++ = Ch('q');
+          *out++ = Ch('u');
+          *out++ = Ch('o');
+          *out++ = Ch('t');
+          *out++ = Ch(';');
+          break;
+        case Ch('&'):
+          *out++ = Ch('&');
+          *out++ = Ch('a');
+          *out++ = Ch('m');
+          *out++ = Ch('p');
+          *out++ = Ch(';');
+          break;
+        default:
+          *out++ = *begin;  // No expansion, copy character
       }
     }
-    ++begin; // Step to next character
+    ++begin;  // Step to next character
   }
   return out;
 }
@@ -97,8 +97,7 @@ inline OutIt copy_and_expand_chars(const Ch *begin, const Ch *end, Ch noexpand,
 // Fill given output iterator with repetitions of the same character
 template <class OutIt, class Ch>
 inline OutIt fill_chars(OutIt out, int n, Ch ch) {
-  for (int i = 0; i < n; ++i)
-    *out++ = ch;
+  for (int i = 0; i < n; ++i) *out++ = ch;
   return out;
 }
 
@@ -140,15 +139,16 @@ inline OutIt print_attributes(OutIt out, const xml_node<Ch> *node, int flags) {
                        attribute->name() + attribute->name_size(), out);
       *out = Ch('='), ++out;
       // Print attribute value using appropriate quote type
-      if (find_char<Ch, Ch('"')>(attribute->value(),
-                                 attribute->value() +
-                                     attribute->value_size())) {
+      if (find_char<Ch, Ch('"')>(
+              attribute->value(),
+              attribute->value() + attribute->value_size())) {
         *out = Ch('\''), ++out;
         out = copy_and_expand_chars(
             attribute->value(), attribute->value() + attribute->value_size(),
             Ch('"'), out);
         *out = Ch('\''), ++out;
-      } else {
+      }
+      else {
         *out = Ch('"'), ++out;
         out = copy_and_expand_chars(
             attribute->value(), attribute->value() + attribute->value_size(),
@@ -225,7 +225,8 @@ inline OutIt print_element_node(OutIt out, const xml_node<Ch> *node, int flags,
     // Print childless node tag ending
     *out = Ch('/'), ++out;
     *out = Ch('>'), ++out;
-  } else {
+  }
+  else {
     // Print normal node tag ending
     *out = Ch('>'), ++out;
 
@@ -235,11 +236,13 @@ inline OutIt print_element_node(OutIt out, const xml_node<Ch> *node, int flags,
       // If node has no children, only print its value without indenting
       out = copy_and_expand_chars(
           node->value(), node->value() + node->value_size(), Ch(0), out);
-    } else if (child->next_sibling() == 0 && child->type() == node_data) {
+    }
+    else if (child->next_sibling() == 0 && child->type() == node_data) {
       // If node has a sole data child, only print its value without indenting
       out = copy_and_expand_chars(
           child->value(), child->value() + child->value_size(), Ch(0), out);
-    } else {
+    }
+    else {
       // Print all children with full indenting
       if (!(flags & print_no_indenting))
         *out = Ch('\n'), ++out;
@@ -343,51 +346,50 @@ inline OutIt print_node(OutIt out, const xml_node<Ch> *node, int flags,
                         int indent) {
   // Print proper node type
   switch (node->type()) {
+    // Document
+    case node_document:
+      out = print_children(out, node, flags, indent);
+      break;
 
-  // Document
-  case node_document:
-    out = print_children(out, node, flags, indent);
-    break;
+      // Element
+    case node_element:
+      out = print_element_node(out, node, flags, indent);
+      break;
 
-    // Element
-  case node_element:
-    out = print_element_node(out, node, flags, indent);
-    break;
+      // Data
+    case node_data:
+      out = print_data_node(out, node, flags, indent);
+      break;
 
-    // Data
-  case node_data:
-    out = print_data_node(out, node, flags, indent);
-    break;
+      // CDATA
+    case node_cdata:
+      out = print_cdata_node(out, node, flags, indent);
+      break;
 
-    // CDATA
-  case node_cdata:
-    out = print_cdata_node(out, node, flags, indent);
-    break;
+      // Declaration
+    case node_declaration:
+      out = print_declaration_node(out, node, flags, indent);
+      break;
 
-    // Declaration
-  case node_declaration:
-    out = print_declaration_node(out, node, flags, indent);
-    break;
+      // Comment
+    case node_comment:
+      out = print_comment_node(out, node, flags, indent);
+      break;
 
-    // Comment
-  case node_comment:
-    out = print_comment_node(out, node, flags, indent);
-    break;
+      // Doctype
+    case node_doctype:
+      out = print_doctype_node(out, node, flags, indent);
+      break;
 
-    // Doctype
-  case node_doctype:
-    out = print_doctype_node(out, node, flags, indent);
-    break;
+      // Pi
+    case node_pi:
+      out = print_pi_node(out, node, flags, indent);
+      break;
 
-    // Pi
-  case node_pi:
-    out = print_pi_node(out, node, flags, indent);
-    break;
-
-    // Unknown
-  default:
-    assert(0);
-    break;
+      // Unknown
+    default:
+      assert(0);
+      break;
   }
 
   // If indenting not disabled, add line break after node
@@ -397,7 +399,7 @@ inline OutIt print_node(OutIt out, const xml_node<Ch> *node, int flags,
   // Return modified iterator
   return out;
 }
-} // namespace internal
+}  // namespace internal
 //! \endcond
 
 ///////////////////////////////////////////////////////////////////////////
@@ -439,6 +441,6 @@ inline std::basic_ostream<Ch> &operator<<(std::basic_ostream<Ch> &out,
 
 #endif
 
-} // namespace rapidxml
+}  // namespace rapidxml
 
 #endif
