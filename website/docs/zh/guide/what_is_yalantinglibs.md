@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_pb, easylog, coro_rpc, coro_http 和 async_simple </h6>
+<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -8,7 +8,7 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-yaLanTingLibs 是一个C++20基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_pb, easylog, coro_rpc, coro_http 和 [async_simple](https://github.com/alibaba/async_simple), 目前我们正在开发并添加更多的新功能。
+yaLanTingLibs 是一个C++20基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
 yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的C++20基础工具库, 帮助用户构建高性能的现代C++应用。
 
@@ -132,6 +132,40 @@ int main() {
 
   person p1;
   struct_json::from_json(p1, str);
+}
+```
+
+## struct_xml
+基于反射的xml库，轻松实现结构体和xml之间的映射。
+
+### quick example
+```cpp
+#include "struct_xml/xml_reader.h"
+#include "struct_xml/xml_writer.h"
+
+struct person {
+  std::string name;
+  int age;
+};
+REFLECTION(person, name, age);
+
+void basic_usage() {
+  std::string xml = R"(
+<person>
+    <name>tom</name>
+    <age>20</age>
+</person>
+)";
+
+  person p;
+  bool r = struct_xml::from_xml(p, xml.data());
+  assert(r);
+  assert(p.name == "tom" && p.age == 20);
+
+  std::string str;
+  r = struct_xml::to_xml_pretty(p, str);
+  assert(r);
+  std::cout << str;
 }
 ```
 
