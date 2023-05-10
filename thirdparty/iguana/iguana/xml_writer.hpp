@@ -180,13 +180,13 @@ inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
 
 template <typename Stream, typename T,
           typename = std::enable_if_t<is_reflection<T>::value>>
-inline void to_xml(Stream &s, T &&t) {
+inline void to_xml(T &&t, Stream &s) {
   to_xml_impl(s, std::forward<T>(t));
 }
 
 template <int Flags = 0, typename Stream, typename T,
           typename = std::enable_if_t<is_reflection<T>::value>>
-inline bool to_xml_pretty(Stream &s, T &&t) {
+inline bool to_xml_pretty(T &&t, Stream &s) {
   to_xml_impl(s, std::forward<T>(t));
 
   bool r = true;

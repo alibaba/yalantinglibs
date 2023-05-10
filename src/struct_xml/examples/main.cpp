@@ -101,7 +101,7 @@ void nested_xml() {
   assert(r);
 
   std::string out;
-  r = struct_xml::to_xml_pretty(out, list_bucket);
+  r = struct_xml::to_xml_pretty(list_bucket, out);
   assert(r);
   std::cout << out << "\n";
 }
@@ -144,7 +144,7 @@ void basic_usage() {
   assert(p.name == "tom" && p.age == 20);
 
   std::string str;
-  r = struct_xml::to_xml_pretty(str, p);
+  r = struct_xml::to_xml_pretty(p, str);
   assert(r);
   std::cout << str;
 }

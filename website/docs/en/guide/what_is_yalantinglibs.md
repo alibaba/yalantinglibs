@@ -165,7 +165,7 @@ void basic_usage() {
   assert(p.name == "tom" && p.age == 20);
 
   std::string str;
-  r = struct_xml::to_xml_pretty(str, p);
+  r = struct_xml::to_xml_pretty(p, str);
   assert(r);
   std::cout << str;
 }
