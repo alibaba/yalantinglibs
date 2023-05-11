@@ -263,7 +263,7 @@ constexpr auto get_types() {
     return declval<
         std::tuple<typename T::first_type, typename T::second_type>>();
   }
-  else if constexpr (std::is_aggregate_v<T>) {
+  else if constexpr (std::is_class_v<T>) {
     // clang-format off
     return visit_members(
         declval<T>(), []<typename... Args>(Args &&
@@ -556,7 +556,6 @@ consteval type_id get_type_id() {
     return type_id::non_trivial_class_t;
   }
   else if constexpr (std::is_class_v<T>) {
-    static_assert(std::is_aggregate_v<std::remove_cvref_t<T>>);
     return type_id::trivial_class_t;
   }
   else {
