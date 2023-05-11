@@ -149,8 +149,39 @@ void basic_usage() {
   std::cout << str;
 }
 
+void get_error() {
+  std::string xml = "invalid xml";
+  person p;
+  bool r = struct_xml::from_xml(p, xml.data());
+  if (!r) {
+    std::cout << struct_xml::get_last_read_err() << "\n";
+  }
+}
+
+struct person2 {
+  std::string name;
+  int age;
+};
+REFLECTION(person2, name, age);
+REQUIRED(person2, age);
+
+void required_field() {
+  std::string xml = R"(
+<person>
+    <name>tom</name>
+</person>
+)";
+
+  person2 p;
+  bool r = struct_xml::from_xml(p, xml.data());
+  assert(!r);
+  std::cout << struct_xml::get_last_read_err() << "\n";
+}
+
 int main() {
   basic_usage();
   nested_xml();
   attribute();
+  get_error();
+  required_field();
 }

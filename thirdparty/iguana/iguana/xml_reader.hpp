@@ -12,6 +12,7 @@
 #include "type_traits.hpp"
 
 namespace iguana {
+inline std::string g_xml_read_err;
 template <typename T>
 void do_read(rapidxml::xml_node<char> *node, T &&t);
 
@@ -26,9 +27,12 @@ constexpr inline size_t find_underline(const char *str) {
 }
 
 template <typename T>
-inline T parse_num(std::string_view value) {
+inline void parse_num(T &num, std::string_view value) {
+  if (value.empty()) {
+    return;
+  }
+
   if constexpr (std::is_arithmetic_v<T>) {
-    T num;
     auto [p, ec] =
         msstl::from_chars(value.data(), value.data() + value.size(), num);
 #if defined(_MSC_VER)
@@ -37,8 +41,6 @@ inline T parse_num(std::string_view value) {
     if (__builtin_expect(ec != std::errc{}, 0))
 #endif
       throw std::invalid_argument("Failed to parse number");
-
-    return num;
   }
   else {
     static_assert(!sizeof(T), "don't support this type");
@@ -58,9 +60,10 @@ class any_t {
     else if constexpr (std::is_arithmetic_v<T>) {
       T num;
       try {
-        num = parse_num<T>(value_);
+        parse_num<T>(num, value_);
         return std::make_pair(true, static_cast<T>(num));
       } catch (std::exception &e) {
+        g_xml_read_err = e.what();
         std::cout << "parse num failed, reason: " << e.what() << "\n";
         return std::make_pair(false, T{});
       }
@@ -104,7 +107,7 @@ inline void parse_attribute(rapidxml::xml_node<char> *node, T &t) {
     }
     else if constexpr (std::is_arithmetic_v<value_type> &&
                        !std::is_same_v<bool, value_type>) {
-      value_item = parse_num<value_type>(value);
+      parse_num<value_type>(value_item, value);
     }
     else {
       static_assert(!sizeof(value_type), "value type not supported");
@@ -124,10 +127,12 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   }
   else if constexpr (std::is_arithmetic_v<U>) {
     if constexpr (std::is_same_v<bool, U>) {
-      if (value == "true" || value == "True") {
+      if (value == "true" || value == "1" || value == "True" ||
+          value == "TRUE") {
         t = true;
       }
-      else if (value == "false" || value == "False") {
+      else if (value == "false" || value == "0" || value == "False" ||
+               value == "FALSE") {
         t = false;
       }
       else {
@@ -135,7 +140,7 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
       }
     }
     else {
-      t = parse_num<U>(value);
+      parse_num<U>(t, value);
     }
   }
   else if constexpr (is_str_v<U>) {
@@ -169,6 +174,39 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   }
   else {
     static_assert(!sizeof(T), "don't support this type!!");
+  }
+}
+
+template <typename item_type, typename T>
+inline void parse_node(rapidxml::xml_node<char> *n, T &&t,
+                       std::string_view str) {
+  if constexpr (is_std_optinal_v<
+                    item_type>) {  // std::optional<std::vector<some_object>>
+    using op_value_type = typename item_type::value_type;
+    if constexpr (!is_str_v<op_value_type> &&
+                  is_container<op_value_type>::value) {
+      op_value_type op_val;
+      parse_node<op_value_type>(n, op_val, str);
+      t = std::move(op_val);
+    }
+    else {
+      parse_item(n, t, std::string_view(n->value(), n->value_size()));
+    }
+  }
+  else if constexpr (!is_str_v<item_type> && is_container<item_type>::value) {
+    using value_type = typename item_type::value_type;
+    while (n) {
+      if (std::string_view(n->name(), n->name_size()) != str) {
+        break;
+      }
+      value_type item;
+      parse_item(n, item, std::string_view(n->value(), n->value_size()));
+      t.push_back(std::move(item));
+      n = n->next_sibling();
+    }
+  }
+  else {
+    parse_item(n, t, std::string_view(n->value(), n->value_size()));
   }
 }
 
@@ -206,27 +244,17 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
           n = node->first_node(str.data());
         }
         if (n) {
-          if constexpr (!is_str_v<item_type> &&
-                        is_container<item_type>::value) {
-            using value_type = typename item_type::value_type;
-            while (n) {
-              if (std::string_view(n->name(), n->name_size()) != str) {
-                break;
-              }
-              value_type item;
-              parse_item(n, item,
-                         std::string_view(n->value(), n->value_size()));
-              (t.*member_ptr).push_back(std::move(item));
-              n = n->next_sibling();
-            }
-          }
-          else {
-            parse_item(n, t.*member_ptr,
-                       std::string_view(n->value(), n->value_size()));
-          }
+          parse_node<item_type>(n, t.*member_ptr, str);
         }
         else {
-          std::cout << str << " not found\n";
+          if constexpr (!is_std_optinal_v<item_type>) {
+            std::cout << str << " not found\n";
+            if (iguana::is_required<T>(str)) {
+              std::string err = "required filed ";
+              err.append(str).append(" not found!");
+              throw std::invalid_argument(err);
+            }
+          }
         }
       }
     }
@@ -239,6 +267,9 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
 template <int Flags = 0, typename T,
           typename = std::enable_if_t<is_reflection<T>::value>>
 inline bool from_xml(T &&t, char *buf) {
+  if (!g_xml_read_err.empty()) {
+    g_xml_read_err.clear();
+  }
   try {
     rapidxml::xml_document<> doc;
     doc.parse<Flags>(buf);
@@ -249,9 +280,12 @@ inline bool from_xml(T &&t, char *buf) {
 
     return true;
   } catch (std::exception &e) {
+    g_xml_read_err = e.what();
     std::cout << e.what() << "\n";
   }
 
   return false;
 }
+
+inline std::string get_last_read_err() { return g_xml_read_err; }
 }  // namespace iguana
