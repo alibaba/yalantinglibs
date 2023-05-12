@@ -48,7 +48,7 @@ struct resp_data {
 #endif
 };
 
-template <typename Stream>
+template <typename Stream = std::string>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_str;
@@ -114,8 +114,8 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path = "",
-                              const std::string &cert_file = "",
+  [[nodiscard]] bool init_ssl(const std::string &base_path,
+                              const std::string &cert_file,
                               int verify_mode = asio::ssl::verify_none,
                               const std::string &domain = "localhost") {
     try {
@@ -130,6 +130,8 @@ class coro_http_client {
       }
       else {
         printf("no certificate file %s", full_cert_file.string().data());
+        if (!base_path.empty() || !cert_file.empty())
+          return false;
       }
 
       ssl_ctx_.set_verify_mode(verify_mode);
@@ -147,6 +149,22 @@ class coro_http_client {
       printf("init ssl failed: %s", e.what());
     }
     return ssl_init_ret_;
+  }
+
+  [[nodiscard]] bool init_ssl(std::string full_path = "",
+                              int verify_mode = asio::ssl::verify_none,
+                              const std::string &domain = "localhost") {
+    std::string base_path;
+    std::string cert_file;
+    if (full_path.empty()) {
+      base_path = "";
+      cert_file = "";
+    }
+    else {
+      base_path = full_path.substr(0, full_path.find_last_of('/'));
+      cert_file = full_path.substr(full_path.find_last_of('/') + 1);
+    }
+    return init_ssl(base_path, cert_file, verify_mode, domain);
   }
 #endif
 
@@ -241,6 +259,26 @@ class coro_http_client {
   void set_read_fix() { read_fix_ = 1; }
 #endif
 
+  async_simple::coro::Lazy<resp_data> async_patch(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::PATCH,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_options(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::OPTIONS,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_trace(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::TRACE,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::HEAD,
+                         cinatra::req_context<>{});
+  }
+
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
     resp_data data{};
 #ifdef BENCHMARK_TEST
@@ -264,7 +302,8 @@ class coro_http_client {
       if (read_fix_ == 0) {
         req_context<std::string> ctx{};
         bool is_keep_alive = true;
-        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                    http_method::GET);
         handle_result(data, ec, is_keep_alive);
         if (ec) {
           if (!stop_bench_)
@@ -336,6 +375,19 @@ class coro_http_client {
       std::string uri, std::string content, req_content_type content_type) {
     req_context<std::string> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_delete(
+      std::string uri, std::string content, req_content_type content_type) {
+    req_context<std::string> ctx{content_type, "", std::move(content)};
+    return async_request(std::move(uri), http_method::DEL, std::move(ctx));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_put(std::string uri,
+                                                std::string content,
+                                                req_content_type content_type) {
+    req_context<std::string> ctx{content_type, "", std::move(content)};
+    return async_request(std::move(uri), http_method::PUT, std::move(ctx));
   }
 
   resp_data post(std::string uri, std::string content,
@@ -461,7 +513,8 @@ class coro_http_client {
     }
 
     bool is_keep_alive = true;
-    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                http_method::POST);
     if (auto errc = co_await wait_timer(promise); errc) {
       ec = errc;
     }
@@ -529,9 +582,18 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
                                                     http_method method,
                                                     auto ctx) {
-    if (!resp_chunk_str_.empty()) {
-      resp_chunk_str_.clear();
-    }
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      if (!req_headers_.empty()) {
+        req_headers_.clear();
+      }
+
+      if (!resp_chunk_str_.empty()) {
+        resp_chunk_str_.clear();
+      }
+    });
+
+    check_scheme(uri);
+
     resp_data data{};
 
     std::error_code ec{};
@@ -573,7 +635,8 @@ class coro_http_client {
         break;
       }
 
-      data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+      data =
+          co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
     } while (0);
 
     if (auto errc = co_await wait_timer(promise); errc) {
@@ -758,6 +821,10 @@ class coro_http_client {
                                   const auto &ctx) {
     std::string req_str = build_request_header(u, method, ctx);
 
+#ifdef CORO_HTTP_PRINT_REQ_HEAD
+    std::cout << req_str << "\n";
+#endif
+
     if (!ctx.content.empty())
       req_str.append(std::move(ctx.content));
 
@@ -789,8 +856,8 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> handle_read(std::error_code &ec,
                                                   size_t &size,
-                                                  bool &is_keep_alive,
-                                                  auto ctx) {
+                                                  bool &is_keep_alive, auto ctx,
+                                                  http_method method) {
     resp_data data{};
     do {
       if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
@@ -810,6 +877,10 @@ class coro_http_client {
         inject_header_valid = ClientInjectAction::none;
 #endif
         break;
+      }
+
+      if (method == http_method::HEAD) {
+        co_return data;
       }
 
       is_keep_alive = parser.keep_alive();
@@ -1214,6 +1285,21 @@ class coro_http_client {
     close_socket();
     promise.setValue(async_simple::Unit());
     co_return true;
+  }
+
+  void check_scheme(std::string &url) {
+    size_t pos_http = url.find_first_of("http://");
+    size_t pos_https = url.find_first_of("https://");
+    size_t pos_ws = url.find_first_of("ws://");
+    size_t pos_wss = url.find_first_of("wss://");
+    bool has_http_scheme =
+        ((pos_http != std::string::npos) && pos_http == 0) ||
+        ((pos_https != std::string::npos) && pos_https == 0) ||
+        ((pos_ws != std::string::npos) && pos_ws == 0) ||
+        ((pos_wss != std::string::npos) && pos_wss == 0);
+
+    if (!has_http_scheme)
+      url.insert(0, "http://");
   }
 
   std::unique_ptr<asio::io_context> io_ctx_;
