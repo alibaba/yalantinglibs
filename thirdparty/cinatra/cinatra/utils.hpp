@@ -203,6 +203,7 @@ enum class http_method {
   HEAD,
   POST,
   PUT,
+  PATCH,
   CONNECT,
   OPTIONS,
   TRACE
@@ -237,6 +238,9 @@ inline constexpr std::string_view method_name(http_method mthd) {
       break;
     case cinatra::http_method::PUT:
       return "PUT"sv;
+      break;
+    case cinatra::http_method::PATCH:
+      return "PATCH"sv;
       break;
     case cinatra::http_method::CONNECT:
       return "CONNECT"sv;
