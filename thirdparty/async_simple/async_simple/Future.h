@@ -16,14 +16,17 @@
 #ifndef ASYNC_SIMPLE_FUTURE_H
 #define ASYNC_SIMPLE_FUTURE_H
 
-#include <async_simple/Executor.h>
-#include <async_simple/FutureState.h>
-#include <async_simple/LocalState.h>
-#include <async_simple/Promise.h>
-#include <async_simple/Traits.h>
 #include <type_traits>
+#include "async_simple/Executor.h"
+#include "async_simple/FutureState.h"
+#include "async_simple/LocalState.h"
+#include "async_simple/Promise.h"
+#include "async_simple/Traits.h"
 
 namespace async_simple {
+
+template <typename T>
+class Promise;
 
 // The well-known Future/Promise pairs mimic a producer/consumer pair.
 // The Future stands for the consumer-side.
@@ -45,14 +48,23 @@ namespace async_simple {
 // he should call makeReadyFuture().
 template <typename T>
 class Future {
+private:
+    // If T is void, the inner_value_type is Unit. It will be used by
+    // `FutureState` and `LocalState`. Because `Try<void>` cannot distinguish
+    // between `Nothing` state and `Value` state.
+    // It maybe remove Unit after next version, and then will change the
+    // `Try<void>` to distinguish between `Nothing` state and `Value` state
+    using inner_value_type = std::conditional_t<std::is_void_v<T>, Unit, T>;
+
 public:
     using value_type = T;
-    Future(FutureState<T>* fs) : _sharedState(fs) {
+    Future(FutureState<inner_value_type>* fs) : _sharedState(fs) {
         if (_sharedState) {
             _sharedState->attachOne();
         }
     }
-    Future(Try<T>&& t) : _sharedState(nullptr), _localState(std::move(t)) {}
+    Future(Try<inner_value_type>&& t)
+        : _sharedState(nullptr), _localState(std::move(t)) {}
 
     ~Future() {
         if (_sharedState) {
@@ -86,13 +98,31 @@ public:
         return _localState.hasResult() || _sharedState->hasResult();
     }
 
-    T&& value() && { return std::move(result().value()); }
-    T& value() & { return result().value(); }
-    const T& value() const& { return result().value(); }
+    std::add_rvalue_reference_t<T> value() && {
+        if constexpr (std::is_void_v<T>) {
+            return result().value();
+        } else {
+            return std::move(result().value());
+        }
+    }
+    std::add_lvalue_reference_t<T> value() & { return result().value(); }
+    const std::add_lvalue_reference_t<T> value() const& {
+        return result().value();
+    }
 
-    Try<T>&& result() && { return std::move(getTry(*this)); }
-    Try<T>& result() & { return getTry(*this); }
-    const Try<T>& result() const& { return getTry(*this); }
+    Try<T>&& result() && requires(!std::is_void_v<T>) {
+        return std::move(getTry(*this));
+    }
+    Try<T>& result() & requires(!std::is_void_v<T>) { return getTry(*this); }
+    const Try<T>& result() const& requires(!std::is_void_v<T>) {
+        return getTry(*this);
+    }
+
+    Try<void> result() && requires(std::is_void_v<T>) { return getTry(*this); }
+    Try<void> result() & requires(std::is_void_v<T>) { return getTry(*this); }
+    Try<void> result() const& requires(std::is_void_v<T>) {
+        return getTry(*this);
+    }
 
     // get is only allowed on rvalue, aka, Future is not valid after get
     // invoked.
@@ -161,10 +191,27 @@ public:
     template <typename F, typename R = ValueCallableResult<T, F>>
     Future<typename R::ReturnsFuture::Inner> thenValue(F&& f) && {
         auto lambda = [func = std::forward<F>(f)](Try<T>&& t) mutable {
-            return std::forward<F>(func)(std::move(t).value());
+            if constexpr (std::is_void_v<T>) {
+                t.value();
+                return std::forward<F>(func)();
+            } else {
+                return std::forward<F>(func)(std::move(t).value());
+            };
         };
         using Func = decltype(lambda);
         return thenImpl<Func, TryCallableResult<T, Func>>(std::move(lambda));
+    }
+
+    template <typename F,
+              typename R = std::conditional_t<std::is_invocable_v<F, T>,
+                                              ValueCallableResult<T, F>,
+                                              TryCallableResult<T, F>>>
+    Future<typename R::ReturnsFuture::Inner> then(F&& f) && {
+        if constexpr (std::is_invocable_v<F, T>) {
+            return std::move(*this).thenValue(std::forward<F>(f));
+        } else {
+            return std::move(*this).thenTry(std::forward<F>(f));
+        }
     }
 
 public:
@@ -224,22 +271,27 @@ private:
 
     // continuation returns a future
     template <typename F, typename R>
-    std::enable_if_t<R::ReturnsFuture::value,
-                     Future<typename R::ReturnsFuture::Inner>>
-    thenImpl(F&& func) {
+    Future<typename R::ReturnsFuture::Inner> thenImpl(F&& func) {
         logicAssert(valid(), "Future is broken");
         using T2 = typename R::ReturnsFuture::Inner;
 
         if (!_sharedState) {
-            try {
-                auto newFuture =
-                    std::forward<F>(func)(std::move(_localState.getTry()));
-                if (!newFuture.getExecutor()) {
-                    newFuture.setExecutor(_localState.getExecutor());
+            if constexpr (R::ReturnsFuture::value) {
+                try {
+                    auto newFuture =
+                        std::forward<F>(func)(std::move(_localState.getTry()));
+                    if (!newFuture.getExecutor()) {
+                        newFuture.setExecutor(_localState.getExecutor());
+                    }
+                    return newFuture;
+                } catch (...) {
+                    return Future<T2>(Try<T2>(std::current_exception()));
                 }
+            } else {
+                Future<T2> newFuture(makeTryCall(
+                    std::forward<F>(func), std::move(_localState.getTry())));
+                newFuture.setExecutor(_localState.getExecutor());
                 return newFuture;
-            } catch (...) {
-                return Future<T2>(Try<T2>(std::current_exception()));
             }
         }
 
@@ -252,54 +304,30 @@ private:
                 if (!R::isTry && t.hasError()) {
                     p.setException(t.getException());
                 } else {
-                    try {
-                        auto f2 = f(std::move(t));
-                        f2.setContinuation(
-                            [pm = std::move(p)](Try<T2>&& t2) mutable {
-                                pm.setValue(std::move(t2));
-                            });
-                    } catch (...) {
-                        p.setException(std::current_exception());
+                    if constexpr (R::ReturnsFuture::value) {
+                        try {
+                            auto f2 = f(std::move(t));
+                            f2.setContinuation(
+                                [pm = std::move(p)](Try<T2>&& t2) mutable {
+                                    pm.setValue(std::move(t2));
+                                });
+                        } catch (...) {
+                            p.setException(std::current_exception());
+                        }
+                    } else {
+                        p.setValue(makeTryCall(std::forward<F>(f),
+                                               std::move(t)));  // Try<Unit>
                     }
                 }
             });
         return newFuture;
     }
 
-    // continuation returns a value
-    template <typename F, typename R>
-    std::enable_if_t<!(R::ReturnsFuture::value),
-                     Future<typename R::ReturnsFuture::Inner>>
-    thenImpl(F&& func) {
-        logicAssert(valid(), "Future is broken");
-        using T2 = typename R::ReturnsFuture::Inner;
-        if (!_sharedState) {
-            Future<T2> newFuture(makeTryCall(std::forward<F>(func),
-                                             std::move(_localState.getTry())));
-            newFuture.setExecutor(_localState.getExecutor());
-            return newFuture;
-        }
-        Promise<T2> promise;
-        auto newFuture = promise.getFuture();
-        newFuture.setExecutor(_sharedState->getExecutor());
-        _sharedState->setContinuation(
-            [p = std::move(promise),
-             f = std::forward<F>(func)](Try<T>&& t) mutable {
-                if (!R::isTry && t.hasError()) {
-                    p.setException(t.getException());
-                } else {
-                    p.setValue(makeTryCall(std::forward<F>(f),
-                                           std::move(t)));  // Try<Unit>
-                }
-            });
-        return newFuture;
-    }
-
 private:
-    FutureState<T>* _sharedState;
+    FutureState<inner_value_type>* _sharedState;
 
     // Ready-Future does not have a Promise, an inline state is faster.
-    LocalState<T> _localState;
+    LocalState<inner_value_type> _localState;
 
 private:
     template <typename Iter>
@@ -321,6 +349,7 @@ template <typename T>
 Future<T> makeReadyFuture(std::exception_ptr ex) {
     return Future<T>(Try<T>(ex));
 }
+inline Future<void> makeReadyFuture() { return Future<void>(Try<Unit>()); }
 
 }  // namespace async_simple
 

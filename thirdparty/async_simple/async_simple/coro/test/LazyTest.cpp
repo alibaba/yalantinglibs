@@ -23,15 +23,23 @@
 
 #include <iostream>
 
-#include <async_simple/coro/Collect.h>
-#include <async_simple/coro/Lazy.h>
-#include <async_simple/coro/SyncAwait.h>
-#include <async_simple/coro/test/Time.h>
-#include <async_simple/executors/SimpleExecutor.h>
-#include <async_simple/experimental/coroutine.h>
-#include <async_simple/test/unittest.h>
-#include <async_simple/util/Condition.h>
 #include <chrono>
+#ifdef USE_MODULES
+#include <variant>
+#include "async_simple/experimental/coroutine.h"
+#include "async_simple/coro/test/Time.h"
+#include "async_simple/test/unittest.h"
+import async_simple;
+#else
+#include "async_simple/coro/Collect.h"
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
+#include "async_simple/coro/test/Time.h"
+#include "async_simple/executors/SimpleExecutor.h"
+#include "async_simple/experimental/coroutine.h"
+#include "async_simple/test/unittest.h"
+#include "async_simple/util/Condition.h"
+#endif
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -135,7 +143,7 @@ public:
         co_return ret;
     }
 
-    template <typename T, bool thread_id = false>
+    template <typename T>
     Lazy<T> getValueWithSleep(T x, std::chrono::microseconds msec =
                                        std::chrono::microseconds::max()) {
         struct ValueAwaiter {
@@ -158,6 +166,42 @@ public:
             msec = std::chrono::microseconds(rand() % 1000 + 1);
         }
         auto ret = co_await ValueAwaiter(x, msec);
+        auto id2 = std::this_thread::get_id();
+        EXPECT_EQ(id1, id2);
+        co_return ret;
+    }
+
+    template <typename T>
+    Lazy<T> getValueWithCV(T x, std::condition_variable& cv, bool& ready,
+                           int& cnt, std::mutex& mutex) {
+        struct ValueAwaiter {
+            T value;
+            std::condition_variable& cv;
+            bool& ready;
+            int& cnt;
+            std::mutex& mutex;
+            ValueAwaiter(T value, std::condition_variable& cv, bool& ready,
+                         int& cnt, std::mutex& mutex)
+                : value(value), cv(cv), ready(ready), cnt(cnt), mutex(mutex) {}
+
+            bool await_ready() { return false; }
+            void await_suspend(std::coroutine_handle<> continuation) noexcept {
+                std::thread([this, c = continuation]() mutable {
+                    int condition;
+                    {
+                        std::unique_lock lk(mutex);
+                        cv.wait(lk, [this]() -> bool { return this->ready; });
+                        condition = --cnt;
+                    }
+                    if (condition == 0)
+                        cv.notify_one();
+                    c.resume();
+                }).detach();
+            }
+            T await_resume() noexcept { return value; }
+        };
+        auto id1 = std::this_thread::get_id();
+        auto ret = co_await ValueAwaiter(x, cv, ready, cnt, mutex);
         auto id2 = std::this_thread::get_id();
         EXPECT_EQ(id1, id2);
         co_return ret;
@@ -308,9 +352,9 @@ TEST_F(LazyTest, testExecutor) {
     executors::SimpleExecutor e1(1);
     executors::SimpleExecutor e2(1);
     auto addTwo = [&](int x) -> Lazy<int> {
-        CHECK_EXECUTOR(&e2);
+        CHECK_EXECUTOR(&e1);
         auto tmp = co_await getValue(x);
-        CHECK_EXECUTOR(&e2);
+        CHECK_EXECUTOR(&e1);
         co_return tmp + 2;
     };
     {
@@ -320,9 +364,9 @@ TEST_F(LazyTest, testExecutor) {
             CHECK_EXECUTOR(&e1);
             int y = co_await plusOne();
             CHECK_EXECUTOR(&e1);
-            int z = co_await addTwo(y).via(&e2);
+            auto z = co_await addTwo(y).coAwaitTry();
             CHECK_EXECUTOR(&e1);
-            co_return z;
+            co_return z.value();
         };
         triggerValue(100);
         auto val = syncAwait(test().via(&e1));
@@ -1027,6 +1071,37 @@ TEST_F(LazyTest, testCollectAllVariadic) {
         CHECK_EXECUTOR(&e2);
     };
     syncAwait(test4().via(&e2));
+
+    auto testCollectAllPara = [this, &e1]() -> Lazy<> {
+        Lazy<int> intLazy = getValue(2);
+        Lazy<double> doubleLazy = getValue(2.2);
+        Lazy<std::string> stringLazy =
+            getValue(std::string("testCollectAllPara"));
+        auto sleepLazy = [](int rep) -> Lazy<std::thread::id> {
+            std::this_thread::sleep_for(std::chrono::microseconds(rep));
+            co_return std::this_thread::get_id();
+        };
+
+        auto id = std::this_thread::get_id();
+        CHECK_EXECUTOR(&e1);
+        auto out_tuple = co_await collectAllPara(
+            std::move(intLazy), std::move(doubleLazy), std::move(stringLazy),
+            sleepLazy(2), sleepLazy(1));
+        CHECK_EXECUTOR(&e1);
+
+        EXPECT_EQ(std::this_thread::get_id(), id);
+        EXPECT_EQ(5u, std::tuple_size<decltype(out_tuple)>::value);
+
+        auto [v_try_int, v_try_double, v_try_string, id0, id1] =
+            std::move(out_tuple);
+
+        EXPECT_EQ(2, v_try_int.value());
+        EXPECT_DOUBLE_EQ(2.2, v_try_double.value());
+        EXPECT_STREQ("testCollectAllPara", v_try_string.value().c_str());
+
+        CHECK_EXECUTOR(&e1);
+    };
+    syncAwait(testCollectAllPara().via(&e1));
 }
 
 TEST_F(LazyTest, testCollectAny) {
@@ -1036,64 +1111,91 @@ TEST_F(LazyTest, testCollectAny) {
     executors::SimpleExecutor e3(10);
 
     auto test = [this]() -> Lazy<int> {
+        auto m = std::mutex{};
+        auto is_ready = bool{false};
+        auto cnt = int{};
+        auto cv = std::condition_variable{};
         std::vector<Lazy<int>> input;
-        input.push_back(getValueWithSleep(1));
-        input.push_back(getValueWithSleep(2));
-        input.push_back(getValueWithSleep(2));
-        input.push_back(getValueWithSleep(3));
-        input.push_back(getValueWithSleep(4));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(3));
-        input.push_back(getValueWithSleep(4));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
-        input.push_back(getValueWithSleep(5));
+        input.push_back(getValueWithCV(1, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(2, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(3, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(4, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(5, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(6, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(7, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(8, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(9, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(10, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(11, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(12, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(13, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(14, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(15, cv, is_ready, cnt, m));
+        input.push_back(getValueWithSleep(16, 42ms));
+        input.push_back(getValueWithCV(17, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(18, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(19, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(20, cv, is_ready, cnt, m));
+        input.push_back(getValueWithCV(21, cv, is_ready, cnt, m));
+        cnt = input.size() - 1;
         auto combinedLazy = collectAny(std::move(input));
         auto out = co_await std::move(combinedLazy);
-        EXPECT_GT(out._value.value(), 0);
-        EXPECT_GE(out._idx, 0u);
+        EXPECT_FALSE(out.hasError());
+        auto index = out.index();
+        auto& value = out.value();
+        EXPECT_EQ(out._value.value(), 16);
+        EXPECT_EQ(value, 16);
+        EXPECT_EQ(out._idx, 15u);
+        EXPECT_EQ(index, 15u);
+        {
+            std::unique_lock lk{m};
+            is_ready = true;
+            lk.unlock();
+            cv.notify_all();
+            lk.lock();
+            cv.wait(lk, [&] { return cnt == 0; });
+        }
         co_return out._value.value();
     };
-    ASSERT_GT(syncAwait(test().via(&e1)), 0);
+    ASSERT_EQ(syncAwait(test().via(&e1)), 16);
 
     auto test2 = [this, &e1, &e2, &e3]() -> Lazy<int> {
+        auto m = std::mutex{};
+        auto is_ready = bool{false};
+        auto cnt = int{};
+        auto cv = std::condition_variable{};
         std::vector<RescheduleLazy<int>> input;
-        input.push_back(getValueWithSleep(11).via(&e1));
-        input.push_back(getValueWithSleep(12).via(&e1));
-        input.push_back(getValueWithSleep(13).via(&e1));
-        input.push_back(getValueWithSleep(14).via(&e1));
-        input.push_back(getValueWithSleep(15).via(&e1));
-
-        input.push_back(getValueWithSleep(25).via(&e2));
-        input.push_back(getValueWithSleep(21).via(&e2));
-        input.push_back(getValueWithSleep(22).via(&e2));
-        input.push_back(getValueWithSleep(23).via(&e2));
-        input.push_back(getValueWithSleep(24).via(&e2));
-        input.push_back(getValueWithSleep(25).via(&e2));
-
+        input.push_back(getValueWithCV(1, cv, is_ready, cnt, m).via(&e1));
+        input.push_back(getValueWithCV(2, cv, is_ready, cnt, m).via(&e1));
+        input.push_back(getValueWithSleep(3, 65ms).via(&e1));
+        input.push_back(getValueWithCV(4, cv, is_ready, cnt, m).via(&e1));
+        input.push_back(getValueWithCV(5, cv, is_ready, cnt, m).via(&e1));
+        input.push_back(getValueWithCV(6, cv, is_ready, cnt, m).via(&e2));
+        input.push_back(getValueWithCV(7, cv, is_ready, cnt, m).via(&e2));
+        input.push_back(getValueWithCV(8, cv, is_ready, cnt, m).via(&e2));
+        input.push_back(getValueWithCV(9, cv, is_ready, cnt, m).via(&e2));
+        input.push_back(getValueWithCV(1, cv, is_ready, cnt, m).via(&e2));
+        input.push_back(getValueWithCV(1, cv, is_ready, cnt, m).via(&e2));
+        cnt = input.size() - 1;
         CHECK_EXECUTOR(&e3);
         auto combinedLazy = collectAny(std::move(input));
         CHECK_EXECUTOR(&e3);
 
         auto out = co_await std::move(combinedLazy);
 
-        EXPECT_GT(out._value.value(), 10);
-        EXPECT_GE(out._idx, 0u);
+        EXPECT_EQ(out._value.value(), 3);
+        EXPECT_EQ(out._idx, 2u);
+        {
+            std::unique_lock lk{m};
+            is_ready = true;
+            lk.unlock();
+            cv.notify_all();
+            lk.lock();
+            cv.wait(lk, [&] { return cnt == 0; });
+        }
         co_return out._value.value();
     };
-    ASSERT_GT(syncAwait(test2().via(&e3)), 10);
-
-    std::this_thread::sleep_for(chrono::seconds(2));
+    ASSERT_EQ(syncAwait(test2().via(&e3)), 3);
 }
 
 TEST_F(LazyTest, testCollectAnyVariadic) {
@@ -1108,21 +1210,35 @@ TEST_F(LazyTest, testCollectAnyVariadic) {
             async_simple::Try<long>, async_simple::Try<unsigned long>,
             async_simple::Try<long long>,
             async_simple::Try<unsigned long long>>> {
+        auto m = std::mutex{};
+        auto is_ready = bool{false};
+        auto cnt = int{7};
+        auto cv = std::condition_variable{};
         auto combinedLazy = collectAny(
-            getValueWithSleep((short)1), getValueWithSleep((unsigned short)1),
-            getValueWithSleep((int)1), getValueWithSleep((unsigned int)1),
-            getValueWithSleep((long)1), getValueWithSleep((unsigned long)1),
-            getValueWithSleep((long long)1),
-            getValueWithSleep((unsigned long long)1));
+            getValueWithCV((short)1, cv, is_ready, cnt, m),
+            getValueWithSleep((unsigned short)2),
+            getValueWithCV((int)3, cv, is_ready, cnt, m),
+            getValueWithCV((unsigned int)4, cv, is_ready, cnt, m),
+            getValueWithCV((long)5, cv, is_ready, cnt, m),
+            getValueWithCV((unsigned long)6, cv, is_ready, cnt, m),
+            getValueWithCV((long long)1, cv, is_ready, cnt, m),
+            getValueWithCV((unsigned long long)1, cv, is_ready, cnt, m));
         auto out = co_await std::move(combinedLazy);
-        EXPECT_EQ(std::visit([](const auto& o) { return o.value() == 1; }, out),
+        EXPECT_EQ(std::visit([](const auto& o) { return o.value() == 2; }, out),
                   true);
-        EXPECT_GE(out.index(), 0u);
+        {
+            std::unique_lock lk{m};
+            is_ready = true;
+            lk.unlock();
+            cv.notify_all();
+            lk.lock();
+            cv.wait(lk, [&] { return cnt == 0; });
+        }
         co_return out;
     };
-    ASSERT_EQ(std::visit([](const auto& o) { return o.value() == 1; },
+    ASSERT_EQ(std::visit([](const auto& o) { return o.value() == 2; },
                          syncAwait(test().via(&e1))),
-              1);
+              true);
 
     auto test2 = [this, &e1, &e2, &e3]()
         -> Lazy<std::variant<
@@ -1131,50 +1247,75 @@ TEST_F(LazyTest, testCollectAnyVariadic) {
             async_simple::Try<long>, async_simple::Try<unsigned long>,
             async_simple::Try<long long>,
             async_simple::Try<unsigned long long>>> {
+        auto m = std::mutex{};
+        auto is_ready = bool{false};
+        auto cnt = int{7};
+        auto cv = std::condition_variable{};
         CHECK_EXECUTOR(&e3);
-        auto combinedLazy =
-            collectAny(getValueWithSleep((short)1).via(&e1),
-                       getValueWithSleep((unsigned short)1).via(&e1),
-                       getValueWithSleep((int)1).via(&e1),
-                       getValueWithSleep((unsigned int)1).via(&e1),
-                       getValueWithSleep((long)1).via(&e2),
-                       getValueWithSleep((unsigned long)1).via(&e2),
-                       getValueWithSleep((long long)1).via(&e2),
-                       getValueWithSleep((unsigned long long)1).via(&e2));
+        auto combinedLazy = collectAny(
+            getValueWithCV((short)1, cv, is_ready, cnt, m).via(&e1),
+            getValueWithCV((unsigned short)2, cv, is_ready, cnt, m).via(&e1),
+            getValueWithCV((int)3, cv, is_ready, cnt, m).via(&e1),
+            getValueWithCV((unsigned int)4, cv, is_ready, cnt, m).via(&e1),
+            getValueWithCV((long)5, cv, is_ready, cnt, m).via(&e2),
+            getValueWithSleep((unsigned long)6, 50ms).via(&e2),
+            getValueWithCV((long long)7, cv, is_ready, cnt, m).via(&e2),
+            getValueWithCV((unsigned long long)8, cv, is_ready, cnt, m)
+                .via(&e2));
         CHECK_EXECUTOR(&e3);
-
         auto out = co_await std::move(combinedLazy);
-
-        EXPECT_EQ(std::visit([](const auto& o) { return o.value() == 1; }, out),
+        EXPECT_EQ(std::visit([](const auto& o) { return o.value() == 6; }, out),
                   true);
-        EXPECT_GE(out.index(), 0u);
+        EXPECT_EQ(out.index(), 5u);
+        {
+            std::unique_lock lk{m};
+            is_ready = true;
+            lk.unlock();
+            cv.notify_all();
+            lk.lock();
+            cv.wait(lk, [&] { return cnt == 0; });
+        }
         co_return out;
     };
 
-    ASSERT_EQ(std::visit([](const auto& o) { return o.value() == 1; },
+    ASSERT_EQ(std::visit([](const auto& o) { return o.value() == 6; },
                          syncAwait(test2().via(&e3))),
-              1);
+              true);
     using namespace std::chrono_literals;
+
     auto test3 = [this, &e1, &e2, &e3]() -> Lazy<Try<std::vector<int>>> {
+        auto m = std::mutex{};
+        auto is_ready = bool{false};
+        auto cnt = int{4};
+        auto cv = std::condition_variable{};
         CHECK_EXECUTOR(&e3);
         auto combinedLazy = collectAny(
-            getValueWithSleep(std::string("hello"), 120ms).via(&e1),
-            getValueWithSleep(std::string("hi"), 260ms).via(&e1),
+            getValueWithCV(std::string("hello"), cv, is_ready, cnt, m).via(&e1),
+            getValueWithCV(std::string("hi"), cv, is_ready, cnt, m).via(&e1),
             getValueWithSleep(std::vector<int>{1, 2, 3}, 50ms).via(&e1),
-            getValueWithSleep(std::vector<double>{1.0f, 1.5f, 204.23f}, 170ms)
+            getValueWithCV(std::vector<double>{1.0f, 1.5f, 204.23f}, cv,
+                           is_ready, cnt, m)
                 .via(&e2),
-            getValueWithSleep(std::set<int>{1, 2, 3}, 190ms).via(&e2));
+            getValueWithCV(std::set<int>{1, 2, 3}, cv, is_ready, cnt, m)
+                .via(&e2));
         CHECK_EXECUTOR(&e3);
         auto ret = co_await std::move(combinedLazy);
         EXPECT_EQ(ret.index(), 2u);
         auto out = std::get<2>(std::move(ret));
+        {
+            std::unique_lock lk{m};
+            is_ready = true;
+            lk.unlock();
+            cv.notify_all();
+            lk.lock();
+            cv.wait(lk, [&] { return cnt == 0; });
+        }
         co_return out;
     };
     auto tmp = std::vector<int>{1, 2, 3};
     auto out = syncAwait(test3().via(&e3));
     ASSERT_EQ(out.available(), true);
     ASSERT_EQ(out.value(), tmp);
-    std::this_thread::sleep_for(2000ms);
 }
 
 TEST_F(LazyTest, testException) {
@@ -1212,10 +1353,10 @@ TEST_F(LazyTest, testContext) {
     executors::SimpleExecutor e2(10);
 
     auto addTwo = [&](int x) -> Lazy<int> {
-        CHECK_EXECUTOR(&e2);
+        CHECK_EXECUTOR(&e1);
         auto tid = std::this_thread::get_id();
         auto tmp = co_await getValue(x);
-        CHECK_EXECUTOR(&e2);
+        CHECK_EXECUTOR(&e1);
         EXPECT_EQ(tid, std::this_thread::get_id());
         co_return tmp + 2;
     };
@@ -1228,10 +1369,10 @@ TEST_F(LazyTest, testContext) {
             int y = co_await plusOne();
             CHECK_EXECUTOR(&e1);
             EXPECT_EQ(tid, std::this_thread::get_id());
-            int z = co_await addTwo(y).via(&e2);
+            auto z = co_await addTwo(y).coAwaitTry();
             CHECK_EXECUTOR(&e1);
             EXPECT_EQ(tid, std::this_thread::get_id());
-            co_return z;
+            co_return z.value();
         };
         triggerValue(100);
         auto val = syncAwait(test().via(&e1));
@@ -1495,12 +1636,12 @@ TEST_F(LazyTest, testDetach) {
     util::Condition cond;
     int count = 0;
     executors::SimpleExecutor e1(1);
-    auto test1 = [&]() -> Lazy<int> {
+    auto test1 = [](util::Condition& cond, int& count) -> Lazy<> {
         count += 2;
         cond.release();
-        co_return count;
+        co_return;
     };
-    test1().via(&e1).detach();
+    test1(cond, count).via(&e1).detach();
     cond.acquire();
     EXPECT_EQ(count, 2);
 }

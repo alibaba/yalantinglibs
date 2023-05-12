@@ -16,12 +16,12 @@
 #ifndef ASYNC_SIMPLE_COLLECT_H
 #define ASYNC_SIMPLE_COLLECT_H
 
-#include <async_simple/Common.h>
-#include <async_simple/Future.h>
-#include <async_simple/Try.h>
 #include <exception>
 #include <iterator>
 #include <vector>
+#include "async_simple/Common.h"
+#include "async_simple/Future.h"
+#include "async_simple/Try.h"
 
 #include <iostream>
 
@@ -46,11 +46,11 @@ namespace async_simple {
 //
 // Since the returned type is a future. So the user wants to get its value
 // could use `get()` method synchronously or `then*()` method asynchronously.
-template <typename Iter>
+template <std::input_iterator Iterator>
 inline Future<std::vector<
-    Try<typename std::iterator_traits<Iter>::value_type::value_type>>>
-collectAll(Iter begin, Iter end) {
-    using T = typename std::iterator_traits<Iter>::value_type::value_type;
+    Try<typename std::iterator_traits<Iterator>::value_type::value_type>>>
+collectAll(Iterator begin, Iterator end) {
+    using T = typename std::iterator_traits<Iterator>::value_type::value_type;
     size_t n = std::distance(begin, end);
 
     bool allReady = true;
@@ -81,12 +81,11 @@ collectAll(Iter begin, Iter end) {
     };
 
     auto ctx = std::make_shared<Context>(n, std::move(promise));
-    for (size_t i = 0; i < n; ++i) {
-        auto cur = begin + i;
-        if (cur->hasResult()) {
-            ctx->results[i] = std::move(cur->result());
+    for (size_t i = 0; i < n; ++i, ++begin) {
+        if (begin->hasResult()) {
+            ctx->results[i] = std::move(begin->result());
         } else {
-            cur->setContinuation([ctx, i](Try<T>&& t) mutable {
+            begin->setContinuation([ctx, i](Try<T>&& t) mutable {
                 ctx->results[i] = std::move(t);
             });
         }

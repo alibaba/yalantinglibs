@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <async_simple/coro/FutureAwaiter.h>
-#include <async_simple/coro/Lazy.h>
-#include <async_simple/coro/SyncAwait.h>
-#include <async_simple/test/unittest.h>
 #include <chrono>
 #include <thread>
+#include "async_simple/coro/FutureAwaiter.h"
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
+#include "async_simple/test/unittest.h"
 
 namespace async_simple {
 namespace coro {
@@ -43,7 +43,7 @@ TEST_F(FutureAwaiterTest, testWithFuture) {
         auto fut = pr.getFuture();
         sum(1, 1, [pr = std::move(pr)](int val) mutable { pr.setValue(val); });
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        auto val = co_await fut;
+        auto val = co_await std::move(fut);
         EXPECT_EQ(2, val);
     };
     syncAwait(lazy1());
@@ -59,6 +59,13 @@ TEST_F(FutureAwaiterTest, testWithFuture) {
     };
     syncAwait(lazy2());
 }
+
+namespace detail {
+
+static_assert(HasGlobalCoAwaitOperator<Future<int>>);
+static_assert(HasGlobalCoAwaitOperator<Future<int>&&>);
+
+}  // namespace detail
 
 }  // namespace coro
 }  // namespace async_simple

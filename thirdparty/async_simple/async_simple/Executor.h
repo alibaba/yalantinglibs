@@ -16,28 +16,27 @@
 #ifndef ASYNC_SIMPLE_EXECUTOR_H
 #define ASYNC_SIMPLE_EXECUTOR_H
 
-#include <async_simple/experimental/coroutine.h>
-
 #include <chrono>
 #include <functional>
 #include <string>
 #include <thread>
+#include "async_simple/experimental/coroutine.h"
 
 namespace async_simple {
 // Stat information for an executor.
 // It contains the number of pending task
 // for the executor now.
 struct ExecutorStat {
-  size_t pendingTaskCount = 0;
-  ExecutorStat() = default;
+    size_t pendingTaskCount = 0;
+    ExecutorStat() = default;
 };
 // Options for a schedule.
 // The option contains:
 // - bool prompt. Whether or not this schedule
 //   should be prompted.
 struct ScheduleOptions {
-  bool prompt = true;
-  ScheduleOptions() = default;
+    bool prompt = true;
+    ScheduleOptions() = default;
 };
 
 // Awaitable to get the current executor.
@@ -61,115 +60,115 @@ struct CurrentExecutor {};
 class IOExecutor;
 
 class Executor {
- public:
-  // Context is an identification for the context where an executor
-  // should run. See checkin/checkout for details.
-  using Context = void *;
-  static constexpr Context NULLCTX = nullptr;
+public:
+    // Context is an identification for the context where an executor
+    // should run. See checkin/checkout for details.
+    using Context = void *;
+    static constexpr Context NULLCTX = nullptr;
 
-  // A time duration in microseconds.
-  using Duration = std::chrono::duration<int64_t, std::micro>;
+    // A time duration in microseconds.
+    using Duration = std::chrono::duration<int64_t, std::micro>;
 
-  // The schedulable function. Func should accept no argument and
-  // return void.
-  using Func = std::function<void()>;
-  class TimeAwaitable;
-  class TimeAwaiter;
+    // The schedulable function. Func should accept no argument and
+    // return void.
+    using Func = std::function<void()>;
+    class TimeAwaitable;
+    class TimeAwaiter;
 
-  Executor(std::string name = "default") : _name(std::move(name)) {}
-  virtual ~Executor() {}
+    Executor(std::string name = "default") : _name(std::move(name)) {}
+    virtual ~Executor() {}
 
-  Executor(const Executor &) = delete;
-  Executor &operator=(const Executor &) = delete;
+    Executor(const Executor &) = delete;
+    Executor &operator=(const Executor &) = delete;
 
-  // Schedule a function.
-  // `schedule` would return false if schedule failed, which means function
-  // func will not be executed. In case schedule return true, the executor
-  // should guarantee that the func would be executed.
-  virtual bool schedule(Func func) = 0;
-  // Return true if caller runs in the executor.
-  virtual bool currentThreadInExecutor() const {
-    throw std::logic_error("Not implemented");
-  }
-  virtual ExecutorStat stat() const {
-    throw std::logic_error("Not implemented");
-  }
+    // Schedule a function.
+    // `schedule` would return false if schedule failed, which means function
+    // func will not be executed. In case schedule return true, the executor
+    // should guarantee that the func would be executed.
+    virtual bool schedule(Func func) = 0;
+    // Return true if caller runs in the executor.
+    virtual bool currentThreadInExecutor() const {
+        throw std::logic_error("Not implemented");
+    }
+    virtual ExecutorStat stat() const {
+        throw std::logic_error("Not implemented");
+    }
 
-  // checkout() return current "Context", which defined by executor
-  // implementation, then checkin(func, "Context") should schedule func to the
-  // same "Context" as before.
-  virtual size_t currentContextId() const { return 0; };
-  virtual Context checkout() { return NULLCTX; }
-  virtual bool checkin(Func func, [[maybe_unused]] Context ctx,
-                       [[maybe_unused]] ScheduleOptions opts) {
-    return schedule(std::move(func));
-  }
-  virtual bool checkin(Func func, Context ctx) {
-    static ScheduleOptions opts;
-    return checkin(std::move(func), ctx, opts);
-  }
+    // checkout() return current "Context", which defined by executor
+    // implementation, then checkin(func, "Context") should schedule func to the
+    // same "Context" as before.
+    virtual size_t currentContextId() const { return 0; };
+    virtual Context checkout() { return NULLCTX; }
+    virtual bool checkin(Func func, [[maybe_unused]] Context ctx,
+                         [[maybe_unused]] ScheduleOptions opts) {
+        return schedule(std::move(func));
+    }
+    virtual bool checkin(Func func, Context ctx) {
+        static ScheduleOptions opts;
+        return checkin(std::move(func), ctx, opts);
+    }
 
-  const std::string &name() const { return _name; }
+    const std::string &name() const { return _name; }
 
-  // Use
-  //  co_await executor.after(sometime)
-  // to schedule current execution after some time.
-  TimeAwaitable after(Duration dur);
+    // Use
+    //  co_await executor.after(sometime)
+    // to schedule current execution after some time.
+    TimeAwaitable after(Duration dur);
 
-  // IOExecutor accepts IO read/write requests.
-  // Return nullptr if the executor doesn't offer an IOExecutor.
-  virtual IOExecutor *getIOExecutor() {
-    throw std::logic_error("Not implemented");
-  }
+    // IOExecutor accepts IO read/write requests.
+    // Return nullptr if the executor doesn't offer an IOExecutor.
+    virtual IOExecutor *getIOExecutor() {
+        throw std::logic_error("Not implemented");
+    }
 
- protected:
-  virtual void schedule(Func func, Duration dur) {
-    std::thread([this, func = std::move(func), dur]() {
-      std::this_thread::sleep_for(dur);
-      schedule(std::move(func));
-    }).detach();
-  }
+protected:
+    virtual void schedule(Func func, Duration dur) {
+        std::thread([this, func = std::move(func), dur]() {
+            std::this_thread::sleep_for(dur);
+            schedule(std::move(func));
+        }).detach();
+    }
 
- private:
-  std::string _name;
+private:
+    std::string _name;
 };
 
 // Awaiter to implement Executor::after.
 class Executor::TimeAwaiter {
- public:
-  TimeAwaiter(Executor *ex, Executor::Duration dur) : _ex(ex), _dur(dur) {}
+public:
+    TimeAwaiter(Executor *ex, Executor::Duration dur) : _ex(ex), _dur(dur) {}
 
- public:
-  bool await_ready() const noexcept { return false; }
+public:
+    bool await_ready() const noexcept { return false; }
 
-  template <typename PromiseType>
-  void await_suspend(std::coroutine_handle<PromiseType> continuation) {
-    std::function<void()> func = [c = continuation]() mutable {
-      c.resume();
-    };
-    _ex->schedule(func, _dur);
-  }
-  void await_resume() const noexcept {}
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> continuation) {
+        std::function<void()> func = [c = continuation]() mutable {
+            c.resume();
+        };
+        _ex->schedule(func, _dur);
+    }
+    void await_resume() const noexcept {}
 
- private:
-  Executor *_ex;
-  Executor::Duration _dur;
+private:
+    Executor *_ex;
+    Executor::Duration _dur;
 };
 
 // Awaitable to implement Executor::after.
 class Executor::TimeAwaitable {
- public:
-  TimeAwaitable(Executor *ex, Executor::Duration dur) : _ex(ex), _dur(dur) {}
+public:
+    TimeAwaitable(Executor *ex, Executor::Duration dur) : _ex(ex), _dur(dur) {}
 
-  auto coAwait(Executor *) { return Executor::TimeAwaiter(_ex, _dur); }
+    auto coAwait(Executor *) { return Executor::TimeAwaiter(_ex, _dur); }
 
- private:
-  Executor *_ex;
-  Executor::Duration _dur;
+private:
+    Executor *_ex;
+    Executor::Duration _dur;
 };
 
 Executor::TimeAwaitable inline Executor::after(Executor::Duration dur) {
-  return Executor::TimeAwaitable(this, dur);
+    return Executor::TimeAwaitable(this, dur);
 };
 
 }  // namespace async_simple
