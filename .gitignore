@@ -53,3 +53,4 @@ node_modules
 # Bazel
 bazel-*
 !BUILD.bazel
+cdb.json
