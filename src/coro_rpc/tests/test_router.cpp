@@ -190,6 +190,21 @@ async_simple::coro::Lazy<void> coro_func() {
   co_return;
 }
 
+TEST_CASE("test string literal") {
+  char arr[10] = "JACK";
+  char arr2[10] = "jack";
+  struct_pack::string_literal<char, 9> s1(arr);
+  struct_pack::string_literal<char, 9> s2(arr2);
+
+  CHECK(s1 != s2);
+
+  constexpr struct_pack::string_literal s3("aaa");
+  constexpr struct_pack::string_literal s4("aaa");
+  constexpr struct_pack::string_literal s5("bbb");
+  static_assert(s3 == s4);
+  static_assert(s3 != s5);
+}
+
 TEST_CASE("testing coro_handler") {
   router.register_handler<coro_func>(1);
   router.register_handler<coro_func>();
