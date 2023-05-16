@@ -7,10 +7,12 @@
 #include <fstream>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
 
+#include "asio/dispatch.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
@@ -36,6 +38,25 @@ inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
 inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
+
+constexpr inline bool connect_ok = true;
+
+struct client_config {
+  std::optional<std::chrono::steady_clock::duration> timeout_duration;
+  std::string sec_key;
+  size_t max_single_part_size;
+  std::string proxy_host;
+  std::string proxy_port;
+  std::string proxy_auth_username;
+  std::string proxy_auth_passwd;
+  std::string proxy_auth_token;
+#ifdef CINATRA_ENABLE_SSL
+  std::string base_path;
+  std::string cert_file;
+  int verify_mode;
+  std::string domain;
+#endif
+};
 
 struct resp_data {
   std::error_code net_err;
@@ -83,6 +104,32 @@ class coro_http_client {
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
 
+  bool init_config(const client_config &conf) {
+    if (conf.timeout_duration.has_value()) {
+      set_timeout(*conf.timeout_duration);
+    }
+    if (!conf.sec_key.empty()) {
+      set_ws_sec_key(conf.sec_key);
+    }
+    if (conf.max_single_part_size > 0) {
+      set_max_single_part_size(conf.max_single_part_size);
+    }
+    if (!conf.proxy_host.empty()) {
+      set_proxy_basic_auth(conf.proxy_host, conf.proxy_port);
+    }
+    if (!conf.proxy_auth_username.empty()) {
+      set_proxy_basic_auth(conf.proxy_auth_username, conf.proxy_auth_passwd);
+    }
+    if (!conf.proxy_auth_token.empty()) {
+      set_proxy_bearer_token_auth(conf.proxy_auth_token);
+    }
+#ifdef CINATRA_ENABLE_SSL
+    return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
+                    conf.domain);
+#endif
+    return true;
+  }
+
   ~coro_http_client() {
     async_close();
     if (io_thd_.joinable()) {
@@ -108,7 +155,7 @@ class coro_http_client {
     if (has_closed_)
       return;
 
-    asio::post(executor_wrapper_.get_executor(), [this] {
+    asio::dispatch(executor_wrapper_.get_executor(), [this] {
       close_socket();
     });
   }
@@ -191,7 +238,7 @@ class coro_http_client {
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
 
-  async_simple::coro::Lazy<bool> async_connect(std::string uri) {
+  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
@@ -276,6 +323,11 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::HEAD,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_connect(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::CONNECT,
                          cinatra::req_context<>{});
   }
 
@@ -567,28 +619,32 @@ class coro_http_client {
   }
 
   void reset() {
-    if (has_closed()) {
-      socket_ = decltype(socket_)(executor_wrapper_.context());
-      if (!socket_.is_open()) {
-        socket_.open(asio::ip::tcp::v4());
-      }
-#ifdef BENCHMARK_TEST
-      req_str_.clear();
-      total_len_ = 0;
-#endif
+    if (!has_closed())
+      close_socket();
+    socket_ = decltype(socket_)(executor_wrapper_.context());
+    if (!socket_.is_open()) {
+      socket_.open(asio::ip::tcp::v4());
     }
+#ifdef BENCHMARK_TEST
+    req_str_.clear();
+    total_len_ = 0;
+#endif
+  }
+
+  async_simple::coro::Lazy<resp_data> async_reconnect(std::string uri) {
+    reset();
+    co_return co_await async_get(uri);
   }
 
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
                                                     http_method method,
                                                     auto ctx) {
+    if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.clear();
+    }
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
-      }
-
-      if (!resp_chunk_str_.empty()) {
-        resp_chunk_str_.clear();
       }
     });
 
