@@ -93,7 +93,7 @@ async_simple::coro::Lazy<void> test_websocket(
   });
 
   // connect to your websocket server.
-  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
   if (!r) {
     co_return;
   }
