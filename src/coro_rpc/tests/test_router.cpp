@@ -203,6 +203,11 @@ TEST_CASE("test string literal") {
   constexpr struct_pack::string_literal s5("bbb");
   static_assert(s3 == s4);
   static_assert(s3 != s5);
+
+  std::tuple<int> tp;
+  bool r = struct_pack::get_type_literal<decltype(tp)>() !=
+           struct_pack::get_type_literal<std::tuple<int, int>>();
+  CHECK(r);
 }
 
 TEST_CASE("testing coro_handler") {
