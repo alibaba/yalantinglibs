@@ -71,9 +71,11 @@ template <typename Char, std::size_t Size1, std::size_t Size2>
 constexpr bool operator!=(const string_literal<Char, Size1> &s1,
                           const string_literal<Char, Size2> &s2) {
   if constexpr (Size1 == Size2) {
-    return s1 != s2;
+    return !(s1 == s2);
   }
-  return true;
+  else {
+    return true;
+  }
 }
 
 template <typename CharType, std::size_t Size>
