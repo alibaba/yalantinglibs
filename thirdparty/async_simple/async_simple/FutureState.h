@@ -19,16 +19,16 @@
 #include <atomic>
 #include <iostream>
 
-#include <async_simple/Common.h>
-#include <async_simple/Executor.h>
-#include <async_simple/MoveWrapper.h>
-#include <async_simple/Try.h>
 #include <cassert>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include "async_simple/Common.h"
+#include "async_simple/Executor.h"
+#include "async_simple/MoveWrapper.h"
+#include "async_simple/Try.h"
 
 namespace async_simple {
 
@@ -144,7 +144,7 @@ public:
         _attached.fetch_add(1, std::memory_order_relaxed);
     }
     AS_INLINE void detachOne() {
-        auto old = _attached.fetch_sub(1, std::memory_order_relaxed);
+        auto old = _attached.fetch_sub(1, std::memory_order_acq_rel);
         assert(old >= 1u);
         if (old == 1) {
             delete this;
@@ -155,7 +155,7 @@ public:
         attachOne();
     }
     AS_INLINE void detachPromise() {
-        auto old = _promiseRef.fetch_sub(1, std::memory_order_relaxed);
+        auto old = _promiseRef.fetch_sub(1, std::memory_order_acq_rel);
         assert(old >= 1u);
         if (!hasResult() && old == 1) {
             try {
@@ -195,7 +195,11 @@ public:
     //  ONLY_RESULT: promise.setValue called
     //  ONLY_CONTINUATION: future.thenImpl called
     void setResult(Try<T>&& value) {
+#if !defined(__GNUC__) || __GNUC__ < 12
+        // GCC 12 issues a spurious uninitialized-var warning.
+        // See details: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=109448
         logicAssert(!hasResult(), "FutureState already has a result");
+#endif
         _try_value = std::move(value);
 
         auto state = _state.load(std::memory_order_acquire);

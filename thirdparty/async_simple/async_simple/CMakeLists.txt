@@ -1,19 +1,12 @@
 file(GLOB coro_src "coro/*.cpp")
 file(GLOB executors_src "executors/*.cpp")
 
-if(UTHREAD)
+if(${UTHREAD})
   file(GLOB uthread_src "uthread/internal/*.cc")
-  # Compiler-rt15 enables new sanitizer option sanitize-address-use-after-return,
-  # But it can't take user thread well. So disable it for thread.cc as a workaround.
   if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
       CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "13")
-    set_property(SOURCE ${uthread_src} PROPERTY COMPILE_FLAGS -fsanitize-address-use-after-return=never)
   endif()
-  if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
-    file(GLOB uthread_asm_src "uthread/internal/*arm64_aapcs_elf*")
-  elseif ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
-    file(GLOB uthread_asm_src "uthread/internal/*x86_64_sysv_elf*")
-  endif()
+file(GLOB uthread_asm_src "uthread/internal/${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}/*.S")
 endif()
 
 file(GLOB headers "*.h")
@@ -51,6 +44,10 @@ else()
   target_link_libraries(async_simple PUBLIC libasync_simple)
   install(TARGETS async_simple DESTINATION lib/)
 endif()
+
+set_target_properties(async_simple PROPERTIES 
+                                   VERSION ${PROJECT_VERSION}
+                                   SOVERSION ${PROJECT_VERSION_MAJOR})
 
 install(FILES ${headers} DESTINATION include/async_simple)
 install(FILES ${coro_header} DESTINATION include/async_simple/coro)

@@ -16,15 +16,23 @@
 #ifndef ASYNC_SIMPLE_TRY_H
 #define ASYNC_SIMPLE_TRY_H
 
-#include <async_simple/Common.h>
-#include <async_simple/Unit.h>
 #include <cassert>
 #include <exception>
+#include <functional>
 #include <new>
 #include <utility>
+#include <variant>
+#include "async_simple/Common.h"
+#include "async_simple/Unit.h"
 
 namespace async_simple {
 
+// Forward declaration
+template <typename T>
+class Try;
+
+template <>
+class Try<void>;
 // Try<T> contains either an instance of T, an exception, or nothing.
 // Try<T>::value() will return the instance.
 // If exception or nothing inside, Try<T>::value() would throw an exception.
@@ -36,133 +44,101 @@ namespace async_simple {
 // 4. moved from another Try<T> instance.
 template <typename T>
 class Try {
-private:
-    enum class Contains {
-        VALUE,
-        EXCEPTION,
-        NOTHING,
-    };
-
 public:
-    Try() : _contains(Contains::NOTHING) {}
-    ~Try() { destroy(); }
+    Try() = default;
+    ~Try() = default;
 
-    Try(Try<T>&& other) : _contains(other._contains) {
-        if (_contains == Contains::VALUE) {
-            new (&_value) T(std::move(other._value));
-        } else if (_contains == Contains::EXCEPTION) {
-            new (&_error) std::exception_ptr(other._error);
-        }
-    }
+    Try(Try<T>&& other) = default;
     template <typename T2 = T>
     Try(std::enable_if_t<std::is_same<Unit, T2>::value, const Try<void>&>
             other) {
         if (other.hasError()) {
-            _contains = Contains::EXCEPTION;
-            new (&_error) std::exception_ptr(other._error);
+            _value.template emplace<std::exception_ptr>(other._error);
         } else {
-            _contains = Contains::VALUE;
-            new (&_value) T();
+            _value.template emplace<T>();
         }
     }
-    Try& operator=(Try<T>&& other) {
-        if (&other == this) {
-            return *this;
-        }
-
-        destroy();
-
-        _contains = other._contains;
-        if (_contains == Contains::VALUE) {
-            new (&_value) T(std::move(other._value));
-        } else if (_contains == Contains::EXCEPTION) {
-            new (&_error) std::exception_ptr(other._error);
-        }
-        return *this;
-    }
+    Try& operator=(Try<T>&& other) = default;
     Try& operator=(std::exception_ptr error) {
-        if (_contains == Contains::EXCEPTION && error == this->_error) {
+        if (std::holds_alternative<std::exception_ptr>(_value) &&
+            std::get<std::exception_ptr>(_value) == error) {
             return *this;
         }
 
-        destroy();
-
-        _contains = Contains::EXCEPTION;
-        new (&_error) std::exception_ptr(error);
+        _value.template emplace<std::exception_ptr>(error);
         return *this;
     }
 
-    Try(const T& val) : _contains(Contains::VALUE), _value(val) {}
-    Try(T&& val) : _contains(Contains::VALUE), _value(std::move(val)) {}
-    Try(std::exception_ptr error)
-        : _contains(Contains::EXCEPTION), _error(error) {}
+    template <class... U>
+    Try(U&&... value)
+        requires std::is_constructible_v<T, U...>
+        : _value(std::in_place_type<T>, std::forward<U>(value)...) {}
+
+    Try(std::exception_ptr error) : _value(error) {}
 
 private:
     Try(const Try&) = delete;
     Try& operator=(const Try&) = delete;
 
 public:
-    bool available() const { return _contains != Contains::NOTHING; }
-    bool hasError() const { return _contains == Contains::EXCEPTION; }
+    constexpr bool available() const noexcept {
+        return !std::holds_alternative<std::monostate>(_value);
+    }
+    constexpr bool hasError() const noexcept {
+        return std::holds_alternative<std::exception_ptr>(_value);
+    }
     const T& value() const& {
         checkHasTry();
-        return _value;
+        return std::get<T>(_value);
     }
     T& value() & {
         checkHasTry();
-        return _value;
+        return std::get<T>(_value);
     }
     T&& value() && {
         checkHasTry();
-        return std::move(_value);
+        return std::move(std::get<T>(_value));
     }
     const T&& value() const&& {
         checkHasTry();
-        return std::move(_value);
+        return std::move(std::get<T>(_value));
+    }
+
+    template <class... Args>
+    T& emplace(Args&&... args) {
+        return _value.template emplace<T>(std::forward<Args>(args)...);
     }
 
     void setException(std::exception_ptr error) {
-        if (_contains == Contains::EXCEPTION && _error == error) {
+        if (std::holds_alternative<std::exception_ptr>(_value) &&
+            std::get<std::exception_ptr>(_value) == error) {
             return;
         }
-        destroy();
-        _contains = Contains::EXCEPTION;
-        new (&_error) std::exception_ptr(error);
+        _value.template emplace<std::exception_ptr>(error);
     }
-    std::exception_ptr getException() {
-        logicAssert(_contains == Contains::EXCEPTION,
-                    "Try object do not has an error");
-        return _error;
+    std::exception_ptr getException() const {
+        logicAssert(std::holds_alternative<std::exception_ptr>(_value),
+                    "Try object do not has on error");
+        return std::get<std::exception_ptr>(_value);
     }
+
+    operator Try<void>() const;
 
 private:
     AS_INLINE void checkHasTry() const {
-        if (_contains == Contains::VALUE)
+        if (std::holds_alternative<T>(_value))
             AS_LIKELY { return; }
-        else if (_contains == Contains::EXCEPTION) {
-            std::rethrow_exception(_error);
-        } else if (_contains == Contains::NOTHING) {
+        else if (std::holds_alternative<std::exception_ptr>(_value)) {
+            std::rethrow_exception(std::get<std::exception_ptr>(_value));
+        } else if (std::holds_alternative<std::monostate>(_value)) {
             throw std::logic_error("Try object is empty");
         } else {
             assert(false);
         }
     }
 
-    void destroy() {
-        if (_contains == Contains::VALUE) {
-            _value.~T();
-        } else if (_contains == Contains::EXCEPTION) {
-            _error.~exception_ptr();
-        }
-        _contains = Contains::NOTHING;
-    }
-
 private:
-    Contains _contains = Contains::NOTHING;
-    union {
-        T _value;
-        std::exception_ptr _error;
-    };
+    std::variant<std::monostate, T, std::exception_ptr> _value;
 
 private:
     friend Try<Unit>;
@@ -207,29 +183,30 @@ private:
     friend Try<Unit>;
 };
 
-// T is Non void
-template <typename F, typename... Args>
-std::enable_if_t<!(std::is_same<std::invoke_result_t<F, Args...>, void>::value),
-                 Try<std::invoke_result_t<F, Args...>>>
-makeTryCall(F&& f, Args&&... args) {
-    using T = std::invoke_result_t<F, Args...>;
-    try {
-        return Try<T>(std::forward<F>(f)(std::forward<Args>(args)...));
-    } catch (...) {
-        return Try<T>(std::current_exception());
+template <class T>
+Try<T>::operator Try<void>() const {
+    if (hasError()) {
+        return Try<void>(getException());
     }
+    return Try<void>();
 }
 
-// T is void
+template <class T>
+Try(T) -> Try<T>;
+
 template <typename F, typename... Args>
-std::enable_if_t<std::is_same<std::invoke_result_t<F, Args...>, void>::value,
-                 Try<void>>
-makeTryCall(F&& f, Args&&... args) {
+auto makeTryCall(F&& f, Args&&... args) {
+    using T = std::invoke_result_t<F, Args...>;
     try {
-        std::forward<F>(f)(std::forward<Args>(args)...);
-        return Try<void>();
+        if constexpr (std::is_void_v<T>) {
+            std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
+            return Try<void>();
+        } else {
+            return Try<T>(
+                std::invoke(std::forward<F>(f), std::forward<Args>(args)...));
+        }
     } catch (...) {
-        return Try<void>(std::current_exception());
+        return Try<T>(std::current_exception());
     }
 }
 
