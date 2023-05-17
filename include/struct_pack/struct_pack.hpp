@@ -154,7 +154,7 @@ STRUCT_PACK_INLINE consteval std::uint32_t get_type_code() {
 }
 
 template <typename... Args>
-STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal() {
+STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
   if constexpr (sizeof...(Args) == 1) {
     using Types = decltype(detail::get_types<Args...>());
