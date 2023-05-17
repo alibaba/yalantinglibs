@@ -197,7 +197,7 @@ constexpr inline type_info_config enable_type_info =
     type_info_config::automatic;
 
 template <typename... Args>
-STRUCT_PACK_INLINE consteval decltype(auto) get_type_literal();
+STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal();
 
 struct serialize_buffer_size;
 
