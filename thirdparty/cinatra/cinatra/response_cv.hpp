@@ -30,7 +30,7 @@ enum class status_type {
 
 enum class content_encoding { gzip, none };
 
-inline std::string_view ok = "OK";
+inline std::string_view ok_sv = "OK";
 inline std::string_view created =
     "<html>"
     "<head><title>Created</title></head>"
@@ -382,7 +382,7 @@ inline constexpr std::string_view to_rep_string(status_type status) {
 inline std::string_view to_string(status_type status) {
   switch (status) {
     case status_type::ok:
-      return ok;
+      return ok_sv;
     case status_type::created:
       return created;
     case status_type::accepted:
