@@ -2,7 +2,7 @@
 // experimental/detail/impl/channel_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -246,7 +246,7 @@ void channel_service<Mutex>::cancel(
   if (impl.receive_state_ == waiter)
     impl.receive_state_ = block;
   if (impl.send_state_ == waiter)
-    impl.send_state_ = block;
+    impl.send_state_ = impl.max_buffer_size_ ? buffer : block;
 }
 
 template <typename Mutex>
@@ -294,7 +294,7 @@ void channel_service<Mutex>::cancel_by_key(
     if (impl.receive_state_ == waiter)
       impl.receive_state_ = block;
     if (impl.send_state_ == waiter)
-      impl.send_state_ = block;
+      impl.send_state_ = impl.max_buffer_size_ ? buffer : block;
   }
 }
 
