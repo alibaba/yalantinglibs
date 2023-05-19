@@ -2,7 +2,7 @@
 // asio.hpp
 // ~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -12,18 +12,14 @@
 #define ASIO_HPP
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1200)
-# pragma once
-#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+#pragma once
+#endif  // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#include "asio/any_completion_executor.hpp"
-#include "asio/any_completion_handler.hpp"
-#include "asio/any_io_executor.hpp"
 #include "asio/append.hpp"
 #include "asio/as_tuple.hpp"
 #include "asio/associated_allocator.hpp"
 #include "asio/associated_cancellation_slot.hpp"
 #include "asio/associated_executor.hpp"
-#include "asio/associated_immediate_executor.hpp"
 #include "asio/associator.hpp"
 #include "asio/async_result.hpp"
 #include "asio/awaitable.hpp"
@@ -49,15 +45,14 @@
 #include "asio/bind_allocator.hpp"
 #include "asio/bind_cancellation_slot.hpp"
 #include "asio/bind_executor.hpp"
-#include "asio/bind_immediate_executor.hpp"
 #include "asio/buffer.hpp"
 #include "asio/buffer_registration.hpp"
-#include "asio/buffered_read_stream_fwd.hpp"
 #include "asio/buffered_read_stream.hpp"
-#include "asio/buffered_stream_fwd.hpp"
+#include "asio/buffered_read_stream_fwd.hpp"
 #include "asio/buffered_stream.hpp"
-#include "asio/buffered_write_stream_fwd.hpp"
+#include "asio/buffered_stream_fwd.hpp"
 #include "asio/buffered_write_stream.hpp"
+#include "asio/buffered_write_stream_fwd.hpp"
 #include "asio/buffers_iterator.hpp"
 #include "asio/cancellation_signal.hpp"
 #include "asio/cancellation_state.hpp"
@@ -67,7 +62,6 @@
 #include "asio/compose.hpp"
 #include "asio/connect.hpp"
 #include "asio/connect_pipe.hpp"
-#include "asio/consign.hpp"
 #include "asio/coroutine.hpp"
 #include "asio/deadline_timer.hpp"
 #include "asio/defer.hpp"
@@ -128,8 +122,6 @@
 #include "asio/ip/address_v6.hpp"
 #include "asio/ip/address_v6_iterator.hpp"
 #include "asio/ip/address_v6_range.hpp"
-#include "asio/ip/network_v4.hpp"
-#include "asio/ip/network_v6.hpp"
 #include "asio/ip/bad_address_cast.hpp"
 #include "asio/ip/basic_endpoint.hpp"
 #include "asio/ip/basic_resolver.hpp"
@@ -139,6 +131,8 @@
 #include "asio/ip/host_name.hpp"
 #include "asio/ip/icmp.hpp"
 #include "asio/ip/multicast.hpp"
+#include "asio/ip/network_v4.hpp"
+#include "asio/ip/network_v6.hpp"
 #include "asio/ip/resolver_base.hpp"
 #include "asio/ip/resolver_query_base.hpp"
 #include "asio/ip/tcp.hpp"
@@ -153,7 +147,6 @@
 #include "asio/local/basic_endpoint.hpp"
 #include "asio/local/connect_pair.hpp"
 #include "asio/local/datagram_protocol.hpp"
-#include "asio/local/seq_packet_protocol.hpp"
 #include "asio/local/stream_protocol.hpp"
 #include "asio/multiple_exceptions.hpp"
 #include "asio/packaged_task.hpp"
@@ -212,4 +205,4 @@
 #include "asio/write.hpp"
 #include "asio/write_at.hpp"
 
-#endif // ASIO_HPP
+#endif  // ASIO_HPP
