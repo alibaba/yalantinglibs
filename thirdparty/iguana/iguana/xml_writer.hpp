@@ -21,6 +21,7 @@ template <typename Stream, typename T>
 inline void to_xml_impl(Stream &s, T &&t, std::string_view name = "");
 
 class any_t;
+class cdata_t;
 constexpr inline size_t find_underline(const char *);
 
 template <typename Stream, typename T>
@@ -106,6 +107,9 @@ inline void render_xml_node(Stream &ss, std::string_view name, T &&item) {
     render_xml_value(ss, item.first);
     render_tail(ss, name.data());
   }
+  else if constexpr (std::is_same_v<cdata_t, U>) {
+    ss.append("<![CDATA[").append(item.get()).append("]]>");
+  }
   else {
     render_head(ss, name.data());
     render_xml_value(ss, std::forward<T>(item));
@@ -153,7 +157,7 @@ inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
       }
       else if constexpr (is_namespace_v<type_u>) {
         constexpr auto name = get_name<T, Idx>();
-        auto index_ul = find_underline(name.data());
+        constexpr auto index_ul = find_underline(name.data());
         std::string ns(name.data(), name.size());
         ns[index_ul] = ':';
         if constexpr (is_reflection<typename type_u::value_type>::value) {
@@ -172,7 +176,7 @@ inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
             render_xml_value0(s, *(t.*v), sv);
           }
           else {
-            render_xml_node(s, get_name<T, Idx>().data(), t.*v);
+            render_xml_node(s, get_name<T, Idx>().data(), *(t.*v));
           }
         }
       }
