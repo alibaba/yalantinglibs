@@ -45,5 +45,4 @@ constexpr inline bool is_namespace_v = false;
 
 template <typename T>
 constexpr inline bool is_namespace_v<namespace_t<T>> = true;
-
 }  // namespace iguana

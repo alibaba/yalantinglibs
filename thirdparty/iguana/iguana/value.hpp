@@ -25,23 +25,26 @@ enum dom_parse_error { ok, wrong_type };
 
 template <typename CharT>
 struct basic_json_value
-    : std::variant<
-          std::monostate, std::nullptr_t, bool, double, int,
-          std::basic_string<CharT>, std::vector<basic_json_value<CharT>>,
-          json_map<std::basic_string<CharT>, basic_json_value<CharT>>> {
+    : std::variant<std::monostate, std::nullptr_t, bool, double, int,
+                   std::basic_string<CharT>,
+                   std::vector<basic_json_value<CharT>>,
+                   json_map<std::basic_string<CharT>, basic_json_value<CharT>>,
+                   std::basic_string_view<CharT>> {
   using string_type = std::basic_string<CharT>;
+  using string_view_type = std::basic_string_view<CharT>;
   using array_type = std::vector<basic_json_value<CharT>>;
   using object_type = json_map<string_type, basic_json_value<CharT>>;
 
-  using base_type = std::variant<std::monostate, std::nullptr_t, bool, double,
-                                 int, string_type, array_type, object_type>;
+  using base_type =
+      std::variant<std::monostate, std::nullptr_t, bool, double, int,
+                   string_type, array_type, object_type, string_view_type>;
 
   using base_type::base_type;
 
   inline const static std::unordered_map<size_t, std::string> type_map_ = {
-      {0, "undefined type"}, {1, "null type"},  {2, "bool type"},
-      {3, "double type"},    {4, "int type"},   {5, "string type"},
-      {6, "array type"},     {7, "object type"}};
+      {0, "undefined type"}, {1, "null type"},   {2, "bool type"},
+      {3, "double type"},    {4, "int type"},    {5, "string type"},
+      {6, "array type"},     {7, "object type"}, {8, "string_view type"}};
 
   basic_json_value() : base_type(std::in_place_type<std::monostate>) {}
 
@@ -62,6 +65,9 @@ struct basic_json_value
   bool is_string() const { return std::holds_alternative<string_type>(*this); }
   bool is_array() const { return std::holds_alternative<array_type>(*this); }
   bool is_object() const { return std::holds_alternative<object_type>(*this); }
+  bool is_string_view() const {
+    return std::holds_alternative<string_view_type>(*this);
+  }
 
   // if type is not match, will throw exception, if pass std::error_code, won't
   // throw exception
@@ -98,7 +104,6 @@ struct basic_json_value
     v = get<T>(ec);
     return ec;
   }
-
   template <typename T>
   T at(const std::string &key) {
     const auto &map = get<object_type>();
@@ -165,11 +170,14 @@ struct basic_json_value
   bool to_bool() const { return get<bool>(); }
   bool to_bool(std::error_code &ec) const { return get<bool>(ec); }
 
-  std::basic_string<CharT> to_string() const {
-    return get<std::basic_string<CharT>>();
+  string_type to_string() const { return get<string_type>(); }
+  string_type to_string(std::error_code &ec) const {
+    return get<string_type>(ec);
   }
-  std::basic_string<CharT> to_string(std::error_code &ec) const {
-    return get<std::basic_string<CharT>>(ec);
+
+  string_view_type to_string_view() const { return get<string_view_type>(); }
+  string_view_type to_string_view(std::error_code &ec) const {
+    return get<string_view_type>(ec);
   }
 };
 
