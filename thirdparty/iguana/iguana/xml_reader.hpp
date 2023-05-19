@@ -27,6 +27,16 @@ constexpr inline size_t find_underline(const char *str) {
 }
 
 template <typename T>
+inline void missing_node_handler(std::string_view name) {
+  std::cout << name << " not found\n";
+  if (iguana::is_required<T>(name)) {
+    std::string err = "required filed ";
+    err.append(name).append(" not found!");
+    throw std::invalid_argument(err);
+  }
+}
+
+template <typename T>
 inline void parse_num(T &num, std::string_view value) {
   if (value.empty()) {
     return;
@@ -49,8 +59,7 @@ inline void parse_num(T &num, std::string_view value) {
 
 class any_t {
  public:
-  explicit any_t(std::string_view value) : value_(value) {}
-  explicit any_t() {}
+  explicit any_t(std::string_view value = "") : value_(value) {}
   template <typename T>
   std::pair<bool, T> get() const {
     if constexpr (std::is_same_v<T, std::string> ||
@@ -58,7 +67,7 @@ class any_t {
       return std::make_pair(true, T{value_});
     }
     else if constexpr (std::is_arithmetic_v<T>) {
-      T num;
+      T num{};
       try {
         parse_num<T>(num, value_);
         return std::make_pair(true, static_cast<T>(num));
@@ -84,11 +93,21 @@ class namespace_t {
  public:
   using value_type = T;
   explicit namespace_t(T &&value) : value_(std::forward<T>(value)) {}
-  explicit namespace_t() {}
+  namespace_t() : value_() {}
   const T &get() const { return value_; }
 
  private:
   T value_;
+};
+
+class cdata_t {
+ public:
+  cdata_t() : value_() {}
+  cdata_t(const char *c, size_t len) : value_(c, len) {}
+  std::string_view get() const { return value_; }
+
+ private:
+  std::string_view value_;
 };
 
 template <typename T>
@@ -115,6 +134,16 @@ inline void parse_attribute(rapidxml::xml_node<char> *node, T &t) {
     t.emplace(key_type(attr->name(), attr->name_size()), std::move(value_item));
     attr = attr->next_attribute();
   }
+}
+
+inline rapidxml::xml_node<char> *find_cdata(
+    const rapidxml::xml_node<char> *node) {
+  for (auto cn = node->first_node(); cn; cn = cn->next_sibling()) {
+    if (cn->type() == rapidxml::node_cdata) {
+      return cn;
+    }
+  }
+  return nullptr;
 }
 
 template <typename T>
@@ -152,7 +181,7 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   else if constexpr (is_std_optinal_v<U>) {
     if (!value.empty()) {
       using value_type = typename U::value_type;
-      value_type opt;
+      value_type opt{};
       parse_item(node, opt, value);
       t = std::move(opt);
     }
@@ -163,7 +192,7 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   }
   else if constexpr (is_namespace_v<U>) {
     using value_type = typename U::value_type;
-    value_type ns;
+    value_type ns{};
     if constexpr (is_reflection_v<value_type>) {
       do_read(node, ns);
     }
@@ -177,36 +206,72 @@ inline void parse_item(rapidxml::xml_node<char> *node, T &t,
   }
 }
 
-template <typename item_type, typename T>
-inline void parse_node(rapidxml::xml_node<char> *n, T &&t,
-                       std::string_view str) {
-  if constexpr (is_std_optinal_v<
-                    item_type>) {  // std::optional<std::vector<some_object>>
+template <typename T, typename member_type>
+inline void parse_node(rapidxml::xml_node<char> *node, member_type &&t,
+                       std::string_view name) {
+  using item_type = std::decay_t<member_type>;
+  if constexpr (std::is_same_v<cdata_t, item_type>) {
+    auto c_node = find_cdata(node);
+    if (c_node) {
+      t = cdata_t(c_node->value(), c_node->value_size());
+    }
+  }
+  else if constexpr (
+      is_std_optinal_v<item_type>) {  // std::optional<std::vector<some_object>>
     using op_value_type = typename item_type::value_type;
-    if constexpr (!is_str_v<op_value_type> &&
-                  is_container<op_value_type>::value) {
+    if constexpr ((!is_str_v<op_value_type> &&
+                   is_container<op_value_type>::value) ||
+                  std::is_same_v<cdata_t, op_value_type>) {
       op_value_type op_val;
-      parse_node<op_value_type>(n, op_val, str);
+      parse_node<T>(node, op_val, name);
       t = std::move(op_val);
     }
     else {
-      parse_item(n, t, std::string_view(n->value(), n->value_size()));
+      auto n = node->first_node(name.data());
+      if (n) {
+        parse_item(n, t, std::string_view(n->value(), n->value_size()));
+      }
     }
   }
   else if constexpr (!is_str_v<item_type> && is_container<item_type>::value) {
     using value_type = typename item_type::value_type;
-    while (n) {
-      if (std::string_view(n->name(), n->name_size()) != str) {
-        break;
+    if constexpr (std::is_same_v<cdata_t, value_type>) {
+      for (auto c = node->first_node(); c; c = c->next_sibling()) {
+        if (c->type() == rapidxml::node_cdata) {
+          t.push_back(value_type(c->value(), c->value_size()));
+        }
       }
-      value_type item;
-      parse_item(n, item, std::string_view(n->value(), n->value_size()));
-      t.push_back(std::move(item));
-      n = n->next_sibling();
+    }
+    else {
+      auto n = node->first_node(name.data());
+      if (n) {
+        while (n) {
+          if (std::string_view(n->name(), n->name_size()) != name) {
+            break;
+          }
+          value_type item;
+          parse_item(n, item, std::string_view(n->value(), n->value_size()));
+          t.push_back(std::move(item));
+          n = n->next_sibling();
+        }
+      }
+      else {
+        if constexpr (!is_std_optinal_v<value_type>) {
+          missing_node_handler<T>(name);
+        }
+      }
     }
   }
   else {
-    parse_item(n, t, std::string_view(n->value(), n->value_size()));
+    auto n = node->first_node(name.data());
+    if (n) {
+      parse_item(n, t, std::string_view(n->value(), n->value_size()));
+    }
+    else {
+      if constexpr (!is_std_optinal_v<item_type>) {
+        missing_node_handler<T>(name);
+      }
+    }
   }
 }
 
@@ -230,32 +295,16 @@ inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
       if constexpr (is_map_container<item_type>::value) {
         parse_attribute(node, t.*member_ptr);
       }
+      else if constexpr (is_namespace_v<item_type>) {
+        constexpr auto index_ul = find_underline(key.data());
+        static_assert(index_ul < key.size(),
+                      "'_' is needed in namesapce_t value name");
+        std::string ns(key.data(), key.size());
+        ns[index_ul] = ':';
+        parse_node<T>(node, t.*member_ptr, ns);
+      }
       else {
-        rapidxml::xml_node<char> *n = nullptr;
-        if constexpr (is_namespace_v<item_type>) {
-          constexpr auto index_ul = find_underline(key.data());
-          static_assert(index_ul < key.size(),
-                        "'_' is needed in namesapce_t value name");
-          std::string ns(key.data(), key.size());
-          ns[index_ul] = ':';
-          n = node->first_node(ns.data());
-        }
-        else {
-          n = node->first_node(str.data());
-        }
-        if (n) {
-          parse_node<item_type>(n, t.*member_ptr, str);
-        }
-        else {
-          if constexpr (!is_std_optinal_v<item_type>) {
-            std::cout << str << " not found\n";
-            if (iguana::is_required<T>(str)) {
-              std::string err = "required filed ";
-              err.append(str).append(" not found!");
-              throw std::invalid_argument(err);
-            }
-          }
-        }
+        parse_node<T>(node, t.*member_ptr, str);
       }
     }
     else {

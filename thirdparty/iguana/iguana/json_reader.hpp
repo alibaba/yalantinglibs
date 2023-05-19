@@ -35,8 +35,18 @@ concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
 template <class T>
 concept enum_type_t = std::is_enum_v<std::decay_t<T>>;
 
+template <typename T>
+constexpr inline bool is_basic_string_view = false;
+
+template <typename T>
+constexpr inline bool is_basic_string_view<std::basic_string_view<T>> = true;
+
+template <typename T>
+concept str_view_t = is_basic_string_view<std::remove_reference_t<T>>;
+
 template <class T>
-concept str_t = std::convertible_to<std::decay_t<T>, std::string_view>;
+concept str_t =
+    std::convertible_to<std::decay_t<T>, std::string_view> && !str_view_t<T>;
 
 template <typename Type>
 constexpr inline bool is_std_vector_v = false;
@@ -122,6 +132,44 @@ template <refletable T, typename It>
 void from_json(T &value, It &&it, It &&end);
 
 namespace detail {
+
+template <str_t U, class It>
+IGUANA_INLINE void parse_escape(U &value, It &&it, It &&end) {
+  if (it == end)
+    throw std::runtime_error(R"(Expected ")");
+  if (*it == 'u') {
+    ++it;
+    if (std::distance(it, end) <= 4)
+      throw std::runtime_error(R"(Expected 4 hexadecimal digits)");
+    auto code_point = parse_unicode_hex4(it);
+    encode_utf8(value, code_point);
+  }
+  else if (*it == 'n') {
+    ++it;
+    value.push_back('\n');
+  }
+  else if (*it == 't') {
+    ++it;
+    value.push_back('\t');
+  }
+  else if (*it == 'r') {
+    ++it;
+    value.push_back('\r');
+  }
+  else if (*it == 'b') {
+    ++it;
+    value.push_back('\b');
+  }
+  else if (*it == 'f') {
+    ++it;
+    value.push_back('\f');
+  }
+  else {
+    value.push_back(*it);  // add the escaped character
+    ++it;
+  }
+}
+
 template <refletable U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   from_json(value, it, end);
@@ -181,47 +229,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
     skip_ws(it, end);
     match<'"'>(it, end);
   }
-
-  if constexpr (!std::contiguous_iterator<std::decay_t<It>>) {
-    const auto cend = value.cend();
-    for (auto c = value.begin(); c < cend; ++c, ++it) {
-      if (it == end) [[unlikely]]
-        throw std::runtime_error(R"(Expected ")");
-      switch (*it) {
-        [[unlikely]] case '\\' : {
-          if (++it == end) [[unlikely]]
-            throw std::runtime_error(R"(Expected ")");
-          else [[likely]] {
-            *c = *it;
-          }
-          break;
-        }
-        [[unlikely]] case '"' : {
-          ++it;
-          value.resize(std::distance(value.begin(), c));
-          return;
-        }
-        [[unlikely]] case 'u' : {
-          ++it;
-          auto start = it;
-          auto code_point = parse_unicode_hex4(it);
-          std::string str;
-          encode_utf8(str, code_point);
-          std::memcpy(value.data(), str.data(), str.size());
-          --it;
-          c += std::distance(start, it) - 1;
-
-          break;
-        }
-        [[likely]] default : *c = *it;
-      }
-    }
-  }
-
-  // growth portion
+  value.clear();
   if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
-    value.clear();  // Single append on unescaped strings so overwrite opt isnt
-                    // as important
     auto start = it;
     while (it < end) {
       skip_till_escape_or_qoute(it, end);
@@ -232,20 +241,10 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
       }
       else {
         // Must be an escape
-        // TODO propperly handle this
         value.append(&*start, static_cast<size_t>(std::distance(start, it)));
         ++it;  // skip first escape
-        if (*it == 'u') {
-          ++it;
-          auto code_point = parse_unicode_hex4(it);
-          encode_utf8(value, code_point);
-          start = it;
-        }
-        else {
-          value.push_back(*it);  // add the escaped character
-          ++it;
-          start = it;
-        }
+        parse_escape(value, it, end);
+        start = it;
       }
     }
   }
@@ -253,11 +252,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
     while (it != end) {
       switch (*it) {
         [[unlikely]] case '\\' : {
-          if (++it == end) [[unlikely]]
-            throw std::runtime_error(R"(Expected ")");
-          else [[likely]] {
-            value.push_back(*it);
-          }
+          ++it;
+          parse_escape(value, it, end);
           break;
         }
         [[unlikely]] case ']' : { return; }
@@ -265,17 +261,35 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
           ++it;
           return;
         }
-        [[unlikely]] case 'u' : {
+        [[likely]] default : {
+          value.push_back(*it);
           ++it;
-          auto code_point = parse_unicode_hex4(it);
-          encode_utf8(value, code_point);
-          break;
         }
-        [[likely]] default : value.push_back(*it);
       }
-      ++it;
     }
   }
+}
+
+template <str_view_t U, class It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
+  static_assert(std::contiguous_iterator<std::decay_t<It>>,
+                "must be contiguous");
+  if (!skip) {
+    skip_ws(it, end);
+    match<'"'>(it, end);
+  }
+  using T = std::decay_t<U>;
+  auto start = it;
+  while (it < end) {
+    skip_till_escape_or_qoute(it, end);
+    if (*it == '"') {
+      value = T(&*start, static_cast<size_t>(std::distance(start, it)));
+      ++it;
+      return;
+    }
+    it += 2;
+  }
+  throw std::runtime_error("Expected \"");  // is needed?
 }
 
 template <fixed_array U, class It>
@@ -350,6 +364,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
 template <map_container U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   using T = std::remove_reference_t<U>;
+  using key_type = typename T::key_type;
   skip_ws(it, end);
 
   match<'{'>(it, end);
@@ -366,17 +381,17 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
       match<','>(it, end);
     }
 
-    static thread_local std::string key{};
+    static thread_local std::string_view key{};
     parse_item(key, it, end);
 
     skip_ws(it, end);
     match<':'>(it, end);
 
-    if constexpr (std::is_same_v<typename T::key_type, std::string>) {
-      parse_item(value[key], it, end);
+    if constexpr (str_t<key_type> || str_view_t<key_type>) {
+      parse_item(value[key_type(key)], it, end);
     }
     else {
-      static thread_local typename T::key_type key_value{};
+      static thread_local key_type key_value{};
       parse_item(key_value, key.begin(), key.end());
       parse_item(value[key_value], it, end);
     }
@@ -456,7 +471,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   else {
     using value_type = typename T::value_type;
     value_type t;
-    if constexpr (str_t<value_type>) {
+    if constexpr (str_t<value_type> || str_view_t<value_type>) {
       parse_item(t, it, end, true);
     }
     else {
@@ -558,7 +573,7 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
       }
       else {
         static thread_local std::string static_key{};
-        detail::parse_item(static_key, it, end, true);
+        detail::parse_item(static_key, it, end, false);
         key = static_key;
       }
 
@@ -643,10 +658,10 @@ IGUANA_INLINE void from_json(T &value, const Byte *data, size_t size,
   }
 }
 
-template <typename It>
+template <bool Is_view = false, typename It>
 void parse(jvalue &result, It &&it, It &&end);
 
-template <typename It>
+template <bool Is_view = false, typename It>
 inline void parse_array(jarray &result, It &&it, It &&end) {
   skip_ws(it, end);
   match<'['>(it, end);
@@ -660,7 +675,7 @@ inline void parse_array(jarray &result, It &&it, It &&end) {
     }
     result.emplace_back();
 
-    parse(result.back(), it, end);
+    parse<Is_view>(result.back(), it, end);
 
     if (*it == ']') [[unlikely]] {
       ++it;
@@ -672,7 +687,7 @@ inline void parse_array(jarray &result, It &&it, It &&end) {
   throw std::runtime_error("Expected ]");
 }
 
-template <typename It>
+template <bool Is_view = false, typename It>
 inline void parse_object(jobject &result, It &&it, It &&end) {
   skip_ws(it, end);
   match<'{'>(it, end);
@@ -696,7 +711,7 @@ inline void parse_object(jobject &result, It &&it, It &&end) {
 
     match<':'>(it, end);
 
-    parse(emplaced.first->second, it, end);
+    parse<Is_view>(emplaced.first->second, it, end);
 
     if (*it == '}') [[unlikely]] {
       ++it;
@@ -707,7 +722,7 @@ inline void parse_object(jobject &result, It &&it, It &&end) {
   }
 }
 
-template <typename It>
+template <bool Is_view, typename It>
 inline void parse(jvalue &result, It &&it, It &&end) {
   skip_ws(it, end);
   switch (*it) {
@@ -740,16 +755,22 @@ inline void parse(jvalue &result, It &&it, It &&end) {
       break;
     }
     case '"':
-      result.template emplace<std::string>();
-      detail::parse_item(std::get<std::string>(result), it, end);
+      if constexpr (Is_view) {
+        result.template emplace<std::string_view>();
+        detail::parse_item(std::get<std::string_view>(result), it, end);
+      }
+      else {
+        result.template emplace<std::string>();
+        detail::parse_item(std::get<std::string>(result), it, end);
+      }
       break;
     case '[':
       result.template emplace<jarray>();
-      parse_array(std::get<jarray>(result), it, end);
+      parse_array<Is_view>(std::get<jarray>(result), it, end);
       break;
     case '{': {
       result.template emplace<jobject>();
-      parse_object(std::get<jobject>(result), it, end);
+      parse_object<Is_view>(std::get<jobject>(result), it, end);
       break;
     }
     default:
@@ -759,10 +780,10 @@ inline void parse(jvalue &result, It &&it, It &&end) {
   skip_ws(it, end);
 }
 
-template <typename It>
+template <bool Is_view = false, typename It>
 inline void parse(jvalue &result, It &&it, It &&end, std::error_code &ec) {
   try {
-    parse(result, it, end);
+    parse<Is_view>(result, it, end);
     ec = {};
   } catch (const std::runtime_error &e) {
     result.template emplace<std::nullptr_t>();
@@ -770,15 +791,15 @@ inline void parse(jvalue &result, It &&it, It &&end, std::error_code &ec) {
   }
 }
 
-template <typename T, json_view View>
+template <bool Is_view = false, typename T, json_view View>
 inline void parse(T &result, const View &view) {
-  parse(result, std::begin(view), std::end(view));
+  parse<Is_view>(result, std::begin(view), std::end(view));
 }
 
-template <typename T, json_view View>
+template <bool Is_view = false, typename T, json_view View>
 inline void parse(T &result, const View &view, std::error_code &ec) noexcept {
   try {
-    parse(result, view);
+    parse<Is_view>(result, view);
     ec = {};
   } catch (std::runtime_error &e) {
     ec = iguana::make_error_code(e.what());
