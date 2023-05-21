@@ -1711,11 +1711,6 @@
 #   endif // (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 8)
 #  endif // defined(ASIO_HAS_EPOLL)
 # endif // !defined(ASIO_HAS_TIMERFD)
-# if !defined(ASIO_HAS_LIB_AIO)
-#  if defined(ASIO_HAS_EPOLL) && defined(ASIO_HAS_EVENTFD)
-#    define ASIO_HAS_LIB_AIO 1
-#  endif // defined(ASIO_HAS_EPOLL) && defined(ASIO_HAS_EVENTFD)
-# endif // !defined(ASIO_HAS_LIB_AIO)
 #endif // defined(__linux__)
 
 // Linux: io_uring is used instead of epoll.
