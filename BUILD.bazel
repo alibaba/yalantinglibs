@@ -56,7 +56,7 @@ cc_library(
     name = "coro_rpc",
     hdrs = glob([
         "include/coro_rpc/**/*.hpp",
-        "include/asio_util/*.hpp",
+        "include/coro_io/*.hpp",
         "include/util/*.hpp",
         "include/util/*.h",
     ]),
@@ -75,7 +75,7 @@ cc_library(
     name = "coro_http",
     hdrs = glob([
         "include/coro_http/*.h",
-        "include/asio_util/*.hpp",
+        "include/coro_io/*.hpp",
     ]),
     include_prefix = "include",
     includes = ["include"],

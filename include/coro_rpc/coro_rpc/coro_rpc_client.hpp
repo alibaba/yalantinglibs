@@ -28,9 +28,9 @@
 #include <variant>
 
 #include "asio/io_context.hpp"
-#include "asio_util/asio_coro_util.hpp"
 #include "async_simple/coro/SyncAwait.h"
 #include "common_service.hpp"
+#include "coro_io/asio_coro_util.hpp"
 #include "coro_rpc/coro_rpc/context.hpp"
 #include "coro_rpc/coro_rpc/protocol/coro_rpc_protocol.hpp"
 #include "easylog/easylog.h"
@@ -40,7 +40,7 @@
 #include "util/type_traits.h"
 #include "util/utils.hpp"
 #ifdef UNIT_TEST_INJECT
-#include "asio_util/asio_util.hpp"
+#include "coro_io/asio_util.hpp"
 #include "inject_action.hpp"
 #endif
 
