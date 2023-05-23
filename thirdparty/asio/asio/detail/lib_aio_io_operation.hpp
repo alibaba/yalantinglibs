@@ -52,7 +52,7 @@ public:
   // Construct.
   lib_aio_io_operation(execution_context& context)
     : reactor_(asio::use_service<reactor>(context)),
-    aio_iocb_(NULL)
+    aio_iocb_{NULL}
   {
     reactor_.init_task();
     init_aio_context();
