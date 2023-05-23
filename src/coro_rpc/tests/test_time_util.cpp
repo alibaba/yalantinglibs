@@ -1,5 +1,7 @@
 #include <util/time_util.h>
 
+#include <cassert>
+
 int main() {
   std::string tm_str = "Mon, 02 Jan 2006 15:04:05 GMT";
   if (auto [ok, t] = ylt::get_timestamp(tm_str); ok) {
