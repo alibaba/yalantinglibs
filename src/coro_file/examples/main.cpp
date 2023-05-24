@@ -18,54 +18,59 @@ or
 apt install libaio-dev
 */
 #ifdef ASIO_HAS_LIB_AIO
-constexpr size_t FILE_SIZE = 1024;
-void create_temp_file() {
-  std::ofstream file("test.txt", std::ios::binary);
+void create_temp_file(std::string filename, size_t size) {
+  std::ofstream file(filename, std::ios::binary);
   file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
 
-  std::string str(FILE_SIZE, 'a');
-  file.write(str.data(), str.size());
+  {
+    std::string str(size, 'a');
+    file.write(str.data(), str.size());
+  }
+  {
+    std::string str(size, 'b');
+    file.write(str.data(), str.size());
+  }
+  {
+    std::string str(42, 'c');
+    file.write(str.data(), str.size());
+  }
+
   file.flush();  // can throw
 }
 
-int test_libaio() {
-  create_temp_file();
+void test_read_file() {
+  std::string filename = "test1.txt";
+  create_temp_file("test1.txt", 1024);
   asio::io_context ioc;
   auto work = std::make_unique<asio::io_context::work>(ioc);
   std::thread thd([&ioc] {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), "test.txt");
+  ylt::coro_file file(ioc.get_executor(), filename);
   bool r = file.is_open();
   if (!file.is_open()) {
-    return -1;
+    return;
   }
 
-  void *data = nullptr;
-  int ok = posix_memalign(&data, 512, 2048);
-  if (ok) {
-    fprintf(stderr, "posix_memalign failed: %s\n", strerror(r));
-    return -1;
+  while (!file.eof()) {
+    auto [ec, buf] = async_simple::coro::syncAwait(file.async_read_some());
+    if (ec) {
+      std::cout << ec.message() << "\n";
+      break;
+    }
+
+    std::cout << buf.size() << "\n";
+    std::cout << buf << "\n";
   }
 
-  auto [ec, size] =
-      async_simple::coro::syncAwait(file.async_read_some((char *)data, 2048));
-  if (ec) {
-    std::cout << ec.message() << "\n";
-    return -1;
-  }
-  assert(size == FILE_SIZE);
-  std::cout << "read size: " << size << "\n";
-  free(data);
   work.reset();
   thd.join();
-  return 0;
 }
 #endif
 
 int main() {
 #ifdef ASIO_HAS_LIB_AIO
-  test_libaio();
+  test_read_file();
 #endif
 }
