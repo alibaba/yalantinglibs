@@ -7,7 +7,7 @@
 #include "asio/io_context.hpp"
 #include "async_simple/coro/SyncAwait.h"
 #include "coro_io/asio_coro_util.hpp"
-#ifdef ASIO_HAS_LIB_AIO
+#if defined(ASIO_HAS_LIB_AIO) || defined(ASIO_HAS_IO_URING)
 #include "coro_io/coro_file.hpp"
 #endif
 
@@ -17,7 +17,7 @@ yum install libaio-devel
 or
 apt install libaio-dev
 */
-#ifdef ASIO_HAS_LIB_AIO
+#if defined(ASIO_HAS_LIB_AIO) || defined(ASIO_HAS_IO_URING)
 void create_temp_file(std::string filename, size_t size) {
   std::ofstream file(filename, std::ios::binary);
   file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
@@ -70,7 +70,7 @@ void test_read_file() {
 #endif
 
 int main() {
-#ifdef ASIO_HAS_LIB_AIO
+#if defined(ASIO_HAS_LIB_AIO) || defined(ASIO_HAS_IO_URING)
   test_read_file();
 #endif
 }

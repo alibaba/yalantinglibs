@@ -55,12 +55,19 @@ class aligned_allocator {
 };
 #endif
 
+#if defined(ASIO_HAS_LIB_AIO)
+constexpr asio::file_base::flags coro_file_flags =
+    asio::stream_file::direct | asio::stream_file::read_write;
+#else
+constexpr asio::file_base::flags coro_file_flags =
+    asio::stream_file::read_write;
+#endif
+
 class coro_file {
  public:
   coro_file(asio::io_context::executor_type executor,
             const std::string& filepath,
-            asio::file_base::flags flags = asio::stream_file::direct |
-                                           asio::stream_file::read_write) {
+            asio::file_base::flags flags = coro_file_flags) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
