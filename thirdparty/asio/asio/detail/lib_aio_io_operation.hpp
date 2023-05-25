@@ -39,7 +39,7 @@ public:
   int event_fd_;
 
   // libaio context
-  io_context_t aio_ctx_;
+  io_context_t aio_ctx_{};
 
   // The selector that performs event demultiplexing for the service.
   reactor& reactor_;

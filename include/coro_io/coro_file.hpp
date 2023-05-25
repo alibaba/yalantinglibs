@@ -18,6 +18,7 @@
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
 #include <cstddef>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -31,6 +32,7 @@
 #include "async_simple/coro/Lazy.h"
 
 namespace ylt {
+#ifdef ASIO_HAS_LIB_AIO
 template <typename T, size_t alignment>
 class aligned_allocator {
  public:
@@ -51,6 +53,7 @@ class aligned_allocator {
     free(ptr);
   }
 };
+#endif
 
 class coro_file {
  public:
@@ -58,8 +61,14 @@ class coro_file {
             const std::string& filepath,
             asio::file_base::flags flags = asio::stream_file::direct |
                                            asio::stream_file::read_write) {
-    std::error_code ec;
+    try {
+      stream_file_ = std::make_unique<asio::stream_file>(executor);
+    } catch (std::exception& ex) {
+      std::cout << ex.what() << "\n";
+      return;
+    }
     stream_file_ = std::make_unique<asio::stream_file>(executor);
+    std::error_code ec;
     stream_file_->open(filepath, flags, ec);
     if (ec) {
       std::cout << ec.message() << "\n";
@@ -77,7 +86,7 @@ class coro_file {
     return true;
   }
 
-  bool is_open() { return stream_file_->is_open(); }
+  bool is_open() { return stream_file_ && stream_file_->is_open(); }
 
   bool eof() { return eof_; }
 
@@ -108,7 +117,11 @@ class coro_file {
   std::unique_ptr<asio::stream_file> stream_file_;
 
   size_t buf_size_ = 2048;
+#ifdef ASIO_HAS_LIB_AIO
   std::vector<char, aligned_allocator<char, 512>> buf_;
+#else
+  std::vector<char> buf_;
+#endif
   size_t read_total_ = 0;
   bool eof_ = false;
 };
