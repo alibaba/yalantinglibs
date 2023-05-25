@@ -228,6 +228,17 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
   });
 }
 
+template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    socket.async_write_some(buffer, [&, handler](const auto &ec, auto size) {
+      handler.set_value_then_resume(ec, size);
+    });
+  });
+}
+
 template <typename executor_t>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     const executor_t &executor, asio::ip::tcp::socket &socket,

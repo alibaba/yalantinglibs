@@ -22,6 +22,15 @@ void create_temp_file(std::string filename, size_t size) {
   std::ofstream file(filename, std::ios::binary);
   file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
 
+  if (!file) {
+    std::cout << "create file failed\n";
+    return;
+  }
+
+  if (size == 0) {
+    return;
+  }
+
   {
     std::string str(size, 'a');
     file.write(str.data(), str.size());
@@ -54,7 +63,7 @@ void test_read_file() {
   }
 
   while (!file.eof()) {
-    auto [ec, buf] = async_simple::coro::syncAwait(file.async_read_some());
+    auto [ec, buf] = async_simple::coro::syncAwait(file.async_read());
     if (ec) {
       std::cout << ec.message() << "\n";
       break;
@@ -67,10 +76,60 @@ void test_read_file() {
   work.reset();
   thd.join();
 }
+
+void test_write_and_read_file() {
+  std::string filename = "test.txt";
+  create_temp_file(filename, 0);
+
+  asio::io_context ioc;
+  auto work = std::make_unique<asio::io_context::work>(ioc);
+  std::thread thd([&ioc] {
+    ioc.run();
+  });
+
+  ylt::coro_file file(ioc.get_executor(), filename);
+  bool r = file.is_open();
+  if (!file.is_open()) {
+    return;
+  }
+
+  std::string str = "test async write";
+
+  auto ec =
+      async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+
+  std::string str1 = "another test async write";
+  ec =
+      async_simple::coro::syncAwait(file.async_write(str1.data(), str1.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+
+  ylt::coro_file file1(ioc.get_executor(), filename);
+  r = file1.is_open();
+  if (!file1.is_open()) {
+    return;
+  }
+  auto [read_ec, buf] = async_simple::coro::syncAwait(file1.async_read());
+  if (read_ec) {
+    std::cout << read_ec.message() << "\n";
+    return;
+  }
+
+  std::cout << buf.size() << "\n";
+  std::cout << buf << "\n";
+
+  work.reset();
+  thd.join();
+}
 #endif
 
 int main() {
 #if defined(ASIO_HAS_LIB_AIO) || defined(ASIO_HAS_IO_URING)
   test_read_file();
+  test_write_and_read_file();
 #endif
 }

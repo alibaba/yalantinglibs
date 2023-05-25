@@ -98,7 +98,7 @@ class coro_file {
   bool eof() { return eof_; }
 
   async_simple::coro::Lazy<std::pair<std::error_code, std::string_view>>
-  async_read_some() {
+  async_read() {
     auto [ec, size] = co_await asio_util::async_read_some(
         *stream_file_, asio::buffer(buf_.data(), buf_.size()));
     if (!ec) {
@@ -118,6 +118,34 @@ class coro_file {
                                "");
     }
     co_return std::make_pair(ec, std::string_view(buf_.data(), size));
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
+                                                        size_t size) {
+    size_t left_size = size;
+    size_t offset = 0;
+    while (left_size) {
+      auto [ec, write_size] = co_await asio_util::async_write_some(
+          *stream_file_, asio::buffer(data, size));
+
+      if (ec) {
+        co_return ec;
+      }
+
+      left_size -= write_size;
+      if (left_size == 0) {
+        co_return ec;
+      }
+      offset += write_size;
+      std::error_code seek_ec;
+      stream_file_->seek(offset, asio::file_base::seek_basis::seek_set,
+                         seek_ec);
+      if (seek_ec) {
+        co_return seek_ec;
+      }
+    }
+
+    co_return std::error_code{};
   }
 
  private:
