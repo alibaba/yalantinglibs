@@ -56,42 +56,59 @@ class aligned_allocator {
 };
 #endif
 
-inline asio::file_base::flags default_flags() {
+inline asio::file_base::flags write_flags() {
 #if defined(ASIO_HAS_LIB_AIO)
   return asio::stream_file::direct | asio::stream_file::read_write;
 #else
-  return asio::stream_file::read_write;
+  return asio::stream_file::write_only | asio::stream_file::create;
 #endif
 }
 
 class coro_file {
  public:
   coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath,
-            asio::file_base::flags flags = default_flags()) {
+            const std::string& filepath)
+      : filepath_(filepath) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
       std::cout << ex.what() << "\n";
       return;
     }
-    std::error_code ec;
-    stream_file_->open(filepath, flags, ec);
-    if (ec) {
-      std::cout << ec.message() << "\n";
-    }
+
     buf_.resize(buf_size_);
 #ifdef ASIO_HAS_LIB_AIO
     write_buf_.resize(buf_size_);
 #endif
   }
 
-  bool is_open() { return stream_file_ && stream_file_->is_open(); }
+  std::error_code open_file(size_t write_size = 0) {
+    asio::file_base::flags flags =
+        write_size ? write_flags() : asio::file_base::flags::read_only;
+    std::error_code ec;
+#ifdef ASIO_HAS_LIB_AIO
+    if (write_size > 0 && write_size < 512) {
+      flags = asio::stream_file::write_only | asio::stream_file::create;
+    }
+#endif
+
+    stream_file_->open(filepath_, flags, ec);
+    if (ec) {
+      std::cout << ec.message() << "\n";
+    }
+
+    return ec;
+  }
 
   bool eof() { return eof_; }
 
   async_simple::coro::Lazy<std::pair<std::error_code, std::string_view>>
   async_read() {
+    if (!stream_file_->is_open()) {
+      if (auto ec = open_file(); ec) {
+        co_return std::make_pair(ec, "");
+      }
+    }
     auto [ec, size] = co_await asio_util::async_read_some(
         *stream_file_, asio::buffer(buf_.data(), buf_.size()));
     if (!ec) {
@@ -115,13 +132,22 @@ class coro_file {
 
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
                                                         size_t size) {
+    if (!stream_file_->is_open()) {
+      if (auto ec = open_file(size); ec) {
+        co_return ec;
+      }
+    }
 #ifdef ASIO_HAS_LIB_AIO
-    if (size > 512) {
+    if (size >= 512) {
       if (size % 512 != 0) {
         // must be multiple of 512
         co_return std::make_error_code(std::errc::invalid_argument);
       }
     }
+    else {
+      co_return co_await write_small_file(data, size);
+    }
+
     if (size > write_buf_.size()) {
       write_buf_.resize(size);
     }
@@ -174,7 +200,27 @@ class coro_file {
                        seek_err);
     return seek_err;
   }
+
+#ifdef ASIO_HAS_LIB_AIO
+  async_simple::coro::Lazy<std::error_code> write_small_file(const char* data,
+                                                             size_t size) {
+    std::error_code ec;
+    size_t left_size = size;
+    while (left_size) {
+      size_t write_size =
+          stream_file_->write_some(asio::buffer(data, size), ec);
+      if (ec) {
+        co_return ec;
+      }
+      left_size -= write_size;
+    }
+
+    co_return ec;
+  }
+#endif
+
   std::unique_ptr<asio::stream_file> stream_file_;
+  std::string filepath_;
 
   size_t buf_size_ = 2048;
 #ifdef ASIO_HAS_LIB_AIO

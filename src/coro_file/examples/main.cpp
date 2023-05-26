@@ -58,11 +58,6 @@ void test_read_file() {
   });
 
   ylt::coro_file file(ioc.get_executor(), filename);
-  bool r = file.is_open();
-  if (!file.is_open()) {
-    return;
-  }
-
   while (!file.eof()) {
     auto [ec, buf] = async_simple::coro::syncAwait(file.async_read());
     if (ec) {
@@ -89,10 +84,6 @@ void test_write_and_read_file() {
   });
 
   ylt::coro_file file(ioc.get_executor(), filename);
-  bool r = file.is_open();
-  if (!file.is_open()) {
-    return;
-  }
 
   std::string str(2048, 'a');
 
@@ -110,17 +101,13 @@ void test_write_and_read_file() {
   }
 
   ylt::coro_file file1(ioc.get_executor(), filename);
-  r = file1.is_open();
-  if (!file1.is_open()) {
-    return;
-  }
 
   size_t file_size = 0;
   while (!file1.eof()) {
     auto [read_ec, buf] = async_simple::coro::syncAwait(file1.async_read());
     if (read_ec) {
       std::cout << read_ec.message() << "\n";
-      return;
+      break;
     }
     file_size += buf.size();
   }
@@ -132,10 +119,39 @@ void test_write_and_read_file() {
   work.reset();
   thd.join();
 }
+
+void test_write_small_file() {
+  std::string filename = "/tmp/test_small.txt";
+  asio::io_context ioc;
+  auto work = std::make_unique<asio::io_context::work>(ioc);
+  std::thread thd([&ioc] {
+    ioc.run();
+  });
+
+  ylt::coro_file file(ioc.get_executor(), filename);
+  std::string str(10, 'a');
+
+  auto ec =
+      async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+
+  std::string str1(20, 'b');
+  ec =
+      async_simple::coro::syncAwait(file.async_write(str1.data(), str1.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+  assert(str.size() + str1.size() == std::filesystem::file_size(filename));
+  work.reset();
+  thd.join();
+}
 #endif
 
 int main() {
 #if defined(ASIO_HAS_LIB_AIO) || defined(ASIO_HAS_IO_URING)
+  test_write_small_file();
   test_read_file();
   test_write_and_read_file();
 #endif
