@@ -58,7 +58,8 @@ class aligned_allocator {
 
 inline asio::file_base::flags write_flags() {
 #if defined(ASIO_HAS_LIB_AIO)
-  return asio::stream_file::direct | asio::stream_file::read_write;
+  return asio::stream_file::direct | asio::stream_file::read_write |
+         asio::stream_file::create;
 #else
   return asio::stream_file::write_only | asio::stream_file::create;
 #endif
@@ -162,7 +163,7 @@ class coro_file {
       if (ec) {
         co_return ec;
       }
-      std::cout << "write_size " << write_size << "\n ";
+
       assert(write_size % 512 == 0);
       if (std::error_code seek_err = seek_file(write_size); seek_err) {
         co_return seek_err;
