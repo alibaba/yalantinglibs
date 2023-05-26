@@ -1,4 +1,5 @@
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string_view>
@@ -78,7 +79,7 @@ void test_read_file() {
 }
 
 void test_write_and_read_file() {
-  std::string filename = "test.txt";
+  std::string filename = "/tmp/test.txt";
   create_temp_file(filename, 0);
 
   asio::io_context ioc;
@@ -93,7 +94,7 @@ void test_write_and_read_file() {
     return;
   }
 
-  std::string str = "test async write";
+  std::string str(2048, 'a');
 
   auto ec =
       async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
@@ -101,7 +102,7 @@ void test_write_and_read_file() {
     std::cout << ec.message() << "\n";
   }
 
-  std::string str1 = "another test async write";
+  std::string str1(1024, 'b');
   ec =
       async_simple::coro::syncAwait(file.async_write(str1.data(), str1.size()));
   if (ec) {
@@ -113,14 +114,20 @@ void test_write_and_read_file() {
   if (!file1.is_open()) {
     return;
   }
-  auto [read_ec, buf] = async_simple::coro::syncAwait(file1.async_read());
-  if (read_ec) {
-    std::cout << read_ec.message() << "\n";
-    return;
+
+  size_t file_size = 0;
+  while (!file1.eof()) {
+    auto [read_ec, buf] = async_simple::coro::syncAwait(file1.async_read());
+    if (read_ec) {
+      std::cout << read_ec.message() << "\n";
+      return;
+    }
+    file_size += buf.size();
   }
 
-  std::cout << buf.size() << "\n";
-  std::cout << buf << "\n";
+  std::cout << file_size << "\n";
+  assert(file_size == str.size() + str1.size());
+  assert(file_size == std::filesystem::file_size(filename));
 
   work.reset();
   thd.join();
