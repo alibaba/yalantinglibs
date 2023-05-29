@@ -15,8 +15,15 @@
  */
 #pragma once
 #include <asio/io_context.hpp>
+#include <fstream>
+
+#include "async_simple/Promise.h"
+#include "async_simple/Traits.h"
+#include "async_simple/coro/FutureAwaiter.h"
+#if defined(ENABLE_FILE_IO_URING)
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
+#endif
 #include <cstddef>
 #include <exception>
 #include <iostream>
@@ -28,17 +35,20 @@
 #include <vector>
 
 #include "asio/error.hpp"
-#include "asio/file_base.hpp"
 #include "asio_coro_util.hpp"
 #include "async_simple/coro/Lazy.h"
 
 namespace ylt {
+#if defined(ENABLE_FILE_IO_URING)
 inline asio::file_base::flags default_flags() {
-  return asio::stream_file::read_write | asio::stream_file::create;
+  return asio::stream_file::read_write | asio::stream_file::append |
+         asio::stream_file::create;
 }
+#endif
 
 class coro_file {
  public:
+#if defined(ENABLE_FILE_IO_URING)
   coro_file(asio::io_context::executor_type executor,
             const std::string& filepath,
             asio::file_base::flags flags = default_flags()) {
@@ -55,11 +65,32 @@ class coro_file {
       std::cout << ec.message() << "\n";
     }
   }
+#else
+  coro_file(asio::io_context::executor_type executor,
+            const std::string& filepath, bool read = 0)
+      : executor_wrapper_(executor) {
+    stream_file_ = std::make_unique<std::fstream>(
+        filepath,
+        std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
+    if (!stream_file_->is_open()) {
+      std::cout << "open file " << filepath << " failed "
+                << "\n";
+      stream_file_.reset();
+    }
+  }
+#endif
 
-  bool is_open() { return stream_file_ && stream_file_->is_open(); }
+  bool is_open() {
+#if defined(ENABLE_FILE_IO_URING)
+    return stream_file_ && stream_file_->is_open();
+#else
+    return stream_file_ && stream_file_->is_open();
+#endif
+  }
 
   bool eof() { return eof_; }
 
+#if defined(ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
     size_t left_size = size;
@@ -128,10 +159,69 @@ class coro_file {
 
     co_return std::error_code{};
   }
+#else
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+      char* data, size_t size) {
+    async_simple::Promise<std::pair<std::error_code, size_t>> promise;
+    async_read_impl(data, size)
+        .via(&executor_wrapper_)
+        .start([&promise](auto&& t) {
+          if (t.available()) {
+            promise.setValue(t.value());
+          }
+          else {
+            promise.setValue(std::make_pair(
+                std::make_error_code(std::errc::io_error), size_t(0)));
+          }
+        });
+
+    co_return co_await promise.getFuture();
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
+                                                        size_t size) {
+    async_simple::Promise<std::error_code> promise;
+    async_write_impl(data, size)
+        .via(&executor_wrapper_)
+        .start([&promise](auto&& t) {
+          if (t.available()) {
+            promise.setValue(t.value());
+          }
+          else {
+            promise.setValue(std::make_error_code(std::errc::io_error));
+          }
+        });
+
+    co_return co_await promise.getFuture();
+  }
 
  private:
-  std::unique_ptr<asio::stream_file> stream_file_;
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_impl(
+      char* data, size_t size) {
+    stream_file_->read(data, size);
+    size_t read_size = stream_file_->gcount();
+    if (!stream_file_ && read_size == 0) {
+      co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+    }
+    eof_ = stream_file_->eof();
+    co_return std::make_pair(std::error_code{}, read_size);
+  }
 
+  async_simple::coro::Lazy<std::error_code> async_write_impl(const char* data,
+                                                             size_t size) {
+    stream_file_->write(data, size);
+    stream_file_->flush();
+    co_return std::error_code{};
+  }
+#endif
+
+ private:
+#if defined(ENABLE_FILE_IO_URING)
+  std::unique_ptr<asio::stream_file> stream_file_;
+#else
+  std::unique_ptr<std::fstream> stream_file_;
+  asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
+#endif
   size_t seek_offset_ = 0;
   bool eof_ = false;
 };

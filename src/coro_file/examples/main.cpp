@@ -1,4 +1,5 @@
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string_view>
@@ -7,17 +8,9 @@
 #include "asio/io_context.hpp"
 #include "async_simple/coro/SyncAwait.h"
 #include "coro_io/asio_coro_util.hpp"
-#if defined(ENABLE_FILE_IO_URING)
 #include "coro_io/coro_file.hpp"
-#endif
+#include "coro_io/io_context_pool.hpp"
 
-/*
-make sure you have install libaio when testing libaio.
-yum install libaio-devel
-or
-apt install libaio-dev
-*/
-#if defined(ENABLE_FILE_IO_URING)
 void create_temp_file(std::string filename, size_t size) {
   std::ofstream file(filename, std::ios::binary);
   file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
@@ -133,11 +126,84 @@ void test_write_and_read_file() {
   work.reset();
   thd.join();
 }
-#endif
+
+void test_read_with_pool() {
+  std::string filename = "test1.txt";
+  create_temp_file("test1.txt", 1024);
+
+  asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+  std::thread thd([&pool] {
+    pool.run();
+  });
+  ylt::coro_file file(pool.get_executor(), filename);
+  bool r = file.is_open();
+  if (!file.is_open()) {
+    return;
+  }
+
+  char buf[1024]{};
+
+  while (!file.eof()) {
+    auto [ec, read_size] =
+        async_simple::coro::syncAwait(file.async_read(buf, 1024));
+    if (ec) {
+      std::cout << ec.message() << "\n";
+      break;
+    }
+
+    std::cout << read_size << "\n";
+    std::cout << std::string_view(buf, read_size) << "\n";
+  }
+
+  std::string str = "test async write";
+  ylt::coro_file file1(pool.get_executor(), filename);
+  r = file1.is_open();
+  if (!file1.is_open()) {
+    return;
+  }
+  auto ec =
+      async_simple::coro::syncAwait(file1.async_write(str.data(), str.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+
+  pool.stop();
+  thd.join();
+}
+
+void test_write_with_pool() {
+  std::string filename = "test1.txt";
+  create_temp_file("test1.txt", 10);
+
+  asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+  std::thread thd([&pool] {
+    pool.run();
+  });
+  ylt::coro_file file(pool.get_executor(), filename);
+  bool r = file.is_open();
+  if (!file.is_open()) {
+    return;
+  }
+
+  std::string str = "test async write";
+
+  auto ec =
+      async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+
+  std::cout << std::filesystem::file_size(filename) << "\n";
+  assert(std::filesystem::file_size(filename) == 78);
+
+  pool.stop();
+  thd.join();
+}
 
 int main() {
-#if defined(ENABLE_FILE_IO_URING)
+  test_write_with_pool();
+  test_read_with_pool();
+
   test_read_file();
   test_write_and_read_file();
-#endif
 }
