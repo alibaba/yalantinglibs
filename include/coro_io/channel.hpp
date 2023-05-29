@@ -97,16 +97,16 @@ class channel {
       const ::std::vector<::std::string>& hosts,
       const channel_config& config = {},
       client_pools_t& client_pools =
-          g_clients_pool<client_pool_t, io_context_pool_t>()) {
+          g_clients_pool<client_t, io_context_pool_t>()) {
     channel ch;
-    co_await ch.init(hosts, client_pools, config);
+    co_await ch.init(hosts, config, client_pools);
     co_return ch;
   }
 
  private:
   async_simple::coro::Lazy<void> init(const ::std::vector<::std::string>& hosts,
-                                      client_pools_t& client_pools,
-                                      const channel_config& config) {
+                                      const channel_config& config,
+                                      client_pools_t& client_pools) {
     client_pools_.reserve(hosts.size());
     for (auto& host : hosts) {
       client_pools_.emplace_back(

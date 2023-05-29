@@ -80,16 +80,17 @@ Lazy<void> qps_watcher(coro_io::client_pool<coro_rpc_client> &clients) {
 
 int main() {
   auto thread_cnt = std::thread::hardware_concurrency();
-  auto clients = std::make_shared<coro_io::client_pool<coro_rpc_client>>(
+  auto client_pool = coro_io::client_pool<coro_rpc_client>::create(
       "localhost:8801",
       coro_io::client_pool<coro_rpc_client>::pool_config{
           .max_connection_ = thread_cnt * 20,
           .client_config = {.timeout_duration = std::chrono::seconds{50}}});
+
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
-    call_echo(*clients, 10000).start([](auto &&) {
+    call_echo(*client_pool, 10000).start([](auto &&) {
     });
   }
-  syncAwait(qps_watcher(*clients));
+  syncAwait(qps_watcher(*client_pool));
   std::cout << "Done!" << std::endl;
   return 0;
 }

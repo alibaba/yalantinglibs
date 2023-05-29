@@ -26,8 +26,10 @@
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
 #include "coro_io/channel.hpp"
+#include "coro_io/client_pool.hpp"
 #include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
+#include "coro_rpc/coro_rpc/coro_rpc_client.hpp"
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_view_literals;
@@ -68,9 +70,10 @@ Lazy<void> call_echo(coro_io::channel<coro_rpc_client> &channel, int cnt) {
   }
 }
 
-Lazy<void> qps_watcher(coro_io::client_pools<coro_rpc_client> &clients) {
+Lazy<void> qps_watcher() {
   using namespace std::chrono_literals;
-  while (true) {
+  auto &clients = coro_io::g_clients_pool<coro_rpc_client>();
+  while (working_echo > 0) {
     co_await coro_io::sleep_for(1s);
     uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:" << cnt << " working echo:" << working_echo << std::endl;
@@ -84,13 +87,13 @@ Lazy<void> qps_watcher(coro_io::client_pools<coro_rpc_client> &clients) {
   }
 }
 
-Lazy<void> start(coro_io::client_pools<coro_rpc_client> &clients) {
-  auto chan = co_await coro_io::channel<coro_rpc_client>::create(
-      {"127.0.0.1:8801", "localhost:8801"}, clients,
-      coro_io::channel<coro_rpc_client>::channel_config{
-          .pool_config{.max_connection_ = 1000}});
-  std::vector<async_simple::coro::Lazy<void>> works;
+Lazy<void> start() {
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
+  auto chan = co_await coro_io::channel<coro_rpc_client>::create(
+      {"127.0.0.1:8801", "localhost:8801"},
+      coro_io::channel<coro_rpc_client>::channel_config{
+          .pool_config{.max_connection_ = worker_cnt}});
+  std::vector<async_simple::coro::Lazy<void>> works;
   works.reserve(worker_cnt);
   for (int i = 0; i < worker_cnt; ++i) {
     works.emplace_back(call_echo(chan, 10000));
@@ -99,10 +102,9 @@ Lazy<void> start(coro_io::client_pools<coro_rpc_client> &clients) {
 }
 
 int main() {
-  coro_io::client_pools<coro_rpc_client> clients;
-  start(clients).start([](auto &&) {
+  start().start([](auto &&) {
   });
-  syncAwait(qps_watcher(clients));
+  syncAwait(qps_watcher());
   std::cout << "Done!" << std::endl;
   return 0;
 }

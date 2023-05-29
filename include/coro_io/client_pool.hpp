@@ -55,9 +55,15 @@ class client_pool : public std::enable_shared_from_this<
                         client_pool<client_t, io_context_pool_t>> {
   using client_pools_t = client_pools<client_t, io_context_pool_t>;
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
-      std::shared_ptr<client_pool> self) {
+      std::weak_ptr<client_pool> self_weak) {
+    std::shared_ptr<client_pool> self = self_weak.lock();
     while (true) {
-      co_await async_simple::coro::sleep(self->pool_config_.idle_timeout_);
+      auto sleep_time = self->pool_config_.idle_timeout_;
+      self = nullptr;
+      co_await async_simple::coro::sleep(sleep_time);
+      if ((self = self_weak.lock()) == nullptr) {
+        break;
+      }
       auto timeout_point =
           std::chrono::steady_clock::now() - self->pool_config_.idle_timeout_;
       client_info_t t;
@@ -149,19 +155,33 @@ class client_pool : public std::enable_shared_from_this<
       }
     }
 
-    bool ok;
     if (client == nullptr) {
       client = std::make_unique<client_t>(*io_context_pool_.get_executor());
-      ok = client->init_config(client_config);
-      if (!ok) {
+      if (!client->init_config(client_config)) {
         co_return nullptr;
       }
-      ok = false;
+      bool ok;
+      if constexpr (requires { client->async_connect(host_name_); }) {
+        ok = (client_t::is_ok(co_await client->async_connect(host_name_)));
+      }
+      else {
+        ok = (client_t::is_ok(co_await client->connect(host_name_)));
+      }
+      if (ok) {
+        co_return std::move(client);
+      }
+      else {
+        co_return co_await reconnect(std::move(client));
+      }
     }
     else {
-      ok = !client->has_closed();
+      if (client->has_closed()) {
+        co_return co_await reconnect(std::move(client));
+      }
+      else {
+        co_return std::move(client);
+      }
     }
-    co_return ok ? std::move(client) : co_await reconnect(std::move(client));
   }
 
   std::chrono::microseconds rand_wait_time() {
@@ -224,8 +244,20 @@ class client_pool : public std::enable_shared_from_this<
     typename client_t::config client_config{};
   };
 
-  client_pool(const std::string& host_name, const pool_config& pool_config = {},
-              io_context_pool_t& io_context_pool = coro_io::g_io_context_pool())
+ private:
+  struct private_construct_token {};
+
+ public:
+  static std::shared_ptr<client_pool> create(
+      const std::string& host_name, const pool_config& pool_config = {},
+      io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
+    return std::make_shared<client_pool>(private_construct_token{}, host_name,
+                                         pool_config, io_context_pool);
+  }
+
+  client_pool(private_construct_token t, const std::string& host_name,
+              const pool_config& pool_config,
+              io_context_pool_t& io_context_pool)
       : host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
@@ -236,8 +268,8 @@ class client_pool : public std::enable_shared_from_this<
     }
   };
 
-  client_pool(client_pools_t* pools_manager_, const std::string& host_name,
-              const pool_config& pool_config,
+  client_pool(private_construct_token t, client_pools_t* pools_manager_,
+              const std::string& host_name, const pool_config& pool_config,
               io_context_pool_t& io_context_pool)
       : pools_manager_(pools_manager_),
         host_name_(host_name),
@@ -344,7 +376,8 @@ class client_pools {
     for (auto& e : fixed_host_list) {
       client_pool_manager_.emplace(
           e, std::make_shared<client_pool_t>(
-                 this, std::string{e}, default_pool_config_, io_context_pool_));
+                 typename client_pool_t::private_construct_token{}, this,
+                 std::string{e}, default_pool_config_, io_context_pool_));
     }
   }
   auto send_request(const std::string& host_name, auto&& op)
@@ -394,7 +427,8 @@ class client_pools {
           client_pool_manager_.emplace(host_name, nullptr);
       if (has_inserted) {
         iter->second = std::make_shared<client_pool_t>(
-            this, host_name, pool_config, io_context_pool_);
+            typename client_pool_t::private_construct_token{}, this, host_name,
+            pool_config, io_context_pool_);
       }
       co_return iter->second;
     }
@@ -410,7 +444,7 @@ class client_pools {
 template <typename client_t,
           typename io_context_pool_t = coro_io::io_context_pool>
 inline client_pools<client_t, io_context_pool_t>& g_clients_pool(
-    const typename client_pools<client_t, io_context_pool_t>::pool_config&
+    const typename client_pool<client_t, io_context_pool_t>::pool_config&
         pool_config = {},
     const std::vector<std::string>& fixed_host_list = {},
     io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
