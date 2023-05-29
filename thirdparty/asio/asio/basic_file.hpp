@@ -2,7 +2,7 @@
 // basic_file.hpp
 // ~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -37,8 +37,6 @@
 # include "asio/detail/win_iocp_file_service.hpp"
 #elif defined(ASIO_HAS_IO_URING)
 # include "asio/detail/io_uring_file_service.hpp"
-#elif defined(ASIO_HAS_LIB_AIO)
-# include "asio/detail/lib_aio_file_service.hpp"
 #endif
 
 #if defined(ASIO_HAS_MOVE)
@@ -90,8 +88,6 @@ public:
   typedef detail::win_iocp_file_service::native_handle_type native_handle_type;
 #elif defined(ASIO_HAS_IO_URING)
   typedef detail::io_uring_file_service::native_handle_type native_handle_type;
-#elif defined(ASIO_HAS_LIB_AIO)
-  typedef detail::lib_aio_file_service::native_handle_type native_handle_type;
 #endif
 
   /// Construct a basic_file without opening it.
@@ -347,7 +343,7 @@ public:
 #endif // defined(ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
 
   /// Get the executor associated with the object.
-  const executor_type& get_executor() ASIO_NOEXCEPT
+  executor_type get_executor() ASIO_NOEXCEPT
   {
     return impl_.get_executor();
   }
@@ -815,8 +811,6 @@ protected:
   detail::io_object_impl<detail::win_iocp_file_service, Executor> impl_;
 #elif defined(ASIO_HAS_IO_URING)
   detail::io_object_impl<detail::io_uring_file_service, Executor> impl_;
-#elif defined(ASIO_HAS_LIB_AIO)
-  detail::io_object_impl<detail::lib_aio_file_service, Executor> impl_;
 #endif
 
 private:

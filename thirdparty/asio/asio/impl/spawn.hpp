@@ -2,7 +2,7 @@
 // impl/spawn.hpp
 // ~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -22,7 +22,6 @@
 #include "asio/async_result.hpp"
 #include "asio/bind_executor.hpp"
 #include "asio/detail/atomic_count.hpp"
-#include "asio/detail/bind_handler.hpp"
 #include "asio/detail/handler_alloc_helpers.hpp"
 #include "asio/detail/handler_cont_helpers.hpp"
 #include "asio/detail/handler_invoke_helpers.hpp"
@@ -45,14 +44,6 @@
 
 namespace asio {
 namespace detail {
-
-#if !defined(ASIO_NO_EXCEPTIONS)
-inline void spawned_thread_rethrow(void* ex)
-{
-  if (*static_cast<exception_ptr*>(ex))
-    rethrow_exception(*static_cast<exception_ptr*>(ex));
-}
-#endif // !defined(ASIO_NO_EXCEPTIONS)
 
 #if defined(ASIO_HAS_BOOST_COROUTINE)
 
@@ -126,8 +117,6 @@ public:
   {
     callee_type callee;
     callee.swap(callee_);
-    if (terminal_)
-      callee();
   }
 
 private:
@@ -150,26 +139,8 @@ private:
       *spawned_thread_out_ = &spawned_thread;
       spawned_thread_out_ = 0;
       spawned_thread.suspend();
-#if !defined(ASIO_NO_EXCEPTIONS)
-      try
-#endif // !defined(ASIO_NO_EXCEPTIONS)
-      {
-        function(&spawned_thread);
-        spawned_thread.terminal_ = true;
-        spawned_thread.suspend();
-      }
-#if !defined(ASIO_NO_EXCEPTIONS)
-      catch (const boost::coroutines::detail::forced_unwind&)
-      {
-        throw;
-      }
-      catch (...)
-      {
-        exception_ptr ex = current_exception();
-        spawned_thread.terminal_ = true;
-        spawned_thread.suspend_with(spawned_thread_rethrow, &ex);
-      }
-#endif // !defined(ASIO_NO_EXCEPTIONS)
+      function(&spawned_thread);
+      spawned_thread.suspend();
     }
 
   private:
@@ -254,8 +225,7 @@ public:
   void destroy()
   {
     fiber_type callee = ASIO_MOVE_CAST(fiber_type)(callee_);
-    if (terminal_)
-      fiber_type(ASIO_MOVE_CAST(fiber_type)(callee)).resume();
+    (void)callee;
   }
 
 private:
@@ -279,27 +249,9 @@ private:
       *spawned_thread_out_ = &spawned_thread;
       spawned_thread_out_ = 0;
       spawned_thread.suspend();
-#if !defined(ASIO_NO_EXCEPTIONS)
-      try
-#endif // !defined(ASIO_NO_EXCEPTIONS)
-      {
-        function(&spawned_thread);
-        spawned_thread.terminal_ = true;
-        spawned_thread.suspend();
-      }
-#if !defined(ASIO_NO_EXCEPTIONS)
-      catch (const boost::context::detail::forced_unwind&)
-      {
-        throw;
-      }
-      catch (...)
-      {
-        exception_ptr ex = current_exception();
-        spawned_thread.terminal_ = true;
-        spawned_thread.suspend_with(spawned_thread_rethrow, &ex);
-      }
-#endif // !defined(ASIO_NO_EXCEPTIONS)
-      return ASIO_MOVE_CAST(fiber_type)(spawned_thread.caller_);
+      function(&spawned_thread);
+      spawned_thread.suspend();
+      return {};
     }
 
   private:
@@ -1010,8 +962,7 @@ public:
       ASIO_MOVE_ARG(F) f, ASIO_MOVE_ARG(H) h)
     : executor_(ex),
       function_(ASIO_MOVE_CAST(F)(f)),
-      handler_(ASIO_MOVE_CAST(H)(h)),
-      work_(handler_, executor_)
+      handler_(ASIO_MOVE_CAST(H)(h))
   {
   }
 
@@ -1033,9 +984,7 @@ private:
       function_(yield);
       if (!yield.spawned_thread_->has_context_switched())
         (post)(yield);
-      detail::binder1<Handler, exception_ptr>
-        handler(handler_, exception_ptr());
-      work_.complete(handler, handler.handler_);
+      ASIO_MOVE_OR_LVALUE(Handler)(handler_)(exception_ptr());
     }
 #if !defined(ASIO_NO_EXCEPTIONS)
 # if defined(ASIO_HAS_BOOST_CONTEXT_FIBER)
@@ -1055,8 +1004,7 @@ private:
       exception_ptr ex = current_exception();
       if (!yield.spawned_thread_->has_context_switched())
         (post)(yield);
-      detail::binder1<Handler, exception_ptr> handler(handler_, ex);
-      work_.complete(handler, handler.handler_);
+      ASIO_MOVE_OR_LVALUE(Handler)(handler_)(ex);
     }
 #endif // !defined(ASIO_NO_EXCEPTIONS)
   }
@@ -1071,9 +1019,8 @@ private:
       T result(function_(yield));
       if (!yield.spawned_thread_->has_context_switched())
         (post)(yield);
-      detail::binder2<Handler, exception_ptr, T>
-        handler(handler_, exception_ptr(), ASIO_MOVE_CAST(T)(result));
-      work_.complete(handler, handler.handler_);
+      ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+          exception_ptr(), ASIO_MOVE_CAST(T)(result));
     }
 #if !defined(ASIO_NO_EXCEPTIONS)
 # if defined(ASIO_HAS_BOOST_CONTEXT_FIBER)
@@ -1093,8 +1040,7 @@ private:
       exception_ptr ex = current_exception();
       if (!yield.spawned_thread_->has_context_switched())
         (post)(yield);
-      detail::binder2<Handler, exception_ptr, T> handler(handler_, ex, T());
-      work_.complete(handler, handler.handler_);
+      ASIO_MOVE_OR_LVALUE(Handler)(handler_)(ex, T());
     }
 #endif // !defined(ASIO_NO_EXCEPTIONS)
   }
@@ -1102,7 +1048,6 @@ private:
   Executor executor_;
   Function function_;
   Handler handler_;
-  handler_work<Handler, Executor> work_;
 };
 
 struct spawn_cancellation_signal_emitter
@@ -1120,8 +1065,8 @@ template <typename Handler, typename Executor, typename = void>
 class spawn_cancellation_handler
 {
 public:
-  spawn_cancellation_handler(const Handler&, const Executor& ex)
-    : ex_(ex)
+  spawn_cancellation_handler(const Handler& handler, const Executor& ex)
+    : ex_(asio::get_associated_executor(handler, ex))
   {
   }
 
@@ -1138,7 +1083,7 @@ public:
 
 private:
   cancellation_signal signal_;
-  Executor ex_;
+  typename associated_executor<Handler, Executor>::type ex_;
 };
 
 
