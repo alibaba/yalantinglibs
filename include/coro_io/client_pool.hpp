@@ -23,6 +23,7 @@
 #include <memory>
 #include <random>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 
 #include "asio/io_context.hpp"
