@@ -19,7 +19,7 @@
 
 #include "asio/io_context.hpp"
 #include "asio/steady_timer.hpp"
-#include "coro_io/asio_coro_util.hpp"
+#include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
 #include "rpc_service/rpc_service.h"
 using namespace coro_rpc;
@@ -32,9 +32,9 @@ std::atomic<uint64_t> qps = 0;
  * \brief demo for run concurrency clients
  */
 
-Lazy<void> call_echo(asio::io_context::executor_type executor) {
+Lazy<void> call_echo() {
   while (true) {
-    coro_rpc_client client(executor);
+    coro_rpc_client client(*coro_io::get_global_executor());
     for (auto ec = co_await client.connect("127.0.0.1", "8801");
          ec != std::errc{};) {
       std::cout << "connect failed." << std::endl;
@@ -55,12 +55,10 @@ Lazy<void> call_echo(asio::io_context::executor_type executor) {
   }
 }
 
-Lazy<void> qps_watcher(asio::io_context::executor_type ioc) {
+Lazy<void> qps_watcher() {
   using namespace std::chrono_literals;
-  asio_util::period_timer timer(ioc);
-  while (true) {
-    timer.expires_after(1s);
-    co_await timer.async_await();
+  for (int i = 0; i < 30; ++i) {
+    co_await coro_io::sleep_for(1s);
     uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:" << cnt << std::endl;
     cnt = 0;
@@ -69,15 +67,12 @@ Lazy<void> qps_watcher(asio::io_context::executor_type ioc) {
 
 int main() {
   auto thread_cnt = std::thread::hardware_concurrency();
-  asio_util::io_context_pool pool(thread_cnt);
   // total client cnt = thread_cnt * 20;
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
-    call_echo(pool.get_executor()).start([](auto&&) {
+    call_echo().start([](auto&&) {
     });
   }
-  qps_watcher(pool.get_executor()).start([](auto&&) {
-  });
-  pool.run();
+  syncAwait(qps_watcher());
   std::cout << "Done!" << std::endl;
   return 0;
 }

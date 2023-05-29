@@ -29,8 +29,7 @@
 #include "asio/buffer.hpp"
 #include "async_simple/Executor.h"
 #include "async_simple/coro/SyncAwait.h"
-#include "coro_io/asio_coro_util.hpp"
-#include "coro_io/asio_util.hpp"
+#include "coro_io/coro_io.hpp"
 #include "easylog/easylog.h"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
@@ -79,14 +78,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param timeout_duration
    */
   template <typename executor_t>
-  coro_connection(executor_t executor, asio::ip::tcp::socket socket,
+  coro_connection(executor_t *executor, asio::ip::tcp::socket socket,
                   std::chrono::steady_clock::duration timeout_duration =
                       std::chrono::seconds(0))
-      : executor_(
-            std::make_unique<asio_util::ExecutorWrapper<executor_t>>(executor)),
+      : executor_(executor),
         socket_(std::move(socket)),
         resp_err_(std::errc{}),
-        timer_(executor) {
+        timer_(executor->get_asio_executor()) {
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
     }
@@ -121,7 +119,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       assert(ssl_stream_);
       ELOGV(INFO, "begin to handshake conn_id %d", conn_id_);
       reset_timer();
-      auto shake_ec = co_await asio_util::async_handshake(
+      auto shake_ec = co_await coro_io::async_handshake(
           ssl_stream_, asio::ssl::stream_base::server);
       cancel_timer();
       if (shake_ec) {
@@ -235,7 +233,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         case rpc_call_type::callback_finished:
           continue;
         case rpc_call_type::callback_started:
-          asio_util::callback_awaitor<void> awaitor;
+          coro_io::callback_awaitor<void> awaitor;
           rpc_call_type_ = rpc_call_type::callback_finished;
           co_await awaitor.await_resume([this](auto handler) {
             this->callback_awaitor_handler_ = std::move(handler);
@@ -256,7 +254,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
               "inject action: close_socket_after_send_length conn_id %d, "
               "client_id %d",
               conn_id_, client_id_);
-        co_await asio_util::async_write(socket, asio::buffer(header_buf));
+        co_await coro_io::async_write(socket, asio::buffer(header_buf));
         close();
         break;
       }
@@ -296,7 +294,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     std::string header_buf = rpc_protocol::prepare_response(body_buf, req_head);
     response(std::move(header_buf), std::move(body_buf), shared_from_this(),
              is_delay)
-        .via(executor_.get())
+        .via(executor_)
         .detach();
   }
 
@@ -399,11 +397,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef ENABLE_SSL
       if (use_ssl_) {
         assert(ssl_stream_);
-        ret = co_await asio_util::async_write(*ssl_stream_, buffers);
+        ret = co_await coro_io::async_write(*ssl_stream_, buffers);
       }
       else {
 #endif
-        ret = co_await asio_util::async_write(socket_, buffers);
+        ret = co_await coro_io::async_write(socket_, buffers);
 #ifdef ENABLE_SSL
       }
 #endif
@@ -489,9 +487,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
 
-  asio_util::callback_awaitor<void>::awaitor_handler callback_awaitor_handler_{
+  coro_io::callback_awaitor<void>::awaitor_handler callback_awaitor_handler_{
       nullptr};
-  std::unique_ptr<async_simple::Executor> executor_;
+  async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   // FIXME: queue's performance can be imporved.
   std::deque<std::pair<std::string, std::string>> write_queue_;
