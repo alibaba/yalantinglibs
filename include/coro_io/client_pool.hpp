@@ -83,10 +83,10 @@ class client_pool : public std::enable_shared_from_this<
         }
         --self->queue_size_;
         if (cnt % 10000 == 0) {
-          co_await async_simple::coro::Yield();
+          co_await async_simple::coro::Yield{};
         }
       }
-      ELOGV(INFO, "collect count:%d", cnt);
+      //ELOGV(INFO, "collect count:%d", cnt);
 
       --self->collecter_cnt_;
       if (self->queue_size_ == 0) {
