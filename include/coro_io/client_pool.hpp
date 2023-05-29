@@ -38,7 +38,6 @@
 #include "async_simple/coro/SpinLock.h"
 #include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
-#include "coro_rpc/coro_rpc/expected.hpp"
 #include "easylog/easylog.h"
 #include "util/concurrentqueue.h"
 #include "util/expected.hpp"
