@@ -38,7 +38,6 @@
 #include "async_simple/coro/SpinLock.h"
 #include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
-#include "easylog/easylog.h"
 #include "util/concurrentqueue.h"
 #include "util/expected.hpp"
 namespace coro_io {
@@ -86,7 +85,6 @@ class client_pool : public std::enable_shared_from_this<
           co_await async_simple::coro::Yield{};
         }
       }
-      // ELOGV(INFO, "collect count:%d", cnt);
 
       --self->collecter_cnt_;
       if (self->queue_size_ == 0) {
@@ -415,9 +413,6 @@ class client_pools {
         co_return iter->second;
       }
       else {
-        ELOGV(ERROR,
-              "unknown host, the host pool is fixed and not allow to add "
-              "new host");
         co_return nullptr;
       }
     }
