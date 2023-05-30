@@ -33,7 +33,6 @@
 #include "async_simple/Try.h"
 #include "async_simple/Unit.h"
 #include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/SharedMutex.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SpinLock.h"
 #include "coro_io/coro_io.hpp"
