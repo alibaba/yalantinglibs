@@ -43,11 +43,12 @@ std::atomic<uint64_t> working_echo = 0;
  * \brief demo for run concurrency clients
  */
 
-Lazy<void> call_echo(coro_io::channel<coro_rpc_client> &channel, int cnt) {
+Lazy<void> call_echo(std::shared_ptr<coro_io::channel<coro_rpc_client>> channel,
+                     int cnt) {
   while (true) {
     ++working_echo;
     for (int i = 0; i < cnt; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await channel->send_request(
           [](coro_rpc_client &client, std::string_view hostname) -> Lazy<void> {
             auto res = co_await client.call<echo>("Hello world!");
             if (!res.has_value()) {
@@ -86,22 +87,17 @@ Lazy<void> qps_watcher() {
     cnt = 0;
   }
 }
-auto hosts = std::vector<std::string>{
-    {std::string{"127.0.0.1:8801"}, std::string{"localhost:8801"}}};
 Lazy<void> start() {
+  auto hosts = std::vector<std::string>{
+      {std::string{"127.0.0.1:8801"}, std::string{"localhost:8801"}}};
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
-  try {
-    auto chan = co_await coro_io::channel<coro_rpc_client>::create(hosts);
-
-    std::vector<async_simple::coro::Lazy<void>> works;
-    works.reserve(worker_cnt);
-    for (int i = 0; i < worker_cnt; ++i) {
-      works.emplace_back(call_echo(chan, 10000));
-    }
-    co_await collectAll(std::move(works));
-  } catch (const std::exception &e) {
-    std::cout << e.what() << std::endl;
+  auto chan = co_await coro_io::channel<coro_rpc_client>::create(hosts);
+  auto chan_ptr = std::make_shared<decltype(chan)>(std::move(chan));
+  for (int i = 0; i < worker_cnt; ++i) {
+    call_echo(chan_ptr, 10000).start([](auto &&) {
+    });
   }
+  co_return;
 }
 
 int main() {
