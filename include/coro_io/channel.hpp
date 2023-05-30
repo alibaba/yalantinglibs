@@ -37,24 +37,25 @@ class channel {
   struct channel_config {
     typename client_pool_t::pool_config pool_config;
     load_blance_algorithm lba = load_blance_algorithm::RR;
+    ~channel_config(){};
   };
 
  private:
   struct RRLoadBlancer {
     std::unique_ptr<std::atomic<uint32_t>> index =
         std::make_unique<std::atomic<uint32_t>>();
-    async_simple::coro::Lazy<::std::shared_ptr<client_pool_t>> operator()(
+    async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
         const channel& channel) {
-      auto i = index->fetch_add(1, ::std::memory_order_relaxed);
+      auto i = index->fetch_add(1, std::memory_order_relaxed);
       co_return channel.client_pools_[i % channel.client_pools_.size()];
     }
   };
   struct RandomLoadBlancer {
-    async_simple::coro::Lazy<::std::shared_ptr<client_pool_t>> operator()(
+    async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
         const channel& channel) {
-      static thread_local ::std::default_random_engine e;
-      ::std::uniform_int_distribution rnd{std::size_t{0},
-                                          channel.client_pools_.size() - 1};
+      static thread_local std::default_random_engine e;
+      std::uniform_int_distribution rnd{std::size_t{0},
+                                        channel.client_pools_.size() - 1};
       co_return channel.client_pools_[rnd(e)];
     }
   };
@@ -70,6 +71,8 @@ class channel {
     this->lb_worker = std::move(o.lb_worker);
     this->client_pools_ = std::move(o.client_pools_);
   }
+  channel(const channel& o) = delete;
+  channel& operator=(const channel& o) = delete;
 
   auto send_request(auto&& op, const typename client_t::config& config)
       -> decltype(std::declval<client_pool_t>().send_request(op,
@@ -100,11 +103,11 @@ class channel {
           g_clients_pool<client_t, io_context_pool_t>()) {
     channel ch;
     co_await ch.init(hosts, config, client_pools);
-    co_return ch;
+    co_return std::move(ch);
   }
 
  private:
-  async_simple::coro::Lazy<void> init(const ::std::vector<::std::string>& hosts,
+  async_simple::coro::Lazy<void> init(const std::vector<std::string> hosts,
                                       const channel_config& config,
                                       client_pools_t& client_pools) {
     client_pools_.reserve(hosts.size());
@@ -124,7 +127,7 @@ class channel {
   }
   channel_config config_;
   std::variant<RRLoadBlancer, RandomLoadBlancer> lb_worker;
-  ::std::vector<::std::shared_ptr<client_pool_t>> client_pools_;
+  std::vector<std::shared_ptr<client_pool_t>> client_pools_;
 };
 
 }  // namespace coro_io

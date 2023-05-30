@@ -86,7 +86,7 @@ class client_pool : public std::enable_shared_from_this<
           co_await async_simple::coro::Yield{};
         }
       }
-      //ELOGV(INFO, "collect count:%d", cnt);
+      // ELOGV(INFO, "collect count:%d", cnt);
 
       --self->collecter_cnt_;
       if (self->queue_size_ == 0) {
@@ -241,7 +241,7 @@ class client_pool : public std::enable_shared_from_this<
     std::chrono::milliseconds reconnect_wait_min_time{1000};
     std::chrono::milliseconds reconnect_wait_random_duration{5000};
     std::chrono::milliseconds idle_timeout_{5000};
-    typename client_t::config client_config{};
+    typename client_t::config client_config;
   };
 
  private:

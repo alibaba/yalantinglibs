@@ -86,19 +86,22 @@ Lazy<void> qps_watcher() {
     cnt = 0;
   }
 }
-
+auto hosts = std::vector<std::string>{
+    {std::string{"127.0.0.1:8801"}, std::string{"localhost:8801"}}};
 Lazy<void> start() {
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
-  auto chan = co_await coro_io::channel<coro_rpc_client>::create(
-      {"127.0.0.1:8801", "localhost:8801"},
-      coro_io::channel<coro_rpc_client>::channel_config{
-          .pool_config{.max_connection_ = worker_cnt}});
-  std::vector<async_simple::coro::Lazy<void>> works;
-  works.reserve(worker_cnt);
-  for (int i = 0; i < worker_cnt; ++i) {
-    works.emplace_back(call_echo(chan, 10000));
+  try {
+    auto chan = co_await coro_io::channel<coro_rpc_client>::create(hosts);
+
+    std::vector<async_simple::coro::Lazy<void>> works;
+    works.reserve(worker_cnt);
+    for (int i = 0; i < worker_cnt; ++i) {
+      works.emplace_back(call_echo(chan, 10000));
+    }
+    co_await collectAll(std::move(works));
+  } catch (const std::exception &e) {
+    std::cout << e.what() << std::endl;
   }
-  co_await collectAll(std::move(works));
 }
 
 int main() {

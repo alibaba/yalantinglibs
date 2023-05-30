@@ -65,15 +65,15 @@ Lazy<void> qps_watcher() {
 }
 
 Lazy<void> call_all() {
+  std::vector<std::string> hosts;
+  hosts.emplace_back("http://www.baidu.com");
   auto chan = co_await coro_io::channel<coro_http_client>::create(
-      {"http://www.baidu.com"},
-      coro_io::channel<coro_http_client>::channel_config{
-          .pool_config{.max_connection_ = 1000}});
-  std::vector<Lazy<void>> works;
-  works.reserve(1000);
+      hosts, coro_io::channel<coro_http_client>::channel_config{
+                 .pool_config{.max_connection_ = 1000}});
+
   for (int i = 0, lim = std::thread::hardware_concurrency() * 10; i < lim; ++i)
-    works.emplace_back(test_async_channel(chan));
-  co_await collectAll(std::move(works));
+    test_async_channel(chan).start([](auto &&) {
+    });
   co_return;
 }
 
