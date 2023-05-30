@@ -32,8 +32,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
-#include "coro_io/asio_coro_util.hpp"
-#include "coro_io/asio_util.hpp"
+#include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
 #include "easylog/easylog.h"
 namespace coro_rpc {
@@ -71,7 +70,7 @@ class coro_rpc_server_base {
                        std::chrono::steady_clock::duration
                            conn_timeout_duration = std::chrono::seconds(0))
       : pool_(thread_num),
-        acceptor_(pool_.get_executor()),
+        acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(port),
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {}
@@ -342,8 +341,8 @@ class coro_rpc_server_base {
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
       auto executor = pool_.get_executor();
-      asio::ip::tcp::socket socket(executor);
-      auto error = co_await asio_util::async_accept(acceptor_, socket);
+      asio::ip::tcp::socket socket(executor->get_asio_executor());
+      auto error = co_await coro_io::async_accept(acceptor_, socket);
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_server_accept_error) {
         asio::error_code ignored_ec;

@@ -159,16 +159,19 @@ struct CoroServerTester : ServerTester {
 
   void test_start_new_server_with_same_port() {
     ELOGV(INFO, "run %s", __func__);
-    auto new_server = coro_rpc_server(2, std::stoi(this->port_));
-    std::errc ec;
-    if (async_start) {
-      ec = syncAwait(new_server.async_start());
+    {
+      auto new_server = coro_rpc_server(2, std::stoi(this->port_));
+      std::errc ec;
+      if (async_start) {
+        ec = syncAwait(new_server.async_start());
+      }
+      else {
+        ec = new_server.start();
+      }
+      REQUIRE_MESSAGE(ec == std::errc::address_in_use,
+                      make_error_code(ec).message());
     }
-    else {
-      ec = new_server.start();
-    }
-    REQUIRE_MESSAGE(ec == std::errc::address_in_use,
-                    make_error_code(ec).message());
+    ELOGV(INFO, "OH NO");
   }
   void test_server_send_bad_rpc_result() {
     auto client = create_client(inject_action::server_send_bad_rpc_result);
@@ -336,13 +339,13 @@ TEST_CASE("test server write queue") {
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);
-  auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8810");
+  auto ret = coro_io::connect(io_context, socket, "127.0.0.1", "8810");
   CHECK(!ret);
   ELOGV(INFO, "%s client_id %d call %s", "sync_client", header.seq_num,
         "coro_fun_with_delay_return_void_cost_long_time");
   for (int i = 0; i < 1; ++i) {
     auto err =
-        asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
+        coro_io::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
   for (int i = 0; i < 1; ++i) {

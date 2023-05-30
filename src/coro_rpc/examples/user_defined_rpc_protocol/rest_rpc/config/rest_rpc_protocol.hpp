@@ -56,7 +56,7 @@ struct rest_rpc_protocol {
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
       Socket& socket, req_header& req_head) {
-    auto [ec, _] = co_await asio_util::async_read(
+    auto [ec, _] = co_await coro_io::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
     if (ec)
       AS_UNLIKELY { co_return std::move(ec); }
@@ -69,7 +69,7 @@ struct rest_rpc_protocol {
   static async_simple::coro::Lazy<std::error_code> read_payload(
       Socket& socket, req_header& req_head, Buffer& buffer) {
     buffer.resize(req_head.body_len);
-    auto [ec, _] = co_await asio_util::async_read(socket, asio::buffer(buffer));
+    auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
     co_return ec;
   }
 
@@ -99,7 +99,7 @@ struct rest_rpc_config {
   std::chrono::steady_clock::duration conn_timeout_duration =
       std::chrono::seconds{0};
   using rpc_protocol = coro_rpc::protocol::rest_rpc_protocol;
-  using executor_pool_t = asio_util::io_context_pool;
+  using executor_pool_t = coro_io::io_context_pool;
 };
 }  // namespace coro_rpc::config
 
