@@ -49,7 +49,14 @@ void test_sync_client() {
 async_simple::coro::Lazy<void> test_async_client(
     coro_http::coro_http_client &client) {
   std::string uri = "http://www.baidu.com";
-  auto result = co_await client.async_get(uri);
+
+  auto result = co_await client.connect(uri);
+  if (result.net_err) {
+    std::cout << result.net_err.message() << "\n";
+  }
+  std::cout << result.status << "\n";
+
+  result = co_await client.async_get(uri);
   if (result.net_err) {
     std::cout << result.net_err.message() << "\n";
   }

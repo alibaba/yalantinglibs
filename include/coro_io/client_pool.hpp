@@ -101,12 +101,7 @@ class client_pool : public std::enable_shared_from_this<
     bool ok = false;
 
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
-      if constexpr (requires { client->async_connect(host_name_); }) {
-        ok = (client_t::is_ok(co_await client->async_connect(host_name_)));
-      }
-      else {
-        ok = (client_t::is_ok(co_await client->connect(host_name_)));
-      }
+      ok = (client_t::is_ok(co_await client->connect(host_name_)));
       if (!ok) {
         auto executor = co_await async_simple::CurrentExecutor();
         if (executor == nullptr) {
