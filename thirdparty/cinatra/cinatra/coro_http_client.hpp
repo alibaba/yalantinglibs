@@ -223,6 +223,26 @@ class coro_http_client {
   }
 #endif
 
+  // only make socket connet(or handshake) to the host
+  async_simple::coro::Lazy<resp_data> connect(std::string uri) {
+    resp_data data{};
+    auto [ok, u] = handle_uri(data, uri);
+    if (!ok) {
+      co_return resp_data{{}, 404};
+    }
+
+    auto promise = start_timer(req_timeout_duration_, "connect timer");
+
+    data = co_await connect(u);
+    if (auto ec = co_await wait_timer(promise); ec) {
+      co_return resp_data{{}, 404};
+    }
+    if (!data.net_err) {
+      data.status = 200;
+    }
+    co_return data;
+  }
+
   bool has_closed() { return socket_->has_closed_; }
 
   bool add_header(std::string key, std::string val) {
