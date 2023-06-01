@@ -56,12 +56,12 @@ struct resp_data {
 #endif
 };
 
-template <typename Stream = std::string>
+template <typename Stream = std::ofstream>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_str;
   std::string content;
-  Stream stream;
+  std::optional<Stream> stream;
 };
 
 struct multipart_t {
@@ -72,7 +72,8 @@ struct multipart_t {
 class coro_http_client {
  public:
   struct config {
-    std::optional<std::chrono::steady_clock::duration> timeout_duration;
+    std::optional<std::chrono::steady_clock::duration> conn_timeout_duration;
+    std::optional<std::chrono::steady_clock::duration> req_timeout_duration;
     std::string sec_key;
     size_t max_single_part_size;
     std::string proxy_host;
@@ -81,6 +82,7 @@ class coro_http_client {
     std::string proxy_auth_passwd;
     std::string proxy_auth_token;
 #ifdef CINATRA_ENABLE_SSL
+    bool use_ssl = false;
     std::string base_path;
     std::string cert_file;
     int verify_mode;
@@ -109,8 +111,11 @@ class coro_http_client {
         timer_(&executor_wrapper_) {}
 
   bool init_config(const config &conf) {
-    if (conf.timeout_duration.has_value()) {
-      set_timeout(*conf.timeout_duration);
+    if (conf.conn_timeout_duration.has_value()) {
+      set_conn_timeout(*conf.conn_timeout_duration);
+    }
+    if (conf.req_timeout_duration.has_value()) {
+      set_req_timeout(*conf.req_timeout_duration);
     }
     if (!conf.sec_key.empty()) {
       set_ws_sec_key(conf.sec_key);
@@ -128,8 +133,11 @@ class coro_http_client {
       set_proxy_bearer_token_auth(conf.proxy_auth_token);
     }
 #ifdef CINATRA_ENABLE_SSL
-    return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
-                    conf.domain);
+    if (conf.use_ssl) {
+      return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
+                      conf.domain);
+    }
+    return true;
 #endif
     return true;
   }
@@ -224,15 +232,8 @@ class coro_http_client {
     if (key == "Host")
       return false;
 
-    if (auto it = std::find_if(req_headers_.begin(), req_headers_.end(),
-                               [&key](auto &item) {
-                                 return item.first == key;
-                               });
-        it != req_headers_.end()) {
-      return false;
-    }
+    req_headers_[key] = std::move(val);
 
-    req_headers_.emplace_back(std::move(key), std::move(val));
     return true;
   }
 
@@ -248,7 +249,7 @@ class coro_http_client {
       co_return false;
     }
 
-    req_context<std::string> ctx{};
+    req_context<> ctx{};
     if (u.is_websocket()) {
       // build websocket http header
       add_header("Upgrade", "websocket");
@@ -354,7 +355,7 @@ class coro_http_client {
       }
 
       if (read_fix_ == 0) {
-        req_context<std::string> ctx{};
+        req_context<> ctx{};
         bool is_keep_alive = true;
         data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                     http_method::GET);
@@ -406,7 +407,7 @@ class coro_http_client {
     }
 #endif
 
-    req_context<std::string> ctx{};
+    req_context<> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 #ifdef BENCHMARK_TEST
@@ -429,20 +430,20 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::DEL, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_put(std::string uri,
                                                 std::string content,
                                                 req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::PUT, std::move(ctx));
   }
 
@@ -484,10 +485,12 @@ class coro_http_client {
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
-  async_simple::Promise<async_simple::Unit> start_timer() {
+  async_simple::Promise<async_simple::Unit> start_timer(
+      std::chrono::steady_clock::duration duration, std::string msg) {
+    is_timeout_ = false;
     async_simple::Promise<async_simple::Unit> promise;
     if (enable_timeout_) {
-      timeout(timer_, promise, "request timer canceled")
+      timeout(timer_, promise, duration, std::move(msg))
           .via(&executor_wrapper_)
           .detach();
     }
@@ -522,7 +525,7 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    req_context<std::string> ctx{req_content_type::multipart, "", ""};
+    req_context<> ctx{req_content_type::multipart, "", ""};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
@@ -538,13 +541,17 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    auto promise = start_timer();
+    auto promise = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
+    if (ec = co_await wait_timer(promise); ec) {
+      co_return resp_data{{}, 404};
+    }
     if (data.net_err) {
       co_return data;
     }
 
+    promise = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (inject_write_failed == ClientInjectAction::write_failed) {
@@ -650,9 +657,9 @@ class coro_http_client {
     co_return co_await async_get(uri);
   }
 
-  async_simple::coro::Lazy<resp_data> async_request(std::string uri,
-                                                    http_method method,
-                                                    auto ctx) {
+  async_simple::coro::Lazy<resp_data> async_request(
+      std::string uri, http_method method, auto ctx,
+      std::unordered_map<std::string, std::string> headers = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
@@ -670,8 +677,6 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
-    auto promise = start_timer();
-
     do {
       auto [ok, u] = handle_uri(data, uri);
       if (!ok) {
@@ -679,6 +684,8 @@ class coro_http_client {
       }
 
       if (socket_->has_closed_) {
+        auto conn_promise =
+            start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
         if (ec = co_await coro_io::async_connect(&executor_wrapper_,
@@ -693,13 +700,17 @@ class coro_http_client {
           }
         }
         socket_->has_closed_ = false;
+        if (ec = co_await wait_timer(conn_promise); ec) {
+          break;
+        }
       }
 
-      std::string write_msg = prepare_request_str(u, method, ctx);
+      std::string write_msg =
+          prepare_request_str(u, method, ctx, std::move(headers));
 #ifdef BENCHMARK_TEST
       req_str_ = write_msg;
 #endif
-
+      auto promise = start_timer(req_timeout_duration_, "request timer");
       if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
           ec) {
         break;
@@ -707,11 +718,10 @@ class coro_http_client {
 
       data =
           co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
+      if (auto errc = co_await wait_timer(promise); errc) {
+        ec = errc;
+      }
     } while (0);
-
-    if (auto errc = co_await wait_timer(promise); errc) {
-      ec = errc;
-    }
 
     handle_result(data, ec, is_keep_alive);
     co_return data;
@@ -769,10 +779,14 @@ class coro_http_client {
     return false;
   }
 
-  inline void set_timeout(
-      std::chrono::steady_clock::duration timeout_duration) {
+  void set_conn_timeout(std::chrono::steady_clock::duration timeout_duration) {
     enable_timeout_ = true;
-    timeout_duration_ = timeout_duration;
+    conn_timeout_duration_ = timeout_duration;
+  }
+
+  void set_req_timeout(std::chrono::steady_clock::duration timeout_duration) {
+    enable_timeout_ = true;
+    req_timeout_duration_ = timeout_duration;
   }
 
   template <typename T, typename U>
@@ -825,13 +839,18 @@ class coro_http_client {
     }
   }
 
-  std::string build_request_header(const uri_t &u, http_method method,
-                                   const auto &ctx) {
+  std::string build_request_header(
+      const uri_t &u, http_method method, const auto &ctx,
+      std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str(method_name(method));
 
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
+    }
+
+    if (!headers.empty()) {
+      req_headers_ = std::move(headers);
     }
 
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
@@ -840,7 +859,7 @@ class coro_http_client {
       if (ctx.content_type == req_content_type::multipart) {
         type_str.append(BOUNDARY);
       }
-      req_headers_.emplace_back("Content-Type", std::move(type_str));
+      req_headers_["Content-Type"] = std::move(type_str);
     }
 
     bool has_connection = false;
@@ -902,9 +921,11 @@ class coro_http_client {
     return req_str;
   }
 
-  std::string prepare_request_str(const uri_t &u, http_method method,
-                                  const auto &ctx) {
-    std::string req_str = build_request_header(u, method, ctx);
+  std::string prepare_request_str(
+      const uri_t &u, http_method method, const auto &ctx,
+      std::unordered_map<std::string, std::string> headers) {
+    std::string req_str =
+        build_request_header(u, method, ctx, std::move(headers));
 
 #ifdef CORO_HTTP_PRINT_REQ_HEAD
     std::cout << req_str << "\n";
@@ -1019,10 +1040,11 @@ class coro_http_client {
     if (content_len > 0) {
       if (is_ranges) {
         auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-        if constexpr (std::is_same_v<
-                          std::ofstream,
-                          std::remove_cvref_t<decltype(ctx.stream)>>) {
-          ctx.stream.write(data_ptr, content_len);
+        if (ctx.stream) {
+          (*ctx.stream).write(data_ptr, content_len);
+        }
+        else {
+          resp_chunk_str_.append(data_ptr, content_len);
         }
       }
 
@@ -1041,10 +1063,11 @@ class coro_http_client {
       data.net_err = ec;
       data.status = 404;
 #ifdef BENCHMARK_TEST
-      if (!stop_bench_)
-#endif
+      if (!stop_bench_) {
 #ifndef NDEBUG
         std::cout << ec.message() << "\n";
+#endif
+      }
 #endif
     }
     else {
@@ -1115,9 +1138,8 @@ class coro_http_client {
       }
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      if constexpr (std::is_same_v<std::ofstream,
-                                   std::remove_cvref_t<Stream>>) {
-        ctx.stream.write(data_ptr, chunk_size);
+      if (ctx.stream) {
+        (*ctx.stream).write(data_ptr, chunk_size);
       }
       else {
         resp_chunk_str_.append(data_ptr, chunk_size);
@@ -1361,17 +1383,18 @@ class coro_http_client {
     socket.has_closed_ = true;
   }
 
-  async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
-                                         std::string msg) {
-    timer.expires_after(timeout_duration_);
+  async_simple::coro::Lazy<bool> timeout(
+      auto &timer, auto &promise, std::chrono::steady_clock::duration duration,
+      std::string msg) {
+    timer.expires_after(duration);
     is_timeout_ = co_await timer.async_await();
     if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
 
-      std::cout << msg << '\n';
+      std::cout << msg << " canceled\n";
       co_return false;
     }
-    std::cout << "request timeout\n";
+    std::cout << msg << " timeout\n";
     close_socket(*socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
@@ -1401,7 +1424,7 @@ class coro_http_client {
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
 
-  std::vector<std::pair<std::string, std::string>> req_headers_;
+  std::unordered_map<std::string, std::string> req_headers_;
 
   std::string proxy_request_uri_ = "";
   std::string proxy_host_;
@@ -1430,7 +1453,9 @@ class coro_http_client {
 
   bool is_timeout_ = false;
   bool enable_timeout_ = false;
-  std::chrono::steady_clock::duration timeout_duration_ =
+  std::chrono::steady_clock::duration conn_timeout_duration_ =
+      std::chrono::seconds(8);
+  std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
 #ifdef BENCHMARK_TEST
