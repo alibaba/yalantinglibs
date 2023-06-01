@@ -31,7 +31,7 @@ std::vector<char> create_filled_vec(std::string fill_with, size_t size) {
   }
   return ret;
 }
-std::vector<char> create_big_file(std::string filename, size_t file_size,
+std::vector<char> create_large_file(std::string filename, size_t file_size,
                                   std::string fill_with) {
   std::ofstream file(filename, std::ios::binary);
   file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
@@ -94,12 +94,12 @@ TEST_CASE("small_file_read_test") {
   thd.join();
   fs::remove(fs::path(filename));
 }
-TEST_CASE("big_file_read_test") {
-  std::string filename = "big_file_read_test.txt";
+TEST_CASE("large_file_read_test") {
+  std::string filename = "large_file_read_test.txt";
   std::string file_with = "abc";
   uint64_t file_size = 100 * MB;
   std::vector<char> file_content{
-      create_big_file(filename, file_size, file_with)};
+      create_large_file(filename, file_size, file_with)};
   asio::io_context ioc;
   auto work = std::make_unique<asio::io_context::work>(ioc);
   std::thread thd([&ioc] {
@@ -213,8 +213,8 @@ TEST_CASE("small_file_write_test") {
   thd.join();
   fs::remove(fs::path(filename));
 }
-TEST_CASE("big_file_write_test") {
-  std::string filename = "big_file_write_test.txt";
+TEST_CASE("large_file_write_test") {
+  std::string filename = "large_file_write_test.txt";
   size_t file_size = 100 * MB;
   asio::io_context ioc;
   auto work = std::make_unique<asio::io_context::work>(ioc);
@@ -225,7 +225,7 @@ TEST_CASE("big_file_write_test") {
   ylt::coro_file file(ioc.get_executor(), filename);
   CHECK(file.is_open());
 
-  auto file_content = create_filled_vec("big_file_write_test", file_size);
+  auto file_content = create_filled_vec("large_file_write_test", file_size);
 
   auto ec = async_simple::coro::syncAwait(
       file.async_write(file_content.data(), file_content.size()));
