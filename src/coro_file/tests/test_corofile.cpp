@@ -13,6 +13,8 @@
 #include "coro_io/io_context_pool.hpp"
 #include "doctest.h"
 
+namespace fs = std::filesystem;
+
 constexpr uint64_t KB = 1024;
 constexpr uint64_t MB = 1024 * KB;
 
@@ -64,12 +66,6 @@ void create_small_file(std::string filename, std::string file_content) {
   file.flush();  // can throw
 }
 
-#ifdef ENABLE_FILE_IO_URING
-
-TEST_CASE("test coro http bearer token auth request") {}
-
-#else
-
 TEST_CASE("small_file_read_test") {
   std::string filename = "small_file_read_test.txt";
   std::string file_content = "small_file_read_test";
@@ -96,6 +92,7 @@ TEST_CASE("small_file_read_test") {
   CHECK(read_content == file_content);
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
 TEST_CASE("big_file_read_test") {
   std::string filename = "big_file_read_test.txt";
@@ -124,6 +121,7 @@ TEST_CASE("big_file_read_test") {
                            read_content.begin()));
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
 TEST_CASE("empty_file_read_test") {
   std::string filename = "empty_file_read_test.txt";
@@ -151,6 +149,7 @@ TEST_CASE("empty_file_read_test") {
   CHECK(read_content == file_content);
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
 TEST_CASE("small_file_write_test") {
   std::string filename = "small_file_write_test.txt";
@@ -206,13 +205,13 @@ TEST_CASE("small_file_write_test") {
   CHECK(size == (file_content_0.size() + file_content_1.size()));
   is.read(buf, size);
   is.close();
-  read_content =
-      std::string_view(buf, size);
+  read_content = std::string_view(buf, size);
   std::cout << read_content << "\n";
   CHECK(read_content == (file_content_0 + file_content_1));
 
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
 TEST_CASE("big_file_write_test") {
   std::string filename = "big_file_write_test.txt";
@@ -227,7 +226,6 @@ TEST_CASE("big_file_write_test") {
   CHECK(file.is_open());
 
   auto file_content = create_filled_vec("big_file_write_test", file_size);
-
 
   auto ec = async_simple::coro::syncAwait(
       file.async_write(file_content.data(), file_content.size()));
@@ -249,9 +247,10 @@ TEST_CASE("big_file_write_test") {
   is.close();
   CHECK(true == std::equal(file_content.begin(), file_content.end(),
                            read_content.begin()));
-  
+
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
 TEST_CASE("empty_file_write_test") {
   std::string filename = "empty_file_write_test.txt";
@@ -268,8 +267,8 @@ TEST_CASE("empty_file_write_test") {
 
   std::string file_content_0 = "small_file_write_test_0";
 
-  auto ec = async_simple::coro::syncAwait(
-      file.async_write(file_content_0.data(), 0));
+  auto ec =
+      async_simple::coro::syncAwait(file.async_write(file_content_0.data(), 0));
   if (ec) {
     std::cout << ec.message() << "\n";
   }
@@ -285,7 +284,5 @@ TEST_CASE("empty_file_write_test") {
   is.close();
   work.reset();
   thd.join();
+  fs::remove(fs::path(filename));
 }
-
-
-#endif

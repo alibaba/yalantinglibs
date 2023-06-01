@@ -23,10 +23,12 @@ add_executable(test_corofile
 
 if(ENABLE_FILE_IO_URING)
 if (UNIX)
-        target_link_libraries(test_corofile -luring)
+        target_link_libraries(test_corofile PRIVATE yalantinglibs::easylog doctest uring)
 endif()
+else()
+        target_link_libraries(test_corofile PRIVATE yalantinglibs::easylog doctest)
 endif()
-target_link_libraries(test_corofile PRIVATE yalantinglibs::easylog doctest)
+
 
 add_test(NAME test_corofile COMMAND test_corofile)
 
