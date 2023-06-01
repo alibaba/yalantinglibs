@@ -2,7 +2,19 @@ cc_binary(
     name = "coro_http_example",
     srcs =
         [
-            "main.cpp",
+            "example.cpp",
+        ],
+    copts = [
+        "-std=c++20",
+    ],
+    deps = ["//:coro_http"],
+)
+
+cc_binary(
+    name = "coro_http_channel",
+    srcs =
+        [
+            "channel.cpp",
         ],
     copts = [
         "-std=c++20",

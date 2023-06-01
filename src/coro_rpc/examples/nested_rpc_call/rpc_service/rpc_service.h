@@ -34,17 +34,16 @@
  */
 #include <string_view>
 
-#include "coro_io/asio_coro_util.hpp"
+#include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
-#include "coro_rpc/coro_rpc/coro_rpc_client.hpp"
+#include "coro_rpc/coro_rpc_client.hpp"
 
 inline std::string_view echo(std::string_view sv) { return sv; }
 
 inline async_simple::coro::Lazy<std::string_view> nested_echo(
     std::string_view sv) {
   ELOGV(INFO, "start nested echo");
-  coro_rpc::coro_rpc_client client(
-      co_await asio_util::get_executor<asio::io_context>());
+  coro_rpc::coro_rpc_client client(co_await coro_io::get_executor());
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8802");
   assert(ec == std::errc{});
   ELOGV(INFO, "connect another server");

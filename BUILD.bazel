@@ -76,6 +76,8 @@ cc_library(
     hdrs = glob([
         "include/coro_http/*.h",
         "include/coro_io/*.hpp",
+        "include/util/*.h",
+        "include/util/*.hpp",
     ]),
     include_prefix = "include",
     includes = ["include"],

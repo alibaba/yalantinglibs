@@ -20,6 +20,9 @@
 #include <chrono>
 #include <deque>
 
+#include "async_simple/Executor.h"
+#include "async_simple/coro/Sleep.h"
+
 #if defined(ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
@@ -30,58 +33,9 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 
-namespace asio_util {
+#include "io_context_pool.hpp"
 
-template <typename ExecutorImpl = asio::io_context::executor_type>
-class ExecutorWrapper : public async_simple::Executor {
- private:
-  ExecutorImpl executor_;
-
- public:
-  ExecutorWrapper(ExecutorImpl executor) : executor_(executor) {}
-
-  using context_t = std::remove_cvref_t<decltype(executor_.context())>;
-
-  virtual bool schedule(Func func) override {
-    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor_.post(std::move(func));
-    }
-    else {
-      asio::post(executor_, std::move(func));
-    }
-
-    return true;
-  }
-
-  virtual bool checkin(Func func, void *ctx) override {
-    using context_t = std::remove_cvref_t<decltype(executor_.context())>;
-    auto &executor = *(context_t *)ctx;
-    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor.post(std::move(func));
-    }
-    else {
-      asio::post(executor, std::move(func));
-    }
-    return true;
-  }
-  virtual void *checkout() override { return &executor_.context(); }
-
-  bool currentThreadInExecutor() const override { return false; }
-
-  async_simple::ExecutorStat stat() const override { return {}; }
-
-  context_t &context() { return executor_.context(); }
-
-  auto get_executor() { return executor_; }
-
- private:
-  void schedule(Func func, Duration dur) override {
-    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
-    timer->async_wait([fn = std::move(func), timer](auto ec) {
-      fn();
-    });
-  }
-};
+namespace coro_io {
 
 template <typename Arg, typename Derived>
 class callback_awaitor_base {
@@ -241,10 +195,10 @@ async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
 
 template <typename executor_t>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
-    const executor_t &executor, asio::ip::tcp::socket &socket,
+    executor_t *executor, asio::ip::tcp::socket &socket,
     const std::string &host, const std::string &port) noexcept {
   callback_awaitor<std::error_code> awaitor;
-  asio::ip::tcp::resolver resolver(executor);
+  asio::ip::tcp::resolver resolver(executor->get_asio_executor());
   asio::ip::tcp::resolver::iterator iterator;
   auto ec = co_await awaitor.await_resume([&](auto handler) {
     resolver.async_resolve(host, port, [&, handler](auto ec, auto it) {
@@ -290,17 +244,18 @@ inline async_simple::coro::Lazy<std::error_code> async_handshake(
   });
 }
 #endif
-
 class period_timer : public asio::steady_timer {
  public:
-  template <typename executor_t>
-  period_timer(const executor_t &executor) : asio::steady_timer(executor) {}
+  template <typename T>
+  period_timer(coro_io::ExecutorWrapper<T> *executor)
+      : asio::steady_timer(executor->get_asio_executor()) {}
   template <typename executor_t, typename Rep, typename Period>
   period_timer(const executor_t &executor,
                const std::chrono::duration<Rep, Period> &timeout_duration)
       : asio::steady_timer(executor, timeout_duration) {}
   async_simple::coro::Lazy<bool> async_await() noexcept {
     callback_awaitor<bool> awaitor;
+
     co_return co_await awaitor.await_resume([&](auto handler) {
       this->async_wait([&, handler](const auto &ec) {
         handler.set_value_then_resume(!ec);
@@ -309,4 +264,67 @@ class period_timer : public asio::steady_timer {
   }
 };
 
-}  // namespace asio_util
+template <typename Duration, typename Executor>
+inline async_simple::coro::Lazy<void> sleep_for(const Duration &d,
+                                                Executor *e) {
+  coro_io::period_timer timer(e);
+  timer.expires_after(d);
+  co_await timer.async_await();
+}
+template <typename Duration>
+inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
+  if (auto executor = co_await async_simple::CurrentExecutor();
+      executor != nullptr) {
+    co_await async_simple::coro::sleep(d);
+  }
+  else {
+    co_return co_await sleep_for(d,
+                                 coro_io::g_io_context_pool().get_executor());
+  }
+}
+
+template <typename Socket, typename AsioBuffer>
+std::pair<asio::error_code, size_t> read_some(Socket &sock,
+                                              AsioBuffer &&buffer) {
+  asio::error_code error;
+  size_t length = sock.read_some(std::forward<AsioBuffer>(buffer), error);
+  return std::make_pair(error, length);
+}
+
+template <typename Socket, typename AsioBuffer>
+std::pair<asio::error_code, size_t> read(Socket &sock, AsioBuffer &&buffer) {
+  asio::error_code error;
+  size_t length = asio::read(sock, buffer, error);
+  return std::make_pair(error, length);
+}
+
+template <typename Socket, typename AsioBuffer>
+std::pair<asio::error_code, size_t> write(Socket &sock, AsioBuffer &&buffer) {
+  asio::error_code error;
+  auto length = asio::write(sock, std::forward<AsioBuffer>(buffer), error);
+  return std::make_pair(error, length);
+}
+
+inline std::error_code accept(asio::ip::tcp::acceptor &a,
+                              asio::ip::tcp::socket &socket) {
+  std::error_code error;
+  a.accept(socket, error);
+  return error;
+}
+
+template <typename executor_t>
+inline std::error_code connect(executor_t &executor,
+                               asio::ip::tcp::socket &socket,
+                               const std::string &host,
+                               const std::string &port) {
+  asio::ip::tcp::resolver resolver(executor);
+  std::error_code error;
+  auto endpoints = resolver.resolve(host, port, error);
+  if (error) {
+    return error;
+  }
+  asio::connect(socket, endpoints, error);
+  return error;
+}
+
+}  // namespace coro_io

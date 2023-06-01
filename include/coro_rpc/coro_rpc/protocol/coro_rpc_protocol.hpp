@@ -21,7 +21,7 @@
 #include "../expected.hpp"
 #include "asio/buffer.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "coro_io/asio_coro_util.hpp"
+#include "coro_io/coro_io.hpp"
 #include "coro_rpc/coro_rpc/context.hpp"
 #include "coro_rpc/coro_rpc/router.hpp"
 #include "easylog/easylog.h"
@@ -91,7 +91,7 @@ struct coro_rpc_protocol {
   static async_simple::coro::Lazy<std::error_code> read_head(
       Socket& socket, req_header& req_head) {
     // TODO: add a connection-level buffer in parameter to reuse memory
-    auto [ec, _] = co_await asio_util::async_read(
+    auto [ec, _] = co_await coro_io::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
     if (ec)
       AS_UNLIKELY { co_return std::move(ec); }
@@ -104,7 +104,7 @@ struct coro_rpc_protocol {
   static async_simple::coro::Lazy<std::error_code> read_payload(
       Socket& socket, req_header& req_head, buffer_type& buffer) {
     buffer.resize(req_head.length);
-    auto [ec, _] = co_await asio_util::async_read(socket, asio::buffer(buffer));
+    auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
     co_return ec;
   }
 

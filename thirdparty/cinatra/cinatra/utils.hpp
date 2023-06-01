@@ -273,6 +273,15 @@ inline std::string get_content_type_str(req_content_type type) {
     case req_content_type::multipart:
       str = "multipart/form-data; boundary=";
       break;
+    case req_content_type::form_url_encode:
+      str = "application/x-www-form-urlencoded";
+      break;
+    case req_content_type::octet_stream:
+      str = "application/octet-stream";
+      break;
+    case req_content_type::xml:
+      str = "application/xml";
+      break;
     case req_content_type::none:
     default:
       break;
@@ -371,6 +380,17 @@ inline std::vector<std::string_view> split(std::string_view s,
 
 inline void remove_char(std::string &str, const char ch) {
   str.erase(std::remove(str.begin(), str.end(), ch), str.end());
+}
+
+inline void replace_all(std::string &out, const std::string &from,
+                        const std::string &to) {
+  if (from.empty())
+    return;
+  size_t start_pos = 0;
+  while ((start_pos = out.find(from, start_pos)) != std::string::npos) {
+    out.replace(start_pos, from.length(), to);
+    start_pos += to.length();
+  }
 }
 
 template <typename... Args>
@@ -797,7 +817,7 @@ inline std::string get_time_str(std::time_t t) {
 inline std::string get_gmt_time_str(std::time_t t) {
   struct tm *GMTime = gmtime(&t);
   char buff[512] = {0};
-  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S GMT", GMTime);
+  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S %Z", GMTime);
   return buff;
 }
 

@@ -49,6 +49,6 @@ endif ()
 
 ylt_install(coro_rpc)
 install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/coro_rpc" DESTINATION include/yalantinglibs)
-install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/asio_util" DESTINATION include/yalantinglibs)
+install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/coro_io" DESTINATION include/yalantinglibs)
 install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/util" DESTINATION include/yalantinglibs)
 

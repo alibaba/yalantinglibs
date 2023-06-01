@@ -24,7 +24,7 @@
 #include "coro_io/io_context_pool.hpp"
 #include "coro_rpc/rpc_context.hpp"
 
-inline asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+inline coro_io::io_context_pool pool(std::thread::hardware_concurrency());
 
 inline std::string echo_4B(const std::string &str) { return str; }
 inline std::string echo_50B(const std::string &str) { return str; }
@@ -80,7 +80,7 @@ inline void async_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
   [executor = pool.get_executor()](
       int a, coro_rpc::context<int> conn) -> async_simple::coro::Lazy<void> {
-    auto timer = asio_util::period_timer(executor);
+    auto timer = coro_io::period_timer(executor);
     timer.expires_after(10ms);
     co_await timer.async_await();
     conn.response_msg(a);
@@ -104,7 +104,7 @@ inline void long_tail_async_io(coro_rpc::context<int> conn, int a) {
 
 inline void block_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
-  asio::post(pool.get_executor(), [conn = std::move(conn), a]() mutable {
+  pool.get_executor()->schedule([conn = std::move(conn), a]() mutable {
     std::this_thread::sleep_for(50ms);
     conn.response_msg(a);
   });
