@@ -35,8 +35,8 @@
 #include <vector>
 
 #include "asio/error.hpp"
-#include "asio_coro_util.hpp"
 #include "async_simple/coro/Lazy.h"
+#include "coro_io.hpp"
 
 namespace ylt {
 #if defined(ENABLE_FILE_IO_URING)
@@ -220,7 +220,7 @@ class coro_file {
   std::unique_ptr<asio::stream_file> stream_file_;
 #else
   std::unique_ptr<std::fstream> stream_file_;
-  asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
+  coro_io::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
 #endif
   size_t seek_offset_ = 0;
   bool eof_ = false;

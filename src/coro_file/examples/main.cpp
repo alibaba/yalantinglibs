@@ -7,8 +7,8 @@
 
 #include "asio/io_context.hpp"
 #include "async_simple/coro/SyncAwait.h"
-#include "coro_io/asio_coro_util.hpp"
 #include "coro_io/coro_file.hpp"
+#include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
 
 void create_temp_file(std::string filename, size_t size) {
@@ -131,11 +131,11 @@ void test_read_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 1024);
 
-  asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+  coro_io::io_context_pool pool(std::thread::hardware_concurrency());
   std::thread thd([&pool] {
     pool.run();
   });
-  ylt::coro_file file(pool.get_executor(), filename);
+  ylt::coro_file file(*pool.get_executor(), filename);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -156,7 +156,7 @@ void test_read_with_pool() {
   }
 
   std::string str = "test async write";
-  ylt::coro_file file1(pool.get_executor(), filename);
+  ylt::coro_file file1(*pool.get_executor(), filename);
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -175,11 +175,11 @@ void test_write_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 10);
 
-  asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+  coro_io::io_context_pool pool(std::thread::hardware_concurrency());
   std::thread thd([&pool] {
     pool.run();
   });
-  ylt::coro_file file(pool.get_executor(), filename);
+  ylt::coro_file file(*pool.get_executor(), filename);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
