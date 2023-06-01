@@ -15,7 +15,17 @@ enum class content_type {
   unknown,
 };
 
-enum class req_content_type { html, json, string, multipart, ranges, none };
+enum class req_content_type {
+  html,
+  json,
+  string,
+  multipart,
+  ranges,
+  form_url_encode,
+  octet_stream,
+  xml,
+  none
+};
 
 constexpr inline auto HTML = req_content_type::html;
 constexpr inline auto JSON = req_content_type::json;
