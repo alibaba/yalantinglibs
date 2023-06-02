@@ -71,7 +71,11 @@ class coro_file {
       : executor_wrapper_(executor) {
     stream_file_ = std::make_unique<std::fstream>(
         filepath,
+#ifdef __APPLE__
+        std::ios::binary | std::ios::in | std::ios::out);
+#else
         std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
+#endif
     if (!stream_file_->is_open()) {
       std::cout << "open file " << filepath << " failed "
                 << "\n";
