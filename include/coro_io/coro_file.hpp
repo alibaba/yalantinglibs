@@ -46,12 +46,13 @@ inline asio::file_base::flags default_flags() {
 }
 #endif
 
+enum class open_mode { read, write };
+
 class coro_file {
  public:
 #if defined(ENABLE_FILE_IO_URING)
   coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath,
-            asio::file_base::flags flags = default_flags()) {
+            const std::string& filepath, oepn_mode flags = open_mode::read) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
@@ -60,22 +61,20 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath, flags, ec);
+    stream_file_->open(filepath, default_flags(), ec);
     if (ec) {
       std::cout << ec.message() << "\n";
     }
   }
 #else
+
   coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath, bool read = 0)
+            const std::string& filepath, open_mode flags = open_mode::read)
       : executor_wrapper_(executor) {
-    stream_file_ = std::make_unique<std::fstream>(
-        filepath,
-#ifdef __APPLE__
-        std::ios::binary | std::ios::in | std::ios::out);
-#else
-        std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
-#endif
+    std::ios::openmode open_flags = flags == open_mode::read
+                                        ? std::ios::binary | std::ios::in
+                                        : std::ios::out | std::ios::app;
+    stream_file_ = std::make_unique<std::fstream>(filepath, open_flags);
     if (!stream_file_->is_open()) {
       std::cout << "open file " << filepath << " failed "
                 << "\n";

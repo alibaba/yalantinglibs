@@ -74,8 +74,10 @@ TEST_CASE("small_file_read_test") {
   CHECK(file.is_open());
 
   char buf[block_size]{};
+  std::error_code ec;
+  size_t read_size;
   while (!file.eof()) {
-    auto [ec, read_size] =
+    std::tie(ec, read_size) =
         async_simple::coro::syncAwait(file.async_read(buf, block_size));
     if (ec) {
       std::cout << ec.message() << "\n";
@@ -107,8 +109,10 @@ TEST_CASE("large_file_read_test") {
 
   char buf[block_size]{};
   size_t total_size = 0;
+  std::error_code ec;
+  size_t read_size;
   while (!file.eof()) {
-    auto [ec, read_size] =
+    std::tie(ec, read_size) =
         async_simple::coro::syncAwait(file.async_read(buf, block_size));
     if (ec) {
       std::cout << ec.message() << "\n";
@@ -138,7 +142,9 @@ TEST_CASE("empty_file_read_test") {
   CHECK(file.is_open());
 
   char buf[block_size]{};
-  auto [ec, read_size] =
+  std::error_code ec;
+  size_t read_size;
+  std::tie(ec, read_size) =
       async_simple::coro::syncAwait(file.async_read(buf, block_size));
   if (ec) {
     std::cout << ec.message() << "\n";
@@ -166,8 +172,10 @@ TEST_CASE("small_file_read_with_pool_test") {
   CHECK(file.is_open());
 
   char buf[block_size]{};
+  std::error_code ec;
+  size_t read_size;
   while (!file.eof()) {
-    auto [ec, read_size] =
+    std::tie(ec, read_size) =
         async_simple::coro::syncAwait(file.async_read(buf, block_size));
     if (ec) {
       std::cout << ec.message() << "\n";
@@ -198,8 +206,10 @@ TEST_CASE("large_file_read_with_pool_test") {
 
   char buf[block_size]{};
   size_t total_size = 0;
+  std::error_code ec;
+  size_t read_size;
   while (!file.eof()) {
-    auto [ec, read_size] =
+    std::tie(ec, read_size) =
         async_simple::coro::syncAwait(file.async_read(buf, block_size));
     if (ec) {
       std::cout << ec.message() << "\n";
@@ -222,7 +232,7 @@ TEST_CASE("small_file_write_test") {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), filename);
+  ylt::coro_file file(ioc.get_executor(), filename, ylt::open_mode::write);
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -285,7 +295,7 @@ TEST_CASE("large_file_write_test") {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), filename);
+  ylt::coro_file file(ioc.get_executor(), filename, ylt::open_mode::write);
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_test");
@@ -336,7 +346,7 @@ TEST_CASE("empty_file_write_test") {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), filename);
+  ylt::coro_file file(ioc.get_executor(), filename, ylt::open_mode::write);
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -369,7 +379,7 @@ TEST_CASE("small_file_write_with_pool_test") {
     pool.run();
   });
 
-  ylt::coro_file file(*pool.get_executor(), filename);
+  ylt::coro_file file(*pool.get_executor(), filename, ylt::open_mode::write);
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -431,7 +441,7 @@ TEST_CASE("large_file_write_with_pool_test") {
     pool.run();
   });
 
-  ylt::coro_file file(*pool.get_executor(), filename);
+  ylt::coro_file file(*pool.get_executor(), filename, ylt::open_mode::write);
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_with_pool_test");
