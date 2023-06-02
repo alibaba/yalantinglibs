@@ -93,6 +93,8 @@ class coro_file {
 
   bool eof() { return eof_; }
 
+  void close() { stream_file_.reset(); }
+
 #if defined(ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {

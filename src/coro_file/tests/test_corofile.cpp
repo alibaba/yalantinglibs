@@ -89,6 +89,7 @@ TEST_CASE("small_file_read_test") {
   }
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("large_file_read_test") {
@@ -125,6 +126,7 @@ TEST_CASE("large_file_read_test") {
   CHECK(total_size == file_size);
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("empty_file_read_test") {
@@ -154,6 +156,7 @@ TEST_CASE("empty_file_read_test") {
   CHECK(read_content.empty());
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("small_file_read_with_pool_test") {
@@ -187,6 +190,7 @@ TEST_CASE("small_file_read_with_pool_test") {
   }
   pool.stop();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("large_file_read_with_pool_test") {
@@ -222,6 +226,7 @@ TEST_CASE("large_file_read_with_pool_test") {
   CHECK(total_size == file_size);
   pool.stop();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("small_file_write_test") {
@@ -284,6 +289,7 @@ TEST_CASE("small_file_write_test") {
 
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("large_file_write_test") {
@@ -336,6 +342,7 @@ TEST_CASE("large_file_write_test") {
   is.close();
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("empty_file_write_test") {
@@ -370,6 +377,7 @@ TEST_CASE("empty_file_write_test") {
   is.close();
   work.reset();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("small_file_write_with_pool_test") {
@@ -431,6 +439,7 @@ TEST_CASE("small_file_write_with_pool_test") {
 
   pool.stop();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
 TEST_CASE("large_file_write_with_pool_test") {
@@ -482,5 +491,6 @@ TEST_CASE("large_file_write_with_pool_test") {
   is.close();
   pool.stop();
   thd.join();
+  file.close();
   fs::remove(fs::path(filename));
 }
