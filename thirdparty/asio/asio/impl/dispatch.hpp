@@ -1,15 +1,15 @@
 //
-// detail/initiate_post.hpp
-// ~~~~~~~~~~~~~~~~~~~~~~~~
+// impl/dispatch.hpp
+// ~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#ifndef ASIO_DETAIL_INITIATE_POST_HPP
-#define ASIO_DETAIL_INITIATE_POST_HPP
+#ifndef ASIO_IMPL_DISPATCH_HPP
+#define ASIO_IMPL_DISPATCH_HPP
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1200)
 # pragma once
@@ -21,16 +21,14 @@
 #include "asio/detail/work_dispatcher.hpp"
 #include "asio/execution/allocator.hpp"
 #include "asio/execution/blocking.hpp"
-#include "asio/execution/relationship.hpp"
 #include "asio/prefer.hpp"
-#include "asio/require.hpp"
 
 #include "asio/detail/push_options.hpp"
 
 namespace asio {
 namespace detail {
 
-class initiate_post
+class initiate_dispatch
 {
 public:
   template <typename CompletionHandler>
@@ -51,23 +49,12 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-#if defined(ASIO_NO_DEPRECATED)
-    asio::prefer(
-        asio::require(ex, execution::blocking.never),
-        execution::relationship.fork,
-        execution::allocator(alloc)
-      ).execute(
-        asio::detail::bind_handler(
-          ASIO_MOVE_CAST(CompletionHandler)(handler)));
-#else // defined(ASIO_NO_DEPRECATED)
     execution::execute(
-        asio::prefer(
-          asio::require(ex, execution::blocking.never),
-          execution::relationship.fork,
+        asio::prefer(ex,
+          execution::blocking.possibly,
           execution::allocator(alloc)),
         asio::detail::bind_handler(
           ASIO_MOVE_CAST(CompletionHandler)(handler)));
-#endif // defined(ASIO_NO_DEPRECATED)
   }
 
   template <typename CompletionHandler>
@@ -88,18 +75,18 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-    ex.post(asio::detail::bind_handler(
+    ex.dispatch(asio::detail::bind_handler(
           ASIO_MOVE_CAST(CompletionHandler)(handler)), alloc);
   }
 };
 
 template <typename Executor>
-class initiate_post_with_executor
+class initiate_dispatch_with_executor
 {
 public:
   typedef Executor executor_type;
 
-  explicit initiate_post_with_executor(const Executor& ex)
+  explicit initiate_dispatch_with_executor(const Executor& ex)
     : ex_(ex)
   {
   }
@@ -128,23 +115,12 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-#if defined(ASIO_NO_DEPRECATED)
-    asio::prefer(
-        asio::require(ex_, execution::blocking.never),
-        execution::relationship.fork,
-        execution::allocator(alloc)
-      ).execute(
-        asio::detail::bind_handler(
-          ASIO_MOVE_CAST(CompletionHandler)(handler)));
-#else // defined(ASIO_NO_DEPRECATED)
     execution::execute(
-        asio::prefer(
-          asio::require(ex_, execution::blocking.never),
-          execution::relationship.fork,
+        asio::prefer(ex_,
+          execution::blocking.possibly,
           execution::allocator(alloc)),
         asio::detail::bind_handler(
           ASIO_MOVE_CAST(CompletionHandler)(handler)));
-#endif // defined(ASIO_NO_DEPRECATED)
   }
 
   template <typename CompletionHandler>
@@ -170,23 +146,12 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-#if defined(ASIO_NO_DEPRECATED)
-    asio::prefer(
-        asio::require(ex_, execution::blocking.never),
-        execution::relationship.fork,
-        execution::allocator(alloc)
-      ).execute(
-        detail::work_dispatcher<handler_t, handler_ex_t>(
-          ASIO_MOVE_CAST(CompletionHandler)(handler), handler_ex));
-#else // defined(ASIO_NO_DEPRECATED)
     execution::execute(
-        asio::prefer(
-          asio::require(ex_, execution::blocking.never),
-          execution::relationship.fork,
+        asio::prefer(ex_,
+          execution::blocking.possibly,
           execution::allocator(alloc)),
         detail::work_dispatcher<handler_t, handler_ex_t>(
           ASIO_MOVE_CAST(CompletionHandler)(handler), handler_ex));
-#endif // defined(ASIO_NO_DEPRECATED)
   }
 
   template <typename CompletionHandler>
@@ -208,7 +173,7 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-    ex_.post(asio::detail::bind_handler(
+    ex_.dispatch(asio::detail::bind_handler(
           ASIO_MOVE_CAST(CompletionHandler)(handler)), alloc);
   }
 
@@ -235,7 +200,7 @@ public:
     typename associated_allocator<handler_t>::type alloc(
         (get_associated_allocator)(handler));
 
-    ex_.post(detail::work_dispatcher<handler_t, handler_ex_t>(
+    ex_.dispatch(detail::work_dispatcher<handler_t, handler_ex_t>(
           ASIO_MOVE_CAST(CompletionHandler)(handler),
           handler_ex), alloc);
   }
@@ -245,8 +210,52 @@ private:
 };
 
 } // namespace detail
+
+template <ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken>
+ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+    ASIO_MOVE_ARG(NullaryToken) token)
+  ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+    async_initiate<NullaryToken, void()>(
+        declval<detail::initiate_dispatch>(), token)))
+{
+  return async_initiate<NullaryToken, void()>(
+      detail::initiate_dispatch(), token);
+}
+
+template <typename Executor,
+    ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken>
+ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+    const Executor& ex, ASIO_MOVE_ARG(NullaryToken) token,
+    typename constraint<
+      execution::is_executor<Executor>::value || is_executor<Executor>::value
+    >::type)
+  ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+    async_initiate<NullaryToken, void()>(
+        declval<detail::initiate_dispatch_with_executor<Executor> >(), token)))
+{
+  return async_initiate<NullaryToken, void()>(
+      detail::initiate_dispatch_with_executor<Executor>(ex), token);
+}
+
+template <typename ExecutionContext,
+    ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken>
+inline ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+    ExecutionContext& ctx, ASIO_MOVE_ARG(NullaryToken) token,
+    typename constraint<is_convertible<
+      ExecutionContext&, execution_context&>::value>::type)
+  ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+    async_initiate<NullaryToken, void()>(
+        declval<detail::initiate_dispatch_with_executor<
+          typename ExecutionContext::executor_type> >(), token)))
+{
+  return async_initiate<NullaryToken, void()>(
+      detail::initiate_dispatch_with_executor<
+        typename ExecutionContext::executor_type>(
+          ctx.get_executor()), token);
+}
+
 } // namespace asio
 
 #include "asio/detail/pop_options.hpp"
 
-#endif // ASIO_DETAIL_INITIATE_POST_HPP
+#endif // ASIO_IMPL_DISPATCH_HPP

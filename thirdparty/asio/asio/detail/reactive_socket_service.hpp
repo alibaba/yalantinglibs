@@ -2,7 +2,7 @@
 // detail/reactive_socket_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -306,8 +306,7 @@ public:
     ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "socket",
           &impl, impl.socket_, "async_send_to"));
 
-    start_op(impl, reactor::write_op, p.p,
-        is_continuation, true, false, &io_ex, 0);
+    start_op(impl, reactor::write_op, p.p, is_continuation, true, false);
     p.v = p.p = 0;
   }
 
@@ -340,8 +339,7 @@ public:
     ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "socket",
           &impl, impl.socket_, "async_send_to(null_buffers)"));
 
-    start_op(impl, reactor::write_op, p.p,
-        is_continuation, false, false, &io_ex, 0);
+    start_op(impl, reactor::write_op, p.p, is_continuation, false, false);
     p.v = p.p = 0;
   }
 
@@ -432,7 +430,7 @@ public:
     start_op(impl,
         (flags & socket_base::message_out_of_band)
           ? reactor::except_op : reactor::read_op,
-        p.p, is_continuation, true, false, &io_ex, 0);
+        p.p, is_continuation, true, false);
     p.v = p.p = 0;
   }
 
@@ -471,7 +469,7 @@ public:
     start_op(impl,
         (flags & socket_base::message_out_of_band)
           ? reactor::except_op : reactor::read_op,
-        p.p, is_continuation, false, false, &io_ex, 0);
+        p.p, is_continuation, false, false);
     p.v = p.p = 0;
   }
 
@@ -537,7 +535,7 @@ public:
     ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "socket",
           &impl, impl.socket_, "async_accept"));
 
-    start_accept_op(impl, p.p, is_continuation, peer.is_open(), &io_ex, 0);
+    start_accept_op(impl, p.p, is_continuation, peer.is_open());
     p.v = p.p = 0;
   }
 
@@ -574,7 +572,7 @@ public:
     ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "socket",
           &impl, impl.socket_, "async_accept"));
 
-    start_accept_op(impl, p.p, is_continuation, false, &io_ex, 0);
+    start_accept_op(impl, p.p, is_continuation, false);
     p.v = p.p = 0;
   }
 #endif // defined(ASIO_HAS_MOVE)
@@ -619,7 +617,7 @@ public:
           &impl, impl.socket_, "async_connect"));
 
     start_connect_op(impl, p.p, is_continuation,
-        peer_endpoint.data(), peer_endpoint.size(), &io_ex, 0);
+        peer_endpoint.data(), peer_endpoint.size());
     p.v = p.p = 0;
   }
 };

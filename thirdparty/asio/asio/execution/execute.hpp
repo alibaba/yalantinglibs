@@ -2,7 +2,7 @@
 // execution/execute.hpp
 // ~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,9 +16,6 @@
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
 #include "asio/detail/config.hpp"
-
-#if !defined(ASIO_NO_DEPRECATED)
-
 #include "asio/detail/type_traits.hpp"
 #include "asio/execution/detail/as_invocable.hpp"
 #include "asio/execution/detail/as_receiver.hpp"
@@ -32,8 +29,7 @@
 namespace asio {
 namespace execution {
 
-/// (Deprecated: Use @c execute member function.) A customisation point that
-/// executes a function on an executor.
+/// A customisation point that executes a function on an executor.
 /**
  * The name <tt>execution::execute</tt> denotes a customisation point object.
  *
@@ -57,8 +53,7 @@ namespace execution {
  */
 inline constexpr unspecified execute = unspecified;
 
-/// (Deprecated.) A type trait that determines whether an @c execute expression
-/// is well-formed.
+/// A type trait that determines whether a @c execute expression is well-formed.
 /**
  * Class template @c can_execute is a trait that is derived from
  * @c true_type if the expression <tt>execution::execute(std::declval<T>(),
@@ -284,7 +279,5 @@ constexpr bool can_execute_v = can_execute<T, F>::value;
 #endif // defined(GENERATING_DOCUMENTATION)
 
 #include "asio/detail/pop_options.hpp"
-
-#endif // !defined(ASIO_NO_DEPRECATED)
 
 #endif // ASIO_EXECUTION_EXECUTE_HPP
