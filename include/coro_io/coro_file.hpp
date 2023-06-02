@@ -52,7 +52,7 @@ class coro_file {
  public:
 #if defined(ENABLE_FILE_IO_URING)
   coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath, oepn_mode flags = open_mode::read) {
+            const std::string& filepath, open_mode flags = open_mode::read) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
@@ -102,7 +102,7 @@ class coro_file {
     size_t offset = 0;
     size_t read_total = 0;
     while (left_size) {
-      auto [ec, read_size] = co_await asio_util::async_read_some(
+      auto [ec, read_size] = co_await coro_io::async_read_some(
           *stream_file_, asio::buffer(data + offset, size - offset));
       if (ec) {
         if (ec == asio::error::eof) {
@@ -142,7 +142,7 @@ class coro_file {
     size_t left_size = size;
     size_t offset = 0;
     while (left_size) {
-      auto [ec, write_size] = co_await asio_util::async_write_some(
+      auto [ec, write_size] = co_await coro_io::async_write_some(
           *stream_file_, asio::buffer(data, size));
 
       if (ec) {
