@@ -2,9 +2,9 @@ name: Ubuntu 22.04 (gcc)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, add_test_for_coro_file ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, add_test_for_coro_file ]
   workflow_call:
 
 env:
@@ -16,6 +16,7 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
+        io_uring: [ ON, OFF ]
     runs-on: ubuntu-22.04
 
     steps:
@@ -38,7 +39,7 @@ jobs:
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}}
+                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
@@ -52,6 +53,7 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
+        io_uring: [ ON, OFF ]
     runs-on: ubuntu-22.04
 
     steps:
@@ -78,7 +80,7 @@ jobs:
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}}
+                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
