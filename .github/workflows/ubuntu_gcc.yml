@@ -16,7 +16,6 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
-        io_uring: [ ON, OFF ]
     runs-on: ubuntu-22.04
 
     steps:
@@ -24,17 +23,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Dependencies
-        run: |
-          sudo apt-get install openssl libssl-dev
-
-      - name: Install liburing
-        run: |      
-          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
-          tar -zxvf liburing-2.3.tar.gz
-          cd liburing-liburing-2.3/
-          ./configure --cc=gcc --cxx=g++
-          make
-          sudo make install
+        run: sudo apt-get install openssl libssl-dev
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
@@ -49,7 +38,7 @@ jobs:
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} -DUSE_CCACHE=${{env.ccache}}
+                -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
@@ -63,7 +52,6 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
-        io_uring: [ ON, OFF ]
     runs-on: ubuntu-22.04
 
     steps:
@@ -74,16 +62,6 @@ jobs:
         run: |
           sudo apt-get install openssl libssl-dev
           sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
-
-      - name: Install liburing
-        run: |      
-          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
-          tar -zxvf liburing-2.3.tar.gz
-          cd liburing-liburing-2.3/
-          ./configure --cc=gcc --cxx=g++
-          make
-          sudo make install
-          
       - name: Check protoc
         run: protoc --version
 
@@ -100,7 +78,7 @@ jobs:
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} -DUSE_CCACHE=${{env.ccache}}
+                -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
