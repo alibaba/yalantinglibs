@@ -2,9 +2,9 @@ name: Ubuntu 22.04 (clang)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, add_test_for_coro_file ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, add_test_for_coro_file ]
   workflow_call:
 
 env:
@@ -26,6 +26,15 @@ jobs:
 
       - name: Install Dependencies
         run: sudo apt-get install openssl libssl-dev
+
+      - name: Install liburing
+        run: |      
+          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
+          tar -zxvf liburing-2.3.tar.gz
+          cd liburing-liburing-2.3/
+          ./configure --cc=gcc --cxx=g++
+          make
+          sudo make install
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
@@ -65,6 +74,15 @@ jobs:
         run: |
           sudo apt-get install openssl libssl-dev
           sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
+
+      - name: Install liburing
+        run: |      
+          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
+          tar -zxvf liburing-2.3.tar.gz
+          cd liburing-liburing-2.3/
+          ./configure --cc=gcc --cxx=g++
+          make
+          sudo make install
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v3
