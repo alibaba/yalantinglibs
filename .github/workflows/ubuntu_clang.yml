@@ -2,9 +2,9 @@ name: Ubuntu 22.04 (clang)
 
 on:
   push:
-    branches: [ main, develop, add_test_for_coro_file ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop, add_test_for_coro_file ]
+    branches: [ main, develop ]
   workflow_call:
 
 env:
