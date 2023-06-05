@@ -38,7 +38,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "coro_io.hpp"
 
-namespace ylt {
+namespace coro_io {
 #if defined(ENABLE_FILE_IO_URING)
 inline asio::file_base::flags default_flags() {
   return asio::stream_file::read_write | asio::stream_file::append |
@@ -230,4 +230,4 @@ class coro_file {
   size_t seek_offset_ = 0;
   bool eof_ = false;
 };
-}  // namespace ylt
+}  // namespace coro_io

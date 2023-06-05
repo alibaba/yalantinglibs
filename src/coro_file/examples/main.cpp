@@ -49,7 +49,7 @@ void test_read_file() {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(ioc.get_executor(), filename);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -83,7 +83,8 @@ void test_write_and_read_file() {
     ioc.run();
   });
 
-  ylt::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(ioc.get_executor(), filename,
+                          coro_io::open_mode::write);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -104,7 +105,7 @@ void test_write_and_read_file() {
     std::cout << ec.message() << "\n";
   }
 
-  ylt::coro_file file1(ioc.get_executor(), filename);
+  coro_io::coro_file file1(ioc.get_executor(), filename);
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -135,7 +136,7 @@ void test_read_with_pool() {
   std::thread thd([&pool] {
     pool.run();
   });
-  ylt::coro_file file(*pool.get_executor(), filename);
+  coro_io::coro_file file(*pool.get_executor(), filename);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -156,7 +157,8 @@ void test_read_with_pool() {
   }
 
   std::string str = "test async write";
-  ylt::coro_file file1(*pool.get_executor(), filename);
+  coro_io::coro_file file1(*pool.get_executor(), filename,
+                           coro_io::open_mode::write);
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -179,7 +181,8 @@ void test_write_with_pool() {
   std::thread thd([&pool] {
     pool.run();
   });
-  ylt::coro_file file(*pool.get_executor(), filename);
+  coro_io::coro_file file(*pool.get_executor(), filename,
+                          coro_io::open_mode::write);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
