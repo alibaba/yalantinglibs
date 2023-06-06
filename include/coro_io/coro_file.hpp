@@ -223,11 +223,11 @@ class coro_file {
  private:
 #if defined(ENABLE_FILE_IO_URING)
   std::unique_ptr<asio::stream_file> stream_file_;
+  std::atomic<size_t> seek_offset_ = 0;
 #else
   std::unique_ptr<std::fstream> stream_file_;
   coro_io::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
 #endif
-  size_t seek_offset_ = 0;
-  bool eof_ = false;
+  std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io
