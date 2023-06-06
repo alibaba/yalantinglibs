@@ -2,7 +2,7 @@
 // detail/bind_handler.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -949,18 +949,9 @@ struct associator<Associator,
     detail::binder0<Handler>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder0<Handler>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder0<Handler>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder0<Handler>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -972,18 +963,9 @@ struct associator<Associator,
     detail::binder1<Handler, Arg1>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder1<Handler, Arg1>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder1<Handler, Arg1>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder1<Handler, Arg1>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -996,18 +978,9 @@ struct associator<Associator,
     detail::binder2<Handler, Arg1, Arg2>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder2<Handler, Arg1, Arg2>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder2<Handler, Arg1, Arg2>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder2<Handler, Arg1, Arg2>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -1020,18 +993,9 @@ struct associator<Associator,
     detail::binder3<Handler, Arg1, Arg2, Arg3>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder3<Handler, Arg1, Arg2, Arg3>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder3<Handler, Arg1, Arg2, Arg3>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder3<Handler, Arg1, Arg2, Arg3>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -1044,19 +1008,9 @@ struct associator<Associator,
     detail::binder4<Handler, Arg1, Arg2, Arg3, Arg4>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder4<Handler, Arg1, Arg2, Arg3, Arg4>& h)
-    ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder4<Handler, Arg1, Arg2, Arg3, Arg4>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder4<Handler, Arg1, Arg2, Arg3, Arg4>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -1069,19 +1023,9 @@ struct associator<Associator,
     detail::binder5<Handler, Arg1, Arg2, Arg3, Arg4, Arg5>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::binder5<Handler, Arg1, Arg2, Arg3, Arg4, Arg5>& h)
-    ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::binder5<Handler, Arg1, Arg2, Arg3, Arg4, Arg5>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::binder5<Handler, Arg1, Arg2, Arg3, Arg4, Arg5>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -1095,18 +1039,9 @@ struct associator<Associator,
     detail::move_binder1<Handler, Arg1>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::move_binder1<Handler, Arg1>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::move_binder1<Handler, Arg1>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::move_binder1<Handler, Arg1>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
@@ -1119,18 +1054,9 @@ struct associator<Associator,
     detail::move_binder2<Handler, Arg1, Arg2>, DefaultCandidate>
   : Associator<Handler, DefaultCandidate>
 {
-  static typename Associator<Handler, DefaultCandidate>::type
-  get(const detail::move_binder2<Handler, Arg1, Arg2>& h) ASIO_NOEXCEPT
-  {
-    return Associator<Handler, DefaultCandidate>::get(h.handler_);
-  }
-
-  static ASIO_AUTO_RETURN_TYPE_PREFIX2(
-      typename Associator<Handler, DefaultCandidate>::type)
-  get(const detail::move_binder2<Handler, Arg1, Arg2>& h,
-      const DefaultCandidate& c) ASIO_NOEXCEPT
-    ASIO_AUTO_RETURN_TYPE_SUFFIX((
-      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+  static typename Associator<Handler, DefaultCandidate>::type get(
+      const detail::move_binder2<Handler, Arg1, Arg2>& h,
+      const DefaultCandidate& c = DefaultCandidate()) ASIO_NOEXCEPT
   {
     return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
   }
