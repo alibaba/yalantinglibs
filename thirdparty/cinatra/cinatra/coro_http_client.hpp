@@ -924,7 +924,7 @@ class coro_http_client {
       should_add = true;
     }
     else {
-      if (method == http_method::POST &&
+      if ((method == http_method::POST || method == http_method::PUT) &&
           ctx.content_type != req_content_type::multipart)
         should_add = true;
     }
