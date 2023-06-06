@@ -194,6 +194,7 @@ class coro_rpc_client {
     config_.port = std::move(port);
     config_.timeout_duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+    reset();
     return connect(true);
   }
 
@@ -206,6 +207,7 @@ class coro_rpc_client {
     config_.port = endpoint.substr(pos + 1);
     config_.timeout_duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+    reset();
     return connect(true);
   }
   /*!
@@ -358,6 +360,13 @@ class coro_rpc_client {
   friend class coro_io::client_pool;
 
  private:
+  void reset() {
+    close_socket();
+    socket_ = decltype(socket_)(executor.get_asio_executor());
+    is_timeout_ = false;
+    has_closed_ = false;
+  }
+
   static bool is_ok(std::errc ec) noexcept { return ec == std::errc{}; }
   [[nodiscard]] async_simple::coro::Lazy<std::errc> connect(
       bool is_reconnect = false) {

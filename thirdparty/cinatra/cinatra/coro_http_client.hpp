@@ -662,6 +662,7 @@ class coro_http_client {
   void reset() {
     if (!has_closed())
       close_socket(*socket_);
+    socket_->has_closed_ = true;
     socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
     if (!socket_->impl_.is_open()) {
       socket_->impl_.open(asio::ip::tcp::v4());
@@ -672,9 +673,9 @@ class coro_http_client {
 #endif
   }
 
-  async_simple::coro::Lazy<resp_data> async_reconnect(std::string uri) {
+  async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
     reset();
-    co_return co_await async_get(uri);
+    co_return co_await connect(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_request(
