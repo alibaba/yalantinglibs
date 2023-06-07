@@ -87,8 +87,8 @@ string_literal(const CharType (&value)[Size])
     -> string_literal<CharType, Size - 1>;
 
 template <typename CharType, size_t Len1, size_t Len2>
-consteval auto operator+(string_literal<CharType, Len1> str1,
-                         string_literal<CharType, Len2> str2) {
+decltype(auto) consteval operator+(string_literal<CharType, Len1> str1,
+                                   string_literal<CharType, Len2> str2) {
   string_literal<CharType, Len1 + Len2> ret{};
   // don't use std::copy_n here to support low version stdlibc++
   for (size_t i = 0; i < Len1; ++i) {
