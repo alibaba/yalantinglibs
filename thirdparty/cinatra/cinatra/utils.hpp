@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include "define.h"
 #include "response_cv.hpp"
