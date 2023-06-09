@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <asio/io_context.hpp>
+#include <filesystem>
 #include <fstream>
 
 #include "async_simple/Promise.h"
@@ -51,8 +52,12 @@ enum class open_mode { read, write };
 class coro_file {
  public:
 #if defined(ENABLE_FILE_IO_URING)
-  coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath, open_mode flags = open_mode::read) {
+  coro_file(coro_io::ExecutorWrapper<>* executor, std::string_view filepath,
+            open_mode flags = open_mode::read)
+      : coro_file(executor->get_asio_executor(), filepath, flags) {}
+
+  coro_file(asio::io_context::executor_type executor, std::string_view filepath,
+            open_mode flags = open_mode::read) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
@@ -61,20 +66,25 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath, default_flags(), ec);
+    stream_file_->open(filepath.data(), default_flags(), ec);
     if (ec) {
       std::cout << ec.message() << "\n";
     }
   }
 #else
 
-  coro_file(asio::io_context::executor_type executor,
-            const std::string& filepath, open_mode flags = open_mode::read)
+  coro_file(coro_io::ExecutorWrapper<>* executor, std::string_view filepath,
+            open_mode flags = open_mode::read)
+      : coro_file(executor->get_asio_executor(), filepath, flags) {}
+
+  coro_file(asio::io_context::executor_type executor, std::string_view filepath,
+            open_mode flags = open_mode::read)
       : executor_wrapper_(executor) {
     std::ios::openmode open_flags = flags == open_mode::read
                                         ? std::ios::binary | std::ios::in
                                         : std::ios::out | std::ios::app;
-    stream_file_ = std::make_unique<std::fstream>(filepath, open_flags);
+    stream_file_ = std::make_unique<std::fstream>(
+        std::filesystem::path(filepath), open_flags);
     if (!stream_file_->is_open()) {
       std::cout << "open file " << filepath << " failed "
                 << "\n";
@@ -94,6 +104,12 @@ class coro_file {
   bool eof() { return eof_; }
 
   void close() { stream_file_.reset(); }
+
+  static size_t file_size(std::string_view filepath) {
+    std::error_code ec;
+    size_t size = std::filesystem::file_size(filepath, ec);
+    return size;
+  }
 
 #if defined(ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
@@ -226,8 +242,9 @@ class coro_file {
   std::atomic<size_t> seek_offset_ = 0;
 #else
   std::unique_ptr<std::fstream> stream_file_;
-  coro_io::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
+  coro_io::ExecutorWrapper<> executor_wrapper_;
 #endif
+
   std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io

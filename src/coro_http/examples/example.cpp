@@ -119,11 +119,11 @@ async_simple::coro::Lazy<void> upload_files(
   client.add_str_part("key", "value");
   client.add_file_part("test", "test.jpg");
   std::string uri = "http://yoururl.com";
-  auto result = co_await client.async_upload(uri);
+  auto result = co_await client.async_upload_multipart(uri);
   std::cout << result.net_err << "\n";
   std::cout << result.status << "\n";
 
-  result = co_await client.async_upload(uri, "test", "test.jpg");
+  result = co_await client.async_upload_multipart(uri, "test", "test.jpg");
   std::cout << result.status << "\n";
 }
 
