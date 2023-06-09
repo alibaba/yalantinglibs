@@ -33,7 +33,6 @@
 #include "async_simple/Try.h"
 #include "async_simple/Unit.h"
 #include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/SharedMutex.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SpinLock.h"
 #include "coro_io/coro_io.hpp"
@@ -102,7 +101,7 @@ class client_pool : public std::enable_shared_from_this<
     bool ok = false;
 
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
-      ok = (client_t::is_ok(co_await client->connect(host_name_)));
+      ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
       if (!ok) {
         auto executor = co_await async_simple::CurrentExecutor();
         if (executor == nullptr) {
@@ -153,14 +152,7 @@ class client_pool : public std::enable_shared_from_this<
       if (!client->init_config(client_config)) {
         co_return nullptr;
       }
-      bool ok;
-      if constexpr (requires { client->async_connect(host_name_); }) {
-        ok = (client_t::is_ok(co_await client->async_connect(host_name_)));
-      }
-      else {
-        ok = (client_t::is_ok(co_await client->connect(host_name_)));
-      }
-      if (ok) {
+      if (client_t::is_ok(co_await client->connect(host_name_))) {
         co_return std::move(client);
       }
       else {
