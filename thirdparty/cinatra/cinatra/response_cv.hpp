@@ -200,7 +200,7 @@ inline const std::string http_range_chunk_header =
 /*"Content-Type: video/mp4\r\n"
 "\r\n";*/
 
-inline constexpr auto to_content_type_str(req_content_type type) {
+inline constexpr std::string_view to_content_type_str(req_content_type type) {
   switch (type) {
     case req_content_type::html:
       return rep_html;
@@ -211,7 +211,7 @@ inline constexpr auto to_content_type_str(req_content_type type) {
     case req_content_type::multipart:
       return rep_multipart;
     default:
-      return ""sv;
+      return "";
   }
 }
 

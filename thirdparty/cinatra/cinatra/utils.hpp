@@ -20,6 +20,7 @@
 #include <type_traits>
 
 #include "define.h"
+#include "response_cv.hpp"
 #include "sha1.hpp"
 
 namespace cinatra {
@@ -515,7 +516,6 @@ inline int64_t hex_to_int(std::string_view s) {
 
   return n;
 }
-
 
 inline std::vector<asio::const_buffer> to_chunked_buffers(
     const char *chunk_data, size_t length, std::string &chunk_size, bool eof) {
