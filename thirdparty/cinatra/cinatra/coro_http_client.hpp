@@ -18,6 +18,7 @@
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#include "coro_io/coro_file.hpp"
 #include "coro_io/coro_io.hpp"
 #include "http_parser.hpp"
 #include "response_cv.hpp"
@@ -109,6 +110,9 @@ class coro_http_client {
       : socket_(std::make_shared<socket_t>(executor)),
         executor_wrapper_(executor),
         timer_(&executor_wrapper_) {}
+
+  coro_http_client(coro_io::ExecutorWrapper<> *executor)
+      : coro_http_client(executor->get_asio_executor()) {}
 
   bool init_config(const config &conf) {
     if (conf.conn_timeout_duration.has_value()) {
@@ -349,7 +353,8 @@ class coro_http_client {
                          cinatra::req_context<>{});
   }
 
-  async_simple::coro::Lazy<resp_data> async_connect(std::string uri) {
+  // CONNECT example.com HTTP/1.1
+  async_simple::coro::Lazy<resp_data> async_http_connect(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::CONNECT,
                          cinatra::req_context<>{});
   }
@@ -533,7 +538,7 @@ class coro_http_client {
     co_return std::error_code{};
   }
 
-  async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
       form_data_.clear();
@@ -614,16 +619,15 @@ class coro_http_client {
     co_return data;
   }
 
-  async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
-                                                   std::string name,
-                                                   std::string filename) {
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(
+      std::string uri, std::string name, std::string filename) {
     if (!add_file_part(std::move(name), std::move(filename))) {
 #ifndef NDEBUG
       std::cout << "open file failed or duplicate test names\n";
 #endif
       co_return resp_data{{}, 404};
     }
-    co_return co_await async_upload(std::move(uri));
+    co_return co_await async_upload_multipart(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
@@ -676,6 +680,75 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
     reset();
     co_return co_await connect(std::move(uri));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_upload_chunked(
+      std::string uri, http_method method, std::string filename,
+      std::unordered_map<std::string, std::string> headers = {}) {
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      if (!req_headers_.empty()) {
+        req_headers_.clear();
+      }
+    });
+
+    req_context<> ctx{req_content_type::text};
+    resp_data data{};
+    auto [ok, u] = handle_uri(data, uri);
+    if (!ok) {
+      co_return resp_data{{}, 404};
+    }
+
+    if (!std::filesystem::exists(filename)) {
+      co_return resp_data{
+          std::make_error_code(std::errc::no_such_file_or_directory), 404};
+    }
+
+    add_header("Transfer-Encoding", "chunked");
+
+    std::string header_str =
+        build_request_header(u, method, ctx, true, std::move(headers));
+    std::cout << header_str;
+
+    std::error_code ec{};
+    size_t size = 0;
+
+    auto promise = start_timer(req_timeout_duration_, "connect timer");
+
+    data = co_await connect(u);
+    if (ec = co_await wait_timer(promise); ec) {
+      co_return resp_data{{}, 404};
+    }
+    if (data.net_err) {
+      co_return data;
+    }
+
+    promise = start_timer(req_timeout_duration_, "upload timer");
+    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
+    if (ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    coro_io::coro_file file(executor_wrapper_, filename);
+    char buf[4096];
+    std::string chunk_size_str;
+    while (!file.eof()) {
+      auto [rd_ec, rd_size] = co_await file.async_read(buf, 4096);
+      auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+          buf, rd_size, chunk_size_str, file.eof());
+      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+        co_return resp_data{ec, 404};
+      }
+    }
+
+    bool is_keep_alive = true;
+    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                http_method::POST);
+    if (auto errc = co_await wait_timer(promise); errc) {
+      ec = errc;
+    }
+
+    handle_result(data, ec, is_keep_alive);
+    co_return data;
   }
 
   async_simple::coro::Lazy<resp_data> async_request(
@@ -862,6 +935,7 @@ class coro_http_client {
 
   std::string build_request_header(
       const uri_t &u, http_method method, const auto &ctx,
+      bool is_chunked = false,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str(method_name(method));
 
@@ -926,8 +1000,13 @@ class coro_http_client {
     }
     else {
       if ((method == http_method::POST || method == http_method::PUT) &&
-          ctx.content_type != req_content_type::multipart)
+          ctx.content_type != req_content_type::multipart) {
         should_add = true;
+      }
+    }
+
+    if (is_chunked) {
+      should_add = false;
     }
 
     if (should_add) {
@@ -946,7 +1025,7 @@ class coro_http_client {
       const uri_t &u, http_method method, const auto &ctx,
       std::unordered_map<std::string, std::string> headers) {
     std::string req_str =
-        build_request_header(u, method, ctx, std::move(headers));
+        build_request_header(u, method, ctx, false, std::move(headers));
 
 #ifdef CORO_HTTP_PRINT_REQ_HEAD
     std::cout << req_str << "\n";

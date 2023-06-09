@@ -18,6 +18,7 @@ enum class content_type {
 enum class req_content_type {
   html,
   json,
+  text,
   string,
   multipart,
   ranges,

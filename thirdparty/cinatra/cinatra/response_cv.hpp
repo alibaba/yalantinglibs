@@ -186,8 +186,8 @@ inline constexpr std::string_view rep_server = "Server: cinatra\r\n";
 inline const char name_value_separator[] = {':', ' '};
 // inline std::string_view crlf = "\r\n";
 
-inline const char crlf[] = {'\r', '\n'};
-inline const char last_chunk[] = {'0', '\r', '\n'};
+constexpr std::string_view crlf = "\r\n";
+constexpr std::string_view last_chunk = "0\r\n";
 inline const std::string http_chunk_header =
     "HTTP/1.1 200 OK\r\n"
     "Transfer-Encoding: chunked\r\n";
@@ -200,7 +200,7 @@ inline const std::string http_range_chunk_header =
 /*"Content-Type: video/mp4\r\n"
 "\r\n";*/
 
-inline constexpr auto to_content_type_str(req_content_type type) {
+inline constexpr std::string_view to_content_type_str(req_content_type type) {
   switch (type) {
     case req_content_type::html:
       return rep_html;
@@ -211,7 +211,7 @@ inline constexpr auto to_content_type_str(req_content_type type) {
     case req_content_type::multipart:
       return rep_multipart;
     default:
-      return ""sv;
+      return "";
   }
 }
 
@@ -254,60 +254,54 @@ struct explode<0, digits...> : to_chars<digits...> {};
 template <unsigned num>
 struct num_to_string : detail::explode<num / 10, num % 10> {};
 
-inline asio::const_buffer to_buffer(status_type status) {
+template <typename T>
+inline decltype(auto) to_buffer(status_type status) {
   switch (status) {
     case status_type::switching_protocols:
-      return asio::buffer(switching_protocols.data(),
-                          switching_protocols.length());
+      return T(switching_protocols.data(), switching_protocols.length());
     case status_type::ok:
-      return asio::buffer(rep_ok.data(), rep_ok.length());
+      return T(rep_ok.data(), rep_ok.length());
     case status_type::created:
-      return asio::buffer(rep_created.data(), rep_created.length());
+      return T(rep_created.data(), rep_created.length());
     case status_type::accepted:
-      return asio::buffer(rep_accepted.data(), rep_created.length());
+      return T(rep_accepted.data(), rep_created.length());
     case status_type::no_content:
-      return asio::buffer(rep_no_content.data(), rep_no_content.length());
+      return T(rep_no_content.data(), rep_no_content.length());
     case status_type::partial_content:
-      return asio::buffer(rep_partial_content.data(),
-                          rep_partial_content.length());
+      return T(rep_partial_content.data(), rep_partial_content.length());
     case status_type::multiple_choices:
-      return asio::buffer(rep_multiple_choices.data(),
-                          rep_multiple_choices.length());
+      return T(rep_multiple_choices.data(), rep_multiple_choices.length());
     case status_type::moved_permanently:
-      return asio::buffer(rep_moved_permanently.data(),
-                          rep_moved_permanently.length());
+      return T(rep_moved_permanently.data(), rep_moved_permanently.length());
     case status_type::temporary_redirect:
-      return asio::buffer(rep_temporary_redirect.data(),
-                          rep_temporary_redirect.length());
+      return T(rep_temporary_redirect.data(), rep_temporary_redirect.length());
     case status_type::moved_temporarily:
-      return asio::buffer(rep_moved_temporarily.data(),
-                          rep_moved_temporarily.length());
+      return T(rep_moved_temporarily.data(), rep_moved_temporarily.length());
     case status_type::not_modified:
-      return asio::buffer(rep_not_modified.data(), rep_not_modified.length());
+      return T(rep_not_modified.data(), rep_not_modified.length());
     case status_type::bad_request:
-      return asio::buffer(rep_bad_request.data(), rep_bad_request.length());
+      return T(rep_bad_request.data(), rep_bad_request.length());
     case status_type::unauthorized:
-      return asio::buffer(rep_unauthorized.data(), rep_unauthorized.length());
+      return T(rep_unauthorized.data(), rep_unauthorized.length());
     case status_type::forbidden:
-      return asio::buffer(rep_forbidden.data(), rep_forbidden.length());
+      return T(rep_forbidden.data(), rep_forbidden.length());
     case status_type::not_found:
-      return asio::buffer(rep_not_found.data(), rep_not_found.length());
+      return T(rep_not_found.data(), rep_not_found.length());
     case status_type::conflict:
-      return asio::buffer(rep_conflict.data(), rep_conflict.length());
+      return T(rep_conflict.data(), rep_conflict.length());
     case status_type::internal_server_error:
-      return asio::buffer(rep_internal_server_error.data(),
-                          rep_internal_server_error.length());
+      return T(rep_internal_server_error.data(),
+               rep_internal_server_error.length());
     case status_type::not_implemented:
-      return asio::buffer(rep_not_implemented.data(),
-                          rep_not_implemented.length());
+      return T(rep_not_implemented.data(), rep_not_implemented.length());
     case status_type::bad_gateway:
-      return asio::buffer(rep_bad_gateway.data(), rep_bad_gateway.length());
+      return T(rep_bad_gateway.data(), rep_bad_gateway.length());
     case status_type::service_unavailable:
-      return asio::buffer(rep_service_unavailable.data(),
-                          rep_service_unavailable.length());
+      return T(rep_service_unavailable.data(),
+               rep_service_unavailable.length());
     default:
-      return asio::buffer(rep_internal_server_error.data(),
-                          rep_internal_server_error.length());
+      return T(rep_internal_server_error.data(),
+               rep_internal_server_error.length());
   }
 }
 
