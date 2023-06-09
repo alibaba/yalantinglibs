@@ -38,6 +38,7 @@ Lazy<void> call_echo() {
     for (auto ec = co_await client.connect("127.0.0.1", "8801");
          ec != std::errc{};) {
       std::cout << "connect failed." << std::endl;
+      ec = co_await client.reconnect("127.0.0.1", "8801");
     }
     while (true) {
       auto ret = co_await client.call<echo>("Hello world!"sv);
