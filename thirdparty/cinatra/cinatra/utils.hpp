@@ -18,7 +18,6 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <vector>
 
 #include "define.h"
 #include "sha1.hpp"
@@ -267,6 +266,9 @@ inline std::string get_content_type_str(req_content_type type) {
     case req_content_type::json:
       str = "application/json; charset=UTF-8";
       break;
+    case req_content_type::text:
+      str = "text/plain";
+      break;
     case req_content_type::string:
       str = "text/html; charset=UTF-8";
       break;
@@ -512,6 +514,31 @@ inline int64_t hex_to_int(std::string_view s) {
   }
 
   return n;
+}
+
+
+inline std::vector<asio::const_buffer> to_chunked_buffers(
+    const char *chunk_data, size_t length, std::string &chunk_size, bool eof) {
+  std::vector<asio::const_buffer> buffers;
+
+  if (length > 0) {
+    // convert bytes transferred count to a hex string.
+    chunk_size = to_hex_string(length);
+
+    // Construct chunk based on rfc2616 section 3.6.1
+    buffers.push_back(asio::buffer(chunk_size));
+    buffers.push_back(asio::buffer(crlf));
+    buffers.push_back(asio::buffer(chunk_data, length));
+    buffers.push_back(asio::buffer(crlf));
+  }
+
+  // append last-chunk
+  if (eof) {
+    buffers.push_back(asio::buffer(last_chunk));
+    buffers.push_back(asio::buffer(crlf));
+  }
+
+  return buffers;
 }
 
 static const std::string base64_chars =

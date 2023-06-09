@@ -186,8 +186,8 @@ inline constexpr std::string_view rep_server = "Server: cinatra\r\n";
 inline const char name_value_separator[] = {':', ' '};
 // inline std::string_view crlf = "\r\n";
 
-inline const char crlf[] = {'\r', '\n'};
-inline const char last_chunk[] = {'0', '\r', '\n'};
+constexpr std::string_view crlf = "\r\n";
+constexpr std::string_view last_chunk = "0\r\n";
 inline const std::string http_chunk_header =
     "HTTP/1.1 200 OK\r\n"
     "Transfer-Encoding: chunked\r\n";
