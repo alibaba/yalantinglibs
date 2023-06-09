@@ -733,8 +733,8 @@ class coro_http_client {
     std::string chunk_size_str;
     while (!file.eof()) {
       auto [rd_ec, rd_size] = co_await file.async_read(buf, 4096);
-      auto bufs =
-          cinatra::to_chunked_buffers(buf, rd_size, chunk_size_str, file.eof());
+      auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+          buf, rd_size, chunk_size_str, file.eof());
       if (std::tie(ec, size) = co_await async_write(bufs); ec) {
         co_return resp_data{ec, 404};
       }

@@ -19,7 +19,6 @@
 #include <string_view>
 #include <type_traits>
 
-#include "coro_io/coro_io.hpp"
 #include "define.h"
 #include "response_cv.hpp"
 #include "sha1.hpp"
@@ -518,25 +517,26 @@ inline int64_t hex_to_int(std::string_view s) {
   return n;
 }
 
-inline std::vector<asio::const_buffer> to_chunked_buffers(
-    const char *chunk_data, size_t length, std::string &chunk_size, bool eof) {
-  std::vector<asio::const_buffer> buffers;
+template <typename T>
+inline std::vector<T> to_chunked_buffers(const char *chunk_data, size_t length,
+                                         std::string &chunk_size, bool eof) {
+  std::vector<T> buffers;
 
   if (length > 0) {
     // convert bytes transferred count to a hex string.
     chunk_size = to_hex_string(length);
 
     // Construct chunk based on rfc2616 section 3.6.1
-    buffers.push_back(asio::buffer(chunk_size));
-    buffers.push_back(asio::buffer(crlf));
-    buffers.push_back(asio::buffer(chunk_data, length));
-    buffers.push_back(asio::buffer(crlf));
+    buffers.push_back(T(chunk_size.data(), chunk_size.size()));
+    buffers.push_back(T(crlf.data(), crlf.size()));
+    buffers.push_back(T(chunk_data, length));
+    buffers.push_back(T(crlf.data(), crlf.size()));
   }
 
   // append last-chunk
   if (eof) {
-    buffers.push_back(asio::buffer(last_chunk));
-    buffers.push_back(asio::buffer(crlf));
+    buffers.push_back(T(last_chunk.data(), last_chunk.size()));
+    buffers.push_back(T(crlf.data(), crlf.size()));
   }
 
   return buffers;
