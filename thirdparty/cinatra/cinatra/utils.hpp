@@ -19,6 +19,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "coro_io/coro_io.hpp"
 #include "define.h"
 #include "response_cv.hpp"
 #include "sha1.hpp"
