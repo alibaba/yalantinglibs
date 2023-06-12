@@ -174,8 +174,27 @@ inline T &g_io_context_pool(
 }
 
 template <typename T = io_context_pool>
+inline T &g_block_io_context_pool(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  static auto _g_io_context_pool = std::make_shared<T>(pool_size);
+  static bool run_helper = [](auto pool) {
+    std::thread thrd{[pool] {
+      pool->run();
+    }};
+    thrd.detach();
+    return true;
+  }(_g_io_context_pool);
+  return *_g_io_context_pool;
+}
+
+template <typename T = io_context_pool>
 inline auto get_global_executor() {
   return g_io_context_pool<T>().get_executor();
+}
+
+template <typename T = io_context_pool>
+inline auto get_global_block_executor() {
+  return g_block_io_context_pool<T>().get_executor();
 }
 
 }  // namespace coro_io
