@@ -21,6 +21,7 @@
 #include "async_simple/Promise.h"
 #include "async_simple/Traits.h"
 #include "async_simple/coro/FutureAwaiter.h"
+#include "coro_io/io_context_pool.hpp"
 #if defined(ENABLE_FILE_IO_URING)
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
@@ -52,12 +53,13 @@ enum class open_mode { read, write };
 class coro_file {
  public:
 #if defined(ENABLE_FILE_IO_URING)
-  coro_file(coro_io::ExecutorWrapper<>* executor, std::string_view filepath,
-            open_mode flags = open_mode::read)
-      : coro_file(executor->get_asio_executor(), filepath, flags) {}
+  coro_file(
+      std::string_view filepath, open_mode flags = open_mode::read,
+      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor())
+      : coro_file(filepath, flags, executor->get_asio_executor()) {}
 
-  coro_file(asio::io_context::executor_type executor, std::string_view filepath,
-            open_mode flags = open_mode::read) {
+  coro_file(std::string_view filepath, open_mode flags,
+            asio::io_context::executor_type executor) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(executor);
     } catch (std::exception& ex) {
@@ -73,12 +75,13 @@ class coro_file {
   }
 #else
 
-  coro_file(coro_io::ExecutorWrapper<>* executor, std::string_view filepath,
-            open_mode flags = open_mode::read)
-      : coro_file(executor->get_asio_executor(), filepath, flags) {}
+  coro_file(std::string_view filepath, open_mode flags = open_mode::read,
+            coro_io::ExecutorWrapper<>* executor =
+                coro_io::get_global_block_executor())
+      : coro_file(filepath, flags, executor->get_asio_executor()) {}
 
-  coro_file(asio::io_context::executor_type executor, std::string_view filepath,
-            open_mode flags = open_mode::read)
+  coro_file(std::string_view filepath, open_mode flags,
+            asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {
     std::ios::openmode open_flags = flags == open_mode::read
                                         ? std::ios::binary | std::ios::in

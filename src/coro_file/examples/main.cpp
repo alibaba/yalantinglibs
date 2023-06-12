@@ -49,7 +49,8 @@ void test_read_file() {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          ioc.get_executor());
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -83,8 +84,8 @@ void test_write_and_read_file() {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          ioc.get_executor());
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -105,7 +106,8 @@ void test_write_and_read_file() {
     std::cout << ec.message() << "\n";
   }
 
-  coro_io::coro_file file1(ioc.get_executor(), filename);
+  coro_io::coro_file file1(filename, coro_io::open_mode::read,
+                           ioc.get_executor());
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -132,11 +134,7 @@ void test_read_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 1024);
 
-  coro_io::io_context_pool pool(std::thread::hardware_concurrency());
-  std::thread thd([&pool] {
-    pool.run();
-  });
-  coro_io::coro_file file(*pool.get_executor(), filename);
+  coro_io::coro_file file(filename);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -157,8 +155,7 @@ void test_read_with_pool() {
   }
 
   std::string str = "test async write";
-  coro_io::coro_file file1(*pool.get_executor(), filename,
-                           coro_io::open_mode::write);
+  coro_io::coro_file file1(filename, coro_io::open_mode::write);
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -168,21 +165,13 @@ void test_read_with_pool() {
   if (ec) {
     std::cout << ec.message() << "\n";
   }
-
-  pool.stop();
-  thd.join();
 }
 
 void test_write_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 10);
 
-  coro_io::io_context_pool pool(std::thread::hardware_concurrency());
-  std::thread thd([&pool] {
-    pool.run();
-  });
-  coro_io::coro_file file(*pool.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -198,9 +187,6 @@ void test_write_with_pool() {
 
   std::cout << std::filesystem::file_size(filename) << "\n";
   assert(std::filesystem::file_size(filename) == 78);
-
-  pool.stop();
-  thd.join();
 }
 
 int main() {
