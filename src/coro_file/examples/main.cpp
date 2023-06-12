@@ -171,8 +171,7 @@ void test_write_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 10);
 
-  coro_io::coro_file file(filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -188,7 +187,6 @@ void test_write_with_pool() {
 
   std::cout << std::filesystem::file_size(filename) << "\n";
   assert(std::filesystem::file_size(filename) == 78);
-
 }
 
 int main() {

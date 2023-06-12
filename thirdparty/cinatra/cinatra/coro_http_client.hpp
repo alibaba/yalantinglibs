@@ -728,7 +728,8 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    coro_io::coro_file file(filename,coro_io::open_mode::read, &executor_wrapper_);
+    coro_io::coro_file file(filename, coro_io::open_mode::read,
+                            &executor_wrapper_);
     char buf[4096];
     std::string chunk_size_str;
     while (!file.eof()) {
