@@ -79,30 +79,25 @@ Lazy<void> qps_watcher() {
     uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:" << cnt << " working echo:" << working_echo << std::endl;
     std::cout << "free client for localhost: "
-              << (co_await clients["localhost:8801"])->free_client_count()
-              << std::endl;
+              << (clients["localhost:8801"])->free_client_count() << std::endl;
     std::cout << "free client for 127.0.0.1: "
-              << (co_await clients["127.0.0.1:8801"])->free_client_count()
-              << std::endl;
+              << (clients["127.0.0.1:8801"])->free_client_count() << std::endl;
     cnt = 0;
   }
 }
-Lazy<void> start() {
+
+int main() {
   auto hosts = std::vector<std::string>{
       {std::string{"127.0.0.1:8801"}, std::string{"localhost:8801"}}};
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
-  auto chan = co_await coro_io::channel<coro_rpc_client>::create(hosts);
+  auto chan = coro_io::channel<coro_rpc_client>::create(
+      hosts, coro_io::channel<coro_rpc_client>::channel_config{
+                 .pool_config{.max_connection_ = worker_cnt}});
   auto chan_ptr = std::make_shared<decltype(chan)>(std::move(chan));
   for (int i = 0; i < worker_cnt; ++i) {
     call_echo(chan_ptr, 10000).start([](auto &&) {
     });
   }
-  co_return;
-}
-
-int main() {
-  start().start([](auto &&) {
-  });
   syncAwait(qps_watcher());
   std::cout << "Done!" << std::endl;
   return 0;
