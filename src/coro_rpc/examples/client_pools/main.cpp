@@ -72,11 +72,9 @@ Lazy<void> qps_watcher(coro_io::client_pools<coro_rpc_client> &clients) {
     uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:" << cnt << " working echo:" << working_echo << std::endl;
     std::cout << "free client for localhost: "
-              << (clients["localhost:8801"])->free_client_count()
-              << std::endl;
+              << (clients["localhost:8801"])->free_client_count() << std::endl;
     std::cout << "free client for 127.0.0.1: "
-              << (clients["127.0.0.1:8801"])->free_client_count()
-              << std::endl;
+              << (clients["127.0.0.1:8801"])->free_client_count() << std::endl;
     cnt = 0;
   }
 }
