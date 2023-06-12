@@ -55,31 +55,25 @@ Lazy<void> qps_watcher() {
     co_await coro_io::sleep_for(1s);
     uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:" << cnt << " working echo:" << working_echo << std::endl;
-    std::cout << "free client for localhost: "
-              << (co_await coro_io::g_clients_pool<
-                      coro_http_client>()["http://www.baidu.com"])
-                     ->free_client_count()
-              << std::endl;
+    std::cout
+        << "free client for localhost: "
+        << (coro_io::g_clients_pool<coro_http_client>()["http://www.baidu.com"])
+               ->free_client_count()
+        << std::endl;
     cnt = 0;
   }
 }
 
-Lazy<void> call_all() {
+int main() {
   std::vector<std::string> hosts;
   hosts.emplace_back("http://www.baidu.com");
-  auto chan = co_await coro_io::channel<coro_http_client>::create(
+  auto chan = coro_io::channel<coro_http_client>::create(
       hosts, coro_io::channel<coro_http_client>::channel_config{
                  .pool_config{.max_connection_ = 1000}});
 
   for (int i = 0, lim = std::thread::hardware_concurrency() * 10; i < lim; ++i)
     test_async_channel(chan).start([](auto &&) {
     });
-  co_return;
-}
-
-int main() {
-  call_all().start([](auto &&) {
-  });
   syncAwait(qps_watcher());
   std::cout << "OK" << std::endl;
   return 0;

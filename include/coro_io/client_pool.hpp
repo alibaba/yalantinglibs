@@ -21,6 +21,7 @@
 #include <deque>
 #include <exception>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <type_traits>
 #include <unordered_map>
@@ -367,7 +368,7 @@ class client_pools {
   }
   auto send_request(const std::string& host_name, auto&& op)
       -> decltype(std::declval<client_pool_t>().send_request(op)) {
-    auto pool = co_await get_client_pool(host_name, default_pool_config_);
+    auto pool = get_client_pool(host_name, default_pool_config_);
     auto ret = co_await pool->send_request(op);
     co_return ret;
   }
@@ -375,7 +376,7 @@ class client_pools {
                     const typename client_pool_t::pool_config& pool_config,
                     auto&& op)
       -> decltype(std::declval<client_pool_t>().send_request(op)) {
-    auto pool = co_await get_client_pool(host_name, pool_config);
+    auto pool = get_client_pool(host_name, pool_config);
     auto ret = co_await pool.send_request(op);
     co_return ret;
   }
@@ -390,21 +391,21 @@ class client_pools {
   auto get_io_context_pool() { return io_context_pool_; }
 
  private:
-  async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> get_client_pool(
+  std::shared_ptr<client_pool_t> get_client_pool(
       const std::string& host_name,
       const typename client_pool_t::pool_config& pool_config) {
     if (is_pool_fixed) {
       auto iter = client_pool_manager_.find(host_name);
       assert(iter != client_pool_manager_.end());
       if (iter != client_pool_manager_.end()) {
-        co_return iter->second;
+        return iter->second;
       }
       else {
-        co_return nullptr;
+        return nullptr;
       }
     }
     else {
-      auto scoper = co_await mutex.coScopedLock();
+      auto scoper = std::lock_guard{mutex_};
       auto&& [iter, has_inserted] =
           client_pool_manager_.emplace(host_name, nullptr);
       if (has_inserted) {
@@ -412,14 +413,14 @@ class client_pools {
             typename client_pool_t::private_construct_token{}, this, host_name,
             pool_config, io_context_pool_);
       }
-      co_return iter->second;
+      return iter->second;
     }
   }
   typename client_pool_t::pool_config default_pool_config_{};
   std::unordered_map<std::string, std::shared_ptr<client_pool_t>>
       client_pool_manager_;
   io_context_pool_t& io_context_pool_;
-  async_simple::coro::SpinLock mutex;
+  std::mutex mutex_;
   bool is_pool_fixed;
 };
 

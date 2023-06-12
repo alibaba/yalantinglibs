@@ -96,24 +96,22 @@ class channel {
     return send_request(op, config_.pool_config.client_config);
   }
 
-  static async_simple::coro::Lazy<channel> create(
+  static channel create(
       const ::std::vector<::std::string>& hosts,
       const channel_config& config = {},
       client_pools_t& client_pools =
           g_clients_pool<client_t, io_context_pool_t>()) {
     channel ch;
-    co_await ch.init(hosts, config, client_pools);
-    co_return std::move(ch);
+    ch.init(hosts, config, client_pools);
+    return std::move(ch);
   }
 
  private:
-  async_simple::coro::Lazy<void> init(const std::vector<std::string> hosts,
-                                      const channel_config& config,
-                                      client_pools_t& client_pools) {
+  void init(const std::vector<std::string> hosts, const channel_config& config,
+            client_pools_t& client_pools) {
     client_pools_.reserve(hosts.size());
     for (auto& host : hosts) {
-      client_pools_.emplace_back(
-          co_await client_pools.at(host, config.pool_config));
+      client_pools_.emplace_back(client_pools.at(host, config.pool_config));
     }
     switch (config_.lba) {
       case load_blance_algorithm::RR:
@@ -123,7 +121,7 @@ class channel {
       default:
         lb_worker = RandomLoadBlancer{};
     }
-    co_return;
+    return;
   }
   channel_config config_;
   std::variant<RRLoadBlancer, RandomLoadBlancer> lb_worker;
