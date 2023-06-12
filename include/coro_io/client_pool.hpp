@@ -23,6 +23,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -354,18 +355,8 @@ class client_pools {
  public:
   client_pools(
       const typename client_pool_t::pool_config& pool_config = {},
-      const std::vector<std::string>& fixed_host_list = {},
       io_context_pool_t& io_context_pool = coro_io::g_io_context_pool())
-      : io_context_pool_(io_context_pool),
-        default_pool_config_(pool_config),
-        is_pool_fixed(fixed_host_list.size()) {
-    for (auto& e : fixed_host_list) {
-      client_pool_manager_.emplace(
-          e, std::make_shared<client_pool_t>(
-                 typename client_pool_t::private_construct_token{}, this,
-                 std::string{e}, default_pool_config_, io_context_pool_));
-    }
-  }
+      : io_context_pool_(io_context_pool), default_pool_config_(pool_config) {}
   auto send_request(const std::string& host_name, auto&& op)
       -> decltype(std::declval<client_pool_t>().send_request(op)) {
     auto pool = get_client_pool(host_name, default_pool_config_);
@@ -394,24 +385,21 @@ class client_pools {
   std::shared_ptr<client_pool_t> get_client_pool(
       const std::string& host_name,
       const typename client_pool_t::pool_config& pool_config) {
-    if (is_pool_fixed) {
-      auto iter = client_pool_manager_.find(host_name);
-      assert(iter != client_pool_manager_.end());
-      if (iter != client_pool_manager_.end()) {
-        return iter->second;
-      }
-      else {
-        return nullptr;
-      }
-    }
-    else {
-      auto scoper = std::lock_guard{mutex_};
-      auto&& [iter, has_inserted] =
-          client_pool_manager_.emplace(host_name, nullptr);
-      if (has_inserted) {
-        iter->second = std::make_shared<client_pool_t>(
-            typename client_pool_t::private_construct_token{}, this, host_name,
-            pool_config, io_context_pool_);
+    decltype(client_pool_manager_.end()) iter;
+    bool has_inserted;
+    {
+      std::shared_lock shared_lock{mutex_};
+      iter = client_pool_manager_.find(host_name);
+      if (iter == client_pool_manager_.end()) {
+        shared_lock.unlock();
+        std::lock_guard lock{mutex_};
+        std::tie(iter, has_inserted) =
+            client_pool_manager_.emplace(host_name, nullptr);
+        if (has_inserted) {
+          iter->second = std::make_shared<client_pool_t>(
+              typename client_pool_t::private_construct_token{}, this,
+              host_name, pool_config, io_context_pool_);
+        }
       }
       return iter->second;
     }
@@ -420,8 +408,7 @@ class client_pools {
   std::unordered_map<std::string, std::shared_ptr<client_pool_t>>
       client_pool_manager_;
   io_context_pool_t& io_context_pool_;
-  std::mutex mutex_;
-  bool is_pool_fixed;
+  std::shared_mutex mutex_;
 };
 
 template <typename client_t,
@@ -429,10 +416,9 @@ template <typename client_t,
 inline client_pools<client_t, io_context_pool_t>& g_clients_pool(
     const typename client_pool<client_t, io_context_pool_t>::pool_config&
         pool_config = {},
-    const std::vector<std::string>& fixed_host_list = {},
     io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
   static client_pools<client_t, io_context_pool_t> _g_clients_pool(
-      pool_config, fixed_host_list, io_context_pool);
+      pool_config, io_context_pool);
   return _g_clients_pool;
 }
 

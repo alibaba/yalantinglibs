@@ -83,8 +83,7 @@ int main() {
   auto thread_cnt = std::thread::hardware_concurrency();
   coro_io::client_pools<coro_rpc_client> clients{
       coro_io::client_pool<coro_rpc_client>::pool_config{
-          .max_connection_ = thread_cnt * 20, .idle_timeout_ = 5s},
-      {"localhost:8801", "127.0.0.1:8801"}};
+          .max_connection_ = thread_cnt * 20, .idle_timeout_ = 5s}};
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
     call_echo(clients, 10000).start([](auto &&) {
     });
