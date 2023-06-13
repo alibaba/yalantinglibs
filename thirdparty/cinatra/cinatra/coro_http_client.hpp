@@ -16,6 +16,7 @@
 
 #include "asio/dispatch.hpp"
 #include "async_simple/Future.h"
+#include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
 #include "coro_io/coro_file.hpp"
@@ -235,10 +236,10 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    auto promise = start_timer(req_timeout_duration_, "connect timer");
+    auto future = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
-    if (auto ec = co_await wait_timer(promise); ec) {
+    if (auto ec = co_await wait_timer(std::move(future)); ec) {
       co_return resp_data{{}, 404};
     }
     if (!data.net_err) {
@@ -510,27 +511,32 @@ class coro_http_client {
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
-  async_simple::Promise<async_simple::Unit> start_timer(
+  async_simple::Future<async_simple::Unit> start_timer(
       std::chrono::steady_clock::duration duration, std::string msg) {
     is_timeout_ = false;
+
     async_simple::Promise<async_simple::Unit> promise;
+    auto fut = promise.getFuture();
+
     if (enable_timeout_) {
-      timeout(timer_, promise, duration, std::move(msg))
+      timeout(timer_, std::move(promise), duration, std::move(msg))
           .via(&executor_wrapper_)
           .detach();
     }
-
-    return promise;
+    else {
+      promise.setValue(async_simple::Unit{});
+    }
+    return fut;
   }
 
   async_simple::coro::Lazy<std::error_code> wait_timer(
-      async_simple::Promise<async_simple::Unit> &promise) {
+      async_simple::Future<async_simple::Unit> &&future) {
     if (!enable_timeout_) {
       co_return std::error_code{};
     }
     std::error_code err_code;
     timer_.cancel(err_code);
-    co_await promise.getFuture();
+    auto ret = co_await std::move(future);
     if (is_timeout_) {
       co_return std::make_error_code(std::errc::timed_out);
     }
@@ -566,17 +572,17 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    auto promise = start_timer(req_timeout_duration_, "connect timer");
+    auto future = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
-    if (ec = co_await wait_timer(promise); ec) {
+    if (ec = co_await wait_timer(std::move(future)); ec) {
       co_return resp_data{{}, 404};
     }
     if (data.net_err) {
       co_return data;
     }
 
-    promise = start_timer(req_timeout_duration_, "upload timer");
+    future = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (inject_write_failed == ClientInjectAction::write_failed) {
@@ -611,7 +617,7 @@ class coro_http_client {
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
-    if (auto errc = co_await wait_timer(promise); errc) {
+    if (auto errc = co_await wait_timer(std::move(future)); errc) {
       ec = errc;
     }
 
@@ -712,17 +718,17 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    auto promise = start_timer(req_timeout_duration_, "connect timer");
+    auto future = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
-    if (ec = co_await wait_timer(promise); ec) {
+    if (ec = co_await wait_timer(std::move(future)); ec) {
       co_return resp_data{{}, 404};
     }
     if (data.net_err) {
       co_return data;
     }
 
-    promise = start_timer(req_timeout_duration_, "upload timer");
+    future = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
       co_return resp_data{ec, 404};
@@ -744,7 +750,7 @@ class coro_http_client {
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
-    if (auto errc = co_await wait_timer(promise); errc) {
+    if (auto errc = co_await wait_timer(std::move(future)); errc) {
       ec = errc;
     }
 
@@ -779,8 +785,7 @@ class coro_http_client {
       }
 
       if (socket_->has_closed_) {
-        auto conn_promise =
-            start_timer(conn_timeout_duration_, "connect timer");
+        auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
         if (ec = co_await coro_io::async_connect(&executor_wrapper_,
@@ -795,7 +800,7 @@ class coro_http_client {
           }
         }
         socket_->has_closed_ = false;
-        if (ec = co_await wait_timer(conn_promise); ec) {
+        if (ec = co_await wait_timer(std::move(conn_future)); ec) {
           break;
         }
       }
@@ -805,7 +810,7 @@ class coro_http_client {
 #ifdef BENCHMARK_TEST
       req_str_ = write_msg;
 #endif
-      auto promise = start_timer(req_timeout_duration_, "request timer");
+      auto future = start_timer(req_timeout_duration_, "request timer");
       if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
           ec) {
         break;
@@ -813,7 +818,7 @@ class coro_http_client {
 
       data =
           co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
-      if (auto errc = co_await wait_timer(promise); errc) {
+      if (auto errc = co_await wait_timer(std::move(future)); errc) {
         ec = errc;
       }
     } while (0);
@@ -1485,7 +1490,7 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<bool> timeout(
-      auto &timer, auto &promise, std::chrono::steady_clock::duration duration,
+      auto &timer, auto promise, std::chrono::steady_clock::duration duration,
       std::string msg) {
     timer.expires_after(duration);
     is_timeout_ = co_await timer.async_await();
