@@ -494,10 +494,14 @@ class coro_http_client {
       return false;
     }
 
-    std::ifstream file(filename, std::ios::binary);
-    if (!file) {
+    std::error_code ec;
+    bool r = std::filesystem::exists(filename, ec);
+    if (!r || ec) {
 #ifndef NDEBUG
-      std::cout << "open file failed, "
+      if (ec) {
+        std::cout << ec.message() << "\n";
+      }
+      std::cout << "file not exists, "
                 << std::filesystem::current_path().string() << std::endl;
 #endif
       return false;
@@ -1329,17 +1333,16 @@ class coro_http_client {
     }
 
     if (is_file) {
-      std::ifstream file(part.filename, std::ios::binary);
+      coro_io::coro_file file(part.filename, coro_io::open_mode::read,
+                              &executor_wrapper_);
       assert(file.is_open());
-
-      size_t left_size = part.size;
-      size_t size_to_read = left_size;
       std::string file_data;
-      while (left_size > 0) {
-        size_to_read = (std::min)(left_size, max_single_part_size_);
-        file_data.resize(size_to_read);
-        left_size -= file.read(file_data.data(), file_data.size()).gcount();
-        if (auto [ec, size] = co_await async_write(asio::buffer(file_data));
+      file_data.resize(max_single_part_size_);
+      while (!file.eof()) {
+        auto [rd_ec, rd_size] =
+            co_await file.async_read(file_data.data(), file_data.size());
+        if (auto [ec, size] =
+                co_await async_write(asio::buffer(file_data.data(), rd_size));
             ec) {
           co_return resp_data{ec, 404};
         }
