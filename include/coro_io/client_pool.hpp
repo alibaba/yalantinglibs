@@ -37,6 +37,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SpinLock.h"
+#include "async_simple/util/Queue.h"
 #include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
 #include "util/concurrentqueue.h"
@@ -69,16 +70,15 @@ class client_pool : public std::enable_shared_from_this<
       client_info_t t;
       int cnt = 0;
       while (true) {
-        bool is_not_empty = self->free_clients_.try_dequeue(t);
+        bool is_not_empty = self->free_clients_.try_pop(t);
         if (!is_not_empty) {
           break;
         }
         ++cnt;
-        if (self->free_clients_.size_approx() <
-                self->pool_config_.max_connection_ &&
+        if (self->free_clients_.size() < self->pool_config_.max_connection_ &&
             t.second > timeout_point) {
           --cnt;
-          self->free_clients_.enqueue(std::move(t));
+          self->free_clients_.push(std::move(t));
           break;
         }
         --self->queue_size_;
@@ -127,7 +127,7 @@ class client_pool : public std::enable_shared_from_this<
     while (true) {
       {
         client_info_t info;
-        if (free_clients_.try_dequeue(info)) {
+        if (free_clients_.try_pop(info)) {
           client = std::move(info.first);
           --queue_size_;
         }
@@ -184,7 +184,7 @@ class client_pool : public std::enable_shared_from_this<
     if (client && queue_size_ < pool_config_.max_connection_) {
       auto time_point = std::chrono::steady_clock::now();
       if (!client->has_closed()) {
-        free_clients_.enqueue(client_info_t{std::move(client), time_point});
+        free_clients_.push(client_info_t{std::move(client), time_point});
         if (queue_size_++ == 0) {
           std::size_t expected = 0;
           if (collecter_cnt_.compare_exchange_strong(expected, 1)) {
@@ -248,7 +248,7 @@ class client_pool : public std::enable_shared_from_this<
       : host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection_),
+        //   free_clients_(pool_config.max_connection_),
         idle_timeout_executor(io_context_pool.get_executor()) {
     if (pool_config_.connect_retry_count == 0) {
       pool_config_.connect_retry_count = 1;
@@ -262,7 +262,7 @@ class client_pool : public std::enable_shared_from_this<
         host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection_),
+        //   free_clients_(pool_config.max_connection_),
         idle_timeout_executor(io_context_pool.get_executor()) {
     if (pool_config_.connect_retry_count == 0) {
       pool_config_.connect_retry_count = 1;
@@ -340,7 +340,7 @@ class client_pool : public std::enable_shared_from_this<
   coro_io::ExecutorWrapper<>* idle_timeout_executor;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
   std::string host_name_;
-  moodycamel::ConcurrentQueue<client_info_t> free_clients_;
+  async_simple::util::Queue<client_info_t> free_clients_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
   std::atomic<std::size_t> queue_size_;
