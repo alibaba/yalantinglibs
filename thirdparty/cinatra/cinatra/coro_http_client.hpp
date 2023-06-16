@@ -58,10 +58,11 @@ struct resp_data {
 #endif
 };
 
+template <typename String = std::string>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_str;
-  std::string content;
+  String content;
   std::shared_ptr<coro_io::coro_file> stream = nullptr;
 };
 
@@ -273,7 +274,7 @@ class coro_http_client {
       co_return false;
     }
 
-    req_context ctx{};
+    req_context<> ctx{};
     if (u.is_websocket()) {
       // build websocket http header
       add_header("Upgrade", "websocket");
@@ -335,28 +336,28 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_patch(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::PATCH,
-                         cinatra::req_context{});
+                         cinatra::req_context<>{});
   }
 
   async_simple::coro::Lazy<resp_data> async_options(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::OPTIONS,
-                         cinatra::req_context{});
+                         cinatra::req_context<>{});
   }
 
   async_simple::coro::Lazy<resp_data> async_trace(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::TRACE,
-                         cinatra::req_context{});
+                         cinatra::req_context<>{});
   }
 
   async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::HEAD,
-                         cinatra::req_context{});
+                         cinatra::req_context<>{});
   }
 
   // CONNECT example.com HTTP/1.1
   async_simple::coro::Lazy<resp_data> async_http_connect(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::CONNECT,
-                         cinatra::req_context{});
+                         cinatra::req_context<>{});
   }
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
@@ -380,7 +381,7 @@ class coro_http_client {
       }
 
       if (read_fix_ == 0) {
-        req_context ctx{};
+        req_context<> ctx{};
         bool is_keep_alive = true;
         data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                     http_method::GET);
@@ -432,7 +433,7 @@ class coro_http_client {
     }
 #endif
 
-    req_context ctx{};
+    req_context<> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 #ifdef BENCHMARK_TEST
@@ -453,29 +454,29 @@ class coro_http_client {
     return async_simple::coro::syncAwait(async_get(std::move(uri)));
   }
 
+  resp_data post(std::string uri, std::string content,
+                 req_content_type content_type) {
+    return async_simple::coro::syncAwait(
+        async_post(std::move(uri), std::move(content), content_type));
+  }
+
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::DEL, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_put(std::string uri,
                                                 std::string content,
                                                 req_content_type content_type) {
-    req_context ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::PUT, std::move(ctx));
-  }
-
-  resp_data post(std::string uri, std::string content,
-                 req_content_type content_type) {
-    return async_simple::coro::syncAwait(
-        async_post(std::move(uri), std::move(content), content_type));
   }
 
   bool add_str_part(std::string name, std::string content) {
@@ -559,7 +560,7 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    req_context ctx{req_content_type::multipart, "", ""};
+    req_context<> ctx{req_content_type::multipart, "", ""};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
@@ -651,7 +652,7 @@ class coro_http_client {
       co_return data;
     }
 
-    req_context ctx{};
+    req_context<> ctx{};
     if (range.empty()) {
       ctx = {req_content_type::none, "", "", std::move(file)};
     }
@@ -692,8 +693,9 @@ class coro_http_client {
     co_return co_await connect(std::move(uri));
   }
 
+  template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
-      std::string uri, http_method method, std::string filename,
+      S uri, http_method method, String filename,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
@@ -701,7 +703,7 @@ class coro_http_client {
       }
     });
 
-    req_context ctx{req_content_type::text};
+    req_context<> ctx{req_content_type::text};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
@@ -763,8 +765,9 @@ class coro_http_client {
     co_return data;
   }
 
+  template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_request(
-      std::string uri, http_method method, auto ctx,
+      S uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
@@ -775,8 +778,6 @@ class coro_http_client {
       }
     });
 
-    check_scheme(uri);
-
     resp_data data{};
 
     std::error_code ec{};
@@ -784,7 +785,12 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      auto [ok, u] = handle_uri(data, uri);
+      bool no_schema = !has_schema(uri);
+      std::string append_uri;
+      if (no_schema) {
+        append_uri.append("http://").append(uri);
+      }
+      auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
       if (!ok) {
         break;
       }
@@ -817,7 +823,7 @@ class coro_http_client {
       bool has_body = !ctx.content.empty();
       if (has_body) {
         vec.push_back(asio::buffer(req_head_str));
-        vec.push_back(asio::buffer(ctx.content));
+        vec.push_back(asio::buffer(ctx.content.data(), ctx.content.size()));
       }
 
 #ifdef BENCHMARK_TEST
@@ -924,7 +930,8 @@ class coro_http_client {
     return data.net_err == std::error_code{};
   }
 
-  std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
+  template <typename S>
+  std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
       data.net_err = std::make_error_code(std::errc::protocol_error);
@@ -1071,9 +1078,11 @@ class coro_http_client {
     return {};
   }
 
+  template <typename String>
   async_simple::coro::Lazy<resp_data> handle_read(std::error_code &ec,
                                                   size_t &size,
-                                                  bool &is_keep_alive, auto ctx,
+                                                  bool &is_keep_alive,
+                                                  req_context<String> ctx,
                                                   http_method method) {
     resp_data data{};
     do {
@@ -1146,30 +1155,6 @@ class coro_http_client {
     co_return data;
   }
 
-  async_simple::coro::Lazy<void> handle_ranges(size_t content_len,
-                                               resp_data &data,
-                                               req_context &ctx) {
-    if (content_len > 0) {
-      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      if (ctx.stream == nullptr) {
-        resp_chunk_str_.append(data_ptr, content_len);
-      }
-      else {
-        auto ec = co_await ctx.stream->async_write(data_ptr, content_len);
-        if (ec) {
-          data.net_err = ec;
-          co_return;
-        }
-      }
-
-      std::string_view reply(data_ptr, content_len);
-      data.resp_body = reply;
-
-      read_buf_.consume(content_len);
-    }
-    data.eof = (read_buf_.size() == 0);
-  }
-
   async_simple::coro::Lazy<void> handle_entire_content(resp_data &data,
                                                        size_t content_len,
                                                        bool is_ranges,
@@ -1215,8 +1200,9 @@ class coro_http_client {
     }
   }
 
-  async_simple::coro::Lazy<std::error_code> handle_chunked(resp_data &data,
-                                                           req_context ctx) {
+  template <typename String>
+  async_simple::coro::Lazy<std::error_code> handle_chunked(
+      resp_data &data, req_context<String> ctx) {
     std::error_code ec{};
     size_t size = 0;
     while (true) {
@@ -1535,7 +1521,8 @@ class coro_http_client {
     co_return true;
   }
 
-  void check_scheme(std::string &url) {
+  template <typename S>
+  bool has_schema(const S &url) {
     size_t pos_http = url.find_first_of("http://");
     size_t pos_https = url.find_first_of("https://");
     size_t pos_ws = url.find_first_of("ws://");
@@ -1545,9 +1532,7 @@ class coro_http_client {
         ((pos_https != std::string::npos) && pos_https == 0) ||
         ((pos_ws != std::string::npos) && pos_ws == 0) ||
         ((pos_wss != std::string::npos) && pos_wss == 0);
-
-    if (!has_http_scheme)
-      url.insert(0, "http://");
+    return has_http_scheme;
   }
 
   std::unique_ptr<asio::io_context> io_ctx_;
