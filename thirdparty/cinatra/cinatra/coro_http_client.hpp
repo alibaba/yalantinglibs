@@ -71,6 +71,95 @@ struct multipart_t {
   std::string content;
   size_t size = 0;
 };
+
+class simple_buffer {
+ public:
+  inline static constexpr size_t sbuf_init_size = 4096;
+  simple_buffer(size_t init_size = sbuf_init_size)
+      : size_(0), alloc_size_(init_size) {
+    if (init_size == 0) {
+      data_ = nullptr;
+    }
+    else {
+      data_ = (char *)::malloc(init_size);
+      if (!data_) {
+        throw std::bad_alloc();
+      }
+    }
+  }
+
+  ~simple_buffer() { ::free(data_); }
+
+  simple_buffer(const simple_buffer &) = delete;
+  simple_buffer &operator=(const simple_buffer &) = delete;
+
+  simple_buffer(simple_buffer &&other)
+      : size_(other.size_), data_(other.data_), alloc_size_(other.alloc_size_) {
+    other.size_ = other.alloc_size_ = 0;
+    other.data_ = nullptr;
+  }
+
+  simple_buffer &operator=(simple_buffer &&other) {
+    ::free(data_);
+
+    size_ = other.size_;
+    alloc_size_ = other.alloc_size_;
+    data_ = other.data_;
+
+    other.size_ = other.alloc_size_ = 0;
+    other.data_ = nullptr;
+
+    return *this;
+  }
+
+  char *data() { return data_; }
+
+  const char *data() const { return data_; }
+
+  size_t size() const { return size_; }
+  size_t alloc_size() const { return alloc_size_; }
+
+  char *release() {
+    char *tmp = data_;
+    size_ = 0;
+    data_ = nullptr;
+    alloc_size_ = 0;
+    return tmp;
+  }
+
+  void init(size_t len) {
+    if (alloc_size_ - size_ >= len) {
+      size_ = len;
+      return;
+    }
+
+    size_t nsize = (alloc_size_ > 0) ? alloc_size_ * 2 : sbuf_init_size;
+
+    while (nsize < size_ + len) {
+      size_t tmp_nsize = nsize * 2;
+      if (tmp_nsize <= nsize) {
+        nsize = size_ + len;
+        break;
+      }
+      nsize = tmp_nsize;
+    }
+
+    void *tmp = ::realloc(data_, nsize);
+    if (!tmp) {
+      throw std::bad_alloc();
+    }
+
+    data_ = static_cast<char *>(tmp);
+    alloc_size_ = nsize;
+    size_ = nsize;
+  }
+
+ private:
+  size_t size_;
+  size_t alloc_size_;
+  char *data_;
+};
+
 class coro_http_client {
  public:
   struct config {
@@ -227,6 +316,8 @@ class coro_http_client {
     return init_ssl(base_path, cert_file, verify_mode, domain);
   }
 #endif
+
+  char *release_buf() { return body_.release(); }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
@@ -1137,8 +1228,17 @@ class coro_http_client {
       }
 
       // read left part of content.
-      size_t size_to_read = content_len - read_buf_.size();
-      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
+      size_t part_size = read_buf_.size();
+      size_t size_to_read = content_len - part_size;
+
+      body_.init(content_len);
+      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      memcpy(body_.data(), data_ptr, part_size);
+      read_buf_.consume(part_size);
+
+      if (std::tie(ec, size) = co_await async_read(
+              asio::buffer(body_.data() + part_size, size_to_read),
+              size_to_read);
           ec) {
         break;
       }
@@ -1160,8 +1260,11 @@ class coro_http_client {
                                                        bool is_ranges,
                                                        auto &ctx) {
     if (content_len > 0) {
+      auto data_ptr = read_buf_.size() == 0
+                          ? body_.data()
+                          : asio::buffer_cast<const char *>(read_buf_.data());
+
       if (is_ranges) {
-        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         if (ctx.stream) {
           auto ec = co_await ctx.stream->async_write(data_ptr, content_len);
           if (ec) {
@@ -1171,7 +1274,6 @@ class coro_http_client {
         }
       }
 
-      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view reply(data_ptr, content_len);
       data.resp_body = reply;
 
@@ -1454,7 +1556,7 @@ class coro_http_client {
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      AsioBuffer &buffer, size_t size_to_read) noexcept {
+      AsioBuffer &&buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
@@ -1543,6 +1645,7 @@ class coro_http_client {
   std::thread io_thd_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
+  simple_buffer body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
 
