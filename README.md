@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http and async_simple </h6>
+<h6 align="center">A Collection of C++20 libraries, include struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_http and async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -10,7 +10,7 @@
 
 [中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
+yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
 
@@ -170,6 +170,37 @@ void basic_usage() {
   r = struct_xml::to_xml_pretty(p, str);
   assert(r);
   std::cout << str;
+}
+```
+
+## struct_yaml
+reflection-based yaml lib, very easy to do struct to yaml and yaml to struct.
+
+### quick example
+```cpp
+#include "struct_yaml/yaml_reader.h"
+#include "struct_yaml/yaml_writer.h"
+
+struct person {
+  std::string name;
+  int age;
+};
+REFLECTION(person, name, age);
+
+void basic_usage() {
+    // serialization the structure to the string
+    person p = {"admin", 20};
+    std::string ss;
+    struct_yaml::to_yaml(ss, p);
+    std::cout << ss << std::endl;
+    
+    std::string yaml = R"(
+    name : tom
+    age : 30
+    )";
+    
+    // deserialization the structure from the string
+    struct_yaml::from_yaml(p, yaml);
 }
 ```
 
