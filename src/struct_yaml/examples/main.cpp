@@ -65,6 +65,4 @@ contacts:
   iguana::from_yaml(p2, ss);
 }
 
-int main() {
-  person_example();
-}
+int main() { person_example(); }
