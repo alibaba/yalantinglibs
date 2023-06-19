@@ -1,132 +1,11 @@
 #pragma once
 #include <charconv>
-#include <filesystem>
-#include <forward_list>
-#include <fstream>
-#include <string_view>
-#include <type_traits>
 
-#include "detail/fast_float.h"
+#include "detail/charconv.h"
 #include "detail/utf.hpp"
 #include "error_code.h"
 #include "json_util.hpp"
-#include "reflection.hpp"
-#include "value.hpp"
-
 namespace iguana {
-
-template <class T>
-concept char_t = std::same_as < std::decay_t<T>,
-char > || std::same_as<std::decay_t<T>, char16_t> ||
-    std::same_as<std::decay_t<T>, char32_t> ||
-    std::same_as<std::decay_t<T>, wchar_t>;
-
-template <class T>
-concept bool_t = std::same_as < std::decay_t<T>,
-bool > || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
-
-template <class T>
-concept int_t =
-    std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
-
-template <class T>
-concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-template <class T>
-concept enum_type_t = std::is_enum_v<std::decay_t<T>>;
-
-template <typename T>
-constexpr inline bool is_basic_string_view = false;
-
-template <typename T>
-constexpr inline bool is_basic_string_view<std::basic_string_view<T>> = true;
-
-template <typename T>
-concept str_view_t = is_basic_string_view<std::remove_reference_t<T>>;
-
-template <class T>
-concept str_t =
-    std::convertible_to<std::decay_t<T>, std::string_view> && !str_view_t<T>;
-
-template <typename Type>
-constexpr inline bool is_std_vector_v = false;
-
-template <typename... args>
-constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
-
-template <typename Type>
-concept vector_container = is_std_vector_v<std::remove_reference_t<Type>>;
-
-template <typename Type>
-concept optional = requires(Type optional) {
-  optional.value();
-  optional.has_value();
-  optional.operator*();
-  typename std::remove_cvref_t<Type>::value_type;
-};
-
-template <typename Type>
-concept container = requires(Type container) {
-  typename std::remove_cvref_t<Type>::value_type;
-  container.size();
-  container.begin();
-  container.end();
-};
-
-template <typename Type>
-concept map_container = container<Type> && requires(Type container) {
-  typename std::remove_cvref_t<Type>::mapped_type;
-};
-
-template <class T>
-concept c_array = std::is_array_v<std::remove_cvref_t<T>> &&
-                  std::extent_v<std::remove_cvref_t<T>> >
-0;
-
-template <typename Type>
-concept array = requires(Type arr) {
-  arr.size();
-  std::tuple_size<std::remove_cvref_t<Type>>{};
-};
-
-template <typename Type>
-concept fixed_array = c_array<Type> || array<Type>;
-
-template <typename Type>
-concept tuple = !array<Type> && requires(Type tuple) {
-  std::get<0>(tuple);
-  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
-};
-
-template <typename Type>
-concept json_view = requires(Type container) {
-  container.size();
-  container.begin();
-  container.end();
-};
-
-template <typename T>
-concept json_byte = std::is_same_v<char, T> ||
-    std::is_same_v<unsigned char, T> || std::is_same_v<std::byte, T>;
-
-template <typename Type>
-constexpr inline bool is_std_list_v = false;
-template <typename... args>
-constexpr inline bool is_std_list_v<std::list<args...>> = true;
-
-template <typename Type>
-constexpr inline bool is_std_deque_v = false;
-template <typename... args>
-constexpr inline bool is_std_deque_v<std::deque<args...>> = true;
-
-template <typename Type>
-concept sequence_container = is_std_list_v<std::remove_reference_t<Type>> ||
-    is_std_vector_v<std::remove_reference_t<Type>> ||
-    is_std_deque_v<std::remove_reference_t<Type>>;
-
-template <class T>
-concept non_refletable = container<T> || c_array<T> || tuple<T> ||
-    optional<T> || std::is_fundamental_v<T>;
 
 template <refletable T, typename It>
 void from_json(T &value, It &&it, It &&end);
@@ -187,7 +66,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
       if (size == 0) [[unlikely]]
         throw std::runtime_error("Failed to parse number");
       const auto start = &*it;
-      auto [p, ec] = fast_float::from_chars(start, start + size, value);
+      auto [p, ec] = detail::from_chars(start, start + size, value);
       if (ec != std::errc{}) [[unlikely]]
         throw std::runtime_error("Failed to parse number");
       it += (p - &*it);
@@ -202,7 +81,6 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     }
   }
   else {
-    double num;
     char buffer[256];
     size_t i{};
     while (it != end && is_numeric(*it)) {
@@ -211,16 +89,16 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
       buffer[i] = *it++;
       ++i;
     }
-    auto [p, ec] = fast_float::from_chars(buffer, buffer + i, num);
+    auto [p, ec] = detail::from_chars(buffer, buffer + i, value);
     if (ec != std::errc{}) [[unlikely]]
       throw std::runtime_error("Failed to parse number");
-    value = static_cast<T>(num);
   }
 }
 
-template <enum_type_t U, class It>
+template <enum_t U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
-  parse_item((int &)value, it, end);
+  using T = std::underlying_type_t<std::decay_t<U>>;
+  parse_item(reinterpret_cast<T &>(value), it, end);
 }
 
 template <str_t U, class It>
