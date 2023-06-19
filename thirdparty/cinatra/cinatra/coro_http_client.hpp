@@ -317,7 +317,11 @@ class coro_http_client {
   }
 #endif
 
-  char *release_buf() { return body_.release(); }
+  // it may return nullptr, because maybe no body_ allocated, the read_buf_ may
+  // read all head and body, at that time the body_ is nullptr.
+  std::unique_ptr<char[]> release_buf() {
+    return std::unique_ptr<char[]>(body_.release());
+  }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
