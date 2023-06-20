@@ -739,7 +739,7 @@ constexpr int tuple_element_index() {
   return element_index_helper<0, Condition, Tuple, T>();
 }
 
-#if _MSC_VER || (__cplusplus >= 202002L)
+#if _MSC_VER || (__cplusplus >= 201402L)
 template <class T>
 concept refletable = is_reflection_v<std::remove_cvref_t<T>>;
 #endif
