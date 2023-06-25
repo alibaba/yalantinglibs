@@ -98,17 +98,17 @@ inline std::string_view severity_str(Severity severity) {
 
 class record_t {
  public:
-  record_t(auto tm_point, Severity severity, auto str)
-      : tm_point_(tm_point), severity_(severity), tid_(get_tid_impl()) {
-    std::memcpy(buf_, str.data(), str.size());
-    buf_len_ = str.size();
-  }
+  record_t(auto tm_point, Severity severity, std::string_view str)
+      : tm_point_(tm_point),
+        severity_(severity),
+        tid_(get_tid_impl()),
+        file_str_(str) {}
 
   Severity get_severity() const { return severity_; }
 
   const char *get_message() const { return ss_.data(); }
 
-  std::string_view get_file_str() const { return {buf_, buf_len_}; }
+  std::string_view get_file_str() const { return file_str_; }
 
   unsigned int get_tid() const { return tid_; }
 
@@ -195,8 +195,7 @@ class record_t {
   std::chrono::system_clock::time_point tm_point_;
   Severity severity_;
   unsigned int tid_;
-  char buf_[64] = {};
-  size_t buf_len_ = 0;
+  std::string_view file_str_;
 
 #ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
