@@ -115,8 +115,10 @@ class appender {
 
   void flush() {
     std::lock_guard guard(mtx_);
-    file_.flush();
-    file_.sync_with_stdio();
+    if (file_.is_open()) {
+      file_.flush();
+      file_.sync_with_stdio();
+    }
   }
 
   void stop() {
