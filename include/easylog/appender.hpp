@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <charconv>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
