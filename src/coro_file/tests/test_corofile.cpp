@@ -3,6 +3,7 @@
 #include <fstream>
 #include <memory>
 #include <string_view>
+#include <system_error>
 #include <thread>
 
 #include "asio/io_context.hpp"
@@ -138,8 +139,12 @@ TEST_CASE("multithread for balance") {
 
   async_simple::coro::syncAwait(wait_read_func());
 
+  std::error_code ec;
   for (auto& filename : filenames) {
-    fs::remove(fs::path(filename));
+    fs::remove(fs::path(filename), ec);
+    if (ec) {
+      std::cout << "remove file error: " << ec.message() << "\n";
+    }
   }
 }
 
