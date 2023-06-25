@@ -2,10 +2,8 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_test(
     name = "test_easylog",
-    hdrs = glob([
-        "include/util/*.h",
-    ]),
     srcs = [
+        "include/util/concurrentqueue.h",
         "main.cpp",
         "test_easylog.cpp",
     ],
