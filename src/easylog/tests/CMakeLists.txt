@@ -1,5 +1,9 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
+if (UNIX)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+endif()
+
 add_executable(test_easylog
         test_easylog.cpp
         main.cpp

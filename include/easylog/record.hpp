@@ -98,11 +98,14 @@ inline std::string_view severity_str(Severity severity) {
 
 class record_t {
  public:
+  record_t() = default;
   record_t(auto tm_point, Severity severity, std::string_view str)
       : tm_point_(tm_point),
         severity_(severity),
         tid_(get_tid_impl()),
         file_str_(str) {}
+  record_t(record_t &&) = default;
+  record_t &operator=(record_t &&) = default;
 
   Severity get_severity() const { return severity_; }
 
@@ -195,7 +198,7 @@ class record_t {
   std::chrono::system_clock::time_point tm_point_;
   Severity severity_;
   unsigned int tid_;
-  std::string_view file_str_;
+  std::string file_str_;
 
 #ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
