@@ -2,6 +2,9 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_test(
     name = "test_easylog",
+    hdrs = glob([
+        "include/util/*.h",
+    ]),
     srcs = [
         "main.cpp",
         "test_easylog.cpp",
