@@ -108,6 +108,7 @@ class channel {
  private:
   void init(const std::vector<std::string> hosts, const channel_config& config,
             client_pools_t& client_pools) {
+    config_ = config;
     client_pools_.reserve(hosts.size());
     for (auto& host : hosts) {
       client_pools_.emplace_back(client_pools.at(host, config.pool_config));
