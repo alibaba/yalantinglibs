@@ -136,7 +136,6 @@ class appender {
 
   ~appender() {
     stop();
-    flush();
     if (write_thd_.joinable())
       write_thd_.join();
   }
