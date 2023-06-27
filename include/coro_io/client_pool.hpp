@@ -37,9 +37,9 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SpinLock.h"
+#include "coro_io/client_queue.hpp"
 #include "coro_io/coro_io.hpp"
 #include "coro_io/io_context_pool.hpp"
-#include "util/concurrentqueue.h"
 #include "util/expected.hpp"
 namespace coro_io {
 
@@ -59,36 +59,25 @@ class client_pool : public std::enable_shared_from_this<
     std::shared_ptr<client_pool> self = self_weak.lock();
     while (true) {
       auto sleep_time = self->pool_config_.idle_timeout_;
+      self->free_clients_.reselect();
       self = nullptr;
-      co_await async_simple::coro::sleep(sleep_time);
+      co_await coro_io::sleep_for(sleep_time);
       if ((self = self_weak.lock()) == nullptr) {
         break;
       }
-      auto timeout_point =
-          std::chrono::steady_clock::now() - self->pool_config_.idle_timeout_;
-      client_info_t t;
-      int cnt = 0;
+      std::unique_ptr<client_t> client;
       while (true) {
-        bool is_not_empty = self->free_clients_.try_dequeue(t);
-        if (!is_not_empty) {
-          break;
-        }
-        ++cnt;
-        if (self->free_clients_.size_approx() <
-                self->pool_config_.max_connection_ &&
-            t.second > timeout_point) {
-          --cnt;
-          self->free_clients_.enqueue(std::move(t));
-          break;
-        }
-        --self->queue_size_;
-        if (cnt % 10000 == 0) {
+        std::size_t is_all_cleared = self->free_clients_.clear_old(10000);
+        std::cout<<"is_all_cleared"<<std::endl;
+        if (is_all_cleared!=0) [[unlikely]] {
           co_await async_simple::coro::Yield{};
         }
+        else {
+          break;
+        }
       }
-
       --self->collecter_cnt_;
-      if (self->queue_size_ == 0) {
+      if (self->free_clients_.size() == 0) {
         break;
       }
       std::size_t expected = 0;
@@ -105,16 +94,7 @@ class client_pool : public std::enable_shared_from_this<
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
       ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
       if (!ok) {
-        auto executor = co_await async_simple::CurrentExecutor();
-        if (executor == nullptr) {
-          coro_io::period_timer reconnect_timer(
-              io_context_pool_.get_executor());
-          reconnect_timer.expires_after(rand_wait_time());
-          co_await reconnect_timer.async_await();
-        }
-        else {
-          co_await async_simple::coro::sleep(rand_wait_time());
-        }
+        co_await coro_io::sleep_for(pool_config_.reconnect_wait_time);
       }
     }
     co_return ok ? std::move(client) : nullptr;
@@ -125,23 +105,17 @@ class client_pool : public std::enable_shared_from_this<
     std::unique_ptr<client_t> client;
 
     while (true) {
-      {
-        client_info_t info;
-        if (free_clients_.try_dequeue(info)) {
-          client = std::move(info.first);
-          --queue_size_;
-        }
-        else {
-          break;
-        }
+      if (!free_clients_.try_dequeue(client)) {
+        break;
       }
-
       if (client->has_closed()) {
-        [this](std::unique_ptr<client_t> client)
+        [self = this->shared_from_this()](std::unique_ptr<client_t> client)
             -> async_simple::coro::Lazy<void> {
-          co_await collect_free_client(co_await reconnect(std::move(client)));
+          self->collect_free_client(
+              co_await self->reconnect(std::move(client)));
+          co_return;
         }(std::move(client))
-                   .start([](auto&&) {
+                   .start([](auto&& v) {
                    });
       }
       else {
@@ -162,41 +136,24 @@ class client_pool : public std::enable_shared_from_this<
       }
     }
     else {
-      if (client->has_closed()) {
-        co_return co_await reconnect(std::move(client));
-      }
-      else {
-        co_return std::move(client);
-      }
+      co_return std::move(client);
     }
   }
 
-  std::chrono::microseconds rand_wait_time() {
-    using namespace std::chrono_literals;
-    return rand() %
-               (pool_config_.reconnect_wait_random_duration + 1ms).count() *
-               1ms +
-           pool_config_.reconnect_wait_min_time;
-  }
-
-  async_simple::coro::Lazy<void> collect_free_client(
-      std::unique_ptr<client_t> client) {
-    if (client && queue_size_ < pool_config_.max_connection_) {
-      auto time_point = std::chrono::steady_clock::now();
+  void collect_free_client(std::unique_ptr<client_t> client) {
+    if (client && free_clients_.size() < pool_config_.max_connection_) {
       if (!client->has_closed()) {
-        free_clients_.enqueue(client_info_t{std::move(client), time_point});
-        if (queue_size_++ == 0) {
+        if (free_clients_.enqueue(std::move(client)) == 1) {
           std::size_t expected = 0;
           if (collecter_cnt_.compare_exchange_strong(expected, 1)) {
             collect_idle_timeout_client(this->shared_from_this())
-                .via(idle_timeout_executor)
                 .start([](auto&&) {
                 });
           }
         }
       }
     }
-    co_return;
+    return;
   };
 
   template <typename T>
@@ -219,15 +176,12 @@ class client_pool : public std::enable_shared_from_this<
                        std::declval<client_t&>(), std::string_view{}))>::type,
                    std::errc>;
 
-  constexpr static int BLOCK_SIZE = 32;
-
  public:
   struct pool_config {
     uint32_t max_connection_ = 100;
     uint32_t connect_retry_count = 5;
-    std::chrono::milliseconds reconnect_wait_min_time{1000};
-    std::chrono::milliseconds reconnect_wait_random_duration{5000};
-    std::chrono::milliseconds idle_timeout_{5000};
+    std::chrono::milliseconds reconnect_wait_time{1000};
+    std::chrono::milliseconds idle_timeout_{3000};
     typename client_t::config client_config;
   };
 
@@ -248,8 +202,7 @@ class client_pool : public std::enable_shared_from_this<
       : host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection_),
-        idle_timeout_executor(io_context_pool.get_executor()) {
+        free_clients_(pool_config.max_connection_) {
     if (pool_config_.connect_retry_count == 0) {
       pool_config_.connect_retry_count = 1;
     }
@@ -262,8 +215,7 @@ class client_pool : public std::enable_shared_from_this<
         host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection_),
-        idle_timeout_executor(io_context_pool.get_executor()) {
+        free_clients_(pool_config.max_connection_) {
     if (pool_config_.connect_retry_count == 0) {
       pool_config_.connect_retry_count = 1;
     }
@@ -279,12 +231,12 @@ class client_pool : public std::enable_shared_from_this<
     }
     if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
       co_await op(*client);
-      co_await collect_free_client(std::move(client));
+      collect_free_client(std::move(client));
       co_return return_type<T>{};
     }
     else {
       auto ret = co_await op(*client);
-      co_await collect_free_client(std::move(client));
+      collect_free_client(std::move(client));
       co_return std::move(ret);
     }
   }
@@ -294,7 +246,7 @@ class client_pool : public std::enable_shared_from_this<
     return send_request(op, pool_config_.client_config);
   }
 
-  std::size_t free_client_count() const noexcept { return queue_size_; }
+  std::size_t free_client_count() const noexcept { return free_clients_.size(); }
 
   std::string_view get_host_name() const noexcept { return host_name_; }
 
@@ -318,12 +270,12 @@ class client_pool : public std::enable_shared_from_this<
     if constexpr (std::is_same_v<typename return_type_with_host<T>::value_type,
                                  void>) {
       co_await op(*client, endpoint);
-      co_await collect_free_client(std::move(client));
+      collect_free_client(std::move(client));
       co_return return_type_with_host<T>{};
     }
     else {
       auto ret = co_await op(*client, endpoint);
-      co_await collect_free_client(std::move(client));
+      collect_free_client(std::move(client));
       co_return std::move(ret);
     }
   }
@@ -333,17 +285,12 @@ class client_pool : public std::enable_shared_from_this<
     return send_request(op, sv, pool_config_.client_config);
   }
 
-  using client_info_t = std::pair<std::unique_ptr<client_t>,
-                                  std::chrono::steady_clock::time_point>;
-
+  coro_io::detail::client_queue<std::unique_ptr<client_t>> free_clients_;
   client_pools_t* pools_manager_ = nullptr;
-  coro_io::ExecutorWrapper<>* idle_timeout_executor;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
   std::string host_name_;
-  moodycamel::ConcurrentQueue<client_info_t> free_clients_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
-  std::atomic<std::size_t> queue_size_;
   std::atomic<std::size_t> collecter_cnt_;
 };
 
