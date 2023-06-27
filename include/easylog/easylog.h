@@ -31,10 +31,15 @@ class logger {
     return instance;
   }
 
-  void operator+=(const record_t &record) { write(record); }
+  void operator+=(record_t &record) { write(record); }
 
-  void write(const record_t &record) {
-    append_format(record);
+  void write(record_t &record) {
+    if (async_ && appender_) {
+      append_record(std::move(record));
+    }
+    else {
+      append_format(record);
+    }
 
     if (record.get_severity() == Severity::CRITICAL) {
       flush();
@@ -48,11 +53,12 @@ class logger {
     }
   }
 
-  void init(Severity min_severity, bool enable_console,
+  void init(Severity min_severity, bool async, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time) {
-    static appender appender(filename, max_file_size, max_files,
-                             flush_every_time);
+    static appender appender(filename, async, enable_console, max_file_size,
+                             max_files, flush_every_time);
+    async_ = async;
     appender_ = &appender;
     min_severity_ = min_severity;
     enable_console_ = enable_console;
@@ -64,27 +70,17 @@ class logger {
     appenders_.emplace_back(std::move(fn));
   }
 
+  void stop_async_log() { appender_->stop(); }
+
  private:
   logger() = default;
   logger(const logger &) = default;
 
-  template <size_t N>
-  size_t get_time_str(char (&buf)[N], const auto &now) {
-    const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
-    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now.time_since_epoch())
-                           .count() %
-                       1000;
-
-    size_t endpos =
-        std::strftime(buf, N, "%Y-%m-%d %H:%M:%S", std::localtime(&nowAsTimeT));
-    snprintf(buf + endpos, N - endpos, ".%03d", (int)nowMs);
-    return endpos + 4;
-  }
+  void append_record(record_t record) { appender_->write(std::move(record)); }
 
   void append_format(const record_t &record) {
     char buf[32];
-    size_t len = get_time_str(buf, record.get_time_point());
+    size_t len = appender_->get_time_str(buf, record.get_time_point());
 
 #ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
@@ -119,6 +115,7 @@ class logger {
   }
 
   Severity min_severity_;
+  bool async_ = true;
   bool enable_console_ = true;
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
@@ -126,15 +123,21 @@ class logger {
 
 template <size_t Id = 0>
 inline void init_log(Severity min_severity, const std::string &filename = "",
-                     bool enable_console = true, size_t max_file_size = 0,
-                     size_t max_files = 0, bool flush_every_time = false) {
-  logger<Id>::instance().init(min_severity, enable_console, filename,
+                     bool async = true, bool enable_console = true,
+                     size_t max_file_size = 0, size_t max_files = 0,
+                     bool flush_every_time = false) {
+  logger<Id>::instance().init(min_severity, async, enable_console, filename,
                               max_file_size, max_files, flush_every_time);
 }
 
 template <size_t Id = 0>
 inline void flush() {
   logger<Id>::instance().flush();
+}
+
+template <size_t Id = 0>
+inline void stop_async_log() {
+  logger<Id>::instance().stop_async_log();
 }
 
 template <size_t Id = 0>

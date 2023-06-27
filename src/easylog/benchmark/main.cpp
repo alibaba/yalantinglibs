@@ -18,6 +18,9 @@
 #include <glog/logging.h>
 #endif
 
+// #include <spdlog/sinks/base_sink.h>
+// #include <spdlog/spdlog.h>
+
 #include <filesystem>
 
 #include "easylog/easylog.h"
@@ -65,16 +68,35 @@ void test_glog() {
 }
 
 void test_easylog() {
-  std::filesystem::remove("easylog.txt");
-  easylog::init_log(Severity::DEBUG, "easylog.txt", false, 1024 * 1024, 1);
-  {
+  std::filesystem::remove("long_name_of_easylog.txt");
+  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", true, false,
+                    10 * 1024 * 1024, 1);
+  for (int i = 0; i < 10; i++) {
     ScopedTimer timer("easylog");
-    for (int i = 0; i < 5000; i++)
-      ELOG(INFO) << "Hello, it is a long string test! " << 42 << 21 << 2.5;
+    for (int i = 0; i < 50000; i++)
+      ELOG(INFO) << "Hello logger: msg number " << i;
   }
 }
 
+// void bench(int howmany, std::shared_ptr<spdlog::logger> log) {
+//   spdlog::drop(log->name());
+
+//   using std::chrono::duration;
+//   using std::chrono::duration_cast;
+//   using std::chrono::high_resolution_clock;
+
+//   for (int i = 0; i < 10; i++) {
+//     ScopedTimer timer("spdlog ");
+//     for (auto i = 0; i < howmany; ++i) {
+//       log->info("Hello logger: msg number {}", i);
+//     }
+//   }
+// }
+
 int main() {
+  // auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
+  // bench(50000, std::move(basic_st));
+
   test_glog();
   test_easylog();
 }
