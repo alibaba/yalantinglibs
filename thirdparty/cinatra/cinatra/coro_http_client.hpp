@@ -269,16 +269,11 @@ class coro_http_client {
                               const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
-      printf("init ssl: %s", domain.data());
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
-      printf("current path %s",
-             std::filesystem::current_path().string().data());
       if (std::filesystem::exists(full_cert_file)) {
-        printf("load %s", full_cert_file.string().data());
         ssl_ctx_.load_verify_file(full_cert_file.string());
       }
       else {
-        printf("no certificate file %s", full_cert_file.string().data());
         if (!base_path.empty() || !cert_file.empty())
           return false;
       }
@@ -295,7 +290,7 @@ class coro_http_client {
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      printf("init ssl failed: %s", e.what());
+      std::cout << "init ssl failed: " << e.what() << "\n";
     }
     return ssl_init_ret_;
   }
@@ -1077,9 +1072,12 @@ class coro_http_client {
 
     if (!headers.empty()) {
       req_headers_ = std::move(headers);
+      req_str.append(" HTTP/1.1\r\n");
+    }
+    else {
+      req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     }
 
-    req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
       if (ctx.content_type == req_content_type::multipart) {
@@ -1626,11 +1624,11 @@ class coro_http_client {
     is_timeout_ = co_await timer.async_await();
     if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
-
-      std::cout << msg << " canceled\n";
       co_return false;
     }
+#ifndef NDEBUG
     std::cout << msg << " timeout\n";
+#endif
     close_socket(*socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
