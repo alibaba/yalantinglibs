@@ -68,8 +68,8 @@ class client_pool : public std::enable_shared_from_this<
       std::unique_ptr<client_t> client;
       while (true) {
         std::size_t is_all_cleared = self->free_clients_.clear_old(10000);
-        std::cout<<"is_all_cleared"<<std::endl;
-        if (is_all_cleared!=0) [[unlikely]] {
+        std::cout << "is_all_cleared" << std::endl;
+        if (is_all_cleared != 0) [[unlikely]] {
           co_await async_simple::coro::Yield{};
         }
         else {
@@ -246,7 +246,9 @@ class client_pool : public std::enable_shared_from_this<
     return send_request(op, pool_config_.client_config);
   }
 
-  std::size_t free_client_count() const noexcept { return free_clients_.size(); }
+  std::size_t free_client_count() const noexcept {
+    return free_clients_.size();
+  }
 
   std::string_view get_host_name() const noexcept { return host_name_; }
 

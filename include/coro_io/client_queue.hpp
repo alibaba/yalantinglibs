@@ -56,7 +56,8 @@ class client_queue {
   std::size_t clear_old(int max_clear_cnt) {
     const int_fast16_t index = selected_index_ ^ 1;
     if (size_[index]) {
-      std::size_t result = queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
+      std::size_t result =
+          queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
       size_[index] -= result;
       return result;
     }
