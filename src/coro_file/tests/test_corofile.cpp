@@ -103,6 +103,8 @@ TEST_CASE("multithread for balance") {
 
   async_simple::coro::syncAwait(wait_func());
 
+  std::cout << "write finished\n";
+
   // read and compare
   std::vector<async_simple::coro::Lazy<void>> read_vec;
 
@@ -123,7 +125,12 @@ TEST_CASE("multithread for balance") {
     size_t read_size;
     std::tie(ec, read_size) = co_await file.async_read(buf.data(), buf.size());
     CHECK(!ec);
-    CHECK(str == buf);
+    bool ok = (str == buf);
+    if (!ok) {
+      std::cout << "str: " << str << "\n";
+      std::cout << "read buf: " << buf << "\n";
+    }
+    CHECK(ok);
     co_return;
   };
 
@@ -138,6 +145,7 @@ TEST_CASE("multithread for balance") {
   };
 
   async_simple::coro::syncAwait(wait_read_func());
+  std::cout << "read finished\n";
 
   std::error_code ec;
   for (auto& filename : filenames) {
