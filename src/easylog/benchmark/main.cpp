@@ -18,8 +18,9 @@
 #include <glog/logging.h>
 #endif
 
-// #include <spdlog/sinks/base_sink.h>
-// #include <spdlog/spdlog.h>
+//#include <spdlog/sinks/base_sink.h>
+//#include <spdlog/sinks/basic_file_sink.h>
+//#include <spdlog/spdlog.h>
 
 #include <filesystem>
 
@@ -67,36 +68,37 @@ void test_glog() {
 #endif
 }
 
-void test_easylog() {
+void test_easylog(int howmany) {
   std::filesystem::remove("long_name_of_easylog.txt");
-  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", true, false,
-                    10 * 1024 * 1024, 1);
+  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", false, false,
+                    10 * 1024 * 1024);
   for (int i = 0; i < 10; i++) {
     ScopedTimer timer("easylog");
-    for (int i = 0; i < 50000; i++)
+    for (int i = 0; i < howmany; i++)
       ELOG(INFO) << "Hello logger: msg number " << i;
   }
 }
 
-// void bench(int howmany, std::shared_ptr<spdlog::logger> log) {
-//   spdlog::drop(log->name());
-
-//   using std::chrono::duration;
-//   using std::chrono::duration_cast;
-//   using std::chrono::high_resolution_clock;
-
-//   for (int i = 0; i < 10; i++) {
-//     ScopedTimer timer("spdlog ");
-//     for (auto i = 0; i < howmany; ++i) {
-//       log->info("Hello logger: msg number {}", i);
-//     }
-//   }
-// }
+//void bench(int howmany, std::shared_ptr<spdlog::logger> log) {
+//  spdlog::drop(log->name());
+//
+//  using std::chrono::duration;
+//  using std::chrono::duration_cast;
+//  using std::chrono::high_resolution_clock;
+//
+//  for (int i = 0; i < 10; i++) {
+//    ScopedTimer timer("spdlog ");
+//    for (auto i = 0; i < howmany; ++i) {
+//      log->info("Hello logger: msg number {}", i);
+//    }
+//  }
+//}
 
 int main() {
-  // auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
-  // bench(50000, std::move(basic_st));
+  int howmany = 50000;
+//  auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
+//  bench(howmany, std::move(basic_st));
 
   test_glog();
-  test_easylog();
+  test_easylog(howmany);
 }

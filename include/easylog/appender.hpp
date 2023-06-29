@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 
@@ -56,7 +56,7 @@ class appender {
           }
 
           if (queue_.size_approx() == 0) {
-            std::unique_lock<std::mutex> lock(mtx_);
+            std::unique_lock lock(que_mtx_);
             cnd_.wait(lock, [&]() {
               return queue_.size_approx() > 0 || stop_;
             });
@@ -104,9 +104,11 @@ class appender {
 
   template <typename String>
   void write(const String &str) {
-    std::lock_guard guard(mtx_);
+    std::shared_lock guard(mtx_);
     if (max_files_ > 0 && file_size_ > max_file_size_ &&
         static_cast<size_t>(-1) != file_size_) {
+      guard.unlock();
+      std::lock_guard lock{mtx_};
       roll_log_files();
     }
 
@@ -237,8 +239,10 @@ class appender {
   size_t max_files_ = 0;
   bool is_first_write_ = true;
 
-  std::mutex mtx_;
+  std::shared_mutex mtx_;
   std::ofstream file_;
+
+  std::mutex que_mtx_;
 
   moodycamel::ConcurrentQueue<record_t, QueueTraits> queue_;
   std::thread write_thd_;
