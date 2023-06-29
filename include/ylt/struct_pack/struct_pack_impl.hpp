@@ -431,6 +431,15 @@ consteval type_id get_integral_type() {
                   "sizeof(bool)!=1, which is not supported.");
     return type_id::bool_t;
   }
+#if __GNUC__ || __clang__
+  //-std=gnu++20
+  else if constexpr (std::is_same_v<__int128, T>) {
+    return type_id::int128_t;
+  }
+  else if constexpr (std::is_same_v<unsigned __int128, T>) {
+    return type_id::uint128_t;
+  }
+#endif
   else {
     /*
      * Due to different data model,
@@ -521,6 +530,7 @@ consteval type_id get_type_id() {
     return get_integral_type<T>();
   }
 #if __GNUC__ || __clang__
+  //-std=c++20
   else if constexpr (std::is_same_v<__int128, T>) {
     return type_id::int128_t;
   }
