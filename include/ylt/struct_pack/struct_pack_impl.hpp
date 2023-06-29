@@ -508,6 +508,14 @@ consteval type_id get_type_id() {
   else if constexpr (std::is_integral_v<T>) {
     return get_integral_type<T>();
   }
+#if __GNUC__ && __clang__
+  else if constexpr (std::is_same_v<__int128, T>) {
+    return type_id::int128_t;
+  }
+  else if constexpr (std::is_same_v<unsigned __int128, T>) {
+    return type_id::uint128_t;
+  }
+#endif
   else if constexpr (std::is_floating_point_v<T>) {
     return get_floating_point_type<T>();
   }
