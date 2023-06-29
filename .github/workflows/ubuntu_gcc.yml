@@ -1,0 +1,132 @@
+name: Ubuntu 22.04 (gcc)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_call:
+
+env:
+  ccache: ON
+
+jobs:
+  ubuntu_gcc:
+    strategy:
+      matrix:
+        mode: [ Debug ] #[Release, Debug]
+        ssl: [ ON, OFF ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: sudo apt-get install openssl libssl-dev
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DUSE_CCACHE=${{env.ccache}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
+
+  ubuntu_gcc_pb:
+    strategy:
+      matrix:
+        mode: [ Debug ] #[Release, Debug]
+        ssl: [ ON, OFF ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get install openssl libssl-dev
+          sudo apt-get install libprotobuf-dev protobuf-compiler libprotoc-dev
+      - name: Check protoc
+        run: protoc --version
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v3
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DUSE_CCACHE=${{env.ccache}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 1 -V
+
+  ubuntu_gcc_for_liburing:
+    strategy:
+      matrix:
+        mode: [Release, Debug]
+        io_uring: [ ON ]
+        case_name: [ test_corofile ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install liburing
+        run: |      
+          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
+          tar -zxvf liburing-2.3.tar.gz
+          cd liburing-liburing-2.3/
+          ./configure --cc=gcc --cxx=g++
+          make
+          sudo make install
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
+                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} \
+                -DUSE_CCACHE=${{env.ccache}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -R ${{matrix.case_name}} -j 1 `nproc` -V

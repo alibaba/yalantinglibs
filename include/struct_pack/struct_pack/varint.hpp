@@ -4,8 +4,7 @@
 #include <system_error>
 #include <type_traits>
 
-#include "error_code.h"
-#include "reflection.h"
+#include "struct_pack/struct_pack/reflection.hpp"
 namespace struct_pack {
 
 namespace detail {
@@ -97,17 +96,6 @@ template <typename T, typename U>
 [[nodiscard]] STRUCT_PACK_INLINE T decode_zigzag(U u) {
   return static_cast<T>((u >> 1U)) ^ static_cast<U>(-static_cast<T>(u & 1U));
 }
-
-template <typename T>
-concept varintable_t =
-    std::is_same_v<T, varint<int32_t>> || std::is_same_v<T, varint<int64_t>> ||
-    std::is_same_v<T, varint<uint32_t>> || std::is_same_v<T, varint<uint64_t>>;
-template <typename T>
-concept sintable_t =
-    std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
-
-template <typename T>
-concept varint_t = varintable_t<T> || sintable_t<T>;
 
 template <typename U, typename T, unsigned Shift>
 [[nodiscard]] STRUCT_PACK_INLINE U encode_zigzag(T t) {

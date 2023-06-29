@@ -15,7 +15,7 @@
  */
 #include <coro_rpc/coro_rpc_client.hpp>
 #include <coro_rpc/coro_rpc_server.hpp>
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 
 #include "doctest.h"
 using namespace coro_rpc;
@@ -28,10 +28,10 @@ TEST_CASE("test varadic param") {
   using namespace coro_rpc;
   using namespace std;
 
-  auto server = std::make_unique<coro_rpc::coro_rpc_server<>>(
+  auto server = std::make_unique<coro_rpc::coro_rpc_server>(
       std::thread::hardware_concurrency(), 8808);
   std::thread thrd([&] {
-    server->regist_handler<test_func>();
+    server->register_handler<test_func>();
     try {
       auto ec = server->start();
       REQUIRE(ec == std::errc{});

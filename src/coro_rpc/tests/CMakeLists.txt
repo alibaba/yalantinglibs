@@ -68,3 +68,6 @@ foreach (_test_file ${TEST_REGISTER_DUPLICATION_SRCS})
 endforeach ()
 add_executable(test_util test_util.cpp)
 target_link_libraries(test_util PRIVATE yalantinglibs::coro_rpc)
+
+include_directories(${yaLanTingLibs_SOURCE_DIR}/thirdparty/cinatra)
+add_executable(test_time_util test_time_util.cpp)

@@ -624,6 +624,12 @@ inline constexpr auto get_iguana_struct_map_impl(
 }  // namespace iguana::detail
 
 namespace iguana {
+inline std::unordered_map<std::string_view, std::vector<std::string_view>>
+    g_iguana_required_map;
+inline std::unordered_map<
+    std::string_view,
+    std::vector<std::pair<std::string_view, std::string_view>>>
+    g_iguana_custom_map;
 template <typename T>
 inline constexpr auto get_iguana_struct_map() {
   using reflect_members = decltype(iguana_reflect_members(std::declval<T>()));
@@ -642,6 +648,60 @@ inline constexpr auto get_iguana_struct_map() {
 
 #define REFLECTION_EMPTY(STRUCT_NAME) MAKE_META_DATA_EMPTY(STRUCT_NAME)
 
+inline int add_required(std::string_view key, std::vector<std::string_view> v) {
+  iguana::g_iguana_required_map.emplace(key, v);
+  return 0;
+}
+
+#ifdef _MSC_VER
+#define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __COUNTER__)
+#else
+#define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __LINE__)
+#endif
+
+#define REQUIRED_IMPL(STRUCT_NAME, N, ...)                                \
+  inline auto IGUANA_UNIQUE_VARIABLE(STRUCT_NAME) = iguana::add_required( \
+      #STRUCT_NAME, std::vector<std::string_view>{                        \
+                        MARCO_EXPAND(MACRO_CONCAT(CON_STR, N)(__VA_ARGS__))});
+
+#define REQUIRED(STRUCT_NAME, ...) \
+  REQUIRED_IMPL(STRUCT_NAME, GET_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
+
+inline std::string_view trim_sv(std::string_view str) {
+  std::string_view whitespaces(" \t\f\v\n\r");
+  auto first = str.find_first_not_of(whitespaces);
+  auto last = str.find_last_not_of(whitespaces);
+  if (first == std::string_view::npos || last == std::string_view::npos)
+    return std::string_view();
+  return str.substr(first, last - first + 1);
+}
+
+inline int add_custom_fields(std::string_view key,
+                             std::vector<std::string_view> v) {
+  std::vector<std::pair<std::string_view, std::string_view>> vec;
+  for (auto val : v) {
+    std::string_view str = {val.data() + 1, val.size() - 2};
+    size_t pos = str.find(',');
+    if (pos == std::string_view::npos || pos == str.size() - 1) {
+      continue;
+    }
+
+    std::string_view origin = str.substr(0, pos);
+    std::string_view alias = str.substr(pos + 1);
+
+    vec.push_back(std::make_pair(trim_sv(origin), trim_sv(alias)));
+  }
+  g_iguana_custom_map.emplace(key, std::move(vec));
+  return 0;
+}
+
+#define CUSTOM_FIELDS_IMPL(STRUCT_NAME, N, ...)                                \
+  inline auto IGUANA_UNIQUE_VARIABLE(STRUCT_NAME) = iguana::add_custom_fields( \
+      #STRUCT_NAME, {MARCO_EXPAND(MACRO_CONCAT(CON_STR, N)(__VA_ARGS__))});
+
+#define CUSTOM_FIELDS(STRUCT_NAME, ...) \
+  CUSTOM_FIELDS_IMPL(STRUCT_NAME, GET_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
+
 template <typename T>
 using Reflect_members = decltype(iguana_reflect_members(std::declval<T>()));
 
@@ -655,8 +715,34 @@ struct is_reflection<T, std::void_t<decltype(Reflect_members<T>::arr())>>
 template <typename T>
 inline constexpr bool is_reflection_v = is_reflection<T>::value;
 
+template <std::size_t index, template <typename...> typename Condition,
+          typename Tuple, typename Owner>
+constexpr int element_index_helper() {
+  if constexpr (index == std::tuple_size_v<Tuple>) {
+    return index;
+  }
+  else {
+    using type_v = decltype(std::declval<Owner>().*
+                            std::declval<std::tuple_element_t<index, Tuple>>());
+    using item_type = std::decay_t<type_v>;
+
+    return Condition<item_type>::value
+               ? index
+               : element_index_helper<index + 1, Condition, Tuple, Owner>();
+  }
+}
+
+template <template <typename...> typename Condition, typename T>
+constexpr int tuple_element_index() {
+  using M = decltype(iguana_reflect_members(std::declval<T>()));
+  using Tuple = decltype(M::apply_impl());
+  return element_index_helper<0, Condition, Tuple, T>();
+}
+
+#if _MSC_VER || (__cplusplus >= 201402L)
 template <class T>
 concept refletable = is_reflection_v<std::remove_cvref_t<T>>;
+#endif
 
 template <size_t I, typename T>
 constexpr decltype(auto) get(T &&t) {
@@ -671,6 +757,11 @@ constexpr decltype(auto) get(T &&t) {
   }
   else
     return std::forward<T>(t).*(std::get<I>(M::apply_impl()));
+}
+
+template <template <typename...> typename Condition, typename T>
+constexpr size_t get_type_index() {
+  return tuple_element_index<Condition, T>();
 }
 
 template <typename T, size_t... Is>
@@ -730,6 +821,47 @@ template <typename T>
 constexpr auto get_array() {
   using M = decltype(iguana_reflect_members(std::declval<T>()));
   return M::arr();
+}
+
+template <typename T>
+inline bool is_required(std::string_view key) {
+  constexpr std::string_view name = get_name<T>();
+  auto it = g_iguana_required_map.find(name);
+  if (it == g_iguana_required_map.end())
+    return false;
+
+  auto &v = it->second;
+  auto r = std::find(v.begin(), v.end(), key);
+  return r != v.end();
+}
+
+template <typename T>
+inline bool has_custom_fields(std::string_view key = "") {
+  if (key.empty()) {
+    return !g_iguana_custom_map.empty();
+  }
+
+  return g_iguana_custom_map.find(key) != g_iguana_custom_map.end();
+}
+
+template <typename T>
+inline std::string_view get_custom_fields(std::string_view origin) {
+  constexpr std::string_view name = get_name<T>();
+  auto it = g_iguana_custom_map.find(name);
+  if (it == g_iguana_custom_map.end()) {
+    return "";
+  }
+
+  auto &vec = it->second;
+  auto find_it = std::find_if(vec.begin(), vec.end(), [origin](auto &pair) {
+    return pair.first == origin;
+  });
+
+  if (find_it == vec.end()) {
+    return "";
+  }
+
+  return (*find_it).second;
 }
 
 template <typename T>

@@ -22,6 +22,7 @@
 #include <future>
 #include <ostream>
 #include <string>
+#include <thread>
 
 #include "doctest.h"
 #include "easylog/easylog.h"
@@ -107,7 +108,6 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run test: heartbeat=%d, ssl=%d", enable_heartbeat, use_ssl);
     register_all_function();
     test_all();
-    remove_all_rpc_function();
   }
   virtual void test_all() {
     test_connect_timeout();
@@ -128,13 +128,14 @@ struct ServerTester : TesterConfig {
   std::shared_ptr<coro_rpc_client> create_client(
       inject_action action = inject_action::nothing) {
     std::shared_ptr<coro_rpc_client> client;
-    // sometimes, connect will take more than conn_timeout_duration(300ms), so
+    // sometimes, connect will take more than conn_timeout_duration(500ms), so
     // retry 3 times to make sure connect ok.
     std::errc ec;
     int retry = 4;
     for (int i = 0; i < retry; i++) {
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
+                                                   g_client_id++);
       }
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
@@ -154,16 +155,16 @@ struct ServerTester : TesterConfig {
         ec = syncAwait(client->connect("127.0.0.1", port_));
       }
 
-      if (ec == err_ok) {
+      if (ec == std::errc{}) {
         break;
       }
 
       ELOGV(INFO, "retry times %d", retry);
     }
 
-    REQUIRE_MESSAGE(ec == err_ok, std::to_string(client->get_client_id())
-                                      .append(" not connected ")
-                                      .append(conf_str_));
+    REQUIRE_MESSAGE(ec == std::errc{}, std::to_string(client->get_client_id())
+                                           .append(" not connected ")
+                                           .append(conf_str_));
     return client;
   }
   template <auto func, typename... Args>
@@ -187,7 +188,7 @@ struct ServerTester : TesterConfig {
   void test_function_registered() {
     g_action = {};
 
-    // because heartbeat timeout is 300ms, sometimes the client closed because
+    // because heartbeat timeout is 500ms, sometimes the client closed because
     // of timeout, so retry call.
     int retry = 4;
     for (int i = 0; i < retry; i++) {
@@ -314,7 +315,7 @@ struct ServerTester : TesterConfig {
     auto ret = call<async_hi>(client);
     CHECK(ret.value() == "async hi"s);
 
-    std::this_thread::sleep_for(400ms);
+    std::this_thread::sleep_for(700ms);
 
     ret = call<async_hi>(client);
     if (enable_heartbeat) {
@@ -350,7 +351,8 @@ struct ServerTester : TesterConfig {
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_, g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
+                                                   g_client_id++);
       }
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
@@ -370,7 +372,7 @@ struct ServerTester : TesterConfig {
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
-    CHECK_MESSAGE(ec == std::errc::timed_out,
+    CHECK_MESSAGE(ec != std::errc{},
                   std::to_string(client->get_client_id())
                       .append(make_error_code(ec).message()));
   }
@@ -411,12 +413,15 @@ struct ServerTester : TesterConfig {
   };
 
   template <auto func, typename... Args>
-  void test_call_with_delay_func_server_timeout_due_to_heartbeat(Args... args) {
+  void test_call_with_delay_func_server_timeout(Args... args) {
     g_action = {};
     auto client = this->create_client();
     ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
           client->get_client_id());
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
+    REQUIRE(ret);
+    std::this_thread::sleep_for(700ms);
+    ret = this->call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::io_error,

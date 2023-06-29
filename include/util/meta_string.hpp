@@ -22,79 +22,86 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#if __has_include(<span>)
 #include <compare>
 #include <concepts>
-#include <cstddef>
 #include <span>
+#endif
 #include <string_view>
 #include <utility>
 
 namespace refvalue {
 template <std::size_t N>
 struct meta_string {
-  std::array<char, N + 1> elements;
+  std::array<char, N + 1> elements_;
 
-  consteval meta_string() noexcept : elements{} {}
+  constexpr meta_string() noexcept : elements_{} {}
 
-  consteval meta_string(const char (&data)[N + 1]) noexcept
-      : elements{std::to_array(data)} {}
+  constexpr meta_string(const char (&data)[N + 1]) noexcept {
+    for (size_t i = 0; i < N + 1; i++) elements_[i] = data[i];
+  }
+
+#if __has_include(<span>)
+  template <std::size_t... Ns>
+  constexpr meta_string(std::span<const char, Ns>... data) noexcept
+      : elements_{} {
+    auto iter = elements_.begin();
+
+    ((iter = std::copy(data.begin(), data.end(), iter)), ...);
+  }
+#endif
 
   template <std::size_t... Ns>
-  consteval meta_string(std::span<const char, Ns>... data) noexcept
-      : elements{} {
-    auto iter = elements.begin();
+  constexpr meta_string(const meta_string<Ns>&... data) noexcept : elements_{} {
+    auto iter = elements_.begin();
 
     ((iter = std::copy(data.begin(), data.end(), iter)), ...);
   }
 
-  template <std::size_t... Ns>
-  consteval meta_string(const meta_string<Ns>&... data) noexcept : elements{} {
-    auto iter = elements.begin();
-
-    ((iter = std::copy(data.begin(), data.end(), iter)), ...);
-  }
-
+#if __has_include(<span>)
   template <std::same_as<char>... Ts>
-  consteval meta_string(Ts... chars) noexcept requires(sizeof...(Ts) == N)
-      : elements{chars...} {}
+  constexpr meta_string(Ts... chars) noexcept requires(sizeof...(Ts) == N)
+      : elements_{chars...} {}
+#endif
 
   constexpr char& operator[](std::size_t index) noexcept {
-    return elements[index];
+    return elements_[index];
   }
 
   constexpr const char& operator[](std::size_t index) const noexcept {
-    return elements[index];
+    return elements_[index];
   }
 
   constexpr operator std::string_view() const noexcept {
-    return std::string_view{elements.data(), size()};
+    return std::string_view{elements_.data(), size()};
   }
 
   constexpr bool empty() const noexcept { return size() == 0; }
 
   constexpr std::size_t size() const noexcept { return N; }
 
-  constexpr char& front() noexcept { return elements.front(); }
+  constexpr char& front() noexcept { return elements_.front(); }
 
-  constexpr const char& front() const noexcept { return elements.front(); }
+  constexpr const char& front() const noexcept { return elements_.front(); }
 
-  constexpr char& back() noexcept { return elements[size() - 1]; }
+  constexpr char& back() noexcept { return elements_[size() - 1]; }
 
-  constexpr const char& back() const noexcept { return elements[size() - 1]; }
+  constexpr const char& back() const noexcept { return elements_[size() - 1]; }
 
-  constexpr auto begin() noexcept { return elements.begin(); }
+  constexpr auto begin() noexcept { return elements_.begin(); }
 
-  constexpr auto begin() const noexcept { return elements.begin(); }
+  constexpr auto begin() const noexcept { return elements_.begin(); }
 
-  constexpr auto end() noexcept { return elements.begin() + size(); }
+  constexpr auto end() noexcept { return elements_.begin() + size(); }
 
-  constexpr auto end() const noexcept { return elements.begin() + size(); }
+  constexpr auto end() const noexcept { return elements_.begin() + size(); }
 
-  constexpr char* data() noexcept { return elements.data(); }
+  constexpr char* data() noexcept { return elements_.data(); }
 
-  constexpr const char* data() const noexcept { return elements.data(); };
+  constexpr const char* data() const noexcept { return elements_.data(); };
 
-  constexpr const char* c_str() const noexcept { return elements.data(); }
+  constexpr const char* c_str() const noexcept { return elements_.data(); }
 
   constexpr bool contains(char c) const noexcept {
     return std::find(begin(), end(), c) != end();
@@ -124,7 +131,7 @@ struct meta_string {
 
     meta_string<n> result;
     for (int i = 0; i < n; ++i) {
-      result[i] = elements[pos + i];
+      result[i] = elements_[pos + i];
     }
     return result;
   }
@@ -141,21 +148,27 @@ struct meta_string {
 template <std::size_t N>
 meta_string(const char (&)[N]) -> meta_string<N - 1>;
 
+#if __has_include(<span>)
 template <std::size_t... Ns>
 meta_string(std::span<const char, Ns>...) -> meta_string<(Ns + ...)>;
+#endif
 
 template <std::size_t... Ns>
 meta_string(const meta_string<Ns>&...) -> meta_string<(Ns + ...)>;
 
+#if __has_include(<span>)
 template <std::same_as<char>... Ts>
 meta_string(Ts...) -> meta_string<sizeof...(Ts)>;
+#endif
 
+#if __has_include(<span>)
 template <std::size_t M, std::size_t N>
 constexpr auto operator<=>(const meta_string<M>& left,
                            const meta_string<N>& right) noexcept {
   return static_cast<std::string_view>(left).compare(
              static_cast<std::string_view>(right)) <=> 0;
 }
+#endif
 
 template <std::size_t M, std::size_t N>
 constexpr bool operator==(const meta_string<M>& left,
@@ -165,14 +178,14 @@ constexpr bool operator==(const meta_string<M>& left,
 }
 
 template <std::size_t M, std::size_t N>
-consteval bool operator==(const meta_string<M>& left,
+constexpr bool operator==(const meta_string<M>& left,
                           const char (&right)[N]) noexcept {
   return static_cast<std::string_view>(left) ==
          static_cast<std::string_view>(meta_string{right});
 }
 
 template <std::size_t M, std::size_t N>
-consteval auto operator+(const meta_string<M>& left,
+constexpr auto operator+(const meta_string<M>& left,
                          const meta_string<N>& right) noexcept {
   return meta_string{left, right};
 }
@@ -195,6 +208,7 @@ constexpr auto operator+(const char (&left)[M],
   return s;
 }
 
+#if __has_include(<span>)
 template <meta_string S, meta_string Delim>
 struct split_of {
   static constexpr auto value = [] {
@@ -304,4 +318,5 @@ struct remove {
 
 template <meta_string S, meta_string Removal>
 inline constexpr auto&& remove_v = remove<S, Removal>::value;
+#endif
 }  // namespace refvalue

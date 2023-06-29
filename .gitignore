@@ -49,3 +49,8 @@ CMakeUserPresets.json
 .DS_Store
 node_modules
 /CMakeSettings.json
+
+# Bazel
+bazel-*
+!BUILD.bazel
+cdb.json

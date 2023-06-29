@@ -543,8 +543,8 @@ inline char *to_chars<double, default_float_traits<double>>(
 
 // Avoid needless ABI overhead incurred by tag dispatch.
 template <class PolicyHolder, class Float, class FloatTraits>
-inline char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
-                             char *buffer) noexcept {
+char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
+                      char *buffer) noexcept {
   auto const exponent_bits = br.extract_exponent_bits();
   auto const s = br.remove_exponent_bits(exponent_bits);
 
@@ -587,7 +587,7 @@ inline char *to_chars_n_impl(float_bits<Float, FloatTraits> br,
 // Returns the next-to-end position
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-inline char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
+char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
   using namespace jkj::dragonbox::detail::policy_impl;
   using policy_holder = decltype(make_policy_holder(
       base_default_pair_list<
@@ -605,7 +605,7 @@ inline char *to_chars_n(Float x, char *buffer, Policies... policies) noexcept {
 // Null-terminate and bypass the return value of fp_to_chars_n
 template <class Float, class FloatTraits = default_float_traits<Float>,
           class... Policies>
-inline char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
+char *to_chars(Float x, char *buffer, Policies... policies) noexcept {
   auto ptr = to_chars_n<Float, FloatTraits>(x, buffer, policies...);
   *ptr = '\0';
   return ptr;

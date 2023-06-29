@@ -20,11 +20,11 @@
 #include "Rect.h"
 #include "ValidateRequest.h"
 #include "asio/associated_executor.hpp"
-#include "asio_util/io_context_pool.hpp"
 #include "async_simple/coro/Lazy.h"
-#include "coro_rpc/rpc_connection.hpp"
+#include "coro_io/io_context_pool.hpp"
+#include "coro_rpc/rpc_context.hpp"
 
-inline asio_util::io_context_pool pool(std::thread::hardware_concurrency());
+inline coro_io::io_context_pool pool(std::thread::hardware_concurrency());
 
 inline std::string echo_4B(const std::string &str) { return str; }
 inline std::string echo_50B(const std::string &str) { return str; }
@@ -48,9 +48,8 @@ inline void monsterFunc(Monster monster) { return; }
 
 inline void ValidateRequestFunc(ValidateRequest req) { return; }
 
-inline void heavy_calculate(coro_rpc::connection<int> conn, int a) {
-  [&ioc = pool.get_io_context()](
-      int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
+inline void heavy_calculate(coro_rpc::context<int> conn, int a) {
+  [](int a, coro_rpc::context<int> conn) -> async_simple::coro::Lazy<void> {
     std::vector<int> ar;
     ar.reserve(10001);
     for (int i = 0; i < 10000; ++i) ar.push_back((std::max)(a, rand()));
@@ -58,44 +57,44 @@ inline void heavy_calculate(coro_rpc::connection<int> conn, int a) {
     std::sort(ar.begin(), ar.end());
     conn.response_msg(ar[0]);
     co_return;
-  }(a, conn)
-                                                    .start([](auto &&e) {
-                                                    });
+  }(a, std::move(conn))
+                                                .start([](auto &&e) {
+                                                });
   return;
 }
 
 inline std::string download_10KB(int a) { return std::string(10000, 'A'); }
 
-inline void long_tail_heavy_calculate(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_heavy_calculate(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {
-    heavy_calculate(conn, a);
+    heavy_calculate(std::move(conn), a);
   }
   else {
     conn.response_msg(a);
   }
 }
 
-inline void async_io(coro_rpc::connection<int> conn, int a) {
+inline void async_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
-  [&ioc = pool.get_io_context()](
-      int a, coro_rpc::connection<int> conn) -> async_simple::coro::Lazy<void> {
-    auto timer = asio_util::period_timer(ioc);
+  [executor = pool.get_executor()](
+      int a, coro_rpc::context<int> conn) -> async_simple::coro::Lazy<void> {
+    auto timer = coro_io::period_timer(executor);
     timer.expires_after(10ms);
     co_await timer.async_await();
     conn.response_msg(a);
-  }(a, conn)
-                                                    .start([](auto &&e) {
-                                                    });
+  }(a, std::move(conn))
+                                                 .start([](auto &&e) {
+                                                 });
   return;
 }
 
-inline void long_tail_async_io(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_async_io(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {
-    async_io(conn, a);
+    async_io(std::move(conn), a);
   }
   else {
     conn.response_msg(a);
@@ -103,20 +102,20 @@ inline void long_tail_async_io(coro_rpc::connection<int> conn, int a) {
   return;
 }
 
-inline void block_io(coro_rpc::connection<int> conn, int a) {
+inline void block_io(coro_rpc::context<int> conn, int a) {
   using namespace std::chrono;
-  asio::post(pool.get_io_context(), [conn, a]() mutable {
+  pool.get_executor()->schedule([conn = std::move(conn), a]() mutable {
     std::this_thread::sleep_for(50ms);
     conn.response_msg(a);
   });
   return;
 }
 
-inline void long_tail_block_io(coro_rpc::connection<int> conn, int a) {
+inline void long_tail_block_io(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;
   g_index++;
   if (g_index % 100 == 0) {
-    block_io(conn, a);
+    block_io(std::move(conn), a);
     return;
   }
   else {

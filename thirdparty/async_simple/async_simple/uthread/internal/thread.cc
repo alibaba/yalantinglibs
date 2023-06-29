@@ -20,16 +20,45 @@
  * Copyright (C) 2015 Cloudius Systems, Ltd.
  */
 
-#include <ucontext.h>
 #include <algorithm>
 #include <string>
 
-#include <async_simple/Common.h>
-#include <async_simple/uthread/internal/thread.h>
+#include "async_simple/Common.h"
+#include "async_simple/uthread/internal/thread.h"
 
 namespace async_simple {
 namespace uthread {
 namespace internal {
+
+#ifdef AS_INTERNAL_USE_ASAN
+
+extern "C" {
+void __sanitizer_start_switch_fiber(void** fake_stack_save,
+                                    const void* stack_bottom,
+                                    size_t stack_size);
+void __sanitizer_finish_switch_fiber(void* fake_stack_save,
+                                     const void** stack_bottom_old,
+                                     size_t* stack_size_old);
+}
+
+inline void start_switch_fiber(jmp_buf_link* context) {
+    __sanitizer_start_switch_fiber(&context->asan_fake_stack,
+                                   context->asan_stack_bottom,
+                                   context->asan_stack_size);
+}
+
+inline void finish_switch_fiber(jmp_buf_link* context) {
+    __sanitizer_finish_switch_fiber(context->asan_fake_stack,
+                                    &context->asan_stack_bottom,
+                                    &context->asan_stack_size);
+}
+
+#else
+
+inline void start_switch_fiber(jmp_buf_link* context) {}
+inline void finish_switch_fiber(jmp_buf_link* context) {}
+
+#endif  // AS_INTERNAL_USE_ASAN
 
 thread_local jmp_buf_link g_unthreaded_context;
 thread_local jmp_buf_link* g_current_context = nullptr;
@@ -56,19 +85,45 @@ inline void jmp_buf_link::switch_in() {
     link = std::exchange(g_current_context, this);
     if (!link)
         AS_UNLIKELY { link = &g_unthreaded_context; }
+    start_switch_fiber(this);
+    // `thread` is currently only used in `s_main`
     fcontext = _fl_jump_fcontext(fcontext, thread).fctx;
+    finish_switch_fiber(this);
 }
 
 inline void jmp_buf_link::switch_out() {
     g_current_context = link;
-    auto from = _fl_jump_fcontext(link->fcontext, nullptr).fctx;
-    link->fcontext = from;
+    start_switch_fiber(link);
+    link->fcontext = _fl_jump_fcontext(link->fcontext, thread).fctx;
+    finish_switch_fiber(link);
 }
 
-inline void jmp_buf_link::initial_switch_in_completed() {}
+inline void jmp_buf_link::initial_switch_in_completed() {
+#ifdef AS_INTERNAL_USE_ASAN
+    // This is a new thread and it doesn't have the fake stack yet. ASan will
+    // create it lazily, for now just pass nullptr.
+    __sanitizer_finish_switch_fiber(nullptr, &link->asan_stack_bottom,
+                                    &link->asan_stack_size);
+#endif
+}
 
-thread_context::thread_context(std::function<void()> func)
-    : stack_size_(get_base_stack_size()), func_(std::move(func)) {
+inline void jmp_buf_link::final_switch_out() {
+    g_current_context = link;
+#ifdef AS_INTERNAL_USE_ASAN
+    // Since the thread is about to die we pass nullptr as fake_stack_save
+    // argument so that ASan knows it can destroy the fake stack if it exists.
+    __sanitizer_start_switch_fiber(nullptr, link->asan_stack_bottom,
+                                   link->asan_stack_size);
+#endif
+    _fl_jump_fcontext(link->fcontext, thread);
+
+    // never reach here
+    assert(false);
+}
+
+thread_context::thread_context(std::function<void()> func, size_t stack_size)
+    : stack_size_(stack_size ? stack_size : get_base_stack_size()),
+      func_(std::move(func)) {
     setup();
 }
 
@@ -87,6 +142,10 @@ void thread_context::setup() {
     context_.fcontext = _fl_make_fcontext(stack_.get() + stack_size_,
                                           stack_size_, thread_context::s_main);
     context_.thread = this;
+#ifdef AS_INTERNAL_USE_ASAN
+    context_.asan_stack_bottom = stack_.get();
+    context_.asan_stack_size = stack_size_;
+#endif
     context_.switch_in();
 }
 
@@ -96,6 +155,7 @@ void thread_context::switch_out() { context_.switch_out(); }
 
 void thread_context::s_main(transfer_t t) {
     auto q = reinterpret_cast<thread_context*>(t.data);
+    assert(g_current_context->thread == q);
     q->context_.link->fcontext = t.fctx;
     q->main();
 }
@@ -121,7 +181,7 @@ void thread_context::main() {
         done_.setException(std::current_exception());
     }
 
-    context_.switch_out();
+    context_.final_switch_out();
 }
 
 namespace thread_impl {

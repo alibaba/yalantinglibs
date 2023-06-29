@@ -17,8 +17,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef STRUCT_PACK_MD5_CONSTEXPR_H
-#define STRUCT_PACK_MD5_CONSTEXPR_H
+#pragma once
 #include <algorithm>
 #include <array>
 // #include <compare>
@@ -72,9 +71,15 @@ template <typename Char, std::size_t Size1, std::size_t Size2>
 constexpr bool operator!=(const string_literal<Char, Size1> &s1,
                           const string_literal<Char, Size2> &s2) {
   if constexpr (Size1 == Size2) {
-    return s1 != s2;
+    for (int i = 0; i < Size1; ++i) {
+      if (s1[i] != s2[i])
+        return true;
+    }
+    return false;
   }
-  return true;
+  else {
+    return true;
+  }
 }
 
 template <typename CharType, std::size_t Size>
@@ -84,13 +89,13 @@ string_literal(const CharType (&value)[Size])
 template <typename CharType, size_t Len1, size_t Len2>
 decltype(auto) consteval operator+(string_literal<CharType, Len1> str1,
                                    string_literal<CharType, Len2> str2) {
-  auto ret = string_literal<CharType, Len1 + Len2>{};
+  string_literal<CharType, Len1 + Len2> ret{};
   // don't use std::copy_n here to support low version stdlibc++
   for (size_t i = 0; i < Len1; ++i) {
     ret[i] = str1[i];
   }
-  for (size_t i = Len1; i < Len1 + Len2; ++i) {
-    ret[i] = str2[i - Len1];
+  for (size_t i = 0; i < Len2; ++i) {
+    ret[i + Len1] = str2[i];
   }
   return ret;
 }
@@ -337,4 +342,3 @@ constexpr uint32_t MD5Hash32Constexpr(const char *string, uint32_t length) {
 }  // namespace MD5
 
 }  // namespace struct_pack
-#endif  // STRUCT_PACK_MD5_CONSTEXPR_H

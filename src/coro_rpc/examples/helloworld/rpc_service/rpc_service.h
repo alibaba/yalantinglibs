@@ -16,23 +16,20 @@
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
 
-#include <coro_rpc/rpc_connection.hpp>
+#include <coro_rpc/rpc_context.hpp>
 #include <string>
 #include <string_view>
 
-#include "async_simple/coro/Lazy.h"
-
 std::string hello_world();
 int A_add_B(int a, int b);
-void hello_with_delay(coro_rpc::connection<std::string> conn);
+void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
+std::string echo(std::string_view sv);
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv);
 
 class HelloService {
  public:
   std::string hello();
-  void hello_with_delay(coro_rpc::connection<std::string> conn);
-
- private:
+  void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
 };
 
 #endif  // CORO_RPC_RPC_API_HPP

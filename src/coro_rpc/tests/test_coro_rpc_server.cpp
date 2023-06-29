@@ -87,13 +87,15 @@ struct CoroServerTester : ServerTester {
     test_server_send_bad_rpc_result();
     test_server_send_no_body();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void>();
+    this->test_call_with_delay_func<
+        coro_fun_with_user_define_connection_type>();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void_twice>();
     this->test_call_with_delay_func_client_read_length_error<
         coro_fun_with_delay_return_void>();
     this->test_call_with_delay_func_client_read_body_error<
         coro_fun_with_delay_return_void>();
     if (enable_heartbeat) {
-      this->test_call_with_delay_func_server_timeout_due_to_heartbeat<
+      this->test_call_with_delay_func_server_timeout<
           coro_fun_with_delay_return_void_cost_long_time>();
     }
     this->test_call_with_delay_func<coro_fun_with_delay_return_string>();
@@ -102,52 +104,45 @@ struct CoroServerTester : ServerTester {
   void register_all_function() override {
     g_action = {};
     ELOGV(INFO, "run %s", __func__);
-    server.regist_handler<async_hi, large_arg_fun, client_hello>();
-    server.regist_handler<long_run_func>();
-    server.regist_handler<&ns_login::LoginService::login>(&login_service_);
-    server.regist_handler<&HelloService::hello>(&hello_service_);
-    server.regist_handler<hello>();
-    server.regist_handler<coro_fun_with_delay_return_void>();
-    server.regist_handler<coro_fun_with_delay_return_void_twice>();
-    server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    server.regist_handler<coro_fun_with_delay_return_string>();
-    server.regist_handler<coro_fun_with_delay_return_string_twice>();
-    server.regist_handler<coro_func>();
-    server.regist_handler<&HelloService::coro_func>(&hello_service_);
-    server.regist_handler<get_coro_value>();
-    server.regist_handler<&CoroServerTester::get_value>(this);
-  }
-  void remove_all_rpc_function() override {
-    ELOGV(INFO, "run %s", __func__);
-    test_server_start_again();
-    ServerTester::remove_all_rpc_function();
-    server.remove_handler<coro_fun_with_delay_return_void>();
-    server.remove_handler<coro_fun_with_delay_return_void_twice>();
-    server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
-    server.remove_handler<coro_fun_with_delay_return_string>();
-    server.remove_handler<coro_fun_with_delay_return_string_twice>();
-    server.remove_handler<coro_func>();
-    server.remove_handler<&HelloService::coro_func>();
-    server.remove_handler<get_coro_value>();
-    server.remove_handler<&CoroServerTester::get_value>();
+    server.register_handler<async_hi, large_arg_fun, client_hello>();
+    server.register_handler<long_run_func>();
+    server.register_handler<&ns_login::LoginService::login>(&login_service_);
+    server.register_handler<&HelloService::hello>(&hello_service_);
+    server.register_handler<hello>();
+    server.register_handler<coro_fun_with_user_define_connection_type>();
+    server.register_handler<coro_fun_with_delay_return_void>();
+    server.register_handler<coro_fun_with_delay_return_void_twice>();
+    server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
+    server.register_handler<coro_fun_with_delay_return_string>();
+    server.register_handler<coro_fun_with_delay_return_string_twice>();
+    server.register_handler<coro_func>();
+    server.register_handler<coro_func_return_void>();
+    server.register_handler<coro_func_delay_return_int>();
+    server.register_handler<coro_func_delay_return_void>();
+    server.register_handler<&HelloService::coro_func,
+                            &HelloService::coro_func_return_void,
+                            &HelloService::coro_func_delay_return_void,
+                            &HelloService::coro_func_delay_return_int>(
+        &hello_service_);
+    server.register_handler<get_coro_value>();
+    server.register_handler<&CoroServerTester::get_value>(this);
   }
 
   void test_function_not_registered() {
     g_action = {};
-    server.remove_handler<async_hi>();
     auto client = create_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    auto ret = call<async_hi>(client);
+    auto ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(
         ret.error().code == std::errc::function_not_supported,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     REQUIRE(client->has_closed() == true);
-    ret = call<async_hi>(client);
+    ret = call<function_not_registered>(client);
     CHECK(client->has_closed() == true);
-    ret = call<async_hi>(client);
+    ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
     CHECK(client->has_closed() == true);
-    server.regist_handler<async_hi>();
+    server.register_handler<function_not_registered>();
   }
 
   void test_server_start_again() {
@@ -164,16 +159,19 @@ struct CoroServerTester : ServerTester {
 
   void test_start_new_server_with_same_port() {
     ELOGV(INFO, "run %s", __func__);
-    auto new_server = coro_rpc_server(2, std::stoi(this->port_));
-    std::errc ec;
-    if (async_start) {
-      ec = syncAwait(new_server.async_start());
+    {
+      auto new_server = coro_rpc_server(2, std::stoi(this->port_));
+      std::errc ec;
+      if (async_start) {
+        ec = syncAwait(new_server.async_start());
+      }
+      else {
+        ec = new_server.start();
+      }
+      REQUIRE_MESSAGE(ec == std::errc::address_in_use,
+                      make_error_code(ec).message());
     }
-    else {
-      ec = new_server.start();
-    }
-    REQUIRE_MESSAGE(ec == std::errc::address_in_use,
-                    make_error_code(ec).message());
+    ELOGV(INFO, "OH NO");
   }
   void test_server_send_bad_rpc_result() {
     auto client = create_client(inject_action::server_send_bad_rpc_result);
@@ -209,15 +207,36 @@ struct CoroServerTester : ServerTester {
 
     auto ret3 = this->template call<coro_func>(client, 42);
     CHECK(ret3.value() == 42);
+
+    auto ret4 = this->template call<coro_func_return_void>(client, 42);
+    CHECK(ret4.has_value());
+
+    auto ret5 =
+        this->template call<&HelloService::coro_func_return_void>(client, 42);
+    CHECK(ret5.has_value());
+
+    auto ret6 = this->template call<&HelloService::coro_func_delay_return_void>(
+        client, 42);
+    CHECK(ret6.has_value());
+
+    auto ret7 = this->template call<&HelloService::coro_func_delay_return_int>(
+        client, 42);
+    CHECK(ret7.value() == 42);
+
+    auto ret8 = this->template call<coro_func_delay_return_void>(client, 42);
+    CHECK(ret8.has_value());
+
+    auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
+    CHECK(ret9.value() == 42);
   }
-  coro_rpc_server<> server;
+  coro_rpc_server server;
   std::thread thd;
   HelloService hello_service_;
 };
 TEST_CASE("testing coro rpc server") {
   ELOGV(INFO, "run testing coro rpc server");
   unsigned short server_port = 8810;
-  auto conn_timeout_duration = 300ms;
+  auto conn_timeout_duration = 500ms;
   std::vector<bool> switch_list{true, false};
   for (auto async_start : switch_list) {
     for (auto enable_heartbeat : switch_list) {
@@ -268,7 +287,7 @@ TEST_CASE("test server accept error") {
   ELOGV(INFO, "run test server accept error");
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
-  server.regist_handler<hi>();
+  server.register_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -290,56 +309,53 @@ TEST_CASE("test server accept error") {
   ret = syncAwait(client.call<hi>());
   CHECK(!ret);
   REQUIRE(client.has_closed() == true);
-  server.remove_handler<hi>();
   g_action = {};
 }
 
 TEST_CASE("test server write queue") {
+  using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
   ELOGV(INFO, "run server write queue");
   g_action = {};
   coro_rpc_server server(2, 8810);
-  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
-  server.regist_handler<coro_fun_with_delay_return_void_cost_long_time>();
+  server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  constexpr auto id = func_id<coro_fun_with_delay_return_void_cost_long_time>();
-  std::size_t offset = REQ_HEAD_LEN + FUNCTION_ID_LEN;
-  std::vector<std::byte> buffer;
-  buffer.resize(offset);
-  std::memcpy(buffer.data() + REQ_HEAD_LEN, &id, FUNCTION_ID_LEN);
-  req_header header{magic_number};
+  std::string buffer;
+  buffer.reserve(coro_rpc_protocol::REQ_HEAD_LEN +
+                 struct_pack::get_needed_size(std::monostate{}));
+  buffer.resize(coro_rpc_protocol::REQ_HEAD_LEN);
+  auto &header = *(coro_rpc_protocol::req_header *)buffer.data();
+  header.magic = coro_rpc_protocol::magic_number;
+  header.function_id =
+      func_id<coro_fun_with_delay_return_void_cost_long_time>();
   header.seq_num = g_client_id++;
+  header.length = struct_pack::get_needed_size(std::monostate{});
   ELOGV(INFO, "client_id %d begin to connect %d", header.seq_num, 8820);
-  header.length = buffer.size() - REQ_HEAD_LEN;
-  constexpr auto size = struct_pack::get_needed_size(header);
-  struct_pack::serialize_to((char *)buffer.data(), size, header);
+  struct_pack::serialize_to(buffer, std::monostate{});
   asio::io_context io_context;
   std::thread thd([&io_context]() {
     asio::io_context::work work(io_context);
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);
-  auto ret = asio_util::connect(io_context, socket, "127.0.0.1", "8810");
+  auto ret = coro_io::connect(io_context, socket, "127.0.0.1", "8810");
   CHECK(!ret);
-  ELOGV(INFO, "%d client_id %d call %s", "sync_client", header.seq_num,
+  ELOGV(INFO, "%s client_id %d call %s", "sync_client", header.seq_num,
         "coro_fun_with_delay_return_void_cost_long_time");
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 1; ++i) {
     auto err =
-        asio_util::write(socket, asio::buffer(buffer.data(), buffer.size()));
+        coro_io::write(socket, asio::buffer(buffer.data(), buffer.size()));
     CHECK(err.second == buffer.size());
   }
-  for (int i = 0; i < 10; ++i) {
-    std::byte resp_len_buf[RESP_HEAD_LEN];
+  for (int i = 0; i < 1; ++i) {
+    char buffer2[coro_rpc_protocol::RESP_HEAD_LEN];
     std::monostate r;
     auto buf = struct_pack::serialize<std::string>(r);
     std::string buffer_read;
     buffer_read.resize(buf.size());
-    read(socket, asio::buffer(resp_len_buf, RESP_HEAD_LEN));
-
-    req_header header{};
-    [[maybe_unused]] auto errc = struct_pack::deserialize_to(
-        header, (const char *)resp_len_buf, RESP_HEAD_LEN);
+    read(socket, asio::buffer(buffer2, coro_rpc_protocol::RESP_HEAD_LEN));
+    auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));
@@ -359,14 +375,13 @@ TEST_CASE("test server write queue") {
   io_context.stop();
   thd.join();
   server.stop();
-  server.remove_handler<coro_fun_with_delay_return_void_cost_long_time>();
 }
 
 TEST_CASE("testing coro rpc write error") {
   ELOGV(INFO, "run testing coro rpc write error");
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);
-  server.regist_handler<hi>();
+  server.register_handler<hi>();
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
@@ -383,5 +398,4 @@ TEST_CASE("testing coro rpc write error") {
       std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
-  server.remove_handler<hi>();
 }

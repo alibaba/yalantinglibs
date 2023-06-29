@@ -34,30 +34,26 @@
 #ifndef ASYNC_SIMPLE_UTHREAD_ASYNC_H
 #define ASYNC_SIMPLE_UTHREAD_ASYNC_H
 
-#include <async_simple/uthread/Uthread.h>
 #include <memory>
 #include <type_traits>
+#include "async_simple/uthread/Uthread.h"
 
 namespace async_simple {
 namespace uthread {
 
-struct Launch {
-    struct Prompt {};
-    struct Schedule {};
-    struct Current {};
+enum class Launch {
+    Prompt,
+    Schedule,
+    Current,
 };
 
-template <class T, class F,
-          typename std::enable_if<std::is_same<T, Launch::Prompt>::value,
-                                  T>::type* = nullptr>
-inline Uthread async(F&& f, Executor* ex) {
+template <Launch policy, class F>
+requires(policy == Launch::Prompt) inline Uthread async(F&& f, Executor* ex) {
     return Uthread(Attribute{ex}, std::forward<F>(f));
 }
 
-template <class T, class F,
-          typename std::enable_if<std::is_same<T, Launch::Schedule>::value,
-                                  T>::type* = nullptr>
-inline void async(F&& f, Executor* ex) {
+template <Launch policy, class F>
+requires(policy == Launch::Schedule) inline void async(F&& f, Executor* ex) {
     if (!ex)
         AS_UNLIKELY { return; }
     ex->schedule([f = std::move(f), ex]() {
@@ -67,10 +63,9 @@ inline void async(F&& f, Executor* ex) {
 }
 
 // schedule async task, set a callback
-template <class T, class F, class C,
-          typename std::enable_if<std::is_same<T, Launch::Schedule>::value,
-                                  T>::type* = nullptr>
-inline void async(F&& f, C&& c, Executor* ex) {
+template <Launch policy, class F, class C>
+requires(policy == Launch::Schedule) inline void async(F&& f, C&& c,
+                                                       Executor* ex) {
     if (!ex)
         AS_UNLIKELY { return; }
     ex->schedule([f = std::move(f), c = std::move(c), ex]() {
@@ -79,15 +74,53 @@ inline void async(F&& f, C&& c, Executor* ex) {
     });
 }
 
-template <class T, class F,
-          typename std::enable_if<std::is_same<T, Launch::Current>::value,
-                                  T>::type* = nullptr>
-inline void async(F&& f, Executor* ex) {
+template <Launch policy, class F>
+requires(policy == Launch::Current) inline void async(F&& f, Executor* ex) {
     Uthread uth(Attribute{ex}, std::forward<F>(f));
     uth.detach();
 }
 
+template <class F, class... Args,
+          typename R = std::invoke_result_t<F&&, Args&&...>>
+inline Future<R> async(Launch policy, Attribute attr, F&& f, Args&&... args) {
+    if (policy == Launch::Schedule) {
+        if (!attr.ex)
+            AS_UNLIKELY {
+                // TODO log
+                assert(false);
+            }
+    }
+    Promise<R> p;
+    auto rc = p.getFuture().via(attr.ex);
+    auto proc = [p = std::move(p), ex = attr.ex, f = std::forward<F>(f),
+                 args =
+                     std::make_tuple(std::forward<Args>(args)...)]() mutable {
+        if (ex) {
+            p.forceSched().checkout();
+        }
+        if constexpr (std::is_void_v<R>) {
+            std::apply(f, std::move(args));
+            p.setValue();
+        } else {
+            p.setValue(std::apply(f, std::move(args)));
+        }
+    };
+    if (policy == Launch::Schedule) {
+        attr.ex->schedule([fn = std::move(proc), attr]() {
+            Uthread(attr, std::move(fn)).detach();
+        });
+    } else if (policy == Launch::Current) {
+        Uthread(attr, std::move(proc)).detach();
+    } else {
+        // TODO log
+        assert(false);
+    }
+
+    return rc;
+}
+
 }  // namespace uthread
+
 }  // namespace async_simple
 
 #endif  // ASYNC_SIMPLE_UTHREAD_ASYNC_H

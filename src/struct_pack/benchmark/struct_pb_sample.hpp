@@ -5,27 +5,32 @@
 #include <valarray>
 
 #include "ScopedTimer.hpp"
-#include "benchmark.struct_pb.h"
+#include "no_op.h"
 #include "sample.hpp"
+
+#ifdef HAVE_PROTOBUF
+#include "data_def.struct_pb.h"
+#endif
+
 namespace struct_pb_sample {
 
-auto create_rects(std::size_t object_count) {
+inline auto create_rects(std::size_t object_count) {
   rect32s rcs;
   for (int i = 0; i < object_count; ++i) {
-    rect32 rc{65536, 65536, 65536, 65536};
+    rect32 rc{.x = 1, .y = 11, .width = 1111, .height = 111111};
     rcs.rect32_list.emplace_back(rc);
   }
   return rcs;
 }
-auto create_persons(std::size_t object_count) {
+inline auto create_persons(std::size_t object_count) {
   persons ps;
   for (int i = 0; i < object_count; ++i) {
-    person p{65536, "tom", 65536, 65536.42};
+    person p{.id = 432798, .name = "tom", .age = 24, .salary = 65536.42};
     ps.person_list.emplace_back(p);
   }
   return ps;
 }
-auto create_monsters(std::size_t object_count) {
+inline auto create_monsters(std::size_t object_count) {
   Monsters monsters;
   for (int i = 0; i < object_count / 2; ++i) {
     {
@@ -38,30 +43,46 @@ auto create_monsters(std::size_t object_count) {
       m.name = "it is a test";
       m.inventory = "\1\2\3\4";
       m.color = Monster::Color::Red;
-      m.weapons = {{"gun", 42}, {"mission", 56}};
+      m.weapons = {{"gun", 42}, {"shotgun", 56}};
       m.equipped = std::make_unique<struct_pb_sample::Weapon>();
       *m.equipped = struct_pb_sample::Weapon{"air craft", 67};
       // m.equipped = {"air craft", 67};
-      m.path = {{7, 8, 9}};
+      m.path = {{7, 8, 9}, {71, 81, 91}};
       monsters.monsters.push_back(std::move(m));
     }
     {
       Monster m;
       m.pos = std::make_unique<struct_pb_sample::Vec3>();
       *m.pos = struct_pb_sample::Vec3{11, 22, 33};
-      // m.pos = {11, 22, 33};
       m.mana = 161;
       m.hp = 241;
       m.name = "it is a test, ok";
       m.inventory = "\24\25\26\24";
       m.color = Monster::Color::Red;
-      m.weapons = {{"gun", 421}, {"mission", 561}};
+      m.weapons = {{"gun", 421}, {"shotgun", 561}};
       m.equipped = std::make_unique<struct_pb_sample::Weapon>();
       *m.equipped = struct_pb_sample::Weapon{"air craft", 671};
       // m.equipped = {"air craft", 671};
-      m.path = {{71, 82, 93}};
+      m.path = {{71, 82, 93}, {711, 821, 931}};
       monsters.monsters.push_back(std::move(m));
     }
+  }
+  if (object_count % 2 == 1) {
+    Monster m{};
+    m.pos = std::make_unique<struct_pb_sample::Vec3>();
+    *m.pos = struct_pb_sample::Vec3{1, 2, 3};
+    //      m.pos = {1, 2, 3};
+    m.mana = 16;
+    m.hp = 24;
+    m.name = "it is a test";
+    m.inventory = "\1\2\3\4";
+    m.color = Monster::Color::Red;
+    m.weapons = {{"gun", 42}, {"shotgun", 56}};
+    m.equipped = std::make_unique<struct_pb_sample::Weapon>();
+    *m.equipped = struct_pb_sample::Weapon{"air craft", 67};
+    // m.equipped = {"air craft", 67};
+    m.path = {{7, 8, 9}, {71, 81, 91}};
+    monsters.monsters.push_back(std::move(m));
   }
   return monsters;
 }
@@ -114,6 +135,7 @@ struct struct_pb_sample_t : public base_sample {
         buffer_.resize(sz);
         struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(),
                                           sample);
+        no_op(buffer_);
       }
     }
 
@@ -142,6 +164,7 @@ struct struct_pb_sample_t : public base_sample {
             vec[i], buffer_.data(), buffer_.size());
         assert(ok);
       }
+      no_op((char*)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
 

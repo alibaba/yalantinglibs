@@ -15,6 +15,7 @@
  */
 #include <cstddef>
 #include <iostream>
+#include <type_traits>
 
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
@@ -39,20 +40,41 @@ struct dummy {
   char a;
   short b;
 };
+struct dummy2 {
+  struct nest {
+    int a;
+    char ch[15];
+    double c;
+  };
+  std::map<int, std::vector<nest>> hi;
+};
+struct dummy3 {
+  struct nest {
+    struct_pack::compatible<int, 10234> ewr2;
+    int a;
+    char ch[15];
+    struct_pack::compatible<int> ewr;
+    double c;
+  };
+  struct_pack::compatible<int, 1021234> ewr2;
+  std::map<int, std::vector<nest>> hi;
+};
+
 }  // namespace test_pragma_pack
 TEST_CASE("testing no #pragam pack") {
   using T = test_pragma_pack::dummy;
   static_assert(std::alignment_of_v<T> == 2);
-  static_assert(struct_pack::min_alignment<T> == 0);
-  static_assert(struct_pack::detail::min_align<T>() == '0');
-  static_assert(struct_pack::detail::max_align<T>() == 2);
+  static_assert(struct_pack::pack_alignment_v<T> == 0);
+  static_assert(struct_pack::detail::align::pack_alignment_v<T> == 2);
+  static_assert(struct_pack::detail::align::alignment_v<T> == 2);
   static_assert(alignof(T) == 2);
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 2);
   T t{.a = 'a', .b = 666};
-  auto literal = struct_pack::get_type_literal<T>();
-  string_literal<char, 6> val{{(char)-3, 12, 7, 48, 2, (char)-1}};
+  auto literal = struct_pack::get_type_literal<test_pragma_pack::dummy>();
+  string_literal<char, 6> val{
+      {(char)-3, 12, 7, (char)131, (char)131, (char)-1}};
   REQUIRE(literal == val);
   auto buf = struct_pack::serialize(t);
   auto ret = struct_pack::deserialize<T>(buf);
@@ -69,30 +91,23 @@ struct dummy_1 {
 #pragma pack()
 }  // namespace test_pragma_pack
 template <>
-constexpr std::size_t struct_pack::min_alignment<test_pragma_pack::dummy_1> = 1;
-namespace test_pragma_pack {
-#pragma pack(1)
-// if we forget add the template specialization like above,
-// the deserialization will be failed.
-struct dummy_1_forget {
-  char a;
-  short b;
-};
-#pragma pack()
-}  // namespace test_pragma_pack
+constexpr std::size_t struct_pack::pack_alignment_v<test_pragma_pack::dummy_1> =
+    1;
+namespace test_pragma_pack {}  // namespace test_pragma_pack
 TEST_CASE("testing #pragma pack(1)") {
   using T = test_pragma_pack::dummy_1;
   static_assert(std::alignment_of_v<T> == 1);
-  static_assert(struct_pack::min_alignment<T> == 1);
-  static_assert(struct_pack::detail::min_align<T>() == 1);
-  static_assert(struct_pack::detail::max_align<T>() == 1);
+  static_assert(struct_pack::pack_alignment_v<T> == 1);
+  static_assert(struct_pack::detail::align::pack_alignment_v<T> == 1);
+  static_assert(struct_pack::detail::align::alignment_v<T> == 1);
   static_assert(alignof(T) == 1);
   static_assert(sizeof(T) == 3);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 1);
   T t{.a = 'a', .b = 666};
   auto literal = struct_pack::get_type_literal<T>();
-  string_literal<char, 6> val{{(char)-3, 12, 7, 1, 1, (char)-1}};
+  string_literal<char, 6> val{
+      {(char)-3, 12, 7, (char)130, (char)130, (char)-1}};
   REQUIRE(literal == val);
   auto buf = struct_pack::serialize(t);
   SUBCASE("deserialize to dummy") {
@@ -106,11 +121,6 @@ TEST_CASE("testing #pragma pack(1)") {
     REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
     DT d_t = ret.value();
     CHECK(t == d_t);
-  }
-  SUBCASE("deserialize to dummy_1_forget") {
-    using DT = test_pragma_pack::dummy_1_forget;
-    auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(!ret, alignment_requirement_err_msg);
   }
 }
 namespace test_pragma_pack {
@@ -122,42 +132,32 @@ struct dummy_2 {
 #pragma pack()
 }  // namespace test_pragma_pack
 template <>
-constexpr std::size_t struct_pack::min_alignment<test_pragma_pack::dummy_2> = 2;
-namespace test_pragma_pack {
-#pragma pack(2)
-struct dummy_2_forget {
-  char a;
-  short b;
-};
-#pragma pack()
-}  // namespace test_pragma_pack
+constexpr std::size_t struct_pack::pack_alignment_v<test_pragma_pack::dummy_2> =
+    2;
+namespace test_pragma_pack {}  // namespace test_pragma_pack
 TEST_CASE("testing #pragma pack(2)") {
   using T = test_pragma_pack::dummy_2;
   static_assert(std::alignment_of_v<T> == 2);
-  static_assert(struct_pack::min_alignment<T> == 2);
-  static_assert(struct_pack::detail::min_align<T>() == 2);
-  static_assert(struct_pack::detail::max_align<T>() == 2);
+  static_assert(struct_pack::pack_alignment_v<T> == 2);
+  static_assert(struct_pack::detail::align::pack_alignment_v<T> == 2);
+  static_assert(struct_pack::detail::align::alignment_v<T> == 2);
   static_assert(alignof(T) == 2);
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 2);
   T t{.a = 'a', .b = 666};
   auto literal = struct_pack::get_type_literal<T>();
-  string_literal<char, 6> val{{(char)-3, 12, 7, 2, 2, (char)-1}};
+  string_literal<char, 6> val{
+      {(char)-3, 12, 7, (char)131, (char)131, (char)-1}};
   REQUIRE(literal == val);
   auto buf = struct_pack::serialize(t);
   SUBCASE("deserialize to dummy") {
     using DT = test_pragma_pack::dummy;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(!ret, alignment_requirement_err_msg);
+    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
   }
   SUBCASE("deserialize to dummy_1") {
     using DT = test_pragma_pack::dummy_1;
-    auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(!ret, alignment_requirement_err_msg);
-  }
-  SUBCASE("deserialize to dummy_1_forget") {
-    using DT = test_pragma_pack::dummy_1_forget;
     auto ret = struct_pack::deserialize<DT>(buf);
     REQUIRE_MESSAGE(!ret, alignment_requirement_err_msg);
   }
@@ -167,14 +167,6 @@ TEST_CASE("testing #pragma pack(2)") {
     REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
     DT d_t = ret.value();
     CHECK(t == d_t);
-  }
-  SUBCASE("deserialize to dummy_2_forget") {
-    using DT = test_pragma_pack::dummy_2_forget;
-    auto ret = struct_pack::deserialize<DT>(buf);
-    // although the default alignment is 2,
-    // if we forget add the `min_alignment<dummy_2> = 2;`
-    // struct_pack can't get the actual min alignment.
-    REQUIRE_MESSAGE(!ret, alignment_requirement_err_msg);
   }
 }
 
@@ -203,17 +195,18 @@ struct Outer_1 {
 #pragma pack()
 }  // namespace test_pragma_pack
 template <>
-constexpr std::size_t struct_pack::min_alignment<test_pragma_pack::A> = 1;
+constexpr std::size_t struct_pack::pack_alignment_v<test_pragma_pack::A> = 1;
 template <>
-constexpr std::size_t struct_pack::min_alignment<test_pragma_pack::B> = 2;
+constexpr std::size_t struct_pack::pack_alignment_v<test_pragma_pack::B> = 2;
 template <>
-constexpr std::size_t struct_pack::min_alignment<test_pragma_pack::Outer_1> = 1;
+constexpr std::size_t struct_pack::pack_alignment_v<test_pragma_pack::Outer_1> =
+    1;
 TEST_CASE("testing nesting #pragma pack()") {
   using T = test_pragma_pack::Outer;
   static_assert(std::alignment_of_v<T> == 2);
-  static_assert(struct_pack::min_alignment<T> == 0);
-  static_assert(struct_pack::detail::min_align<T>() == '0');
-  static_assert(struct_pack::detail::max_align<T>() == 2);
+  static_assert(struct_pack::pack_alignment_v<T> == 0);
+  static_assert(struct_pack::detail::align::pack_alignment_v<T> == 2);
+  static_assert(struct_pack::detail::align::alignment_v<T> == 2);
   static_assert(alignof(T) == 2);
   static_assert(sizeof(T) == 10);
   static_assert(offsetof(T, a) == 0);
@@ -221,18 +214,18 @@ TEST_CASE("testing nesting #pragma pack()") {
   auto literal = struct_pack::get_type_literal<T>();
   // clang-format off
   string_literal<char, 16> val{{(char)-3,
-                                (char)-3,12, 7, 1, 1, (char)-1,
-                                (char)-3,12, 1, 2, 2, (char)-1,
-                                      48, 2, (char)-1}};
+                                (char)-3,12, 7, (char)130,(char) 130, (char)-1,
+                                (char)-3,12, 1, (char)131,(char) 131, (char)-1,
+                                      (char)131, (char)131, (char)-1}};
   // clang-format on
   REQUIRE(literal == val);
 }
 TEST_CASE("testing nesting #pragma pack(), outer pack(1)") {
   using T = test_pragma_pack::Outer_1;
   static_assert(std::alignment_of_v<T> == 1);
-  static_assert(struct_pack::min_alignment<T> == 1);
-  static_assert(struct_pack::detail::min_align<T>() == 1);
-  static_assert(struct_pack::detail::max_align<T>() == 1);
+  static_assert(struct_pack::pack_alignment_v<T> == 1);
+  static_assert(struct_pack::detail::align::pack_alignment_v<T> == 1);
+  static_assert(struct_pack::detail::align::alignment_v<T> == 1);
   static_assert(alignof(T) == 1);
   static_assert(sizeof(T) == 9);
   static_assert(offsetof(T, a) == 0);
@@ -240,10 +233,13 @@ TEST_CASE("testing nesting #pragma pack(), outer pack(1)") {
   auto literal = struct_pack::get_type_literal<T>();
   // clang-format off
   string_literal<char, 16> val{{(char)-3,
-                                (char)-3,12, 7, 1, 1, (char)-1,
-                                (char)-3,12, 1, 2, 2, (char)-1,
-                                       1, 1, (char)-1}};
+                                (char)-3,12, 7, (char)130,(char) 130, (char)-1,
+                                (char)-3,12, 1, (char)131, (char)131, (char)-1,
+                                       (char)130, (char)130, (char)-1}};
   // clang-format on
   REQUIRE(literal == val);
 }
+static_assert(struct_pack::get_type_literal<test_pragma_pack::dummy2>() ==
+              struct_pack::get_type_literal<test_pragma_pack::dummy3>());
+
 TEST_SUITE_END;

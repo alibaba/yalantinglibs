@@ -4,6 +4,7 @@ add_executable(test_serialize
         test_serialize.cpp
         test_compile_time_calculate.cpp
         test_data_struct.cpp
+        test_data_struct2.cpp
         test_tuplet.cpp
         test_alignas.cpp
         test_pragma_pack.cpp

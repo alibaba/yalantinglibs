@@ -1,5 +1,9 @@
-find_package(glog)
+find_package(glog QUIET)
 
+if (UNIX)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+endif()
+#include_directories(spdlog/include)
 add_executable(easylog_benchmark
         main.cpp
         )

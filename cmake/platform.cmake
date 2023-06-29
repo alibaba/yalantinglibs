@@ -10,4 +10,6 @@ endif()
 # Resolves C1128 complained by MSVC: number of sections exceeded object file format limit: compile with /bigobj.
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/bigobj>")
 # Resolves C4737 complained by MSVC: C4737: Unable to perform required tail call. Performance may be degraded. "Release-Type only"
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/EHa>")
+endif()

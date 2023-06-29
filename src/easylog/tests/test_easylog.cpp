@@ -36,7 +36,7 @@ std::string get_last_line(const std::string& filename) {
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
-  easylog::init_log(Severity::DEBUG, filename, true, 5000, 1, true);
+  easylog::init_log(Severity::DEBUG, filename, false, true, 5000, 1, true);
 
   ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
 
@@ -66,7 +66,7 @@ TEST_CASE("test basic") {
   std::string other_filename = "other.txt";
   std::filesystem::remove(other_filename);
   constexpr size_t InstanceId = 2;
-  easylog::init_log<InstanceId>(Severity::DEBUG, other_filename, false);
+  easylog::init_log<InstanceId>(Severity::DEBUG, other_filename, false, false);
   ELOG(INFO, InstanceId) << "ok in other txt";
   easylog::flush<InstanceId>();
   CHECK(get_last_line(other_filename).rfind("ok in other txt") !=
@@ -87,8 +87,8 @@ TEST_CASE("test_severity") {
   std::string severity_filename = "test_severity.txt";
   std::filesystem::remove(severity_filename);
   constexpr size_t SecId = 3;
-  easylog::init_log<SecId>(Severity::WARN, severity_filename, true, 5000, 1,
-                           true);
+  easylog::init_log<SecId>(Severity::WARN, severity_filename, false, true, 5000,
+                           1, true);
 
   MELOGV(ERROR, SecId, "error log can put in file.");
   MELOGV(INFO, SecId, "info log can't put in file.");
@@ -111,8 +111,8 @@ TEST_CASE("test_flush") {
   std::string flust_filename = "test_flush.txt";
   std::filesystem::remove(flust_filename);
   constexpr size_t ThirdId = 4;
-  easylog::init_log<ThirdId>(Severity::DEBUG, flust_filename, true, 5000, 1,
-                             false);
+  easylog::init_log<ThirdId>(Severity::DEBUG, flust_filename, false, true, 5000,
+                             1, false);
 
   ELOG(INFO, ThirdId) << "flush log to file.";
   CHECK(get_last_line(flust_filename).rfind("flush log to file.") ==
@@ -134,7 +134,8 @@ TEST_CASE("file_number") {
   std::string number_file = "test_number.txt";
   std::filesystem::remove(number_file);
   constexpr size_t FourthId = 5;
-  easylog::init_log<FourthId>(Severity::DEBUG, number_file, true, 23, 4, true);
+  easylog::init_log<FourthId>(Severity::DEBUG, number_file, false, true, 23, 4,
+                              true);
   MELOGV(INFO, FourthId, "append data to file1.");
   MELOGV(INFO, FourthId, "append data to file2.");
   MELOGV(INFO, FourthId, "append data to file3.");
@@ -147,10 +148,25 @@ TEST_CASE("file_roll") {
   std::string roll_file = "roll_file.txt";
   std::filesystem::remove(roll_file);
   constexpr size_t FifthId = 6;
-  easylog::init_log<FifthId>(Severity::DEBUG, roll_file, true, 10, 1, true);
+  easylog::init_log<FifthId>(Severity::DEBUG, roll_file, false, true, 10, 1,
+                             true);
   MELOGV(INFO, FifthId, "should be covered string.");
   MELOGV(INFO, FifthId, "the string that should be saved in the file.");
   CHECK(get_last_line(roll_file).rfind(
             "he string that should be saved in the file.") !=
+        std::string::npos);
+}
+
+TEST_CASE("async_file") {
+  std::string async_file = "async_file.txt";
+  std::filesystem::remove(async_file);
+  constexpr size_t Id = 7;
+  easylog::init_log<Id>(Severity::DEBUG, async_file, true, true, 10, 1, true);
+  MELOGV(INFO, Id, "file 7 should be covered string.");
+  MELOGV(INFO, Id, "the string that should be saved in the file 7.");
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  easylog::stop_async_log<Id>();
+  auto s = get_last_line(async_file);
+  CHECK(s.rfind("he string that should be saved in the file 7.") !=
         std::string::npos);
 }

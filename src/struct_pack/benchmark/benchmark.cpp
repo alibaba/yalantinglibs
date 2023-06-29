@@ -4,15 +4,22 @@
 #include <vector>
 
 #include "struct_pack_sample.hpp"
+
+#if __has_include(<msgpack.hpp>)
+#define HAVE_MSGPACK 1
+#endif
+
 #ifdef HAVE_MSGPACK
 #include "msgpack_sample.hpp"
 #endif
+
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
 #include "struct_pb_sample.hpp"
 #endif
-
-#include <string>
+#ifdef HAVE_FLATBUFFER
+#include "flatbuffer_sample.hpp"
+#endif
 
 #include "config.hpp"
 using namespace std::string_literals;
@@ -77,7 +84,7 @@ void run_benchmark(const auto& map, LibType base_line_type) {
 int main(int argc, char** argv) {
   std::cout << "OBJECT_COUNT : " << OBJECT_COUNT << std::endl;
 
-  std::unordered_map<LibType, std::shared_ptr<base_sample>> map;
+  std::map<LibType, std::shared_ptr<base_sample>> map;
   map.emplace(LibType::STRUCT_PACK, new struct_pack_sample());
 
 #ifdef HAVE_MSGPACK
@@ -86,6 +93,9 @@ int main(int argc, char** argv) {
 #ifdef HAVE_PROTOBUF
   map.emplace(LibType::STRUCT_PB, new struct_pb_sample::struct_pb_sample_t());
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
+#endif
+#ifdef HAVE_FLATBUFFER
+  map.emplace(LibType::FLATBUFFER, new flatbuffer_sample_t());
 #endif
 
   for (auto [lib_type, sample] : map) {
@@ -103,9 +113,6 @@ int main(int argc, char** argv) {
   run_benchmark(map, LibType::STRUCT_PACK);
 
 #ifdef HAVE_PROTOBUF
-  std::erase_if(map, [](auto& pair) {
-    return pair.first != LibType::STRUCT_PB && pair.first != LibType::PROTOBUF;
-  });
 
   run_benchmark(map, LibType::STRUCT_PB);
 #endif

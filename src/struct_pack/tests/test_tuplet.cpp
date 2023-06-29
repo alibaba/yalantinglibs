@@ -57,6 +57,7 @@ struct struct_with_empty {
   int c;
 };
 
+#if TUPLET_HAS_NO_UNIQUE_ADDRESS && !(defined _MSC_VER)
 static_assert(offsetof(struct_with_empty, b) == (has_no_unique_address)
                   ? 0
                   : sizeof(int));
@@ -69,6 +70,7 @@ static_assert(offsetof(struct_with_empty, c) ==
                       (has_no_unique_address && !is_cl_or_clang_cl)
                   ? sizeof(int)
                   : 2 * sizeof(int));
+#endif
 
 template <typename Tuple>
 void test_tuple_alignment() {

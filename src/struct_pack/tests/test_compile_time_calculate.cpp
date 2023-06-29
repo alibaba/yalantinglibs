@@ -22,14 +22,14 @@ constexpr std::size_t struct_pack::members_count<bug_member_count_struct2> = 3;
 TEST_CASE("test members_count") {
   {
     using t = bug_member_count_struct1;
-    t b;
+    t b{};
     auto res = struct_pack::serialize(b);
     auto ret = struct_pack::deserialize<t>(res.data(), res.size());
     CHECK(ret);
   }
   {
     using t = bug_member_count_struct2;
-    t b;
+    t b{};
     auto res = struct_pack::serialize(b);
     auto ret = struct_pack::deserialize<t>(res.data(), res.size());
     CHECK(ret);

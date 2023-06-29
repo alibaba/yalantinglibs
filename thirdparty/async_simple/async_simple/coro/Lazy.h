@@ -16,16 +16,16 @@
 #ifndef ASYNC_SIMPLE_CORO_LAZY_H
 #define ASYNC_SIMPLE_CORO_LAZY_H
 
-#include <async_simple/Common.h>
-#include <async_simple/Try.h>
-#include <async_simple/coro/DetachedCoroutine.h>
-#include <async_simple/coro/ViaCoroutine.h>
-#include <async_simple/experimental/coroutine.h>
 #include <atomic>
 #include <concepts>
 #include <cstdio>
 #include <exception>
 #include <variant>
+#include "async_simple/Common.h"
+#include "async_simple/Try.h"
+#include "async_simple/coro/DetachedCoroutine.h"
+#include "async_simple/coro/ViaCoroutine.h"
+#include "async_simple/experimental/coroutine.h"
 
 namespace async_simple {
 
@@ -48,8 +48,11 @@ class Lazy;
 struct Yield {};
 
 namespace detail {
-template <typename LazyType, typename IAlloc, typename OAlloc, bool Para>
+template <class, typename OAlloc, bool Para>
 struct CollectAllAwaiter;
+
+template <bool Para, template <typename> typename LazyType, typename... Ts>
+struct CollectAllVariadicAwaiter;
 
 template <typename LazyType, typename IAlloc>
 struct CollectAnyAwaiter;
@@ -124,10 +127,10 @@ public:
 
     Lazy<T> get_return_object() noexcept;
 
-    template <typename V,
-              typename = std::enable_if_t<std::is_convertible_v<V&&, T>>>
+    template <typename V>
     void return_value(V&& value) noexcept(
-        std::is_nothrow_constructible_v<T, V&&>) {
+        std::is_nothrow_constructible_v<
+            T, V&&>) requires std::is_convertible_v<V&&, T> {
         _value.template emplace<T>(std::forward<V>(value));
     }
     void unhandled_exception() noexcept {
@@ -216,25 +219,24 @@ struct LazyAwaiterBase {
 
     bool await_ready() const noexcept { return false; }
 
-    template <typename T2 = T, std::enable_if_t<std::is_void_v<T2>, int> = 0>
-    void awaitResume() {
-        _handle.promise().result();
-        // We need to destroy the handle expclictly since the awaited coroutine
-        // after symmetric transfer couldn't release it self any more.
-        _handle.destroy();
-        _handle = nullptr;
-    }
-
-    template <typename T2 = T, std::enable_if_t<!std::is_void_v<T2>, int> = 0>
-    T awaitResume() {
-        auto r = std::move(_handle.promise()).result();
-        _handle.destroy();
-        _handle = nullptr;
-        return r;
+    auto awaitResume() {
+        if constexpr (std::is_void_v<T>) {
+            _handle.promise().result();
+            // We need to destroy the handle expclictly since the awaited
+            // coroutine after symmetric transfer couldn't release it self any
+            // more.
+            _handle.destroy();
+            _handle = nullptr;
+        } else {
+            auto r = std::move(_handle.promise()).result();
+            _handle.destroy();
+            _handle = nullptr;
+            return r;
+        }
     }
 
     Try<T> awaitResumeTry() noexcept {
-        Try<T> ret = std::move(_handle.promise().tryResult());
+        Try<T> ret = _handle.promise().tryResult();
         _handle.destroy();
         _handle = nullptr;
         return ret;
@@ -253,28 +255,24 @@ public:
         AwaiterBase(Handle coro) : Base(coro) {}
 
         AS_INLINE auto await_suspend(
-            std::coroutine_handle<> continuation) noexcept {
+            std::coroutine_handle<> continuation) noexcept(!reschedule) {
             // current coro started, caller becomes my continuation
             this->_handle.promise()._continuation = continuation;
 
-            using R =
-                std::conditional_t<reschedule, void, std::coroutine_handle<>>;
-            return awaitSuspendImpl<R>();
+            return awaitSuspendImpl();
         }
 
     private:
-        template <std::same_as<std::coroutine_handle<>> R>
-        auto awaitSuspendImpl() noexcept {
-            return this->_handle;
-        }
-
-        template <std::same_as<void> R>
-        auto awaitSuspendImpl() noexcept {
-            // executor schedule performed
-            auto& pr = this->_handle.promise();
-            logicAssert(pr._executor, "RescheduleLazy need executor");
-            pr._executor->schedule(
-                [h = this->_handle]() mutable { h.resume(); });
+        auto awaitSuspendImpl() noexcept(!reschedule) {
+            if constexpr (reschedule) {
+                // executor schedule performed
+                auto& pr = this->_handle.promise();
+                logicAssert(pr._executor, "RescheduleLazy need executor");
+                pr._executor->schedule(
+                    [h = this->_handle]() mutable { h.resume(); });
+            } else {
+                return this->_handle;
+            }
         }
     };
 
@@ -283,6 +281,17 @@ public:
         AS_INLINE Try<T> await_resume() noexcept {
             return AwaiterBase::awaitResumeTry();
         };
+
+        auto coAwait(Executor* ex) {
+            if constexpr (reschedule) {
+                logicAssert(false,
+                            "RescheduleLazy should be only allowed in "
+                            "DetachedCoroutine");
+            }
+            // derived lazy inherits executor
+            this->_handle.promise()._executor = ex;
+            return std::move(*this);
+        }
     };
 
     struct ValueAwaiter : public AwaiterBase {
@@ -307,13 +316,13 @@ public:
     Executor* getExecutor() { return _coro.promise()._executor; }
 
     template <typename F>
-    void start(F&& callback) {
+    void start(F&& callback) requires(std::is_invocable_v<F&&, Try<T>>) {
         // callback should take a single Try<T> as parameter, return value will
         // be ignored. a detached coroutine will not suspend at initial/final
         // suspend point.
         auto launchCoro = [](LazyBase lazy,
                              std::decay_t<F> cb) -> detail::DetachedCoroutine {
-            cb(std::move(co_await lazy.coAwaitTry()));
+            cb(co_await lazy.coAwaitTry());
         };
         [[maybe_unused]] auto detached =
             launchCoro(std::move(*this), std::forward<F>(callback));
@@ -330,8 +339,11 @@ public:
 protected:
     Handle _coro;
 
-    template <typename LazyType, typename IAlloc, typename OAlloc, bool Para>
+    template <class, typename OAlloc, bool Para>
     friend struct detail::CollectAllAwaiter;
+
+    template <bool, template <typename> typename, typename...>
+    friend struct detail::CollectAllVariadicAwaiter;
 
     template <typename LazyType, typename IAlloc>
     friend struct detail::CollectAnyAwaiter;
@@ -480,6 +492,12 @@ public:
                 std::rethrow_exception(t.getException());
             }
         });
+    }
+
+    [[deprecated(
+        "RescheduleLazy should be only allowed in DetachedCoroutine")]] auto
+    operator co_await() {
+        return Base::operator co_await();
     }
 
 private:

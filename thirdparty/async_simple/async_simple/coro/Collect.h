@@ -16,11 +16,7 @@
 #ifndef ASYNC_SIMPLE_CORO_COLLECT_H
 #define ASYNC_SIMPLE_CORO_COLLECT_H
 
-#include <async_simple/Common.h>
-#include <async_simple/Try.h>
-#include <async_simple/coro/CountEvent.h>
-#include <async_simple/coro/Lazy.h>
-#include <async_simple/experimental/coroutine.h>
+#include <array>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -28,6 +24,11 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include "async_simple/Common.h"
+#include "async_simple/Try.h"
+#include "async_simple/coro/CountEvent.h"
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/experimental/coroutine.h"
 
 namespace async_simple {
 namespace coro {
@@ -46,7 +47,8 @@ namespace detail {
 template <typename T>
 struct CollectAnyResult {
     CollectAnyResult() : _idx(static_cast<size_t>(-1)), _value() {}
-    CollectAnyResult(size_t idx, T&& value)
+    CollectAnyResult(size_t idx, std::add_rvalue_reference_t<T> value) requires(
+        !std::is_void_v<T>)
         : _idx(idx), _value(std::move(value)) {}
 
     CollectAnyResult(const CollectAnyResult&) = delete;
@@ -58,13 +60,29 @@ struct CollectAnyResult {
 
     size_t _idx;
     Try<T> _value;
-};
 
-template <>
-struct CollectAnyResult<void> {
-    CollectAnyResult() : _idx(static_cast<size_t>(-1)) {}
-    size_t _idx;
-    Try<void> _value;
+    size_t index() const { return _idx; }
+
+    bool hasError() const { return _value.hasError(); }
+    // Require hasError() == true. Otherwise it is UB to call
+    // this method.
+    std::exception_ptr getException() const {
+        return _value.getException();
+    }
+
+    // Require hasError() == false. Otherwise it is UB to call
+    // value() method.
+#if __cpp_explicit_this_parameter >= 202110L
+    template <class Self>
+    auto&& value(this Self&& self) {
+        return std::forward<Self>(self)._value.value();
+    }
+#else
+    const T& value() const& { return _value.value(); }
+    T& value() & { return _value.value(); }
+    T&& value() && { return std::move(_value).value(); }
+    const T&& value() const&& { return std::move(_value).value(); }
+#endif
 };
 
 template <typename LazyType, typename InAlloc>
@@ -137,6 +155,10 @@ struct CollectAnyVariadicAwaiter {
         : _input(std::make_unique<InputType>(std::move(inputs)...)),
           _result(nullptr) {}
 
+    CollectAnyVariadicAwaiter(InputType&& inputs)
+        : _input(std::make_unique<InputType>(std::move(inputs))),
+          _result(nullptr) {}
+
     CollectAnyVariadicAwaiter(const CollectAnyVariadicAwaiter&) = delete;
     CollectAnyVariadicAwaiter& operator=(const CollectAnyVariadicAwaiter&) =
         delete;
@@ -144,8 +166,7 @@ struct CollectAnyVariadicAwaiter {
         : _input(std::move(other._input)), _result(std::move(other._result)) {}
 
     bool await_ready() const noexcept {
-        return std::tuple_size<InputType>() == 0 ||
-               (_result && _result->has_value());
+        return _result && _result->has_value();
     }
 
     template <size_t... index>
@@ -221,19 +242,29 @@ struct SimpleCollectAnyAwaitable {
     }
 };
 
-template <typename LazyType, typename IAlloc, typename OAlloc,
-          bool Para = false>
-struct CollectAllAwaiter {
-    using ValueType = typename LazyType::ValueType;
+template <template <typename> typename LazyType, typename... Ts>
+struct SimpleCollectAnyVariadicAwaiter {
+    using InputType = std::tuple<LazyType<Ts>...>;
 
-    CollectAllAwaiter(std::vector<LazyType, IAlloc>&& input, OAlloc outAlloc)
+    InputType _inputs;
+
+    SimpleCollectAnyVariadicAwaiter(LazyType<Ts>&&... inputs)
+        : _inputs(std::move(inputs)...) {}
+
+    auto coAwait(Executor* ex) {
+        return CollectAnyVariadicAwaiter(std::move(_inputs));
+    }
+};
+
+template <class Container, typename OAlloc, bool Para = false>
+struct CollectAllAwaiter {
+    using ValueType = typename Container::value_type::ValueType;
+
+    CollectAllAwaiter(Container&& input, OAlloc outAlloc)
         : _input(std::move(input)), _output(outAlloc), _event(_input.size()) {
         _output.resize(_input.size());
     }
-    CollectAllAwaiter(CollectAllAwaiter&& other)
-        : _input(std::move(other._input)),
-          _output(std::move(other._output)),
-          _event(std::move(other._event)) {}
+    CollectAllAwaiter(CollectAllAwaiter&& other) = default;
 
     CollectAllAwaiter(const CollectAllAwaiter&) = delete;
     CollectAllAwaiter& operator=(const CollectAllAwaiter&) = delete;
@@ -276,26 +307,22 @@ struct CollectAllAwaiter {
     }
     inline auto await_resume() { return std::move(_output); }
 
-    std::vector<LazyType, IAlloc> _input;
+    Container _input;
     std::vector<Try<ValueType>, OAlloc> _output;
     detail::CountEvent _event;
 };  // CollectAllAwaiter
 
-template <typename T, typename IAlloc, typename OAlloc, bool Para = false>
+template <class Container, typename OAlloc, bool Para = false>
 struct SimpleCollectAllAwaitable {
-    using ValueType = T;
-    using LazyType = Lazy<T>;
-    using VectorType = std::vector<LazyType, IAlloc>;
-
-    VectorType _input;
+    Container _input;
     OAlloc _out_alloc;
 
-    SimpleCollectAllAwaitable(VectorType&& input, OAlloc out_alloc)
+    SimpleCollectAllAwaitable(Container&& input, OAlloc out_alloc)
         : _input(std::move(input)), _out_alloc(out_alloc) {}
 
     auto coAwait(Executor* ex) {
-        return CollectAllAwaiter<LazyType, IAlloc, OAlloc, Para>(
-            std::move(_input), _out_alloc);
+        return CollectAllAwaiter<Container, OAlloc, Para>(std::move(_input),
+                                                          _out_alloc);
     }
 };  // SimpleCollectAllAwaitable
 
@@ -303,32 +330,38 @@ struct SimpleCollectAllAwaitable {
 
 namespace detail {
 
-template <bool Para, typename T, template <typename> typename LazyType,
-          typename IAlloc = std::allocator<LazyType<T>>,
+template <typename T>
+struct is_lazy : std::false_type {};
+
+template <typename T>
+struct is_lazy<Lazy<T>> : std::true_type {};
+
+template <bool Para, class Container,
+          typename T = typename Container::value_type::ValueType,
           typename OAlloc = std::allocator<Try<T>>>
-inline auto collectAllImpl(std::vector<LazyType<T>, IAlloc>&& input,
-                           OAlloc out_alloc = OAlloc())
-    -> Lazy<std::vector<Try<T>, OAlloc>> {
+inline auto collectAllImpl(Container input, OAlloc out_alloc = OAlloc()) {
+    using LazyType = typename Container::value_type;
     using AT = std::conditional_t<
-        std::is_same_v<LazyType<T>, Lazy<T>>,
-        detail::SimpleCollectAllAwaitable<T, IAlloc, OAlloc, Para>,
-        detail::CollectAllAwaiter<LazyType<T>, IAlloc, OAlloc, Para>>;
-    co_return co_await AT(std::move(input), out_alloc);
+        is_lazy<LazyType>::value,
+        detail::SimpleCollectAllAwaitable<Container, OAlloc, Para>,
+        detail::CollectAllAwaiter<Container, OAlloc, Para>>;
+    return AT(std::move(input), out_alloc);
 }
 
-template <bool Para, typename T, template <typename> typename LazyType,
-          typename IAlloc = std::allocator<LazyType<T>>,
+template <bool Para, class Container,
+          typename T = typename Container::value_type::ValueType,
           typename OAlloc = std::allocator<Try<T>>>
 inline auto collectAllWindowedImpl(size_t maxConcurrency,
                                    bool yield /*yield between two batchs*/,
-                                   std::vector<LazyType<T>, IAlloc>&& input,
-                                   OAlloc out_alloc = OAlloc())
+                                   Container input, OAlloc out_alloc = OAlloc())
     -> Lazy<std::vector<Try<T>, OAlloc>> {
+    using LazyType = typename Container::value_type;
     using AT = std::conditional_t<
-        std::is_same_v<LazyType<T>, Lazy<T>>,
-        detail::SimpleCollectAllAwaitable<T, IAlloc, OAlloc, Para>,
-        detail::CollectAllAwaiter<LazyType<T>, IAlloc, OAlloc, Para>>;
+        is_lazy<LazyType>::value,
+        detail::SimpleCollectAllAwaitable<Container, OAlloc, Para>,
+        detail::CollectAllAwaiter<Container, OAlloc, Para>>;
     std::vector<Try<T>, OAlloc> output(out_alloc);
+    output.reserve(input.size());
     size_t input_size = input.size();
     // maxConcurrency == 0;
     // input_size <= maxConcurrency size;
@@ -339,16 +372,15 @@ inline auto collectAllWindowedImpl(size_t maxConcurrency,
     size_t start = 0;
     while (start < input_size) {
         size_t end = std::min(input_size, start + maxConcurrency);
-        std::vector<LazyType<T>, IAlloc> tmp_group(input.get_allocator());
-        for (; start < end; ++start) {
-            tmp_group.push_back(std::move(input[start]));
-        }
-        auto tmp_output = co_await AT(std::move(tmp_group), out_alloc);
-        for (auto& t : tmp_output) {
+        std::vector<LazyType> tmp_group(
+            std::make_move_iterator(input.begin() + start),
+            std::make_move_iterator(input.begin() + end));
+        start = end;
+        for (auto& t : co_await AT(std::move(tmp_group), out_alloc)) {
             output.push_back(std::move(t));
         }
         if (yield) {
-            co_await Yield();
+            co_await Yield{};
         }
     }
     co_return std::move(output);
@@ -356,68 +388,137 @@ inline auto collectAllWindowedImpl(size_t maxConcurrency,
 
 // variadic collectAll
 
-template <template <typename> typename LazyType, typename Ts>
-Lazy<void> makeWraperTask(LazyType<Ts>&& awaitable, Try<Ts>& result) {
-    try {
-        if constexpr (std::is_void_v<Ts>) {
-            co_await awaitable;
-        } else {
-            result = co_await awaitable;
+template <bool Para, template <typename> typename LazyType, typename... Ts>
+struct CollectAllVariadicAwaiter {
+    using ResultType = std::tuple<Try<Ts>...>;
+    using InputType = std::tuple<LazyType<Ts>...>;
+
+    CollectAllVariadicAwaiter(LazyType<Ts>&&... inputs)
+        : _inputs(std::move(inputs)...), _event(sizeof...(Ts)) {}
+    CollectAllVariadicAwaiter(InputType&& inputs)
+        : _inputs(std::move(inputs)), _event(sizeof...(Ts)) {}
+
+    CollectAllVariadicAwaiter(const CollectAllVariadicAwaiter&) = delete;
+    CollectAllVariadicAwaiter& operator=(const CollectAllVariadicAwaiter&) =
+        delete;
+    CollectAllVariadicAwaiter(CollectAllVariadicAwaiter&&) = default;
+
+    bool await_ready() const noexcept { return false; }
+
+    template <size_t... index>
+    void await_suspend_impl(std::index_sequence<index...>,
+                            std::coroutine_handle<> continuation) {
+        auto promise_type =
+            std::coroutine_handle<LazyPromiseBase>::from_address(
+                continuation.address())
+                .promise();
+        auto executor = promise_type._executor;
+
+        _event.setAwaitingCoro(continuation);
+
+        // fold expression
+        (
+            [executor, this](auto& lazy, auto& result) {
+                auto& exec = lazy._coro.promise()._executor;
+                if (exec == nullptr) {
+                    exec = executor;
+                }
+                auto func = [&]() {
+                    lazy.start([&](auto&& res) {
+                        result = std::move(res);
+                        if (auto awaitingCoro = _event.down(); awaitingCoro) {
+                            awaitingCoro.resume();
+                        }
+                    });
+                };
+
+                if constexpr (Para == true && sizeof...(Ts) > 1) {
+                    if (exec != nullptr)
+                        AS_LIKELY { exec->schedule(std::move(func)); }
+                    else
+                        AS_UNLIKELY { func(); }
+                } else {
+                    func();
+                }
+            }(std::get<index>(_inputs), std::get<index>(_results)),
+            ...);
+
+        if (auto awaitingCoro = _event.down(); awaitingCoro) {
+            awaitingCoro.resume();
         }
-    } catch (...) {
-        result.setException(std::current_exception());
     }
-}
 
-template <bool Para, template <typename> typename LazyType, typename... Ts,
-          size_t... Indices>
-inline auto collectAllVariadicImpl(std::index_sequence<Indices...>,
-                                   LazyType<Ts>&&... awaitables)
-    -> Lazy<std::tuple<Try<Ts>...>> {
+    void await_suspend(std::coroutine_handle<> continuation) {
+        await_suspend_impl(std::make_index_sequence<sizeof...(Ts)>{},
+                           std::move(continuation));
+    }
+
+    auto await_resume() { return std::move(_results); }
+
+    InputType _inputs;
+    ResultType _results;
+    detail::CountEvent _event;
+};
+
+template <bool Para, template <typename> typename LazyType, typename... Ts>
+struct SimpleCollectAllVariadicAwaiter {
+    using InputType = std::tuple<LazyType<Ts>...>;
+
+    SimpleCollectAllVariadicAwaiter(LazyType<Ts>&&... inputs)
+        : _input(std::move(inputs)...) {}
+
+    auto coAwait(Executor* ex) {
+        return CollectAllVariadicAwaiter<Para, LazyType, Ts...>(
+            std::move(_input));
+    }
+
+    InputType _input;
+};
+
+template <bool Para, template <typename> typename LazyType, typename... Ts>
+inline auto collectAllVariadicImpl(LazyType<Ts>&&... awaitables) {
     static_assert(sizeof...(Ts) > 0);
-
-    std::tuple<Try<Ts>...> results;
-    std::vector<Lazy<void>> wraper_tasks;
-
-    // make wraper task
-    (void)std::initializer_list<bool>{
-        (wraper_tasks.push_back(std::move(makeWraperTask(
-             std::move(awaitables), std::get<Indices>(results)))),
-         true)...,
-    };
-
-    co_await collectAllImpl<Para>(std::move(wraper_tasks));
-    co_return std::move(results);
+    using AT = std::conditional_t<
+        is_lazy<LazyType<void>>::value && !Para,
+        SimpleCollectAllVariadicAwaiter<Para, LazyType, Ts...>,
+        CollectAllVariadicAwaiter<Para, LazyType, Ts...>>;
+    return AT(std::move(awaitables)...);
 }
 
 // collectAny
 
 template <typename T, template <typename> typename LazyType,
           typename IAlloc = std::allocator<LazyType<T>>>
-inline auto collectAnyImpl(std::vector<LazyType<T>, IAlloc>&& input)
-    -> Lazy<detail::CollectAnyResult<T>> {
+inline auto collectAnyImpl(std::vector<LazyType<T>, IAlloc> input) {
     using AT =
         std::conditional_t<std::is_same_v<LazyType<T>, Lazy<T>>,
                            detail::SimpleCollectAnyAwaitable<T, IAlloc>,
                            detail::CollectAnyAwaiter<LazyType<T>, IAlloc>>;
-    co_return co_await AT(std::move(input));
+    return AT(std::move(input));
+}
+
+// collectAnyVariadic
+template <template <typename> typename LazyType, typename... Ts>
+inline auto CollectAnyVariadicImpl(LazyType<Ts>&&... inputs) {
+    using AT =
+        std::conditional_t<is_lazy<LazyType<void>>::value,
+                           SimpleCollectAnyVariadicAwaiter<LazyType, Ts...>,
+                           CollectAnyVariadicAwaiter<LazyType, Ts...>>;
+    return AT(std::move(inputs)...);
 }
 
 }  // namespace detail
 
 template <typename T, template <typename> typename LazyType,
           typename IAlloc = std::allocator<LazyType<T>>>
-inline auto collectAny(std::vector<LazyType<T>, IAlloc>&& input)
-    -> Lazy<detail::CollectAnyResult<T>> {
-    co_return co_await detail::collectAnyImpl(std::move(input));
+inline auto collectAny(std::vector<LazyType<T>, IAlloc>&& input) {
+    return detail::collectAnyImpl(std::move(input));
 }
 
 template <template <typename> typename LazyType, typename... Ts>
-inline auto collectAny(LazyType<Ts>... awaitables)
-    -> Lazy<std::variant<Try<Ts>...>> {
+inline auto collectAny(LazyType<Ts>... awaitables) {
     static_assert(sizeof...(Ts), "collectAny need at least one param!");
-    co_return co_await detail::CollectAnyVariadicAwaiter(
-        std::move(awaitables)...);
+    return detail::CollectAnyVariadicImpl(std::move(awaitables)...);
 }
 
 // The collectAll() function can be used to co_await on a vector of LazyType
@@ -427,10 +528,8 @@ template <typename T, template <typename> typename LazyType,
           typename IAlloc = std::allocator<LazyType<T>>,
           typename OAlloc = std::allocator<Try<T>>>
 inline auto collectAll(std::vector<LazyType<T>, IAlloc>&& input,
-                       OAlloc out_alloc = OAlloc())
-    -> Lazy<std::vector<Try<T>, OAlloc>> {
-    co_return co_await detail::collectAllImpl<false>(std::move(input),
-                                                     out_alloc);
+                       OAlloc out_alloc = OAlloc()) {
+    return detail::collectAllImpl<false>(std::move(input), out_alloc);
 }
 
 // Like the collectAll() function above, The collectAllPara() function can be
@@ -440,10 +539,8 @@ template <typename T, template <typename> typename LazyType,
           typename IAlloc = std::allocator<LazyType<T>>,
           typename OAlloc = std::allocator<Try<T>>>
 inline auto collectAllPara(std::vector<LazyType<T>, IAlloc>&& input,
-                           OAlloc out_alloc = OAlloc())
-    -> Lazy<std::vector<Try<T>, OAlloc>> {
-    co_return co_await detail::collectAllImpl<true>(std::move(input),
-                                                    out_alloc);
+                           OAlloc out_alloc = OAlloc()) {
+    return detail::collectAllImpl<true>(std::move(input), out_alloc);
 }
 
 // This collectAll function can be used to co_await on some different kinds of
@@ -453,27 +550,18 @@ template <template <typename> typename LazyType, typename... Ts>
 // The temporary object's life-time which binding to reference(inputs) won't
 // be extended to next time of coroutine resume. Just Copy inputs to avoid
 // crash.
-inline auto collectAll(LazyType<Ts>... inputs) -> Lazy<std::tuple<Try<Ts>...>> {
-    if constexpr (0 == sizeof...(Ts)) {
-        co_return std::tuple<>{};
-    } else {
-        co_return co_await detail::collectAllVariadicImpl<false>(
-            std::make_index_sequence<sizeof...(Ts)>{}, std::move(inputs)...);
-    }
+inline auto collectAll(LazyType<Ts>... inputs) {
+    static_assert(sizeof...(Ts), "collectAll need at least one param!");
+    return detail::collectAllVariadicImpl<false>(std::move(inputs)...);
 }
 
 // Like the collectAll() function above, This collectAllPara() function can be
 // used to concurrently co_await on some different kinds of LazyType tasks in
 // executor,and producing a tuple of Try values containing each of the results.
 template <template <typename> typename LazyType, typename... Ts>
-inline auto collectAllPara(LazyType<Ts>... inputs)
-    -> Lazy<std::tuple<Try<Ts>...>> {
-    if constexpr (0 == sizeof...(Ts)) {
-        co_return std::tuple<>{};
-    } else {
-        co_return co_await detail::collectAllVariadicImpl<true>(
-            std::make_index_sequence<sizeof...(Ts)>{}, std::move(inputs)...);
-    }
+inline auto collectAllPara(LazyType<Ts>... inputs) {
+    static_assert(sizeof...(Ts), "collectAllPara need at least one param!");
+    return detail::collectAllVariadicImpl<true>(std::move(inputs)...);
 }
 
 // Await each of the input LazyType tasks in the vector, allowing at most
@@ -486,10 +574,9 @@ template <typename T, template <typename> typename LazyType,
 inline auto collectAllWindowed(size_t maxConcurrency,
                                bool yield /*yield between two batchs*/,
                                std::vector<LazyType<T>, IAlloc>&& input,
-                               OAlloc out_alloc = OAlloc())
-    -> Lazy<std::vector<Try<T>, OAlloc>> {
-    co_return co_await detail::collectAllWindowedImpl<true>(
-        maxConcurrency, yield, std::move(input), out_alloc);
+                               OAlloc out_alloc = OAlloc()) {
+    return detail::collectAllWindowedImpl<true>(maxConcurrency, yield,
+                                                std::move(input), out_alloc);
 }
 
 // Await each of the input LazyType tasks in the vector, allowing at most
@@ -503,10 +590,9 @@ template <typename T, template <typename> typename LazyType,
 inline auto collectAllWindowedPara(size_t maxConcurrency,
                                    bool yield /*yield between two batchs*/,
                                    std::vector<LazyType<T>, IAlloc>&& input,
-                                   OAlloc out_alloc = OAlloc())
-    -> Lazy<std::vector<Try<T>, OAlloc>> {
-    co_return co_await detail::collectAllWindowedImpl<false>(
-        maxConcurrency, yield, std::move(input), out_alloc);
+                                   OAlloc out_alloc = OAlloc()) {
+    return detail::collectAllWindowedImpl<false>(maxConcurrency, yield,
+                                                 std::move(input), out_alloc);
 }
 
 }  // namespace coro

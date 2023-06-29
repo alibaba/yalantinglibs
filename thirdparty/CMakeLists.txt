@@ -36,6 +36,12 @@ target_include_directories(frozen INTERFACE frozen)
 add_library(iguana INTERFACE)
 target_include_directories(iguana INTERFACE frozen iguana)
 
+#############################
+# cinatra
+#############################
+add_library(cinatra INTERFACE)
+target_include_directories(cinatra INTERFACE cinatra)
+
 #
 # Install
 #
@@ -49,3 +55,4 @@ install(DIRECTORY frozen/ DESTINATION include/yalantinglibs
         REGEX "CMakeLists.txt" EXCLUDE
         )
 install(DIRECTORY iguana/ DESTINATION include/yalantinglibs)
+install(DIRECTORY cinatra/ DESTINATION include/yalantinglibs)

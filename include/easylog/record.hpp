@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 #pragma once
+#include <util/type_traits.h>
+
 #include <charconv>
 #include <chrono>
 #include <cstring>
-#include <type_traits>
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -31,7 +32,7 @@
 #include <util/meta_string.hpp>
 #include <utility>
 
-#include "iguana/detail/dragonbox_to_chars.h"
+#include "util/dragonbox_to_chars.h"
 
 #if defined(_WIN32)
 #ifndef _WINDOWS_
@@ -97,17 +98,20 @@ inline std::string_view severity_str(Severity severity) {
 
 class record_t {
  public:
-  record_t(auto tm_point, Severity severity, auto str)
-      : tm_point_(tm_point), severity_(severity), tid_(get_tid_impl()) {
-    std::memcpy(buf_, str.data(), str.size());
-    buf_len_ = str.size();
-  }
+  record_t() = default;
+  record_t(auto tm_point, Severity severity, std::string_view str)
+      : tm_point_(tm_point),
+        severity_(severity),
+        tid_(get_tid_impl()),
+        file_str_(str) {}
+  record_t(record_t &&) = default;
+  record_t &operator=(record_t &&) = default;
 
   Severity get_severity() const { return severity_; }
 
   const char *get_message() const { return ss_.data(); }
 
-  std::string_view get_file_str() const { return {buf_, buf_len_}; }
+  std::string_view get_file_str() const { return file_str_; }
 
   unsigned int get_tid() const { return tid_; }
 
@@ -154,10 +158,12 @@ class record_t {
   void printf_string_format(const char *fmt, Args... args) {
     size_t size = snprintf(nullptr, 0, fmt, args...);
 
+#ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
     char arr[1024];
     std::pmr::monotonic_buffer_resource resource(arr, 1024);
     std::pmr::string buf{&resource};
+#endif
 #else
     std::string buf;
 #endif
@@ -192,13 +198,14 @@ class record_t {
   std::chrono::system_clock::time_point tm_point_;
   Severity severity_;
   unsigned int tid_;
-  char buf_[64] = {};
-  size_t buf_len_ = 0;
+  std::string file_str_;
 
+#ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)
   char arr_[1024];
   std::pmr::monotonic_buffer_resource resource_;
   std::pmr::string ss_{&resource_};
+#endif
 #else
   std::string ss_;
 #endif

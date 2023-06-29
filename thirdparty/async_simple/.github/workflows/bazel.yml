@@ -1,0 +1,28 @@
+name: Bazel
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: deps
+      # Install Bazel See: https://bazel.build/install/ubuntu
+      run: |
+           sudo apt install -y libaio-dev
+    - name: Build
+      # Build your program with clang
+      working-directory: ${{github.workspace}}
+      run: bazel build --action_env=CXX=clang++ --action_env=CC=clang ...
+
+    - name: Test
+      # Build and Execute tests
+      working-directory: ${{github.workspace}}
+      run: bazel test --action_env=CXX=clang++ --action_env=CC=clang --test_output=errors ...

@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "doctest.h"
 #include "struct_pack/struct_pack.hpp"
 #include "struct_pack/struct_pack/struct_pack_impl.hpp"
@@ -8,20 +10,9 @@ using namespace struct_pack;
 struct compatible12;
 struct compatible1 {
   struct_pack::compatible<int> c;
+  std::unique_ptr<compatible12> i;
   friend bool operator<(const compatible1& self, const compatible1& other) {
-    if (self.c.has_value()) {
-      if (other.c.has_value()) {
-        return self.c.value() < other.c.value();
-      }
-      else {
-        return false;
-      }
-    }
-    else if (other.c.has_value()) {
-      return true;
-    }
-    else
-      return false;
+    return false;
   }
 };
 
@@ -29,12 +20,18 @@ struct compatible2 {
   std::string a;
   compatible1 comp;
   std::string b;
+  friend bool operator<(const compatible2& self, const compatible2& other) {
+    return false;
+  }
 };
 
 struct compatible3 {
   std::string a;
   std::tuple<int, double, compatible2, char> comp;
   std::string b;
+  friend bool operator<(const compatible3& self, const compatible3& other) {
+    return false;
+  }
 };
 
 struct compatible4 {
@@ -46,9 +43,54 @@ struct compatible4 {
   }
 };
 
+struct compatible5 {
+  std::string a;
+  std::vector<compatible4> comp;
+  std::string b;
+  friend bool operator<(const compatible5&, const compatible5&) {
+    return false;
+  }
+};
+
+struct compatible6 {
+  std::string a;
+  std::list<compatible5> comp;
+  std::string b;
+  friend bool operator<(const compatible6&, const compatible6&) {
+    return false;
+  }
+};
+
+struct compatible7 {
+  std::string a;
+  std::set<compatible6> comp;
+  std::string b;
+  friend bool operator<(const compatible7&, const compatible7&) {
+    return false;
+  }
+};
+
+struct compatible8 {
+  std::string a;
+  std::map<compatible7, int> comp;
+  std::string b;
+  friend bool operator<(const compatible8&, const compatible8&) {
+    return false;
+  }
+};
+
+struct compatible9 {
+  std::string a;
+  std::map<int, compatible8> comp;
+  std::string b;
+  friend bool operator<(const compatible9&, const compatible9&) {
+    return false;
+  }
+};
+
 struct compatible10 {
   std::string a;
-  std::vector<compatible4> j;
+  std::vector<compatible9> j;
   std::string b;
 };
 
@@ -60,7 +102,7 @@ struct compatible11 {
 
 struct compatible12 {
   std::string a;
-  std::unique_ptr<compatible10> j;
+  std::unique_ptr<compatible11> j;
   std::string b;
 };
 
@@ -74,6 +116,16 @@ TEST_CASE("test compatible check") {
   static_assert(struct_pack::detail::exist_compatible_member<compatible3>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible4>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible5>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible6>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible7>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible8>,
+                "check compatible failed");
+  static_assert(struct_pack::detail::exist_compatible_member<compatible9>,
                 "check compatible failed");
   static_assert(struct_pack::detail::exist_compatible_member<compatible10>,
                 "check compatible failed");
@@ -815,5 +867,328 @@ TEST_CASE("test compatible_with_version") {
     auto result =
         struct_pack::deserialize<compatible_with_version_20230110>(buffer);
     CHECK(result == obj_20230110_empty_1);
+  }
+}
+
+struct compatible_with_trival_field_v0 {
+  int a[4];
+  char aa;
+  double b[2];
+  char cc;
+  friend bool operator==(const compatible_with_trival_field_v0& t,
+                         const compatible_with_trival_field_v0& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc;
+  }
+};
+struct compatible_with_trival_field_v1 {
+  int a[4];
+  char aa;
+  double b[2];
+  char cc;
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v1& t,
+                         const compatible_with_trival_field_v1& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c;
+  };
+};
+
+struct compatible_with_trival_field_v2 {
+  struct_pack::compatible<double, 114515> d;
+  int a[4];
+  char aa;
+  double b[2];
+  char cc;
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v2& t,
+                         const compatible_with_trival_field_v2& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
+           t.d == o.d;
+  };
+};
+
+struct compatible_with_trival_field_v3 {
+  struct_pack::compatible<double, 114515> d;
+  int a[4];
+  char aa;
+  struct_pack::compatible<int, 114516> e;
+  double b[2];
+  char cc;
+  struct_pack::compatible<std::string, 114514> c;
+  friend bool operator==(const compatible_with_trival_field_v3& t,
+                         const compatible_with_trival_field_v3& o) {
+    return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
+           memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
+           t.d == o.d && t.e == o.e;
+  };
+};
+
+template <typename T>
+struct nested_trival_v0 {
+  int a;
+  double b;
+  char c;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  int h[3];
+  char z;
+  friend bool operator==(const nested_trival_v0<T>& t,
+                         const nested_trival_v0<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z;
+  }
+};
+
+[[maybe_unused]] constexpr auto i2 =
+    struct_pack::detail::align::calculate_padding_size<
+        nested_trival_v0<compatible_with_trival_field_v1>>();
+
+template <typename T>
+struct nested_trival_v1 {
+  int a;
+  double b;
+  char c;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  char z;
+  friend bool operator==(const nested_trival_v1<T>& t,
+                         const nested_trival_v1<T>& o) {
+    bool test = t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d &&
+                t.e == o.e && t.f == o.f &&
+                memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+                memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i;
+    return test;
+  }
+};
+
+template <typename T>
+struct nested_trival_v2 {
+  int a;
+  double b;
+  char c;
+  struct_pack::compatible<double, 114516> j;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  char z;
+  friend bool operator==(const nested_trival_v2<T>& t,
+                         const nested_trival_v2<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
+           t.j == o.j;
+  }
+};
+
+template <typename T>
+struct nested_trival_v3 {
+  int a;
+  double b;
+  char c;
+  struct_pack::compatible<double, 114516> j;
+  float d;
+  int64_t e;
+  T f;
+  char g[10];
+  struct_pack::compatible<int, 114516> i;
+  int h[3];
+  char z;
+  struct_pack::compatible<std::string, 114516> k;
+  friend bool operator==(const nested_trival_v3<T>& t,
+                         const nested_trival_v3<T>& o) {
+    return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
+           t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
+           memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
+           t.j == o.j && t.k == o.k;
+  }
+};
+
+TEST_CASE("test trival_serialzable_obj_with_compatible") {
+  nested_trival_v0<compatible_with_trival_field_v0> to = {
+      .a = 113,
+      .b = 123.322134213,
+      .c = 'H',
+      .d = 890432.1,
+      .e = INT64_MAX - 1,
+      .f = {{123343, 7984321, 1987432, 1984327},
+            'I',
+            {798214321.98743, 821304.084321},
+            'Q'},
+      .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
+      .h = {14, 1023213, 1432143231},
+      .z = 'G'};
+  auto op = [&](auto from) {
+    from = {.a = 113,
+            .b = 123.322134213,
+            .c = 'H',
+            .d = 890432.1,
+            .e = INT64_MAX - 1,
+            .f = {.a = {123343, 7984321, 1987432, 1984327},
+                  .aa = 'I',
+                  .b = {798214321.98743, 821304.084321},
+                  .cc = 'Q'},
+            .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
+            .h = {14, 1023213, 1432143231},
+            .z = 'G'};
+    {
+      auto buffer = struct_pack::serialize(from);
+      auto result = struct_pack::deserialize<decltype(to)>(buffer);
+      CHECK(result.value() == to);
+    }
+    {
+      auto buffer = struct_pack::serialize(to);
+      auto result = struct_pack::deserialize<decltype(from)>(buffer);
+      CHECK(result == from);
+    }
+  };
+  SUBCASE("test outer v0") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v0<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v0<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v0<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v0<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v1") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v1<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v1<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v1<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v1<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v2") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v2<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v2<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v2<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v2<compatible_with_trival_field_v3>{});
+    }
+  }
+  SUBCASE("test outer v3") {
+    SUBCASE("test innner v0") {
+      op(nested_trival_v3<compatible_with_trival_field_v0>{});
+    }
+    SUBCASE("test innner v1") {
+      op(nested_trival_v3<compatible_with_trival_field_v1>{});
+    }
+    SUBCASE("test innner v2") {
+      op(nested_trival_v3<compatible_with_trival_field_v2>{});
+    }
+    SUBCASE("test innner v3") {
+      op(nested_trival_v3<compatible_with_trival_field_v3>{});
+    }
+  }
+}
+struct A_v1 {
+  double a;
+  struct B {
+    double a;
+    struct C {
+      double a;
+      struct D {
+        double a;
+        struct E {
+          double a;
+          char c;
+        } b;
+        char c;
+      } b;
+      char c;
+    } b;
+    char c;
+  } b;
+  char c;
+};
+
+struct A_v2 {
+  double a;
+  struct B {
+    double a;
+    struct C {
+      double a;
+      struct D {
+        double a;
+        struct E {
+          double a;
+          struct_pack::compatible<int> b;
+          char c;
+        } b;
+        char c;
+      } b;
+      char c;
+    } b;
+    char c;
+  } b;
+  char c;
+};
+bool test_equal(const auto& v1, const auto& v2) {
+  return v1.a == v2.a && v1.c == v2.c &&
+         (v1.b.a == v2.b.a && v1.b.c == v2.b.c &&
+          (v1.b.b.a == v2.b.b.a && v1.b.b.c == v2.b.b.c &&
+           (v1.b.b.b.a == v2.b.b.b.a && v1.b.b.b.c == v2.b.b.b.c &&
+            (v1.b.b.b.b.a == v2.b.b.b.b.a && v1.b.b.b.b.c == v2.b.b.b.b.c))));
+}
+TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
+  A_v1 a_v1 = {
+      .a = .123,
+      .b = {.a = 123.12,
+            .b = {.a = 123.324,
+                  .b = {.a = 213, .b = {.a = 123.53, .c = 'A'}, .c = 'B'},
+                  .c = 'C'},
+            .c = 'D'},
+      .c = 'E'};
+  A_v2 a_v2 = {
+      .a = .123,
+      .b = {.a = 123.12,
+            .b = {.a = 123.324,
+                  .b = {.a = 213,
+                        .b = {.a = 123.53, .b = std::nullopt, .c = 'A'},
+                        .c = 'B'},
+                  .c = 'C'},
+            .c = 'D'},
+      .c = 'E'};
+  {
+    auto buffer = struct_pack::serialize(a_v1);
+    auto result = struct_pack::deserialize<A_v2>(buffer);
+    CHECK(result.has_value());
+    CHECK(test_equal(result.value(), a_v2));
+    CHECK(result->b.b.b.b.b == std::nullopt);
+  }
+  {
+    auto buffer = struct_pack::serialize(a_v2);
+    auto result = struct_pack::deserialize<A_v1>(buffer);
+    CHECK(result.has_value());
+    CHECK(test_equal(result.value(), a_v1));
   }
 }
