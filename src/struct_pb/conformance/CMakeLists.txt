@@ -1,4 +1,5 @@
-find_package(Protobuf)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests/struct_pb)
+find_package(Protobuf QUIET)
 if (NOT Protobuf_FOUND)
     message(WARNING "to build struct_pb conformance test, you must install libprotoc first!!!")
     return()
@@ -40,7 +41,6 @@ add_test(NAME conformance_cpp_test
 add_executable(conformance_struct_pb
         conformance_struct_pb.cc
         )
-target_link_libraries(conformance_struct_pb PRIVATE yalantinglibs::struct_pb)
 protobuf_generate_struct_pb(SRCS HDRS
         conformance/conformance.proto
         google/protobuf/test_messages_proto2.proto

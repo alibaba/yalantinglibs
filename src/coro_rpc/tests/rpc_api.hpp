@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
-#include <coro_rpc/rpc_context.hpp>
+#include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <string>
 #include <thread>
 

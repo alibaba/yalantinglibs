@@ -1,14 +1,17 @@
-find_package(Protobuf)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/bin)
+find_package(Protobuf QUIET)
 if (Protobuf_FOUND)
     file(GLOB SRCS "*.cpp" "*.h")
     add_executable(protoc-gen-struct_pb ${SRCS})
     target_link_libraries(protoc-gen-struct_pb PUBLIC protobuf::libprotoc protobuf::libprotobuf)
-    if (NOT TARGET yalantinglibs::protoc-gen-struct_pb)
-        add_executable(yalantinglibs::protoc-gen-struct_pb ALIAS protoc-gen-struct_pb)
-    endif ()
-    ylt_install(protoc-gen-struct_pb)
+    install(
+        TARGETS protoc-gen-struct_pb
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
 else ()
-    message(WARNING "to build struct_pb protoc plugin, you must install libprotoc first!!!\n"
+    message(WARNING "struct_pb is skipped. To build struct_pb protoc plugin, you must install libprotoc first!!!\n"
             "see https://alibaba.github.io/yalantinglibs/guide/struct-pb-generating-your-struct.html"
             )
 endif ()

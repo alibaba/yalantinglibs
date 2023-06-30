@@ -3,8 +3,8 @@
 
 #include "data_def.struct_pb.h"
 #include "hex_printer.hpp"
-#include "struct_pb/struct_pb.hpp"
 #include "test_pb.struct_pb.h"
+#include "ylt/struct_pb.hpp"
 #ifdef HAVE_PROTOBUF
 #include "google/protobuf/repeated_field.h"
 #endif

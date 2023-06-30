@@ -26,8 +26,6 @@ cc_test(
         "STRUCT_PACK_ENABLE_UNPORTABLE_TYPE",
     ],
     deps = [
-        "//:coro_rpc",
-        "//:struct_pack",
-        "//thirdparty:doctest",
+        "//:ylt"
     ],
 )

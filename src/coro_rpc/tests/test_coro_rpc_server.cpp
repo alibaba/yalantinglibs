@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,16 @@
 #include <async_simple/coro/Collect.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#include <coro_rpc/coro_rpc_client.hpp>
-#include <coro_rpc/coro_rpc_server.hpp>
 #include <thread>
 #include <variant>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
-#include "struct_pack/struct_pack.hpp"
+#include "ylt/struct_pack.hpp"
 
 async_simple::coro::Lazy<int> get_coro_value(int val) { co_return val; }
 
@@ -355,7 +355,7 @@ TEST_CASE("test server write queue") {
     std::string buffer_read;
     buffer_read.resize(buf.size());
     read(socket, asio::buffer(buffer2, coro_rpc_protocol::RESP_HEAD_LEN));
-    auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
+    [[maybe_unused]] auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

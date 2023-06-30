@@ -2,18 +2,18 @@
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
+#include <ylt/struct_pack.hpp>
 
 #include "ScopedTimer.hpp"
 #include "config.hpp"
 #include "data_def.hpp"
 #include "no_op.h"
 #include "sample.hpp"
-#include "struct_pack/struct_pack.hpp"
 
 inline auto create_rects(size_t object_count) {
   rect<int32_t> rc{1, 11, 1111, 111111};
   std::vector<rect<int32_t>> v{};
-  for (int i = 0; i < object_count; i++) {
+  for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(rc);
   }
   return v;
@@ -22,7 +22,7 @@ inline auto create_rects(size_t object_count) {
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
   person p{.id = 432798, .name = "tom", .age = 24, .salary = 65536.42};
-  for (int i = 0; i < object_count; i++) {
+  for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(p);
   }
   return v;
@@ -54,7 +54,7 @@ inline std::vector<Monster> create_monsters(size_t object_count) {
       .path = {{71, 82, 93}, {711, 821, 931}},
   };
 
-  for (int i = 0; i < object_count / 2; i++) {
+  for (std::size_t i = 0; i < object_count / 2; i++) {
     v.push_back(m);
     v.push_back(m1);
   }

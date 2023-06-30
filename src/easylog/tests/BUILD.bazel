@@ -3,13 +3,12 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
 cc_test(
     name = "test_easylog",
     srcs = [
-        "//:include/util/concurrentqueue.h",
         "main.cpp",
-        "test_easylog.cpp",
+        "test_easylog.cpp"
     ],
     copts = ["-std=c++20", "-I", "include"],
+    linkopts = ["-lpthread"],
     deps = [
-        "//:easylog",
-        "//thirdparty:doctest",
+        "//:ylt"
     ],
 )

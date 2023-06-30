@@ -1,17 +1,22 @@
+message(STATUS "-------------DEVELOP SETTING-------------")
 # extra
 option(BUILD_EXAMPLES "Build examples" ON)
+message(STATUS "BUILD_EXAMPLES: ${BUILD_EXAMPLES}")
 
 # bench test
 option(BUILD_BENCHMARK "Build benchmark" ON)
+message(STATUS "BUILD_BENCHMARK: ${BUILD_BENCHMARK}")
 
 # unit test
 option(BUILD_UNIT_TESTS "Build unit tests" ON)
+message(STATUS "BUILD_UNIT_TESTS: ${BUILD_UNIT_TESTS}")
 if(BUILD_UNIT_TESTS)
     enable_testing()
 endif()
 
 # coverage test
 option(COVERAGE_TEST "Build with unit test coverage" OFF)
+message(STATUS "COVERAGE_TEST: ${COVERAGE_TEST}")
 if(COVERAGE_TEST)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage --coverage")
@@ -19,6 +24,15 @@ if(COVERAGE_TEST)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
     endif()
 endif()
+
+# generator benchmark test data
+option(GENERATE_BENCHMARK_DATA "Generate benchmark data" ON)
+message(STATUS "GENERATE_BENCHMARK_DATA: ${GENERATE_BENCHMARK_DATA}")
+
+
+# Enable coro_rpc user define protocol example
+option(CORO_RPC_USE_OTHER_RPC "coro_rpc extend to support other rpc" OFF)
+message(STATUS "CORO_RPC_USE_OTHER_RPC: ${CORO_RPC_USE_OTHER_RPC}")
 
 # Enable address sanitizer
 option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" ON)
@@ -30,8 +44,6 @@ if(ENABLE_SANITIZER AND NOT MSVC)
         else()
             message(WARNING "sanitizer is no supported with current tool-chains")
         endif()
-    else()
-        message(WARNING "Sanitizer supported only for debug type")
     endif()
 endif()
 

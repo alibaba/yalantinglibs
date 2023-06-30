@@ -1,4 +1,5 @@
-find_package(Protobuf)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/benchmark)
+find_package(Protobuf QUIET)
 add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
 if (Protobuf_FOUND)
     message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
@@ -29,8 +30,7 @@ endif ()
 
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)
 target_compile_definitions(struct_pack_benchmark PRIVATE STRUCT_PACK_OPTIMIZE)
-
-find_package(Flatbuffers)
+find_package(Flatbuffers QUIET)
 if (Flatbuffers_FOUND)
     message(STATUS "Flatbuffers_FOUND: ${Flatbuffers_FOUND}")
     execute_process(
