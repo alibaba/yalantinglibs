@@ -173,17 +173,23 @@ class appender {
   }
 
   void add_color(Severity severity) {
+#if defined(_WIN32)
+#else
     if (severity == Severity::WARN)
       std::cout << "\x1B[93m";
     if (severity == Severity::ERROR)
       std::cout << "\x1B[91m";
     if (severity == Severity::CRITICAL)
       std::cout << "\x1B[97m\x1B[41m";
+#endif
   }
 
   void clean_color(Severity severity) {
+#if defined(_WIN32)
+#else
     if (severity >= Severity::WARN)
       std::cout << "\x1B[0m\x1B[0K";
+#endif
   }
 
   void write(record_t &&r) {

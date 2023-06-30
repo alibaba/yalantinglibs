@@ -71,9 +71,8 @@ void test_glog() {
 }
 
 void test_easylog(int count, bool async) {
-  std::filesystem::remove("long_name_of_easylog.txt");
-  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", async, false,
-                    -1);
+  std::filesystem::remove("easylog.txt");
+  easylog::init_log(Severity::DEBUG, "easylog.txt", async, false, -1);
   for (int i = 0; i < 10; i++) {
     ScopedTimer timer("easylog");
     for (int i = 0; i < count; i++)
@@ -127,14 +126,19 @@ int main() {
   int count = 500000;
 #ifdef HAVE_SPDLOG
   spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %l [%t] [%@] %v");
+
+  std::cout << "========test sync spdlog===========\n";
   auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
   bench(count, std::move(basic_st));
 
+  std::cout << "========test async spdlog===========\n";
   auto basic_mt = spdlog::basic_logger_st("basic_mt", "basic_mt.log", true);
   bench_mt(count, std::move(basic_mt), 4);
 #endif
 
   test_glog();
+  std::cout << "========test sync spdlog===========\n";
   test_easylog(count, /*async =*/false);
+  std::cout << "========test async easylog===========\n";
   test_easylog(count, /*async =*/true);
 }
