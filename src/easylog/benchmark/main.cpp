@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <exception>
 #ifdef HAVE_GLOG
 #include <glog/logging.h>
 #endif
@@ -137,8 +138,14 @@ int main() {
 #endif
 
   test_glog();
-  std::cout << "========test sync spdlog===========\n";
-  test_easylog(count, /*async =*/false);
-  std::cout << "========test async easylog===========\n";
-  test_easylog(count, /*async =*/true);
+  try {
+    std::cout << "========test sync easylog===========\n";
+    test_easylog(count, /*async =*/false);
+    std::cout << "========test async easylog===========\n";
+    test_easylog(count, /*async =*/true);
+  } catch (std::exception &e) {
+    std::cout << e.what() << "\n";
+  } catch (...) {
+    std::cout << "unknown exception\n";
+  }
 }
