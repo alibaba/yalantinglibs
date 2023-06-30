@@ -56,8 +56,8 @@ class logger {
   void init(Severity min_severity, bool async, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time) {
-    static appender appender(filename, async, enable_console, max_file_size,
-                             max_files, flush_every_time);
+    static appender appender(filename, async, max_file_size, max_files,
+                             flush_every_time);
     async_ = async;
     appender_ = &appender;
     min_severity_ = min_severity;
@@ -73,49 +73,28 @@ class logger {
   void stop_async_log() { appender_->stop(); }
 
  private:
-  logger() = default;
+  logger() {
+    static appender appender{};
+    appender_ = &appender;
+  }
+
   logger(const logger &) = default;
 
   void append_record(record_t record) { appender_->write(std::move(record)); }
 
-  void append_format(const record_t &record) {
-    char buf[32];
-    size_t len = appender_->get_time_str(buf, record.get_time_point());
-
-#ifdef YLT_ENABLE_PMR
-#if __has_include(<memory_resource>)
-    char arr[1024];
-    std::pmr::monotonic_buffer_resource resource(arr, 1024);
-    std::pmr::string str{&resource};
-#endif
-#else
-    std::string str;
-#endif
-    str.append(buf, len).append(" ");
-    str.append(severity_str(record.get_severity())).append(" ");
-
-    auto [ptr, ec] = std::to_chars(buf, buf + 32, record.get_tid());
-
-    str.append("[").append(std::string_view(buf, ptr - buf)).append("] ");
-    str.append(record.get_file_str());
-    str.append(record.get_message()).append("\n");
-
+  void append_format(record_t &record) {
     if (appender_) {
-      appender_->write(str);
-    }
-
-    if (enable_console_) {
-      std::cout << str;
-      std::cout << std::flush;
-    }
-
-    for (auto &fn : appenders_) {
-      fn(std::string_view(str));
+      if (enable_console_) {
+        appender_->write_record<true, true>(record);
+      }
+      else {
+        appender_->write_record<true, false>(record);
+      }
     }
   }
 
   Severity min_severity_;
-  bool async_ = true;
+  bool async_ = false;
   bool enable_console_ = true;
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;

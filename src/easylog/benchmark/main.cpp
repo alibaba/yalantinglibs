@@ -18,8 +18,11 @@
 #include <glog/logging.h>
 #endif
 
-// #include <spdlog/sinks/base_sink.h>
-// #include <spdlog/spdlog.h>
+#ifdef HAVE_SPDLOG
+#include <spdlog/sinks/base_sink.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
+#endif
 
 #include <filesystem>
 
@@ -67,36 +70,71 @@ void test_glog() {
 #endif
 }
 
-void test_easylog() {
+void test_easylog(int count, bool async) {
   std::filesystem::remove("long_name_of_easylog.txt");
-  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", true, false,
-                    10 * 1024 * 1024, 1);
+  easylog::init_log(Severity::DEBUG, "long_name_of_easylog.txt", async, false,
+                    -1);
   for (int i = 0; i < 10; i++) {
     ScopedTimer timer("easylog");
-    for (int i = 0; i < 50000; i++)
+    for (int i = 0; i < count; i++)
       ELOG(INFO) << "Hello logger: msg number " << i;
   }
 }
 
-// void bench(int howmany, std::shared_ptr<spdlog::logger> log) {
-//   spdlog::drop(log->name());
+#ifdef HAVE_SPDLOG
+void bench(int howmany, std::shared_ptr<spdlog::logger> log) {
+  spdlog::drop(log->name());
 
-//   using std::chrono::duration;
-//   using std::chrono::duration_cast;
-//   using std::chrono::high_resolution_clock;
+  using std::chrono::duration;
+  using std::chrono::duration_cast;
+  using std::chrono::high_resolution_clock;
 
-//   for (int i = 0; i < 10; i++) {
-//     ScopedTimer timer("spdlog ");
-//     for (auto i = 0; i < howmany; ++i) {
-//       log->info("Hello logger: msg number {}", i);
-//     }
-//   }
-// }
+  for (int i = 0; i < 10; i++) {
+    ScopedTimer timer("spdlog ");
+    for (auto i = 0; i < howmany; ++i) {
+      SPDLOG_LOGGER_INFO(log, "Hello logger: msg number {}", i);
+    }
+  }
+}
+
+void bench_mt(int howmany, std::shared_ptr<spdlog::logger> log,
+              size_t thread_count) {
+  using std::chrono::duration;
+  using std::chrono::duration_cast;
+  using std::chrono::high_resolution_clock;
+  spdlog::drop(log->name());
+
+  std::vector<std::thread> threads;
+  threads.reserve(thread_count);
+  {
+    ScopedTimer timer("spdlog ");
+    for (size_t t = 0; t < thread_count; ++t) {
+      threads.emplace_back([&]() {
+        for (int j = 0; j < howmany / static_cast<int>(thread_count); j++) {
+          SPDLOG_LOGGER_INFO(log, "Hello logger: msg number {}", j);
+        }
+      });
+    }
+
+    for (auto &t : threads) {
+      t.join();
+    };
+  }
+}
+#endif
 
 int main() {
-  // auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
-  // bench(50000, std::move(basic_st));
+  int count = 500000;
+#ifdef HAVE_SPDLOG
+  spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %l [%t] [%@] %v");
+  auto basic_st = spdlog::basic_logger_st("basic_st", "basic_st.log", true);
+  bench(count, std::move(basic_st));
+
+  auto basic_mt = spdlog::basic_logger_st("basic_mt", "basic_mt.log", true);
+  bench_mt(count, std::move(basic_mt), 4);
+#endif
 
   test_glog();
-  test_easylog();
+  test_easylog(count, /*async =*/false);
+  test_easylog(count, /*async =*/true);
 }
