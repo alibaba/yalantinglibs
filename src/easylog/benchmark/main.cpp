@@ -15,6 +15,7 @@
  */
 
 #include <exception>
+#include <system_error>
 #ifdef HAVE_GLOG
 #include <glog/logging.h>
 #endif
@@ -71,9 +72,13 @@ void test_glog() {
 #endif
 }
 
-void test_easylog(int count, bool async) {
-  std::filesystem::remove("easylog.txt");
-  easylog::init_log(Severity::DEBUG, "easylog.txt", async, false, -1);
+void test_easylog(std::string filename, int count, bool async) {
+  std::error_code ec;
+  std::filesystem::remove(filename, ec);
+  if (ec) {
+    std::cout << ec.message() << "\n";
+  }
+  easylog::init_log(Severity::DEBUG, filename, async, false, -1);
   for (int i = 0; i < 10; i++) {
     ScopedTimer timer("easylog");
     for (int i = 0; i < count; i++)
@@ -138,14 +143,8 @@ int main() {
 #endif
 
   test_glog();
-  try {
-    std::cout << "========test sync easylog===========\n";
-    test_easylog(count, /*async =*/false);
-    std::cout << "========test async easylog===========\n";
-    test_easylog(count, /*async =*/true);
-  } catch (std::exception &e) {
-    std::cout << e.what() << "\n";
-  } catch (...) {
-    std::cout << "unknown exception\n";
-  }
+  std::cout << "========test sync easylog===========\n";
+  test_easylog("easylog.txt", count, /*async =*/false);
+  std::cout << "========test async easylog===========\n";
+  test_easylog("async_easylog.txt", count, /*async =*/true);
 }
