@@ -14,13 +14,11 @@ else()
     find_package(yalantinglibs REQUIRED)
     find_package(Threads)
 endif()
-add_executable(file_server
-        file_server/main.cpp
-        file_server/rpc_service.cpp
+add_executable(coro_rpc_file_server
+        file_server.cpp
+        rpc_service.cpp
         )
-target_link_libraries(file_server PRIVATE yalantinglibs::coro_rpc)
-add_executable(file_client file_client/main.cpp)
-target_link_libraries(file_client PRIVATE yalantinglibs::coro_rpc)
+add_executable(coro_rpc_file_client file_client.cpp)
 
 if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
   # if is the subproject of yalantinglibs

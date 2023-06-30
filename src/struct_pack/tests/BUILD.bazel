@@ -6,7 +6,6 @@ cc_test(
     copts = ["-std=c++20"],
     defines = ["STRUCT_PACK_ENABLE_UNPORTABLE_TYPE"],
     deps = [
-        "//:struct_pack",
-        "//thirdparty:doctest",
+        "//:ylt"
     ],
 )

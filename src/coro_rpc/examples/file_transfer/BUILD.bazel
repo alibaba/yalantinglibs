@@ -2,27 +2,27 @@ cc_binary(
     name = "file_client",
     srcs =
         [
-            "file_client/main.cpp",
-            "rpc_service/rpc_service.h",
+            "file_client.cpp",
+            "rpc_service.h"
         ],
     copts = [
         "-std=c++20",
         "-Isrc/coro_rpc/examples/file_transfer",
     ],
-    deps = ["//:coro_rpc"],
+    deps = ["//:ylt"],
 )
 
 cc_binary(
     name = "file_server",
     srcs =
         [
-            "file_server/main.cpp",
-            "file_server/rpc_service.cpp",
-            "rpc_service/rpc_service.h",
+            "file_server.cpp",
+            "rpc_service.cpp",
+            "rpc_service.h"
         ],
     copts = [
         "-std=c++20",
         "-Isrc/coro_rpc/examples/file_transfer",
     ],
-    deps = ["//:coro_rpc"],
+    deps = ["//:ylt"],
 )

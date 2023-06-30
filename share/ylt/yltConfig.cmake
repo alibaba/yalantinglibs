@@ -1,0 +1,3 @@
+include(CMakeFindDependencyMacro)
+add_library(yalantinglibs INTERFACE)
+target_include_directories(yalantinglibs INTERFACE ylt/thirdparty)

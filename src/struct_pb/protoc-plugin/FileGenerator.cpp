@@ -49,14 +49,15 @@ void FileGenerator::generate_header(google::protobuf::io::Printer *p) {
 // source: $filename$
 
 #include <limits>
+#include <map>
+#include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
-#include <memory>
-#include <map>
 #include <variant>
 #include <vector>
-#include <optional>
-#include "struct_pb/struct_pb.hpp"
+
+#include "ylt/struct_pb.hpp"
 )");
 
   generate_dependency_includes(p);

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include <filesystem>
+#include <ylt/easylog.hpp>
 
 #include "doctest.h"
-#include "easylog/easylog.h"
 
 using namespace easylog;
 

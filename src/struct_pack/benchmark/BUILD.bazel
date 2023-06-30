@@ -15,8 +15,7 @@ cc_binary(
     copts = ["-std=c++20"],
     defines = ["STRUCT_PACK_OPTIMIZE"],
     deps = [
-        "//:struct_pack",
-        "//:struct_pb",
+        "//:ylt"
     ],
 )
 

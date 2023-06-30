@@ -32,11 +32,11 @@ make -j test_rpc
 # add %m to fix the bug on ARM
 # https://groups.google.com/g/llvm-dev/c/oaA58fbNMGg
 # https://github.com/llvm/llvm-project/issues/50966
-export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
+export LLVM_PROFILE_FILE="coro_rpc_test-%m.profraw"
 ls
 cd tests
 ./test_rpc
-llvm-profdata merge -sparse test_rpc-*.profraw -o test_rpc.profdata
-llvm-cov show ./test_rpc -instr-profile=test_rpc.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
+llvm-profdata merge -sparse coro_rpc_test-*.profraw -o coro_rpc_test.profdata
+llvm-cov show ./coro_rpc_test -instr-profile=test_rpc.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
 echo 'Done!!!'
 fi

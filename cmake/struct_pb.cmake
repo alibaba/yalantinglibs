@@ -165,7 +165,7 @@ function(protobuf_generate_struct_pb SRCS HDRS)
     set(_outvar)
     protobuf_generate_modified(${_append_arg} ${_descriptors}
             LANGUAGE struct_pb EXPORT_MACRO ${protobuf_generate_struct_pb_EXPORT_MACRO}
-            PLUGIN $<TARGET_FILE:yalantinglibs::protoc-gen-struct_pb>
+            PLUGIN $<TARGET_FILE:protoc-gen-struct_pb>
             OUT_VAR _outvar ${_import_arg} PROTOS ${_proto_files}
             PROTOC_OPTION ${_opt}
             )
@@ -217,7 +217,7 @@ function(target_protos_struct_pb target)
     protobuf_generate_modified(
             TARGET ${target}
             LANGUAGE struct_pb EXPORT_MACRO ${target_protos_struct_pb_EXPORT_MACRO}
-            PLUGIN $<TARGET_FILE:yalantinglibs::protoc-gen-struct_pb>
+            PLUGIN $<TARGET_FILE:protoc-gen-struct_pb>
             ${_import_arg} PROTOS ${_proto_files}
             PROTOC_OPTION ${_opt}
     )

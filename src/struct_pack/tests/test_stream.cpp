@@ -1,9 +1,9 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack.hpp"
 #include "test_struct.hpp"
 
 TEST_CASE("test serialize_to/deserialize file") {

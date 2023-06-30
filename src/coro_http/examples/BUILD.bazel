@@ -7,7 +7,7 @@ cc_binary(
     copts = [
         "-std=c++20",
     ],
-    deps = ["//:coro_http"],
+    deps = ["//:ylt"],
 )
 
 cc_binary(
@@ -19,5 +19,5 @@ cc_binary(
     copts = [
         "-std=c++20",
     ],
-    deps = ["//:coro_http"],
+    deps = ["//:ylt"],
 )

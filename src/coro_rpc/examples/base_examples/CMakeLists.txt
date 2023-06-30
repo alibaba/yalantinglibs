@@ -1,0 +1,29 @@
+cmake_minimum_required(VERSION 3.15)
+project(coro_rpc_examples)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  # if is the subproject of yalantinglibs
+  # do nothing
+else()
+  # else find installed yalantinglibs
+    find_package(ylt REQUIRED)
+    find_package(Threads)
+  # When using coro_rpc_client to send request, only remote function declarations are required.
+  # In the examples, RPC function declaration and definition are divided.
+  # However, clang + ld(gold linker) + '-g' will report 'undefined reference to xxx'.
+  # So you can use lld when compiler is clang by this code:
+  # if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  # add_link_options(-fuse-ld=lld)
+endif()
+
+add_executable(coro_rpc_example_channel channel.cpp)
+add_executable(coro_rpc_example_client_pool client_pool.cpp)
+add_executable(coro_rpc_example_client_pools client_pools.cpp)
+add_executable(coro_rpc_example_client client.cpp)
+add_executable(coro_rpc_example_server server.cpp rpc_service.cpp)
+

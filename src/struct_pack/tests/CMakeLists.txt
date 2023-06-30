@@ -1,6 +1,5 @@
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-find_package(Protobuf)
-add_executable(test_serialize
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
+add_executable(struct_pack_test
         test_serialize.cpp
         test_compile_time_calculate.cpp
         test_data_struct.cpp
@@ -14,6 +13,5 @@ add_executable(test_serialize
         test_compatible.cpp
         main.cpp
         )
-add_test(NAME test_serialize COMMAND test_serialize)
-target_compile_definitions(test_serialize PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-target_link_libraries(test_serialize PRIVATE yalantinglibs::struct_pack doctest)
+add_test(NAME struct_pack_test COMMAND struct_pack_test)
+target_compile_definitions(struct_pack_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
