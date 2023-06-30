@@ -6,19 +6,27 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
   # if is the subproject of yalantinglibs
   # do nothing
 else()
   # else find installed yalantinglibs
-    find_package(ylt REQUIRED)
+    find_package(yalantinglibs REQUIRED)
+    link_libraries(yalantinglibs::yalantinglibs)
     find_package(Threads)
+    link_libraries(Threads::Threads)
   # When using coro_rpc_client to send request, only remote function declarations are required.
   # In the examples, RPC function declaration and definition are divided.
   # However, clang + ld(gold linker) + '-g' will report 'undefined reference to xxx'.
   # So you can use lld when compiler is clang by this code:
   # if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   # add_link_options(-fuse-ld=lld)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+    #-ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 endif()
 
 add_executable(coro_rpc_example_channel channel.cpp)
