@@ -64,7 +64,6 @@ namespace easylog {
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {
-#if defined(NDEBUG) || defined(_WIN32)
     case Severity::TRACE:
       return "TRACE   ";
     case Severity::DEBUG:
@@ -77,22 +76,8 @@ inline std::string_view severity_str(Severity severity) {
       return "ERROR   ";
     case Severity::CRITICAL:
       return "CRITICAL";
-#else
-    case Severity::TRACE:
-      return "TRACE   ";
-    case Severity::DEBUG:
-      return "DEBUG   ";
-    case Severity::INFO:
-      return "INFO    ";
-    case Severity::WARN:
-      return "\x1B[93mWARNING\x1B[0m\x1B[0K ";
-    case Severity::ERROR:
-      return "\x1B[91mERROR\x1B[0m\x1B[0K   ";
-    case Severity::CRITICAL:
-      return "\x1B[97m\x1B[41mCRITICAL\x1B[0m\x1B[0K";
-#endif
     default:
-      return "NONE";
+      return "NONE    ";
   }
 }
 
@@ -102,14 +87,19 @@ class record_t {
   record_t(auto tm_point, Severity severity, std::string_view str)
       : tm_point_(tm_point),
         severity_(severity),
-        tid_(get_tid_impl()),
-        file_str_(str) {}
+        tid_(_get_tid()),
+        file_str_(str) {
+    ss_.reserve(64);
+  }
   record_t(record_t &&) = default;
   record_t &operator=(record_t &&) = default;
 
   Severity get_severity() const { return severity_; }
 
-  const char *get_message() const { return ss_.data(); }
+  const char *get_message() {
+    ss_.push_back('\n');
+    return ss_.data();
+  }
 
   std::string_view get_file_str() const { return file_str_; }
 
@@ -173,6 +163,11 @@ class record_t {
     snprintf(&buf[0], size + 1, fmt, args...);
 
     ss_.append(buf);
+  }
+
+  unsigned int _get_tid() {
+    static thread_local unsigned int tid = get_tid_impl();
+    return tid;
   }
 
   unsigned int get_tid_impl() {

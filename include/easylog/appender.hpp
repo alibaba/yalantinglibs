@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 
@@ -32,12 +32,55 @@ struct QueueTraits : public moodycamel::ConcurrentQueueDefaultTraits {
   static const size_t BLOCK_SIZE = 256;
 };
 
+constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+template <size_t N, char c>
+inline void to_int(int num, char *p, int &size) {
+  for (int i = 0; i < N; i++) {
+    p[--size] = digits[num % 10];
+    num = num / 10;
+  }
+
+  if constexpr (N != 4)
+    p[--size] = c;
+}
+
+inline char *get_time_str(const auto &now) {
+  static thread_local char buf[33];
+  static thread_local std::chrono::seconds last_sec_{};
+
+  std::chrono::system_clock::duration d = now.time_since_epoch();
+  std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(d);
+  auto mill_sec =
+      std::chrono::duration_cast<std::chrono::milliseconds>(d - s).count();
+  int size = 23;
+  if (last_sec_ == s) {
+    to_int<3, '.'>(mill_sec, buf, size);
+    return buf;
+  }
+
+  last_sec_ = s;
+  auto tm = std::chrono::system_clock::to_time_t(now);
+  auto gmt = localtime(&tm);
+
+  to_int<3, '.'>(mill_sec, buf, size);
+  to_int<2, ':'>(gmt->tm_sec, buf, size);
+  to_int<2, ':'>(gmt->tm_min, buf, size);
+  to_int<2, ' '>(gmt->tm_hour, buf, size);
+
+  to_int<2, '-'>(gmt->tm_mday, buf, size);
+  to_int<2, '-'>(gmt->tm_mon + 1, buf, size);
+  to_int<4, ' '>(gmt->tm_year + 1900, buf, size);
+  return buf;
+}
+
 class appender {
  public:
-  appender(const std::string &filename, bool async, bool enable_console,
-           size_t max_file_size, size_t max_files, bool flush_every_time)
-      : flush_every_time_(flush_every_time),
-        enable_console_(enable_console),
+  appender() = default;
+  appender(const std::string &filename, bool async, size_t max_file_size,
+           size_t max_files, bool flush_every_time)
+      : has_init_(true),
+        flush_every_time_(flush_every_time),
         max_file_size_(max_file_size) {
     filename_ = filename;
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
@@ -56,7 +99,7 @@ class appender {
           }
 
           if (queue_.size_approx() == 0) {
-            std::unique_lock<std::mutex> lock(mtx_);
+            std::unique_lock lock(que_mtx_);
             cnd_.wait(lock, [&]() {
               return queue_.size_approx() > 0 || stop_;
             });
@@ -74,43 +117,84 @@ class appender {
     }
   }
 
+  std::string_view get_tid_buf(unsigned int tid) {
+    static thread_local char buf[24];
+    static thread_local unsigned int last_tid;
+    static thread_local size_t last_len;
+    if (tid == last_tid) {
+      return {buf, last_len};
+    }
+
+    buf[0] = '[';
+    auto [ptr, ec] = std::to_chars(buf + 1, buf + 21, tid);
+    buf[22] = ']';
+    buf[23] = ' ';
+    last_len = ptr - buf;
+    buf[last_len++] = ']';
+    buf[last_len++] = ' ';
+    return {buf, last_len};
+  }
+
+  template <bool sync = false, bool enable_console = false>
   void write_record(record_t &record) {
-    char buf[32];
-    size_t len = get_time_str(buf, record.get_time_point());
+    if constexpr (sync == true) {
+      std::shared_lock guard(mtx_);
+      if (max_files_ > 0 && file_size_ > max_file_size_ &&
+          static_cast<size_t>(-1) != file_size_) {
+        guard.unlock();
+        std::lock_guard lock{mtx_};
+        roll_log_files();
+      }
+    }
 
-    write_str({buf, len});
-    write_str({" ", 1});
-    write_str(severity_str(record.get_severity()));
-    write_str({" ", 1});
+    auto buf = get_time_str(record.get_time_point());
 
-    auto [ptr, ec] = std::to_chars(buf, buf + 32, record.get_tid());
+    buf[23] = ' ';
+    memcpy(buf + 24, severity_str(record.get_severity()).data(), 8);
+    buf[32] = ' ';
 
-    write_str({"[", 1});
-    write_str(std::string_view(buf, ptr - buf));
-    write_str({"] ", 2});
-    write_str(record.get_file_str());
-    write_str(record.get_message());
-    write_str({"\n", 1});
+    if constexpr (enable_console) {
+      add_color(record.get_severity());
+    }
 
-    if (enable_console_) {
+    write_str<enable_console>(std::string_view(buf, 33));
+
+    if constexpr (enable_console) {
+      clean_color(record.get_severity());
+    }
+
+    write_str<enable_console>(get_tid_buf(record.get_tid()));
+    write_str<enable_console>(record.get_file_str());
+    write_str<enable_console>(record.get_message());
+
+    if constexpr (enable_console) {
       std::cout << std::flush;
     }
+  }
+
+  void add_color(Severity severity) {
+#if defined(_WIN32)
+#else
+    if (severity == Severity::WARN)
+      std::cout << "\x1B[93m";
+    if (severity == Severity::ERROR)
+      std::cout << "\x1B[91m";
+    if (severity == Severity::CRITICAL)
+      std::cout << "\x1B[97m\x1B[41m";
+#endif
+  }
+
+  void clean_color(Severity severity) {
+#if defined(_WIN32)
+#else
+    if (severity >= Severity::WARN)
+      std::cout << "\x1B[0m\x1B[0K";
+#endif
   }
 
   void write(record_t &&r) {
     queue_.enqueue(std::move(r));
     cnd_.notify_all();
-  }
-
-  template <typename String>
-  void write(const String &str) {
-    std::lock_guard guard(mtx_);
-    if (max_files_ > 0 && file_size_ > max_file_size_ &&
-        static_cast<size_t>(-1) != file_size_) {
-      roll_log_files();
-    }
-
-    write_str(str);
   }
 
   void flush() {
@@ -138,20 +222,6 @@ class appender {
     stop();
     if (write_thd_.joinable())
       write_thd_.join();
-  }
-
-  template <size_t N>
-  size_t get_time_str(char (&buf)[N], const auto &now) {
-    const auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
-    const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now.time_since_epoch())
-                           .count() %
-                       1000;
-
-    size_t endpos =
-        std::strftime(buf, N, "%Y-%m-%d %H:%M:%S", std::localtime(&nowAsTimeT));
-    snprintf(buf + endpos, N - endpos, ".%03d", (int)nowMs);
-    return endpos + 4;
   }
 
  private:
@@ -214,22 +284,25 @@ class appender {
     is_first_write_ = false;
   }
 
+  template <bool enable_console>
   void write_str(std::string_view str) {
-    if (file_.write(str.data(), str.size())) {
-      if (flush_every_time_) {
-        file_.flush();
-      }
+    if (has_init_) {
+      if (file_.write(str.data(), str.size())) {
+        if (flush_every_time_) {
+          file_.flush();
+        }
 
-      file_size_ += str.size();
+        file_size_ += str.size();
+      }
     }
 
-    if (enable_console_) {
+    if constexpr (enable_console) {
       std::cout << str;
     }
   }
 
+  bool has_init_ = false;
   std::string filename_;
-  bool enable_console_ = false;
 
   bool flush_every_time_;
   size_t file_size_ = 0;
@@ -237,8 +310,10 @@ class appender {
   size_t max_files_ = 0;
   bool is_first_write_ = true;
 
-  std::mutex mtx_;
+  std::shared_mutex mtx_;
   std::ofstream file_;
+
+  std::mutex que_mtx_;
 
   moodycamel::ConcurrentQueue<record_t, QueueTraits> queue_;
   std::thread write_thd_;
