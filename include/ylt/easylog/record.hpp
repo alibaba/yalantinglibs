@@ -30,10 +30,9 @@
 #include <string_view>
 #include <utility>
 
-
+#include "ylt/util/dragonbox_to_chars.h"
 #include "ylt/util/meta_string.hpp"
 #include "ylt/util/type_traits.h"
-#include "ylt/util/dragonbox_to_chars.h"
 
 #if defined(_WIN32)
 #ifndef _WINDOWS_
