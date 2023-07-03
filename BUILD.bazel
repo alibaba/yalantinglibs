@@ -7,7 +7,7 @@ cc_library(
         "include/**",
         "src/include/**"
     ]),
-    includes = ["include", "include/ylt/thirdparty"],
+    includes = ["include", "include/ylt/thirdparty","src/include"],
     linkopts = ["-lpthread"],
     visibility = ["//visibility:public"],
 )
