@@ -48,7 +48,7 @@ inline std::string_view echo(std::string_view str) { return str; }
 
 ```cpp
 #include "rpc_service.hpp"
-#include <coro_rpc/coro_rpc_server.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
@@ -61,7 +61,7 @@ int main() {
 
 ```cpp
 #include "rpc_service.hpp"
-#include <coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
 
 Lazy<void> test_client() {
   coro_rpc_client client;

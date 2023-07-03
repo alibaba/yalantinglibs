@@ -10,7 +10,7 @@ set(TEST_SRCS
         test_variadic.cpp
         )
 set(TEST_COMMON
-        rpc_service.cpp
+        rpc_api.cpp
         main.cpp
         )
 add_executable(coro_rpc_test
@@ -21,3 +21,9 @@ target_compile_definitions(coro_rpc_test PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(coro_rpc_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 
 add_test(NAME coro_rpc_test COMMAND coro_rpc_test)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests/coro_rpc)
+
+add_executable(coro_rpc_regist_test_1 rpc_api.cpp test_register_duplication_1.cpp)
+add_executable(coro_rpc_regist_test_2 rpc_api.cpp test_register_duplication_2.cpp)
+add_executable(coro_rpc_regist_test_3 rpc_api.cpp test_register_duplication_3.cpp)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #pragma once
-#include <coro_rpc/coro_rpc_server.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 /*!
  * \defgroup coro_rpc coro_rpc
  *
@@ -32,7 +32,7 @@ namespace coro_rpc {
  * 服务端使用示例
  *
  * ```c++
- * #include <coro_rpc/coro_rpc_server.hpp>
+ * #include <ylt/coro_rpc/coro_rpc_server.hpp>
  *
  * inline std::string hello_coro_rpc() { return "hello coro_rpc"; }
  *
@@ -169,7 +169,7 @@ struct rpc_error {
  * 使用示例
  *
  * ```c++
- * #include <coro_rpc/coro_rpc_client.hpp>
+ * #include <ylt/coro_rpc/coro_rpc_client.hpp>
  *
  * using namespace coro_rpc;
  * using namespace async_simple::coro;

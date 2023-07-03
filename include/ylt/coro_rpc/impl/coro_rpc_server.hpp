@@ -39,7 +39,7 @@
 namespace coro_rpc {
 /*!
  * ```cpp
- * #include <coro_rpc/coro_rpc_server.hpp>
+ * #include <ylt/coro_rpc/coro_rpc_server.hpp>
  * inline std::string hello_coro_rpc() { return "hello coro_rpc"; }
  * int main(){
  *   register_handler<hello_coro_rpc>();

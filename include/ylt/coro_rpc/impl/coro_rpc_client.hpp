@@ -78,7 +78,7 @@ template <typename T>
 using rpc_return_type_t = typename rpc_return_type<T>::type;
 /*!
  * ```cpp
- * #include <coro_rpc/coro_rpc_client.hpp>
+ * #include <ylt/coro_rpc/coro_rpc_client.hpp>
  *
  * using namespace coro_rpc;
  * using namespace async_simple::coro;
