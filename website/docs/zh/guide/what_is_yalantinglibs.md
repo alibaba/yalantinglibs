@@ -81,7 +81,7 @@ cmake --build .
 
 - 手动编译:
 
-1. 将 `include/ylt` 加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
+1. 将 `include/`加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
 2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过Cmake 选项 -DINSTALL_INDEPENDENT_THIRDPARTY=ON 安装了第三方依赖，可跳过该步骤)
 3. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++`编译器时需要添加选项 `-fcoroutines`。
 4. 全部搞定. 更多细节请参考 `example/cmakelist.txt`.
@@ -357,7 +357,7 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 |ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
 |ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
 
-## Thirdparty Dependency
+## 第三方依赖
 
 默认情况下，ylt会把第三方依赖安装到`ylt/thirdparty`目录下，你需要将它添加到头文件包含路径中。
 

@@ -17,8 +17,6 @@ link_libraries(Threads::Threads)
 include(cmake/utils.cmake)
 include(cmake/struct_pb.cmake)
 include(cmake/build.cmake)
-include(cmake/platform.cmake)
-include(cmake/dependency.cmake)
 include(cmake/develop.cmake)
 include(cmake/install.cmake)
 # add project config, such as enable_ssl.

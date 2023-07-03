@@ -11,8 +11,12 @@ else()
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
+  # if you have install ylt  
     find_package(yalantinglibs REQUIRED)
     link_libraries(yalantinglibs::yalantinglibs)
+  # else 
+  # include_directories(include)
+  # include_directories(include/ylt/thirdparty)
 endif()
 
 add_executable(struct_xml_example

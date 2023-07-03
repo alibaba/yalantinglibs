@@ -12,8 +12,14 @@ else()
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
-    find_package(yalantinglibs REQUIRED)
     find_package(Threads)
+  # if you have install ylt  
+    find_package(yalantinglibs REQUIRED)
+    link_libraries(yalantinglibs::yalantinglibs)
+  # else 
+  # include_directories(include)
+  # include_directories(include/ylt/thirdparty)
+  
   # When using coro_rpc_client to send request, only remote function declarations are required.
   # In the examples, RPC function declaration and definition are divided.
   # However, clang + ld(gold linker) + '-g' will report 'undefined reference to xxx'.
