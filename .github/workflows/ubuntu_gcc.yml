@@ -92,7 +92,7 @@ jobs:
       matrix:
         mode: [Release, Debug]
         io_uring: [ ON ]
-        case_name: [ test_corofile ]
+        case_name: [ coro_io_test ]
     runs-on: ubuntu-22.04
 
     steps:
