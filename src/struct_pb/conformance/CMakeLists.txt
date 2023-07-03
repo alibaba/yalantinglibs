@@ -35,7 +35,7 @@ add_test(NAME conformance_cpp_test
         COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/conformance_test_runner
         --failure_list ${CMAKE_CURRENT_SOURCE_DIR}/failure_list_cpp.txt
         --output_dir ${CMAKE_CURRENT_BINARY_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/conformance_cpp
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/conformance_cpp
         DEPENDS conformance_test_runner conformance_cpp)
 
 add_executable(conformance_struct_pb
@@ -64,5 +64,5 @@ add_test(NAME conformance_struct_pb_test
         COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/conformance_test_runner
         --failure_list ${CMAKE_CURRENT_SOURCE_DIR}/failure_list_cpp.txt
         --output_dir ${CMAKE_CURRENT_BINARY_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/conformance_struct_pb
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/conformance_struct_pb
         DEPENDS conformance_test_runner conformance_struct_pb)

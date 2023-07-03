@@ -18,7 +18,7 @@
 #include <async_simple/Promise.h>
 #include <async_simple/Traits.h>
 #include <async_simple/coro/FutureAwaiter.h>
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
 #endif
@@ -42,7 +42,7 @@
 #include "io_context_pool.hpp"
 
 namespace coro_io {
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
 inline asio::file_base::flags default_flags() {
   return asio::stream_file::read_write | asio::stream_file::append |
          asio::stream_file::create;
@@ -53,7 +53,7 @@ enum class open_mode { read, write };
 
 class coro_file {
  public:
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
   coro_file(
       std::string_view filepath, open_mode flags = open_mode::read,
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor())
@@ -98,7 +98,7 @@ class coro_file {
 #endif
 
   bool is_open() {
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
     return stream_file_ && stream_file_->is_open();
 #else
     return stream_file_ && stream_file_->is_open();
@@ -115,7 +115,7 @@ class coro_file {
     return size;
   }
 
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
     size_t left_size = size;
@@ -241,7 +241,7 @@ class coro_file {
 #endif
 
  private:
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(YLT_ENABLE_FILE_IO_URING)
   std::unique_ptr<asio::stream_file> stream_file_;
   std::atomic<size_t> seek_offset_ = 0;
 #else
