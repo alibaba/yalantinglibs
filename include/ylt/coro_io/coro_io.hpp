@@ -20,7 +20,7 @@
 #include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#if defined(ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
+#if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
 
@@ -232,7 +232,7 @@ inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   });
 }
 
-#if defined(ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
+#if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 inline async_simple::coro::Lazy<std::error_code> async_handshake(
     auto &ssl_stream, asio::ssl::stream_base::handshake_type type) noexcept {
   callback_awaitor<std::error_code> awaitor;

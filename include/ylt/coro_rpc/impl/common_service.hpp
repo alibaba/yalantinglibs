@@ -18,7 +18,7 @@
 #include <filesystem>
 #include <ylt/easylog.hpp>
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
 
@@ -54,7 +54,7 @@ inline bool file_exists(auto &path) {
   return false;
 };
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
 /*!
  * Initialize SSL Context `context` with SSL Config `conf`
  *

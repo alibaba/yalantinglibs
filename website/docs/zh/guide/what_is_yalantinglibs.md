@@ -19,6 +19,78 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的C++20�
 | macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![macos-clang](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
 | Windows Server 2022 (MSVC 19.33.31630.0)       | ![win-msvc](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
 
+# 快速开始
+
+## 编译器要求
+
+确保你的编译器版本不低于:
+- clang11++ (libstdc++-8 以上)。
+- g++10 或更高版本。
+- msvc 14.29 或更高版本。
+
+## 安装&编译
+
+Yalantinglibs 是一个head-only的库，这意味着你可以简单粗暴的直接将`./include/ylt`拷贝走。但是更推荐的做法还是用Cmake安装。
+
+- 克隆仓库
+
+```shell
+git clone https://github.com/alibaba/yalantinglibs.git
+```
+
+- 构建，测试并安装
+
+- 我们建议，最好在安装之前编译样例/压测程序并执行测试：
+
+```shell
+cmake ..
+cmake --build . --config debug # 可以在末尾加上`-j 选项, 通过并行编译加速
+ctest . # 执行测试
+```
+
+测试/样例/压测的可执行文件存储在路径`./build/output/`下。
+
+- 你也可以跳过编译:
+
+```shell
+# 可以通过这些选项来跳过编译样例/压测/测试程序
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake --build .
+```
+
+3. 安装
+
+默认情况下会安装到系统默认的include路径，你也可以通过选项来自定义安装路径。
+
+```shell
+cmake --install . # --prefix ./user_defined_install_path 
+```
+
+4. 开始编程
+
+- 使用CMAKE:
+
+安装完成后，你可以直接拷贝并打开文件夹`src/*/examples`，然后执行以下命令：
+
+```shell
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+- 手动编译:
+
+1. 将 `include/ylt` 加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
+2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过Cmake 选项 -DINSTALL_INDEPENDENT_THIRDPARTY=ON 安装了第三方依赖，可跳过该步骤)
+3. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++`编译器时需要添加选项 `-fcoroutines`。
+4. 全部搞定. 更多细节请参考 `example/cmakelist.txt`.
+
+- 更多细节:
+如需查看更多细节, 除了`example/cmakelist.txt`，你还可以参考 [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
+
+# 简介
+
 ## coro_rpc
 
 coro是一个高度易用, head-only，基于协程的C++20高性能rpc框架库。在pipeline echo模式下单机每核心qps可达40万+。
@@ -116,8 +188,8 @@ auto person2 = deserialize<person>(buffer);
 
 ### 快速开始
 ```cpp
-#include "struct_json/json_reader.h"
-#include "struct_json/json_writer.h"
+#include "ylt/struct_json/json_reader.h"
+#include "ylt/struct_json/json_writer.h"
 
 struct person {
   std::string name;
@@ -175,7 +247,7 @@ coro_http 是一个 C++20 的协程http(https)客户端, 支持: get/post, webso
 
 ### get/post
 ```cpp
-#include "coro_http/coro_http_client.h"
+#include "ylt/coro_http/coro_http_client.hpp"
 using namespace ylt;
 
 async_simple::coro::Lazy<void> get_post(coro_http_client &client) {
@@ -248,55 +320,94 @@ async_simple::coro::Lazy<void> download_files(coro_http_client &client) {
 async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮助用户编写异步代码。
 请见[async_simple](https://github.com/alibaba/async_simple)
 
-## 编译器要求
+# 其他
 
-确保你的编译器版本不低于:
-- clang11++ (libstdc++-8 以上)。
-- g++10 或更高版本。
-- msvc 14.29 或更高版本。
+## CMAKE 选项
 
-## 快速开始（从源码构建）
+以下这些Cmake选项只适用于yalantinglibs自身的开发和安装。他们不会对你的项目造成影响，因为yalantinglibs是head-only的。
 
-- 克隆仓库
+### 安装选项
 
-```shell
-git clone https://github.com/alibaba/yalantinglibs.git
-```
+|选项|默认值|
+|----------|------------|
+|INSTALL_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
 
-- 构建，测试并安装（linux/macos）
+### ylt 开发选项
 
-```shell
-cd yalantinglibs
-mkdir build && cd build
-cmake .. 
-# 你可以使用这些选项来跳过构建单元测试/benchmark/样例： 
-# cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
-make         # 如果你的机器性能良好，请使用：make -j 并行编译
-ctest .      # 执行测试
-make install # 将头文件安装到系统的默认include路径下。
-```
+|选项|默认值|
+|----------|------------|
+|BUILD_EXAMPLES|ON|
+|BUILD_BENCHMARK|ON|
+|BUILD_UNIT_TESTS|ON|
+|COVERAGE_TEST|OFF|
+|GENERATE_BENCHMARK_DATA|OFF|
+|CORO_RPC_USE_OTHER_RPC|ON|
 
-- 构建与测试（windows）
+### ylt 配置项
 
-使用支持cmake工程的软件，如Visual Studio，Clion，Visual Studio Code打开下载好的源代码，根据IDE提示进行构建和测试。
+你可能也想在你的工程里启用这些配置项。你可以参考这些[cmake 代码](https://github.com/alibaba/yalantinglibs/tree/main/cmake/config.cmake)。
 
-- 开始编程
+|选项|默认值|
+|----------|------------|
+|ENABLE_SSL|OFF|
+|ENABLE_PMR|OFF|
+|ENABLE_IO_URING|OFF|
+|ENABLE_FILE_IO_URING|OFF|
+|ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
+|ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
 
-以下是我们提供的示例代码，你可以在此基础上构建你的工程：
+## Thirdparty Dependency
+
+默认情况下，ylt会把第三方依赖安装到`ylt/thirdparty`目录下，你需要将它添加到头文件包含路径中。
+
+如果你不想让ylt安装第三方依赖，你可以使用选项：`-DINSTALL_THIRDPARTY=OFF`。
+
+如果你想让ylt将第三方依赖直接独立安装到系统默认的包含路径中，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=ON`。
+
+以下是我们使用的第三方依赖（async_simple虽然也是ylt的一部分，但其首先开源，故计为一个独立的第三方依赖）
+
+### coro_io
+
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [openssl](https://www.openssl.org/) (optional)
 
 ### coro_rpc
 
-```shell
-cd yalantinglibs/src/coro_rpc/examples/helloworld
-mkdir build && cd build
-cmake ..
-make
-# 关于更多细节, 请见helloworld下的Cmakelist.txt
-```
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [openssl](https://www.openssl.org/) (optional)
+
+### coro_http
+
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [cinatra](https://github.com/qicosmos/cinatra)
+
+### easylog
+
+无依赖。
 
 ### struct_pack
 
-TODO
+无依赖。
+
+### struct_json
+
+- [iguana](https://github.com/qicosmos/iguana)
+
+### struct_pb (optional)
+
+- [protobuf](https://protobuf.dev/)
+
+### struct_xml
+
+- [iguana](https://github.com/qicosmos/iguana)
+
+### struct_yaml
+
+- [iguana](https://github.com/qicosmos/iguana)
 
 ## Benchmark
 
@@ -308,58 +419,18 @@ TODO
 ./benchmark_client # [线程数（默认为硬件线程数）] [每线程客户端数（默认为20）] [pipeline大小(默认为1，当设为1时相当于ping-pong模式)] [主机地址（默认为127.0.0.1）] [端口号（默认为9000）] [测试数据文件夹地址（默认为"./test_data/echo_test"] [测试秒数（默认为30）] [热身秒数（默认为5）]
 ```
 
-## 编译选项
-
-| 选项              | 描述                                              |默认值    |
-| ----------------- | ------------------------------------------------ | ------- |
-| CMAKE_BUILD_TYPE  | 构建类型                                          | Release |
-| BUILD_WITH_LIBCXX | 是否使用libc++构建                                | OFF     |
-| BUILD_EXAMPLES    | 是否构建样例代码                                   | ON      |
-| BUILD_BENCHMARK   | 是否构建性能测试代码                               | ON      | 
-| BUILD_UNIT_TESTS  | 是否构建单元测试                                   | ON      |
-| USE_CONAN         | 是否使用conan包管理器来管理第三方依赖               | OFF     |
-| ENABLE_SSL        | 是否启用SSL支持                                    | OFF     |
-| ENABLE_IO_URING   | 是否启用io_uring支持                               | OFF     |
-
-## Dependencies
-
-我们依赖`doctest`来进行第三方测试。
-所有第三方库都位于`include/thirdparty`文件夹下。
-
-### coro_rpc
-
-- [struct_pack](https://github.com/alibaba/yalantinglibs)
-- [easylog](https://github.com/alibaba/yalantinglibs)
-- [asio](https://github.com/chriskohlhoff/asio)
-- openssl (optional)
-### struct_pack
-
-无第三方依赖。
-
-### struct_json
-
-- [iguana](https://github.com/qicosmos/iguana)
-
-### struct_pb
-
-TODO
-
-### easylog
-
-无第三方依赖。
-
-# 如何生成文档
+## 如何生成文档
 
 请见[生成网站](https://github.com/alibaba/yalantinglibs/blob/main/website/README.md)
 
-# 如何贡献代码
+## 如何贡献代码
 1. 根据issue模板提交一个issue。
 2. 在本地修改代码，通过测试并使用 `git-clang-format HEAD^` 格式化代码。
 3. 创建一个Pull Request，填写模板中的内容。
 4. 提交Pull Request，并选择审核者: (如： qicosmos, poor-circle, PikachuHyA).
 5. 通过github的全平台测试，审核者完成审核，代码合入主线。
 
-# 许可证
+## 许可证
 
 yaLanTingLibs 基于 Apache License (Version 2.0) 开发。
 本产品包含了许多基于其他开源许可证的第三方组件。

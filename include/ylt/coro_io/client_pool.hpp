@@ -40,7 +40,7 @@
 #include <utility>
 #include <ylt/util/expected.hpp>
 
-#include "client_queue.hpp"
+#include "detail/client_queue.hpp"
 #include "coro_io.hpp"
 #include "io_context_pool.hpp"
 namespace coro_io {

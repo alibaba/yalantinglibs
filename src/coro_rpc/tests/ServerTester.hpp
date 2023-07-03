@@ -140,7 +140,7 @@ struct ServerTester : TesterConfig {
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
       }
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
@@ -357,7 +357,7 @@ struct ServerTester : TesterConfig {
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
       }
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");

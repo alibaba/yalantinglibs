@@ -111,7 +111,7 @@ class coro_rpc_client {
         std::chrono::milliseconds{5000};
     std::string host;
     std::string port;
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     std::filesystem::path ssl_cert_path;
     std::string ssl_domain;
 #endif
@@ -160,7 +160,7 @@ class coro_rpc_client {
 
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     return init_ssl_impl();
 #else
     return true;
@@ -242,7 +242,7 @@ class coro_rpc_client {
     return connect();
   }
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
 
   [[nodiscard]] bool init_ssl(std::string_view cert_base_path,
                               std::string_view cert_file_name,
@@ -302,7 +302,7 @@ class coro_rpc_client {
       }
 
     rpc_result<R, coro_rpc_protocol> ret;
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
       ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::not_connected,
@@ -319,7 +319,7 @@ class coro_rpc_client {
         .via(&executor)
         .detach();
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
       assert(ssl_stream_);
       ret = co_await call_impl<func>(*ssl_stream_, std::move(args)...);
@@ -327,7 +327,7 @@ class coro_rpc_client {
     else {
 #endif
       ret = co_await call_impl<func>(socket_, std::move(args)...);
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     }
 #endif
 
@@ -369,7 +369,7 @@ class coro_rpc_client {
   static bool is_ok(std::errc ec) noexcept { return ec == std::errc{}; }
   [[nodiscard]] async_simple::coro::Lazy<std::errc> connect(
       bool is_reconnect = false) {
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
       co_return std::errc::not_connected;
     }
@@ -410,7 +410,7 @@ class coro_rpc_client {
       co_return std::errc::timed_out;
     }
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
       assert(ssl_stream_);
       auto shake_ec = co_await coro_io::async_handshake(
@@ -425,7 +425,7 @@ class coro_rpc_client {
 
     co_return std::errc{};
   };
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   [[nodiscard]] bool init_ssl_impl() {
     try {
       ssl_init_ret_ = false;
@@ -797,7 +797,7 @@ class coro_rpc_client {
   std::vector<std::byte> read_buf_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;

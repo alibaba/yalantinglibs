@@ -88,7 +88,7 @@ class coro_rpc_server_base {
     stop();
   }
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   void init_ssl_context(const ssl_configure &conf) {
     use_ssl_ = init_ssl_context_helper(context_, conf);
   }
@@ -382,7 +382,7 @@ class coro_rpc_server_base {
   }
 
   async_simple::coro::Lazy<void> start_one(auto conn) noexcept {
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (use_ssl_) {
       conn->init_ssl(context_);
     }
@@ -417,7 +417,7 @@ class coro_rpc_server_base {
   std::atomic<uint16_t> port_;
   std::chrono::steady_clock::duration conn_timeout_duration_;
 
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};
   bool use_ssl_ = false;
 #endif
