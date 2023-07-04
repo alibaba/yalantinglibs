@@ -397,7 +397,7 @@ These option maybe useful for your project. If you want to enable it in your pro
 In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
 
 If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
-If you want to install the thirdparty independence(direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
+If you want to install the thirdparty independently (direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
 
 Here are the thirdparty libraries we used(Although async_simple is a part of ylt, it open source first, so we import it as a independence thirdparty library).
 
