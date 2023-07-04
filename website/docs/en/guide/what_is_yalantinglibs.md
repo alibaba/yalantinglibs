@@ -84,13 +84,13 @@ cmake --build .
 
 - Compile Manually:
 
-1. Add `include/ylt` to include path(skip it if you have install ylt into system default path)
-2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON)
-3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use `g++`
-4. That's all. You can alos find other options in `example/cmakelist.txt`.
+1. Add `include/` directory to include path(skip it if you have install ylt into system default path).
+2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON).
+3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use g++.
+4. That's all. We could find other options in `example/cmakelist.txt`.
 
 - More Details:
-For more details, except `example/cmakelist.txt`, You can also see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
+For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
 
 # Introduction
 ## coro_rpc
@@ -375,6 +375,7 @@ These CMake options is used for yalantinglibs developing/installing itself. They
 |BUILD_EXAMPLES|ON|
 |BUILD_BENCHMARK|ON|
 |BUILD_UNIT_TESTS|ON|
+|BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK etc)|ON|
 |COVERAGE_TEST|OFF|
 |GENERATE_BENCHMARK_DATA|OFF|
 |CORO_RPC_USE_OTHER_RPC|ON|
@@ -397,7 +398,7 @@ These option maybe useful for your project. If you want to enable it in your pro
 In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
 
 If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
-If you want to install the thirdparty independence(direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
+If you want to install the thirdparty independently (direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
 
 Here are the thirdparty libraries we used(Although async_simple is a part of ylt, it open source first, so we import it as a independence thirdparty library).
 

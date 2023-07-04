@@ -15,7 +15,9 @@
 
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
+#if __has_include("data_def.struct_pb.h")
 #include "struct_pb_sample.hpp"
+#endif 
 #endif
 #ifdef HAVE_FLATBUFFER
 #include "flatbuffer_sample.hpp"
@@ -91,7 +93,9 @@ int main(int argc, char** argv) {
   map.emplace(LibType::MSGPACK, new message_pack_sample());
 #endif
 #ifdef HAVE_PROTOBUF
+#if __has_include("data_def.struct_pb.h")
   map.emplace(LibType::STRUCT_PB, new struct_pb_sample::struct_pb_sample_t());
+#endif 
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
 #endif
 #ifdef HAVE_FLATBUFFER
