@@ -90,7 +90,7 @@ cmake --build .
 4. That's all. We could find other options in `example/cmakelist.txt`.
 
 - More Details:
-For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
+For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/blob/main/CMakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
 
 # Introduction
 ## coro_rpc
