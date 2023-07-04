@@ -84,13 +84,13 @@ cmake --build .
 
 - Compile Manually:
 
-1. Add `include/` directory to include path(skip it if you have install ylt into system default path)
-2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON)
-3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use `g++`
-4. That's all. You can alos find other options in `example/cmakelist.txt`.
+1. Add `include/` directory to include path(skip it if you have install ylt into system default path).
+2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON).
+3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use g++.
+4. That's all. We could find other options in `example/cmakelist.txt`.
 
 - More Details:
-For more details, except `example/cmakelist.txt`, You can also see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
+For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
 
 # Introduction
 ## coro_rpc
