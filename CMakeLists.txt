@@ -22,6 +22,6 @@ include(cmake/install.cmake)
 # add project config, such as enable_ssl.
 include(cmake/config.cmake)
 # add project's source such as unit test, example & benchmark
-include(cmake/subdirectory.cmake)
+include(cmake/subdir.cmake)
 
 
