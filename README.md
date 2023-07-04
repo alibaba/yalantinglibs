@@ -84,7 +84,7 @@ cmake --build .
 
 - Compile Manually:
 
-1. Add `include/`'s parent  to include path(skip it if you have install ylt into system default path)
+1. Add `include/` directory to include path(skip it if you have install ylt into system default path)
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON)
 3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use `g++`
 4. That's all. You can alos find other options in `example/cmakelist.txt`.
