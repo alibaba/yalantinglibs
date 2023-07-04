@@ -15,7 +15,7 @@ if (Protobuf_FOUND)
     target_link_libraries(struct_pack_benchmark PRIVATE protobuf::libprotobuf)
 
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
-    if (build_struct_pb)
+    if (BUILD_STRUCT_PB)
         protobuf_generate_struct_pb(STRUCT_PACK_BENCHMARK_PROTO_SRCS2
                 STRUCT_PACK_BENCHMARK_PROTO_HDRS2
                 data_def.proto
