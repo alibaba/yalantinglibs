@@ -846,7 +846,7 @@ inline std::string get_time_str(std::time_t t) {
 inline std::string get_gmt_time_str(std::time_t t) {
   struct tm *GMTime = gmtime(&t);
   char buff[512] = {0};
-  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S %Z", GMTime);
+  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S GMT", GMTime);
   return buff;
 }
 
