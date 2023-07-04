@@ -1,5 +1,5 @@
 message(STATUS "-------------PROJECT SETTING-------------")
-option(ENABLE_SSL "Enable ssl support" ON)
+option(ENABLE_SSL "Enable ssl support" OFF)
 message(STATUS "ENABLE_SSL: ${ENABLE_SSL}")
 if (ENABLE_SSL)
     find_package(OpenSSL REQUIRED)
