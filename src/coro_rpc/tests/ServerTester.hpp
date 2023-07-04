@@ -159,7 +159,7 @@ struct ServerTester : TesterConfig {
         break;
       }
 
-      ELOGV(INFO, "retry times %d", retry);
+      ELOGV(INFO, "retry times %d", i);
     }
 
     REQUIRE_MESSAGE(ec == std::errc{}, std::to_string(client->get_client_id())

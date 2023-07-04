@@ -17,6 +17,16 @@ add_executable(coro_rpc_test
         ${TEST_SRCS}
         ${TEST_COMMON}
         )
+add_custom_command(
+        TARGET coro_rpc_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/src/coro_rpc/openssl_files)
+add_custom_command(
+        TARGET coro_rpc_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/output/openssl_files)
 target_compile_definitions(coro_rpc_test PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(coro_rpc_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 

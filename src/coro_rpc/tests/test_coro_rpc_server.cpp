@@ -33,7 +33,7 @@ struct CoroServerTester : ServerTester {
   CoroServerTester(TesterConfig config)
       : ServerTester(config),
         server(2, config.port, config.conn_timeout_duration) {
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
     if (use_ssl) {
       server.init_ssl_context(
           ssl_configure{"../openssl_files", "server.crt", "server.key"});
@@ -355,7 +355,8 @@ TEST_CASE("test server write queue") {
     std::string buffer_read;
     buffer_read.resize(buf.size());
     read(socket, asio::buffer(buffer2, coro_rpc_protocol::RESP_HEAD_LEN));
-    [[maybe_unused]] auto resp_head = *(coro_rpc_protocol::resp_header *)buffer2;
+    [[maybe_unused]] auto resp_head =
+        *(coro_rpc_protocol::resp_header *)buffer2;
     uint32_t body_len = header.length;
     CHECK(body_len == buf.size());
     read(socket, asio::buffer(buffer_read, body_len));

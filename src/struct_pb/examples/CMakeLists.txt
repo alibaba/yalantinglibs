@@ -17,6 +17,7 @@ else()
   # else 
   # include_directories(include)
   # include_directories(include/ylt/thirdparty)
+    include(struct_pb_helper.cmake)
 endif()
 
 find_package(Protobuf QUIET)

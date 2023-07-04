@@ -371,6 +371,7 @@ class coro_rpc_client {
       bool is_reconnect = false) {
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
+      std::cout << "ssl_init_ret_: " << ssl_init_ret_ << std::endl;
       co_return std::errc::not_connected;
     }
 #endif

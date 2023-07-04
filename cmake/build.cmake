@@ -18,6 +18,16 @@ if(BUILD_WITH_LIBCXX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 else()
 endif()
 
+# force use lld if your compiler is clang
+
+# When using coro_rpc_client to send request, only remote function declarations are required.
+# In the examples, RPC function declaration and definition are divided.
+# However, clang + ld(gold linker) + '-g' will report 'undefined reference to xxx'.
+# So you can use lld when compiler is clang by this code:
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+add_link_options(-fuse-ld=lld)    
+endif()
+
 # ccache
 option(USE_CCACHE "use ccache to faster compile when develop" OFF)
 message(STATUS "USE_CCACHE: ${USE_CCACHE}")
