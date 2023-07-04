@@ -5,9 +5,9 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
-#include "struct_pack/struct_pack.hpp"
 
 using namespace std::string_view_literals;
 

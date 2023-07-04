@@ -21,6 +21,78 @@ The target of yaLanTingLibs: provide very easy and high performance C++20 librar
 | macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![macos-clang](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
 | Windows Server 2022 (MSVC 19.33.31630.0)       | ![win-msvc](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
 
+
+# Quick Start
+## compiler requirements
+
+make sure you have such compilers:
+- clang11 and libstdc++-8 above; 
+- or gcc10 and g++10 above; 
+- msvc 14.29 above;
+
+## Install & Compile
+
+Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
+
+1. clone repo
+
+```shell
+git clone https://github.com/alibaba/yalantinglibs.git
+cd yalantinglibs
+mkdir build
+cd build
+```
+
+2. build & test
+
+- We suggest you compile the example and test the code first:
+
+```shell
+cmake ..
+cmake --build . --config debug # add -j, if you have enough memory to parallel compile
+ctest . # run tests
+```
+
+You can see the test/example/benchmark executable file in `./build/output/`.
+
+- Or you can just skip build example/test/benchmark:
+
+```shell
+# You can use those option to skip build unit-test & benchmark & example: 
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake --build .
+```
+
+3. install
+
+```shell
+cmake --install . # --prefix ./user_defined_install_path 
+```
+
+4. start develop
+
+- Use Cmake:
+
+After install ylt, copy then open the directory `src/*/examples`, then:
+
+```shell
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+- Compile Manually:
+
+1. Add `include/`'s parent  to include path(skip it if you have install ylt into system default path)
+2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON)
+3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use `g++`
+4. That's all. You can alos find other options in `example/cmakelist.txt`.
+
+- More Details:
+For more details, except `example/cmakelist.txt`, You can also see the cmake file [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
+
+# Introduction
 ## coro_rpc
 
 Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 0.4M QPS per thread in pipeline mode. coro_rpc is a header only library.
@@ -48,7 +120,7 @@ inline std::string_view echo(std::string_view str) { return str; }
 
 ```cpp
 #include "rpc_service.hpp"
-#include <coro_rpc/coro_rpc_server.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 int main() {
   coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
@@ -61,7 +133,7 @@ int main() {
 
 ```cpp
 #include "rpc_service.hpp"
-#include <coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
 
 Lazy<void> test_client() {
   coro_rpc_client client;
@@ -120,8 +192,8 @@ reflection-based json lib, very easy to do struct to json and json to struct.
 
 ### quick example
 ```cpp
-#include "struct_json/json_reader.h"
-#include "struct_json/json_writer.h"
+#include "ylt/struct_json/json_reader.h"
+#include "ylt/struct_json/json_writer.h"
 
 struct person {
   std::string name;
@@ -144,8 +216,8 @@ reflection-based xml lib, very easy to do struct to xml and xml to struct.
 
 ### quick example
 ```cpp
-#include "struct_xml/xml_reader.h"
-#include "struct_xml/xml_writer.h"
+#include "ylt/struct_xml/xml_reader.h"
+#include "ylt/struct_xml/xml_writer.h"
 
 struct person {
   std::string name;
@@ -178,8 +250,8 @@ reflection-based yaml lib, very easy to do struct to yaml and yaml to struct.
 
 ### quick example
 ```cpp
-#include "struct_yaml/yaml_reader.h"
-#include "struct_yaml/yaml_writer.h"
+#include "ylt/struct_yaml/yaml_reader.h"
+#include "ylt/struct_yaml/yaml_writer.h"
 
 struct person {
   std::string name;
@@ -210,7 +282,7 @@ coro_http is a C++20 coroutine http(https) client, include: get/post, websocket,
 
 ### get/post
 ```c++
-#include "coro_http/coro_http_client.h"
+#include "ylt/coro_http/coro_http_client.hpp"
 using namespace coro_http;
 
 async_simple::coro::Lazy<void> get_post(coro_http_client &client) {
@@ -283,88 +355,74 @@ async_simple::coro::Lazy<void> download_files(coro_http_client &client) {
 A C++ 20 coroutine library offering simple, light-weight and easy-to-use components to write asynchronous codes.
 See [async_simple](https://github.com/alibaba/async_simple)
 
-## compiler requirements
+# Details
 
-make sure you have such compilers:
-- clang11 and libstdc++-8 above; 
-- or gcc10 and g++10 above; 
-- msvc 14.29 或更高版本。
+## CMAKE OPTION
 
-## Quick Start
+These CMake options is used for yalantinglibs developing/installing itself. They are not effected for your project, because ylt is a head-only. 
 
-- clone repo
+### INSTALL OPTION
 
-```shell
-git clone https://github.com/alibaba/yalantinglibs.git
-```
+|option|default value|
+|----------|------------|
+|INSTALL_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
 
-- build, test & install (linux/macos)
+### ylt develop option
 
-```shell
-cd yalantinglibs
-mkdir build && cd build
-cmake .. 
-# You can use those option to skip build unit-test & benchmark & example: 
-# cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
-make # if your machine has enough memory, use `make -j` to speed up
-ctest . # run tests
-make install 
-```
+|option|default value|
+|----------|------------|
+|BUILD_EXAMPLES|ON|
+|BUILD_BENCHMARK|ON|
+|BUILD_UNIT_TESTS|ON|
+|COVERAGE_TEST|OFF|
+|GENERATE_BENCHMARK_DATA|OFF|
+|CORO_RPC_USE_OTHER_RPC|ON|
 
-- build & test( windows)
+### ylt config option
 
-You can use the IDE which support CMake to build & test the source, such as Visual Studio/Clion/Visual Studio Code.
+These option maybe useful for your project. If you want to enable it in your project, see the cmake code [here](https://github.com/alibaba/yalantinglibs/tree/main/cmake/config.cmake)
 
-- start your coding
+|option|default value|
+|----------|------------|
+|ENABLE_SSL|OFF|
+|ENABLE_PMR|OFF|
+|ENABLE_IO_URING|OFF|
+|ENABLE_FILE_IO_URING|OFF|
+|ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
+|ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
 
-Here is the sample code, you can start your project on this.
+## Thirdparty Dependency
 
-### coro_rpc
+In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
 
-```shell
-cd yalantinglibs/src/coro_rpc/examples/helloworld
-mkdir build && cd build
-cmake ..
-make
-# For more detail, see Cmakelist.txt in helloworld.
-```
+If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
+If you want to install the thirdparty independence(direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
 
-### struct_pack
+Here are the thirdparty libraries we used(Although async_simple is a part of ylt, it open source first, so we import it as a independence thirdparty library).
 
-TODO
+### coro_io
 
-## Benchmark
-
-options:
-
-```bash
-./benchmark_client # [threads = hardware counts] [client_pre_thread = 20] [pipeline_size = 1] [host = 127.0.0.1] [port = 9000] [test_data_path = ./test_data/echo_test] [test_seconds = 30] [warm_up_seconds = 5]
-```
-
-## Build Options
-
-| option            | description                                      | default |
-| ----------------- | ------------------------------------------------ | ------- |
-| CMAKE_BUILD_TYPE  | build type                                       | Release |
-| BUILD_WITH_LIBCXX | Build with libc++                                | OFF     |
-| BUILD_EXAMPLES    | Build examples                                   | ON      |
-| BUILD_BENCHMARK   | Build benchmark                                  | ON      | 
-| BUILD_UNIT_TESTS  | Build unit test                                  | ON      |
-| USE_CONAN         | Use conan package manager to handle dependencies | OFF     |
-| ENABLE_SSL        | Enable ssl support                               | OFF     |
-| ENABLE_IO_URING   | Enable io_uring support                          | OFF     |
-
-## Dependencies
-
-We use doctest for unit test. 
-All third-party dependencies are put in include/thirdparty.
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [openssl](https://www.openssl.org/) (optional)
 
 ### coro_rpc
 
-- [struct_pack](https://github.com/alibaba/yalantinglibs)
-- [easylog](https://github.com/alibaba/yalantinglibs)
-- [asio](https://github.com/chriskohlhoff/asio)
-- openssl (optional)
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [openssl](https://www.openssl.org/) (optional)
+
+### coro_http
+
+- [asio](https://think-async.com/Asio)
+- [async_simple](https://github.com/alibaba/async_simple)
+- [cinatra](https://github.com/qicosmos/cinatra)
+
+### easylog
+
+No dependency.
+
 ### struct_pack
 
 No dependency.
@@ -373,26 +431,40 @@ No dependency.
 
 - [iguana](https://github.com/qicosmos/iguana)
 
-### struct_pb
+### struct_pb (optional)
 
-TODO
+- [protobuf](https://protobuf.dev/)
 
-### easylog
+### struct_xml
 
-No dependency.
+- [iguana](https://github.com/qicosmos/iguana)
 
-# How to generate document
+### struct_yaml
+
+- [iguana](https://github.com/qicosmos/iguana)
+
+## Benchmark
+
+### coro_rpc 
+options:
+
+```bash
+./benchmark_client # [threads = hardware counts] [client_pre_thread = 20] [pipeline_size = 1] [host = 127.0.0.1] [port = 9000] [test_data_path = ./test_data/echo_test] [test_seconds = 30] [warm_up_seconds = 5]
+```
+
+
+## How to generate document
 
 see [Build Website](https://github.com/alibaba/yalantinglibs/blob/main/website/README.md)
 
-# How to Contribute
+## How to Contribute
 1. Create an issue in the issue template.
 2. Run tests and `git-clang-format HEAD^` locally for the change.
 3. Create a PR, fill in the PR template.
 4. Choose one or more reviewers from contributors: (e.g., qicosmos, poor-circle, PikachuHyA).
 5. Get approved and merged.
 
-# License
+## License
 
 yaLanTingLibs is distributed under the Apache License (Version 2.0)
 This product contains various third-party components under other open-source licenses.

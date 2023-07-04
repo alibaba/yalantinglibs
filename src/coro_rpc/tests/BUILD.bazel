@@ -8,7 +8,7 @@ cc_test(
             "inject_action.hpp",
             "main.cpp",
             "rpc_api.hpp",
-            "rpc_service.cpp",
+            "rpc_api.cpp",
             "test_connection.cpp",
             "test_coro_rpc_client.cpp",
             "test_coro_rpc_server.cpp",
@@ -26,8 +26,6 @@ cc_test(
         "STRUCT_PACK_ENABLE_UNPORTABLE_TYPE",
     ],
     deps = [
-        "//:coro_rpc",
-        "//:struct_pack",
-        "//thirdparty:doctest",
+        "//:ylt"
     ],
 )

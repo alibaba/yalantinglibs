@@ -58,7 +58,7 @@ inline std::string get_lib_name(LibType lib_type) {
 inline std::string get_space_str(size_t size, size_t max_size) {
   std::string space_str = "";
   if (size < max_size) {
-    for (int i = 0; i < max_size - size; ++i) space_str.append(" ");
+    for (std::size_t i = 0; i < max_size - size; ++i) space_str.append(" ");
   }
   return space_str;
 }

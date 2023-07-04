@@ -1,10 +1,27 @@
-find_package(Protobuf)
-if (Protobuf_FOUND)
-    add_executable(struct_pb_example main.cpp)
-    target_protos_struct_pb(struct_pb_example PUBLIC demo.proto)
-    target_link_libraries(struct_pb_example PRIVATE yalantinglibs::struct_pb)
+if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  # If this is a subproject in ylt
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/examples)
+else()
+  # else find installed yalantinglibs
+    cmake_minimum_required(VERSION 3.15)
+    project(coro_rpc_examples)
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE "Release")
+    endif()
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_INCLUDE_CURRENT_DIR ON)
+  # if you have install ylt  
+    find_package(yalantinglibs REQUIRED)
+    link_libraries(yalantinglibs::yalantinglibs)
+  # else 
+  # include_directories(include)
+  # include_directories(include/ylt/thirdparty)
+    include(struct_pb_helper.cmake)
+endif()
 
+find_package(Protobuf QUIET)
+if (Protobuf_FOUND)
     add_executable(struct_pb_tutorial tutorial.cpp)
     target_protos_struct_pb(struct_pb_tutorial PRIVATE addressbook.proto)
-    target_link_libraries(struct_pb_tutorial PRIVATE yalantinglibs::struct_pb)
 endif()

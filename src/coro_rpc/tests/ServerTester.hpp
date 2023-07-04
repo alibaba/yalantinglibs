@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@
 #define CORO_RPC_SERVERTESTER_HPP
 #include <async_simple/coro/Lazy.h>
 
-#include <coro_rpc/coro_rpc_client.hpp>
 #include <exception>
 #include <future>
 #include <ostream>
 #include <string>
 #include <thread>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
+#include <ylt/easylog.hpp>
 
 #include "doctest.h"
-#include "easylog/easylog.h"
 #include "inject_action.hpp"
 #include "rpc_api.hpp"
 
@@ -140,7 +140,7 @@ struct ServerTester : TesterConfig {
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
       }
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
@@ -159,7 +159,7 @@ struct ServerTester : TesterConfig {
         break;
       }
 
-      ELOGV(INFO, "retry times %d", retry);
+      ELOGV(INFO, "retry times %d", i);
     }
 
     REQUIRE_MESSAGE(ec == std::errc{}, std::to_string(client->get_client_id())
@@ -357,7 +357,7 @@ struct ServerTester : TesterConfig {
       else {
         client = std::make_shared<coro_rpc_client>(g_client_id++);
       }
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");

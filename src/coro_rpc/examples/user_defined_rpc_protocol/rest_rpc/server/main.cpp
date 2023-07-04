@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <coro_rpc/coro_rpc_server.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "../config/rest_rpc_protocol.hpp"
 #include "rpc_service.h"

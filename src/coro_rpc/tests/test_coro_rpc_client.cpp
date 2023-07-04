@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,19 @@
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/io_context.hpp>
 #include <chrono>
-#include <coro_rpc/coro_rpc_client.hpp>
-#include <coro_rpc/coro_rpc_server.hpp>
 #include <cstddef>
 #include <memory>
 #include <thread>
 #include <variant>
+#include <ylt/coro_io/coro_io.hpp>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
+#include <ylt/struct_pack.hpp>
 
-#include "asio/io_context.hpp"
-#include "coro_io/coro_io.hpp"
 #include "doctest.h"
 #include "rpc_api.hpp"
-#include "struct_pack/struct_pack.hpp"
 using namespace coro_rpc;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
@@ -46,7 +46,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
     asio::io_context& io_context, std::string port) {
   auto client = std::make_shared<coro_rpc_client>(io_context.get_executor(),
                                                   g_client_id++);
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   bool ok = client->init_ssl("../openssl_files", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 #endif
@@ -80,7 +80,7 @@ TEST_CASE("testing client") {
 
   future.wait();
   coro_rpc_server server(2, coro_rpc_server_port);
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   server.init_ssl_context(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
@@ -167,7 +167,7 @@ TEST_CASE("testing client with inject server") {
     io_context.run();
   });
   coro_rpc_server server(2, coro_rpc_server_port);
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   server.init_ssl_context(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
@@ -214,7 +214,7 @@ TEST_CASE("testing client with inject server") {
   thd.join();
   g_action = inject_action::nothing;
 }
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
 
 enum class ssl_type { _, fake, no };
 
@@ -450,7 +450,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
   auto val = client.sync_connect("127.0.0.1", "8801");
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
-#ifdef ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   SUBCASE("client use ssl but server don't use ssl") {
     g_action = {};
     coro_rpc_server server(2, 8801);

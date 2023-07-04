@@ -27,8 +27,7 @@
 #endif
 
 #include <filesystem>
-
-#include "easylog/easylog.h"
+#include <ylt/easylog.hpp>
 
 using namespace easylog;
 

@@ -1,5 +1,5 @@
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-find_package(Protobuf)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
+find_package(Protobuf QUIET)
 if (Protobuf_FOUND)
 add_executable(test_struct_pb
         test_pb.cpp
@@ -10,7 +10,6 @@ add_executable(test_struct_pb
 target_sources(test_struct_pb PRIVATE
         main.cpp
         )
-target_link_libraries(test_struct_pb PRIVATE yalantinglibs::struct_pb doctest)
 add_test(NAME test_struct_pb COMMAND test_struct_pb)
 target_include_directories(test_struct_pb PUBLIC ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark)
     target_compile_definitions(test_struct_pb PRIVATE HAVE_PROTOBUF)

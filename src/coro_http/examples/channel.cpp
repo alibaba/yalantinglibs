@@ -13,18 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "coro_io/channel.hpp"
+#include <async_simple/coro/Collect.h>
+#include <async_simple/coro/Lazy.h>
+#include <async_simple/coro/SyncAwait.h>
 
+#include <cinatra/uri.hpp>
 #include <iostream>
 #include <thread>
-
-#include "async_simple/coro/Collect.h"
-#include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/SyncAwait.h"
-#include "cinatra/uri.hpp"
-#include "coro_http/coro_http_client.h"
-#include "coro_io/client_pool.hpp"
-#include "coro_io/coro_io.hpp"
+#include <ylt/coro_http/coro_http_client.hpp>
+#include <ylt/coro_io/channel.hpp>
+#include <ylt/coro_io/client_pool.hpp>
+#include <ylt/coro_io/coro_io.hpp>
 
 using namespace async_simple::coro;
 using namespace coro_http;
@@ -66,7 +65,7 @@ Lazy<void> qps_watcher() {
 
 int main() {
   std::vector<std::string> hosts;
-  hosts.emplace_back("http://www.baidu.com");
+  hosts.emplace_back("http://www.baidu.com", "http://baidu.com");
   auto chan = coro_io::channel<coro_http_client>::create(
       hosts, coro_io::channel<coro_http_client>::channel_config{
                  .pool_config{.max_connection_ = 1000}});

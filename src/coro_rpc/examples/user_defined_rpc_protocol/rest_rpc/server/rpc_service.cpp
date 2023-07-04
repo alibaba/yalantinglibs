@@ -15,10 +15,9 @@
  */
 #include "rpc_service.h"
 
-#include <easylog/easylog.h>
-
 #include <chrono>
 #include <thread>
+#include <ylt/easylog.hpp>
 
 using namespace coro_rpc;
 

@@ -1,4 +1,8 @@
-# install public header files
+message(STATUS "-------------INSTALL SETTING-------------")
+option(INSTALL_THIRDPARTY "Install thirdparty" ON)
+message(STATUS "INSTALL_THIRDPARTY: " ${INSTALL_THIRDPARTY})
+option(INSTALL_INDEPENDENT_THIRDPARTY "Install independent thirdparty" ON)
+
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
         "${yaLanTingLibs_BINARY_DIR}/cmake/yalantinglibsConfigVersion.cmake"
@@ -7,41 +11,30 @@ write_basic_package_version_file(
 )
 set(ConfigPackageLocation lib/cmake/yalantinglibs)
 
-configure_file(cmake/yalantinglibsConfig.cmake.in
-        "${CMAKE_CURRENT_BINARY_DIR}/cmake/yalantinglibsConfig.cmake"
-        COPYONLY
-        )
-#install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include/yalantinglibs)
 
-install(
-        FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/cmake/yalantinglibsConfig.cmake"
-        "${yaLanTingLibs_BINARY_DIR}/cmake/yalantinglibsConfigVersion.cmake"
-        DESTINATION ${ConfigPackageLocation}
-)
-function(ylt_install target)
-    cmake_parse_arguments(ylt_install_lib " " "NAME" "EXPORT" ${ARGN})
-    set(_export_name ${target}Targets)
-    if (ylt_install_lib_NAME)
-        set(_export_name ${ylt_install_lib_NAME})
-    endif ()
-    install(
-            TARGETS ${target}
-            EXPORT ${_export_name}
-            LIBRARY DESTINATION lib
-            ARCHIVE DESTINATION lib
-            RUNTIME DESTINATION bin
-    )
-    include(CMakePackageConfigHelpers)
-    write_basic_package_version_file(
-            ${target}ConfigVersion.cmake
-            VERSION ${yaLanTingLibs_VERSION}
-            COMPATIBILITY SameMajorVersion
-    )
-    install(
-            EXPORT ${_export_name}
-            FILE ${target}Targets.cmake
-            NAMESPACE yalantinglibs::
-            DESTINATION ${ConfigPackageLocation}
-    )
-endfunction()
+add_library(yalantinglibs INTERFACE)
+install(TARGETS yalantinglibs
+       EXPORT yalantinglibsTargets
+       LIBRARY DESTINATION lib
+       ARCHIVE DESTINATION lib
+       RUNTIME DESTINATION bin
+       )
+install(EXPORT yalantinglibsTargets
+       FILE yalantinglibsConfig.cmake
+       NAMESPACE yalantinglibs::
+       DESTINATION ${ConfigPackageLocation}
+       )
+
+install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty" EXCLUDE)
+
+if (INSTALL_THIRDPARTY)
+        message(STATUS "INSTALL_INDEPENDENT_THIRDPARTY: " ${INSTALL_INDEPENDENT_THIRDPARTY})
+        if (INSTALL_INDEPENDENT_THIRDPARTY)
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/" DESTINATION include)
+        else()
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/" DESTINATION include/ylt/thirdparty)
+                target_include_directories(yalantinglibs INTERFACE
+                $<INSTALL_INTERFACE:include/ylt/thirdparty>
+                )
+        endif()
+endif()

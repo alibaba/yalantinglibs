@@ -60,7 +60,7 @@ bool StructGenerator::Generate(
 // $parameter$
 // =========================
 #include "$header_file$"
-#include "struct_pb/struct_pb/struct_pb_impl.hpp"
+#include "ylt/struct_pb/struct_pb_impl.hpp"
 )");
     Formatter format(&p);
     file_generator.generate_source(&p);
