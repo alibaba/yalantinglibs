@@ -58,6 +58,15 @@ STRUCT_PACK_INLINE std::error_code make_error_code(struct_pack::errc err) {
 }
 
 /*!
+ * \defgroup struct_pack struct_pack
+ *
+ * \brief yaLanTingLibs struct_pack 序列化库
+ *
+ * coro_rpc分为服务端和客户端，服务端包括rpc函数注册API和服务器对象的API，客户端包括rpc调用API。
+ *
+ */
+
+/*!
  * \ingroup struct_pack
  * Get the error message corresponding to the error code `err`.
  * @param err error code.
