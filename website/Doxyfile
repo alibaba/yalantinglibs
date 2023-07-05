@@ -1,10 +1,9 @@
 PROJECT_NAME=yaLanTingLibs
 GENERATE_HTML=yes
 GENERATE_LATEX=no
-INPUT=../include/struct_pack \
-      ../include/coro_rpc \
-      ../include/coro_rpc/coro_rpc \
-      ../include/struct_pack/struct_pack/struct_pack_impl.hpp \
+INPUT=../include/ylt/struct_pack.hpp \
+      ../include/ylt/coro_rpc/coro_rpc_client.hpp \
+      ../include/ylt/coro_rpc/coro_rpc_server.hpp \
       docs/coro_rpc/coro_rpc_introduction.md
 
 GENERATE_TREEVIEW      = YES # required!
