@@ -96,7 +96,6 @@ jobs:
         mode: [ Release, Debug ]
         libcxx: [ OFF ]
         io_uring: [ ON ]
-        case_name: [ coro_io_test ]
 
     runs-on: ubuntu-22.04
 
