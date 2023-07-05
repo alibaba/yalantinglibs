@@ -349,8 +349,9 @@ Compiler: Alibaba Clang 13
 CPU: (Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz)
 
 ### 测试结果
-
-![](./images/struct_pack_bench.png)
+![struct_pack_bench_serialize](./images/struct_pack_bench_serialize.png)       
+![struct_pack_bench_deserialize](./images/struct_pack_bench_deserialize.png)   
+![struct_pack_bench_binary_size](./images/struct_pack_bench_binary_size.png)        
 
 ## 向前/向后兼容性
 
