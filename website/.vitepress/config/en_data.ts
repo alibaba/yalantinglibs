@@ -16,6 +16,7 @@ export const struct_pb_Links = [
 
 export const struct_pack_Links = [
     {text: 'What is struct_pack?', link: '/en/struct_pack/struct_pack_intro'},
+    {text: 'struct_pack tips', link: '/en/struct_pack/struct_pack_tips'},
     {text: 'struct_pack layout', link: '/en/struct_pack/struct_pack_layout'},
     {text: 'struct_pack type system', link: '/en/struct_pack/struct_pack_type_system'},
     {text: 'API Reference', link: "https://alibaba.github.io/yalantinglibs/doxygen_en/html/group__struct__pack.html"}
