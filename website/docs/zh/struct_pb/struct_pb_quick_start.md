@@ -56,7 +56,7 @@ To do this, you need to run the protocol buffer compiler `protoc` with `struct_p
 ```shell
 protoc -I=$SRC_DIR --plugin=$PATH_TO_protoc-gen-struct_pb --struct_pb_out=$DST_DIR $SRC_DIR/addressbook.proto
 ```
-see [Generating source code](https://alibaba.github.io/yalantinglibs/guide/struct-pb-generating-your-struct.html) for details.
+see [Generating source code](https://alibaba.github.io/yalantinglibs/en/struct_pb/struct_pb_generating_your_struct.html) for details.
 
 This generates the following files in your specified destination directory:
 

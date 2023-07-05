@@ -52,7 +52,7 @@ As demonstrated above, it is also very convenient to build a client. There's not
 
 The server/client implementation shows the usability and core features of coro_rpc. Also, it shows us the core concept of RPC: that users can invoke remote methods in a way with local functions, and users will focus their efforts on RPC functions.
 
-Another usability of coro_rpc is that: there are barely any constraints on the RPC function itself. One could define an RPC function with any number of parameters. The parameters' type should be legal for struct_pack. (See [struct pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)). The serialization/deserialization procedures are transparent to users and the RPC framework will take care of them automatically.
+Another usability of coro_rpc is that: there are barely any constraints on the RPC function itself. One could define an RPC function with any number of parameters. The parameters' type should be legal for struct_pack. (See [struct pack type system](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)). The serialization/deserialization procedures are transparent to users and the RPC framework will take care of them automatically.
 
 ## RPC with any parameters
 
@@ -127,7 +127,7 @@ int main() {
   syncAwait(test_client());
 }
 ```
-The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](https://alibaba.github.io/yalantinglibs/guide/struct-pack-intro.html) with compile-time reflection. Users are not required to take efforts on such procedures.
+The input parameter and return type of `get_person` is a `struct`. The serialization/deserialization are automatically done by library [struct_pack](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html) with compile-time reflection. Users are not required to take efforts on such procedures.
 
 # Compare with grpc/brpc
 

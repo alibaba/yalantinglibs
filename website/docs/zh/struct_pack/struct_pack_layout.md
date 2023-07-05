@@ -71,7 +71,7 @@
 
 当类型校验通过时，该字段的长度可在编译期确定。当校验失败时，该字段的长度需要根据`'\0'`字符的位置确定。
 
-该字段的编码规则以及它和struct_pack类型树的映射关系请见[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)。
+该字段的编码规则以及它和struct_pack类型树的映射关系请见[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)。
 
 例如，对于类型：
 ```cpp

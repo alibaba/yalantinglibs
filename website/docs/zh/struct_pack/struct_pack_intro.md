@@ -190,7 +190,7 @@ auto buffer2 = serialize(map2);
 
 关于自定义类型的更多细节，请见：
 
-[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
+[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
 
 ### 序列化到自定义的输出流
 
@@ -405,11 +405,11 @@ struct_pack保证上述的这四个类型之间，可以通过序列化和反序
 
 ### 关于struct_pack类型系统
 
-[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
+[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
 
 ### 关于struct_pack的编码与布局
 
-[struct_pack的编码与布局](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-layout.html)
+[struct_pack的编码与布局](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_layout.html)
 
 ### 测试代码
 

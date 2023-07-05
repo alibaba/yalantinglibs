@@ -79,7 +79,7 @@ of this field is used to get the `type hash` higher 31 bits.
 
 The length of this field could be determined at compile time if it passed validation. However, it's length could only be determined by the position of char `'\0'` when validation failed.
 
-The encoding rules for this field and its mapping to the struct_pack type tree can be found in[struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
+The encoding rules for this field and its mapping to the struct_pack type tree can be found in[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)
 
 
 Take the following type as an example:

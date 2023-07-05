@@ -9,10 +9,8 @@ This document introcude some tips about struct_pack
 ## macro
 | macro      | description |
 | ----------- | ------------------ |
-| STRUCT_PACK_OPTIMIZE               |
-Allow more extremed loop unrolling to get better performance, but it cost more compile time.    | |
-STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |
-enable serialize unportable type, such as wchar_t and wstring. Deserialize them in other platform is ubdefined bevaior. |
+| STRUCT_PACK_OPTIMIZE               | Allow more extremed loop unrolling to get better performance, but it cost more compile time.    |
+| STRUCT_PACK_ENABLE_UNPORTABLE_TYPE | Enable serialize unportable type, such as wchar_t and wstring. Deserialize them in other platform is ubdefined bevaior. |
 ## How to speed up serialization/deserialization
 1. use string_view instead of string, use span instead of vector/array.
 2. move trivial field to a standlone struct, so that struct_pack could copy it faster. 

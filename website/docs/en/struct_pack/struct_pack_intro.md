@@ -193,7 +193,7 @@ auto buffer1 = serialize(map1);
 auto buffer2 = serialize(map2);
 ```
 
-For more detail, See [struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
+For more detail, See [struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)
 
 ### custom output stream
 
@@ -388,11 +388,11 @@ Remember，if the version number is not incremental, struct_pack can't achieve t
 
 ### struct_pack type system
 
-[struct_pack type system](https://alibaba.github.io/yalantinglibs/guide/struct-pack-type-system.html)
+[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)
 
 ### struct_pack layout
 
-[struct_pack layout](https://alibaba.github.io/yalantinglibs/guide/struct-pack-layout.html)
+[struct_pack layout](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_layout.html)
 
 
 ### Test code
