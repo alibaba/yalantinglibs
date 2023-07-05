@@ -64,7 +64,7 @@ client调用rpc函数也同样简单，5，6行代码就可以实现rpc调用了
 
 相信上面的这个简单的例子已经充分展示了coro_rpc的易用性和特点了，也体现了rpc的本质，即用户可以像调用本地函数那样调用远程函数，用户只需要关注rpc函数的业务逻辑即可。
 
-coro_rpc的接口易用性还体现在rpc函数几乎没有任何限制，rpc函数可以拥有任意多个参数，参数的序列化和反序列化由rpc库自动完成，用户无需关心。rpc库支持的参数类型相当广泛详见：[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-type-system.html)
+coro_rpc的接口易用性还体现在rpc函数几乎没有任何限制，rpc函数可以拥有任意多个参数，参数的序列化和反序列化由rpc库自动完成，用户无需关心。rpc库支持的参数类型相当广泛详见：[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
 
 ## rpc函数支持任意参数
 
@@ -141,7 +141,7 @@ int main() {
 }
 ```
 
-这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](https://alibaba.github.io/yalantinglibs/zh/guide/struct-pack-intro.html)实现自动的序列化和反序列化，用户无感知，省心省力。
+这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html)实现自动的序列化和反序列化，用户无感知，省心省力。
 
 # 和grpc、brpc比较易用性
 

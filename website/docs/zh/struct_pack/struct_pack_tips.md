@@ -9,10 +9,8 @@
 ## 宏
 | 宏      | 作用 |
 | ----------- | ------------------ |
-| STRUCT_PACK_OPTIMIZE               |
-增加模板实例化的数量，通过牺牲编译时间和二进制体积来换取更好的性能    | |
-STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |
-允许序列化unportable的类型，如wchar_t和wstring，请注意，这些类型序列化出的二进制数据可能无法正常的在其他平台下反序列化|
+| STRUCT_PACK_OPTIMIZE               |增加模板实例化的数量，通过牺牲编译时间和二进制体积来换取更好的性能    |
+|STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |允许序列化unportable的类型，如wchar_t和wstring，请注意，这些类型序列化出的二进制数据可能无法正常的在其他平台下反序列化|
 ## 如何让序列化or反序列化更加高效
 1. 考虑使用string_view代替string, 使用span代替vector/array；
 2. 把平凡字段封装到一个单独的结构体中，优化拷贝速度；
