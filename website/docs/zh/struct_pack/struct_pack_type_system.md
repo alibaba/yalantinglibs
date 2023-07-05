@@ -333,7 +333,7 @@ assert(res->nick_name.has_value()==false);
 注意，在修改字段的过程中，如果想保证兼容性，必须遵循只增不改原则：
 
 1. 只增：新添加的字段必须是`struct_pack::compatible<T, version_number>`类型，且version_number必须大于上一次填入的版本号。
-2. 不该：不修改/删除任何一个旧的字段。
+2. 不改：不修改/删除任何一个旧的字段。
 
 如果删去/修改了旧的`struct_pack::compatible<T, version_number>`类型，或者新增的`struct_pack::compatible<T, version_number>`类型版本号不是递增的，则两个结构体不能相互兼容，并且在两个不同版本之间序列化/反序列化的行为是**未定义**的！
 
