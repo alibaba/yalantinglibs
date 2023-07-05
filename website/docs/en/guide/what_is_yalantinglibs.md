@@ -8,7 +8,7 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-[中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
+[中文版](../../zh/guide/what_is_yalantinglibs.md)
 
 yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
 
@@ -26,8 +26,9 @@ The target of yaLanTingLibs: provide very easy and high performance C++20 librar
 ## compiler requirements
 
 make sure you have such compilers:
-- clang11 and libstdc++-8 above; 
-- or gcc10 and g++10 above; 
+
+- g++10 above;
+- clang++13 above (with stdlib = libc++-13/libstdc++-8 or later version); 
 - msvc 14.29 above;
 
 ## Install & Compile
@@ -86,6 +87,7 @@ cmake --build .
 
 1. Add `include/` directory to include path(skip it if you have install ylt into system default path).
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON).
+3. Enable `c++20` standard by option `-std=c++20`(g++/clang++) or `/std:c++20`(msvc)
 3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use g++.
 4. That's all. We could find other options in `example/cmakelist.txt`.
 

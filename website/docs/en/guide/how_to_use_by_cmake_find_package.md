@@ -31,27 +31,24 @@ make install
 ```
 
 ## Use yaLanTingLibs
-write `CMakeLists.txt` and use find_package
 
-```
+Here is an example about how to use cmake to import ylt in your project.
+
+```shell
 cmake_minimum_required(VERSION 3.15)
-
-project(awesome-solution LANGUAGES CXX)
+project(file_transfer)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# it's very important to set the compiler flags
-# if you use gcc/g++
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
-    if (CMAKE_CXX_COMPILER_VERSION MATCHES "12.*")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-maybe-uninitialized")
-    endif()
-endif()
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 find_package(Threads REQUIRED)
+link_libraries(Threads::Threads)
 find_package(yalantinglibs REQUIRED)
-# add your server
-target_link_libraries(your_server PRIVATE yalantinglibs::coro_rpc)
+link_libraries(yalantinglibs::yalantinglibs)
+
+add_executable(coro_io_example main.cpp)
 ```
 
 the full demo is here: https://github.com/PikachuHyA/yalantinglibs_find_package_demo

@@ -8,6 +8,8 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
+[English Version](../../en/guide/what_is_yalantinglibs.md)
+
 yaLanTingLibs 是一个C++20基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
 yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的C++20基础工具库, 帮助用户构建高性能的现代C++应用。

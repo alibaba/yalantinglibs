@@ -479,7 +479,7 @@ struct ConcurrentQueueDefaultTraits {
   // but many producers, a smaller block size should be favoured. For few
   // producers and/or many elements, a larger block size is preferred. A sane
   // default is provided. Must be a power of 2.
-  static const size_t BLOCK_SIZE = 32;
+  static const size_t QUEUE_BLOCK_SIZE = 32;
 
   // For explicit producers (i.e. when using a producer token), the block is
   // checked for being empty by iterating through a list of flags, one per
@@ -943,7 +943,8 @@ class ConcurrentQueue {
   typedef typename Traits::index_t index_t;
   typedef typename Traits::size_t size_t;
 
-  static const size_t BLOCK_SIZE = static_cast<size_t>(Traits::BLOCK_SIZE);
+  static const size_t QUEUE_BLOCK_SIZE =
+      static_cast<size_t>(Traits::QUEUE_BLOCK_SIZE);
   static const size_t EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD =
       static_cast<size_t>(Traits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD);
   static const size_t EXPLICIT_INITIAL_INDEX_SIZE =
@@ -964,11 +965,11 @@ class ConcurrentQueue {
   static const size_t MAX_SUBQUEUE_SIZE =
       (details::const_numeric_max<size_t>::value -
            static_cast<size_t>(Traits::MAX_SUBQUEUE_SIZE) <
-       BLOCK_SIZE)
+       QUEUE_BLOCK_SIZE)
           ? details::const_numeric_max<size_t>::value
           : ((static_cast<size_t>(Traits::MAX_SUBQUEUE_SIZE) +
-              (BLOCK_SIZE - 1)) /
-             BLOCK_SIZE * BLOCK_SIZE);
+              (QUEUE_BLOCK_SIZE - 1)) /
+             QUEUE_BLOCK_SIZE * QUEUE_BLOCK_SIZE);
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -981,8 +982,9 @@ class ConcurrentQueue {
                 "Traits::index_t must be an unsigned integral type");
   static_assert(sizeof(index_t) >= sizeof(size_t),
                 "Traits::index_t must be at least as wide as Traits::size_t");
-  static_assert((BLOCK_SIZE > 1) && !(BLOCK_SIZE & (BLOCK_SIZE - 1)),
-                "Traits::BLOCK_SIZE must be a power of 2 (and at least 2)");
+  static_assert(
+      (QUEUE_BLOCK_SIZE > 1) && !(QUEUE_BLOCK_SIZE & (QUEUE_BLOCK_SIZE - 1)),
+      "Traits::QUEUE_BLOCK_SIZE must be a power of 2 (and at least 2)");
   static_assert((EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD > 1) &&
                     !(EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD &
                       (EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD - 1)),
@@ -1019,7 +1021,7 @@ class ConcurrentQueue {
   // to ensure that the queue is fully constructed before it starts being used
   // by other threads (this includes making the memory effects of construction
   // visible, possibly with a memory barrier).
-  explicit ConcurrentQueue(size_t capacity = 32 * BLOCK_SIZE)
+  explicit ConcurrentQueue(size_t capacity = 32 * QUEUE_BLOCK_SIZE)
       : producerListTail(nullptr),
         producerCount(0),
         initialBlockPoolIndex(0),
@@ -1027,8 +1029,9 @@ class ConcurrentQueue {
         globalExplicitConsumerOffset(0) {
     implicitProducerHashResizeInProgress.clear(std::memory_order_relaxed);
     populate_initial_implicit_producer_hash();
-    populate_initial_block_list(capacity / BLOCK_SIZE +
-                                ((capacity & (BLOCK_SIZE - 1)) == 0 ? 0 : 1));
+    populate_initial_block_list(
+        capacity / QUEUE_BLOCK_SIZE +
+        ((capacity & (QUEUE_BLOCK_SIZE - 1)) == 0 ? 0 : 1));
 
 #ifdef MOODYCAMEL_QUEUE_INTERNAL_DEBUG
     // Track all the producers using a fully-resolved typed list for
@@ -1052,9 +1055,10 @@ class ConcurrentQueue {
         globalExplicitConsumerOffset(0) {
     implicitProducerHashResizeInProgress.clear(std::memory_order_relaxed);
     populate_initial_implicit_producer_hash();
-    size_t blocks = (((minCapacity + BLOCK_SIZE - 1) / BLOCK_SIZE) - 1) *
-                        (maxExplicitProducers + 1) +
-                    2 * (maxExplicitProducers + maxImplicitProducers);
+    size_t blocks =
+        (((minCapacity + QUEUE_BLOCK_SIZE - 1) / QUEUE_BLOCK_SIZE) - 1) *
+            (maxExplicitProducers + 1) +
+        2 * (maxExplicitProducers + maxImplicitProducers);
     populate_initial_block_list(blocks);
 
 #ifdef MOODYCAMEL_QUEUE_INTERNAL_DEBUG
@@ -1675,7 +1679,7 @@ class ConcurrentQueue {
   // contention.
   template <typename N>  // N must inherit FreeListNode or have the same fields
                          // (and initialization of them)
-                         struct FreeList {
+  struct FreeList {
     FreeList() : freeListHead(nullptr) {}
     FreeList(FreeList&& other)
         : freeListHead(other.freeListHead.load(std::memory_order_relaxed)) {
@@ -1822,10 +1826,10 @@ class ConcurrentQueue {
     template <InnerQueueContext context>
     inline bool is_empty() const {
       MOODYCAMEL_CONSTEXPR_IF(context == explicit_context &&
-                              BLOCK_SIZE <=
+                              QUEUE_BLOCK_SIZE <=
                                   EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD) {
         // Check flags
-        for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+        for (size_t i = 0; i < QUEUE_BLOCK_SIZE; ++i) {
           if (!emptyFlags[i].load(std::memory_order_relaxed)) {
             return false;
           }
@@ -1839,12 +1843,12 @@ class ConcurrentQueue {
       else {
         // Check counter
         if (elementsCompletelyDequeued.load(std::memory_order_relaxed) ==
-            BLOCK_SIZE) {
+            QUEUE_BLOCK_SIZE) {
           std::atomic_thread_fence(std::memory_order_acquire);
           return true;
         }
         assert(elementsCompletelyDequeued.load(std::memory_order_relaxed) <=
-               BLOCK_SIZE);
+               QUEUE_BLOCK_SIZE);
         return false;
       }
     }
@@ -1854,16 +1858,16 @@ class ConcurrentQueue {
     template <InnerQueueContext context>
     inline bool set_empty(MOODYCAMEL_MAYBE_UNUSED index_t i) {
       MOODYCAMEL_CONSTEXPR_IF(context == explicit_context &&
-                              BLOCK_SIZE <=
+                              QUEUE_BLOCK_SIZE <=
                                   EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD) {
         // Set flag
-        assert(!emptyFlags[BLOCK_SIZE - 1 -
+        assert(!emptyFlags[QUEUE_BLOCK_SIZE - 1 -
                            static_cast<size_t>(
-                               i & static_cast<index_t>(BLOCK_SIZE - 1))]
+                               i & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1))]
                     .load(std::memory_order_relaxed));
-        emptyFlags[BLOCK_SIZE - 1 -
-                   static_cast<size_t>(i &
-                                       static_cast<index_t>(BLOCK_SIZE - 1))]
+        emptyFlags[QUEUE_BLOCK_SIZE - 1 -
+                   static_cast<size_t>(
+                       i & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1))]
             .store(true, std::memory_order_release);
         return false;
       }
@@ -1871,8 +1875,8 @@ class ConcurrentQueue {
         // Increment counter
         auto prevVal =
             elementsCompletelyDequeued.fetch_add(1, std::memory_order_release);
-        assert(prevVal < BLOCK_SIZE);
-        return prevVal == BLOCK_SIZE - 1;
+        assert(prevVal < QUEUE_BLOCK_SIZE);
+        return prevVal == QUEUE_BLOCK_SIZE - 1;
       }
     }
 
@@ -1883,12 +1887,13 @@ class ConcurrentQueue {
     inline bool set_many_empty(MOODYCAMEL_MAYBE_UNUSED index_t i,
                                size_t count) {
       MOODYCAMEL_CONSTEXPR_IF(context == explicit_context &&
-                              BLOCK_SIZE <=
+                              QUEUE_BLOCK_SIZE <=
                                   EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD) {
         // Set flags
         std::atomic_thread_fence(std::memory_order_release);
-        i = BLOCK_SIZE - 1 -
-            static_cast<size_t>(i & static_cast<index_t>(BLOCK_SIZE - 1)) -
+        i = QUEUE_BLOCK_SIZE - 1 -
+            static_cast<size_t>(i &
+                                static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) -
             count + 1;
         for (size_t j = 0; j != count; ++j) {
           assert(!emptyFlags[i + j].load(std::memory_order_relaxed));
@@ -1900,34 +1905,35 @@ class ConcurrentQueue {
         // Increment counter
         auto prevVal = elementsCompletelyDequeued.fetch_add(
             count, std::memory_order_release);
-        assert(prevVal + count <= BLOCK_SIZE);
-        return prevVal + count == BLOCK_SIZE;
+        assert(prevVal + count <= QUEUE_BLOCK_SIZE);
+        return prevVal + count == QUEUE_BLOCK_SIZE;
       }
     }
 
     template <InnerQueueContext context>
     inline void set_all_empty() {
       MOODYCAMEL_CONSTEXPR_IF(context == explicit_context &&
-                              BLOCK_SIZE <=
+                              QUEUE_BLOCK_SIZE <=
                                   EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD) {
         // Set all flags
-        for (size_t i = 0; i != BLOCK_SIZE; ++i) {
+        for (size_t i = 0; i != QUEUE_BLOCK_SIZE; ++i) {
           emptyFlags[i].store(true, std::memory_order_relaxed);
         }
       }
       else {
         // Reset counter
-        elementsCompletelyDequeued.store(BLOCK_SIZE, std::memory_order_relaxed);
+        elementsCompletelyDequeued.store(QUEUE_BLOCK_SIZE,
+                                         std::memory_order_relaxed);
       }
     }
 
     template <InnerQueueContext context>
     inline void reset_empty() {
       MOODYCAMEL_CONSTEXPR_IF(context == explicit_context &&
-                              BLOCK_SIZE <=
+                              QUEUE_BLOCK_SIZE <=
                                   EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD) {
         // Reset flags
-        for (size_t i = 0; i != BLOCK_SIZE; ++i) {
+        for (size_t i = 0; i != QUEUE_BLOCK_SIZE; ++i) {
           emptyFlags[i].store(false, std::memory_order_relaxed);
         }
       }
@@ -1939,24 +1945,29 @@ class ConcurrentQueue {
 
     inline T* operator[](index_t idx) MOODYCAMEL_NOEXCEPT {
       return static_cast<T*>(static_cast<void*>(elements)) +
-             static_cast<size_t>(idx & static_cast<index_t>(BLOCK_SIZE - 1));
+             static_cast<size_t>(idx &
+                                 static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
     }
     inline T const* operator[](index_t idx) const MOODYCAMEL_NOEXCEPT {
       return static_cast<T const*>(static_cast<void const*>(elements)) +
-             static_cast<size_t>(idx & static_cast<index_t>(BLOCK_SIZE - 1));
+             static_cast<size_t>(idx &
+                                 static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
     }
 
    private:
     static_assert(std::alignment_of<T>::value <= sizeof(T),
                   "The queue does not support types with an alignment greater "
                   "than their size at this time");
-    MOODYCAMEL_ALIGNED_TYPE_LIKE(char[sizeof(T) * BLOCK_SIZE], T) elements;
+    MOODYCAMEL_ALIGNED_TYPE_LIKE(char[sizeof(T) * QUEUE_BLOCK_SIZE], T)
+    elements;
 
    public:
     Block* next;
     std::atomic<size_t> elementsCompletelyDequeued;
-    std::atomic<bool> emptyFlags
-        [BLOCK_SIZE <= EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD ? BLOCK_SIZE : 1];
+    std::atomic<bool>
+        emptyFlags[QUEUE_BLOCK_SIZE <= EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD
+                       ? QUEUE_BLOCK_SIZE
+                       : 1];
 
    public:
     std::atomic<std::uint32_t> freeListRefs;
@@ -2084,14 +2095,14 @@ class ConcurrentQueue {
         // First find the block that's partially dequeued, if any
         Block* halfDequeuedBlock = nullptr;
         if ((this->headIndex.load(std::memory_order_relaxed) &
-             static_cast<index_t>(BLOCK_SIZE - 1)) != 0) {
+             static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) != 0) {
           // The head's not on a block boundary, meaning a block somewhere is
           // partially dequeued (or the head block is the tail block and was
           // fully dequeued, but the head/tail are still not on a boundary)
           size_t i = (pr_blockIndexFront - pr_blockIndexSlotsUsed) &
                      (pr_blockIndexSize - 1);
           while (details::circular_less_than<index_t>(
-              pr_blockIndexEntries[i].base + BLOCK_SIZE,
+              pr_blockIndexEntries[i].base + QUEUE_BLOCK_SIZE,
               this->headIndex.load(std::memory_order_relaxed))) {
             i = (i + 1) & (pr_blockIndexSize - 1);
           }
@@ -2115,19 +2126,19 @@ class ConcurrentQueue {
           if (block == halfDequeuedBlock) {
             i = static_cast<size_t>(
                 this->headIndex.load(std::memory_order_relaxed) &
-                static_cast<index_t>(BLOCK_SIZE - 1));
+                static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
           }
 
           // Walk through all the items in the block; if this is the tail block,
           // we need to stop when we reach the tail index
           auto lastValidIndex =
               (this->tailIndex.load(std::memory_order_relaxed) &
-               static_cast<index_t>(BLOCK_SIZE - 1)) == 0
-                  ? BLOCK_SIZE
+               static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0
+                  ? QUEUE_BLOCK_SIZE
                   : static_cast<size_t>(
                         this->tailIndex.load(std::memory_order_relaxed) &
-                        static_cast<index_t>(BLOCK_SIZE - 1));
-          while (i != BLOCK_SIZE &&
+                        static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
+          while (i != QUEUE_BLOCK_SIZE &&
                  (block != this->tailBlock || i != lastValidIndex)) {
             (*block)[i++]->~T();
           }
@@ -2159,7 +2170,8 @@ class ConcurrentQueue {
       index_t currentTailIndex =
           this->tailIndex.load(std::memory_order_relaxed);
       index_t newTailIndex = 1 + currentTailIndex;
-      if ((currentTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) == 0) {
+      if ((currentTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) ==
+          0) {
         // We reached the end of a block, start a new one
         auto startBlock = this->tailBlock;
         auto originalBlockIndexSlotsUsed = pr_blockIndexSlotsUsed;
@@ -2187,10 +2199,10 @@ class ConcurrentQueue {
           auto head = this->headIndex.load(std::memory_order_relaxed);
           assert(!details::circular_less_than<index_t>(currentTailIndex, head));
           if (!details::circular_less_than<index_t>(
-                  head, currentTailIndex + BLOCK_SIZE) ||
+                  head, currentTailIndex + QUEUE_BLOCK_SIZE) ||
               (MAX_SUBQUEUE_SIZE != details::const_numeric_max<size_t>::value &&
-               (MAX_SUBQUEUE_SIZE == 0 ||
-                MAX_SUBQUEUE_SIZE - BLOCK_SIZE < currentTailIndex - head))) {
+               (MAX_SUBQUEUE_SIZE == 0 || MAX_SUBQUEUE_SIZE - QUEUE_BLOCK_SIZE <
+                                              currentTailIndex - head))) {
             // We can't enqueue in another block because there's not enough
             // leeway -- the tail could surpass the head by the time the block
             // fills up! (Or we'll exceed the size limit, if the second part of
@@ -2359,12 +2371,13 @@ class ConcurrentQueue {
           // sign of the offset when dividing it by the block size (in order to
           // get a correct signed block count offset in all cases):
           auto headBase = localBlockIndex->entries[localBlockIndexHead].base;
-          auto blockBaseIndex = index & ~static_cast<index_t>(BLOCK_SIZE - 1);
+          auto blockBaseIndex =
+              index & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
           auto offset = static_cast<size_t>(
               static_cast<typename std::make_signed<index_t>::type>(
                   blockBaseIndex - headBase) /
               static_cast<typename std::make_signed<index_t>::type>(
-                  BLOCK_SIZE));
+                  QUEUE_BLOCK_SIZE));
           auto block = localBlockIndex
                            ->entries[(localBlockIndexHead + offset) &
                                      (localBlockIndex->size - 1)]
@@ -2426,18 +2439,18 @@ class ConcurrentQueue {
       // Figure out how many blocks we'll need to allocate, and do so
       size_t blockBaseDiff =
           ((startTailIndex + count - 1) &
-           ~static_cast<index_t>(BLOCK_SIZE - 1)) -
-          ((startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1));
+           ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) -
+          ((startTailIndex - 1) & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
       index_t currentTailIndex =
-          (startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1);
+          (startTailIndex - 1) & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
       if (blockBaseDiff > 0) {
         // Allocate as many blocks as possible from ahead
         while (blockBaseDiff > 0 && this->tailBlock != nullptr &&
                this->tailBlock->next != firstAllocatedBlock &&
                this->tailBlock->next->ConcurrentQueue::Block::template is_empty<
                    explicit_context>()) {
-          blockBaseDiff -= static_cast<index_t>(BLOCK_SIZE);
-          currentTailIndex += static_cast<index_t>(BLOCK_SIZE);
+          blockBaseDiff -= static_cast<index_t>(QUEUE_BLOCK_SIZE);
+          currentTailIndex += static_cast<index_t>(QUEUE_BLOCK_SIZE);
 
           this->tailBlock = this->tailBlock->next;
           firstAllocatedBlock = firstAllocatedBlock == nullptr
@@ -2454,17 +2467,17 @@ class ConcurrentQueue {
 
         // Now allocate as many blocks as necessary from the block pool
         while (blockBaseDiff > 0) {
-          blockBaseDiff -= static_cast<index_t>(BLOCK_SIZE);
-          currentTailIndex += static_cast<index_t>(BLOCK_SIZE);
+          blockBaseDiff -= static_cast<index_t>(QUEUE_BLOCK_SIZE);
+          currentTailIndex += static_cast<index_t>(QUEUE_BLOCK_SIZE);
 
           auto head = this->headIndex.load(std::memory_order_relaxed);
           assert(!details::circular_less_than<index_t>(currentTailIndex, head));
           bool full =
               !details::circular_less_than<index_t>(
-                  head, currentTailIndex + BLOCK_SIZE) ||
+                  head, currentTailIndex + QUEUE_BLOCK_SIZE) ||
               (MAX_SUBQUEUE_SIZE != details::const_numeric_max<size_t>::value &&
-               (MAX_SUBQUEUE_SIZE == 0 ||
-                MAX_SUBQUEUE_SIZE - BLOCK_SIZE < currentTailIndex - head));
+               (MAX_SUBQUEUE_SIZE == 0 || MAX_SUBQUEUE_SIZE - QUEUE_BLOCK_SIZE <
+                                              currentTailIndex - head));
           if (pr_blockIndexRaw == nullptr ||
               pr_blockIndexSlotsUsed == pr_blockIndexSize || full) {
             MOODYCAMEL_CONSTEXPR_IF(allocMode == CannotAlloc) {
@@ -2556,16 +2569,17 @@ class ConcurrentQueue {
       currentTailIndex = startTailIndex;
       auto endBlock = this->tailBlock;
       this->tailBlock = startBlock;
-      assert((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) != 0 ||
+      assert((startTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) !=
+                 0 ||
              firstAllocatedBlock != nullptr || count == 0);
-      if ((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) == 0 &&
+      if ((startTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0 &&
           firstAllocatedBlock != nullptr) {
         this->tailBlock = firstAllocatedBlock;
       }
       while (true) {
         index_t stopIndex =
-            (currentTailIndex & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-            static_cast<index_t>(BLOCK_SIZE);
+            (currentTailIndex & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+            static_cast<index_t>(QUEUE_BLOCK_SIZE);
         if (details::circular_less_than<index_t>(newTailIndex, stopIndex)) {
           stopIndex = newTailIndex;
         }
@@ -2610,15 +2624,15 @@ class ConcurrentQueue {
 
             if (!details::is_trivially_destructible<T>::value) {
               auto block = startBlock;
-              if ((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) ==
-                  0) {
+              if ((startTailIndex &
+                   static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0) {
                 block = firstAllocatedBlock;
               }
               currentTailIndex = startTailIndex;
               while (true) {
-                stopIndex =
-                    (currentTailIndex & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                    static_cast<index_t>(BLOCK_SIZE);
+                stopIndex = (currentTailIndex &
+                             ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                            static_cast<index_t>(QUEUE_BLOCK_SIZE);
                 if (details::circular_less_than<index_t>(constructedStopIndex,
                                                          stopIndex)) {
                   stopIndex = constructedStopIndex;
@@ -2693,12 +2707,12 @@ class ConcurrentQueue {
 
           auto headBase = localBlockIndex->entries[localBlockIndexHead].base;
           auto firstBlockBaseIndex =
-              firstIndex & ~static_cast<index_t>(BLOCK_SIZE - 1);
+              firstIndex & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
           auto offset = static_cast<size_t>(
               static_cast<typename std::make_signed<index_t>::type>(
                   firstBlockBaseIndex - headBase) /
               static_cast<typename std::make_signed<index_t>::type>(
-                  BLOCK_SIZE));
+                  QUEUE_BLOCK_SIZE));
           auto indexIndex =
               (localBlockIndexHead + offset) & (localBlockIndex->size - 1);
 
@@ -2706,8 +2720,9 @@ class ConcurrentQueue {
           auto index = firstIndex;
           do {
             auto firstIndexInBlock = index;
-            index_t endIndex = (index & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                               static_cast<index_t>(BLOCK_SIZE);
+            index_t endIndex =
+                (index & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                static_cast<index_t>(QUEUE_BLOCK_SIZE);
             endIndex =
                 details::circular_less_than<index_t>(
                     firstIndex + static_cast<index_t>(actualCount), endIndex)
@@ -2751,8 +2766,9 @@ class ConcurrentQueue {
                   indexIndex = (indexIndex + 1) & (localBlockIndex->size - 1);
 
                   firstIndexInBlock = index;
-                  endIndex = (index & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                             static_cast<index_t>(BLOCK_SIZE);
+                  endIndex =
+                      (index & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                      static_cast<index_t>(QUEUE_BLOCK_SIZE);
                   endIndex =
                       details::circular_less_than<index_t>(
                           firstIndex + static_cast<index_t>(actualCount),
@@ -2901,7 +2917,7 @@ class ConcurrentQueue {
           index != tail;  // If we enter the loop, then the last (tail) block
                           // will not be freed
       while (index != tail) {
-        if ((index & static_cast<index_t>(BLOCK_SIZE - 1)) == 0 ||
+        if ((index & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0 ||
             block == nullptr) {
           if (block != nullptr) {
             // Free the old block
@@ -2920,7 +2936,7 @@ class ConcurrentQueue {
       // the tail will be poised to create a new block).
       if (this->tailBlock != nullptr &&
           (forceFreeLastBlock ||
-           (tail & static_cast<index_t>(BLOCK_SIZE - 1)) != 0)) {
+           (tail & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) != 0)) {
         this->parent->add_block_to_free_list(this->tailBlock);
       }
 
@@ -2944,15 +2960,16 @@ class ConcurrentQueue {
       index_t currentTailIndex =
           this->tailIndex.load(std::memory_order_relaxed);
       index_t newTailIndex = 1 + currentTailIndex;
-      if ((currentTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) == 0) {
+      if ((currentTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) ==
+          0) {
         // We reached the end of a block, start a new one
         auto head = this->headIndex.load(std::memory_order_relaxed);
         assert(!details::circular_less_than<index_t>(currentTailIndex, head));
         if (!details::circular_less_than<index_t>(
-                head, currentTailIndex + BLOCK_SIZE) ||
+                head, currentTailIndex + QUEUE_BLOCK_SIZE) ||
             (MAX_SUBQUEUE_SIZE != details::const_numeric_max<size_t>::value &&
-             (MAX_SUBQUEUE_SIZE == 0 ||
-              MAX_SUBQUEUE_SIZE - BLOCK_SIZE < currentTailIndex - head))) {
+             (MAX_SUBQUEUE_SIZE == 0 || MAX_SUBQUEUE_SIZE - QUEUE_BLOCK_SIZE <
+                                            currentTailIndex - head))) {
           return false;
         }
 #ifdef MCDBGQ_NOLOCKFREE_IMPLICITPRODBLOCKINDEX
@@ -3118,17 +3135,17 @@ class ConcurrentQueue {
       // Figure out how many blocks we'll need to allocate, and do so
       size_t blockBaseDiff =
           ((startTailIndex + count - 1) &
-           ~static_cast<index_t>(BLOCK_SIZE - 1)) -
-          ((startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1));
+           ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) -
+          ((startTailIndex - 1) & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1));
       index_t currentTailIndex =
-          (startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1);
+          (startTailIndex - 1) & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
       if (blockBaseDiff > 0) {
 #ifdef MCDBGQ_NOLOCKFREE_IMPLICITPRODBLOCKINDEX
         debug::DebugLock lock(mutex);
 #endif
         do {
-          blockBaseDiff -= static_cast<index_t>(BLOCK_SIZE);
-          currentTailIndex += static_cast<index_t>(BLOCK_SIZE);
+          blockBaseDiff -= static_cast<index_t>(QUEUE_BLOCK_SIZE);
+          currentTailIndex += static_cast<index_t>(QUEUE_BLOCK_SIZE);
 
           // Find out where we'll be inserting this block in the block index
           BlockIndexEntry* idxEntry =
@@ -3140,10 +3157,10 @@ class ConcurrentQueue {
           assert(!details::circular_less_than<index_t>(currentTailIndex, head));
           bool full =
               !details::circular_less_than<index_t>(
-                  head, currentTailIndex + BLOCK_SIZE) ||
+                  head, currentTailIndex + QUEUE_BLOCK_SIZE) ||
               (MAX_SUBQUEUE_SIZE != details::const_numeric_max<size_t>::value &&
-               (MAX_SUBQUEUE_SIZE == 0 ||
-                MAX_SUBQUEUE_SIZE - BLOCK_SIZE < currentTailIndex - head));
+               (MAX_SUBQUEUE_SIZE == 0 || MAX_SUBQUEUE_SIZE - QUEUE_BLOCK_SIZE <
+                                              currentTailIndex - head));
 
           if (full ||
               !(indexInserted = insert_block_index_entry<allocMode>(
@@ -3157,11 +3174,11 @@ class ConcurrentQueue {
               rewind_block_index_tail();
               idxEntry->value.store(nullptr, std::memory_order_relaxed);
             }
-            currentTailIndex =
-                (startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1);
+            currentTailIndex = (startTailIndex - 1) &
+                               ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
             for (auto block = firstAllocatedBlock; block != nullptr;
                  block = block->next) {
-              currentTailIndex += static_cast<index_t>(BLOCK_SIZE);
+              currentTailIndex += static_cast<index_t>(QUEUE_BLOCK_SIZE);
               idxEntry = get_block_index_entry_for_index(currentTailIndex);
               idxEntry->value.store(nullptr, std::memory_order_relaxed);
               rewind_block_index_tail();
@@ -3185,7 +3202,8 @@ class ConcurrentQueue {
           // Store the chain of blocks so that we can undo if later allocations
           // fail, and so that we can find the blocks when we do the actual
           // enqueueing
-          if ((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) != 0 ||
+          if ((startTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) !=
+                  0 ||
               firstAllocatedBlock != nullptr) {
             assert(this->tailBlock != nullptr);
             this->tailBlock->next = newBlock;
@@ -3201,16 +3219,17 @@ class ConcurrentQueue {
       index_t newTailIndex = startTailIndex + static_cast<index_t>(count);
       currentTailIndex = startTailIndex;
       this->tailBlock = startBlock;
-      assert((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) != 0 ||
+      assert((startTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) !=
+                 0 ||
              firstAllocatedBlock != nullptr || count == 0);
-      if ((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) == 0 &&
+      if ((startTailIndex & static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0 &&
           firstAllocatedBlock != nullptr) {
         this->tailBlock = firstAllocatedBlock;
       }
       while (true) {
         index_t stopIndex =
-            (currentTailIndex & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-            static_cast<index_t>(BLOCK_SIZE);
+            (currentTailIndex & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+            static_cast<index_t>(QUEUE_BLOCK_SIZE);
         if (details::circular_less_than<index_t>(newTailIndex, stopIndex)) {
           stopIndex = newTailIndex;
         }
@@ -3240,15 +3259,15 @@ class ConcurrentQueue {
 
             if (!details::is_trivially_destructible<T>::value) {
               auto block = startBlock;
-              if ((startTailIndex & static_cast<index_t>(BLOCK_SIZE - 1)) ==
-                  0) {
+              if ((startTailIndex &
+                   static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) == 0) {
                 block = firstAllocatedBlock;
               }
               currentTailIndex = startTailIndex;
               while (true) {
-                stopIndex =
-                    (currentTailIndex & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                    static_cast<index_t>(BLOCK_SIZE);
+                stopIndex = (currentTailIndex &
+                             ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                            static_cast<index_t>(QUEUE_BLOCK_SIZE);
                 if (details::circular_less_than<index_t>(constructedStopIndex,
                                                          stopIndex)) {
                   stopIndex = constructedStopIndex;
@@ -3263,11 +3282,11 @@ class ConcurrentQueue {
               }
             }
 
-            currentTailIndex =
-                (startTailIndex - 1) & ~static_cast<index_t>(BLOCK_SIZE - 1);
+            currentTailIndex = (startTailIndex - 1) &
+                               ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
             for (auto block = firstAllocatedBlock; block != nullptr;
                  block = block->next) {
-              currentTailIndex += static_cast<index_t>(BLOCK_SIZE);
+              currentTailIndex += static_cast<index_t>(QUEUE_BLOCK_SIZE);
               auto idxEntry = get_block_index_entry_for_index(currentTailIndex);
               idxEntry->value.store(nullptr, std::memory_order_relaxed);
               rewind_block_index_tail();
@@ -3327,8 +3346,9 @@ class ConcurrentQueue {
               get_block_index_index_for_index(index, localBlockIndex);
           do {
             auto blockStartIndex = index;
-            index_t endIndex = (index & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                               static_cast<index_t>(BLOCK_SIZE);
+            index_t endIndex =
+                (index & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                static_cast<index_t>(QUEUE_BLOCK_SIZE);
             endIndex =
                 details::circular_less_than<index_t>(
                     firstIndex + static_cast<index_t>(actualCount), endIndex)
@@ -3379,8 +3399,9 @@ class ConcurrentQueue {
                       (indexIndex + 1) & (localBlockIndex->capacity - 1);
 
                   blockStartIndex = index;
-                  endIndex = (index & ~static_cast<index_t>(BLOCK_SIZE - 1)) +
-                             static_cast<index_t>(BLOCK_SIZE);
+                  endIndex =
+                      (index & ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1)) +
+                      static_cast<index_t>(QUEUE_BLOCK_SIZE);
                   endIndex =
                       details::circular_less_than<index_t>(
                           firstIndex + static_cast<index_t>(actualCount),
@@ -3500,7 +3521,7 @@ class ConcurrentQueue {
 #ifdef MCDBGQ_NOLOCKFREE_IMPLICITPRODBLOCKINDEX
       debug::DebugLock lock(mutex);
 #endif
-      index &= ~static_cast<index_t>(BLOCK_SIZE - 1);
+      index &= ~static_cast<index_t>(QUEUE_BLOCK_SIZE - 1);
       localBlockIndex = blockIndex.load(std::memory_order_acquire);
       auto tail = localBlockIndex->tail.load(std::memory_order_acquire);
       auto tailBase =
@@ -3511,7 +3532,8 @@ class ConcurrentQueue {
       auto offset = static_cast<size_t>(
           static_cast<typename std::make_signed<index_t>::type>(index -
                                                                 tailBase) /
-          static_cast<typename std::make_signed<index_t>::type>(BLOCK_SIZE));
+          static_cast<typename std::make_signed<index_t>::type>(
+              QUEUE_BLOCK_SIZE));
       size_t idx = (tail + offset) & (localBlockIndex->capacity - 1);
       assert(localBlockIndex->index[idx]->key.load(std::memory_order_relaxed) ==
                  index &&
@@ -3732,7 +3754,7 @@ class ConcurrentQueue {
             }
           }
           for (; details::circular_less_than<index_t>(head, tail);
-               head += BLOCK_SIZE) {
+               head += QUEUE_BLOCK_SIZE) {
             // auto block = prod->get_block_index_entry_for_index(head);
             ++stats.usedBlocks;
           }

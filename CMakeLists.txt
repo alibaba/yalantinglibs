@@ -6,6 +6,9 @@ project(yaLanTingLibs
         LANGUAGES CXX
         )
 
+# load pack finder
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Find/)
+
 # add include path
 include_directories(include)
 include_directories(include/ylt/thirdparty)

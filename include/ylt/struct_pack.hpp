@@ -31,67 +31,6 @@
 #include "util/expected.hpp"
 #endif
 
-/*! \defgroup struct_pack struct_pack
- *  \brief yaLanTingLibs Serialization Library
- *
- *  Based on compile-time reflection, very easy to use,
- *  high performance serialization library,
- *  struct_pack is a header only library, it is used by coro_rpc now.
- *
- *  \section struct_pack_compiler_support Compiler Support
- *
- * | Compiler      | Version |
- * | ----------- | ------------------ |
- * | GCC         | 10.2               |
- * | Clang       | 13.0.1             |
- * | Apple Clang | 13.1.16            |
- * | MSVC        | 14.32              |
- *
- * \section struct_pack_memory_layout Memory Layout
- *
- * a simple object after serialization
- *
- *
- * ![person](images/mem_layout_of_person.png)
- *
- * ![vec](images/mem_layout_of_vec_rect.png)
- *
- * ![std::vector<int32_t>](images/mem_layout_of_vec_int.png)
- *
- * The struct pack has a compact data format.
- * For fundamental types (e.g. int, float) and fixed length array,
- * the actual length is used.
- * For container concept (e.g string, stl container),
- * the element size is placed first, then all elements are wrote one by one.
- *
- * \subsection struct_pack_speed How to optimize serialization or
- * deserialization
- *
- * 1. using fixed-length string as far as possible
- * 2. encapsulating memory contiguous fields into a single object
- * 3. using memory contiguous container (e.g. std::vector)
- *
- * \subsection struct_pack_binary How to optimize serialization binary size
- *
- * For container and std::string, the field of element size can be compressed.
- * You can use `add_definitions` on CMake to get the optimization.
- * ```
- * # use 1 byte to represent the element size, require size < 256
- * add_definitions(-DSTRUCT_PACK_USE_INT8_SIZE)
- * # use 2 bytes to represent the element size, require size < 65536
- * add_definitions(-DSTRUCT_PACK_USE_INT16_SIZE)
- * ```
- *
- * \subsection struct_pack_limitation Limitation
- *
- * 1. the element size must less than UINT32_MAX.
- * 2. no pointer or reference allowed in object, otherwise compile-time error
- * reported.
- * 3. the object must be
- * [aggregate](https://en.cppreference.com/w/cpp/language/aggregate_initialization),
- * otherwise compile-time error reported.
- *
- */
 namespace struct_pack {
 
 #if __cpp_lib_expected >= 202202L && __cplusplus > 202002L

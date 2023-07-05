@@ -96,7 +96,6 @@ jobs:
         mode: [ Release, Debug ]
         libcxx: [ OFF ]
         io_uring: [ ON ]
-        case_name: [ coro_io_test ]
 
     runs-on: ubuntu-22.04
 
@@ -105,13 +104,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install liburing
-        run: |      
-          wget https://github.com/axboe/liburing/archive/refs/tags/liburing-2.3.tar.gz
-          tar -zxvf liburing-2.3.tar.gz
-          cd liburing-liburing-2.3/
-          ./configure --cc=clang --cxx=clang++
-          make
-          sudo make install
+        run: sudo apt-get install liburing-dev
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
@@ -127,12 +120,13 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
-                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} \
+                -DENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}}
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{matrix.mode}} -R ${{matrix.case_name}} -j 1 `nproc` -V
+        run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
