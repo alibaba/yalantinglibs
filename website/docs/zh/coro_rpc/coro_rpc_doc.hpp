@@ -33,6 +33,7 @@ namespace coro_rpc {
  *
  * ```c++
  * #include <ylt/coro_rpc/coro_rpc_server.hpp>
+ * using namespace ylt::coro_rpc;
  *
  * inline std::string hello_coro_rpc() { return "hello coro_rpc"; }
  *
@@ -89,7 +90,6 @@ class coro_rpc_server {
   auto &get_executor();
 
   /*!
-   * \ingroup coro_rpc
    * 注册rpc服务函数（非成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
    * 在模版参数中填入函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出。
    *
@@ -126,7 +126,6 @@ class coro_rpc_server {
   void register_handler();
 
   /*!
-   * \ingroup coro_rpc
    * 注册rpc服务函数（成员函数），服务端启动之前需要先注册rpc服务函数以对外提供rpc服务。
    * 在模版参数中填入成员函数地址即可完成注册，如果注册的函数重复的话，程序会终止退出；
    * 如果成员函数对应的对象指针为空程序会终止退出。
@@ -171,7 +170,7 @@ struct rpc_error {
  * ```c++
  * #include <ylt/coro_rpc/coro_rpc_client.hpp>
  *
- * using namespace coro_rpc;
+ * using namespace ylt::coro_rpc;
  * using namespace async_simple::coro;
  *
  * Lazy<void> show_rpc_call(coro_rpc_client &client) {

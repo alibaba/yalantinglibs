@@ -2,9 +2,11 @@ PROJECT_NAME=yaLanTingLibs
 GENERATE_HTML=yes
 GENERATE_LATEX=no
 INPUT=../include/ylt/struct_pack.hpp \
-      ../include/ylt/coro_rpc/coro_rpc_client.hpp \
+      
       ../include/ylt/coro_rpc/coro_rpc_server.hpp \
-      docs/coro_rpc/coro_rpc_introduction.md
+      ../include/ylt/coro_rpc/coro_rpc_client.hpp \
+      docs/en/coro_rpc/coro_rpc_introduction.md \
+      docs/en/struct_pack/struct_pack_intro.md
 
 GENERATE_TREEVIEW      = YES # required!
 DISABLE_INDEX          = NO
