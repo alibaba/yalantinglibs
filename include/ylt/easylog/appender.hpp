@@ -28,9 +28,6 @@
 
 namespace easylog {
 constexpr inline std::string_view BOM_STR = "\xEF\xBB\xBF";
-struct QueueTraits : public moodycamel::ConcurrentQueueDefaultTraits {
-  static const size_t BLOCK_SIZE = 256;
-};
 
 constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
@@ -315,7 +312,7 @@ class appender {
 
   std::mutex que_mtx_;
 
-  moodycamel::ConcurrentQueue<record_t, QueueTraits> queue_;
+  moodycamel::ConcurrentQueue<record_t> queue_;
   std::thread write_thd_;
   std::condition_variable cnd_;
   std::atomic<bool> stop_ = false;
