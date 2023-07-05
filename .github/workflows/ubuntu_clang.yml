@@ -121,12 +121,13 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
-                -DENABLE_FILE_IO_URING=${{matrix.io_uring}} \
+                -DENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
                 -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}}
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{matrix.mode}} -R ${{matrix.case_name}} -j 1 `nproc` -V
+        run: ctest -C ${{matrix.mode}} -j 1 `nproc` -V
