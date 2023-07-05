@@ -123,7 +123,7 @@ jobs:
                 -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
                 -DENABLE_FILE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}}
 
