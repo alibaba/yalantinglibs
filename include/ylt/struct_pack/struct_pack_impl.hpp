@@ -518,8 +518,12 @@ consteval type_id get_type_id() {
   else if constexpr (std::is_enum_v<T>) {
     return get_integral_type<std::underlying_type_t<T>>();
   }
-  else if constexpr (std::is_integral_v<T> || std::is_same_v<__int128, T> ||
-                     std::is_same_v<unsigned __int128, T>) {
+  else if constexpr (std::is_integral_v<T>
+#if __GNUC__ || __CLANG__
+                     || std::is_same_v<__int128, T> ||
+                     std::is_same_v<unsigned __int128, T>
+#endif
+  ) {
     return get_integral_type<T>();
   }
   else if constexpr (std::is_floating_point_v<T>) {
@@ -574,7 +578,7 @@ consteval type_id get_type_id() {
   else {
     static_assert(!sizeof(T), "not supported type");
   }
-}
+}  // namespace detail
 
 template <size_t size>
 consteval decltype(auto) get_size_literal() {
