@@ -19,6 +19,13 @@
 namespace struct_pack {
 
 /*!
+ * \defgroup  struct_pack struct_pack
+ *
+ * \brief yaLanTingLibs struct_pack 序列化库
+ *
+ */
+
+/*!
  * \ingroup struct_pack
  * \struct expected
  * \brief deserialize的返回值
