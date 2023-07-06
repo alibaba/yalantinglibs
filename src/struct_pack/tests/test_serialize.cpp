@@ -1050,7 +1050,6 @@ TEST_CASE("test 128-bit int") {
   CHECK(struct_pack::detail::is_trivial_serializable<test_int_128>::value);
 }
 
-TEST_CASE("test uint128") {}
 #endif
 
 #if __cpp_lib_span >= 202002L

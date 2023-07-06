@@ -246,17 +246,15 @@ template <typename T>
 template <typename U>
 constexpr auto get_types() {
   using T = std::remove_cvref_t<U>;
+  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
+                string<T> || container<T> || optional<T> || unique_ptr<T> ||
+                variant<T> || expected<T> || array<T> || c_array<T> ||
+                std::is_same_v<std::monostate, T>
 #if __GNUC__ || __clang__
-  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
-                std::is_same_v<std::string, T> || container<T> || optional<T> ||
-                unique_ptr<T> || variant<T> || expected<T> || array<T> ||
-                c_array<T> || std::is_same_v<std::monostate, T>) {
-#else
-  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
-                std::is_same_v<std::string, T> || container<T> || optional<T> ||
-                unique_ptr<T> || variant<T> || expected<T> || array<T> ||
-                c_array<T> || std::is_same_v<std::monostate, T>) {
+                || std::is_same_v<__int128, T> ||
+                std::is_same_v<unsigned __int128, T>
 #endif
+  ) {
     return declval<std::tuple<T>>();
   }
   else if constexpr (tuple<T>) {
@@ -300,7 +298,6 @@ template <typename T>
 concept struct_pack_buffer = trivially_copyable_container<T>
                              && struct_pack_byte<typename T::value_type>;
 // clang-format on
-
 enum class type_id {
   // compatible template type
   compatible_t = 0,
@@ -521,7 +518,8 @@ consteval type_id get_type_id() {
   else if constexpr (std::is_enum_v<T>) {
     return get_integral_type<std::underlying_type_t<T>>();
   }
-  else if constexpr (std::is_integral_v<T>) {
+  else if constexpr (std::is_integral_v<T> || std::is_same_v<__int128, T> ||
+                     std::is_same_v<unsigned __int128, T>) {
     return get_integral_type<T>();
   }
   else if constexpr (std::is_floating_point_v<T>) {
@@ -1162,15 +1160,10 @@ constexpr size_info inline calculate_one_size(const T &item) {
   size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
   if constexpr (id == type_id::monostate_t) {
   }
-#if __GNUC__ || __clang__
-  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                     id == type_id::int128_t || id == type_id::uint128_t) {
     ret.total = sizeof(type);
   }
-#else
-  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
-    ret.total = sizeof(type);
-  }
-#endif
   else if constexpr (detail::varint_t<type>) {
     ret.total = detail::calculate_varint_size(item);
   }
@@ -1706,7 +1699,8 @@ class packer {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         writer_.write((char *)&item, sizeof(type));
       }
       else if constexpr (detail::varint_t<type>) {
@@ -2444,7 +2438,8 @@ class unpacker {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         if constexpr (NotSkip) {
           if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
             return struct_pack::errc::no_buffer_space;
