@@ -247,9 +247,14 @@ template <typename U>
 constexpr auto get_types() {
   using T = std::remove_cvref_t<U>;
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
-                std::is_same_v<std::string, T> || container<T> || optional<T> ||
-                unique_ptr<T> || variant<T> || expected<T> || array<T> ||
-                c_array<T> || std::is_same_v<std::monostate, T>) {
+                string<T> || container<T> || optional<T> || unique_ptr<T> ||
+                variant<T> || expected<T> || array<T> || c_array<T> ||
+                std::is_same_v<std::monostate, T>
+#if __GNUC__ || __clang__
+                || std::is_same_v<__int128, T> ||
+                std::is_same_v<unsigned __int128, T>
+#endif
+  ) {
     return declval<std::tuple<T>>();
   }
   else if constexpr (tuple<T>) {
@@ -293,7 +298,6 @@ template <typename T>
 concept struct_pack_buffer = trivially_copyable_container<T>
                              && struct_pack_byte<typename T::value_type>;
 // clang-format on
-
 enum class type_id {
   // compatible template type
   compatible_t = 0,
@@ -306,7 +310,7 @@ enum class type_id {
   uint8_t,
   int16_t,
   uint16_t,
-  int128_t,  // TODO: support int128/uint128
+  int128_t,  // Tips: We only support 128-bit integer on gcc clang
   uint128_t,
   bool_t,
   char_8_t,
@@ -411,7 +415,7 @@ consteval type_id get_integral_type() {
   // char32_t's size maybe bigger than 32bits, which is not supported.
   else if constexpr (std::is_same_v<char32_t, T> && sizeof(char32_t) == 4) {
     static_assert(sizeof(char32_t) == 4,
-                  "sizeof(char16_t)!=4, which is not supported.");
+                  "sizeof(char32_t)!=4, which is not supported.");
     return type_id::char_32_t;
   }
   else if constexpr (std::is_same_v<bool, T> && sizeof(bool)) {
@@ -419,6 +423,15 @@ consteval type_id get_integral_type() {
                   "sizeof(bool)!=1, which is not supported.");
     return type_id::bool_t;
   }
+#if __GNUC__ || __clang__
+  //-std=gnu++20
+  else if constexpr (std::is_same_v<__int128, T>) {
+    return type_id::int128_t;
+  }
+  else if constexpr (std::is_same_v<unsigned __int128, T>) {
+    return type_id::uint128_t;
+  }
+#endif
   else {
     /*
      * Due to different data model,
@@ -505,7 +518,12 @@ consteval type_id get_type_id() {
   else if constexpr (std::is_enum_v<T>) {
     return get_integral_type<std::underlying_type_t<T>>();
   }
-  else if constexpr (std::is_integral_v<T>) {
+  else if constexpr (std::is_integral_v<T>
+#if __GNUC__ || __CLANG__
+                     || std::is_same_v<__int128, T> ||
+                     std::is_same_v<unsigned __int128, T>
+#endif
+  ) {
     return get_integral_type<T>();
   }
   else if constexpr (std::is_floating_point_v<T>) {
@@ -560,7 +578,7 @@ consteval type_id get_type_id() {
   else {
     static_assert(!sizeof(T), "not supported type");
   }
-}
+}  // namespace detail
 
 template <size_t size>
 consteval decltype(auto) get_size_literal() {
@@ -1146,7 +1164,8 @@ constexpr size_info inline calculate_one_size(const T &item) {
   size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
   if constexpr (id == type_id::monostate_t) {
   }
-  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                     id == type_id::int128_t || id == type_id::uint128_t) {
     ret.total = sizeof(type);
   }
   else if constexpr (detail::varint_t<type>) {
@@ -1684,7 +1703,8 @@ class packer {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         writer_.write((char *)&item, sizeof(type));
       }
       else if constexpr (detail::varint_t<type>) {
@@ -1891,7 +1911,7 @@ class packer {
   friend constexpr serialize_buffer_size get_needed_size(const T &t);
   writer &writer_;
   const serialize_buffer_size &info;
-};
+};  // namespace detail
 
 template <serialize_config conf = serialize_config{},
           struct_pack::writer_t Writer, typename... Args>
@@ -2422,7 +2442,8 @@ class unpacker {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         if constexpr (NotSkip) {
           if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
             return struct_pack::errc::no_buffer_space;

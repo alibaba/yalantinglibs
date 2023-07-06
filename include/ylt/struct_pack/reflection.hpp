@@ -311,7 +311,11 @@ namespace detail {
         if constexpr (is_compatible_v<T> || trivial_view<T>) {
           return ignore_compatible_field;
         }
-        else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>) {
+        else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T> 
+#if __GNUC__ || __clang__
+        || std::is_same_v<__int128,T> || std::is_same_v<unsigned __int128,T>
+#endif
+        ) {
           return true;
         }
         else if constexpr (array<T>) {
