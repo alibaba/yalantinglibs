@@ -97,7 +97,7 @@ class channel {
     return send_request(op, config_.pool_config.client_config);
   }
 
-  static channel create(const ::std::vector<::std::string>& hosts,
+  static channel create(const std::vector<std::string_view>& hosts,
                         const channel_config& config = {},
                         client_pools_t& client_pools =
                             g_clients_pool<client_t, io_context_pool_t>()) {
@@ -107,7 +107,7 @@ class channel {
   }
 
  private:
-  void init(const std::vector<std::string> hosts, const channel_config& config,
+  void init(const std::vector<std::string_view>& hosts, const channel_config& config,
             client_pools_t& client_pools) {
     config_ = config;
     client_pools_.reserve(hosts.size());
