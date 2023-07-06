@@ -235,11 +235,6 @@ namespace detail {
 #endif
 }
 
-#if __GNUC__ || __clang__
-template <typename T>
-constexpr inline bool is_integral128_v = std::is_same_v<__int128, T> | std::is_same_v<unsigned __int128, T>;
-#endif
-
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 
@@ -255,7 +250,7 @@ constexpr auto get_types() {
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
                 unique_ptr<T> || variant<T> || expected<T> || array<T> ||
-                c_array<T> || std::is_same_v<std::monostate, T> || is_integral128_v<T>) {
+                c_array<T> || std::is_same_v<std::monostate, T>) {
 #else
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 std::is_same_v<std::string, T> || container<T> || optional<T> ||
@@ -318,7 +313,7 @@ enum class type_id {
   uint8_t,
   int16_t,
   uint16_t,
-  int128_t,  // TODO: support int128/uint128 on msvc, now support on gcc clang
+  int128_t,  // Tips: We only support 128-bit integer on gcc clang
   uint128_t,
   bool_t,
   char_8_t,
@@ -423,7 +418,7 @@ consteval type_id get_integral_type() {
   // char32_t's size maybe bigger than 32bits, which is not supported.
   else if constexpr (std::is_same_v<char32_t, T> && sizeof(char32_t) == 4) {
     static_assert(sizeof(char32_t) == 4,
-                  "sizeof(char16_t)!=4, which is not supported.");
+                  "sizeof(char32_t)!=4, which is not supported.");
     return type_id::char_32_t;
   }
   else if constexpr (std::is_same_v<bool, T> && sizeof(bool)) {
@@ -529,15 +524,6 @@ consteval type_id get_type_id() {
   else if constexpr (std::is_integral_v<T>) {
     return get_integral_type<T>();
   }
-#if __GNUC__ || __clang__
-  //-std=c++20
-  else if constexpr (std::is_same_v<__int128, T>) {
-    return type_id::int128_t;
-  }
-  else if constexpr (std::is_same_v<unsigned __int128, T>) {
-    return type_id::uint128_t;
-  }
-#endif
   else if constexpr (std::is_floating_point_v<T>) {
     return get_floating_point_type<T>();
   }
@@ -1177,7 +1163,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   if constexpr (id == type_id::monostate_t) {
   }
 #if __GNUC__ || __clang__
-  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> || is_integral128_v<type>) {
+  else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
     ret.total = sizeof(type);
   }
 #else
@@ -1720,15 +1706,9 @@ class packer {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-#if __GNUC__ || __clang__
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> || is_integral128_v<type>) {
-        writer_.write((char *)&item, sizeof(type));
-      }
-#else
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
         writer_.write((char *)&item, sizeof(type));
       }
-#endif
       else if constexpr (detail::varint_t<type>) {
         detail::serialize_varint(writer_, item);
       }
@@ -2464,11 +2444,7 @@ class unpacker {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
-#if __GNUC__ || __clang__
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> || is_integral128_v<type>) {
-#else
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
-#endif
         if constexpr (NotSkip) {
           if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
             return struct_pack::errc::no_buffer_space;

@@ -1029,6 +1029,29 @@ TEST_CASE("compatible convert to optional") {
   CHECK(b.value() == "hello world");
   CHECK(a.value() == "hello world");
 }
+#if __GNUC__ || __clang__
+struct test_int_128 {
+  __int128_t x;
+  __uint128_t y;
+  bool operator==(const test_int_128 &) const = default;
+};
+
+TEST_CASE("test 128-bit int") {
+  __int128_t i = INT64_MAX;
+  i *= INT64_MAX;
+  CHECK(i > INT64_MAX);
+  __uint128_t j = UINT64_MAX;
+  j *= UINT64_MAX;
+  CHECK(j > UINT64_MAX);
+  auto vec = std::vector<test_int_128>{{i, j}, {-1 * i, j + UINT64_MAX}};
+  auto buffer = struct_pack::serialize(vec);
+  auto result = struct_pack::deserialize<std::vector<test_int_128>>(buffer);
+  CHECK(result == vec);
+  CHECK(struct_pack::detail::is_trivial_serializable<test_int_128>::value);
+}
+
+TEST_CASE("test uint128") {}
+#endif
 
 #if __cpp_lib_span >= 202002L
 

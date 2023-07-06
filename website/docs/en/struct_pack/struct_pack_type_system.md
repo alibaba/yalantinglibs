@@ -15,14 +15,16 @@ supported by `struct_pack`.
 
 | Type                      | Meaning                                   | code                                       |
 | ------------------------- | ----------------------------------------- | ------------------------------------------ |
-| int8_t                    | Signed fixed-length 8-bit integer         | complementary code                         |
-| int16_t                   | Signed fixed-length 16-bit integer        | complementary cod                          |
-| int32_t                   | Signed fixed-length 32-bit integer        | complementary cod                          |
-| int64_t                   | Signed fixed-length 64-bit integer        | complementary cod                          |
+| int8_t                    | Signed fixed-length 8-bit integer         | complement code                         |
+| int16_t                   | Signed fixed-length 16-bit integer        | complement code                         |
+| int32_t                   | Signed fixed-length 32-bit integer        | complement code                         |
+| int64_t                   | Signed fixed-length 64-bit integer        | complement code                         |
+| int128_t (GCC/Clang only) | Signed fixed-length 64-bit integer        | complement code                         |
 | uint8_t                   | Unsigned fixed-length 8-bit integer       | Original Code                              |
 | uint16_t                  | Unsigned fixed-length 16-bit integer      | Original Code                              |
 | uint32_t                  | Unsigned fixed-length 32-bit integer      | Original Code                              |
 | uint64_t                  | Unsigned fixed-length 64-bit integer      | Original Code                              |
+| uint128_t (GCC/Clang only)| Unsigned fixed-length 64-bit integer      | Original Code                           |
 | struct_pack::var_uint32_t | Unsigned variable-length 32-bit integer   | `varint` variable length code              |
 | struct_pack::var_uint64_t | Unsigned variable-length 64-bit integer   | `varint` variable length code              |
 | struct_pack::var_int32_t  | Signed variable-length 32-bit integers    | `varint`+`zigzag` variable length encoding |
