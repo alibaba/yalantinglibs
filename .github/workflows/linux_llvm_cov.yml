@@ -3,6 +3,7 @@ name: Ubuntu 22.04 (llvm cov)
 on:
   pull_request_target:
     branches: [ doc ]
+  workflow_dispatch:
 
 jobs:
   build:
