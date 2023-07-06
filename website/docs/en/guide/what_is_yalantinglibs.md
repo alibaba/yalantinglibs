@@ -379,7 +379,7 @@ These CMake options is used for yalantinglibs developing/installing itself. They
 |BUILD_UNIT_TESTS|ON|
 |BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK etc)|ON|
 |COVERAGE_TEST|OFF|
-|GENERATE_BENCHMARK_DATA|OFF|
+|GENERATE_BENCHMARK_DATA|ON|
 |CORO_RPC_USE_OTHER_RPC|ON|
 
 ### ylt config option
