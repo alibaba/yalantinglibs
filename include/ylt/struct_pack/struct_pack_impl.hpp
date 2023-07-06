@@ -1907,7 +1907,7 @@ class packer {
   friend constexpr serialize_buffer_size get_needed_size(const T &t);
   writer &writer_;
   const serialize_buffer_size &info;
-};
+};  // namespace detail
 
 template <serialize_config conf = serialize_config{},
           struct_pack::writer_t Writer, typename... Args>
