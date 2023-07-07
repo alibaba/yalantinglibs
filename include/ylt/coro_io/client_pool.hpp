@@ -292,7 +292,7 @@ class client_pool : public std::enable_shared_from_this<
   coro_io::detail::client_queue<std::unique_ptr<client_t>> free_clients_;
   client_pools_t* pools_manager_ = nullptr;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
-  std::string_view host_name_;
+  std::string host_name_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
   std::atomic<std::size_t> collecter_cnt_;

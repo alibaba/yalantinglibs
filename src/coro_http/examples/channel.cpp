@@ -64,8 +64,8 @@ Lazy<void> qps_watcher() {
 }
 
 int main() {
-  std::vector<std::string> hosts;
-  hosts.emplace_back("http://www.baidu.com", "http://baidu.com");
+  std::vector<std::string_view> hosts{"http://baidu.com",
+                                      "http://www.baidu.com"};
   auto chan = coro_io::channel<coro_http_client>::create(
       hosts, coro_io::channel<coro_http_client>::channel_config{
                  .pool_config{.max_connection_ = 1000}});
