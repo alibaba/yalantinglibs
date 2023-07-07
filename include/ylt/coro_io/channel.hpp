@@ -107,8 +107,8 @@ class channel {
   }
 
  private:
-  void init(const std::vector<std::string_view>& hosts, const channel_config& config,
-            client_pools_t& client_pools) {
+  void init(const std::vector<std::string_view>& hosts,
+            const channel_config& config, client_pools_t& client_pools) {
     config_ = config;
     client_pools_.reserve(hosts.size());
     for (auto& host : hosts) {

@@ -86,8 +86,8 @@ Lazy<void> qps_watcher() {
 }
 
 int main() {
-  auto hosts = std::vector<std::string_view>{
-      {"127.0.0.1:8801", "localhost:8801"}};
+  auto hosts =
+      std::vector<std::string_view>{{"127.0.0.1:8801", "localhost:8801"}};
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
   auto chan = coro_io::channel<coro_rpc_client>::create(
       hosts, coro_io::channel<coro_rpc_client>::channel_config{
