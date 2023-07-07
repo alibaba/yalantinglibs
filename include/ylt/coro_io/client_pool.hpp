@@ -339,11 +339,13 @@ class client_pools {
     decltype(client_pool_manager_.end()) iter;
     bool has_inserted;
     {
-      std::shared_lock shared_lock{mutex_};
 #ifdef __cpp_lib_generic_unordered_lookup
+      std::shared_lock shared_lock{mutex_};
       iter = client_pool_manager_.find(host_name);
 #else
-      iter = client_pool_manager_.find(std::string{host_name});
+      std::string host_name_copy = std::string{host_name};
+      std::shared_lock shared_lock{mutex_};
+      iter = client_pool_manager_.find(host_name_copy);
 #endif
       if (iter == client_pool_manager_.end()) {
         shared_lock.unlock();
@@ -359,8 +361,20 @@ class client_pools {
       return iter->second;
     }
   }
+  struct string_hash {
+    using hash_type = std::hash<std::string_view>;
+    using is_transparent = void;
+
+    std::size_t operator()(std::string_view str) const {
+      return hash_type{}(str);
+    }
+    std::size_t operator()(std::string const& str) const {
+      return hash_type{}(str);
+    }
+  };
   typename client_pool_t::pool_config default_pool_config_{};
-  std::unordered_map<std::string, std::shared_ptr<client_pool_t>>
+  std::unordered_map<std::string, std::shared_ptr<client_pool_t>, string_hash,
+                     std::equal_to<>>
       client_pool_manager_;
   io_context_pool_t& io_context_pool_;
   std::shared_mutex mutex_;
