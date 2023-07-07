@@ -35,13 +35,14 @@
 #include <mutex>
 #include <random>
 #include <shared_mutex>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <ylt/util/expected.hpp>
 
-#include "detail/client_queue.hpp"
 #include "coro_io.hpp"
+#include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
 namespace coro_io {
 
@@ -191,13 +192,13 @@ class client_pool : public std::enable_shared_from_this<
 
  public:
   static std::shared_ptr<client_pool> create(
-      const std::string& host_name, const pool_config& pool_config = {},
+      std::string_view host_name, const pool_config& pool_config = {},
       io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
     return std::make_shared<client_pool>(private_construct_token{}, host_name,
                                          pool_config, io_context_pool);
   }
 
-  client_pool(private_construct_token t, const std::string& host_name,
+  client_pool(private_construct_token t, std::string_view host_name,
               const pool_config& pool_config,
               io_context_pool_t& io_context_pool)
       : host_name_(host_name),
@@ -210,7 +211,7 @@ class client_pool : public std::enable_shared_from_this<
   };
 
   client_pool(private_construct_token t, client_pools_t* pools_manager_,
-              const std::string& host_name, const pool_config& pool_config,
+              std::string_view host_name, const pool_config& pool_config,
               io_context_pool_t& io_context_pool)
       : pools_manager_(pools_manager_),
         host_name_(host_name),
@@ -307,13 +308,13 @@ class client_pools {
       const typename client_pool_t::pool_config& pool_config = {},
       io_context_pool_t& io_context_pool = coro_io::g_io_context_pool())
       : io_context_pool_(io_context_pool), default_pool_config_(pool_config) {}
-  auto send_request(const std::string& host_name, auto&& op)
+  auto send_request(std::string_view host_name, auto&& op)
       -> decltype(std::declval<client_pool_t>().send_request(op)) {
     auto pool = get_client_pool(host_name, default_pool_config_);
     auto ret = co_await pool->send_request(op);
     co_return ret;
   }
-  auto send_request(const std::string& host_name,
+  auto send_request(std::string_view host_name,
                     const typename client_pool_t::pool_config& pool_config,
                     auto&& op)
       -> decltype(std::declval<client_pool_t>().send_request(op)) {
@@ -321,25 +322,31 @@ class client_pools {
     auto ret = co_await pool.send_request(op);
     co_return ret;
   }
-  auto at(const std::string& host_name) {
+  auto at(std::string_view host_name) {
     return get_client_pool(host_name, default_pool_config_);
   }
-  auto at(const std::string& host_name,
+  auto at(std::string_view host_name,
           const typename client_pool_t::pool_config& pool_config) {
     return get_client_pool(host_name, pool_config);
   }
-  auto operator[](const std::string& host_name) { return at(host_name); }
+  auto operator[](std::string_view host_name) { return at(host_name); }
   auto get_io_context_pool() { return io_context_pool_; }
 
  private:
   std::shared_ptr<client_pool_t> get_client_pool(
-      const std::string& host_name,
+      std::string_view host_name,
       const typename client_pool_t::pool_config& pool_config) {
     decltype(client_pool_manager_.end()) iter;
     bool has_inserted;
     {
+#ifdef __cpp_lib_generic_unordered_lookup
       std::shared_lock shared_lock{mutex_};
       iter = client_pool_manager_.find(host_name);
+#else
+      std::string host_name_copy = std::string{host_name};
+      std::shared_lock shared_lock{mutex_};
+      iter = client_pool_manager_.find(host_name_copy);
+#endif
       if (iter == client_pool_manager_.end()) {
         shared_lock.unlock();
         std::lock_guard lock{mutex_};
@@ -354,8 +361,20 @@ class client_pools {
       return iter->second;
     }
   }
+  struct string_hash {
+    using hash_type = std::hash<std::string_view>;
+    using is_transparent = void;
+
+    std::size_t operator()(std::string_view str) const {
+      return hash_type{}(str);
+    }
+    std::size_t operator()(std::string const& str) const {
+      return hash_type{}(str);
+    }
+  };
   typename client_pool_t::pool_config default_pool_config_{};
-  std::unordered_map<std::string, std::shared_ptr<client_pool_t>>
+  std::unordered_map<std::string, std::shared_ptr<client_pool_t>, string_hash,
+                     std::equal_to<>>
       client_pool_manager_;
   io_context_pool_t& io_context_pool_;
   std::shared_mutex mutex_;
