@@ -297,12 +297,10 @@ class coro_rpc_server_base {
     router_.template register_handler<func>(key);
   }
 
-  /*!
-   * Remove registered RPC function
-   * @tparam func the address of RPC function. e.g. `&foo::bar`, `foobar`
-   * @return true, if the function existed and removed success. otherwise,
-   * false.
-   */
+
+  auto& get_io_context_pool() noexcept { 
+      return pool_;
+  }
 
  private:
   std::errc listen() {
