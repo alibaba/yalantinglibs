@@ -297,10 +297,7 @@ class coro_rpc_server_base {
     router_.template register_handler<func>(key);
   }
 
-
-  auto& get_io_context_pool() noexcept { 
-      return pool_;
-  }
+  auto& get_io_context_pool() noexcept { return pool_; }
 
  private:
   std::errc listen() {
