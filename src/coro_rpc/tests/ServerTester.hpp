@@ -28,6 +28,7 @@
 #include "doctest.h"
 #include "inject_action.hpp"
 #include "rpc_api.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 
 #ifdef _MSC_VER
 #define CORO_RPC_FUNCTION_SIGNATURE __FUNCSIG__
@@ -138,7 +139,8 @@ struct ServerTester : TesterConfig {
                                                    g_client_id++);
       }
       else {
-        client = std::make_shared<coro_rpc_client>(g_client_id++);
+        client = std::make_shared<coro_rpc_client>(
+            *coro_io::get_global_executor(), g_client_id++);
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {
@@ -355,7 +357,8 @@ struct ServerTester : TesterConfig {
                                                    g_client_id++);
       }
       else {
-        client = std::make_shared<coro_rpc_client>(g_client_id++);
+        client = std::make_shared<coro_rpc_client>(
+            *coro_io::get_global_executor(), g_client_id++);
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {

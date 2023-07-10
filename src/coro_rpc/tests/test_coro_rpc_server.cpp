@@ -291,7 +291,7 @@ TEST_CASE("test server accept error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   ELOGV(INFO, "run test server accept error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
@@ -386,7 +386,7 @@ TEST_CASE("testing coro rpc write error") {
   server.async_start().start([](auto &&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(),g_client_id++);
   ELOGV(INFO, "run testing coro rpc write error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));

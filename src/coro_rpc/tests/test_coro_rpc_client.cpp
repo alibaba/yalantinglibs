@@ -368,7 +368,7 @@ TEST_CASE("testing client with eof") {
   server.async_start().start([](auto&&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
 
@@ -390,7 +390,7 @@ TEST_CASE("testing client with shutdown") {
   server.async_start().start([](auto&&) {
   });
   CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
   server.register_handler<hello, client_hello>();
@@ -420,7 +420,7 @@ TEST_CASE("testing client timeout") {
   SUBCASE("connect, ip timeout") {
     g_action = {};
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
-    coro_rpc_client client(g_client_id++);
+    coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ret = client.connect("10.255.255.1", "8801", 5ms);
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val == std::errc::timed_out, make_error_code(val).message());
@@ -439,14 +439,14 @@ TEST_CASE("testing client timeout") {
   // }
 }
 TEST_CASE("testing client connect err") {
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto val = syncAwait(client.connect("127.0.0.1", "8801"));
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
 }
 #ifdef UNIT_TEST_INJECT
 TEST_CASE("testing client sync connect, unit test inject only") {
-  coro_rpc_client client(g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto val = client.sync_connect("127.0.0.1", "8801");
   CHECK_MESSAGE(val == std::errc::not_connected,
                 make_error_code(val).message());
@@ -474,7 +474,7 @@ TEST_CASE("testing client call timeout") {
     //    coro_rpc_server server(2, 8801);
     //    server.async_start().start([](auto&&) {
     //    });
-    coro_rpc_client client(g_client_id++);
+    coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     //    auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
     //    auto ec = syncAwait(ec_lazy);
     //    assert(ec == std::errc{});
@@ -492,7 +492,7 @@ TEST_CASE("testing client call timeout") {
     server.async_start().start([](auto&&) {
     });
     CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
-    coro_rpc_client client(g_client_id++);
+    coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ec_lazy = client.connect("127.0.0.1", "8801");
     auto ec = syncAwait(ec_lazy);
     REQUIRE(ec == std::errc{});
