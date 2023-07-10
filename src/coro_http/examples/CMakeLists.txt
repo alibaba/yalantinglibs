@@ -1,7 +1,6 @@
 
 if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-  # if is the subproject of yalantinglibs
-  # do nothing
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/examples/coro_http)
 else()
   # else find installed yalantinglibs
     cmake_minimum_required(VERSION 3.15)

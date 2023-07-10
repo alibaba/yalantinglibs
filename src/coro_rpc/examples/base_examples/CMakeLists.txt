@@ -40,5 +40,6 @@ add_executable(coro_rpc_example_channel channel.cpp)
 add_executable(coro_rpc_example_client_pool client_pool.cpp)
 add_executable(coro_rpc_example_client_pools client_pools.cpp)
 add_executable(coro_rpc_example_client client.cpp)
+add_executable(coro_rpc_example_concurrent_clients concurrent_clients.cpp)
 add_executable(coro_rpc_example_server server.cpp rpc_service.cpp)
 

@@ -132,30 +132,13 @@ class coro_rpc_client {
    * Create client with io_context
    * @param io_context asio io_context, async event handler
    */
-  coro_rpc_client(coro_io::ExecutorWrapper<> &executor, uint32_t client_id = 0)
+  coro_rpc_client(
+      coro_io::ExecutorWrapper<> &executor = *coro_io::get_global_executor(),
+      uint32_t client_id = 0)
       : executor(executor.get_asio_executor()),
         socket_(executor.get_asio_executor()) {
     config_.client_id = client_id;
     read_buf_.resize(default_read_buf_size_);
-  }
-
-  /*!
-   * Create client
-   */
-  coro_rpc_client(uint32_t client_id = 0)
-      : inner_io_context_(std::make_unique<asio::io_context>()),
-        executor(inner_io_context_->get_executor()),
-        socket_(inner_io_context_->get_executor()) {
-    config_.client_id = client_id;
-    std::promise<void> promise;
-    thd_ = std::thread([this, &promise] {
-      work_ = std::make_unique<asio::io_context::work>(*inner_io_context_);
-      executor.schedule([&] {
-        promise.set_value();
-      });
-      inner_io_context_->run();
-    });
-    promise.get_future().wait();
   }
 
   [[nodiscard]] bool init_config(const config &conf) {
@@ -194,7 +177,7 @@ class coro_rpc_client {
     config_.timeout_duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
     reset();
-    return connect(true);
+    return connect(is_reconnect_t{true});
   }
 
   [[nodiscard]] async_simple::coro::Lazy<std::errc> reconnect(
@@ -207,7 +190,7 @@ class coro_rpc_client {
     config_.timeout_duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
     reset();
-    return connect(true);
+    return connect(is_reconnect_t{true});
   }
   /*!
    * Connect server
@@ -231,7 +214,7 @@ class coro_rpc_client {
     return connect();
   }
   [[nodiscard]] async_simple::coro::Lazy<std::errc> connect(
-      std::string endpoint,
+      std::string_view endpoint,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
     auto pos = endpoint.find(':');
@@ -254,10 +237,7 @@ class coro_rpc_client {
   }
 #endif
 
-  ~coro_rpc_client() {
-    close();
-    stop_inner_io_context();
-  }
+  ~coro_rpc_client() { close(); }
 
   /*!
    * Call RPC function with default timeout (5 second)
@@ -359,6 +339,12 @@ class coro_rpc_client {
   friend class coro_io::client_pool;
 
  private:
+  // the const char * will convert to bool instead of std::string_view
+  // use this struct to prevent it.
+  struct is_reconnect_t {
+    bool value = false;
+  };
+
   void reset() {
     close_socket();
     socket_ = decltype(socket_)(executor.get_asio_executor());
@@ -368,14 +354,14 @@ class coro_rpc_client {
 
   static bool is_ok(std::errc ec) noexcept { return ec == std::errc{}; }
   [[nodiscard]] async_simple::coro::Lazy<std::errc> connect(
-      bool is_reconnect = false) {
+      is_reconnect_t is_reconnect = is_reconnect_t{false}) {
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
       std::cout << "ssl_init_ret_: " << ssl_init_ret_ << std::endl;
       co_return std::errc::not_connected;
     }
 #endif
-    if (!is_reconnect && has_closed_)
+    if (!is_reconnect.value && has_closed_)
       AS_UNLIKELY {
         ELOGV(ERROR,
               "a closed client is not allowed connect again, please use "
@@ -756,26 +742,6 @@ class coro_rpc_client {
     has_closed_ = true;
   }
 
-  void stop_inner_io_context() {
-    if (thd_.joinable()) {
-      work_ = nullptr;
-      if (thd_.get_id() == std::this_thread::get_id()) {
-        // we are now running in inner_io_context_, so destruction it in
-        // another thread
-        std::thread thrd{[ioc = std::move(inner_io_context_),
-                          thd = std::move(thd_)]() mutable {
-          thd.join();
-        }};
-        thrd.detach();
-      }
-      else {
-        thd_.join();
-      }
-    }
-
-    return;
-  }
-
 #ifdef UNIT_TEST_INJECT
  public:
   std::errc sync_connect(const std::string &host, const std::string &port) {
@@ -790,9 +756,6 @@ class coro_rpc_client {
   }
 #endif
  private:
-  std::unique_ptr<asio::io_context> inner_io_context_;
-  std::unique_ptr<asio::io_context::work> work_;
-  std::thread thd_;
   coro_io::ExecutorWrapper<> executor;
   asio::ip::tcp::socket socket_;
   std::vector<std::byte> read_buf_;
