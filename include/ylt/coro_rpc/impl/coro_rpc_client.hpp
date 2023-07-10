@@ -339,6 +339,8 @@ class coro_rpc_client {
   friend class coro_io::client_pool;
 
  private:
+  // the const char * will convert to bool instead of std::string_view
+  // use this struct to prevent it. 
   struct is_reconnect_t {
     bool value = false;
   };
