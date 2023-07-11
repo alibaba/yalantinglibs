@@ -127,10 +127,10 @@ class io_context_pool {
     return;
   }
 
-  // ~io_context_pool() {
-  //   if (!has_stop())
-  //     stop();
-  // }
+  ~io_context_pool() {
+    if (!has_stop())
+      stop();
+  }
 
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
 
