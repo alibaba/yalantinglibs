@@ -75,8 +75,8 @@ class channel {
   channel(const channel& o) = delete;
   channel& operator=(const channel& o) = delete;
 
-  auto send_request(auto&& op, const typename client_t::config& config)
-      -> decltype(std::declval<client_pool_t>().send_request(op,
+  auto send_request(auto op, const typename client_t::config& config)
+      -> decltype(std::declval<client_pool_t>().send_request(std::move(op),
                                                              std::string_view{},
                                                              config)) {
     std::shared_ptr<client_pool_t> client_pool;
@@ -91,10 +91,10 @@ class channel {
       client_pool = client_pools_[0];
     }
     co_return co_await client_pool->send_request(
-        op, client_pool->get_host_name(), config);
+        std::move(op), client_pool->get_host_name(), config);
   }
-  auto send_request(auto&& op) {
-    return send_request(op, config_.pool_config.client_config);
+  auto send_request(auto op) {
+    return send_request(std::move(op), config_.pool_config.client_config);
   }
 
   static channel create(const std::vector<std::string_view>& hosts,

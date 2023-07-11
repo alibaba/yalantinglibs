@@ -144,10 +144,11 @@ class coro_rpc_client {
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
 #ifdef YLT_ENABLE_SSL
-    return init_ssl_impl();
-#else
-    return true;
+    if (!config_.ssl_cert_path.empty())
+      return init_ssl_impl();
+    else
 #endif
+      return true;
   };
 
   /*!
@@ -334,6 +335,17 @@ class coro_rpc_client {
   auto &get_executor() { return executor; }
 
   uint32_t get_client_id() const { return config_.client_id; }
+
+  void close() {
+    if (has_closed_) {
+      return;
+    }
+
+    ELOGV(INFO, "client_id %d close", config_.client_id);
+    close_socket();
+
+    has_closed_ = true;
+  }
 
   template <typename T, typename U>
   friend class coro_io::client_pool;
@@ -729,17 +741,6 @@ class coro_rpc_client {
     asio::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     socket_.close(ignored_ec);
-  }
-
-  void close() {
-    if (has_closed_) {
-      return;
-    }
-
-    ELOGV(INFO, "client_id %d close", config_.client_id);
-    close_socket();
-
-    has_closed_ = true;
   }
 
 #ifdef UNIT_TEST_INJECT
