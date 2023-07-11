@@ -23,6 +23,7 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -106,6 +107,12 @@ class io_context_pool {
   }
 
   void run() {
+    bool has_run_or_stop = false;
+    bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+    if (!ok) {
+      return;
+    }
+
     std::vector<std::shared_ptr<std::thread>> threads;
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
@@ -122,15 +129,24 @@ class io_context_pool {
   }
 
   void stop() {
-    work_.clear();
-    promise_.get_future().wait();
-    return;
+    std::call_once(flag_, [this] {
+      bool has_run_or_stop = false;
+      bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+
+      work_.clear();
+
+      if (ok) {
+        return;
+      }
+
+      promise_.get_future().wait();
+    });
   }
 
-  // ~io_context_pool() {
-  //   if (!has_stop())
-  //     stop();
-  // }
+  ~io_context_pool() {
+    if (!has_stop())
+      stop();
+  }
 
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
 
@@ -156,6 +172,8 @@ class io_context_pool {
   std::vector<work_ptr> work_;
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
+  std::atomic<bool> has_run_or_stop_ = false;
+  std::once_flag flag_;
 };
 
 class multithread_context_pool {
