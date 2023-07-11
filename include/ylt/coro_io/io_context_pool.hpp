@@ -136,6 +136,10 @@ class io_context_pool {
       work_.clear();
 
       if (ok) {
+        // clear all unfinished work
+        for (auto &e : io_contexts_) {
+          e->run();
+        }
         return;
       }
 

@@ -91,7 +91,7 @@ int main() {
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
   auto chan = coro_io::channel<coro_rpc_client>::create(
       hosts, coro_io::channel<coro_rpc_client>::channel_config{
-                 .pool_config{.max_connection_ = worker_cnt}});
+                 .pool_config{.max_connection = worker_cnt}});
   auto chan_ptr = std::make_shared<decltype(chan)>(std::move(chan));
   for (int i = 0; i < worker_cnt; ++i) {
     call_echo(chan_ptr, 10000).start([](auto &&) {
