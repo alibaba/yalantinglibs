@@ -18,22 +18,18 @@
 
 namespace struct_xml {
 
-template <int Flags = 0, typename T>
-inline bool from_xml(T &&t, char *buf) {
-  return iguana::from_xml<Flags>(std::forward<T>(t), buf);
+template <typename T, typename View>
+inline void from_xml(T &&t, const View &str) {
+  iguana::from_xml(std::forward<T>(t), str);
 }
 
-template <int Flags = 0, typename T>
-inline bool from_xml(T &&t, const std::string &str) {
-  return from_xml<Flags>(std::forward<T>(t), str.data());
+template <typename Num>
+inline Num get_number(std::string_view str) {
+  return iguana::get_number<Num>(str);
 }
 
-template <int Flags = 0, typename T>
-inline bool from_xml(T &&t, std::string_view str) {
-  return from_xml<Flags>(std::forward<T>(t), str.data());
-}
+template <typename T, typename map_type = std::unordered_map<std::string_view,
+                                                             std::string_view>>
+using xml_attr_t = iguana::xml_attr_t<T, map_type>;
 
-inline std::string get_last_read_err() { return iguana::get_last_read_err(); }
-
-using any_t = iguana::any_t;
 }  // namespace struct_xml

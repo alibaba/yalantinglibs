@@ -12,6 +12,9 @@ void from_json(T &value, It &&it, It &&end);
 
 namespace detail {
 
+template <sequence_container U, class It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end);
+
 template <str_t U, class It>
 IGUANA_INLINE void parse_escape(U &value, It &&it, It &&end) {
   if (it == end)
@@ -101,9 +104,76 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   parse_item(reinterpret_cast<T &>(value), it, end);
 }
 
-template <str_t U, class It>
-IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
-  if (!skip) {
+template <bool skip = false, char_t U, class It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
+  if constexpr (!skip) {
+    skip_ws(it, end);
+    match<'"'>(it, end);
+  }
+  if (it == end) [[unlikely]]
+    throw std::runtime_error("Unxpected end of buffer");
+  if (*it == '\\') [[unlikely]] {
+    if (++it == end) [[unlikely]] {
+      throw std::runtime_error("Unxpected end of buffer");
+    }
+    else if (*it == 'n') {
+      value = '\n';
+    }
+    else if (*it == 't') {
+      value = '\t';
+    }
+    else if (*it == 'r') {
+      value = '\r';
+    }
+    else if (*it == 'b') {
+      value = '\b';
+    }
+    else if (*it == 'f') {
+      value = '\f';
+    }
+    else [[unlikely]] {
+      value = *it;
+    }
+  }
+  else {
+    value = *it;
+  }
+  ++it;
+  if constexpr (!skip) {
+    match<'"'>(it, end);
+  }
+}
+
+template <bool_t U, class It>
+IGUANA_INLINE void parse_item(U &&value, It &&it, It &&end) {
+  skip_ws(it, end);
+
+  if (it < end) [[likely]] {
+    switch (*it) {
+      case 't': {
+        ++it;
+        match<"rue">(it, end);
+        value = true;
+        break;
+      }
+      case 'f': {
+        ++it;
+        match<"alse">(it, end);
+        value = false;
+        break;
+      }
+        [[unlikely]] default
+            : throw std::runtime_error("Expected true or false");
+    }
+  }
+  else [[unlikely]] {
+    throw std::runtime_error("Expected true or false");
+  }
+}
+
+template <bool skip = false, str_t U, class It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
+  if constexpr (!skip) {
     skip_ws(it, end);
     match<'"'>(it, end);
   }
@@ -148,11 +218,11 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
   }
 }
 
-template <str_view_t U, class It>
-IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
+template <bool skip = false, str_view_t U, class It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   static_assert(std::contiguous_iterator<std::decay_t<It>>,
                 "must be contiguous");
-  if (!skip) {
+  if constexpr (!skip) {
     skip_ws(it, end);
     match<'"'>(it, end);
   }
@@ -173,8 +243,23 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, bool skip = false) {
 template <fixed_array U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   using T = std::remove_reference_t<U>;
+  constexpr auto n = sizeof(T) / sizeof(decltype(std::declval<T>()[0]));
   skip_ws(it, end);
 
+  if constexpr (std::is_same_v<char, std::remove_reference_t<
+                                         decltype(std::declval<T>()[0])>>) {
+    if (*it == '"') {
+      match<'"'>(it, end);
+      auto value_it = std::begin(value);
+      for (size_t i = 0; i < n; ++i) {
+        if (*it != '"') [[likely]] {
+          parse_item<true>(*value_it++, it, end);
+        }
+      }
+      match<'"'>(it, end);
+      return;
+    }
+  }
   match<'['>(it, end);
   skip_ws(it, end);
   if (it == end) {
@@ -185,11 +270,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     ++it;
     return;
   }
-
-  constexpr auto n = sizeof(T) / sizeof(decltype(std::declval<T>()[0]));
-
   auto value_it = std::begin(value);
-
   for (size_t i = 0; i < n; ++i) {
     parse_item(*value_it++, it, end);
     skip_ws(it, end);
@@ -299,41 +380,14 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   match<']'>(it, end);
 }
 
-template <bool_t U, class It>
-IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
-  skip_ws(it, end);
-
-  if (it < end) [[likely]] {
-    switch (*it) {
-      case 't': {
-        ++it;
-        match<"rue">(it, end);
-        value = true;
-        break;
-      }
-      case 'f': {
-        ++it;
-        match<"alse">(it, end);
-        value = false;
-        break;
-      }
-        [[unlikely]] default
-            : throw std::runtime_error("Expected true or false");
-    }
-  }
-  else [[unlikely]] {
-    throw std::runtime_error("Expected true or false");
-  }
-}
-
 template <optional U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   skip_ws(it, end);
-  if (it < end && *it == '"') {
+  if (it < end && *it == '"') [[likely]] {
     ++it;
   }
   using T = std::remove_reference_t<U>;
-  if (it == end) {
+  if (it == end) [[unlikely]] {
     throw std::runtime_error("Unexexpected eof");
   }
   if (*it == 'n') {
@@ -350,28 +404,33 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     using value_type = typename T::value_type;
     value_type t;
     if constexpr (str_t<value_type> || str_view_t<value_type>) {
-      parse_item(t, it, end, true);
+      parse_item<true>(t, it, end);
     }
     else {
       parse_item(t, it, end);
     }
-
     value = std::move(t);
   }
 }
 
-template <char_t U, class It>
+template <unique_ptr_t U, class It>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
-  // TODO: this does not handle escaped chars
   skip_ws(it, end);
-  match<'"'>(it, end);
-  if (it == end) [[unlikely]]
-    throw std::runtime_error("Unxpected end of buffer");
-  if (*it == '\\') [[unlikely]]
-    if (++it == end) [[unlikely]]
-      throw std::runtime_error("Unxpected end of buffer");
-  value = *it++;
-  match<'"'>(it, end);
+  if (it < end && *it == '"') [[likely]] {
+    ++it;
+  }
+  if (it == end) [[unlikely]] {
+    throw std::runtime_error("Unexexpected eof");
+  }
+  if (*it == 'n') {
+    ++it;
+    match<"ull">(it, end);
+  }
+  else {
+    using value_type = typename std::remove_reference_t<U>::element_type;
+    value = std::make_unique<value_type>();
+    parse_item(*value, it, end);
+  }
 }
 
 IGUANA_INLINE void skip_object_value(auto &&it, auto &&end) {
@@ -399,7 +458,6 @@ IGUANA_INLINE void skip_object_value(auto &&it, auto &&end) {
         continue;
       }
     }
-
     break;
   }
 }
@@ -437,7 +495,7 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
           // compile time versions of keys
           it = start;
           static thread_local std::string static_key{};
-          detail::parse_item(static_key, it, end, true);
+          detail::parse_item<true>(static_key, it, end);
           key = static_key;
         }
         else [[likely]] {
@@ -451,7 +509,7 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
       }
       else {
         static thread_local std::string static_key{};
-        detail::parse_item(static_key, it, end, false);
+        detail::parse_item(static_key, it, end);
         key = static_key;
       }
 

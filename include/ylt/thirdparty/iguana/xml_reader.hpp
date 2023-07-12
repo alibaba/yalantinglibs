@@ -1,340 +1,418 @@
 #pragma once
-#include <algorithm>
-#include <cctype>
-#include <functional>
-#include <optional>
-#include <rapidxml/rapidxml.hpp>
-#include <string>
-#include <type_traits>
+#include <charconv>
+#include <unordered_set>
 
 #include "detail/charconv.h"
-#include "reflection.hpp"
-#include "type_traits.hpp"
+#include "detail/utf.hpp"
+#include "xml_util.hpp"
 
 namespace iguana {
-inline std::string g_xml_read_err;
-template <typename T>
-void do_read(rapidxml::xml_node<char> *node, T &&t);
+namespace detail {
 
-constexpr inline size_t find_underline(const char *str) {
-  const char *c = str;
-  for (; *c != '\0'; ++c) {
-    if (*c == '_') {
-      break;
+template <refletable T, typename It>
+IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
+                              std::string_view name);
+
+template <attr_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name);
+
+template <plain_t U, typename It>
+IGUANA_INLINE void parse_value(U &&value, It &&begin, It &&end) {
+  using T = std::decay_t<U>;
+  if constexpr (string_t<T>) {
+    value = T(&*begin, static_cast<size_t>(std::distance(begin, end)));
+  }
+  else if constexpr (num_t<T>) {
+    auto size = std::distance(begin, end);
+    const auto start = &*begin;
+    auto [p, ec] = detail::from_chars(start, start + size, value);
+    if (ec != std::errc{}) [[unlikely]]
+      throw std::runtime_error("Failed to parse number");
+  }
+  else if constexpr (char_t<T>) {
+    if (static_cast<size_t>(std::distance(begin, end)) != 1) [[unlikely]] {
+      throw std::runtime_error("Expected one character");
+    }
+    value = *begin;
+  }
+  else if constexpr (bool_t<T>) {
+    auto bool_v = std::string_view(
+        &*begin, static_cast<size_t>(std::distance(begin, end)));
+    if (bool_v == "true") {
+      value = true;
+    }
+    else if (bool_v == "false") {
+      value = false;
+    }
+    else [[unlikely]] {
+      throw std::runtime_error("Expected true or false");
     }
   }
-  return c - str;
-}
-
-template <typename T>
-inline void missing_node_handler(std::string_view name) {
-  std::cout << name << " not found\n";
-  if (iguana::is_required<T>(name)) {
-    std::string err = "required filed ";
-    err.append(name).append(" not found!");
-    throw std::invalid_argument(err);
+  else if constexpr (enum_t<T>) {
+    using T = std::underlying_type_t<std::decay_t<U>>;
+    parse_value(reinterpret_cast<T &>(value), begin, end);
   }
 }
 
-template <typename T>
-inline void parse_num(T &num, std::string_view value) {
-  if (value.empty()) {
+template <map_container U, typename It>
+IGUANA_INLINE void parse_attr(U &&value, It &&it, It &&end) {
+  using key_type = typename std::remove_cvref_t<U>::key_type;
+  using value_type = typename std::remove_cvref_t<U>::mapped_type;
+  while (it != end) {
+    skip_sapces_and_newline(it, end);
+    if (*it == '>' || *it == '/') [[unlikely]] {
+      return;
+    }
+    auto key_begin = it;
+    auto key_end = skip_pass<'='>(it, end);
+    key_type key;
+    parse_value(key, key_begin, key_end);
+
+    skip_sapces_and_newline(it, end);
+    match<'"'>(it, end);
+    auto value_begin = it;
+    auto value_end = skip_pass<'"'>(it, end);
+    value_type v;
+    parse_value(v, value_begin, value_end);
+    value.emplace(std::move(key), std::move(v));
+  }
+}
+
+template <plain_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name) {
+  skip_till<'>'>(it, end);
+  ++it;
+  skip_sapces_and_newline(it, end);
+  auto value_begin = it;
+  auto value_end = skip_pass<'<'>(it, end);
+  parse_value(value, value_begin, value_end);
+  match_close_tag(it, end, name);
+}
+
+template <sequence_container_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name) {
+  parse_item(value.emplace_back(), it, end, name);
+  skip_sapces_and_newline(it, end);
+  while (it != end) {
+    match<'<'>(it, end);
+    if (*it == '?' || *it == '!') [[unlikely]] {
+      // skip <?
+      if (*(it + 1) == '[') {
+        --it;
+        return;
+      }
+      else {
+        skip_till<'>'>(it, end);
+        ++it;
+        skip_sapces_and_newline(it, end);
+        continue;
+      }
+    }
+    auto start = it;
+    skip_till_greater_or_space(it, end);
+    std::string_view key = std::string_view{
+        &*start, static_cast<size_t>(std::distance(start, it))};
+    if (key != name) [[unlikely]] {
+      it = start - 1;
+      return;
+    }
+    parse_item(value.emplace_back(), it, end, name);
+    skip_sapces_and_newline(it, end);
+  }
+}
+
+template <optional_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name) {
+  using value_type = typename std::remove_reference_t<U>::value_type;
+  skip_till<'>'>(it, end);
+  if (*(it - 1) == '/') [[likely]] {
+    ++it;
     return;
   }
 
-  if constexpr (std::is_arithmetic_v<T>) {
-    auto [p, ec] =
-        detail::from_chars(value.data(), value.data() + value.size(), num);
-#if defined(_MSC_VER)
-    if (ec != std::errc{})
-#else
-    if (__builtin_expect(ec != std::errc{}, 0))
-#endif
-      throw std::invalid_argument("Failed to parse number");
+  if constexpr (plain_t<value_type>) {
+    // The following code is for option not to be emplaced
+    // when parse  "...> <..."
+    skip_till<'>'>(it, end);
+    ++it;
+    skip_sapces_and_newline(it, end);
+    auto value_begin = it;
+    auto value_end = skip_pass<'<'>(it, end);
+    if (value_begin == value_end) {
+      match_close_tag(it, end, name);
+      return;
+    }
+    parse_value(value.emplace(), value_begin, value_end);
+    match_close_tag(it, end, name);
   }
   else {
-    static_assert(!sizeof(T), "don't support this type");
+    parse_item(value.emplace(), it, end, name);
   }
 }
 
-class any_t {
- public:
-  explicit any_t(std::string_view value = "") : value_(value) {}
-  template <typename T>
-  std::pair<bool, T> get() const {
-    if constexpr (std::is_same_v<T, std::string> ||
-                  std::is_same_v<T, std::string_view>) {
-      return std::make_pair(true, T{value_});
-    }
-    else if constexpr (std::is_arithmetic_v<T>) {
-      T num{};
-      try {
-        parse_num<T>(num, value_);
-        return std::make_pair(true, static_cast<T>(num));
-      } catch (std::exception &e) {
-        g_xml_read_err = e.what();
-        std::cout << "parse num failed, reason: " << e.what() << "\n";
-        return std::make_pair(false, T{});
-      }
-    }
-    else {
-      static_assert(!sizeof(T), "don't support this type!!");
-    }
-  }
-
-  std::string_view get_value() const { return value_; }
-
- private:
-  std::string_view value_;
-};
-
-template <typename T>
-class namespace_t {
- public:
-  using value_type = T;
-  explicit namespace_t(T &&value) : value_(std::forward<T>(value)) {}
-  namespace_t() : value_() {}
-  const T &get() const { return value_; }
-
- private:
-  T value_;
-};
-
-class cdata_t {
- public:
-  cdata_t() : value_() {}
-  cdata_t(const char *c, size_t len) : value_(c, len) {}
-  std::string_view get() const { return value_; }
-
- private:
-  std::string_view value_;
-};
-
-template <typename T>
-inline void parse_attribute(rapidxml::xml_node<char> *node, T &t) {
-  using U = std::decay_t<T>;
-  static_assert(is_map_container<U>::value, "must be map container");
-  using key_type = typename U::key_type;
-  using value_type = typename U::mapped_type;
-  static_assert(is_str_v<key_type>, " key of attribute map must be str");
-  rapidxml::xml_attribute<> *attr = node->first_attribute();
-  while (attr != nullptr) {
-    value_type value_item;
-    std::string_view value(attr->value(), attr->value_size());
-    if constexpr (is_str_v<value_type> || std::is_same_v<any_t, value_type>) {
-      value_item = value_type{value};
-    }
-    else if constexpr (std::is_arithmetic_v<value_type> &&
-                       !std::is_same_v<bool, value_type>) {
-      parse_num<value_type>(value_item, value);
-    }
-    else {
-      static_assert(!sizeof(value_type), "value type not supported");
-    }
-    t.emplace(key_type(attr->name(), attr->name_size()), std::move(value_item));
-    attr = attr->next_attribute();
-  }
+template <unique_ptr_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name) {
+  value = std::make_unique<typename std::remove_cvref_t<U>::element_type>();
+  parse_item(*value, it, end, name);
 }
 
-inline rapidxml::xml_node<char> *find_cdata(
-    const rapidxml::xml_node<char> *node) {
-  for (auto cn = node->first_node(); cn; cn = cn->next_sibling()) {
-    if (cn->type() == rapidxml::node_cdata) {
-      return cn;
-    }
-  }
-  return nullptr;
+template <attr_t U, typename It>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end,
+                              std::string_view name) {
+  parse_attr(value.attr(), it, end);
+  parse_item(value.value(), it, end, name);
 }
 
-template <typename T>
-inline void parse_item(rapidxml::xml_node<char> *node, T &t,
-                       std::string_view value) {
-  using U = std::remove_reference_t<T>;
-  if constexpr (std::is_same_v<char, U>) {
-    if (!value.empty())
-      t = value.back();
+//  /> or skip <?>、 <!> and <tag></tag> until the </name>
+//  loose inspection here
+template <typename It>
+IGUANA_INLINE void skip_object_value(It &&it, It &&end, std::string_view name) {
+  skip_till<'>'>(it, end);
+  ++it;
+  if (*(it - 2) == '/') {
+    // .../>
+    return;
   }
-  else if constexpr (std::is_arithmetic_v<U>) {
-    if constexpr (std::is_same_v<bool, U>) {
-      if (value == "true" || value == "1" || value == "True" ||
-          value == "TRUE") {
-        t = true;
-      }
-      else if (value == "false" || value == "0" || value == "False" ||
-               value == "FALSE") {
-        t = false;
-      }
-      else {
-        throw std::invalid_argument("Failed to parse bool");
-      }
+  // </name>
+  size_t size = name.size();
+  while (it != end) {
+    skip_till<'>'>(it, end);
+    if (*(it - size - 2) == '<' && *(it - size - 1) == '/' &&
+        (std::string_view{&*(it - size), size} == name)) {
+      ++it;
+      return;
     }
-    else {
-      parse_num<U>(t, value);
-    }
+    ++it;
+    skip_sapces_and_newline(it, end);
   }
-  else if constexpr (is_str_v<U>) {
-    t = U{value};
-  }
-  else if constexpr (is_reflection_v<U>) {
-    do_read(node, t);
-  }
-  else if constexpr (is_std_optinal_v<U>) {
-    if (!value.empty()) {
-      using value_type = typename U::value_type;
-      value_type opt{};
-      parse_item(node, opt, value);
-      t = std::move(opt);
-    }
-  }
-  else if constexpr (is_std_pair_v<U>) {
-    parse_item(node, t.first, value);
-    parse_attribute(node, t.second);
-  }
-  else if constexpr (is_namespace_v<U>) {
-    using value_type = typename U::value_type;
-    value_type ns{};
-    if constexpr (is_reflection_v<value_type>) {
-      do_read(node, ns);
-    }
-    else {
-      parse_item(node, ns, value);
-    }
-    t = T{std::move(ns)};
-  }
-  else {
-    static_assert(!sizeof(T), "don't support this type!!");
-  }
+  throw std::runtime_error("unclosed tag: " + std::string(name));
 }
 
-template <typename T, typename member_type>
-inline void parse_node(rapidxml::xml_node<char> *node, member_type &&t,
-                       std::string_view name) {
-  using item_type = std::decay_t<member_type>;
-  if constexpr (std::is_same_v<cdata_t, item_type>) {
-    auto c_node = find_cdata(node);
-    if (c_node) {
-      t = cdata_t(c_node->value(), c_node->value_size());
+// return true means reach the close tag
+template <size_t cdata_idx, refletable T, typename It>
+IGUANA_INLINE auto skip_till_key(T &value, It &&it, It &&end) {
+  skip_sapces_and_newline(it, end);
+  while (true) {
+    match<'<'>(it, end);
+    if (*it == '/') [[unlikely]] {
+      // </tag>
+      return true;  // reach the close tag
     }
-  }
-  else if constexpr (
-      is_std_optinal_v<item_type>) {  // std::optional<std::vector<some_object>>
-    using op_value_type = typename item_type::value_type;
-    if constexpr ((!is_str_v<op_value_type> &&
-                   is_container<op_value_type>::value) ||
-                  std::is_same_v<cdata_t, op_value_type>) {
-      op_value_type op_val;
-      parse_node<T>(node, op_val, name);
-      t = std::move(op_val);
+    else if (*it == '?') [[unlikely]] {
+      // <? ... ?>
+      skip_till<'>'>(it, end);
+      ++it;
+      skip_sapces_and_newline(it, end);
+      continue;
     }
-    else {
-      auto n = node->first_node(name.data());
-      if (n) {
-        parse_item(n, t, std::string_view(n->value(), n->value_size()));
-      }
-    }
-  }
-  else if constexpr (!is_str_v<item_type> && is_container<item_type>::value) {
-    using value_type = typename item_type::value_type;
-    if constexpr (std::is_same_v<cdata_t, value_type>) {
-      for (auto c = node->first_node(); c; c = c->next_sibling()) {
-        if (c->type() == rapidxml::node_cdata) {
-          t.push_back(value_type(c->value(), c->value_size()));
+    else if (*it == '!') [[unlikely]] {
+      ++it;
+      if (*it == '[') {
+        // <![
+        if constexpr (cdata_idx == iguana::get_value<std::decay_t<T>>()) {
+          ++it;
+          skip_till<']'>(it, end);
+          ++it;
+          match<"]>">(it, end);
+          skip_sapces_and_newline(it, end);
+          continue;
         }
-      }
-    }
-    else {
-      auto n = node->first_node(name.data());
-      if (n) {
-        while (n) {
-          if (std::string_view(n->name(), n->name_size()) != name) {
-            break;
+        else {
+          // if parse cdata
+          ++it;
+          match<"CDATA[">(it, end);
+          skip_sapces_and_newline(it, end);
+          auto &cdata_value = get<cdata_idx>(value);
+          using VT = typename std::decay_t<decltype(cdata_value)>::value_type;
+          auto vb = it;
+          auto ve = skip_pass<']'>(it, end);
+          if constexpr (str_view_t<VT>) {
+            cdata_value.value() =
+                VT(&*vb, static_cast<size_t>(std::distance(vb, ve)));
           }
-          value_type item;
-          parse_item(n, item, std::string_view(n->value(), n->value_size()));
-          t.push_back(std::move(item));
-          n = n->next_sibling();
+          else {
+            cdata_value.value().append(
+                &*vb, static_cast<size_t>(std::distance(vb, ve)));
+          }
+          match<"]>">(it, end);
+          skip_sapces_and_newline(it, end);
+          continue;
         }
       }
       else {
-        if constexpr (!is_std_optinal_v<value_type>) {
-          missing_node_handler<T>(name);
-        }
+        // <!-- -->
+        // <!D
+        skip_till<'>'>(it, end);
+        ++it;
+        skip_sapces_and_newline(it, end);
+        continue;
       }
     }
-  }
-  else {
-    auto n = node->first_node(name.data());
-    if (n) {
-      parse_item(n, t, std::string_view(n->value(), n->value_size()));
-    }
-    else {
-      if constexpr (!is_std_optinal_v<item_type>) {
-        missing_node_handler<T>(name);
-      }
-    }
+    return false;
   }
 }
 
 template <typename T>
-inline void do_read(rapidxml::xml_node<char> *node, T &&t) {
-  static_assert(is_reflection_v<std::remove_reference_t<T>>,
-                "must be refletable object");
-  for_each(std::forward<T>(t), [&t, &node](const auto member_ptr, auto i) {
-    using member_ptr_type = std::decay_t<decltype(member_ptr)>;
-    using type_v =
-        decltype(std::declval<T>().*std::declval<decltype(member_ptr)>());
-    using item_type = std::decay_t<type_v>;
+IGUANA_INLINE void check_required(
+    const std::unordered_set<std::string_view> &set) {
+  if constexpr (iguana::has_iguana_required_arr_v<T>) {
+    constexpr auto required_set =
+        iguana::iguana_required_struct<T>::requied_arr();
+    for (auto &item : required_set) {
+      if (set.find(item) == set.end()) {
+        std::string err = "required filed ";
+        err.append(item).append(" not found!");
+        throw std::invalid_argument(err);
+      }
+    }
+  }
+}
 
-    if constexpr (std::is_member_pointer_v<member_ptr_type>) {
-      using M = decltype(iguana_reflect_members(std::forward<T>(t)));
-      constexpr auto Idx = decltype(i)::value;
-      constexpr auto Count = M::value();
-      static_assert(Idx < Count);
-      constexpr auto key = M::arr()[Idx];
-      std::string_view str = key.data();
-      if constexpr (is_map_container<item_type>::value) {
-        parse_attribute(node, t.*member_ptr);
+template <refletable T, typename It>
+IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
+                              std::string_view name) {
+  using U = std::decay_t<T>;
+  constexpr auto cdata_idx = get_type_index<is_cdata_t, U>();
+  skip_till<'>'>(it, end);
+  ++it;
+  if (skip_till_key<cdata_idx>(value, it, end)) {
+    match_close_tag(it, end, name);
+    return;
+  }
+  auto start = it;
+  skip_till_greater_or_space(it, end);
+  std::string_view key =
+      std::string_view{&*start, static_cast<size_t>(std::distance(start, it))};
+
+  [[maybe_unused]] std::unordered_set<std::string_view> set;
+  bool parse_done = false;
+  // sequential parse
+  for_each(value, [&](const auto member_ptr, auto i) IGUANA__INLINE_LAMBDA {
+    using item_type = std::remove_reference_t<decltype(value.*member_ptr)>;
+    constexpr auto mkey = iguana::get_name<T, decltype(i)::value>();
+    constexpr std::string_view st_key(mkey.data(), mkey.size());
+    if constexpr (cdata_t<item_type>) {
+      return;
+    }
+    if (key != st_key) [[unlikely]] {
+      return;
+    }
+    if constexpr (!cdata_t<item_type>) {
+      parse_item(value.*member_ptr, it, end, key);
+      if constexpr (iguana::has_iguana_required_arr_v<U>) {
+        set.emplace(key);
       }
-      else if constexpr (is_namespace_v<item_type>) {
-        constexpr auto index_ul = find_underline(key.data());
-        static_assert(index_ul < key.size(),
-                      "'_' is needed in namesapce_t value name");
-        std::string ns(key.data(), key.size());
-        ns[index_ul] = ':';
-        parse_node<T>(node, t.*member_ptr, ns);
-      }
-      else {
-        parse_node<T>(node, t.*member_ptr, str);
-      }
+    }
+    if (skip_till_key<cdata_idx>(value, it, end)) {
+      match_close_tag(it, end, name);
+      parse_done = true;
+      return;
+    }
+    start = it;
+    skip_till_greater_or_space(it, end);
+    key = std::string_view{&*start,
+                           static_cast<size_t>(std::distance(start, it))};
+  });
+  if (parse_done) [[unlikely]] {
+    check_required<U>(set);
+    return;
+  }
+  // map parse
+  while (true) {
+    static constexpr auto frozen_map = get_iguana_struct_map<T>();
+    const auto &member_it = frozen_map.find(key);
+    if (member_it != frozen_map.end()) [[likely]] {
+      std::visit(
+          [&](auto &&member_ptr) IGUANA__INLINE_LAMBDA {
+            static_assert(
+                std::is_member_pointer_v<std::decay_t<decltype(member_ptr)>>,
+                "type must be memberptr");
+            using V = std::remove_reference_t<decltype(value.*member_ptr)>;
+            if constexpr (!cdata_t<V>) {
+              parse_item(value.*member_ptr, it, end, key);
+              if constexpr (iguana::has_iguana_required_arr_v<U>) {
+                set.emplace(key);
+              }
+            }
+          },
+          member_it->second);
+    }
+    else [[unlikely]] {
+#ifdef THROW_UNKNOWN_KEY
+      throw std::runtime_error("Unknown key: " + std::string(key));
+#else
+      skip_object_value(it, end, key);
+#endif
+    }
+    if (skip_till_key<cdata_idx>(value, it, end)) {
+      match_close_tag(it, end, name);
+      check_required<U>(set);
+      return;
+    }
+    start = it;
+    skip_till_greater_or_space(it, end);
+    key = std::string_view{&*start,
+                           static_cast<size_t>(std::distance(start, it))};
+  }
+}
+
+}  // namespace detail
+
+template <attr_t U, typename It>
+IGUANA_INLINE void from_xml(U &value, It &&it, It &&end) {
+  while (it != end) {
+    skip_sapces_and_newline(it, end);
+    match<'<'>(it, end);
+    if (*it == '?') {
+      skip_till<'>'>(it, end);
+      ++it;
     }
     else {
-      static_assert(!sizeof(member_ptr_type), "type not supported");
+      break;
     }
-  });
+  }
+  auto start = it;
+  skip_till_greater_or_space(it, end);
+  std::string_view key =
+      std::string_view{&*start, static_cast<size_t>(std::distance(start, it))};
+  detail::parse_attr(value.attr(), it, end);
+  detail::parse_item(value.value(), it, end, key);
+}
+template <refletable U, typename It>
+IGUANA_INLINE void from_xml(U &value, It &&it, It &&end) {
+  while (it != end) {
+    skip_sapces_and_newline(it, end);
+    match<'<'>(it, end);
+    if (*it == '?') {
+      skip_till<'>'>(it, end);
+      ++it;  // skip >
+    }
+    else {
+      break;
+    }
+  }
+  auto start = it;
+  skip_till_greater_or_space(it, end);
+  std::string_view key =
+      std::string_view{&*start, static_cast<size_t>(std::distance(start, it))};
+  detail::parse_item(value, it, end, key);
 }
 
-template <int Flags = 0, typename T,
-          typename = std::enable_if_t<is_reflection<T>::value>>
-inline bool from_xml(T &&t, char *buf) {
-  if (!g_xml_read_err.empty()) {
-    g_xml_read_err.clear();
-  }
-  try {
-    rapidxml::xml_document<> doc;
-    doc.parse<Flags>(buf);
-
-    auto fisrt_node = doc.first_node();
-    if (fisrt_node)
-      do_read(fisrt_node, t);
-
-    return true;
-  } catch (std::exception &e) {
-    g_xml_read_err = e.what();
-    std::cout << e.what() << "\n";
-  }
-
-  return false;
+template <typename U, string_t View>
+IGUANA_INLINE void from_xml(U &value, const View &view) {
+  from_xml(value, std::begin(view), std::end(view));
 }
 
-inline std::string get_last_read_err() { return g_xml_read_err; }
+template <num_t Num>
+IGUANA_INLINE Num get_number(std::string_view str) {
+  Num num;
+  detail::parse_value(num, str.begin(), str.end());
+  return num;
+}
+
 }  // namespace iguana

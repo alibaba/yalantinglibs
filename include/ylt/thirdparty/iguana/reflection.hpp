@@ -4,9 +4,6 @@
 
 #ifndef IGUANA_REFLECTION_HPP
 #define IGUANA_REFLECTION_HPP
-#include <frozen/string.h>
-#include <frozen/unordered_map.h>
-
 #include <array>
 #include <functional>
 #include <iomanip>
@@ -20,9 +17,11 @@
 #include <variant>
 #include <vector>
 
+#include "../frozen/string.h"
 #include "detail/itoa.hpp"
 #include "detail/string_stream.hpp"
 #include "detail/traits.hpp"
+#include "frozen/unordered_map.h"
 
 namespace iguana::detail {
 /******************************************/
@@ -624,8 +623,6 @@ inline constexpr auto get_iguana_struct_map_impl(
 }  // namespace iguana::detail
 
 namespace iguana {
-inline std::unordered_map<std::string_view, std::vector<std::string_view>>
-    g_iguana_required_map;
 inline std::unordered_map<
     std::string_view,
     std::vector<std::pair<std::string_view, std::string_view>>>
@@ -648,24 +645,36 @@ inline constexpr auto get_iguana_struct_map() {
 
 #define REFLECTION_EMPTY(STRUCT_NAME) MAKE_META_DATA_EMPTY(STRUCT_NAME)
 
-inline int add_required(std::string_view key, std::vector<std::string_view> v) {
-  iguana::g_iguana_required_map.emplace(key, v);
-  return 0;
-}
-
 #ifdef _MSC_VER
 #define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __COUNTER__)
 #else
 #define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __LINE__)
 #endif
-
-#define REQUIRED_IMPL(STRUCT_NAME, N, ...)                                \
-  inline auto IGUANA_UNIQUE_VARIABLE(STRUCT_NAME) = iguana::add_required( \
-      #STRUCT_NAME, std::vector<std::string_view>{                        \
-                        MARCO_EXPAND(MACRO_CONCAT(CON_STR, N)(__VA_ARGS__))});
+template <typename T>
+struct iguana_required_struct;
+#define REQUIRED_IMPL(STRUCT_NAME, N, ...)                      \
+  template <>                                                   \
+  struct iguana::iguana_required_struct<STRUCT_NAME> {          \
+    inline static constexpr auto requied_arr() {                \
+      std::array<std::string_view, N> arr_required = {          \
+          MARCO_EXPAND(MACRO_CONCAT(CON_STR, N)(__VA_ARGS__))}; \
+      return arr_required;                                      \
+    }                                                           \
+  };
 
 #define REQUIRED(STRUCT_NAME, ...) \
   REQUIRED_IMPL(STRUCT_NAME, GET_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
+
+template <class T, class = void>
+struct has_iguana_required_arr : std::false_type {};
+
+template <class T>
+struct has_iguana_required_arr<
+    T, std::void_t<decltype(iguana_required_struct<T>::requied_arr())>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool has_iguana_required_arr_v = has_iguana_required_arr<T>::value;
 
 inline std::string_view trim_sv(std::string_view str) {
   std::string_view whitespaces(" \t\f\v\n\r");
@@ -821,18 +830,6 @@ template <typename T>
 constexpr auto get_array() {
   using M = decltype(iguana_reflect_members(std::declval<T>()));
   return M::arr();
-}
-
-template <typename T>
-inline bool is_required(std::string_view key) {
-  constexpr std::string_view name = get_name<T>();
-  auto it = g_iguana_required_map.find(name);
-  if (it == g_iguana_required_map.end())
-    return false;
-
-  auto &v = it->second;
-  auto r = std::find(v.begin(), v.end(), key);
-  return r != v.end();
 }
 
 template <typename T>
