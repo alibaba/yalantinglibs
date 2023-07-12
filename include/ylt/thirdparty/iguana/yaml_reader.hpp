@@ -9,7 +9,8 @@
 namespace iguana {
 
 template <refletable T, typename It>
-void from_yaml(T &value, It &&it, It &&end, size_t min_spaces = 0);
+IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end,
+                             size_t min_spaces = 0);
 
 namespace detail {
 
@@ -78,7 +79,7 @@ IGUANA_INLINE void parse_block_str(U &value, It &&it, It &&end,
   }
   while (it != end) {
     auto start = it;
-    auto value_end = skip_till<false, '\n'>(it, end);
+    auto value_end = skip_till_newline(it, end);
     value.append(&*start, static_cast<size_t>(std::distance(start, value_end)));
     spaces = skip_space_and_lines<false>(it, end, min_spaces);
     if ((spaces < min_spaces) || (it == end)) [[unlikely]] {
@@ -155,7 +156,7 @@ IGUANA_INLINE void parse_value(U &value, It &&value_begin, It &&value_end) {
 }
 
 template <bool_t U, class It>
-IGUANA_INLINE void parse_value(U &value, It &&value_begin, It &&value_end) {
+IGUANA_INLINE void parse_value(U &&value, It &&value_begin, It &&value_end) {
   auto bool_v = std::string_view(
       &*value_begin,
       static_cast<size_t>(std::distance(value_begin, value_end)));
@@ -199,14 +200,14 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
     else {
       skip_space_and_lines(it, end, min_spaces);
       auto start = it;
-      auto value_end = skip_till<false, '\n'>(it, end);
+      auto value_end = skip_till_newline(it, end);
       parse_value(value, start, value_end);
     }
   }
   else {
     skip_space_and_lines(it, end, min_spaces);
     auto start = it;
-    auto value_end = skip_till<false, '\n'>(it, end);
+    auto value_end = skip_till_newline(it, end);
     parse_value(value, start, value_end);
   }
 }
@@ -233,7 +234,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
       }
       if constexpr (plain_t<value_type>) {
         auto start = it;
-        auto value_end = skip_till<true, ',', ']'>(it, end);
+        auto value_end = skip_till<',', ']'>(it, end);
         parse_value(value.emplace_back(), start, value_end);
         if (*(it - 1) == ']') [[unlikely]] {
           return;
@@ -267,7 +268,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
       }
       else if constexpr (plain_t<value_type>) {
         auto start = it;
-        auto value_end = skip_till<false, '\n'>(it, end);
+        auto value_end = skip_till_newline(it, end);
         parse_value(value.emplace_back(), start, value_end);
       }
       else {
@@ -291,7 +292,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
       skip_space_and_lines(it, end, min_spaces);
       if constexpr (plain_t<value_type>) {
         auto start = it;
-        auto value_end = skip_till<true, ',', ']'>(it, end);
+        auto value_end = skip_till<',', ']'>(it, end);
         parse_value(v, start, value_end);
       }
       else {
@@ -315,7 +316,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
       }
       else if constexpr (plain_t<value_type>) {
         auto start = it;
-        auto value_end = skip_till<false, '\n'>(it, end);
+        auto value_end = skip_till_newline(it, end);
         parse_value(v, start, value_end);
       }
       else {
@@ -343,13 +344,13 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
         return;
       }
       auto start = it;
-      auto value_end = skip_till<true, ':'>(it, end);
+      auto value_end = skip_till<':'>(it, end);
       key_type key;
       parse_value(key, start, value_end);
       subspaces = skip_space_and_lines(it, end, min_spaces);
       if constexpr (plain_t<value_type>) {
         start = it;
-        value_end = skip_till<true, ',', '}'>(it, end);
+        value_end = skip_till<',', '}'>(it, end);
         parse_value(value[key], start, value_end);
         if (*(it - 1) == '}') [[unlikely]] {
           return;
@@ -373,13 +374,13 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
         return;
       }
       auto start = it;
-      auto value_end = skip_till<true, ':'>(it, end);
+      auto value_end = skip_till<':'>(it, end);
       key_type key;
       parse_value(key, start, value_end);
       subspaces = skip_space_and_lines(it, end, min_spaces);
       if constexpr (plain_t<value_type> && !str_t<value_type>) {
         start = it;
-        value_end = skip_till<false, '\n'>(it, end);
+        value_end = skip_till_newline(it, end);
         parse_value(value[key], start, value_end);
       }
       else {
@@ -414,7 +415,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
   auto start = it;
   std::decay_t<It> value_end = end;
   if (*it == 'n') {
-    value_end = skip_till<false, '\n'>(it, end);
+    value_end = skip_till_newline(it, end);
     auto opt_v = std::string_view(
         &*start, static_cast<size_t>(std::distance(start, value_end)));
     if (opt_v == "null") {
@@ -428,9 +429,30 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
   else {
     if (value_end == end) [[likely]] {
       // if value_end isn't touched
-      value_end = skip_till<false, '\n'>(it, end);
+      value_end = skip_till_newline(it, end);
     }
     parse_value(value.emplace(), start, value_end);
+  }
+}
+
+IGUANA_INLINE void skip_object_value(auto &&it, auto &&end, size_t min_spaces) {
+  int subspace = min_spaces;
+  while (it != end) {
+    while (it != end && *it != '\n') {
+      ++it;
+    }
+    // here : it == '\n'
+    subspace = 0;
+    if (it != end) [[likely]] {
+      ++it;
+    }
+    while (it != end && *(it++) == ' ') {
+      ++subspace;
+    }
+    if (subspace < min_spaces) {
+      it -= subspace + 1;
+      return;
+    }
   }
 }
 
@@ -441,7 +463,7 @@ IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end, size_t min_spaces) {
   auto spaces = skip_space_and_lines(it, end, min_spaces);
   while (it != end) {
     auto start = it;
-    auto keyend = skip_till<true, ':'>(it, end);
+    auto keyend = skip_till<':'>(it, end);
     std::string_view key = std::string_view{
         &*start, static_cast<size_t>(std::distance(start, keyend))};
     static constexpr auto frozen_map = get_iguana_struct_map<T>();
@@ -461,13 +483,16 @@ IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end, size_t min_spaces) {
             member_it->second);
       }
       else [[unlikely]] {
-        // TODO: don't throw
+#ifdef THROW_UNKNOWN_KEY
         throw std::runtime_error("Unknown key: " + std::string(key));
+#else
+        detail::skip_object_value(it, end, spaces + 1);
+#endif
       }
     }
     auto subspaces = skip_space_and_lines<false>(it, end, min_spaces);
     if (subspaces < min_spaces) [[unlikely]] {
-      it -= subspaces + 1;  // back to the las line end
+      it -= subspaces + 1;
       return;
     }
   }

@@ -97,31 +97,50 @@ std::string xml_str = R"(
 
 void nested_xml() {
   ListBucketResult list_bucket;
-  bool r = struct_xml::from_xml(list_bucket, xml_str.data());
-  assert(r);
+  struct_xml::from_xml(list_bucket, xml_str);
 
   std::string out;
-  r = struct_xml::to_xml_pretty(list_bucket, out);
-  assert(r);
+  struct_xml::to_xml(list_bucket, out);
+
   std::cout << out << "\n";
 }
 
-struct book_attr_t {
-  std::map<std::string, float> __attr;
+struct book_t {
   std::string title;
+  std::string author;
 };
-REFLECTION(book_attr_t, __attr, title);
+REFLECTION(book_t, title, author);
+struct library {
+  iguana::xml_attr_t<book_t> book;
+};
+REFLECTION(library, book);
+
 void attribute() {
   std::string str = R"(
-    <book_attr_t id="5" pages="392" price="79.9">
-      <title>C++ templates</title>
-    </book_with_attr_t>
-  )";
-  book_attr_t b;
-  iguana::from_xml(b, str.data());
-  assert(b.__attr["id"] == 5);
-  assert(b.__attr["pages"] == 392.0f);
-  assert(b.__attr["price"] == 79.9f);
+  <library name="UESTC library">
+    <book id="1234" language="en" edition="1">
+      <title>Harry Potter and the Philosopher's Stone</title>
+      <author>J.K. Rowling</author>
+      </book>
+  </library>
+)";
+  {
+    std::cout << "========= serialize book_t with attr ========\n";
+    library lib;
+    iguana::from_xml(lib, str);
+    std::string ss;
+    iguana::to_xml(lib, ss);
+    std::cout << ss << "\n\n";
+  }
+  {
+    std::cout << "========= serialize library with attr ========\n";
+    iguana::xml_attr_t<library> lib;
+    iguana::from_xml(lib, str);
+
+    std::string ss;
+    iguana::to_xml(lib, ss);
+    std::cout << ss << "\n\n";
+  }
 }
 
 struct person {
@@ -139,22 +158,23 @@ void basic_usage() {
 )";
 
   person p;
-  bool r = struct_xml::from_xml(p, xml.data());
-  assert(r);
+  struct_xml::from_xml(p, xml);
+
   assert(p.name == "tom" && p.age == 20);
 
   std::string str;
-  r = struct_xml::to_xml_pretty(p, str);
-  assert(r);
+  struct_xml::to_xml(p, str);
+
   std::cout << str;
 }
 
 void get_error() {
   std::string xml = "invalid xml";
   person p;
-  bool r = struct_xml::from_xml(p, xml.data());
-  if (!r) {
-    std::cout << struct_xml::get_last_read_err() << "\n";
+  try {
+    struct_xml::from_xml(p, xml);
+  } catch (std::exception &e) {
+    std::cout << e.what() << "\n";
   }
 }
 
@@ -163,7 +183,7 @@ struct person2 {
   int age;
 };
 REFLECTION(person2, name, age);
-REQUIRED(person2, age);
+REQUIRED(person2, name, age);
 
 void required_field() {
   std::string xml = R"(
@@ -172,10 +192,26 @@ void required_field() {
 </person>
 )";
 
+  std::string xml1 = R"(
+<person>
+    <age>20</age>
+</person>
+)";
+
   person2 p;
-  bool r = struct_xml::from_xml(p, xml.data());
-  assert(!r);
-  std::cout << struct_xml::get_last_read_err() << "\n";
+  try {
+    struct_xml::from_xml(p, xml);
+  } catch (std::exception &e) {
+    std::cout << e.what()
+              << "\n";  // lack of required field, will throw in this case
+  }
+
+  try {
+    struct_xml::from_xml(p, xml1);
+  } catch (std::exception &e) {
+    std::cout << e.what()
+              << "\n";  // lack of required field, will throw in this case
+  }
 }
 
 int main() {

@@ -1,227 +1,166 @@
-//
-// Created by qiyu on 17-6-6.
-//
-
-#ifndef IGUANA_XML17_HPP
-#define IGUANA_XML17_HPP
-#include <string.h>
-
-#include <algorithm>
-#include <cctype>
-#include <functional>
-#include <rapidxml/rapidxml_print.hpp>
+#pragma once
 
 #include "detail/charconv.h"
 #include "reflection.hpp"
-#include "type_traits.hpp"
+#include "xml_util.hpp"
 
 namespace iguana {
-inline std::string g_xml_write_err;
-template <typename Stream, typename T>
-inline void to_xml_impl(Stream &s, T &&t, std::string_view name = "");
 
-class any_t;
-class cdata_t;
-constexpr inline size_t find_underline(const char *);
-
-template <typename Stream, typename T>
-inline std::enable_if_t<std::is_arithmetic_v<T>> render_xml_value(Stream &ss,
-                                                                  T &value) {
-  char temp[65];
-  auto p = detail::to_chars(temp, value);
-  const auto n = std::distance(temp, p);
-  ss.append(temp, n);
-}
+template <typename Stream, refletable T>
+IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name);
 
 template <typename Stream>
-inline void render_xml_value(Stream &ss, bool s) {
-  if (s) {
-    ss.append("true");
-  }
-  else {
-    ss.append("false");
-  }
-}
-
-template <typename Stream>
-inline void render_xml_value(Stream &ss, char s) {
-  ss.push_back(s);
-}
-
-template <typename Stream, typename T>
-inline std::enable_if_t<is_str_v<std::decay_t<T>>> render_xml_value(Stream &ss,
-                                                                    T &&s) {
-  ss.append(s.data(), s.size());
-}
-
-template <typename Stream>
-inline void render_xml_value(Stream &ss, const char *s) {
-  ss.append(s, strlen(s));
-}
-
-template <typename Stream, typename T>
-inline void render_xml_value(Stream &ss, const std::optional<T> &s) {
-  if (s.has_value()) {
-    render_xml_value(ss, *s);
-  }
-}
-
-template <typename Stream>
-inline void render_xml_value(Stream &ss, const any_t &t) {
-  ss.append(t.get_value().data(), t.get_value().size());
-}
-
-template <typename Stream>
-inline void render_tail(Stream &ss, const char *s) {
+inline void render_tail(Stream &ss, std::string_view str) {
   ss.push_back('<');
   ss.push_back('/');
-  ss.append(s, strlen(s));
+  ss.append(str.data(), str.size());
   ss.push_back('>');
 }
 
 template <typename Stream>
-inline void render_head(Stream &ss, const char *s) {
+inline void render_head(Stream &ss, std::string_view str) {
   ss.push_back('<');
-  ss.append(s, strlen(s));
+  ss.append(str.data(), str.size());
   ss.push_back('>');
 }
 
-template <typename Stream, typename T>
-inline void render_xml_attr(Stream &ss, std::string_view name, T &&attr) {
-  static_assert(is_map_container<std::decay_t<T>>::value,
-                "must be map container");
-  ss.append("<").append(name);
-  for (auto &[k, v] : attr) {
-    ss.append(" ").append(k).append("=\"");
-    render_xml_value(ss, v);
-    ss.append("\"");
+template <typename Stream, plain_t T>
+IGUANA_INLINE void render_value(Stream &ss, const T &value) {
+  if constexpr (string_t<T>) {
+    ss.append(value.data(), value.size());
   }
-  ss.append(">");
-}
-
-template <typename Stream, typename T>
-inline void render_xml_node(Stream &ss, std::string_view name, T &&item) {
-  using U = std::decay_t<T>;
-  if constexpr (is_std_pair_v<U>) {
-    render_xml_attr(ss, name, item.second);
-    render_xml_value(ss, item.first);
-    render_tail(ss, name.data());
+  else if constexpr (num_t<T>) {
+    char temp[65];
+    auto p = detail::to_chars(temp, value);
+    ss.append(temp, p - temp);
   }
-  else if constexpr (std::is_same_v<cdata_t, U>) {
-    ss.append("<![CDATA[").append(item.get()).append("]]>");
+  else if constexpr (char_t<T>) {
+    ss.push_back(value);
+  }
+  else if constexpr (bool_t<T>) {
+    ss.append(value ? "true" : "false");
+  }
+  else if constexpr (enum_t<T>) {
+    render_value(ss, static_cast<std::underlying_type_t<T>>(value));
   }
   else {
-    render_head(ss, name.data());
-    render_xml_value(ss, std::forward<T>(item));
-    render_tail(ss, name.data());
+    static_assert(!sizeof(T), "type is not supported");
   }
 }
 
-template <typename Stream, typename T>
-inline void render_xml_value0(Stream &ss, const T &v, std::string_view name) {
-  for (auto &item : v) {
-    using item_type = std::decay_t<decltype(item)>;
-    if constexpr (is_reflection_v<item_type>) {
-      to_xml_impl(ss, item, name);
-    }
-    else {
-      render_xml_node(ss, name, item);
-    }
+template <typename Stream, map_container T>
+inline void render_xml_attr(Stream &ss, const T &value, std::string_view name) {
+  ss.push_back('<');
+  ss.append(name.data(), name.size());
+  for (auto [k, v] : value) {
+    ss.push_back(' ');
+    render_value(ss, k);
+    ss.push_back('=');
+    ss.push_back('"');
+    render_value(ss, v);
+    ss.push_back('"');
   }
+  ss.push_back('>');
 }
 
-template <typename Stream, typename T>
-inline void to_xml_impl(Stream &s, T &&t, std::string_view name) {
-  if (name.empty()) {
-    name = iguana::get_name<T>();
-  }
-  constexpr auto Idx = get_type_index<is_map_container, std::decay_t<T>>();
-  if constexpr (Idx != iguana::get_value<std::decay_t<T>>()) {
-    auto attr_value = get<Idx>(t);
-    render_xml_attr(s, name, attr_value);
+template <typename Stream, attr_t T>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  render_xml_attr(ss, value.attr(), name);
+  render_xml_value(ss, value.value(), name);
+  render_tail(ss, name);
+}
+
+template <typename Stream, plain_t T>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  render_value(ss, value);
+  render_tail(ss, name);
+}
+
+template <typename Stream, optional_t T>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  if (value) {
+    render_xml_value(ss, *value, name);
   }
   else {
-    s.append("<").append(name).append(">");
+    render_tail(ss, name);
   }
-  for_each(std::forward<T>(t), [&t, &s](const auto v, auto i) {
-    using M = decltype(iguana_reflect_members(std::forward<T>(t)));
-    constexpr auto Idx = decltype(i)::value;
-    constexpr auto Count = M::value();
-    static_assert(Idx < Count);
+}
 
-    using type_v = decltype(std::declval<T>().*std::declval<decltype(v)>());
-    using type_u = std::decay_t<type_v>;
-    if constexpr (!is_reflection<type_v>::value) {
-      if constexpr (is_map_container<type_u>::value) {
-        return;
-      }
-      else if constexpr (is_namespace_v<type_u>) {
-        constexpr auto name = get_name<T, Idx>();
-        constexpr auto index_ul = find_underline(name.data());
-        std::string ns(name.data(), name.size());
-        ns[index_ul] = ':';
-        if constexpr (is_reflection<typename type_u::value_type>::value) {
-          to_xml_impl(s, (t.*v).get(), ns);
-        }
-        else {
-          render_xml_node(s, ns, (t.*v).get());
-        }
-      }
-      else if constexpr (is_std_optinal_v<type_u>) {
-        if ((t.*v).has_value()) {
-          using value_type = typename type_u::value_type;
-          if constexpr (!is_str_v<value_type> &&
-                        is_container<value_type>::value) {
-            std::string_view sv = get_name<T, Idx>().data();
-            render_xml_value0(s, *(t.*v), sv);
-          }
-          else {
-            render_xml_node(s, get_name<T, Idx>().data(), *(t.*v));
-          }
-        }
-      }
-      else if constexpr (!is_str_v<type_u> && is_container<type_u>::value) {
-        std::string_view sv = get_name<T, Idx>().data();
-        render_xml_value0(s, t.*v, sv);
-      }
-      else {
-        render_xml_node(s, get_name<T, Idx>().data(), t.*v);
-      }
+template <typename Stream, unique_ptr_t T>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  if (value) {
+    render_xml_value(ss, *value, name);
+  }
+  else {
+    render_tail(ss, name);
+  }
+}
+
+template <typename Stream, sequence_container_t T>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  using value_type = typename std::remove_cvref_t<T>::value_type;
+  for (const auto &v : value) {
+    if constexpr (attr_t<value_type>) {
+      render_xml_attr(ss, v.attr(), name);
+      render_xml_value(ss, v.value(), name);
     }
     else {
-      to_xml_impl(s, t.*v, get_name<T, Idx>().data());
+      render_head(ss, name);
+      render_xml_value(ss, v, name);
     }
-  });
-  s.append("</").append(name).append(">");
-}
-
-template <typename Stream, typename T,
-          typename = std::enable_if_t<is_reflection<T>::value>>
-inline void to_xml(T &&t, Stream &s) {
-  to_xml_impl(s, std::forward<T>(t));
-}
-
-template <int Flags = 0, typename Stream, typename T,
-          typename = std::enable_if_t<is_reflection<T>::value>>
-inline bool to_xml_pretty(T &&t, Stream &s) {
-  to_xml_impl(s, std::forward<T>(t));
-
-  bool r = true;
-  try {
-    rapidxml::xml_document<> doc;
-    doc.parse<Flags>(s.data());
-    std::string ss;
-    rapidxml::print(std::back_inserter(ss), doc);
-    s = std::move(ss);
-  } catch (std::exception &e) {
-    r = false;
-    g_xml_write_err = e.what();
-    std::cerr << e.what() << "\n";
   }
-
-  return r;
 }
 
-inline std::string get_last_write_err() { return g_xml_write_err; }
+template <typename Stream, refletable T>
+IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name) {
+  for_each(std::forward<T>(t),
+           [&](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
+             using M = decltype(iguana_reflect_members(std::forward<T>(t)));
+             using value_type = std::remove_cvref_t<decltype(t.*v)>;
+             constexpr auto Idx = decltype(i)::value;
+             constexpr auto Count = M::value();
+             constexpr std::string_view tag_name =
+                 std::string_view(get_name<std::decay_t<T>, Idx>().data(),
+                                  get_name<std::decay_t<T>, Idx>().size());
+             static_assert(Idx < Count);
+             if constexpr (sequence_container_t<value_type>) {
+               render_xml_value(ss, t.*v, tag_name);
+             }
+             else if constexpr (attr_t<value_type>) {
+               render_xml_attr(ss, (t.*v).attr(), tag_name);
+               render_xml_value(ss, (t.*v).value(), tag_name);
+             }
+             else if constexpr (cdata_t<value_type>) {
+               ss.append("<![CDATA[").append((t.*v).value()).append("]]>");
+             }
+             else {
+               render_head(ss, tag_name);
+               render_xml_value(ss, t.*v, tag_name);
+             }
+           });
+  render_tail(ss, name);
+}
+
+template <typename Stream, attr_t T>
+IGUANA_INLINE void to_xml(T &&t, Stream &s) {
+  using value_type = typename std::decay_t<T>::value_type;
+  constexpr std::string_view root_name = std::string_view(
+      get_name<value_type>().data(), get_name<value_type>().size());
+  render_xml_attr(s, std::forward<T>(t).attr(), root_name);
+  render_xml_value(s, std::forward<T>(t).value(), root_name);
+}
+
+template <typename Stream, refletable T>
+IGUANA_INLINE void to_xml(T &&t, Stream &s) {
+  constexpr std::string_view root_name = std::string_view(
+      get_name<std::decay_t<T>>().data(), get_name<std::decay_t<T>>().size());
+  render_head(s, root_name);
+  render_xml_value(s, std::forward<T>(t), root_name);
+}
+
 }  // namespace iguana
-#endif  // IGUANA_XML17_HPP

@@ -141,6 +141,70 @@ IGUANA_INLINE bool skip_space_till_end(auto &&it, auto &&end) {
   return it == end;
 }
 
+// will not skip  '\n'
+IGUANA_INLINE auto skip_till_newline(auto &&it, auto &&end) {
+  if (it == end) [[unlikely]] {
+    return it;
+  }
+  std::decay_t<decltype(it)> res = it;
+  while ((it != end) && (*it != '\n')) {
+    if (*it == ' ') [[unlikely]] {
+      res = it;
+      while (it != end && *it == ' ') ++it;
+    }
+    else if (*it == '#') [[unlikely]] {
+      if (*(it - 1) == ' ') [[unlikely]] {
+        // it - 1 should be legal because this func is for parse value
+        while ((it != end) && *it != '\n') {
+          ++it;
+        }
+        return res;
+      }
+    }
+    else [[likely]] {
+      ++it;
+    }
+  }
+  return (*(it - 1) == ' ') ? res : it;
+}
+
+template <char... C>
+IGUANA_INLINE auto skip_till(auto &&it, auto &&end) {
+  if (it == end) [[unlikely]] {
+    return it;
+  }
+  std::decay_t<decltype(it)> res = it;
+  while ((it != end) && (!((... || (*it == C))))) {
+    if (*it == '\n') [[unlikely]] {
+      throw std::runtime_error("\\n is not expected");
+    }
+    else if (*it == ' ') [[unlikely]] {
+      res = it;
+      while (it != end && *it == ' ') ++it;
+    }
+    else if (*it == '#') [[unlikely]] {
+      if (*(it - 1) == ' ') [[unlikely]] {
+        // it - 1 may be illegal
+        while ((it != end) && *it != '\n') {
+          ++it;
+        }
+        return res;
+      }
+    }
+    else [[likely]] {
+      ++it;
+    }
+  }
+
+  if (it == end) [[unlikely]] {
+    static constexpr char b[] = {C..., '\0'};
+    std::string error = std::string("Expected one of these: ").append(b);
+    throw std::runtime_error(error);
+  }
+  ++it;  // skip
+  return (*(it - 2) == ' ') ? res : it - 1;
+}
+
 // If there are '\n' , return indentation
 // If not, return minspaces + space
 // If Throw == true, check  res < minspaces
@@ -152,6 +216,16 @@ IGUANA_INLINE size_t skip_space_and_lines(auto &&it, auto &&end,
     if (*it == '\n') {
       ++it;
       res = 0;
+      auto start = it;
+      // skip the --- line
+      if ((it != end) && (*it == '-')) [[unlikely]] {
+        auto line_end = skip_till<false, '\n'>(it, end);
+        auto line = std::string_view(
+            &*start, static_cast<size_t>(std::distance(start, line_end)));
+        if (line != "---") {
+          it = start;
+        }
+      }
     }
     else if (*it == ' ') {
       ++it;
@@ -175,42 +249,4 @@ IGUANA_INLINE size_t skip_space_and_lines(auto &&it, auto &&end,
   return res;  // throw in certain situations ?
 }
 
-// when Throw is false, it == end is allowed
-// whenc C is '\n', do not skip '\n'
-template <bool Throw, char... C>
-IGUANA_INLINE auto skip_till(auto &&it, auto &&end) {
-  if (it == end) [[unlikely]] {
-    return it;
-  }
-  std::decay_t<decltype(it)> res;
-  while ((it != end) && (!((... || (*it == C))))) {
-    if (*it == '\n') [[unlikely]] {
-      throw std::runtime_error("\\n is not expected");
-    }
-    else if (*it == ' ') [[unlikely]] {
-      res = it;
-      while (it != end && *it == ' ') ++it;
-    }
-    else [[likely]] {
-      ++it;
-    }
-  }
-
-  if (it == end) [[unlikely]] {
-    if constexpr (Throw) {
-      static constexpr char b[] = {C..., '\0'};
-      std::string error = std::string("Expected one of these: ").append(b);
-      throw std::runtime_error(error);
-    }
-    else {
-      return (*(it - 1) == ' ') ? res : end;
-    }
-  }
-  // true : when C is not '\n'
-  if (!((... || ('\n' == C)) && (sizeof...(C) == 1))) {
-    ++it;
-    return (*(it - 2) == ' ') ? res : it - 1;
-  }
-  return (*(it - 1) == ' ') ? res : it;
-}
 }  // namespace iguana
