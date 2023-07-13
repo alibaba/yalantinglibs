@@ -75,6 +75,9 @@ class logger {
  private:
   logger() {
     static appender appender{};
+    appender.start_thread();
+    appender.enable_console(true);
+    async_ = true;
     appender_ = &appender;
   }
 
