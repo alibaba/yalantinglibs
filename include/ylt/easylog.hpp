@@ -56,8 +56,8 @@ class logger {
   void init(Severity min_severity, bool async, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time) {
-    static appender appender(filename, async, max_file_size, max_files,
-                             flush_every_time);
+    static appender appender(filename, async, enable_console, max_file_size,
+                             max_files, flush_every_time);
     async_ = async;
     appender_ = &appender;
     min_severity_ = min_severity;
