@@ -84,36 +84,42 @@ class appender {
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
     open_log_file();
     if (async) {
-      write_thd_ = std::thread([this] {
-        while (!stop_) {
-          if (max_files_ > 0 && file_size_ > max_file_size_ &&
-              static_cast<size_t>(-1) != file_size_) {
-            roll_log_files();
-          }
+      start_thread();
+    }
+  }
 
-          record_t record;
-          if (queue_.try_dequeue(record)) {
-            enable_console_ ? write_record<false, true>(record)
-                            : write_record<false, false>(record);
-          }
+  void enable_console(bool b) { enable_console_ = b; }
 
-          if (queue_.size_approx() == 0) {
-            std::unique_lock lock(que_mtx_);
-            cnd_.wait(lock, [&]() {
-              return queue_.size_approx() > 0 || stop_;
-            });
-          }
+  void start_thread() {
+    write_thd_ = std::thread([this] {
+      while (!stop_) {
+        if (max_files_ > 0 && file_size_ > max_file_size_ &&
+            static_cast<size_t>(-1) != file_size_) {
+          roll_log_files();
+        }
 
-          if (stop_) {
-            if (queue_.size_approx() > 0) {
-              while (queue_.try_dequeue(record)) {
-                write_record(record);
-              }
+        record_t record;
+        if (queue_.try_dequeue(record)) {
+          enable_console_ ? write_record<false, true>(record)
+                          : write_record<false, false>(record);
+        }
+
+        if (queue_.size_approx() == 0) {
+          std::unique_lock lock(que_mtx_);
+          cnd_.wait(lock, [&]() {
+            return queue_.size_approx() > 0 || stop_;
+          });
+        }
+
+        if (stop_) {
+          if (queue_.size_approx() > 0) {
+            while (queue_.try_dequeue(record)) {
+              write_record(record);
             }
           }
         }
-      });
-    }
+      }
+    });
   }
 
   std::string_view get_tid_buf(unsigned int tid) {
