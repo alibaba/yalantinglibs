@@ -29,16 +29,9 @@ TEST_CASE("test varadic param") {
 
   auto server = std::make_unique<coro_rpc::coro_rpc_server>(
       std::thread::hardware_concurrency(), 8808);
-  std::thread thrd([&] {
-    server->register_handler<test_func>();
-    try {
-      auto ec = server->start();
-      REQUIRE(ec == std::errc{});
-    } catch (const std::exception& e) {
-      std::cerr << "test varadic param Exception: " << e.what() << "\n";
-    }
-  });
-  REQUIRE_MESSAGE(server->wait_for_start(3s), "server start timeout");
+  server->register_handler<test_func>();
+  auto res = server->async_start();
+  REQUIRE_MESSAGE(res, "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
@@ -51,8 +44,6 @@ TEST_CASE("test varadic param") {
                                               }));
   ELOGV(INFO, "begin to stop server");
   server->stop();
-  if (thrd.joinable())
-    thrd.join();
   ELOGV(INFO, "finished stop server");
   if (ret) {
     ELOGV(INFO, "ret value %s", ret.value().data());

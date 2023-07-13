@@ -78,7 +78,7 @@ int main() {
   auto client_pool = coro_io::client_pool<coro_rpc_client>::create(
       "localhost:8801",
       coro_io::client_pool<coro_rpc_client>::pool_config{
-          .max_connection_ = thread_cnt * 20,
+          .max_connection = thread_cnt * 20,
           .client_config = {.timeout_duration = std::chrono::seconds{50}}});
 
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {

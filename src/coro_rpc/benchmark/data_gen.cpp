@@ -28,15 +28,10 @@ using namespace std::chrono_literals;
 int main() {
   using namespace coro_rpc;
   coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(), 0);
-  std::thread thrd([&] {
-    start_server(server);
-  });
 
-  bool started = server.wait_for_start(3s);
+  auto started = server.async_start();
   if (!started) {
     ELOGV(ERROR, "server started failed");
-    server.stop();
-    thrd.join();
     return -1;
   }
 
@@ -109,7 +104,6 @@ int main() {
   syncAwait(client.call<heavy_calculate>(42));
 
   server.stop();
-  thrd.join();
 
   return 0;
 };

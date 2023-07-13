@@ -49,10 +49,14 @@ class client_queue {
   }
   std::size_t enqueue(client_t&& c) {
     const int_fast16_t index = selected_index_;
+    auto cnt = ++size_[index];
     if (queue_[index].enqueue(std::move(c))) {
-      return ++size_[index];
+      return cnt;
     }
-    return 0;
+    else {
+      --size_[index];
+      return 0;
+    }
   }
   bool try_dequeue(client_t& c) {
     const int_fast16_t index = selected_index_;
