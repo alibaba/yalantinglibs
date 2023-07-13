@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cinatra/utils.hpp>
+#include <cinatra/time_util.hpp>
 
 namespace ylt {
 using time_format = cinatra::time_format;
@@ -26,7 +26,29 @@ inline std::pair<bool, std::time_t> get_timestamp(
   return cinatra::get_timestamp<Format>(gmt_time_str);
 }
 
-inline std::string get_gmt_time_str(std::time_t t) {
-  return cinatra::get_gmt_time_str(t);
+inline std::string_view get_gmt_time_str(std::time_t t) {
+  return cinatra::get_gmt_time_str(std::chrono::system_clock::from_time_t(t));
+}
+
+template <size_t N>
+inline std::string_view get_gmt_time_str(char (&buf)[N], std::time_t t) {
+  return cinatra::get_gmt_time_str(buf, t);
+}
+
+inline std::string_view get_gmt_time_str() {
+  return cinatra::get_gmt_time_str();
+}
+
+inline std::string_view get_local_time_str(std::time_t t) {
+  return cinatra::get_local_time_str(std::chrono::system_clock::from_time_t(t));
+}
+
+template <size_t N>
+inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t) {
+  return cinatra::get_local_time_str(buf, t);
+}
+
+inline std::string_view get_local_time_str() {
+  return cinatra::get_local_time_str();
 }
 }  // namespace ylt
