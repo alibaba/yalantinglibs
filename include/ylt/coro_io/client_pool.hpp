@@ -99,10 +99,8 @@ class client_pool : public std::enable_shared_from_this<
     bool ok = false;
 
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
+      co_await coro_io::sleep_for(pool_config_.reconnect_wait_time);
       ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
-      if (!ok) {
-        co_await coro_io::sleep_for(pool_config_.reconnect_wait_time);
-      }
     }
     co_return ok ? std::move(client) : nullptr;
   }
@@ -115,17 +113,7 @@ class client_pool : public std::enable_shared_from_this<
       if (!free_clients_.try_dequeue(client)) {
         break;
       }
-      if (client->has_closed()) {
-        [self = this->shared_from_this()](std::unique_ptr<client_t> client)
-            -> async_simple::coro::Lazy<void> {
-          self->collect_free_client(
-              co_await self->reconnect(std::move(client)));
-          co_return;
-        }(std::move(client))
-                   .start([](auto&& v) {
-                   });
-      }
-      else {
+      if (!client->has_closed()) {
         break;
       }
     }
@@ -232,7 +220,7 @@ class client_pool : public std::enable_shared_from_this<
 
   template <typename T>
   async_simple::coro::Lazy<return_type<T>> send_request(
-      T op, const typename client_t::config& client_config) {
+      T op, typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
     auto client = co_await get_client(client_config);
     if (!client) {
@@ -252,7 +240,7 @@ class client_pool : public std::enable_shared_from_this<
 
   template <typename T>
   decltype(auto) send_request(T op) {
-    return send_request(op, pool_config_.client_config);
+    return send_request(std::move(op), pool_config_.client_config);
   }
 
   std::size_t free_client_count() const noexcept {
@@ -271,7 +259,7 @@ class client_pool : public std::enable_shared_from_this<
   template <typename T>
   async_simple::coro::Lazy<return_type_with_host<T>> send_request(
       T op, std::string_view endpoint,
-      const typename client_t::config& client_config) {
+      typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
     auto client = co_await get_client(client_config);
     if (!client) {
@@ -293,7 +281,7 @@ class client_pool : public std::enable_shared_from_this<
 
   template <typename T>
   decltype(auto) send_request(T op, std::string_view sv) {
-    return send_request(op, sv, pool_config_.client_config);
+    return send_request(std::move(op), sv, pool_config_.client_config);
   }
 
   coro_io::detail::client_queue<std::unique_ptr<client_t>> free_clients_;
@@ -322,11 +310,10 @@ class client_pools {
     co_return ret;
   }
   auto send_request(std::string_view host_name,
-                    const typename client_pool_t::pool_config& pool_config,
-                    auto op)
+                    typename client_pool_t::pool_config& pool_config, auto op)
       -> decltype(std::declval<client_pool_t>().send_request(std::move(op))) {
     auto pool = get_client_pool(host_name, pool_config);
-    auto ret = co_await pool.send_request(std::move(op));
+    auto ret = co_await pool->send_request(std::move(op));
     co_return ret;
   }
   auto at(std::string_view host_name) {

@@ -75,7 +75,7 @@ class channel {
   channel(const channel& o) = delete;
   channel& operator=(const channel& o) = delete;
 
-  auto send_request(auto op, const typename client_t::config& config)
+  auto send_request(auto op, typename client_t::config& config)
       -> decltype(std::declval<client_pool_t>().send_request(std::move(op),
                                                              std::string_view{},
                                                              config)) {

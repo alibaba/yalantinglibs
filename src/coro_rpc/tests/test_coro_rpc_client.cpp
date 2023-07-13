@@ -84,10 +84,9 @@ TEST_CASE("testing client") {
   server.init_ssl_context(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
-  server.async_start().start([](auto&&) {
-  });
+  auto res = server.async_start();
 
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  CHECK_MESSAGE(res, "server start failed");
 
   SUBCASE("call rpc, function not registered") {
     g_action = {};
@@ -171,9 +170,8 @@ TEST_CASE("testing client with inject server") {
   server.init_ssl_context(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
-  server.async_start().start([](auto&&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  CHECK_MESSAGE(res, "server start failed");
 
   server.register_handler<hello>();
 
@@ -238,9 +236,8 @@ class SSLClientTester {
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
     server.init_ssl_context(config);
     server.template register_handler<hi>();
-    server.async_start().start([](auto&&) {
-    });
-    CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+    auto res = server.async_start();
+    CHECK_MESSAGE(res, "server start timeout");
 
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -365,9 +362,9 @@ TEST_CASE("testing client with ssl server") {
 TEST_CASE("testing client with eof") {
   g_action = {};
   coro_rpc_server server(2, 8801);
-  server.async_start().start([](auto&&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(res, "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
@@ -387,9 +384,8 @@ TEST_CASE("testing client with eof") {
 TEST_CASE("testing client with shutdown") {
   g_action = {};
   coro_rpc_server server(2, 8801);
-  server.async_start().start([](auto&&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  CHECK_MESSAGE(res, "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
@@ -454,9 +450,8 @@ TEST_CASE("testing client sync connect, unit test inject only") {
   SUBCASE("client use ssl but server don't use ssl") {
     g_action = {};
     coro_rpc_server server(2, 8801);
-    server.async_start().start([](auto&&) {
-    });
-    CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+    auto res = server.async_start();
+    CHECK_MESSAGE(res, "server start timeout");
     coro_rpc_client client2(*coro_io::get_global_executor(), g_client_id++);
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
@@ -489,9 +484,8 @@ TEST_CASE("testing client call timeout") {
 
     server.register_handler<hello_timeout>();
     server.register_handler<hi>();
-    server.async_start().start([](auto&&) {
-    });
-    CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+    auto res = server.async_start();
+    CHECK_MESSAGE(res, "server start timeout");
     coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ec_lazy = client.connect("127.0.0.1", "8801");
     auto ec = syncAwait(ec_lazy);

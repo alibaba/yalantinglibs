@@ -44,7 +44,6 @@ using namespace std::chrono_literals;
 struct TesterConfig {
   TesterConfig() = default;
   TesterConfig(TesterConfig &c) {
-    async_start = c.sync_client;
     enable_heartbeat = c.enable_heartbeat;
     use_ssl = c.use_ssl;
     sync_client = c.sync_client;
@@ -52,7 +51,6 @@ struct TesterConfig {
     port = c.port;
     conn_timeout_duration = c.conn_timeout_duration;
   }
-  bool async_start;
   bool enable_heartbeat;
   bool use_ssl;
   bool sync_client;
@@ -64,8 +62,7 @@ struct TesterConfig {
   friend std::ostream &operator<<(std::ostream &os,
                                   const TesterConfig &config) {
     os << std::boolalpha;
-    os << "async_start: " << config.async_start << ";"
-       << " enable_heartbeat: " << config.enable_heartbeat << ";"
+    os << " enable_heartbeat: " << config.enable_heartbeat << ";"
        << " use_ssl: " << config.use_ssl << ";"
        << " sync_client: " << config.sync_client << ";"
        << " use_outer_io_context: " << config.use_outer_io_context << ";"

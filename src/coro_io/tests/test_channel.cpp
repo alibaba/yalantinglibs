@@ -22,10 +22,8 @@
 TEST_CASE("test RR") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(std::chrono::seconds{1});
-    CHECK(is_started);
+    auto res = server.async_start();
+    REQUIRE_MESSAGE(res, "server start failed");
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
@@ -46,10 +44,8 @@ TEST_CASE("test RR") {
 TEST_CASE("test Random") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(std::chrono::seconds{1});
-    CHECK(is_started);
+    auto res = server.async_start();
+    REQUIRE_MESSAGE(res, "server start failed");
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(
@@ -77,10 +73,8 @@ TEST_CASE("test Random") {
 TEST_CASE("test single host") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(std::chrono::seconds{1});
-    CHECK(is_started);
+    auto res = server.async_start();
+    REQUIRE_MESSAGE(res, "server start failed");
     auto hosts = std::vector<std::string_view>{"127.0.0.1:8801"};
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
@@ -100,20 +94,19 @@ TEST_CASE("test single host") {
 TEST_CASE("test send_request config") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8802);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(std::chrono::seconds{1});
-    CHECK(is_started);
+    auto res = server.async_start();
+    REQUIRE_MESSAGE(res, "server start failed");
     auto hosts = std::vector<std::string_view>{"127.0.0.1:8802"};
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
+      auto config = coro_rpc::coro_rpc_client::config{.client_id = 114514};
       auto res = co_await channel.send_request(
           [&i, &hosts](coro_rpc::coro_rpc_client &client, std::string_view host)
               -> async_simple::coro::Lazy<void> {
             CHECK(client.get_client_id() == 114514);
             co_return;
           },
-          coro_rpc::coro_rpc_client::config{.client_id = 114514});
+          config);
       CHECK(res.has_value());
     }
     server.stop();

@@ -32,33 +32,72 @@
 #include "ylt/coro_rpc/impl/expected.hpp"
 using namespace std::chrono_literals;
 using namespace async_simple::coro;
+auto event =
+    [](
+        int lim, coro_io::client_pool<coro_rpc::coro_rpc_client> &pool,
+        ConditionVariable<SpinLock> &cv, SpinLock &lock,
+        std::function<void(coro_rpc::coro_rpc_client &client)> user_op =
+            [](auto &client) {
+            }) -> async_simple::coro::Lazy<bool> {
+  std::vector<RescheduleLazy<bool>> works;
+  int64_t cnt = 0;
+  for (int i = 0; i < lim; ++i) {
+    auto op = [&cnt, &lock, &cv, &lim,
+               &user_op](coro_rpc::coro_rpc_client &client)
+        -> async_simple::coro::Lazy<void> {
+      user_op(client);
+      auto l = co_await lock.coScopedLock();
+      if (++cnt < lim) {
+        std::cout << cnt << std::endl;
+        co_await cv.wait(lock, [&cnt, &lim] {
+          return cnt >= lim;
+        });
+      }
+      else {
+        l.unlock();
+        cv.notifyAll();
+      }
+      co_return;
+    };
+    auto backer = [&cv, &lock, &cnt, &lim](
+                      auto &pool, auto op) -> async_simple::coro::Lazy<bool> {
+      async_simple::Promise<bool> p;
+      auto res = co_await pool.send_request(op);
+      if (!res.has_value()) {
+        {
+          co_await lock.coScopedLock();
+          cnt = lim;
+        }
+        cv.notifyAll();
+        co_return false;
+      }
+      co_return true;
+    };
+    works.emplace_back(backer(pool, op).via(coro_io::get_global_executor()));
+  }
+  std::cout << works.size() << std::endl;
+  auto res = co_await collectAll(std::move(works));
+  for (auto &e : res) {
+    if (!e.value()) {
+      co_return false;
+    }
+  }
+  co_return true;
+};
 TEST_CASE("test client pool") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(1s);
+    auto is_started = server.async_start();
     REQUIRE(is_started);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100, .idle_timeout = 300ms});
-    std::vector<Lazy<coro_rpc::expected<void, std::errc>>> res;
-    auto event = [&res, &pool]() {
-      auto op = [](coro_rpc::coro_rpc_client &client)
-          -> async_simple::coro::Lazy<void> {
-        co_await coro_io::sleep_for(100ms);
-      };
-      res.emplace_back(pool->send_request(op));
-    };
-    for (int i = 0; i < 50; ++i) {
-      event();
-    }
-    co_await collectAll(std::move(res));
-    CHECK(pool->free_client_count() == 50);
-    res.clear();
-    for (int i = 0; i < 110; ++i) {
-      event();
-    }
-    co_await collectAll(std::move(res));
+    SpinLock lock;
+    ConditionVariable<SpinLock> cv;
+    auto res = co_await event(20, *pool, cv, lock);
+    CHECK(res);
+    CHECK(pool->free_client_count() == 20);
+    res = co_await event(100, *pool, cv, lock);
+    CHECK(res);
     CHECK(pool->free_client_count() == 100);
     co_await coro_io::sleep_for(700ms);
     CHECK(pool->free_client_count() == 0);
@@ -68,28 +107,17 @@ TEST_CASE("test client pool") {
 TEST_CASE("test idle timeout yield") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(1s);
+    auto is_started = server.async_start();
     REQUIRE(is_started);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100,
                            .idle_queue_max_clear_count = 1,
                            .idle_timeout = 300ms});
-    std::vector<Lazy<coro_rpc::expected<void, std::errc>>> res;
-    auto event = [&res, &pool]() {
-      auto op = [](coro_rpc::coro_rpc_client &client)
-          -> async_simple::coro::Lazy<void> {
-        co_await coro_io::sleep_for(100ms);
-      };
-      res.emplace_back(pool->send_request(op));
-    };
-    for (int i = 0; i < 100; ++i) {
-      event();
-    }
-    co_await collectAll(std::move(res));
+    SpinLock lock;
+    ConditionVariable<SpinLock> cv;
+    auto res = co_await event(100, *pool, cv, lock);
+    CHECK(res);
     CHECK(pool->free_client_count() == 100);
-    res.clear();
     co_await coro_io::sleep_for(700ms);
     CHECK(pool->free_client_count() == 0);
     server.stop();
@@ -101,54 +129,40 @@ TEST_CASE("test reconnect") {
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801",
         {.connect_retry_count = 3, .reconnect_wait_time = 500ms});
-    std::vector<Lazy<coro_rpc::expected<void, std::errc>>> res;
-    auto event = [&res, &pool]() {
-      auto op = [](coro_rpc::coro_rpc_client &client)
-          -> async_simple::coro::Lazy<void> {
-        co_await coro_io::sleep_for(100ms);
-      };
-      res.emplace_back(pool->send_request(op));
-    };
-    for (int i = 0; i < 100; ++i) {
-      event();
-    }
-    coro_rpc::coro_rpc_server server(1, 8801);
-    res.push_back([&server]() -> Lazy<coro_rpc::expected<void, std::errc>> {
-      co_await coro_io::sleep_for(700ms);
-      server.async_start().start([](auto &&) {
-      });
-      co_return coro_rpc::expected<void, std::errc>{};
-    }());
-    co_await collectAll(std::move(res));
+    SpinLock lock;
+    ConditionVariable<SpinLock> cv;
+    coro_rpc::coro_rpc_server server(2, 8801);
+    async_simple::Promise<async_simple::Unit> p;
+    coro_io::sleep_for(700ms).start([&server, &p](auto &&) {
+      auto server_is_started = server.async_start();
+      REQUIRE(server_is_started);
+    });
+
+    auto res = co_await event(100, *pool, cv, lock);
+    CHECK(res);
     CHECK(pool->free_client_count() == 100);
     server.stop();
+    co_return;
   }());
 }
 
 TEST_CASE("test collect_free_client") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
-    server.async_start().start([](auto &&) {
-    });
-    auto is_started = server.wait_for_start(1s);
+    auto is_started = server.async_start();
     REQUIRE(is_started);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100, .idle_timeout = 300ms});
-    std::vector<Lazy<coro_rpc::expected<void, std::errc>>> res;
-    auto event = [&res, &pool]() {
-      auto op = [](coro_rpc::coro_rpc_client &client)
-          -> async_simple::coro::Lazy<void> {
-        co_await coro_io::sleep_for(100ms);
-        client.close();
-      };
-      res.emplace_back(pool->send_request(op));
-    };
-    for (int i = 0; i < 50; ++i) {
-      event();
-    }
-    co_await collectAll(std::move(res));
+
+    SpinLock lock;
+    ConditionVariable<SpinLock> cv;
+    auto res = co_await event(50, *pool, cv, lock, [](auto &client) {
+      client.close();
+    });
+    CHECK(res);
     CHECK(pool->free_client_count() == 0);
     server.stop();
+    co_return;
   }());
 }
 

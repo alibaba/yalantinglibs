@@ -39,41 +39,10 @@ struct CoroServerTester : ServerTester {
           ssl_configure{"../openssl_files", "server.crt", "server.key"});
     }
 #endif
-    if (async_start) {
-      // https://timsong-cpp.github.io/cppwp/n4861/temp.names#5.example-1
-      // https://developercommunity.visualstudio.com/t/c2059-syntax-error-template-for-valid-template-mem/1632142
-      /*
-        template <class T> struct A {
-          void f(int);
-          template <class U> void f(U);
-        };
-
-        template <class T> void f(T t) {
-          A<T> a;
-          a.template f<>(t);                    // OK: calls template
-          a.template f(t);                      // error: not a template-id
-        }
-      */
-      server.async_start().template start<>([](auto &&) {
-      });
-    }
-    else {
-      thd = std::thread([&] {
-        auto ec = server.start();
-        REQUIRE(ec == std::errc{});
-      });
-    }
-
-    CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+    auto res = server.async_start();
+    CHECK_MESSAGE(res, "server start timeout");
   }
-  ~CoroServerTester() {
-    if (async_start) {
-    }
-    else {
-      server.stop();
-      thd.join();
-    }
-  }
+  ~CoroServerTester() { server.stop(); }
 
   async_simple::coro::Lazy<int> get_value(int val) { co_return val; }
 
@@ -147,13 +116,8 @@ struct CoroServerTester : ServerTester {
 
   void test_server_start_again() {
     ELOGV(INFO, "run %s", __func__);
-    std::errc ec;
-    if (async_start) {
-      ec = syncAwait(server.async_start());
-    }
-    else {
-      ec = server.start();
-    }
+
+    auto ec = server.start();
     REQUIRE_MESSAGE(ec == std::errc::io_error, make_error_code(ec).message());
   }
 
@@ -161,15 +125,10 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s", __func__);
     {
       auto new_server = coro_rpc_server(2, std::stoi(this->port_));
-      std::errc ec;
-      if (async_start) {
-        ec = syncAwait(new_server.async_start());
-      }
-      else {
-        ec = new_server.start();
-      }
-      REQUIRE_MESSAGE(ec == std::errc::address_in_use,
-                      make_error_code(ec).message());
+      auto ec = new_server.async_start();
+      REQUIRE(!ec);
+      REQUIRE_MESSAGE(ec.error() == std::errc::address_in_use,
+                      make_error_code(ec.error()).message());
     }
     ELOGV(INFO, "OH NO");
   }
@@ -238,35 +197,31 @@ TEST_CASE("testing coro rpc server") {
   unsigned short server_port = 8810;
   auto conn_timeout_duration = 500ms;
   std::vector<bool> switch_list{true, false};
-  for (auto async_start : switch_list) {
-    for (auto enable_heartbeat : switch_list) {
-      for (auto use_ssl : switch_list) {
-        TesterConfig config;
-        config.async_start = async_start;
-        config.enable_heartbeat = enable_heartbeat;
-        config.use_ssl = use_ssl;
-        config.sync_client = false;
-        config.use_outer_io_context = false;
-        config.port = server_port;
-        if (enable_heartbeat) {
-          config.conn_timeout_duration = conn_timeout_duration;
-        }
-        std::stringstream ss;
-        ss << config;
-        ELOGV(INFO, "config: %s", ss.str().data());
-        CoroServerTester(config).run();
+  for (auto enable_heartbeat : switch_list) {
+    for (auto use_ssl : switch_list) {
+      TesterConfig config;
+      config.enable_heartbeat = enable_heartbeat;
+      config.use_ssl = use_ssl;
+      config.sync_client = false;
+      config.use_outer_io_context = false;
+      config.port = server_port;
+      if (enable_heartbeat) {
+        config.conn_timeout_duration = conn_timeout_duration;
       }
-      // }
+      std::stringstream ss;
+      ss << config;
+      ELOGV(INFO, "config: %s", ss.str().data());
+      CoroServerTester(config).run();
     }
+    // }
   }
 }
 
 TEST_CASE("testing coro rpc server stop") {
   ELOGV(INFO, "run testing coro rpc server stop");
   coro_rpc_server server(2, 8810);
-  server.async_start().start([](auto &&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(res, "server start failed");
   SUBCASE("stop twice") {
     server.stop();
     server.stop();
@@ -288,9 +243,8 @@ TEST_CASE("test server accept error") {
   g_action = inject_action::force_inject_server_accept_error;
   coro_rpc_server server(2, 8810);
   server.register_handler<hi>();
-  server.async_start().start([](auto &&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  CHECK_MESSAGE(res, "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   ELOGV(INFO, "run test server accept error, client_id %d",
         client.get_client_id());
@@ -318,9 +272,8 @@ TEST_CASE("test server write queue") {
   g_action = {};
   coro_rpc_server server(2, 8810);
   server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
-  server.async_start().start([](auto &&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  CHECK_MESSAGE(res, "server start timeout");
   std::string buffer;
   buffer.reserve(coro_rpc_protocol::REQ_HEAD_LEN +
                  struct_pack::get_needed_size(std::monostate{}));
@@ -383,9 +336,8 @@ TEST_CASE("testing coro rpc write error") {
   g_action = inject_action::force_inject_connection_close_socket;
   coro_rpc_server server(2, 8810);
   server.register_handler<hi>();
-  server.async_start().start([](auto &&) {
-  });
-  CHECK_MESSAGE(server.wait_for_start(3s), "server start timeout");
+  auto res = server.async_start();
+  CHECK_MESSAGE(res, "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   ELOGV(INFO, "run testing coro rpc write error, client_id %d",
         client.get_client_id());
