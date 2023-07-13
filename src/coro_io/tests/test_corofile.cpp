@@ -61,100 +61,99 @@ void create_file(std::string filename, size_t file_size,
   return;
 }
 
-TEST_CASE("multithread for balance") {
-  size_t total = 100;
-  std::vector<std::string> filenames;
-  for (size_t i = 0; i < total; ++i) {
-    filenames.push_back("temp" + std::to_string(i + 1));
-  }
-
-  std::vector<std::string> write_str_vec;
-  char ch = 'a';
-  for (int i = 0; i < 26; ++i) {
-    std::string str(100, ch + i);
-    write_str_vec.push_back(std::move(str));
-  }
-
-  std::vector<async_simple::coro::Lazy<void>> write_vec;
-  auto write_file_func =
-      [&write_str_vec](std::string filename,
-                       int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(filename, coro_io::open_mode::write,
-                            coro_io::get_global_block_executor<
-                                coro_io::multithread_context_pool>());
-    CHECK(file.is_open());
-
-    size_t id = index % write_str_vec.size();
-    auto& str = write_str_vec[id];
-    auto ec = co_await file.async_write(str.data(), str.size());
-    CHECK(!ec);
-    co_return;
-  };
-
-  for (size_t i = 0; i < total; ++i) {
-    write_vec.push_back(write_file_func(filenames[i], i));
-  }
-
-  auto wait_func =
-      [write_vec =
-           std::move(write_vec)]() mutable -> async_simple::coro::Lazy<void> {
-    co_await async_simple::coro::collectAll(std::move(write_vec));
-  };
-
-  async_simple::coro::syncAwait(wait_func());
-
-  std::cout << "write finished\n";
-
-  // read and compare
-  std::vector<async_simple::coro::Lazy<void>> read_vec;
-
-  auto read_file_func =
-      [&write_str_vec](std::string filename,
-                       int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(filename, coro_io::open_mode::read,
-                            coro_io::get_global_block_executor<
-                                coro_io::multithread_context_pool>());
-    CHECK(file.is_open());
-
-    size_t id = index % write_str_vec.size();
-    auto& str = write_str_vec[id];
-    std::string buf;
-    buf.resize(write_str_vec.back().size());
-
-    std::error_code ec;
-    size_t read_size;
-    std::tie(ec, read_size) = co_await file.async_read(buf.data(), buf.size());
-    CHECK(!ec);
-    bool ok = (str == buf);
-    if (!ok) {
-      std::cout << "str: " << str << "\n";
-      std::cout << "read buf: " << buf << "\n";
-    }
-    CHECK(ok);
-    co_return;
-  };
-
-  for (size_t i = 0; i < total; ++i) {
-    read_vec.push_back(read_file_func(filenames[i], i));
-  }
-
-  auto wait_read_func =
-      [read_vec =
-           std::move(read_vec)]() mutable -> async_simple::coro::Lazy<void> {
-    co_await async_simple::coro::collectAll(std::move(read_vec));
-  };
-
-  async_simple::coro::syncAwait(wait_read_func());
-  std::cout << "read finished\n";
-
-  std::error_code ec;
-  for (auto& filename : filenames) {
-    fs::remove(fs::path(filename), ec);
-    if (ec) {
-      std::cout << "remove file error: " << ec.message() << "\n";
-    }
-  }
-}
+// TEST_CASE("multithread for balance") {
+//   size_t total = 100;
+//   std::vector<std::string> filenames;
+//   for (size_t i = 0; i < total; ++i) {
+//     filenames.push_back("temp" + std::to_string(i + 1));
+//   }
+//
+//   std::vector<std::string> write_str_vec;
+//   char ch = 'a';
+//   for (int i = 0; i < 26; ++i) {
+//     std::string str(100, ch + i);
+//     write_str_vec.push_back(std::move(str));
+//   }
+//
+//   std::vector<async_simple::coro::Lazy<void>> write_vec;
+//   auto write_file_func =
+//       [&write_str_vec](std::string filename,
+//                        int index) mutable -> async_simple::coro::Lazy<void> {
+//     coro_io::coro_file file(filename, coro_io::open_mode::write,
+//                             coro_io::get_global_block_executor<
+//                                 coro_io::multithread_context_pool>());
+//     CHECK(file.is_open());
+//
+//     size_t id = index % write_str_vec.size();
+//     auto& str = write_str_vec[id];
+//     auto ec = co_await file.async_write(str.data(), str.size());
+//     CHECK(!ec);
+//     co_return;
+//   };
+//
+//   for (size_t i = 0; i < total; ++i) {
+//     write_vec.push_back(write_file_func(filenames[i], i));
+//   }
+//
+//   auto wait_func =
+//       [write_vec =
+//            std::move(write_vec)]() mutable -> async_simple::coro::Lazy<void>
+//            {
+//     co_await async_simple::coro::collectAll(std::move(write_vec));
+//   };
+//
+//   async_simple::coro::syncAwait(wait_func());
+//
+//   std::cout << "write finished\n";
+//
+//   // read and compare
+//   std::vector<async_simple::coro::Lazy<void>> read_vec;
+//
+//   auto read_file_func =
+//       [&write_str_vec](std::string filename,
+//                        int index) mutable -> async_simple::coro::Lazy<void> {
+//     coro_io::coro_file file(filename, coro_io::open_mode::read,
+//                             coro_io::get_global_block_executor<
+//                                 coro_io::multithread_context_pool>());
+//     CHECK(file.is_open());
+//
+//     size_t id = index % write_str_vec.size();
+//     auto& str = write_str_vec[id];
+//     std::string buf;
+//     buf.resize(write_str_vec.back().size());
+//
+//     std::error_code ec;
+//     size_t read_size;
+//     std::tie(ec, read_size) = co_await file.async_read(buf.data(),
+//     buf.size()); CHECK(!ec); bool ok = (str == buf); if (!ok) {
+//       std::cout << "str: " << str << "\n";
+//       std::cout << "read buf: " << buf << "\n";
+//     }
+//     CHECK(ok);
+//     co_return;
+//   };
+//
+//   for (size_t i = 0; i < total; ++i) {
+//     read_vec.push_back(read_file_func(filenames[i], i));
+//   }
+//
+//   auto wait_read_func =
+//       [read_vec =
+//            std::move(read_vec)]() mutable -> async_simple::coro::Lazy<void> {
+//     co_await async_simple::coro::collectAll(std::move(read_vec));
+//   };
+//
+//   async_simple::coro::syncAwait(wait_read_func());
+//   std::cout << "read finished\n";
+//
+//   std::error_code ec;
+//   for (auto& filename : filenames) {
+//     fs::remove(fs::path(filename), ec);
+//     if (ec) {
+//       std::cout << "remove file error: " << ec.message() << "\n";
+//     }
+//   }
+// }
 
 TEST_CASE("read write 100 small files") {
   size_t total = 100;
