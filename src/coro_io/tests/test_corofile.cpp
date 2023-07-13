@@ -61,6 +61,7 @@ void create_file(std::string filename, size_t file_size,
   return;
 }
 
+// TODO: will revert later.
 // TEST_CASE("multithread for balance") {
 //   size_t total = 100;
 //   std::vector<std::string> filenames;
