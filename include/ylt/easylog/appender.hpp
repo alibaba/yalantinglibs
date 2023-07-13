@@ -74,10 +74,11 @@ inline char *get_time_str(const auto &now) {
 class appender {
  public:
   appender() = default;
-  appender(const std::string &filename, bool async, size_t max_file_size,
-           size_t max_files, bool flush_every_time)
+  appender(const std::string &filename, bool async, bool enable_console,
+           size_t max_file_size, size_t max_files, bool flush_every_time)
       : has_init_(true),
         flush_every_time_(flush_every_time),
+        enable_console_(enable_console),
         max_file_size_(max_file_size) {
     filename_ = filename;
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
@@ -92,7 +93,8 @@ class appender {
 
           record_t record;
           if (queue_.try_dequeue(record)) {
-            write_record(record);
+            enable_console_ ? write_record<false, true>(record)
+                            : write_record<false, false>(record);
           }
 
           if (queue_.size_approx() == 0) {
@@ -151,21 +153,33 @@ class appender {
     buf[32] = ' ';
 
     if constexpr (enable_console) {
-      add_color(record.get_severity());
+      if constexpr (sync) {
+        std::lock_guard guard(console_mtx_);
+        add_color(record.get_severity());
+      }
+      else {
+        add_color(record.get_severity());
+      }
     }
 
-    write_str<enable_console>(std::string_view(buf, 33));
+    write_str<sync, enable_console>(std::string_view(buf, 33));
 
     if constexpr (enable_console) {
       clean_color(record.get_severity());
     }
 
-    write_str<enable_console>(get_tid_buf(record.get_tid()));
-    write_str<enable_console>(record.get_file_str());
-    write_str<enable_console>(record.get_message());
+    write_str<sync, enable_console>(get_tid_buf(record.get_tid()));
+    write_str<sync, enable_console>(record.get_file_str());
+    write_str<sync, enable_console>(record.get_message());
 
     if constexpr (enable_console) {
-      std::cout << std::flush;
+      if constexpr (sync) {
+        std::lock_guard guard(console_mtx_);
+        std::cout << std::flush;
+      }
+      else {
+        std::cout << std::flush;
+      }
     }
   }
 
@@ -281,7 +295,7 @@ class appender {
     is_first_write_ = false;
   }
 
-  template <bool enable_console>
+  template <bool sync, bool enable_console>
   void write_str(std::string_view str) {
     if (has_init_) {
       if (file_.write(str.data(), str.size())) {
@@ -294,18 +308,27 @@ class appender {
     }
 
     if constexpr (enable_console) {
-      std::cout << str;
+      if constexpr (sync) {
+        std::lock_guard guard(console_mtx_);
+        std::cout << str;
+      }
+      else {
+        std::cout << str;
+      }
     }
   }
 
   bool has_init_ = false;
   std::string filename_;
 
+  bool enable_console_ = false;
   bool flush_every_time_;
   size_t file_size_ = 0;
   size_t max_file_size_ = 0;
   size_t max_files_ = 0;
   bool is_first_write_ = true;
+
+  std::mutex console_mtx_;
 
   std::shared_mutex mtx_;
   std::ofstream file_;
