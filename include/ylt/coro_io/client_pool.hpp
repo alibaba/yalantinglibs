@@ -60,6 +60,9 @@ class client_pool : public std::enable_shared_from_this<
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
       std::weak_ptr<client_pool> self_weak) {
     std::shared_ptr<client_pool> self = self_weak.lock();
+    if (self == nullptr) {
+      co_return;
+    }
     while (true) {
       auto sleep_time = self->pool_config_.idle_timeout;
       auto clear_cnt = self->pool_config_.idle_queue_max_clear_count;
