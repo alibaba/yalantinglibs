@@ -1,6 +1,5 @@
 #pragma once
 #include <charconv>
-#include <unordered_set>
 
 #include "detail/charconv.h"
 #include "detail/utf.hpp"
@@ -258,13 +257,12 @@ IGUANA_INLINE auto skip_till_key(T &value, It &&it, It &&end) {
 }
 
 template <typename T>
-IGUANA_INLINE void check_required(
-    const std::unordered_set<std::string_view> &set) {
+IGUANA_INLINE void check_required(std::string_view key_set) {
   if constexpr (iguana::has_iguana_required_arr_v<T>) {
-    constexpr auto required_set =
+    constexpr auto required_arr =
         iguana::iguana_required_struct<T>::requied_arr();
-    for (auto &item : required_set) {
-      if (set.find(item) == set.end()) {
+    for (auto &item : required_arr) {
+      if (key_set.find(item) == std::string_view::npos) {
         std::string err = "required filed ";
         err.append(item).append(" not found!");
         throw std::invalid_argument(err);
@@ -289,7 +287,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
   std::string_view key =
       std::string_view{&*start, static_cast<size_t>(std::distance(start, it))};
 
-  [[maybe_unused]] std::unordered_set<std::string_view> set;
+  [[maybe_unused]] std::string key_set;
   bool parse_done = false;
   // sequential parse
   for_each(value, [&](const auto member_ptr, auto i) IGUANA__INLINE_LAMBDA {
@@ -305,7 +303,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
     if constexpr (!cdata_t<item_type>) {
       parse_item(value.*member_ptr, it, end, key);
       if constexpr (iguana::has_iguana_required_arr_v<U>) {
-        set.emplace(key);
+        key_set.append(key).append(", ");
       }
     }
     if (skip_till_key<cdata_idx>(value, it, end)) {
@@ -319,7 +317,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
                            static_cast<size_t>(std::distance(start, it))};
   });
   if (parse_done) [[unlikely]] {
-    check_required<U>(set);
+    check_required<U>(key_set);
     return;
   }
   // map parse
@@ -336,7 +334,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
             if constexpr (!cdata_t<V>) {
               parse_item(value.*member_ptr, it, end, key);
               if constexpr (iguana::has_iguana_required_arr_v<U>) {
-                set.emplace(key);
+                key_set.append(key).append(", ");
               }
             }
           },
@@ -351,7 +349,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
     }
     if (skip_till_key<cdata_idx>(value, it, end)) {
       match_close_tag(it, end, name);
-      check_required<U>(set);
+      check_required<U>(key_set);
       return;
     }
     start = it;
