@@ -32,10 +32,12 @@
 #include <vector>
 #include <ylt/easylog.hpp>
 
+#include "async_simple/Promise.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
 /*!
  * ```cpp
@@ -102,6 +104,18 @@ class coro_rpc_server_base {
    * @return error code if start failed, otherwise block until server stop.
    */
   [[nodiscard]] std::errc start() noexcept {
+    auto ret = async_start();
+    if (ret) {
+      ret.value().wait();
+      return ret.value().value();
+    }
+    else {
+      return ret.error();
+    }
+  }
+
+  [[nodiscard]] coro_rpc::expected<async_simple::Future<std::errc>, std::errc>
+  async_start() noexcept {
     std::errc ec{};
     {
       std::unique_lock lock(start_mtx_);
@@ -112,51 +126,9 @@ class coro_rpc_server_base {
         else if (flag_ == stat::stop) {
           ELOGV(INFO, "has stoped");
         }
-        return std::errc::io_error;
+        return coro_rpc::unexpected<std::errc>{
+            std::errc::resource_unavailable_try_again};
       }
-
-      ec = listen();
-      if (ec == std::errc{}) {
-        thd_ = std::thread([this] {
-          pool_.run();
-        });
-
-        flag_ = stat::started;
-      }
-      else {
-        flag_ = stat::stop;
-      }
-    }
-
-    cond_.notify_all();
-
-    if (ec == std::errc{}) {
-      async_simple::coro::syncAwait(accept());
-    }
-    return ec;
-  }
-
-  [[nodiscard]] bool wait_for_start(auto duration) {
-    std::unique_lock lock(start_mtx_);
-    return cond_.wait_for(lock, duration, [this] {
-      return flag_ == stat::started || flag_ == stat::stop;
-    });
-  }
-
-  [[nodiscard]] async_simple::coro::Lazy<std::errc> async_start() noexcept {
-    std::errc ec{};
-    {
-      std::unique_lock lock(start_mtx_);
-      if (flag_ != stat::init) {
-        if (flag_ == stat::started) {
-          ELOGV(INFO, "start again");
-        }
-        else if (flag_ == stat::stop) {
-          ELOGV(INFO, "has stoped");
-        }
-        co_return std::errc::io_error;
-      }
-
       ec = listen();
       if (ec == std::errc{}) {
         if constexpr (requires(typename server_config::executor_pool_t & pool) {
@@ -172,12 +144,22 @@ class coro_rpc_server_base {
         flag_ = stat::stop;
       }
     }
-
-    cond_.notify_all();
     if (ec == std::errc{}) {
-      co_await accept();
+      async_simple::Promise<std::errc> promise;
+      auto future = promise.getFuture();
+      accept().start([p = std::move(promise)](auto &&res) mutable {
+        if (res.hasError()) {
+          p.setValue(std::errc::io_error);
+        }
+        else {
+          p.setValue(res.value());
+        }
+      });
+      return std::move(future);
     }
-    co_return ec;
+    else {
+      return coro_rpc::unexpected<std::errc>{ec};
+    }
   }
 
   /*!
@@ -193,8 +175,8 @@ class coro_rpc_server_base {
 
     ELOGV(INFO, "begin to stop coro_rpc_server, conn size %d", conns_.size());
 
-    close_acceptor();
     if (flag_ == stat::started) {
+      close_acceptor();
       {
         std::unique_lock lock(conns_mtx_);
         for (auto &conn : conns_) {
@@ -350,9 +332,11 @@ class coro_rpc_server_base {
       }
 #endif
       if (error) {
-        ELOGV(ERROR, "accept failed, error: %s", error.message().data());
-        if (error == asio::error::operation_aborted) {
-          co_return std::errc::io_error;
+        ELOGV(INFO, "accept failed, error: %s", error.message().data());
+        if (error == asio::error::operation_aborted ||
+            error == asio::error::bad_descriptor) {
+          acceptor_close_waiter_.set_value();
+          co_return std::errc::operation_canceled;
         }
         continue;
       }
@@ -392,17 +376,17 @@ class coro_rpc_server_base {
       acceptor_.cancel(ec);
       acceptor_.close(ec);
     });
+    acceptor_close_waiter_.get_future().wait();
   }
 
   typename server_config::executor_pool_t pool_;
   asio::ip::tcp::acceptor acceptor_;
+  std::promise<void> acceptor_close_waiter_;
 
   std::thread thd_;
   stat flag_;
 
   std::mutex start_mtx_;
-  std::condition_variable cond_;
-
   uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;

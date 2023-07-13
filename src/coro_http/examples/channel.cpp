@@ -68,7 +68,7 @@ int main() {
                                       "http://www.baidu.com"};
   auto chan = coro_io::channel<coro_http_client>::create(
       hosts, coro_io::channel<coro_http_client>::channel_config{
-                 .pool_config{.max_connection_ = 1000}});
+                 .pool_config{.max_connection = 1000}});
 
   for (int i = 0, lim = std::thread::hardware_concurrency() * 10; i < lim; ++i)
     test_async_channel(chan).start([](auto &&) {

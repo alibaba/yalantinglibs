@@ -72,8 +72,9 @@ class ExecutorWrapper : public async_simple::Executor {
 
  private:
   void schedule(Func func, Duration dur) override {
-    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
-    timer->async_wait([fn = std::move(func), timer](auto ec) {
+    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
+    auto tm = timer.get();
+    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
       fn();
     });
   }
@@ -81,7 +82,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
 template <typename ExecutorImpl = asio::io_context>
 inline async_simple::coro::Lazy<typename ExecutorImpl::executor_type>
-get_executor() {
+get_current_executor() {
   auto executor = co_await async_simple::CurrentExecutor{};
   assert(executor != nullptr);
   co_return static_cast<ExecutorImpl *>(executor->checkout())->get_executor();
@@ -136,6 +137,10 @@ class io_context_pool {
       work_.clear();
 
       if (ok) {
+        // clear all unfinished work
+        for (auto &e : io_contexts_) {
+          e->run();
+        }
         return;
       }
 
