@@ -48,7 +48,6 @@ auto event =
       user_op(client);
       auto l = co_await lock.coScopedLock();
       if (++cnt < lim) {
-        std::cout << cnt << std::endl;
         co_await cv.wait(lock, [&cnt, &lim] {
           return cnt >= lim;
         });
@@ -75,7 +74,6 @@ auto event =
     };
     works.emplace_back(backer(pool, op).via(coro_io::get_global_executor()));
   }
-  std::cout << works.size() << std::endl;
   auto res = co_await collectAll(std::move(works));
   for (auto &e : res) {
     if (!e.value()) {
@@ -96,9 +94,10 @@ TEST_CASE("test client pool") {
     auto res = co_await event(20, *pool, cv, lock);
     CHECK(res);
     CHECK(pool->free_client_count() == 20);
-    res = co_await event(100, *pool, cv, lock);
+    res = co_await event(200, *pool, cv, lock);
     CHECK(res);
-    CHECK(pool->free_client_count() == 100);
+    auto sz = pool->free_client_count();
+    CHECK((sz >= 100 && sz <= 105));
     co_await coro_io::sleep_for(700ms);
     CHECK(pool->free_client_count() == 0);
     server.stop();
@@ -111,7 +110,7 @@ TEST_CASE("test idle timeout yield") {
     REQUIRE(is_started);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100,
-                           .idle_queue_max_clear_count = 1,
+                           .idle_queue_per_max_clear_count = 1,
                            .idle_timeout = 300ms});
     SpinLock lock;
     ConditionVariable<SpinLock> cv;

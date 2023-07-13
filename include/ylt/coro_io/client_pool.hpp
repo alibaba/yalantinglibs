@@ -65,7 +65,7 @@ class client_pool : public std::enable_shared_from_this<
     }
     while (true) {
       auto sleep_time = self->pool_config_.idle_timeout;
-      auto clear_cnt = self->pool_config_.idle_queue_max_clear_count;
+      auto clear_cnt = self->pool_config_.idle_queue_per_max_clear_count;
       self->free_clients_.reselect();
       self = nullptr;
       co_await coro_io::sleep_for(sleep_time);
@@ -179,9 +179,9 @@ class client_pool : public std::enable_shared_from_this<
   struct pool_config {
     uint32_t max_connection = 100;
     uint32_t connect_retry_count = 3;
-    uint32_t idle_queue_max_clear_count = 1000;
+    uint32_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds reconnect_wait_time{1000};
-    std::chrono::milliseconds idle_timeout{10000};
+    std::chrono::milliseconds idle_timeout{30000};
     typename client_t::config client_config;
   };
 

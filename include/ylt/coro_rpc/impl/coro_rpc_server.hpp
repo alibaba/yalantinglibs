@@ -371,7 +371,7 @@ class coro_rpc_server_base {
   }
 
   void close_acceptor() {
-    asio::post(acceptor_.get_executor(), [this]() {
+    asio::dispatch(acceptor_.get_executor(), [this]() {
       asio::error_code ec;
       acceptor_.cancel(ec);
       acceptor_.close(ec);

@@ -36,6 +36,7 @@
 #include <variant>
 #include <ylt/easylog.hpp>
 
+#include "asio/dispatch.hpp"
 #include "common_service.hpp"
 #include "context.hpp"
 #include "expected.hpp"
@@ -123,7 +124,8 @@ class coro_rpc_client {
    */
   coro_rpc_client(asio::io_context::executor_type executor,
                   uint32_t client_id = 0)
-      : executor(executor), socket_(executor) {
+      : executor(executor),
+        socket_(std::make_shared<asio::ip::tcp::socket>(executor)) {
     config_.client_id = client_id;
     read_buf_.resize(default_read_buf_size_);
   }
@@ -136,7 +138,8 @@ class coro_rpc_client {
       coro_io::ExecutorWrapper<> &executor = *coro_io::get_global_executor(),
       uint32_t client_id = 0)
       : executor(executor.get_asio_executor()),
-        socket_(executor.get_asio_executor()) {
+        socket_(std::make_shared<asio::ip::tcp::socket>(
+            executor.get_asio_executor())) {
     config_.client_id = client_id;
     read_buf_.resize(default_read_buf_size_);
   }
@@ -307,7 +310,7 @@ class coro_rpc_client {
     }
     else {
 #endif
-      ret = co_await call_impl<func>(socket_, std::move(args)...);
+      ret = co_await call_impl<func>(*socket_, std::move(args)...);
 #ifdef YLT_ENABLE_SSL
     }
 #endif
@@ -342,7 +345,8 @@ class coro_rpc_client {
     }
 
     ELOGV(INFO, "client_id %d close", config_.client_id);
-    close_socket();
+
+    close_socket(socket_);
 
     has_closed_ = true;
   }
@@ -358,8 +362,9 @@ class coro_rpc_client {
   };
 
   void reset() {
-    close_socket();
-    socket_ = decltype(socket_)(executor.get_asio_executor());
+    close_socket(socket_);
+    socket_ =
+        std::make_shared<asio::ip::tcp::socket>(executor.get_asio_executor());
     is_timeout_ = false;
     has_closed_ = false;
   }
@@ -392,7 +397,7 @@ class coro_rpc_client {
         .detach();
 
     std::error_code ec = co_await coro_io::async_connect(
-        &executor, socket_, config_.host, config_.port);
+        &executor, *socket_, config_.host, config_.port);
     std::error_code err_code;
     timer.cancel(err_code);
 
@@ -445,7 +450,7 @@ class coro_rpc_client {
           asio::ssl::host_name_verification(config_.ssl_domain));
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_, ssl_ctx_);
+              *socket_, ssl_ctx_);
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
       ELOGV(ERROR, "init ssl failed: %s", e.what());
@@ -469,7 +474,7 @@ class coro_rpc_client {
     }
 
     is_timeout_ = is_timeout;
-    close_socket();
+    close_socket(socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
   }
@@ -564,7 +569,7 @@ class coro_rpc_client {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
       ELOGV(INFO, "client_id %d shutdown", config_.client_id);
-      socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
+      socket_->shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, coro_rpc_protocol::rpc_error{std::errc::io_error,
                                                      ret.first.message()}};
@@ -737,10 +742,13 @@ class coro_rpc_client {
         offset, std::forward<Args>(args)...);
   }
 
-  void close_socket() {
-    asio::error_code ignored_ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-    socket_.close(ignored_ec);
+  void close_socket(std::shared_ptr<asio::ip::tcp::socket> socket) {
+    asio::dispatch(
+        executor.get_asio_executor(), [socket = std::move(socket)]() {
+          asio::error_code ignored_ec;
+          socket->shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+          socket->close(ignored_ec);
+        });
   }
 
 #ifdef UNIT_TEST_INJECT
@@ -758,7 +766,7 @@ class coro_rpc_client {
 #endif
  private:
   coro_io::ExecutorWrapper<> executor;
-  asio::ip::tcp::socket socket_;
+  std::shared_ptr<asio::ip::tcp::socket> socket_;
   std::vector<std::byte> read_buf_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
