@@ -1,11 +1,4 @@
 #pragma once
-#include <async_simple/Future.h>
-#include <async_simple/Unit.h>
-#include <async_simple/coro/FutureAwaiter.h>
-#include <async_simple/coro/Lazy.h>
-
-#include <asio/dispatch.hpp>
-#include <asio/streambuf.hpp>
 #include <atomic>
 #include <cassert>
 #include <charconv>
@@ -19,14 +12,21 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
-#include <ylt/coro_io/coro_file.hpp>
-#include <ylt/coro_io/coro_io.hpp>
-#include <ylt/coro_io/io_context_pool.hpp>
 
+#include "asio/dispatch.hpp"
+#include "asio/error.hpp"
+#include "asio/streambuf.hpp"
+#include "async_simple/Future.h"
+#include "async_simple/Unit.h"
+#include "async_simple/coro/FutureAwaiter.h"
+#include "async_simple/coro/Lazy.h"
 #include "http_parser.hpp"
 #include "response_cv.hpp"
 #include "uri.hpp"
 #include "websocket.hpp"
+#include "ylt/coro_io/coro_file.hpp"
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 
 namespace coro_io {
 template <typename T, typename U>
@@ -236,10 +236,9 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path,
-                              const std::string &cert_file,
-                              int verify_mode = asio::ssl::verify_none,
-                              const std::string &domain = "localhost") {
+  bool init_ssl(const std::string &base_path, const std::string &cert_file,
+                int verify_mode = asio::ssl::verify_none,
+                const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
@@ -260,6 +259,11 @@ class coro_http_client {
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, ssl_ctx_);
+      // Set SNI Hostname (many hosts need this to handshake successfully)
+      if (!sni_hostname_.empty()) {
+        SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
+                                 sni_hostname_.c_str());
+      }
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
@@ -296,7 +300,13 @@ class coro_http_client {
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
     resp_data data{};
-    auto [ok, u] = handle_uri(data, uri);
+    bool no_schema = !has_schema(uri);
+    std::string append_uri;
+    if (no_schema) {
+      append_uri.append("http://").append(uri);
+    }
+
+    auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
     if (!ok) {
       co_return resp_data{{}, 404};
     }
@@ -784,7 +794,6 @@ class coro_http_client {
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
-    std::cout << header_str;
 
     std::error_code ec{};
     size_t size = 0;
@@ -850,17 +859,21 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      bool no_schema = !has_schema(uri);
+      uri_t u;
       std::string append_uri;
-      if (no_schema) {
-        append_uri.append("http://").append(uri);
-      }
-      auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
-      if (!ok) {
-        break;
-      }
 
-      if (socket_->has_closed_) {
+      if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
+        bool no_schema = !has_schema(uri);
+
+        if (no_schema) {
+          append_uri.append("http://").append(uri);
+        }
+        bool ok = false;
+        std::tie(ok, u) = handle_uri(data, no_schema ? append_uri : uri);
+        if (!ok) {
+          break;
+        }
+
         auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
@@ -869,6 +882,8 @@ class coro_http_client {
             ec) {
           break;
         }
+
+        socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
 
         if (u.is_ssl) {
           if (ec = co_await handle_shake(); ec) {
@@ -879,6 +894,9 @@ class coro_http_client {
         if (ec = co_await wait_timer(std::move(conn_future)); ec) {
           break;
         }
+      }
+      else {
+        u.path = uri;
       }
 
       std::vector<asio::const_buffer> vec;
@@ -980,6 +998,10 @@ class coro_http_client {
     enable_timeout_ = true;
     req_timeout_duration_ = timeout_duration;
   }
+
+#ifdef CINATRA_ENABLE_SSL
+  void set_sni_hostname(const std::string &host) { sni_hostname_ = host; }
+#endif
 
   template <typename T, typename U>
   friend class coro_io::client_pool;
@@ -1369,6 +1391,8 @@ class coro_http_client {
         co_return resp_data{ec, 404};
       }
 
+      socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+
       if (u.is_ssl) {
         if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
@@ -1485,6 +1509,7 @@ class coro_http_client {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
+        close_socket(*socket_);
         if (on_ws_msg_)
           on_ws_msg_(data);
         co_return;
@@ -1508,6 +1533,7 @@ class coro_http_client {
             ec) {
           data.net_err = ec;
           data.status = 404;
+          close_socket(*socket_);
           if (on_ws_msg_)
             on_ws_msg_(data);
           co_return;
@@ -1531,6 +1557,11 @@ class coro_http_client {
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
         async_close();
+
+        data.net_err = asio::error::eof;
+        data.status = 404;
+        if (on_ws_msg_)
+          on_ws_msg_(data);
         co_return;
       }
       if (on_ws_msg_)
@@ -1609,10 +1640,10 @@ class coro_http_client {
 
   template <typename S>
   bool has_schema(const S &url) {
-    size_t pos_http = url.find_first_of("http://");
-    size_t pos_https = url.find_first_of("https://");
-    size_t pos_ws = url.find_first_of("ws://");
-    size_t pos_wss = url.find_first_of("wss://");
+    size_t pos_http = url.find("http://");
+    size_t pos_https = url.find("https://");
+    size_t pos_ws = url.find("ws://");
+    size_t pos_wss = url.find("wss://");
     bool has_http_scheme =
         ((pos_http != std::string::npos) && pos_http == 0) ||
         ((pos_https != std::string::npos) && pos_https == 0) ||
@@ -1651,6 +1682,7 @@ class coro_http_client {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
+  std::string sni_hostname_ = "";
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
