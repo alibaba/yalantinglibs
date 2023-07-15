@@ -17,9 +17,9 @@
 #include <iguana/xml_writer.hpp>
 
 namespace struct_xml {
-template <typename Stream, typename T>
+template <bool pretty = false, typename Stream, typename T>
 inline void to_xml(T &&t, Stream &s) {
-  iguana::to_xml(std::forward<T>(t), s);
+  iguana::to_xml<pretty>(std::forward<T>(t), s);
 }
 
 }  // namespace struct_xml

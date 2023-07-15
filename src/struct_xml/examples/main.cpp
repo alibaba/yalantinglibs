@@ -165,7 +165,12 @@ void basic_usage() {
   std::string str;
   struct_xml::to_xml(p, str);
 
-  std::cout << str;
+  std::cout << str << "\n";
+
+  std::string pretty_xml_str;
+  struct_xml::to_xml</*pretty=*/true>(p, pretty_xml_str);
+
+  std::cout << pretty_xml_str;
 }
 
 void get_error() {
