@@ -165,7 +165,24 @@ void basic_usage() {
   std::string str;
   struct_xml::to_xml(p, str);
 
-  std::cout << str;
+  std::cout << str << "\n";
+
+  std::string pretty_xml_str;
+  struct_xml::to_xml</*pretty=*/true>(p, pretty_xml_str);
+
+  std::cout << pretty_xml_str;
+}
+
+enum class Color { red, black };
+
+enum Size { small, large };
+
+class my_message {};
+
+void type_to_string() {
+  static_assert(struct_xml::type_string<my_message>() == "my_message");
+  static_assert(struct_xml::enum_string<Color::red>() == "Color::red");
+  static_assert(struct_xml::enum_string<Size::small>() == "small");
 }
 
 void get_error() {
@@ -216,6 +233,7 @@ void required_field() {
 
 int main() {
   basic_usage();
+  type_to_string();
   nested_xml();
   attribute();
   get_error();
