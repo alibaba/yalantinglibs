@@ -17,10 +17,10 @@
 #include <variant>
 #include <vector>
 
-#include "../frozen/string.h"
 #include "detail/itoa.hpp"
 #include "detail/string_stream.hpp"
 #include "detail/traits.hpp"
+#include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
 namespace iguana::detail {

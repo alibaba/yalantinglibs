@@ -306,7 +306,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
         key_set.append(key).append(", ");
       }
     }
-    if (skip_till_key<cdata_idx>(value, it, end)) {
+    if (skip_till_key<cdata_idx>(value, it, end)) [[unlikely]] {
       match_close_tag(it, end, name);
       parse_done = true;
       return;
