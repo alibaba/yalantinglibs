@@ -29,15 +29,6 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#ifdef __SSE4_2__
-#ifdef _MSC_VER
-#include <nmmintrin.h>
-#else
-#include <x86intrin.h>
-#endif
-#endif
-
-#include <sys/types.h>
 
 #ifdef _MSC_VER
 #define ssize_t intptr_t
@@ -172,31 +163,10 @@ static const char *findchar_fast(const char *buf, const char *buf_end,
                                  const char *ranges, int ranges_size,
                                  int *found) {
   *found = 0;
-#if __SSE4_2__
-  if (likely(buf_end - buf >= 16)) {
-    __m128i ranges16 = _mm_loadu_si128((const __m128i *)ranges);
-
-    size_t left = (buf_end - buf) & ~15;
-    do {
-      __m128i b16 = _mm_loadu_si128((const __m128i *)buf);
-      int r = _mm_cmpestri(
-          ranges16, ranges_size, b16, 16,
-          _SIDD_LEAST_SIGNIFICANT | _SIDD_CMP_RANGES | _SIDD_UBYTE_OPS);
-      if (unlikely(r != 16)) {
-        buf += r;
-        *found = 1;
-        break;
-      }
-      buf += 16;
-      left -= 16;
-    } while (likely(left != 0));
-  }
-#else
   /* suppress unused parameter warning */
   (void)buf_end;
   (void)ranges;
   (void)ranges_size;
-#endif
   return buf;
 }
 
@@ -205,20 +175,6 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
                                     int *ret) {
   const char *token_start = buf;
 
-#ifdef __SSE4_2__
-  static const char ranges1[] =
-      "\0\010"
-      /* allow HT */
-      "\012\037"
-      /* allow SP and up to but not including DEL */
-      "\177\177"
-      /* allow chars w. MSB set */
-      ;
-  int found;
-  buf = findchar_fast(buf, buf_end, ranges1, sizeof(ranges1) - 1, &found);
-  if (found)
-    goto FOUND_CTL;
-#else
   /* find non-printable char within the next 8 bytes, this is the hottest code;
    * manually inlined */
   while (likely(buf_end - buf >= 8)) {
@@ -245,7 +201,7 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
     }
     ++buf;
   }
-#endif
+
   for (;; ++buf) {
     CHECK_EOF();
     if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {
