@@ -210,18 +210,18 @@ class appender {
     white_bright
   };
 
-  void windows_set_color(color_type _fg, color_type _bg) {
+  void windows_set_color(color_type fg, color_type bg) {
     auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
     if (handle != nullptr) {
       CONSOLE_SCREEN_BUFFER_INFO info{};
       auto status = GetConsoleScreenBufferInfo(handle, &info);
       if (status) {
         WORD color = info.wAttributes;
-        if (_fg != color_type::none) {
-          color = (color & 0xFFF0) | int(_fg);
+        if (fg != color_type::none) {
+          color = (color & 0xFFF0) | int(fg);
         }
-        if (_bg != color_type::none) {
-          color = (color & 0xFF0F) | int(_bg) << 4;
+        if (bg != color_type::none) {
+          color = (color & 0xFF0F) | int(bg) << 4;
         }
         SetConsoleTextAttribute(handle, color);
       }
