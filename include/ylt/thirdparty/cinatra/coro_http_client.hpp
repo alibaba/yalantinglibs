@@ -241,24 +241,27 @@ class coro_http_client {
                 const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
-        ssl_ctx_.load_verify_file(full_cert_file.string());
+        ssl_ctx_->load_verify_file(full_cert_file.string());
       }
       else {
         if (!base_path.empty() || !cert_file.empty())
           return false;
       }
 
-      ssl_ctx_.set_verify_mode(verify_mode);
+      ssl_ctx_->set_verify_mode(verify_mode);
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
       if (!domain.empty())
-        ssl_ctx_.set_verify_callback(asio::ssl::host_name_verification(domain));
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(domain));
 
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_->impl_, ssl_ctx_);
+              socket_->impl_, *ssl_ctx_);
       // Set SNI Hostname (many hosts need this to handshake successfully)
       if (!sni_hostname_.empty()) {
         SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
@@ -1678,7 +1681,7 @@ class coro_http_client {
   std::string ws_sec_key_;
 
 #ifdef CINATRA_ENABLE_SSL
-  asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
+  std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
