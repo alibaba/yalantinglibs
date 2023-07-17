@@ -189,8 +189,54 @@ class appender {
     }
   }
 
+#ifdef _WIN32
+  enum class color_type : int {
+    none = -1,
+    black = 0,
+    blue,
+    green,
+    cyan,
+    red,
+    magenta,
+    yellow,
+    white,
+    black_bright,
+    blue_bright,
+    green_bright,
+    cyan_bright,
+    red_bright,
+    magenta_bright,
+    yellow_bright,
+    white_bright
+  };
+
+  void windows_set_color(color_type fg, color_type bg) {
+    auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (handle != nullptr) {
+      CONSOLE_SCREEN_BUFFER_INFO info{};
+      auto status = GetConsoleScreenBufferInfo(handle, &info);
+      if (status) {
+        WORD color = info.wAttributes;
+        if (fg != color_type::none) {
+          color = (color & 0xFFF0) | int(fg);
+        }
+        if (bg != color_type::none) {
+          color = (color & 0xFF0F) | int(bg) << 4;
+        }
+        SetConsoleTextAttribute(handle, color);
+      }
+    }
+  }
+#endif
+
   void add_color(Severity severity) {
 #if defined(_WIN32)
+    if (severity == Severity::WARN)
+      windows_set_color(color_type::black, color_type::yellow);
+    if (severity == Severity::ERROR)
+      windows_set_color(color_type::black, color_type::red);
+    if (severity == Severity::CRITICAL)
+      windows_set_color(color_type::white_bright, color_type::red);
 #else
     if (severity == Severity::WARN)
       std::cout << "\x1B[93m";
@@ -203,6 +249,8 @@ class appender {
 
   void clean_color(Severity severity) {
 #if defined(_WIN32)
+    if (severity >= Severity::WARN)
+      windows_set_color(color_type::white, color_type::black);
 #else
     if (severity >= Severity::WARN)
       std::cout << "\x1B[0m\x1B[0K";
