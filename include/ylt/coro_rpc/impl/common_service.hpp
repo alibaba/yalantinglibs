@@ -45,7 +45,7 @@ struct ssl_configure {
  * @param path
  * @return true if file exist, otherwise false
  */
-inline bool file_exists(auto &path) {
+inline bool file_exists(const auto &path) {
   std::error_code ec;
   if (!std::filesystem::is_directory(path, ec) &&
       std::filesystem::exists(path, ec)) {
