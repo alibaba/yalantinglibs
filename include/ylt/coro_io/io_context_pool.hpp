@@ -27,6 +27,7 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <ylt/easylog.hpp>
 
 namespace coro_io {
 
@@ -96,6 +97,7 @@ class io_context_pool {
       pool_size = 1;  // set default value as 1
     }
 
+    easylog::logger<>::instance();
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context);
       work_ptr work(new asio::io_context::work(*io_context));
