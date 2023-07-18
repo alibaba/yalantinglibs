@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <future>
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -28,12 +29,19 @@ using namespace std::chrono_literals;
 int main() {
   using namespace coro_rpc;
   coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(), 0);
-
+  register_handlers(server);
   auto started = server.async_start();
   if (!started) {
     ELOGV(ERROR, "server started failed");
     return -1;
   }
+
+  std::promise<void> promise;
+  std::thread thd([&promise] {
+    promise.set_value();
+    pool.run();
+  });
+  promise.get_future().wait();
 
   coro_rpc_client client;
 
@@ -104,6 +112,11 @@ int main() {
   syncAwait(client.call<heavy_calculate>(42));
 
   server.stop();
+
+  started->wait();
+
+  pool.stop();
+  thd.join();
 
   return 0;
 };
