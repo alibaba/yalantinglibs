@@ -760,6 +760,9 @@ class coro_http_client {
     if (!socket_->impl_.is_open()) {
       socket_->impl_.open(asio::ip::tcp::v4());
     }
+#ifdef CINATRA_ENABLE_SSL
+    sni_hostname_ = "";
+#endif
 #ifdef BENCHMARK_TEST
     req_str_.clear();
     total_len_ = 0;
@@ -876,7 +879,11 @@ class coro_http_client {
         if (!ok) {
           break;
         }
-
+      }
+      else {
+        u.path = uri;
+      }
+      if (socket_->has_closed_) {
         auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
@@ -897,9 +904,6 @@ class coro_http_client {
         if (ec = co_await wait_timer(std::move(conn_future)); ec) {
           break;
         }
-      }
-      else {
-        u.path = uri;
       }
 
       std::vector<asio::const_buffer> vec;
