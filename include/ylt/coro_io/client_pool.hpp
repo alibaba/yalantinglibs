@@ -99,8 +99,7 @@ class client_pool : public std::enable_shared_from_this<
 
   async_simple::coro::Lazy<std::unique_ptr<client_t>> reconnect(
       std::unique_ptr<client_t> client) {
-    bool ok = false;
-
+    bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
       co_await coro_io::sleep_for(pool_config_.reconnect_wait_time);
       ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
