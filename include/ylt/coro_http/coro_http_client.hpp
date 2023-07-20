@@ -18,7 +18,6 @@
 #define CINATRA_ENABLE_SSL
 #endif
 #include <ylt/easylog.hpp>
-#define CINATRA_LOG_ENDL
 #define CINATRA_LOG_ERROR ELOG_ERROR
 #define CINATRA_LOG_WARNING ELOG_WARN
 #define CINATRA_LOG_INFO ELOG_INFO
