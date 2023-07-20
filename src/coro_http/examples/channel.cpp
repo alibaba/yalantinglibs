@@ -17,13 +17,13 @@
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#include <cinatra/uri.hpp>
 #include <iostream>
 #include <thread>
 #include <ylt/coro_http/coro_http_client.hpp>
 #include <ylt/coro_io/channel.hpp>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
+#include <ylt/easylog.hpp>
 
 using namespace async_simple::coro;
 using namespace coro_http;
@@ -32,7 +32,7 @@ using namespace coro_io;
 std::atomic<int> qps, working_echo;
 Lazy<void> test_async_channel(coro_io::channel<coro_http_client> &chan) {
   ++working_echo;
-  for (int i = 0; i < 10000; ++i) {
+  for (int i = 0; i < 100; ++i) {
     auto result = co_await chan.send_request(
         [&](coro_http_client &client,
             std::string_view host) -> Lazy<coro_http::resp_data> {
@@ -62,15 +62,14 @@ Lazy<void> qps_watcher() {
     cnt = 0;
   }
 }
-
 int main() {
   std::vector<std::string_view> hosts{"http://baidu.com",
                                       "http://www.baidu.com"};
   auto chan = coro_io::channel<coro_http_client>::create(
       hosts, coro_io::channel<coro_http_client>::channel_config{
-                 .pool_config{.max_connection = 1000}});
+                 .pool_config{.max_connection = 100}});
 
-  for (int i = 0, lim = std::thread::hardware_concurrency() * 10; i < lim; ++i)
+  for (int i = 0, lim = std::thread::hardware_concurrency(); i < lim; ++i)
     test_async_channel(chan).start([](auto &&) {
     });
   syncAwait(qps_watcher());
