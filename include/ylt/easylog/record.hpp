@@ -50,6 +50,8 @@ enum { ERROR = 0 };
 #endif
 #endif
 
+namespace easylog {
+
 enum class Severity {
   NONE = 0,
   TRACE = 1,
@@ -59,8 +61,6 @@ enum class Severity {
   ERROR = 5,
   CRITICAL = 6,
 };
-
-namespace easylog {
 
 inline std::string_view severity_str(Severity severity) {
   switch (severity) {

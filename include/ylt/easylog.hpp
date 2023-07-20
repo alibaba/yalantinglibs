@@ -138,7 +138,8 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
                           GET_STRING(__FILE__, __LINE__))             \
             .ref()
 
-#define ELOG(severity, ...) ELOG_IMPL(Severity::severity, __VA_ARGS__, 0)
+#define ELOG(severity, ...) \
+  ELOG_IMPL(easylog::Severity::severity, __VA_ARGS__, 0)
 
 #define ELOGV_IMPL(severity, Id, fmt, ...)                            \
   if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
@@ -149,19 +150,19 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .sprintf(fmt, __VA_ARGS__);                               \
-    if (severity == Severity::CRITICAL) {                             \
+    if (severity == easylog::Severity::CRITICAL) {                    \
       easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
     }                                                                 \
   }
 
 #define ELOGV(severity, ...) \
-  ELOGV_IMPL(Severity::severity, 0, __VA_ARGS__, "\n")
+  ELOGV_IMPL(easylog::Severity::severity, 0, __VA_ARGS__, "\n")
 
 #define MELOGV(severity, Id, ...) \
-  ELOGV_IMPL(Severity::severity, Id, __VA_ARGS__, "\n")
+  ELOGV_IMPL(easylog::Severity::severity, Id, __VA_ARGS__, "\n")
 
-#define ELOG_TRACE ELOG(INFO)
+#define ELOG_TRACE ELOG(TRACE)
 #define ELOG_DEBUG ELOG(DEBUG)
 #define ELOG_INFO ELOG(INFO)
 #define ELOG_WARN ELOG(WARN)

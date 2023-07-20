@@ -17,6 +17,13 @@
 #ifdef YLT_ENABLE_SSL
 #define CINATRA_ENABLE_SSL
 #endif
+#include <ylt/easylog.hpp>
+#define CINATRA_LOG_ERROR ELOG_ERROR
+#define CINATRA_LOG_WARNING ELOG_WARN
+#define CINATRA_LOG_INFO ELOG_INFO
+#define CINATRA_LOG_DEBUG ELOG_DEBUG
+#define CINATRA_LOG_TRACE ELOG_TRACE
+
 #include <cinatra/coro_http_client.hpp>
 
 namespace coro_http {

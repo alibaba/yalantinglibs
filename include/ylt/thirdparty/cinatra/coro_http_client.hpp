@@ -20,6 +20,7 @@
 #include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
 #include "response_cv.hpp"
 #include "uri.hpp"
@@ -270,7 +271,7 @@ class coro_http_client {
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      std::cout << "init ssl failed: " << e.what() << "\n";
+      CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
     }
     return ssl_init_ret_;
   }
@@ -346,9 +347,7 @@ class coro_http_client {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
-#ifndef NDEBUG
-      std::cout << "url error";
-#endif
+      CINATRA_LOG_WARNING << "url error:";
       co_return false;
     }
 
@@ -466,9 +465,7 @@ class coro_http_client {
         handle_result(data, ec, is_keep_alive);
         if (ec) {
           if (!stop_bench_)
-#ifndef NDEBUG
-            std::cout << "do_bench_read error:" << ec.message() << "\n";
-#endif
+            CINATRA_LOG_ERROR << "do_bench_read error:" << ec.message();
           data.net_err = ec;
           data.status = 404;
         }
@@ -484,9 +481,7 @@ class coro_http_client {
 
       if (ec) {
         if (!stop_bench_)
-#ifndef NDEBUG
-          std::cout << "do_bench_read error:" << ec.message() << "\n";
-#endif
+          CINATRA_LOG_ERROR << "do_bench_read error:" << ec.message();
         data.net_err = ec;
         data.status = 404;
         close_socket(*socket_);
@@ -566,22 +561,18 @@ class coro_http_client {
 
   bool add_file_part(std::string name, std::string filename) {
     if (form_data_.find(name) != form_data_.end()) {
-#ifndef NDEBUG
-      std::cout << "name already exist\n";
-#endif
+      CINATRA_LOG_WARNING << "name already exist: " << name;
       return false;
     }
 
     std::error_code ec;
     bool r = std::filesystem::exists(filename, ec);
     if (!r || ec) {
-#ifndef NDEBUG
       if (ec) {
-        std::cout << ec.message() << "\n";
+        CINATRA_LOG_WARNING << ec.message();
       }
-      std::cout << "file not exists, "
-                << std::filesystem::current_path().string() << std::endl;
-#endif
+      CINATRA_LOG_WARNING << "file not exists, "
+                          << std::filesystem::current_path().string();
       return false;
     }
 
@@ -632,9 +623,7 @@ class coro_http_client {
       form_data_.clear();
     });
     if (form_data_.empty()) {
-#ifndef NDEBUG
-      std::cout << "no multipart\n";
-#endif
+      CINATRA_LOG_WARNING << "no multipart";
       co_return resp_data{{}, 404};
     }
 
@@ -675,9 +664,7 @@ class coro_http_client {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       inject_write_failed = ClientInjectAction::none;
 #endif
-#ifndef NDEBUG
-      std::cout << ec.message() << "\n";
-#endif
+      CINATRA_LOG_DEBUG << ec.message();
       co_return resp_data{ec, 404};
     }
 
@@ -710,9 +697,7 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload_multipart(
       std::string uri, std::string name, std::string filename) {
     if (!add_file_part(std::move(name), std::move(filename))) {
-#ifndef NDEBUG
-      std::cout << "open file failed or duplicate test names\n";
-#endif
+      CINATRA_LOG_WARNING << "open file failed or duplicate test names";
       co_return resp_data{{}, 404};
     }
     co_return co_await async_upload_multipart(std::move(uri));
@@ -920,7 +905,7 @@ class coro_http_client {
       req_str_ = req_head_str;
 #endif
 #ifdef CORO_HTTP_PRINT_REQ_HEAD
-      std::cout << req_head_str << "\n";
+      CINATRA_LOG_DEBUG << req_head_str;
 #endif
       auto future = start_timer(req_timeout_duration_, "request timer");
       if (has_body) {
@@ -954,9 +939,7 @@ class coro_http_client {
       auto ec = co_await coro_io::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
-#ifndef NDEBUG
-        std::cout << "handle failed " << ec.message() << "\n";
-#endif
+        CINATRA_LOG_ERROR << "handle failed " << ec.message();
       }
       co_return ec;
     }
@@ -1302,9 +1285,7 @@ class coro_http_client {
       data.status = 404;
 #ifdef BENCHMARK_TEST
       if (!stop_bench_) {
-#ifndef NDEBUG
-        std::cout << ec.message() << "\n";
-#endif
+        CINATRA_LOG_DEBUG << ec.message();
       }
 #endif
     }
@@ -1350,9 +1331,7 @@ class coro_http_client {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
         inject_chunk_valid = ClientInjectAction::none;
 #endif
-#ifndef NDEBUG
-        std::cout << "bad chunked size\n";
-#endif
+        CINATRA_LOG_DEBUG << "bad chunked size";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
         break;
@@ -1637,9 +1616,7 @@ class coro_http_client {
       promise.setValue(async_simple::Unit());
       co_return false;
     }
-#ifndef NDEBUG
-    std::cout << msg << " timeout\n";
-#endif
+    CINATRA_LOG_WARNING << msg << " timeout";
     close_socket(*socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
