@@ -47,7 +47,16 @@ class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 
 template <typename rpc_protocol>
-class context_info_t;
+struct context_info_t {
+  constexpr static size_t body_default_size_ = 256;
+  std::shared_ptr<coro_connection> conn_;
+  typename rpc_protocol::req_header req_head_;
+  std::vector<char> body_;
+  std::atomic<bool> has_response_ = false;
+  bool is_delay_ = false;
+  context_info_t(std::shared_ptr<coro_connection> &&conn)
+      : conn_(std::move(conn)) {}
+};
 /*!
  * TODO: add doc
  */
@@ -69,7 +78,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     non_callback,
     callback_with_delay,
     callback_finished,
-    callback_started,
+    callback_started
   };
 
   /*!
@@ -495,18 +504,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   // FIXME: queue's performance can be imporved.
   std::deque<std::pair<std::string, std::string>> write_queue_;
   std::errc resp_err_;
-  rpc_call_type rpc_call_type_ = non_callback;
+  rpc_call_type rpc_call_type_{non_callback};
 
   // if don't get any message in keep_alive_timeout_duration_, the connection
   // will be closed when enable_check_timeout_ is true.
   std::chrono::steady_clock::duration keep_alive_timeout_duration_;
-  bool enable_check_timeout_ = false;
+  bool enable_check_timeout_{false};
   asio::steady_timer timer_;
-  std::atomic<bool> has_closed_ = false;
+  std::atomic<bool> has_closed_{false};
 
-  QuitCallback quit_callback_ = nullptr;
-  uint64_t conn_id_ = 0;
-  uint64_t delay_resp_cnt = 0;
+  QuitCallback quit_callback_{nullptr};
+  uint64_t conn_id_{0};
+  uint64_t delay_resp_cnt{0};
 
   std::any tag_;
 
@@ -518,18 +527,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef UNIT_TEST_INJECT
   uint32_t client_id_ = 0;
 #endif
-};
-
-template <typename rpc_protocol>
-struct context_info_t {
-  constexpr static size_t body_default_size_ = 256;
-  std::shared_ptr<coro_connection> conn_;
-  typename rpc_protocol::req_header req_head_;
-  std::vector<char> body_;
-  std::atomic<bool> has_response_ = false;
-  bool is_delay_ = false;
-  context_info_t(std::shared_ptr<coro_connection> &&conn)
-      : conn_(std::move(conn)) {}
 };
 
 }  // namespace coro_rpc
