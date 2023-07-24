@@ -18,7 +18,7 @@ void basic_usage();
 void non_aggregated_type();
 
 int main() {
- // basic_usage();
+  basic_usage();
   non_aggregated_type();
   return 0;
 }

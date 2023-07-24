@@ -198,7 +198,7 @@ namespace detail {
   };
 
   template <typename Type>
-  concept user_defined_refl = requires {STRUCT_PACK_GET_0(std::declval<Type&>());};
+  concept user_defined_refl = std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<Type&>())),Type&>;
 
   template <typename Type>
   concept tuple_size = requires(Type tuple) {
@@ -1687,14 +1687,16 @@ namespace detail {
 }  // namespace detail
 }  // namespace struct_pack
 
-#define STRUCT_PACK_ARG_COUNT(...) STRUCT_PACK_INTERNAL_ARG_COUNT(0, ##__VA_ARGS__,\
+
+#define STRUCT_PACK_ARG_COUNT(...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_INTERNAL_ARG_COUNT(0, ##__VA_ARGS__,\
 	64, 63, 62, 61, 60, \
 	59, 58, 57, 56, 55, 54, 53, 52, 51, 50, \
 	49, 48, 47, 46, 45, 44, 43, 42, 41, 40, \
 	39, 38, 37, 36, 35, 34, 33, 32, 31, 30, \
 	29, 28, 27, 26, 25, 24, 23, 22, 21, 20, \
 	19, 18, 17, 16, 15, 14, 13, 12, 11, 10, \
-	 9,  8,  7,  6,  5,  4,  3,  2,  1,  0)
+	 9,  8,  7,  6,  5,  4,  3,  2,  1,  0))
+
 #define STRUCT_PACK_INTERNAL_ARG_COUNT(\
 	 _0,  _1,  _2,  _3,  _4,  _5,  _6,  _7,  _8,  _9, \
 	_10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
@@ -1705,77 +1707,78 @@ namespace detail {
 	_60, _61, _62, _63, _64, N, ...) N
 
 #define STRUCT_PACK_CONCAT_(l, r) l ## r
-
 #define STRUCT_PACK_CONCAT(l, r) STRUCT_PACK_CONCAT_(l, r)
 
+#define STRUCT_PACK_MARCO_EXPAND(...) __VA_ARGS__
+
 #define STRUCT_PACK_DOARG0(s,f,v,o) 
-#define STRUCT_PACK_DOARG1(s,f,v,t,...)  STRUCT_PACK_DOARG0(s,f,v,__VA_ARGS__)  s f(0,t)
-#define STRUCT_PACK_DOARG2(s,f,v,t,...)  STRUCT_PACK_DOARG1(s,f,v,__VA_ARGS__)  s f(1,t) 
-#define STRUCT_PACK_DOARG3(s,f,v,t,...)  STRUCT_PACK_DOARG2(s,f,v,__VA_ARGS__)  s f(2,t)
-#define STRUCT_PACK_DOARG4(s,f,v,t,...)  STRUCT_PACK_DOARG3(s,f,v,__VA_ARGS__)  s f(3,t)
-#define STRUCT_PACK_DOARG5(s,f,v,t,...)  STRUCT_PACK_DOARG4(s,f,v,__VA_ARGS__)  s f(4,t)
-#define STRUCT_PACK_DOARG6(s,f,v,t,...)  STRUCT_PACK_DOARG5(s,f,v,__VA_ARGS__)  s f(5,t)
-#define STRUCT_PACK_DOARG7(s,f,v,t,...)  STRUCT_PACK_DOARG6(s,f,v,__VA_ARGS__)  s f(6,t)
-#define STRUCT_PACK_DOARG8(s,f,v,t,...)  STRUCT_PACK_DOARG7(s,f,v,__VA_ARGS__)  s f(7,t)
-#define STRUCT_PACK_DOARG9(s,f,v,t,...)  STRUCT_PACK_DOARG8(s,f,v,__VA_ARGS__)  s f(8,t)
-#define STRUCT_PACK_DOARG10(s,f,v,t,...) STRUCT_PACK_DOARG9(s,f,v,__VA_ARGS__)  s f(9,t)
-#define STRUCT_PACK_DOARG11(s,f,v,t,...) STRUCT_PACK_DOARG10(s,f,v,__VA_ARGS__) s f(10,t)
-#define STRUCT_PACK_DOARG12(s,f,v,t,...) STRUCT_PACK_DOARG11(s,f,v,__VA_ARGS__) s f(11,t)
-#define STRUCT_PACK_DOARG13(s,f,v,t,...) STRUCT_PACK_DOARG12(s,f,v,__VA_ARGS__) s f(12,t)
-#define STRUCT_PACK_DOARG14(s,f,v,t,...) STRUCT_PACK_DOARG13(s,f,v,__VA_ARGS__) s f(13,t)
-#define STRUCT_PACK_DOARG15(s,f,v,t,...) STRUCT_PACK_DOARG14(s,f,v,__VA_ARGS__) s f(14,t)
-#define STRUCT_PACK_DOARG16(s,f,v,t,...) STRUCT_PACK_DOARG15(s,f,v,__VA_ARGS__) s f(15,t)
-#define STRUCT_PACK_DOARG17(s,f,v,t,...) STRUCT_PACK_DOARG16(s,f,v,__VA_ARGS__) s f(16,t)
-#define STRUCT_PACK_DOARG18(s,f,v,t,...) STRUCT_PACK_DOARG17(s,f,v,__VA_ARGS__) s f(17,t)
-#define STRUCT_PACK_DOARG19(s,f,v,t,...) STRUCT_PACK_DOARG18(s,f,v,__VA_ARGS__) s f(18,t)
-#define STRUCT_PACK_DOARG20(s,f,v,t,...) STRUCT_PACK_DOARG19(s,f,v,__VA_ARGS__) s f(19,t)
-#define STRUCT_PACK_DOARG21(s,f,v,t,...) STRUCT_PACK_DOARG20(s,f,v,__VA_ARGS__) s f(20,t)
-#define STRUCT_PACK_DOARG22(s,f,v,t,...) STRUCT_PACK_DOARG21(s,f,v,__VA_ARGS__) s f(21,t)
-#define STRUCT_PACK_DOARG23(s,f,v,t,...) STRUCT_PACK_DOARG22(s,f,v,__VA_ARGS__) s f(22,t)
-#define STRUCT_PACK_DOARG24(s,f,v,t,...) STRUCT_PACK_DOARG23(s,f,v,__VA_ARGS__) s f(23,t)
-#define STRUCT_PACK_DOARG25(s,f,v,t,...) STRUCT_PACK_DOARG24(s,f,v,__VA_ARGS__) s f(24,t)
-#define STRUCT_PACK_DOARG26(s,f,v,t,...) STRUCT_PACK_DOARG25(s,f,v,__VA_ARGS__) s f(25,t)
-#define STRUCT_PACK_DOARG27(s,f,v,t,...) STRUCT_PACK_DOARG26(s,f,v,__VA_ARGS__) s f(26,t)
-#define STRUCT_PACK_DOARG28(s,f,v,t,...) STRUCT_PACK_DOARG27(s,f,v,__VA_ARGS__) s f(27,t)
-#define STRUCT_PACK_DOARG29(s,f,v,t,...) STRUCT_PACK_DOARG28(s,f,v,__VA_ARGS__) s f(28,t)
-#define STRUCT_PACK_DOARG30(s,f,v,t,...) STRUCT_PACK_DOARG29(s,f,v,__VA_ARGS__) s f(29,t)
-#define STRUCT_PACK_DOARG31(s,f,v,t,...) STRUCT_PACK_DOARG30(s,f,v,__VA_ARGS__) s f(30,t)
-#define STRUCT_PACK_DOARG32(s,f,v,t,...) STRUCT_PACK_DOARG31(s,f,v,__VA_ARGS__) s f(31,t)
-#define STRUCT_PACK_DOARG33(s,f,v,t,...) STRUCT_PACK_DOARG32(s,f,v,__VA_ARGS__) s f(32,t)
-#define STRUCT_PACK_DOARG34(s,f,v,t,...) STRUCT_PACK_DOARG33(s,f,v,__VA_ARGS__) s f(33,t)
-#define STRUCT_PACK_DOARG35(s,f,v,t,...) STRUCT_PACK_DOARG34(s,f,v,__VA_ARGS__) s f(34,t)
-#define STRUCT_PACK_DOARG36(s,f,v,t,...) STRUCT_PACK_DOARG35(s,f,v,__VA_ARGS__) s f(35,t)
-#define STRUCT_PACK_DOARG37(s,f,v,t,...) STRUCT_PACK_DOARG36(s,f,v,__VA_ARGS__) s f(36,t)
-#define STRUCT_PACK_DOARG38(s,f,v,t,...) STRUCT_PACK_DOARG37(s,f,v,__VA_ARGS__) s f(37,t)
-#define STRUCT_PACK_DOARG39(s,f,v,t,...) STRUCT_PACK_DOARG38(s,f,v,__VA_ARGS__) s f(38,t)
-#define STRUCT_PACK_DOARG40(s,f,v,t,...) STRUCT_PACK_DOARG39(s,f,v,__VA_ARGS__) s f(39,t)
-#define STRUCT_PACK_DOARG41(s,f,v,t,...) STRUCT_PACK_DOARG40(s,f,v,__VA_ARGS__) s f(40,t)
-#define STRUCT_PACK_DOARG42(s,f,v,t,...) STRUCT_PACK_DOARG41(s,f,v,__VA_ARGS__) s f(41,t)
-#define STRUCT_PACK_DOARG43(s,f,v,t,...) STRUCT_PACK_DOARG42(s,f,v,__VA_ARGS__) s f(42,t)
-#define STRUCT_PACK_DOARG44(s,f,v,t,...) STRUCT_PACK_DOARG43(s,f,v,__VA_ARGS__) s f(43,t)
-#define STRUCT_PACK_DOARG45(s,f,v,t,...) STRUCT_PACK_DOARG44(s,f,v,__VA_ARGS__) s f(44,t)
-#define STRUCT_PACK_DOARG46(s,f,v,t,...) STRUCT_PACK_DOARG45(s,f,v,__VA_ARGS__) s f(45,t)
-#define STRUCT_PACK_DOARG47(s,f,v,t,...) STRUCT_PACK_DOARG46(s,f,v,__VA_ARGS__) s f(46,t)
-#define STRUCT_PACK_DOARG48(s,f,v,t,...) STRUCT_PACK_DOARG47(s,f,v,__VA_ARGS__) s f(47,t)
-#define STRUCT_PACK_DOARG49(s,f,v,t,...) STRUCT_PACK_DOARG48(s,f,v,__VA_ARGS__) s f(48,t)
-#define STRUCT_PACK_DOARG50(s,f,v,t,...) STRUCT_PACK_DOARG49(s,f,v,__VA_ARGS__) s f(49,t)
-#define STRUCT_PACK_DOARG51(s,f,v,t,...) STRUCT_PACK_DOARG50(s,f,v,__VA_ARGS__) s f(50,t)
-#define STRUCT_PACK_DOARG52(s,f,v,t,...) STRUCT_PACK_DOARG51(s,f,v,__VA_ARGS__) s f(51,t)
-#define STRUCT_PACK_DOARG53(s,f,v,t,...) STRUCT_PACK_DOARG52(s,f,v,__VA_ARGS__) s f(52,t)
-#define STRUCT_PACK_DOARG54(s,f,v,t,...) STRUCT_PACK_DOARG53(s,f,v,__VA_ARGS__) s f(53,t)
-#define STRUCT_PACK_DOARG55(s,f,v,t,...) STRUCT_PACK_DOARG54(s,f,v,__VA_ARGS__) s f(54,t)
-#define STRUCT_PACK_DOARG56(s,f,v,t,...) STRUCT_PACK_DOARG55(s,f,v,__VA_ARGS__) s f(55,t)
-#define STRUCT_PACK_DOARG57(s,f,v,t,...) STRUCT_PACK_DOARG56(s,f,v,__VA_ARGS__) s f(56,t)
-#define STRUCT_PACK_DOARG58(s,f,v,t,...) STRUCT_PACK_DOARG57(s,f,v,__VA_ARGS__) s f(57,t)
-#define STRUCT_PACK_DOARG59(s,f,v,t,...) STRUCT_PACK_DOARG58(s,f,v,__VA_ARGS__) s f(58,t)
-#define STRUCT_PACK_DOARG60(s,f,v,t,...) STRUCT_PACK_DOARG59(s,f,v,__VA_ARGS__) s f(59,t)
-#define STRUCT_PACK_DOARG61(s,f,v,t,...) STRUCT_PACK_DOARG60(s,f,v,__VA_ARGS__) s f(60,t)
-#define STRUCT_PACK_DOARG62(s,f,v,t,...) STRUCT_PACK_DOARG61(s,f,v,__VA_ARGS__) s f(61,t)
-#define STRUCT_PACK_DOARG63(s,f,v,t,...) STRUCT_PACK_DOARG62(s,f,v,__VA_ARGS__) s f(62,t)
-#define STRUCT_PACK_DOARG64(s,f,v,t,...) STRUCT_PACK_DOARG63(s,f,v,__VA_ARGS__) s f(63,t)
+#define STRUCT_PACK_DOARG1(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG0(s,f,v,__VA_ARGS__))  s f(0,t)
+#define STRUCT_PACK_DOARG2(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG1(s,f,v,__VA_ARGS__))  s f(1,t) 
+#define STRUCT_PACK_DOARG3(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG2(s,f,v,__VA_ARGS__))  s f(2,t)
+#define STRUCT_PACK_DOARG4(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG3(s,f,v,__VA_ARGS__))  s f(3,t)
+#define STRUCT_PACK_DOARG5(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG4(s,f,v,__VA_ARGS__))  s f(4,t)
+#define STRUCT_PACK_DOARG6(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG5(s,f,v,__VA_ARGS__))  s f(5,t)
+#define STRUCT_PACK_DOARG7(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG6(s,f,v,__VA_ARGS__))  s f(6,t)
+#define STRUCT_PACK_DOARG8(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG7(s,f,v,__VA_ARGS__)) s f(7,t)
+#define STRUCT_PACK_DOARG9(s,f,v,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG8(s,f,v,__VA_ARGS__)) s f(8,t)
+#define STRUCT_PACK_DOARG10(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG9(s,f,v,__VA_ARGS__)) s f(9,t)
+#define STRUCT_PACK_DOARG11(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG10(s,f,v,__VA_ARGS__)) s f(10,t)
+#define STRUCT_PACK_DOARG12(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG11(s,f,v,__VA_ARGS__)) s f(11,t)
+#define STRUCT_PACK_DOARG13(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG12(s,f,v,__VA_ARGS__)) s f(12,t)
+#define STRUCT_PACK_DOARG14(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG13(s,f,v,__VA_ARGS__)) s f(13,t)
+#define STRUCT_PACK_DOARG15(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG14(s,f,v,__VA_ARGS__)) s f(14,t)
+#define STRUCT_PACK_DOARG16(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG15(s,f,v,__VA_ARGS__)) s f(15,t)
+#define STRUCT_PACK_DOARG17(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG16(s,f,v,__VA_ARGS__)) s f(16,t)
+#define STRUCT_PACK_DOARG18(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG17(s,f,v,__VA_ARGS__)) s f(17,t)
+#define STRUCT_PACK_DOARG19(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG18(s,f,v,__VA_ARGS__)) s f(18,t)
+#define STRUCT_PACK_DOARG20(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG19(s,f,v,__VA_ARGS__)) s f(19,t)
+#define STRUCT_PACK_DOARG21(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG20(s,f,v,__VA_ARGS__)) s f(20,t)
+#define STRUCT_PACK_DOARG22(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG21(s,f,v,__VA_ARGS__)) s f(21,t)
+#define STRUCT_PACK_DOARG23(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG22(s,f,v,__VA_ARGS__)) s f(22,t)
+#define STRUCT_PACK_DOARG24(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG23(s,f,v,__VA_ARGS__)) s f(23,t)
+#define STRUCT_PACK_DOARG25(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG24(s,f,v,__VA_ARGS__)) s f(24,t)
+#define STRUCT_PACK_DOARG26(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG25(s,f,v,__VA_ARGS__)) s f(25,t)
+#define STRUCT_PACK_DOARG27(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG26(s,f,v,__VA_ARGS__)) s f(26,t)
+#define STRUCT_PACK_DOARG28(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG27(s,f,v,__VA_ARGS__)) s f(27,t)
+#define STRUCT_PACK_DOARG29(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG28(s,f,v,__VA_ARGS__)) s f(28,t)
+#define STRUCT_PACK_DOARG30(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG29(s,f,v,__VA_ARGS__)) s f(29,t)
+#define STRUCT_PACK_DOARG31(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG30(s,f,v,__VA_ARGS__)) s f(30,t)
+#define STRUCT_PACK_DOARG32(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG31(s,f,v,__VA_ARGS__)) s f(31,t)
+#define STRUCT_PACK_DOARG33(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG32(s,f,v,__VA_ARGS__)) s f(32,t)
+#define STRUCT_PACK_DOARG34(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG33(s,f,v,__VA_ARGS__)) s f(33,t)
+#define STRUCT_PACK_DOARG35(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG34(s,f,v,__VA_ARGS__)) s f(34,t)
+#define STRUCT_PACK_DOARG36(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG35(s,f,v,__VA_ARGS__)) s f(35,t)
+#define STRUCT_PACK_DOARG37(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG36(s,f,v,__VA_ARGS__)) s f(36,t)
+#define STRUCT_PACK_DOARG38(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG37(s,f,v,__VA_ARGS__)) s f(37,t)
+#define STRUCT_PACK_DOARG39(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG38(s,f,v,__VA_ARGS__)) s f(38,t)
+#define STRUCT_PACK_DOARG40(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG39(s,f,v,__VA_ARGS__)) s f(39,t)
+#define STRUCT_PACK_DOARG41(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG40(s,f,v,__VA_ARGS__)) s f(40,t)
+#define STRUCT_PACK_DOARG42(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG41(s,f,v,__VA_ARGS__)) s f(41,t)
+#define STRUCT_PACK_DOARG43(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG42(s,f,v,__VA_ARGS__)) s f(42,t)
+#define STRUCT_PACK_DOARG44(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG43(s,f,v,__VA_ARGS__)) s f(43,t)
+#define STRUCT_PACK_DOARG45(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG44(s,f,v,__VA_ARGS__)) s f(44,t)
+#define STRUCT_PACK_DOARG46(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG45(s,f,v,__VA_ARGS__)) s f(45,t)
+#define STRUCT_PACK_DOARG47(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG46(s,f,v,__VA_ARGS__)) s f(46,t)
+#define STRUCT_PACK_DOARG48(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG47(s,f,v,__VA_ARGS__)) s f(47,t)
+#define STRUCT_PACK_DOARG49(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG48(s,f,v,__VA_ARGS__)) s f(48,t)
+#define STRUCT_PACK_DOARG50(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG49(s,f,v,__VA_ARGS__)) s f(49,t)
+#define STRUCT_PACK_DOARG51(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG50(s,f,v,__VA_ARGS__)) s f(50,t)
+#define STRUCT_PACK_DOARG52(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG51(s,f,v,__VA_ARGS__)) s f(51,t)
+#define STRUCT_PACK_DOARG53(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG52(s,f,v,__VA_ARGS__)) s f(52,t)
+#define STRUCT_PACK_DOARG54(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG53(s,f,v,__VA_ARGS__)) s f(53,t)
+#define STRUCT_PACK_DOARG55(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG54(s,f,v,__VA_ARGS__)) s f(54,t)
+#define STRUCT_PACK_DOARG56(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG55(s,f,v,__VA_ARGS__)) s f(55,t)
+#define STRUCT_PACK_DOARG57(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG56(s,f,v,__VA_ARGS__)) s f(56,t)
+#define STRUCT_PACK_DOARG58(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG57(s,f,v,__VA_ARGS__)) s f(57,t)
+#define STRUCT_PACK_DOARG59(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG58(s,f,v,__VA_ARGS__)) s f(58,t)
+#define STRUCT_PACK_DOARG60(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG59(s,f,v,__VA_ARGS__)) s f(59,t)
+#define STRUCT_PACK_DOARG61(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG60(s,f,v,__VA_ARGS__)) s f(60,t)
+#define STRUCT_PACK_DOARG62(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG61(s,f,v,__VA_ARGS__)) s f(61,t)
+#define STRUCT_PACK_DOARG63(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG62(s,f,v,__VA_ARGS__)) s f(62,t)
+#define STRUCT_PACK_DOARG64(s,f,v,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG63(s,f,v,__VA_ARGS__)) s f(63,t)
 
 #define STRUCT_PACK_MAKE_ARGS0(Type)
-#define STRUCT_PACK_MAKE_ARGS1(Type)   Type
+#define STRUCT_PACK_MAKE_ARGS1(Type)     Type
 #define STRUCT_PACK_MAKE_ARGS2(Type)     STRUCT_PACK_MAKE_ARGS1(Type), Type
 #define STRUCT_PACK_MAKE_ARGS3(Type)     STRUCT_PACK_MAKE_ARGS2(Type), Type
 #define STRUCT_PACK_MAKE_ARGS4(Type)     STRUCT_PACK_MAKE_ARGS3(Type), Type
@@ -1845,7 +1848,7 @@ namespace detail {
   STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS,Count)(Type)
 
 #define STRUCT_PACK_FOREACH_(sepatator,fun,...) \
-		STRUCT_PACK_CONCAT(STRUCT_PACK_DOARG,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))(sepatator,fun,STRUCT_PACK_ARG_COUNT(__VA_ARGS__),__VA_ARGS__)
+		STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_CONCAT(STRUCT_PACK_DOARG,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))(sepatator,fun,STRUCT_PACK_ARG_COUNT(__VA_ARGS__),__VA_ARGS__))
 #define STRUCT_PACK_FOREACH(sepatator,fun,...) \
 		STRUCT_PACK_FOREACH_(sepatator,fun,__VA_ARGS__)
 
@@ -1865,31 +1868,31 @@ const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
 }\
 
 #define STRUCT_PACK_REFL(Type,...) \
-template<typename T>\
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL();\
-template<>\
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);}\
-decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){\
-  return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{};\
-}\
-template<std::size_t I> auto& STRUCT_PACK_GET(Type& c) {\
-  STRUCT_PACK_FOREACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__)\
-  else {\
-	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>());\
-  }\
-}\
-template<std::size_t I> const auto& STRUCT_PACK_GET(const Type& c) {\
-  STRUCT_PACK_FOREACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__)\
-  else {\
-	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>());\
-  }\
-}\
-STRUCT_PACK_FOREACH(,STRUCT_PACK_GET_INDEX,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)))\
-STRUCT_PACK_FOREACH(,STRUCT_PACK_GET_INDEX_CONST,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)))\
+Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
+template<typename T> \
+constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL(); \
+template<> \
+constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);} \
+decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
+  return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
+} \
+template<std::size_t I> auto& STRUCT_PACK_GET(Type& c) { \
+  STRUCT_PACK_FOREACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__) \
+  else { \
+	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>()); \
+  } \
+} \
+template<std::size_t I> const auto& STRUCT_PACK_GET(const Type& c) { \
+  STRUCT_PACK_FOREACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__) \
+  else { \
+	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>()); \
+  } \
+} \
+STRUCT_PACK_FOREACH(,STRUCT_PACK_GET_INDEX,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))) \
+STRUCT_PACK_FOREACH(,STRUCT_PACK_GET_INDEX_CONST,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))) \
 
 #define STRUCT_PACK_FRIEND_DECL(Type) \
 template <std::size_t I> \
-friend auto& STRUCT_PACK_GET(Type& c);\
-template <std::size_t I>\
-friend const auto& STRUCT_PACK_GET(const Type& c);\
-
+friend auto& STRUCT_PACK_GET(Type& c); \
+template <std::size_t I> \
+friend const auto& STRUCT_PACK_GET(const Type& c); \
