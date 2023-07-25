@@ -1,6 +1,6 @@
 # struct_pack简介
 
-struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。用户无需定义任何DSL，宏或模板代码，struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。
+struct_pack是一个以零成本抽象，高度易用为特色序列化库。通常情况下只需一行代码即可完成复杂结构体的序列化/反序列化。对于聚合类型，用户无需定义任何DSL，宏或模板代码。struct_pack也支持使用宏来自定义非聚合类型的反射。struct_pack可通过编译期反射自动支持对C++结构体的序列化。其综合性能比protobuf，msgpack大幅提升(详细可以看benchmark部分)。
 
 下面，我们以一个简单的对象为例展示struc_pack的基本用法。
 
@@ -167,6 +167,83 @@ assert(nested2==nested1);
 ```
 
 ## 自定义功能支持
+
+### 用户自定义反射
+
+有时候用户需要支持非聚合的结构体，或者自定义各字段序列化的顺序，这些可以通过宏函数`STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`来支持。
+
+```cpp
+namespace test {
+class person : std::vector<int> {
+ private:
+  std::string mess;
+
+ public:
+  int age;
+  std::string name;
+  auto operator==(const person& rhs) const {
+    return age == rhs.age && name == rhs.name;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age(age), name(name) {}
+};
+STRUCT_PACK_REFL(person, name, age);
+}
+
+`STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`填入的第一个参数是需要反射的类型名，随后是若干个字段名，代表反射信息的各个字段。
+该宏必须定义在反射的类型所在的命名空间中。
+如果该类型不具有默认构造函数，则无法使用函数`struct_pack::deserialize`,不过你依然可以使用`struct_pack::deserialize_to`来实现反序列化。
+它使得struct_pack可以支持那些非聚合的结构体类型，允许用户自定义构造函数，继承其他类型，添加不序列化的字段等等。
+```
+
+有时，用户需要序列化/反序列化那些private字段，这可以通过函数`STRUCT_PACK_FRIEND_DECL(typenmae)`;来支持。
+```cpp
+namespace example2 {
+class person {
+ private:
+  int age;
+  std::string name;
+
+ public:
+  auto operator==(const person& rhs) const {
+    return age == rhs.age && name == rhs.name;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age(age), name(name) {}
+  STRUCT_PACK_FRIEND_DECL(person);
+};
+STRUCT_PACK_REFL(person, age, name);
+}  // namespace example2
+```
+
+该宏必须声明在结构体内部，其原理是将struct_pack与反射有关的函数注册为友元函数。
+
+用户甚至可以在`STRUCT_PACK_REFL`中注册成员函数，这极大的扩展了struct_pack的灵活性。
+
+```cpp
+namespace example3 {
+class person {
+ private:
+  int age_;
+  std::string name_;
+
+ public:
+  auto operator==(const person& rhs) const {
+    return age_ == rhs.age_ && name_ == rhs.name_;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age_(age), name_(name) {}
+
+  int& age() { return age_; };
+  const int& age() const { return age_; };
+  std::string& name() { return name_; };
+  const std::string& name() const { return name_; };
+};
+STRUCT_PACK_REFL(person, age(), name());
+}  // namespace example3
+
+注册的成员函数必须返回一个引用，并且该函数具有常量和非常量的重载。
+```
 
 ### 自定义类型的序列化
 

@@ -1229,8 +1229,12 @@ constexpr size_info inline calculate_one_size(const T &item) {
     }
   }
   else if constexpr (std::is_class_v<type>) {
-    if constexpr (!pair<type> && !is_trivial_tuple<type>)
-      static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+    if constexpr (!pair<type> && !is_trivial_tuple<type>) {
+      if constexpr (!user_defined_refl<type>)
+        static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>,
+                      "struct_pack only support aggregated type, or you should "
+                      "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+    }
     if constexpr (is_trivial_serializable<type>::value) {
       ret.total = sizeof(type);
     }
@@ -1803,7 +1807,11 @@ class packer {
       }
       else if constexpr (std::is_class_v<type>) {
         if constexpr (!pair<type> && !is_trivial_tuple<type>)
-          static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+          if constexpr (!user_defined_refl<type>)
+            static_assert(
+                std::is_aggregate_v<std::remove_cvref_t<type>>,
+                "struct_pack only support aggregated type, or you should "
+                "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value) {
           writer_.write((char *)&item, sizeof(type));
         }
@@ -2300,7 +2308,10 @@ class unpacker {
           t);
     }
     else if constexpr (std::is_class_v<T>) {
-      static_assert(std::is_aggregate_v<T>);
+      if constexpr (!user_defined_refl<T>)
+        static_assert(std::is_aggregate_v<std::remove_cvref_t<T>>,
+                      "struct_pack only support aggregated type, or you should "
+                      "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
       err_code = visit_members(t, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
         static_assert(I < sizeof...(items), "out of range");
         return for_each<size_type, version, I>(field, items...);
@@ -2659,7 +2670,11 @@ class unpacker {
       }
       else if constexpr (std::is_class_v<type>) {
         if constexpr (!pair<type> && !is_trivial_tuple<type>)
-          static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>);
+          if constexpr (!user_defined_refl<type>)
+            static_assert(
+                std::is_aggregate_v<std::remove_cvref_t<type>>,
+                "struct_pack only support aggregated type, or you should "
+                "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value) {
           if constexpr (NotSkip) {
             if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {

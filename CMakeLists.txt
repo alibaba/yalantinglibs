@@ -26,5 +26,5 @@ include(cmake/install.cmake)
 include(cmake/config.cmake)
 # add project's source such as unit test, example & benchmark
 include(cmake/subdir.cmake)
-
+include(cmake/platform.cmake)
 
