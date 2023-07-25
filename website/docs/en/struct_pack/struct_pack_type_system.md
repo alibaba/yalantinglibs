@@ -218,6 +218,14 @@ struct person {
 ```
 and
 ```cpp
+struct person2 {
+  std::string name;
+  int age;
+};
+STRUCT_PACK_REFL(person2,age,name)
+```
+and
+```cpp
 std::pair<int,std::string>
 ```
 and
@@ -241,7 +249,7 @@ are different types with `person` in struct_pack.
 
 ### trivial struct
 
-If there is a struct/class/std::pair/tuplet::tuple, and all the field of this type is a trivial type, then this type is a trivial struct in struct_pack.
+If there is a struct/class/std::pair/tuplet::tuple, and all the field of this type is a trivial type, and the type isn't registed by macro `STRUCT_PACK_REFL`, then this type is a trivial struct in struct_pack.
 
 A trivial type is :
 1. fundamental type.
@@ -273,6 +281,19 @@ void test() {
   // foo and bar are different types.
   assert(result.has_value() == false);
 }
+```
+
+Remeber, the type registed by macro `STRUCT_PACK_REFL` is not trivial struct.  
+For example:
+```cpp
+struct foo {
+  int a,b,c;
+};
+struct bar {
+  int a,b,c;
+};
+STRUCT_PACK_REFL(bar,a,b,c);
+static_assert(struct_pack::get_type_code<foo>()!=struct_pack::get_type_code<bar>());
 ```
 
 ## Compatible Type

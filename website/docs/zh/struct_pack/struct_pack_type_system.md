@@ -219,6 +219,13 @@ struct person {
   std::string name;
 };
 ```
+```cpp
+struct person2 {
+  std::string name;
+  int age;
+};
+STRUCT_PACK_REFL(person2,age,name)
+```
 和
 ```cpp
 std::pair<int,std::string>
@@ -252,7 +259,7 @@ std::tuple<int,std::string>
 
 ### 平凡结构体
 
-假如一个类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，则该类型被视为平凡结构体类型。
+假如一个类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，并且该类型未使用`STRUCT_PACK_REFL`宏注册，则该类型被视为平凡结构体类型。
 
 平凡字段是下面几种类型中的一种：
 1. 基本类型
@@ -284,6 +291,19 @@ void test() {
   // foo和 bar是不同的类型，因为其内存对齐不同，导致其内存布局也不同。
   assert(result.has_value() == false);
 }
+```
+
+需要注意的是，通过`STRUCT_PACK_REFL`宏注册的类型一定不是平凡结构体。
+例如：
+```cpp
+struct foo {
+  int a,b,c;
+};
+struct bar {
+  int a,b,c;
+};
+STRUCT_PACK_REFL(bar,a,b,c);
+static_assert(struct_pack::get_type_code<foo>()!=struct_pack::get_type_code<bar>());
 ```
 
 

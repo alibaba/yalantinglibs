@@ -1,6 +1,6 @@
 # struct_pack Introduction
 
-struct_pack is a serialization library featuring zero-cost abstraction as well as usability. In struct_pack, the serialization or deserialization of one complex structure could easily be done in a single line of code, without any DSL, macro, or template to be defined. struct_pack supports the serialization of C++ structures through compile-time reflection and its performance is significantly better than protobuf and msgpack (see the benchmark section for details).
+struct_pack is a serialization library featuring zero-cost abstraction as well as usability. In struct_pack, the serialization or deserialization of one **aggregated** structure could easily be done in a single line of code, without any DSL, macro, or template to be defined. struct_pack also support use marco for custom reflection of non-aggregated struct. struct_pack supports the serialization of C++ structures through compile-time reflection and its performance is significantly better than protobuf and msgpack (see the benchmark section for details).
 
 Below, we show the basic usage of struct_pack with a simple object as an example.
 
@@ -172,6 +172,83 @@ assert(nested2==nested1);
 ```
 
 ## custom support
+
+### custom reflection
+
+Sometimes user need support non-aggregated type, or adjust the order of each field, which can be supported by macro function `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`.
+
+```cpp
+namespace test {
+class person : std::vector<int> {
+ private:
+  std::string mess;
+
+ public:
+  int age;
+  std::string name;
+  auto operator==(const person& rhs) const {
+    return age == rhs.age && name == rhs.name;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age(age), name(name) {}
+};
+STRUCT_PACK_REFL(person, name, age);
+}
+
+The first argument of `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)` is the name of the type reflected, the others are the field names.
+The macro must be defined in the same namespace of the reflected type.
+The macro allow struct_pack support non-aggregated type, allow user define constructor, derived from other type or add some field which don't serialize.
+```
+
+Sometimes, user want to serialize/deserialize some private fields, which can be supported by macro function `STRUCT_PACK_FRIEND_DECL(typename)`.
+```cpp
+namespace example2 {
+class person {
+ private:
+  int age;
+  std::string name;
+
+ public:
+  auto operator==(const person& rhs) const {
+    return age == rhs.age && name == rhs.name;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age(age), name(name) {}
+  STRUCT_PACK_FRIEND_DECL(person);
+};
+STRUCT_PACK_REFL(person, age, name);
+}  // namespace example2
+```
+
+This macro must declared inside the struct, it regist struct_pack reflection function as friend function.
+
+User can even register member function in macro function `STRUCT_PACK_REFL`, which greatly expands the flexibility of struct_pack.
+
+
+```cpp
+namespace example3 {
+class person {
+ private:
+  int age_;
+  std::string name_;
+
+ public:
+  auto operator==(const person& rhs) const {
+    return age_ == rhs.age_ && name_ == rhs.name_;
+  }
+  person() = default;
+  person(int age, const std::string& name) : age_(age), name_(name) {}
+
+  int& age() { return age_; };
+  const int& age() const { return age_; };
+  std::string& name() { return name_; };
+  const std::string& name() const { return name_; };
+};
+STRUCT_PACK_REFL(person, age(), name());
+}  // namespace example3
+```
+The member function registed must return a reference, and this function must have a const version overload & non-const overload.
+
 
 ### custom type
 
