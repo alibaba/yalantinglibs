@@ -433,6 +433,14 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 4. 提交Pull Request，并选择审核者: (如： qicosmos, poor-circle, PikachuHyA).
 5. 通过github的全平台测试，审核者完成审核，代码合入主线。
 
+# 讨论组
+
+钉钉群
+
+<center>
+<img src="../../public/img/yalantinglibs_ding_talk_group.png" alt="dingtalk" width="200" height="200" align="bottom" />
+</center>
+
 ## 许可证
 
 yaLanTingLibs 基于 Apache License (Version 2.0) 开发。

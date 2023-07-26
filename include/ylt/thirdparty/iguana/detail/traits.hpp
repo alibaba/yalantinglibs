@@ -12,7 +12,11 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+
+#include "iguana/define.h"
+
 namespace iguana {
+
 template <class T>
 struct is_signed_intergral_like
     : std::integral_constant<bool, (std::is_integral<T>::value) &&

@@ -112,6 +112,9 @@ concept tuple = !array<Type> && requires(Type tuple) {
   sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
 };
 
+template <typename T>
+concept refletable = is_reflection_v<std::remove_cvref_t<T>>;
+
 // TODO: support c_array
 template <class T>
 concept non_refletable = container<T> || c_array<T> || tuple<T> ||

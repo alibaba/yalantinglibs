@@ -5,7 +5,6 @@
 
 #include <math.h>
 
-#include <bit>
 #include <filesystem>
 #include <forward_list>
 #include <fstream>
@@ -15,152 +14,149 @@
 #include <type_traits>
 
 #include "define.h"
+#include "detail/charconv.h"
 #include "reflection.hpp"
 #include "value.hpp"
 
 namespace iguana {
 
-template <class T>
-concept char_t = std::same_as < std::decay_t<T>,
-char > || std::same_as<std::decay_t<T>, char16_t> ||
-    std::same_as<std::decay_t<T>, char32_t> ||
-    std::same_as<std::decay_t<T>, wchar_t>;
-
-template <class T>
-concept bool_t = std::same_as < std::decay_t<T>,
-bool > || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
-
-template <class T>
-concept int_t =
-    std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
-
-template <class T>
-concept float_t = std::floating_point<std::decay_t<T>>;
-
-template <class T>
-concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-template <class T>
-concept enum_t = std::is_enum_v<std::decay_t<T>>;
-
-template <class T>
-concept arithmetic_t = std::is_arithmetic_v<std::decay_t<T>>;
+template <typename T>
+inline constexpr bool char_v = std::is_same_v<std::decay_t<T>, char> ||
+                               std::is_same_v<std::decay_t<T>, char16_t> ||
+                               std::is_same_v<std::decay_t<T>, char32_t> ||
+                               std::is_same_v<std::decay_t<T>, wchar_t>;
 
 template <typename T>
-constexpr inline bool is_basic_string_view = false;
+inline constexpr bool bool_v =
+    std::is_same_v<std::decay_t<T>, bool> ||
+    std::is_same_v<std::decay_t<T>, std::vector<bool>::reference>;
 
 template <typename T>
-constexpr inline bool is_basic_string_view<std::basic_string_view<T>> = true;
-
-template <typename Type>
-constexpr inline bool is_std_vector_v = false;
-
-template <typename... args>
-constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
-
-template <typename Type>
-concept vector_container = is_std_vector_v<std::remove_reference_t<Type>>;
-
-template <typename Type>
-concept optional = requires(Type optional) {
-  optional.value();
-  optional.has_value();
-  optional.operator*();
-  typename std::remove_cvref_t<Type>::value_type;
-};
-
-template <typename Type>
-concept container = requires(Type container) {
-  typename std::remove_cvref_t<Type>::value_type;
-  container.size();
-  container.begin();
-  container.end();
-};
-
-template <typename Type>
-concept map_container = container<Type> && requires(Type container) {
-  typename std::remove_cvref_t<Type>::mapped_type;
-};
-
-template <class T>
-concept c_array = std::is_array_v<std::remove_cvref_t<T>> &&
-                  std::extent_v<std::remove_cvref_t<T>> >
-0;
-
-template <typename Type>
-concept array = requires(Type arr) {
-  arr.size();
-  std::tuple_size<std::remove_cvref_t<Type>>{};
-};
-
-template <typename Type>
-concept fixed_array = c_array<Type> || array<Type>;
+inline constexpr bool int_v = std::is_integral_v<std::decay_t<T>> &&
+                              !char_v<std::decay_t<T>> && !bool_v<T>;
 
 template <typename T>
-concept str_view_t = is_basic_string_view<std::remove_reference_t<T>>;
-
-// eliminate char a[]
-template <class T>
-concept str_t =
-    std::convertible_to<std::decay_t<T>, std::string_view> && !str_view_t<T> &&
-    !c_array<T>;
-
-template <typename Type>
-concept tuple = !array<Type> && requires(Type tuple) {
-  std::get<0>(tuple);
-  sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
-};
-
-template <typename Type>
-concept json_view = requires(Type container) {
-  container.size();
-  container.begin();
-  container.end();
-};
+inline constexpr bool float_v = std::is_floating_point_v<std::decay_t<T>>;
 
 template <typename T>
-concept json_byte = std::is_same_v<char, T> ||
-    std::is_same_v<unsigned char, T> || std::is_same_v<std::byte, T>;
+inline constexpr bool num_v = float_v<T> || int_v<T>;
 
-template <typename Type>
-constexpr inline bool is_std_list_v = false;
-template <typename... args>
-constexpr inline bool is_std_list_v<std::list<args...>> = true;
+template <typename T>
+inline constexpr bool enum_v = std::is_enum_v<std::decay_t<T>>;
 
-template <typename Type>
-constexpr inline bool is_std_deque_v = false;
-template <typename... args>
-constexpr inline bool is_std_deque_v<std::deque<args...>> = true;
+template <typename T>
+constexpr inline bool optional_v =
+    is_template_instant_of<std::optional, std::remove_cvref_t<T>>::value;
 
-template <typename Type>
-concept sequence_container = is_std_list_v<std::remove_reference_t<Type>> ||
-    is_std_vector_v<std::remove_reference_t<Type>> ||
-    is_std_deque_v<std::remove_reference_t<Type>>;
+template <class, class = void>
+struct is_container : std::false_type {};
 
 template <class T>
-concept associat_container_t =
-    is_associat_container<std::remove_cvref_t<T>>::value;
+struct is_container<
+    T, std::void_t<decltype(std::declval<T>().size(), std::declval<T>().begin(),
+                            std::declval<T>().end())>> : std::true_type {};
+
+template <class, class = void>
+struct is_map_container : std::false_type {};
 
 template <class T>
-concept sequence_container_t =
+struct is_map_container<
+    T, std::void_t<decltype(std::declval<typename T::mapped_type>())>>
+    : is_container<T> {};
+
+template <typename T>
+constexpr inline bool container_v = is_container<std::remove_cvref_t<T>>::value;
+
+template <typename T>
+constexpr inline bool map_container_v =
+    is_map_container<std::remove_cvref_t<T>>::value;
+
+template <class T>
+constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
+                                      std::extent_v<std::remove_cvref_t<T>> > 0;
+
+template <typename Type, typename = void>
+struct is_array : std::false_type {};
+
+template <typename T>
+struct is_array<
+    T, std::void_t<decltype(std::declval<T>().size()),
+                   typename std::enable_if_t<(std::tuple_size<T>::value != 0)>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr inline bool array_v = is_array<std::remove_cvref_t<T>>::value;
+
+template <typename Type>
+constexpr inline bool fixed_array_v = c_array_v<Type> || array_v<Type>;
+
+template <typename T>
+constexpr inline bool string_view_v =
+    is_template_instant_of<std::basic_string_view,
+                           std::remove_cvref_t<T>>::value;
+
+template <typename T>
+constexpr inline bool string_v =
+    is_template_instant_of<std::basic_string, std::remove_cvref_t<T>>::value;
+
+// TODO: type must be char
+template <typename T>
+constexpr inline bool json_view_v = container_v<T>;
+
+template <typename T>
+constexpr inline bool json_byte_v =
+    std::is_same_v<char, std::remove_cvref_t<T>> ||
+    std::is_same_v<unsigned char, std::remove_cvref_t<T>> ||
+    std::is_same_v<std::byte, std::remove_cvref_t<T>>;
+
+template <typename T>
+constexpr inline bool sequence_container_v =
     is_sequence_container<std::remove_cvref_t<T>>::value;
 
-template <class T>
-concept tuple_t = is_tuple<std::remove_cvref_t<T>>::value;
+template <typename T>
+constexpr inline bool tuple_v = is_tuple<std::remove_cvref_t<T>>::value;
+
+template <typename T>
+constexpr inline bool string_container_v = string_v<T> || string_view_v<T>;
+
+template <typename T>
+constexpr inline bool unique_ptr_v =
+    is_template_instant_of<std::unique_ptr, std::remove_cvref_t<T>>::value;
 
 template <class T>
-concept string_container_t = str_t<T> || str_view_t<T>;
+constexpr inline bool non_refletable_v =
+    container_v<T> || c_array_v<T> || tuple_v<T> || optional_v<T> ||
+    unique_ptr_v<T> || std::is_fundamental_v<std::remove_cvref_t<T>>;
 
-template <typename Type>
-concept unique_ptr_t = requires(Type ptr) {
-  ptr.operator*();
-  typename std::remove_cvref_t<Type>::element_type;
-}
-&&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+template <typename T>
+constexpr inline bool refletable_v = is_reflection_v<std::remove_cvref_t<T>>;
 
-template <class T>
-concept non_refletable = container<T> || c_array<T> || tuple<T> ||
-    optional<T> || unique_ptr_t<T> || std::is_fundamental_v<T>;
+class numeric_str {
+ public:
+  std::string_view &value() { return val_; }
+  std::string_view value() const { return val_; }
+  template <typename T>
+  T convert() {
+    static_assert(num_v<T>, "T must be numeric type");
+    if (val_.empty()) [[unlikely]] {
+      throw std::runtime_error("Failed to parse number");
+    }
+    T res;
+    auto [_, ec] =
+        detail::from_chars(val_.data(), val_.data() + val_.size(), res);
+    if (ec != std::errc{}) [[unlikely]] {
+      throw std::runtime_error("Failed to parse number");
+    }
+    return res;
+  }
+
+ private:
+  std::string_view val_;
+};
+
+template <typename T>
+constexpr inline bool numeric_str_v =
+    std::is_same_v<numeric_str, std::remove_cvref_t<T>>;
 
 template <size_t N>
 struct string_literal {
@@ -176,66 +172,56 @@ struct string_literal {
   constexpr const std::string_view sv() const noexcept { return {value, size}; }
 };
 
-template <char c>
-IGUANA_INLINE void match(auto &&it, auto &&end) {
-  if (it == end || *it != c) [[unlikely]] {
-    static constexpr char b[] = {c, '\0'};
-    //         static constexpr auto error = concat_arrays("Expected:", b);
-    std::string error = std::string("Expected:").append(b);
-    throw std::runtime_error(error);
-  }
-  else [[likely]] {
-    ++it;
-  }
-}
-
-template <string_literal str>
-IGUANA_INLINE void match(auto &&it, auto &&end) {
+template <char... C, typename It>
+IGUANA_INLINE void match(It &&it, It &&end) {
   const auto n = static_cast<size_t>(std::distance(it, end));
-  if (n < str.size) [[unlikely]] {
-    // TODO: compile time generate this message, currently borken with
-    // MSVC
-    static constexpr auto error = "Unexpected end of buffer. Expected:";
-    throw std::runtime_error(error);
-  }
-  size_t i{};
-  // clang and gcc will vectorize this loop
-  for (auto *c = str.value; c < str.end(); ++it, ++c) {
-    i += *it != *c;
-  }
-  if (i != 0) [[unlikely]] {
-    // TODO: compile time generate this message, currently borken with
-    // MSVC
-    static constexpr auto error = "Expected: ";
-    throw std::runtime_error(error);
-  }
+  if (n < sizeof...(C))
+    IGUANA_UNLIKELY {
+      // TODO: compile time generate this message, currently borken with
+      // MSVC
+      static constexpr auto error = "Unexpected end of buffer. Expected:";
+      throw std::runtime_error(error);
+    }
+  if (((... || (*it++ != C))))
+    IGUANA_UNLIKELY {
+      // TODO: compile time generate this message, currently borken with
+      // MSVC
+      static constexpr char b[] = {C..., '\0'};
+      throw std::runtime_error(std::string("Expected these: ").append(b));
+    }
 }
 
-IGUANA_INLINE void skip_comment(auto &&it, auto &&end) {
+template <typename It>
+IGUANA_INLINE void skip_comment(It &&it, It &&end) {
   ++it;
-  if (it == end) [[unlikely]]
-    throw std::runtime_error("Unexpected end, expected comment");
+  if (it == end)
+    IGUANA_UNLIKELY {
+      throw std::runtime_error("Unexpected end, expected comment");
+    }
   else if (*it == '/') {
     while (++it != end && *it != '\n')
       ;
   }
   else if (*it == '*') {
     while (++it != end) {
-      if (*it == '*') [[unlikely]] {
-        if (++it == end) [[unlikely]]
-          break;
-        else if (*it == '/') [[likely]] {
-          ++it;
-          break;
+      if (*it == '*')
+        IGUANA_UNLIKELY {
+          if (++it == end)
+            IGUANA_UNLIKELY { break; }
+          else if (*it == '/')
+            IGUANA_LIKELY {
+              ++it;
+              break;
+            }
         }
-      }
     }
   }
-  else [[unlikely]]
-    throw std::runtime_error("Expected / or * after /");
+  else
+    IGUANA_UNLIKELY throw std::runtime_error("Expected / or * after /");
 }
 
-IGUANA_INLINE void skip_ws(auto &&it, auto &&end) {
+template <typename It>
+IGUANA_INLINE void skip_ws(It &&it, It &&end) {
   while (it != end) {
     // assuming ascii
     if (static_cast<uint8_t>(*it) < 33) {
@@ -250,48 +236,49 @@ IGUANA_INLINE void skip_ws(auto &&it, auto &&end) {
   }
 }
 
-IGUANA_INLINE void skip_ws_no_comments(auto &&it, auto &&end) {
+template <typename It>
+IGUANA_INLINE void skip_ws_no_comments(It &&it, It &&end) {
   while (it != end) {
     // assuming ascii
-    if (static_cast<uint8_t>(*it) < 33) [[likely]] {
-      ++it;
-    }
+    if (static_cast<uint8_t>(*it) < 33)
+      IGUANA_LIKELY { ++it; }
     else {
       break;
     }
   }
 }
 
-IGUANA_INLINE void skip_till_escape_or_qoute(auto &&it, auto &&end) {
-  static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+inline constexpr auto has_zero = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
+  return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
+};
 
-  auto has_zero = [](uint64_t chunk) {
-    return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
-  };
+inline constexpr auto has_qoute = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
+  return has_zero(
+      chunk ^
+      0b0010001000100010001000100010001000100010001000100010001000100010);
+};
 
-  auto has_qoute = [&](uint64_t chunk) IGUANA__INLINE_LAMBDA {
-    return has_zero(
-        chunk ^
-        0b0010001000100010001000100010001000100010001000100010001000100010);
-  };
+inline constexpr auto has_escape = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
+  return has_zero(
+      chunk ^
+      0b0101110001011100010111000101110001011100010111000101110001011100);
+};
 
-  auto has_escape = [&](uint64_t chunk) IGUANA__INLINE_LAMBDA {
-    return has_zero(
-        chunk ^
-        0b0101110001011100010111000101110001011100010111000101110001011100);
-  };
-
-  if (std::distance(it, end) >= 7) [[likely]] {
-    const auto end_m7 = end - 7;
-    for (; it < end_m7; it += 8) {
-      const auto chunk = *reinterpret_cast<const uint64_t *>(&*it);
-      uint64_t test = has_qoute(chunk) | has_escape(chunk);
-      if (test != 0) {
-        it += (std::countr_zero(test) >> 3);
-        return;
+template <typename It>
+IGUANA_INLINE void skip_till_escape_or_qoute(It &&it, It &&end) {
+  static_assert(contiguous_iterator<std::decay_t<decltype(it)>>);
+  if (std::distance(it, end) >= 7)
+    IGUANA_LIKELY {
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
+        const auto chunk = *reinterpret_cast<const uint64_t *>(&*it);
+        uint64_t test = has_qoute(chunk) | has_escape(chunk);
+        if (test != 0) {
+          it += (countr_zero(test) >> 3);
+          return;
+        }
       }
     }
-  }
 
   // Tail end of buffer. Should be rare we even get here
   while (it < end) {
@@ -305,21 +292,48 @@ IGUANA_INLINE void skip_till_escape_or_qoute(auto &&it, auto &&end) {
   throw std::runtime_error("Expected \"");
 }
 
-IGUANA_INLINE void skip_string(auto &&it, auto &&end) noexcept {
+template <typename It>
+IGUANA_INLINE void skip_till_qoute(It &&it, It &&end) {
+  static_assert(contiguous_iterator<std::decay_t<decltype(it)>>);
+  if (std::distance(it, end) >= 7)
+    IGUANA_LIKELY {
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
+        const auto chunk = *reinterpret_cast<const uint64_t *>(&*it);
+        uint64_t test = has_qoute(chunk);
+        if (test != 0) {
+          it += (countr_zero(test) >> 3);
+          return;
+        }
+      }
+    }
+
+  // Tail end of buffer. Should be rare we even get here
+  while (it < end) {
+    if (*it == '"')
+      return;
+    ++it;
+  }
+  throw std::runtime_error("Expected \"");
+}
+
+template <typename It>
+IGUANA_INLINE void skip_string(It &&it, It &&end) noexcept {
   ++it;
   while (it < end) {
     if (*it == '"') {
       ++it;
       break;
     }
-    else if (*it == '\\' && ++it == end) [[unlikely]]
-      break;
+    else if (*it == '\\' && ++it == end)
+      IGUANA_UNLIKELY
+    break;
     ++it;
   }
 }
 
-template <char open, char close>
-IGUANA_INLINE void skip_until_closed(auto &&it, auto &&end) {
+template <char open, char close, typename It>
+IGUANA_INLINE void skip_until_closed(It &&it, It &&end) {
   ++it;
   size_t open_count = 1;
   size_t close_count = 0;
@@ -345,41 +359,27 @@ IGUANA_INLINE void skip_until_closed(auto &&it, auto &&end) {
   }
 }
 
-IGUANA_INLINE constexpr bool is_numeric(const auto c) noexcept {
-  switch (c) {
-    case '0':
-    case '1':
-    case '2':
-    case '3':  //
-    case '4':
-    case '5':
-    case '6':
-    case '7':  //
-    case '8':
-    case '9':  //
-    case '.':
-    case '+':
-    case '-':  //
-    case 'e':
-    case 'E':  //
-      return true;
-  }
-  return false;
+IGUANA_INLINE bool is_numeric(char c) noexcept {
+  static constexpr int is_num[256] = {
+      // 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 1
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0,  // 2
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,  // 3
+      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 4
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 5
+      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 6
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 7
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 8
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 9
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // A
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // B
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // C
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // D
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // E
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // F
+  };
+  return static_cast<bool>(is_num[static_cast<unsigned int>(c)]);
 }
 
-constexpr bool is_digit(char c) { return c <= '9' && c >= '0'; }
-
-constexpr size_t stoui(std::string_view s, size_t value = 0) {
-  if (s.empty()) {
-    return value;
-  }
-
-  else if (is_digit(s[0])) {
-    return stoui(s.substr(1), (s[0] - '0') + value * 10);
-  }
-
-  else {
-    throw std::runtime_error("not a digit");
-  }
-}
 }  // namespace iguana

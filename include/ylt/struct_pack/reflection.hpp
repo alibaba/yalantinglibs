@@ -1895,4 +1895,4 @@ STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX_CONST,STRUCT_PACK_MAKE_ARGS(Type,
 template <std::size_t I> \
 friend auto& STRUCT_PACK_GET(Type& c); \
 template <std::size_t I> \
-friend const auto& STRUCT_PACK_GET(const Type& c); \
+friend const auto& STRUCT_PACK_GET(const Type& c);
