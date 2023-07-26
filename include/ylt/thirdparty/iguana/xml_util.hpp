@@ -63,6 +63,9 @@ template <class T>
 concept sequence_container_t =
     is_sequence_container<std::remove_cvref_t<T>>::value;
 
+template <typename T>
+concept refletable = is_reflection_v<std::remove_cvref_t<T>>;
+
 template <typename Type>
 concept unique_ptr_t = requires(Type ptr) {
   ptr.operator*();

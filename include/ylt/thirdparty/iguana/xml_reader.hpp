@@ -297,7 +297,7 @@ IGUANA_INLINE void parse_item(T &value, It &&it, It &&end,
     if constexpr (cdata_t<item_type>) {
       return;
     }
-    if (key != st_key) [[unlikely]] {
+    if (parse_done || key != st_key) [[unlikely]] {
       return;
     }
     if constexpr (!cdata_t<item_type>) {

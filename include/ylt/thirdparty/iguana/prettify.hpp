@@ -13,8 +13,9 @@ enum class general_state : uint32_t {
   BEFORE_FSLASH
 };
 
-inline void prettify_normal_state(const char c, auto &out, uint32_t &indent,
-                                  auto nl, general_state &state) noexcept {
+template <typename Out, typename NL>
+inline void prettify_normal_state(const char c, Out &out, uint32_t &indent,
+                                  NL nl, general_state &state) noexcept {
   switch (c) {
     case ',':
       out += c;
@@ -101,7 +102,8 @@ inline void prettify_other_states(const char c, general_state &state) noexcept {
 /// <summary>
 /// pretty print a JSON string
 /// </summary>
-inline void prettify(const auto &in, auto &out, const bool tabs = false,
+template <typename In, typename Out>
+inline void prettify(const In &in, Out &out, const bool tabs = false,
                      const uint32_t indent_size = 3) noexcept {
   out.reserve(in.size());
   uint32_t indent{};
@@ -132,7 +134,8 @@ inline void prettify(const auto &in, auto &out, const bool tabs = false,
 /// <summary>
 /// allocating version of prettify
 /// </summary>
-inline std::string prettify(const auto &in, const bool tabs = false,
+template <typename In>
+inline std::string prettify(const In &in, const bool tabs = false,
                             const uint32_t indent_size = 3) noexcept {
   std::string out{};
   prettify(in, out, tabs, indent_size);
