@@ -1492,12 +1492,21 @@ class coro_http_client {
 
     websocket ws{};
     while (true) {
+      std::weak_ptr socket = socket_;
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
-        close_socket(*socket_);
+        auto sock = socket.lock();
+        if (!sock) {
+          co_return;
+        }
+        if (!sock->has_closed_) {
+          close_socket(*sock);
+        }
+
         if (on_ws_msg_)
           on_ws_msg_(data);
+
         co_return;
       }
 
