@@ -39,8 +39,11 @@
 #include "md5_constexpr.hpp"
 #include "reflection.hpp"
 #include "trivial_view.hpp"
-#include "tuple.hpp"
 #include "varint.hpp"
+
+#if __cplusplus >= 202002L
+#include "tuple.hpp"
+#endif
 
 static_assert(std::endian::native == std::endian::little,
               "only support little endian now");
@@ -234,9 +237,10 @@ namespace detail {
   __assume(false);
 #endif
 }
-
+#if __cplusplus >= 202002L
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
+#endif
 
 template <typename T>
 [[noreturn]] constexpr T declval() {
