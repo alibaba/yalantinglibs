@@ -20,7 +20,21 @@ class varint {
     val = t;
     return *this;
   }
-  [[nodiscard]] auto operator<=>(const varint&) const noexcept = default;
+  [[nodiscard]] auto operator<(const varint& o) const noexcept {
+    return val < o.val;
+  }
+  [[nodiscard]] auto operator<=(const varint& o) const noexcept {
+    return val <= o.val;
+  }
+  [[nodiscard]] auto operator>(const varint& o) const noexcept {
+    return val > o.val;
+  }
+  [[nodiscard]] auto operator>=(const varint& o) const noexcept {
+    return val >= o.val;
+  }
+  [[nodiscard]] auto operator!=(const varint& o) const noexcept {
+    return val != o.val;
+  }
   [[nodiscard]] bool operator==(const varint<T>& t) const noexcept {
     return val == t.val;
   }
@@ -67,7 +81,21 @@ class sint {
     val = t;
     return *this;
   }
-  [[nodiscard]] auto operator<=>(const sint<T>&) const noexcept = default;
+  [[nodiscard]] auto operator<(const sint& o) const noexcept {
+    return val < o.val;
+  }
+  [[nodiscard]] auto operator<=(const sint& o) const noexcept {
+    return val <= o.val;
+  }
+  [[nodiscard]] auto operator>(const sint& o) const noexcept {
+    return val > o.val;
+  }
+  [[nodiscard]] auto operator>=(const sint& o) const noexcept {
+    return val >= o.val;
+  }
+  [[nodiscard]] auto operator!=(const sint& o) const noexcept {
+    return val != o.val;
+  }
   [[nodiscard]] bool operator==(T t) const noexcept { return val == t; }
   [[nodiscard]] bool operator==(const sint& t) const noexcept {
     return val == t.val;
@@ -167,7 +195,7 @@ template <reader_t Reader>
   uint8_t now;
   constexpr const int8_t max_varint_length = sizeof(uint64_t) * 8 / 7 + 1;
   for (int8_t i = 0; i < max_varint_length; ++i) {
-    if SP_UNLIKELY(!reader.read((char*)&now, sizeof(char))) {
+    if SP_UNLIKELY (!reader.read((char*)&now, sizeof(char))) {
       return struct_pack::errc::no_buffer_space;
     }
     v |= (1ull * (now & 0x7fu)) << (i * 7);
@@ -183,7 +211,7 @@ template <bool NotSkip = true, reader_t Reader, typename T>
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
   if constexpr (NotSkip) {
-    if SP_LIKELY(ec == struct_pack::errc{}) {
+    if SP_LIKELY (ec == struct_pack::errc{}) {
       if constexpr (sintable_t<T>) {
         t = decode_zigzag<int64_t>(v);
       }

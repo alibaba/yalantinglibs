@@ -43,8 +43,6 @@ struct string_literal : public std::array<CharType, Size + 1> {
     }
   }
 
-  auto operator<=>(const string_literal &) const = default;
-
   constexpr std::size_t size() const { return Size; }
 
   constexpr bool empty() const { return !Size; }
@@ -79,6 +77,12 @@ constexpr bool operator!=(const string_literal<Char, Size1> &s1,
   else {
     return true;
   }
+}
+
+template <typename Char, std::size_t Size1, std::size_t Size2>
+constexpr bool operator==(const string_literal<Char, Size1> &s1,
+                          const string_literal<Char, Size2> &s2) {
+  return !(s1 != s2);
 }
 
 template <typename CharType, std::size_t Size>
