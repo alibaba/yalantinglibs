@@ -88,7 +88,9 @@ TEST_CASE("test client pool") {
     auto is_started = server.async_start();
     REQUIRE(is_started);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
-        "127.0.0.1:8801", {.max_connection = 100, .idle_timeout = 300ms});
+        "127.0.0.1:8801", {.max_connection = 100,
+                           .idle_timeout = 300ms,
+                           .short_connect_idle_timeout = 50ms});
     SpinLock lock;
     ConditionVariable<SpinLock> cv;
     auto res = co_await event(20, *pool, cv, lock);
@@ -97,8 +99,11 @@ TEST_CASE("test client pool") {
     res = co_await event(200, *pool, cv, lock);
     CHECK(res);
     auto sz = pool->free_client_count();
+    CHECK(sz == 200);
+    co_await coro_io::sleep_for(150ms);
+    sz = pool->free_client_count();
     CHECK((sz >= 100 && sz <= 105));
-    co_await coro_io::sleep_for(700ms);
+    co_await coro_io::sleep_for(550ms);
     CHECK(pool->free_client_count() == 0);
     server.stop();
   }());
