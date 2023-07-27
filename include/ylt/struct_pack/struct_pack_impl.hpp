@@ -1558,7 +1558,7 @@ get_serialize_runtime_info(const Args &...args) {
   serialize_buffer_size ret;
   auto sz_info = calculate_payload_size(args...);
 
-  if (sz_info.max_size < (int64_t{1} << 8)) [[likely]] {
+  if SP_LIKELY (sz_info.max_size < (int64_t{1} << 8)) {
     ret.len_ += sz_info.total + sz_info.size_cnt;
     ret.metainfo_ = 0b00000;
     constexpr bool has_compile_time_determined_meta_info =
@@ -1591,7 +1591,7 @@ get_serialize_runtime_info(const Args &...args) {
   }
   if constexpr (has_compatible) {  // calculate bytes count of serialize
                                    // length
-    if (ret.len_ + 2 < (int64_t{1} << 16)) [[likely]] {
+    if SP_LIKELY (ret.len_ + 2 < (int64_t{1} << 16)) {
       ret.len_ += 2;
       ret.metainfo_ |= 0b01;
     }
@@ -1751,7 +1751,7 @@ class packer {
         if constexpr (trivially_copyable_container<type>) {
           using value_type = typename type::value_type;
           auto container_size = 1ull * size * sizeof(value_type);
-          if (container_size >= PTRDIFF_MAX) [[unlikely]]
+          if SP_UNLIKELY (container_size >= PTRDIFF_MAX)
             unreachable();
           else {
             writer_.write((char *)item.data(), container_size);
@@ -1961,7 +1961,7 @@ struct memory_reader {
   constexpr memory_reader(const char *beg, const char *end) noexcept
       : now(beg), end(end) {}
   bool read(char *target, size_t len) {
-    if (now + len > end) [[unlikely]] {
+    if SP_UNLIKELY (now + len > end) {
       return false;
     }
     memcpy(target, now, len);
@@ -1969,7 +1969,7 @@ struct memory_reader {
     return true;
   }
   const char *read_view(size_t len) {
-    if (now + len > end) [[unlikely]] {
+    if SP_UNLIKELY (now + len > end) {
       return nullptr;
     }
     auto ret = now;
@@ -1977,7 +1977,7 @@ struct memory_reader {
     return ret;
   }
   bool ignore(size_t len) {
-    if (now + len > end) [[unlikely]] {
+    if SP_UNLIKELY (now + len > end) {
       return false;
     }
     now += len;
@@ -2013,7 +2013,7 @@ class unpacker {
       data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
+    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -2044,7 +2044,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
+      if SP_UNLIKELY (err_code != errc::ok) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -2065,7 +2065,7 @@ class unpacker {
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
     len = buffer_len;
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
+    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -2096,7 +2096,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
+      if SP_UNLIKELY (err_code != errc::ok) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -2119,7 +2119,7 @@ class unpacker {
     }
 
     auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
-    if (err_code != struct_pack::errc{}) [[unlikely]] {
+    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -2150,7 +2150,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if (err_code != errc::ok) [[unlikely]] {
+      if SP_UNLIKELY (err_code != errc::ok) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -2345,7 +2345,7 @@ class unpacker {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
     uint64_t data_len = 0;
-    if (!reader_.read((char *)&data_len, len_sz)) [[unlikely]] {
+    if SP_UNLIKELY (!reader_.read((char *)&data_len, len_sz)) {
       return {errc::no_buffer_space, 0};
     }
     return {errc{}, data_len};
@@ -2356,19 +2356,19 @@ class unpacker {
     constexpr auto literal = struct_pack::get_type_literal<T>();
     if constexpr (view_reader_t<Reader>) {
       const char *buffer = reader_.read_view(literal.size() + 1);
-      if (!buffer) [[unlikely]] {
+      if SP_UNLIKELY (!buffer) {
         return errc::no_buffer_space;
       }
-      if (memcmp(buffer, literal.data(), literal.size() + 1)) [[unlikely]] {
+      if SP_UNLIKELY (memcmp(buffer, literal.data(), literal.size() + 1)) {
         return errc::hash_conflict;
       }
     }
     else {
       char buffer[literal.size() + 1];
-      if (!reader_.read(buffer, literal.size() + 1)) [[unlikely]] {
+      if SP_UNLIKELY (!reader_.read(buffer, literal.size() + 1)) {
         return errc::no_buffer_space;
       }
-      if (memcmp(buffer, literal.data(), literal.size() + 1)) [[unlikely]] {
+      if SP_UNLIKELY (memcmp(buffer, literal.data(), literal.size() + 1)) {
         return errc::hash_conflict;
       }
     }
@@ -2380,35 +2380,35 @@ class unpacker {
   STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
   deserialize_metainfo() {
     uint32_t current_types_code;
-    if (!reader_.read((char *)&current_types_code, sizeof(uint32_t)))
-        [[unlikely]] {
+    if SP_UNLIKELY (!reader_.read((char *)&current_types_code,
+                                  sizeof(uint32_t))) {
       return {struct_pack::errc::no_buffer_space, 0};
     }
     constexpr uint32_t types_code =
         get_types_code<T, decltype(get_types<T>())>();
-    if ((current_types_code / 2) != (types_code / 2)) [[unlikely]] {
+    if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
       return {struct_pack::errc::invalid_buffer, 0};
     }
-    if (current_types_code % 2 == 0) [[likely]]  // unexist extended metainfo
+    if SP_LIKELY (current_types_code % 2 == 0)  // unexist extended metainfo
     {
       size_type_ = 0;
       return {};
     }
     unsigned char metainfo;
-    if (!reader_.read((char *)&metainfo, sizeof(unsigned char))) [[unlikely]] {
+    if SP_UNLIKELY (!reader_.read((char *)&metainfo, sizeof(unsigned char))) {
       return {struct_pack::errc::no_buffer_space, 0};
     }
     std::pair<errc, std::uint64_t> ret;
     auto compatible_sz_len = metainfo & 0b11;
     if (compatible_sz_len) {
-      if (ret = deserialize_compatible(compatible_sz_len); ret.first != errc{})
-          [[unlikely]] {
+      if SP_UNLIKELY (ret = deserialize_compatible(compatible_sz_len);
+                      ret.first != errc{}) {
         return ret;
       }
     }
     auto has_type_literal = metainfo & 0b100;
     if (has_type_literal) {
-      if (auto ec = deserialize_type_literal<T>(); ec != errc{}) [[unlikely]] {
+      if SP_UNLIKELY (auto ec = deserialize_type_literal<T>(); ec != errc{}) {
         return {ec, 0};
       }
     }
@@ -2424,7 +2424,7 @@ class unpacker {
   constexpr struct_pack::errc STRUCT_PACK_INLINE
   deserialize_many(auto &&first_item, auto &&...items) {
     auto code = deserialize_one<size_type, version, NotSkip>(first_item);
-    if (code != struct_pack::errc{}) [[unlikely]] {
+    if SP_UNLIKELY (code != struct_pack::errc{}) {
       return code;
     }
     return deserialize_many<size_type, version, NotSkip>(items...);
@@ -2456,7 +2456,7 @@ class unpacker {
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                          id == type_id::int128_t || id == type_id::uint128_t) {
         if constexpr (NotSkip) {
-          if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
+          if SP_UNLIKELY (!reader_.read((char *)&item, sizeof(type))) {
             return struct_pack::errc::no_buffer_space;
           }
         }
@@ -2470,7 +2470,7 @@ class unpacker {
       else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value) {
           if constexpr (NotSkip) {
-            if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
+            if SP_UNLIKELY (!reader_.read((char *)&item, sizeof(type))) {
               return struct_pack::errc::no_buffer_space;
             }
           }
@@ -2482,7 +2482,7 @@ class unpacker {
         else {
           for (auto &i : item) {
             code = deserialize_one<size_type, version, NotSkip>(i);
-            if (code != struct_pack::errc{}) [[unlikely]] {
+            if SP_UNLIKELY (code != struct_pack::errc{}) {
               return code;
             }
           }
@@ -2491,29 +2491,29 @@ class unpacker {
       else if constexpr (container<type>) {
         size_t size = 0;
 #ifdef STRUCT_PACK_OPTIMIZE
-        if (!reader_.read((char *)&size, size_type)) [[unlikely]] {
+        if SP_UNLIKELY (!reader_.read((char *)&size, size_type)) {
           return struct_pack::errc::no_buffer_space;
         }
 #else
         if constexpr (size_type == 1) {
-          if (!reader_.read((char *)&size, size_type)) [[unlikely]] {
+          if SP_UNLIKELY (!reader_.read((char *)&size, size_type)) {
             return struct_pack::errc::no_buffer_space;
           }
         }
         else {
           switch (size_type_) {
             case 1:
-              if (!reader_.read((char *)&size, 2)) [[unlikely]] {
+              if SP_UNLIKELY (!reader_.read((char *)&size, 2)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
             case 2:
-              if (!reader_.read((char *)&size, 4)) [[unlikely]] {
+              if SP_UNLIKELY (!reader_.read((char *)&size, 4)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
             case 3:
-              if (!reader_.read((char *)&size, 8)) [[unlikely]] {
+              if SP_UNLIKELY (!reader_.read((char *)&size, 8)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
@@ -2522,7 +2522,7 @@ class unpacker {
           }
         }
 #endif
-        if (size == 0) [[unlikely]] {
+        if SP_UNLIKELY (size == 0) {
           return {};
         }
         if constexpr (map_container<type> || set_container<type>) {
@@ -2545,7 +2545,7 @@ class unpacker {
           else {
             for (size_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
-              if (code != struct_pack::errc{}) [[unlikely]] {
+              if SP_UNLIKELY (code != struct_pack::errc{}) {
                 return code;
               }
               if constexpr (NotSkip) {
@@ -2566,17 +2566,17 @@ class unpacker {
                     "The Reader isn't a view_reader, can't deserialize "
                     "a string_view/span");
                 const char *view = reader_.read_view(mem_sz);
-                if (view == nullptr) [[unlikely]] {
+                if SP_UNLIKELY (view == nullptr) {
                   return struct_pack::errc::no_buffer_space;
                 }
                 item = {(value_type *)(view), size};
               }
               else {
-                if (mem_sz >= PTRDIFF_MAX) [[unlikely]]
+                if SP_UNLIKELY (mem_sz >= PTRDIFF_MAX)
                   unreachable();
                 else {
                   item.resize(size);
-                  if (!reader_.read((char *)item.data(), mem_sz)) [[unlikely]] {
+                  if SP_UNLIKELY (!reader_.read((char *)item.data(), mem_sz)) {
                     return struct_pack::errc::no_buffer_space;
                   }
                 }
@@ -2597,7 +2597,7 @@ class unpacker {
                 item.resize(size);
                 for (auto &i : item) {
                   code = deserialize_one<size_type, version, NotSkip>(i);
-                  if (code != struct_pack::errc{}) [[unlikely]] {
+                  if SP_UNLIKELY (code != struct_pack::errc{}) {
                     return code;
                   }
                 }
@@ -2607,7 +2607,7 @@ class unpacker {
               value_type useless;
               for (size_t i = 0; i < size; ++i) {
                 code = deserialize_one<size_type, version, NotSkip>(useless);
-                if (code != struct_pack::errc{}) [[unlikely]] {
+                if SP_UNLIKELY (code != struct_pack::errc{}) {
                   return code;
                 }
               }
@@ -2629,10 +2629,10 @@ class unpacker {
       }
       else if constexpr (optional<type> || expected<type>) {
         bool has_value;
-        if (!reader_.read((char *)&has_value, sizeof(bool))) [[unlikely]] {
+        if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
           return struct_pack::errc::no_buffer_space;
         }
-        if (!has_value) [[unlikely]] {
+        if SP_UNLIKELY (!has_value) {
           if constexpr (expected<type>) {
             item = typename type::unexpected_type{typename type::error_type{}};
             deserialize_one<size_type, version, NotSkip>(item.error());
@@ -2654,10 +2654,10 @@ class unpacker {
       }
       else if constexpr (variant<type>) {
         uint8_t index;
-        if (!reader_.read((char *)&index, sizeof(index))) [[unlikely]] {
+        if SP_UNLIKELY (!reader_.read((char *)&index, sizeof(index))) {
           return struct_pack::errc::no_buffer_space;
         }
-        if (index >= std::variant_size_v<type>) [[unlikely]] {
+        if SP_UNLIKELY (index >= std::variant_size_v<type>) {
           return struct_pack::errc::invalid_buffer;
         }
         else {
@@ -2677,7 +2677,7 @@ class unpacker {
                 "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value) {
           if constexpr (NotSkip) {
-            if (!reader_.read((char *)&item, sizeof(type))) [[unlikely]] {
+            if SP_UNLIKELY (!reader_.read((char *)&item, sizeof(type))) {
               return struct_pack::errc::no_buffer_space;
             }
           }
@@ -2692,9 +2692,9 @@ class unpacker {
             [[maybe_unused]] bool op =
                 ((
                      [&]() {
-                       if (code = deserialize_one<size_type, version, NotSkip>(
-                               items);
-                           code == errc::ok) [[likely]] {
+                       code =
+                           deserialize_one<size_type, version, NotSkip>(items);
+                       if SP_LIKELY (code == errc::ok) {
                          code = ignore_padding(align::padding_size<type>[i]);
                          ++i;
                        }
@@ -2725,7 +2725,7 @@ class unpacker {
             return struct_pack::errc::no_buffer_space;
           }
           bool has_value;
-          if (!reader_.read((char *)&has_value, sizeof(bool))) [[unlikely]] {
+          if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
             return struct_pack::errc::no_buffer_space;
           }
           if (!has_value) {
@@ -2740,7 +2740,7 @@ class unpacker {
       else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
           code = deserialize_one<size_type, version, NotSkip>(i);
-          if (code != struct_pack::errc{}) [[unlikely]] {
+          if SP_UNLIKELY (code != struct_pack::errc{}) {
             return code;
           }
         }
@@ -2758,7 +2758,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &e : item) {
               code = deserialize_one<size_type, version, NotSkip>(e.second);
-              if (code != struct_pack::errc{}) [[unlikely]] {
+              if SP_UNLIKELY (code != struct_pack::errc{}) {
                 return code;
               }
             }
@@ -2775,7 +2775,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &i : item) {
               code = deserialize_one<size_type, version, NotSkip>(i);
-              if (code != struct_pack::errc{}) [[unlikely]] {
+              if SP_UNLIKELY (code != struct_pack::errc{}) {
                 return code;
               }
             }
@@ -2833,7 +2833,7 @@ class unpacker {
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     if constexpr (version == UINT64_MAX) {
       bool has_value;
-      if (!reader_.read((char *)&has_value, sizeof(bool))) [[unlikely]] {
+      if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
         return struct_pack::errc::no_buffer_space;
       }
       if (!has_value) {
@@ -2856,8 +2856,8 @@ class unpacker {
     static_assert(view_reader_t<Reader>,
                   "The Reader isn't a view_reader, can't deserialize "
                   "a trivial_view<T>");
-    if (const char *view = reader_.read_view(sizeof(typename T::value_type));
-        view != nullptr) [[likely]] {
+    const char *view = reader_.read_view(sizeof(typename T::value_type));
+    if SP_LIKELY (view != nullptr) {
       item = *reinterpret_cast<const typename T::value_type *>(view);
       return errc::ok;
     }

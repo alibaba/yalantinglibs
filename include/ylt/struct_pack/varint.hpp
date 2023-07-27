@@ -167,7 +167,7 @@ template <reader_t Reader>
   uint8_t now;
   constexpr const int8_t max_varint_length = sizeof(uint64_t) * 8 / 7 + 1;
   for (int8_t i = 0; i < max_varint_length; ++i) {
-    if (!reader.read((char*)&now, sizeof(char))) [[unlikely]] {
+    if SP_UNLIKELY(!reader.read((char*)&now, sizeof(char))) {
       return struct_pack::errc::no_buffer_space;
     }
     v |= (1ull * (now & 0x7fu)) << (i * 7);
@@ -183,7 +183,7 @@ template <bool NotSkip = true, reader_t Reader, typename T>
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
   if constexpr (NotSkip) {
-    if (ec == struct_pack::errc{}) [[likely]] {
+    if SP_LIKELY(ec == struct_pack::errc{}) {
       if constexpr (sintable_t<T>) {
         t = decode_zigzag<int64_t>(v);
       }
