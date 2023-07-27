@@ -5,6 +5,7 @@
 #include <asio/io_context.hpp>
 #include <atomic>
 #include <cassert>
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -34,8 +35,7 @@ using namespace std::chrono_literals;
 using namespace async_simple::coro;
 auto event =
     [](
-        int lim, coro_io::client_pool<coro_rpc::coro_rpc_client> &pool,
-        ConditionVariable<SpinLock> &cv, SpinLock &lock,
+        int lim, auto &pool, ConditionVariable<SpinLock> &cv, SpinLock &lock,
         std::function<void(coro_rpc::coro_rpc_client &client)> user_op =
             [](auto &client) {
             }) -> async_simple::coro::Lazy<bool> {
@@ -43,8 +43,7 @@ auto event =
   int64_t cnt = 0;
   for (int i = 0; i < lim; ++i) {
     auto op = [&cnt, &lock, &cv, &lim,
-               &user_op](coro_rpc::coro_rpc_client &client)
-        -> async_simple::coro::Lazy<void> {
+               &user_op](auto &client) -> async_simple::coro::Lazy<void> {
       user_op(client);
       auto l = co_await lock.coScopedLock();
       if (++cnt < lim) {
@@ -145,6 +144,40 @@ TEST_CASE("test reconnect") {
     auto res = co_await event(100, *pool, cv, lock);
     CHECK(res);
     CHECK(pool->free_client_count() == 100);
+    server.stop();
+    co_return;
+  }());
+}
+
+struct mock_client : public coro_rpc::coro_rpc_client {
+  async_simple::coro::Lazy<std::errc> reconnect(const std::string &hostname) {
+    auto ec = co_await this->coro_rpc::coro_rpc_client::reconnect(hostname);
+    if (ec!=std::errc{}) {
+      co_await coro_io::sleep_for(200ms);
+    }
+    co_return ec;
+  }
+};
+TEST_CASE("test reconnect retry wait time exinclude reconnect cost time") {
+  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+    auto tp = std::chrono::steady_clock::now();
+    auto pool = coro_io::client_pool<mock_client>::create(
+        "127.0.0.1:8801",
+        {.connect_retry_count = 3, .reconnect_wait_time = 500ms});
+    SpinLock lock;
+    ConditionVariable<SpinLock> cv;
+    coro_rpc::coro_rpc_server server(2, 8801);
+    async_simple::Promise<async_simple::Unit> p;
+    coro_io::sleep_for(350ms).start([&server, &p](auto &&) {
+      auto server_is_started = server.async_start();
+      REQUIRE(server_is_started);
+    });
+    auto res = co_await event(100, *pool, cv, lock);
+    CHECK(res);
+    CHECK(pool->free_client_count() == 100);
+    auto dur = std::chrono::steady_clock::now() - tp;
+    std::cout << dur.count() << std::endl;
+    CHECK((dur >= 500ms && dur <= 600ms));
     server.stop();
     co_return;
   }());
