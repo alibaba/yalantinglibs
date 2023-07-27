@@ -227,16 +227,7 @@ struct serialize_buffer_size {
 
 namespace detail {
 
-[[noreturn]] inline void unreachable() {
-  // Uses compiler specific extensions if possible.
-  // Even if no extension is used, undefined behavior is still raised by
-  // an empty function body and the noreturn attribute.
-#ifdef __GNUC__  // GCC, Clang, ICC
-  __builtin_unreachable();
-#elif defined(_MSC_VER)  // msvc
-  __assume(false);
-#endif
-}
+
 #if __cplusplus >= 202002L
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
@@ -1378,30 +1369,31 @@ constexpr std::size_t calculate_compatible_version_size() {
   return 0;
 }
 
-template <typename Args, typename... ParentArgs>
-constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz);
+template <typename Buffer, typename Args, typename... ParentArgs>
+constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz);
 
-template <typename Args, typename... ParentArgs, std::size_t... I>
-constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz,
+template <typename Buffer, typename Args, typename... ParentArgs,
+          std::size_t... I>
+constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz,
                                               std::index_sequence<I...>) {
-  return (
-      get_compatible_version_numbers<
-          std::remove_cvref_t<std::tuple_element_t<I, Args>>, ParentArgs...>(
-          buffer, sz),
-      ...);
-}
-
-template <typename Arg, typename... ParentArgs, std::size_t... I>
-constexpr void get_variant_compatible_version_numbers(
-    auto &buffer, std::size_t &sz, std::index_sequence<I...>) {
   return (get_compatible_version_numbers<
-              std::remove_cvref_t<std::variant_alternative_t<I, Arg>>,
+              Buffer, std::remove_cvref_t<std::tuple_element_t<I, Args>>,
               ParentArgs...>(buffer, sz),
           ...);
 }
 
-template <typename Arg, typename... ParentArgs>
-constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
+template <typename Buffer, typename Arg, typename... ParentArgs,
+          std::size_t... I>
+constexpr void get_variant_compatible_version_numbers(
+    Buffer &buffer, std::size_t &sz, std::index_sequence<I...>) {
+  return (get_compatible_version_numbers<
+              Buffer, std::remove_cvref_t<std::variant_alternative_t<I, Arg>>,
+              ParentArgs...>(buffer, sz),
+          ...);
+}
+
+template <typename Buffer, typename Arg, typename... ParentArgs>
+constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   if constexpr (check_circle<T, ParentArgs...>())
@@ -1413,50 +1405,50 @@ constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
     if constexpr (id == type_id::non_trivial_class_t ||
                   id == type_id::trivial_class_t) {
       using subArgs = decltype(get_types<T>());
-      get_compatible_version_numbers<subArgs, T, ParentArgs...>(
+      get_compatible_version_numbers<Buffer, subArgs, T, ParentArgs...>(
           buffer, sz, std::make_index_sequence<std::tuple_size_v<subArgs>>());
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        get_compatible_version_numbers<typename T::element_type, T,
+        get_compatible_version_numbers<Buffer, typename T::element_type, T,
                                        ParentArgs...>(buffer, sz);
       }
       else {
-        get_compatible_version_numbers<typename T::value_type, T,
+        get_compatible_version_numbers<Buffer, typename T::value_type, T,
                                        ParentArgs...>(buffer, sz);
       }
     }
     else if constexpr (id == type_id::array_t) {
       get_compatible_version_numbers<
-          std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          Buffer, std::remove_cvref_t<typename get_array_element<T>::type>, T,
           ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::map_container_t) {
-      get_compatible_version_numbers<typename T::key_type, T, ParentArgs...>(
-          buffer, sz);
-      get_compatible_version_numbers<typename T::mapped_type, T, ParentArgs...>(
-          buffer, sz);
+      get_compatible_version_numbers<Buffer, typename T::key_type, T,
+                                     ParentArgs...>(buffer, sz);
+      get_compatible_version_numbers<Buffer, typename T::mapped_type, T,
+                                     ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::set_container_t ||
                        id == type_id::container_t) {
-      get_compatible_version_numbers<typename T::value_type, T, ParentArgs...>(
-          buffer, sz);
+      get_compatible_version_numbers<Buffer, typename T::value_type, T,
+                                     ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::expected_t) {
-      get_compatible_version_numbers<typename T::value_type, T, ParentArgs...>(
-          buffer, sz);
-      get_compatible_version_numbers<typename T::error_type, T, ParentArgs...>(
-          buffer, sz);
+      get_compatible_version_numbers<Buffer, typename T::value_type, T,
+                                     ParentArgs...>(buffer, sz);
+      get_compatible_version_numbers<Buffer, typename T::error_type, T,
+                                     ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::variant_t) {
-      get_variant_compatible_version_numbers<T, T, ParentArgs...>(
+      get_variant_compatible_version_numbers<Buffer, T, T, ParentArgs...>(
           buffer, sz, std::make_index_sequence<std::variant_size_v<T>>{});
     }
   }
 }
 
-template <trivial_view Arg, typename... ParentArgs>
-constexpr void get_compatible_version_numbers(auto &buffer, std::size_t &sz) {
+template <typename Buffer, trivial_view Arg, typename... ParentArgs>
+constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
   return;
 };
 
@@ -1505,7 +1497,7 @@ template <typename T>
 constexpr auto STRUCT_PACK_INLINE get_sorted_compatible_version_numbers() {
   std::array<uint64_t, calculate_compatible_version_size<T>()> buffer;
   std::size_t sz = 0;
-  get_compatible_version_numbers<T>(buffer, sz);
+  get_compatible_version_numbers<decltype(buffer), T>(buffer, sz);
   compile_time_sort(buffer);
   return buffer;
 }
@@ -1684,9 +1676,10 @@ class packer {
   }
 
  private:
-  template <std::size_t size_type, uint64_t version>
-  constexpr void STRUCT_PACK_INLINE serialize_many(const auto &first_item,
-                                                   const auto &...items) {
+  template <std::size_t size_type, uint64_t version, typename First,
+            typename... Args>
+  constexpr void STRUCT_PACK_INLINE serialize_many(const First &first_item,
+                                                   const Args &...items) {
     serialize_one<size_type, version>(first_item);
     if constexpr (sizeof...(items) > 0) {
       serialize_many<size_type, version>(items...);
@@ -1699,8 +1692,8 @@ class packer {
     }
   }
 
-  template <std::size_t size_type, uint64_t version>
-  constexpr void inline serialize_one(const auto &item) {
+  template <std::size_t size_type, uint64_t version, typename T>
+  constexpr void inline serialize_one(const T &item) {
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
@@ -2025,23 +2018,23 @@ class unpacker {
     }
     switch (size_type_) {
       case 0:
-        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<1, UINT64_MAX, true>(t, args...);
         break;
 #ifdef STRUCT_PACK_OPTIMIZE
       case 1:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
       case 2:
-        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
         break;
 #else
       case 1:
       case 2:
       case 3:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
       default:
@@ -2077,23 +2070,23 @@ class unpacker {
     }
     switch (size_type_) {
       case 0:
-        err_code = deserialize_many<1, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<1, UINT64_MAX, true>(t, args...);
         break;
 #ifdef STRUCT_PACK_OPTIMIZE
       case 1:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
       case 2:
-        err_code = deserialize_many<4, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
         break;
 #else
       case 1:
       case 2:
       case 3:
-        err_code = deserialize_many<2, UINT64_MAX>(t, args...);
+        err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
       default:
@@ -2173,8 +2166,9 @@ class unpacker {
     switch (size_type_) {
       case 0:
         ([&] {
-          err_code = deserialize_many<1, compatible_version_number<Type>[I]>(
-              t, args...);
+          err_code =
+              deserialize_many<1, compatible_version_number<Type>[I], true>(
+                  t, args...);
           return err_code == errc::ok;
         }() &&
          ...);
@@ -2182,24 +2176,27 @@ class unpacker {
 #ifdef STRUCT_PACK_OPTIMIZE
       case 1:
         ([&] {
-          err_code = deserialize_many<2, compatible_version_number<Type>[I]>(
-              t, args...);
+          err_code =
+              deserialize_many<2, compatible_version_number<Type>[I], true>(
+                  t, args...);
           return err_code == errc::ok;
         }() &&
          ...);
         break;
       case 2:
         ([&] {
-          err_code = deserialize_many<4, compatible_version_number<Type>[I]>(
-              t, args...);
+          err_code =
+              deserialize_many<4, compatible_version_number<Type>[I], true>(
+                  t, args...);
           return err_code == errc::ok;
         }() &&
          ...);
         break;
       case 3:
         ([&] {
-          err_code = deserialize_many<8, compatible_version_number<Type>[I]>(
-              t, args...);
+          err_code =
+              deserialize_many<8, compatible_version_number<Type>[I], true>(
+                  t, args...);
           return err_code == errc::ok;
         }() &&
          ...);
@@ -2209,8 +2206,9 @@ class unpacker {
       case 2:
       case 3:
         ([&] {
-          err_code = deserialize_many<2, compatible_version_number<Type>[I]>(
-              t, args...);
+          err_code =
+              deserialize_many<2, compatible_version_number<Type>[I], true>(
+                  t, args...);
           return err_code == errc::ok;
         }() &&
          ...);
@@ -2327,10 +2325,9 @@ class unpacker {
     return err_code;
   }
 
-  template <size_t index, typename size_type, typename version,
-            typename NotSkip>
+  template <typename size_type, typename version, typename NotSkip>
   struct variant_construct_helper {
-    template <typename unpack, typename variant_t>
+    template <size_t index, typename unpack, typename variant_t>
     static STRUCT_PACK_INLINE constexpr void run(unpack &unpacker,
                                                  variant_t &v) {
       if constexpr (index >= std::variant_size_v<variant_t>) {
@@ -2420,13 +2417,14 @@ class unpacker {
     return ret;
   }
 
-  template <size_t size_type, uint64_t version, bool NotSkip = true>
+  template <size_t size_type, uint64_t version, bool NotSkip>
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_many() {
     return {};
   }
-  template <size_t size_type, uint64_t version, bool NotSkip = true>
+  template <size_t size_type, uint64_t version, bool NotSkip, typename First,
+            typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE
-  deserialize_many(auto &&first_item, auto &&...items) {
+  deserialize_many(First &&first_item, Args &&...items) {
     auto code = deserialize_one<size_type, version, NotSkip>(first_item);
     if SP_UNLIKELY (code != struct_pack::errc{}) {
       return code;
@@ -2444,8 +2442,8 @@ class unpacker {
     }
   }
 
-  template <size_t size_type, uint64_t version, bool NotSkip>
-  constexpr struct_pack::errc inline deserialize_one(auto &item) {
+  template <size_t size_type, uint64_t version, bool NotSkip, typename T>
+  constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
@@ -2533,12 +2531,12 @@ class unpacker {
           // value is the element of map/set container.
           // if the type is set, then value is set::value_type;
           // if the type is map, then value is pair<key_type,mapped_type>
-          decltype([]<typename T>(const T &) {
-            if constexpr (map_container<T>) {
-              return std::pair<typename T::key_type, typename T::mapped_type>{};
+          decltype([]<typename U>(const U &) {
+            if constexpr (map_container<U>) {
+              return std::pair<typename U::key_type, typename U::mapped_type>{};
             }
             else {
-              return typename T::value_type{};
+              return typename U::value_type{};
             }
           }(item)) value;
           if constexpr (is_trivial_serializable<decltype(value)>::value &&
@@ -2665,11 +2663,10 @@ class unpacker {
           return struct_pack::errc::invalid_buffer;
         }
         else {
-          template_switch<variant_construct_helper,
-                          std::integral_constant<std::size_t, size_type>,
-                          std::integral_constant<std::uint64_t, version>,
-                          std::integral_constant<bool, NotSkip>>(index, *this,
-                                                                 item);
+          template_switch<variant_construct_helper<
+              std::integral_constant<std::size_t, size_type>,
+              std::integral_constant<std::uint64_t, version>,
+              std::integral_constant<bool, NotSkip>>>(index, *this, item);
         }
       }
       else if constexpr (std::is_class_v<type>) {
