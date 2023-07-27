@@ -24,6 +24,11 @@ class client_queue {
   moodycamel::ConcurrentQueue<client_t> queue_[2];
   std::atomic_int_fast16_t selected_index_ = 0;
   std::atomic<std::size_t> size_[2] = {};
+
+ public:
+  std::atomic<std::size_t> collecter_cnt_ = 0;
+
+ private:
   struct fake_client {
     template <typename T>
     fake_client& operator=(T&&) noexcept {
