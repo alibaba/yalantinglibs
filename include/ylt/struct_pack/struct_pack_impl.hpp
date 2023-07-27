@@ -348,7 +348,7 @@ enum class type_id {
 };
 
 template <typename T>
-consteval type_id get_varint_type() {
+constexpr type_id get_varint_type() {
   if constexpr (std::is_same_v<var_int32_t, T>) {
     return type_id::v_int32_t;
   }
@@ -367,7 +367,7 @@ consteval type_id get_varint_type() {
 }
 
 template <typename T>
-consteval type_id get_integral_type() {
+constexpr type_id get_integral_type() {
   if constexpr (std::is_same_v<int32_t, T>) {
     return type_id::int32_t;
   }
@@ -472,7 +472,7 @@ consteval type_id get_integral_type() {
 }
 
 template <typename T>
-consteval type_id get_floating_point_type() {
+constexpr type_id get_floating_point_type() {
   if constexpr (std::is_same_v<float, T>) {
     if constexpr (!std::numeric_limits<float>::is_iec559 ||
                   sizeof(float) != 4) {
@@ -509,7 +509,7 @@ consteval type_id get_floating_point_type() {
 }
 
 template <typename T>
-consteval type_id get_type_id() {
+constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8);
   // compatible member, which should be ignored in MD5 calculated.
   if constexpr (optional<T> && is_compatible<T>) {
@@ -581,7 +581,7 @@ consteval type_id get_type_id() {
 }  // namespace detail
 
 template <size_t size>
-consteval decltype(auto) get_size_literal() {
+constexpr decltype(auto) get_size_literal() {
   static_assert(sizeof(size_t) <= 8);
   if constexpr (size < 1ull * 127) {
     return string_literal<char, 1>{{static_cast<char>(size + 129)}};
@@ -651,7 +651,7 @@ consteval decltype(auto) get_size_literal() {
   }
 }
 template <typename arg, typename... ParentArgs>
-consteval std::size_t check_circle() {
+constexpr std::size_t check_circle() {
   using types_tuple = std::tuple<ParentArgs...>;
   if constexpr (sizeof...(ParentArgs)) {
     return []<std::size_t... I>(std::index_sequence<I...>) {
@@ -677,7 +677,7 @@ struct get_array_element<T[sz]> {
 };
 
 template <typename T>
-std::size_t consteval get_array_size() {
+std::size_t constexpr get_array_size() {
   if constexpr (array<T> || c_array<T>) {
     return sizeof(T) / sizeof(typename get_array_element<T>::type);
   }
@@ -707,13 +707,13 @@ constexpr size_info inline calculate_one_size(const T &item);
 namespace align {
 
 template <typename T>
-consteval std::size_t alignment_impl();
+constexpr std::size_t alignment_impl();
 
 template <typename T>
 constexpr std::size_t alignment_v = alignment_impl<T>();
 
 template <typename T>
-consteval std::size_t default_alignment() {
+constexpr std::size_t default_alignment() {
   if constexpr (!is_trivial_serializable<T>::value && !is_trivial_view_v<T>) {
     using type = decltype(get_types<T>());
     return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
@@ -736,10 +736,10 @@ template <typename T>
 constexpr std::size_t default_alignment_v = default_alignment<T>();
 
 template <typename T>
-consteval std::size_t alignment_impl();
+constexpr std::size_t alignment_impl();
 
 template <typename T>
-consteval std::size_t pack_alignment_impl() {
+constexpr std::size_t pack_alignment_impl() {
   static_assert(std::is_class_v<T>);
   static_assert(!is_trivial_view_v<T>);
   constexpr auto ret = struct_pack::pack_alignment_v<T>;
@@ -765,7 +765,7 @@ template <typename T>
 constexpr std::size_t pack_alignment_v = pack_alignment_impl<T>();
 
 template <typename T>
-consteval std::size_t alignment_impl() {
+constexpr std::size_t alignment_impl() {
   if constexpr (struct_pack::alignment_v<T> == 0 &&
                 struct_pack::pack_alignment_v<T> == 0) {
     return default_alignment_v<T>;
@@ -887,13 +887,13 @@ struct calculate_trival_obj_size {
 // [Coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html)
 // can not detect code that is run at compile time.
 template <typename Args, typename... ParentArgs, std::size_t... I>
-consteval decltype(auto) get_type_literal(std::index_sequence<I...>);
+constexpr decltype(auto) get_type_literal(std::index_sequence<I...>);
 
 template <typename Args, typename... ParentArgs, std::size_t... I>
-consteval decltype(auto) get_variant_literal(std::index_sequence<I...>);
+constexpr decltype(auto) get_variant_literal(std::index_sequence<I...>);
 
 template <typename Arg, typename... ParentArgs>
-consteval decltype(auto) get_type_literal() {
+constexpr decltype(auto) get_type_literal() {
   constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
   if constexpr (has_cycle) {
     static_assert(has_cycle >= 2);
@@ -981,19 +981,19 @@ consteval decltype(auto) get_type_literal() {
 }
 
 template <trivial_view Arg, typename... ParentArgs>
-consteval decltype(auto) get_type_literal() {
+constexpr decltype(auto) get_type_literal() {
   return get_type_literal<typename Arg::value_type, ParentArgs...>();
 }
 
 template <typename Args, typename... ParentArgs, std::size_t... I>
-consteval decltype(auto) get_type_literal(std::index_sequence<I...>) {
+constexpr decltype(auto) get_type_literal(std::index_sequence<I...>) {
   return ((get_type_literal<std::remove_cvref_t<std::tuple_element_t<I, Args>>,
                             ParentArgs...>()) +
           ...);
 }
 
 template <typename Args, typename... ParentArgs, std::size_t... I>
-consteval decltype(auto) get_variant_literal(std::index_sequence<I...>) {
+constexpr decltype(auto) get_variant_literal(std::index_sequence<I...>) {
   return ((get_type_literal<
               std::remove_cvref_t<std::variant_alternative_t<I, Args>>, Args,
               ParentArgs...>()) +
@@ -1001,7 +1001,7 @@ consteval decltype(auto) get_variant_literal(std::index_sequence<I...>) {
 }
 
 template <typename Parent, typename... Args>
-consteval decltype(auto) get_types_literal_impl() {
+constexpr decltype(auto) get_types_literal_impl() {
   if constexpr (std::is_same_v<Parent, void>)
     return (get_type_literal<Args>() + ...);
   else
@@ -1009,7 +1009,7 @@ consteval decltype(auto) get_types_literal_impl() {
 }
 
 template <typename T, typename... Args>
-consteval decltype(auto) get_types_literal() {
+constexpr decltype(auto) get_types_literal() {
   constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
   constexpr auto end =
       string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
@@ -1035,12 +1035,12 @@ consteval decltype(auto) get_types_literal() {
 }
 
 template <trivial_view T, typename... Args>
-consteval decltype(auto) get_types_literal() {
+constexpr decltype(auto) get_types_literal() {
   return get_types_literal<T::value_type, Args...>();
 }
 
 template <typename T, typename Tuple, std::size_t... I>
-consteval decltype(auto) get_types_literal(std::index_sequence<I...>) {
+constexpr decltype(auto) get_types_literal(std::index_sequence<I...>) {
   return get_types_literal<
       T, std::remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
 }
@@ -1141,13 +1141,13 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
 }
 
 template <typename T, typename... Args>
-consteval uint32_t get_types_code_impl() {
+constexpr uint32_t get_types_code_impl() {
   constexpr auto str = get_types_literal<T, std::remove_cvref_t<Args>...>();
   return MD5::MD5Hash32Constexpr(str.data(), str.size());
 }
 
 template <typename T, typename Tuple, size_t... I>
-consteval uint32_t get_types_code(std::index_sequence<I...>) {
+constexpr uint32_t get_types_code(std::index_sequence<I...>) {
   return get_types_code_impl<T, std::tuple_element_t<I, Tuple>...>();
 }
 
@@ -1271,13 +1271,13 @@ calculate_payload_size(const T &item, const Args &...items) {
 }
 
 template <typename T, typename Tuple>
-consteval uint32_t get_types_code() {
+constexpr uint32_t get_types_code() {
   return detail::get_types_code<T, Tuple>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename T, uint64_t version = 0>
-consteval bool check_if_compatible_element_exist() {
+constexpr bool check_if_compatible_element_exist() {
   using U = std::remove_cvref_t<T>;
   return detail::check_if_compatible_element_exist_impl<version, U>(
       std::make_index_sequence<std::tuple_size_v<U>>{});
@@ -1634,7 +1634,7 @@ class packer {
 
  private:
   template <typename T, typename... Args>
-  static consteval uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
+  static constexpr uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
       return get_types_code<std::remove_cvref_t<T>,
                             std::remove_cvref_t<decltype(get_types<T>())>>();
@@ -1646,7 +1646,7 @@ class packer {
     }
   }
   template <serialize_config conf, typename T, typename... Args>
-  static consteval uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
+  static constexpr uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
     if constexpr (serialize_static_config<serialize_type>::has_compatible ||
                   check_if_add_type_literal<conf, serialize_type>()) {

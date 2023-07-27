@@ -49,11 +49,11 @@ constexpr void for_each(Contexts &...contexts) {
 }
 
 template <typename T>
-consteval std::size_t members_count();
+constexpr std::size_t members_count();
 template <typename T>
-consteval std::size_t pack_align();
+constexpr std::size_t pack_align();
 template <typename T>
-consteval std::size_t alignment();
+constexpr std::size_t alignment();
 }  // namespace detail
 
 template <typename T>
@@ -416,7 +416,7 @@ namespace detail {
   };
 
   template <typename T, typename... Args>
-  consteval std::size_t members_count_impl() {
+  constexpr std::size_t members_count_impl() {
     if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
       return members_count_impl<T, Args..., UniversalVectorType>();
     }
@@ -449,7 +449,7 @@ namespace detail {
   }
 
   template <typename T>
-  consteval std::size_t members_count() {
+  constexpr std::size_t members_count() {
     if constexpr (tuple_size<T>) {
       return std::tuple_size<T>::value;
     }
