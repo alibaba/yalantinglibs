@@ -99,9 +99,15 @@ class client_pool : public std::enable_shared_from_this<
 
   async_simple::coro::Lazy<std::unique_ptr<client_t>> reconnect(
       std::unique_ptr<client_t> client) {
+    auto pre_time_point = std::chrono::steady_clock::now();
     bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
     for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
-      co_await coro_io::sleep_for(pool_config_.reconnect_wait_time);
+      auto post_time_point = std::chrono::steady_clock::now();
+      auto wait_time =
+          pool_config_.reconnect_wait_time - (post_time_point - pre_time_point);
+      if (wait_time > std::chrono::milliseconds{10})
+        co_await coro_io::sleep_for(wait_time);
+      pre_time_point = post_time_point;
       ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
     }
     co_return ok ? std::move(client) : nullptr;
