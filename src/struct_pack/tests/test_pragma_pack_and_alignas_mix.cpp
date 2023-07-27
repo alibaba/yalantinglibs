@@ -18,7 +18,6 @@
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
-#include <ylt/util/expected.hpp>
 using namespace struct_pack;
 using namespace doctest;
 // clang-format off
@@ -26,13 +25,8 @@ static std::string alignment_requirement_err_msg = "different alignment requirem
 // clang-format on
 TEST_SUITE_BEGIN("test_pragma_pack_and_alignas_mix");
 namespace test_pragma_pack_and_alignas_mix {
-template <typename T>
-concept Dummy = requires {
-  T().a;
-  T().b;
-};
 
-template <Dummy A, Dummy B>
+template <typename A, typename B>
 bool operator==(const A& a, const B& b) {
   return a.a == b.a && a.b == b.b;
 }

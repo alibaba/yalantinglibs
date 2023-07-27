@@ -26,13 +26,8 @@ static std::string alignment_requirement_err_msg = "different alignment requirem
 // clang-format on
 TEST_SUITE_BEGIN("test_pragma_pack");
 namespace test_pragma_pack {
-template <typename T>
-concept Dummy = requires {
-  T().a;
-  T().b;
-};
 
-template <Dummy A, Dummy B>
+template <typename A, typename B>
 bool operator==(const A& a, const B& b) {
   return a.a == b.a && a.b == b.b;
 }

@@ -202,7 +202,7 @@ TEST_CASE("testing std::array") {
   std::array<person, 2> v3{};
   test_tuple_like(v3);
 }
-
+#if __cplusplus >= 202002L
 TEST_CASE("test_trivial_copy_tuple") {
   tuplet::tuple tp = tuplet::make_tuple(1, 2);
 
@@ -250,7 +250,7 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
   CHECK(ec == struct_pack::errc{});
   CHECK(obj.tp == obj1.tp);
 }
-
+#endif
 void test_c_array(auto &v) {
   auto ret = serialize(v);
 

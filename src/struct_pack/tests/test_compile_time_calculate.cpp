@@ -263,6 +263,7 @@ TEST_CASE("type calculate") {
         "get same MD5");
     CHECK(deserialize<std::pair<int, std::string>>(serialize(person{})));
   }
+#if __cplusplus >= 202002L
   {
     static_assert(get_type_code<tuplet::tuple<int, std::string>>() ==
                       get_type_code<person>(),
@@ -278,6 +279,7 @@ TEST_CASE("type calculate") {
     CHECK(deserialize<std::pair<int, std::string>>(
         serialize(tuplet::tuple<int, std::string>{})));
   }
+#endif
   {
     static_assert(get_type_code<std::tuple<int, std::string>>() !=
                       get_type_code<person>(),

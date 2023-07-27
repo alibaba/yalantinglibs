@@ -1,3 +1,4 @@
+#if __cplusplus >= 202002L
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -306,3 +307,4 @@ TEST_CASE("Check tuple decomposition by move") {
   assert(*b == 2);
   assert(c == "Hello, world!");
 }
+#endif
