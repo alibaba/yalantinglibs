@@ -142,7 +142,7 @@ class client_pool : public std::enable_shared_from_this<
       if (clients.collecter_cnt_.compare_exchange_strong(expected, 1)) {
         collect_idle_timeout_client(
             this->shared_from_this(), clients,
-            is_short_client ? std::min(pool_config_.idle_timeout,
+            is_short_client ? (std::min)(pool_config_.idle_timeout,
                                        pool_config_.short_connect_idle_timeout)
                             : pool_config_.idle_timeout,
             pool_config_.idle_queue_per_max_clear_count)
