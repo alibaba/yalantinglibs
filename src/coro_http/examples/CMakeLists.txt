@@ -29,3 +29,8 @@ endif()
 
 add_executable(coro_http_example example.cpp)
 add_executable(coro_http_channel channel.cpp)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
+    target_link_libraries(coro_http_example wsock32 ws2_32)
+    target_link_libraries(coro_http_channel wsock32 ws2_32)
+endif()

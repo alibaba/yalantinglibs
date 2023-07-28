@@ -29,3 +29,7 @@ endif()
 
 add_executable(coro_io_example main.cpp)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
+    target_link_libraries(coro_io_example wsock32 ws2_32)
+endif()
+
