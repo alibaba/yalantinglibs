@@ -51,6 +51,10 @@ endif()
 target_compile_definitions(coro_rpc_example_use_rest_rpc_protocol PRIVATE HAVE_MSGPACK)
 target_compile_definitions(coro_rpc_example_use_rest_rpc_protocol PRIVATE MSGPACK_NO_BOOST)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
+  target_link_libraries(coro_rpc_example_use_rest_rpc_protocol wsock32 ws2_32)
+endif()
+
 else()
   message(WARNING "Could Not Found Msgpack, disable coro_rpc_example_use_rest_rpc_protocol")
 endif()
