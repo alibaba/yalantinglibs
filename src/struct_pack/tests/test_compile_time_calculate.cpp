@@ -3,6 +3,9 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#if __cplusplus >= 202002L
+#include <ylt/struct_pack/tuple.hpp>
+#endif
 
 using namespace struct_pack;
 
@@ -35,7 +38,7 @@ TEST_CASE("test members_count") {
     CHECK(ret);
   }
 }
-
+#if __cplusplus >= 202002L
 struct type_calculate_test_1 {
   tuplet::tuple<
       std::pair<std::map<int, std::string>, std::vector<std::list<int>>>,
@@ -52,7 +55,7 @@ struct type_calculate_test_2 {
     std::optional<int> d;
   } e;
 };
-
+#endif
 #ifndef NDEBUG
 TEST_CASE("test hash conflict detected") {
   int32_t value = 42;
@@ -279,7 +282,6 @@ TEST_CASE("type calculate") {
     CHECK(deserialize<std::pair<int, std::string>>(
         serialize(tuplet::tuple<int, std::string>{})));
   }
-#endif
   {
     static_assert(get_type_code<std::tuple<int, std::string>>() !=
                       get_type_code<person>(),
@@ -327,6 +329,7 @@ TEST_CASE("type calculate") {
     CHECK(!deserialize<int>(serialize(tuplet::tuple<int>{})));
   }
 
+#endif
   {
     static_assert(get_type_code<std::tuple<int>>() !=
                       get_type_code<std::tuple<std::tuple<int>>>(),

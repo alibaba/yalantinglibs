@@ -585,7 +585,6 @@ TEST_CASE("test get type code") {
     CHECK(str2 == val2);
   }
 }
-
 TEST_CASE("testing partial deserialization with index") {
   person p{20, "tom"};
   nested_object nested{};
@@ -595,10 +594,12 @@ TEST_CASE("testing partial deserialization with index") {
   REQUIRE(pair);
   CHECK(pair.value() == "tom");
 
+#if __cplusplus >= 202002L
   auto pair1 =
       get_field<tuplet::tuple<int, std::string>, 0>(ret.data(), ret.size());
-  REQUIRE(pair);
+  REQUIRE(pair1);
   CHECK(pair1.value() == 20);
+#endif
 }
 
 namespace array_test {
