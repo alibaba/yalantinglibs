@@ -227,7 +227,6 @@ struct serialize_buffer_size {
 
 namespace detail {
 
-
 #if __cplusplus >= 202002L
 template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
@@ -243,7 +242,7 @@ constexpr auto get_types() {
   using T = std::remove_cvref_t<U>;
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 string<T> || container<T> || optional<T> || unique_ptr<T> ||
-                variant<T> || expected<T> || array<T> || c_array<T> ||
+                is_variant_v<T> || expected<T> || array<T> || c_array<T> ||
                 std::is_same_v<std::monostate, T>
 #if __GNUC__ || __clang__
                 || std::is_same_v<__int128, T> ||
@@ -277,22 +276,45 @@ constexpr auto get_types() {
 }
 
 // clang-format off
+
+#if __cpp_concepts < 201907L
+
+template <typename T, typename = void>
+struct trivially_copyable_container_impl : std::false_type {};
+
+template <typename T>
+struct trivially_copyable_container_impl<T, std::void_t<is_trivial_serializable<typename T::value_type>::value>>
+    : std::true_type {};
+
 template <typename Type>
-concept trivially_copyable_container =
+constexpr bool trivially_copyable_container =
+    continuous_container<Type> && trivially_copyable_container_impl::value;
+
+#else
+
+template <typename Type>
+constexpr bool trivially_copyable_container =
     continuous_container<Type> &&
     requires(Type container) {
       requires is_trivial_serializable<typename Type::value_type>::value;
     };
 
+#endif
+// clang-format on
 template <typename T>
-concept struct_pack_byte = std::is_same_v<char, T>
-                           || std::is_same_v<unsigned char, T>
-                           || std::is_same_v<std::byte, T>;
+constexpr bool struct_pack_byte =
+    std::is_same_v<char, T> || std::is_same_v<unsigned char, T> ||
+    std::is_same_v<std::byte, T>;
 
 template <typename T>
-concept struct_pack_buffer = trivially_copyable_container<T>
-                             && struct_pack_byte<typename T::value_type>;
-// clang-format on
+#if __cpp_concepts < 201907L
+constexpr bool
+#else
+concept
+#endif
+    struct_pack_buffer = trivially_copyable_container<T> &&
+    struct_pack_byte<typename T::value_type>;
+
 enum class type_id {
   // compatible template type
   compatible_t = 0,
@@ -507,7 +529,7 @@ template <typename T>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8);
   // compatible member, which should be ignored in MD5 calculated.
-  if constexpr (optional<T> && is_compatible<T>) {
+  if constexpr (optional<T> && is_compatible_v<T>) {
     return type_id::compatible_t;
   }
   else if constexpr (std::is_enum_v<T>) {
@@ -549,7 +571,7 @@ constexpr type_id get_type_id() {
   else if constexpr (optional<T> || unique_ptr<T>) {
     return type_id::optional_t;
   }
-  else if constexpr (variant<T>) {
+  else if constexpr (is_variant_v<T>) {
     static_assert(
         std::variant_size_v<T> > 1 ||
             (std::variant_size_v<T> == 1 &&
@@ -1205,7 +1227,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
       ret += calculate_one_size(*item);
     }
   }
-  else if constexpr (variant<type>) {
+  else if constexpr (is_variant_v<type>) {
     ret.total = sizeof(uint8_t);
     ret += std::visit(
         [](const auto &e) {
@@ -1279,11 +1301,11 @@ constexpr bool check_if_compatible_element_exist() {
 }
 
 template <typename T, uint64_t version = 0>
-concept exist_compatible_member =
+constexpr bool exist_compatible_member =
     check_if_compatible_element_exist<decltype(get_types<T>()), version>();
 // clang-format off
 template <typename T, uint64_t version = 0>
-concept unexist_compatible_member = !
+constexpr bool unexist_compatible_member = !
 exist_compatible_member<decltype(get_types<T>()), version>;
 // clang-format on
 template <typename Args, typename... ParentArgs>
@@ -1603,11 +1625,23 @@ get_serialize_runtime_info(const Args &...args) {
   return ret;
 }
 
-template <writer_t writer, typename serialize_type>
+template <
+#if __cpp_concepts < 201907L
+    writer_t writer,
+#else
+    typename writer,
+#endif
+    typename serialize_type>
 class packer {
+
  public:
   packer(writer &writer_, const serialize_buffer_size &info)
-      : writer_(writer_), info(info) {}
+      : writer_(writer_), info(info) {
+#if __cpp_concepts < 201907L
+    static_assert(writer_t<writer>,
+                  "The writer type must satisfy requirements!");
+#endif
+  }
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
@@ -1708,6 +1742,13 @@ class packer {
                          id == type_id::int128_t || id == type_id::uint128_t) {
         writer_.write((char *)&item, sizeof(type));
       }
+      else if constexpr (unique_ptr<type>) {
+        bool has_value = (item != nullptr);
+        writer_.write((char *)&has_value, sizeof(char));
+        if (has_value) {
+          serialize_one<size_type, version>(*item);
+        }
+      }
       else if constexpr (detail::varint_t<type>) {
         detail::serialize_varint(writer_, item);
       }
@@ -1780,7 +1821,7 @@ class packer {
           serialize_one<size_type, version>(*item);
         }
       }
-      else if constexpr (variant<type>) {
+      else if constexpr (is_variant_v<type>) {
         static_assert(std::variant_size_v<type> < 256,
                       "variant's size is too large");
         uint8_t index = item.index();
@@ -1843,6 +1884,11 @@ class packer {
           }
         }
       }
+      else if constexpr (unique_ptr<type>) {
+        if (item != nullptr) {
+          serialize_one<size_type, version>(*item);
+        }
+      }
       else if constexpr (id == type_id::array_t) {
         for (const auto &i : item) {
           serialize_one<size_type, version>(i);
@@ -1866,7 +1912,7 @@ class packer {
           serialize_one<size_type, version>(*item);
         }
       }
-      else if constexpr (variant<type>) {
+      else if constexpr (is_variant_v<type>) {
         std::visit(
             [this](const auto &e) {
               this->serialize_one<size_type, version>(e);
@@ -1891,22 +1937,6 @@ class packer {
     return;
   }
 
-  template <std::size_t size_type, uint64_t version, unique_ptr T>
-  constexpr void inline serialize_one(const T &item) {
-    if constexpr (version == UINT64_MAX) {
-      bool has_value = (item != nullptr);
-      writer_.write((char *)&has_value, sizeof(char));
-      if (has_value) {
-        serialize_one<size_type, version>(*item);
-      }
-    }
-    else if constexpr (exist_compatible_member<T, version>) {
-      if (item != nullptr) {
-        serialize_one<size_type, version>(*item);
-      }
-    }
-  }
-
   template <std::size_t size_type, uint64_t version, trivial_view T>
   constexpr void inline serialize_one(const T &item) {
     serialize_one<size_type, version>(item.get());
@@ -1919,10 +1949,18 @@ class packer {
 };  // namespace detail
 
 template <serialize_config conf = serialize_config{},
-          struct_pack::writer_t Writer, typename... Args>
+#if __cpp_concepts < 201907L
+          struct_pack::writer_t Writer,
+#else
+          typename Writer,
+#endif
+          typename... Args>
 STRUCT_PACK_MAY_INLINE void serialize_to(Writer &writer,
                                          const serialize_buffer_size &info,
                                          const Args &...args) {
+#if __cpp_concepts < 201907L
+  static_assert(writer_t<writer>, "The writer type must satisfy requirements!");
+#endif
   static_assert(sizeof...(args) > 0);
   detail::packer<Writer, detail::get_args_type<Args...>> o(writer, info);
   switch ((info.metainfo() & 0b11000) >> 3) {
@@ -1981,25 +2019,24 @@ struct memory_reader {
     return true;
   }
   std::size_t tellg() { return (std::size_t)now; }
-  bool seekg(std::size_t pos) {
-    auto tmp = (const char *)pos;
-    if (tmp > end)
-      return false;
-    else {
-      now = tmp;
-      return true;
-    }
-  }
 };
-
+#if __cpp_concepts < 201907L
 template <reader_t Reader>
+#else
+template <typename Reader>
+#endif
 class unpacker {
  public:
   unpacker() = delete;
   unpacker(const unpacker &) = delete;
   unpacker &operator=(const unpacker &) = delete;
 
-  STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {}
+  STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {
+#if __cpp_concepts < 201907L
+    static_assert(reader_t<writer>,
+                  "The writer type must satisfy requirements!");
+#endif
+  }
 
   template <typename T, typename... Args>
   STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
@@ -2466,6 +2503,17 @@ class unpacker {
           return reader_.ignore(sizeof(type)) ? errc{} : errc::no_buffer_space;
         }
       }
+      else if constexpr (unique_ptr<type>) {
+        bool has_value;
+        if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
+          return struct_pack::errc::no_buffer_space;
+        }
+        if (!has_value) {
+          return {};
+        }
+        item = std::make_unique<typename T::element_type>();
+        deserialize_one<size_type, version, NotSkip>(*item);
+      }
       else if constexpr (detail::varint_t<type>) {
         code = detail::deserialize_varint<NotSkip>(reader_, item);
       }
@@ -2654,7 +2702,7 @@ class unpacker {
           }
         }
       }
-      else if constexpr (variant<type>) {
+      else if constexpr (is_variant_v<type>) {
         uint8_t index;
         if SP_UNLIKELY (!reader_.read((char *)&index, sizeof(index))) {
           return struct_pack::errc::no_buffer_space;
@@ -2738,6 +2786,12 @@ class unpacker {
           }
         }
       }
+      else if constexpr (unique_ptr<type>) {
+        if (item == nullptr) {
+          return {};
+        }
+        deserialize_one<size_type, version, NotSkip>(*item);
+      }
       else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
           code = deserialize_one<size_type, version, NotSkip>(i);
@@ -2814,7 +2868,7 @@ class unpacker {
           }
         }
       }
-      else if constexpr (variant<type>) {
+      else if constexpr (is_variant_v<type>) {
         std::visit(
             [this](auto &item) {
               deserialize_one<size_type, version, NotSkip>(item);
@@ -2828,28 +2882,6 @@ class unpacker {
       }
     }
     return code;
-  }
-
-  template <size_t size_type, uint64_t version, bool NotSkip, unique_ptr T>
-  constexpr struct_pack::errc inline deserialize_one(T &item) {
-    if constexpr (version == UINT64_MAX) {
-      bool has_value;
-      if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
-        return struct_pack::errc::no_buffer_space;
-      }
-      if (!has_value) {
-        return {};
-      }
-      item = std::make_unique<typename T::element_type>();
-      deserialize_one<size_type, version, NotSkip>(*item);
-    }
-    else if constexpr (exist_compatible_member<T, version>) {
-      if (item == nullptr) {
-        return {};
-      }
-      deserialize_one<size_type, version, NotSkip>(*item);
-    }
-    return struct_pack::errc{};
   }
 
   template <size_t size_type, uint64_t version, bool NotSkip, trivial_view T>

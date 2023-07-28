@@ -76,6 +76,8 @@ constexpr std::size_t pack_alignment_v = 0;
 template <typename T>
 constexpr std::size_t alignment_v = 0;
 
+#if __cpp_concepts < 201907L
+
 template <typename T>
 concept writer_t = requires(T t) {
   t.write((const char *)nullptr, std::size_t{});
@@ -98,16 +100,81 @@ concept seek_reader_t = reader_t<T> && requires(T t) {
   t.seekg(std::size_t{});
 };
 
+#else
+
+template <typename T, typename = void>
+struct writer_t_impl : std::false_type {};
+
+template <typename T>
+struct writer_t_impl<T, std::void_t<decltype(std::declval<T>().write(
+                            (const char *)nullptr, std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool writer_t = writer_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct reader_t_impl : std::false_type {};
+
+template <typename T>
+struct reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().read((char *)nullptr,
+                                                   std::size_t{})),
+                   decltype(std::declval<T>().ignore(std::size_t{})),
+                   decltype(std::declval<T>().tellg())>> : std::true_type {};
+
+template <typename T>
+constexpr bool reader_t = reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct view_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct view_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().read_view(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool view_reader_t = reader_t<T> &&view_reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct seek_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct seek_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().seekg(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool seek_reader_t = reader_t<T> &&seek_reader_t_impl<T>::value;
+
+#endif
+
 template <typename T, uint64_t version = 0>
 struct compatible;
 
 // clang-format off
 namespace detail {
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept deserialize_view = requires(Type container) {
     container.size();
     container.data();
   };
+#else
+
+template <typename T, typename = void>
+struct deserialize_view_impl : std::false_type {};
+template <typename T>
+struct deserialize_view_impl<
+    T, std::void_t<decltype(std::declval<T>().size()),decltype(std::declval<T>().data())>>
+    : std::true_type {};
+
+template <typename Type>
+constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
+
+#endif
 
   struct memory_writer {
     char *buffer;
@@ -117,13 +184,30 @@ namespace detail {
     }
   };
 
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept container_adapter = requires(Type container) {
     typename std::remove_cvref_t<Type>::value_type;
     container.size();
     container.pop();
   };
+#else
+  template <typename T, typename = void>
+  struct container_adapter_impl : std::false_type {};
 
+  template <typename T>
+  struct container_adapter_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::value_type,
+    decltype(std::declval<T>().size()),
+    decltype(std::declval<T>().pop())>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool container_adapter = container_adapter_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept container = requires(Type container) {
     typename std::remove_cvref_t<Type>::value_type;
@@ -131,42 +215,110 @@ namespace detail {
     container.begin();
     container.end();
   };
+#else
+  template <typename T, typename = void>
+  struct container_impl : std::false_type {};
+
+  template <typename T>
+  struct container_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::value_type,
+    decltype(std::declval<T>().size()),
+    decltype(std::declval<T>().begin()),
+    decltype(std::declval<T>().end())>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool container = container_impl<T>::value;
+#endif  
 
   template <typename Type>
-  concept is_char_t = std::is_same_v<Type, signed char> ||
+  constexpr bool is_char_t = std::is_same_v<Type, signed char> ||
       std::is_same_v<Type, char> || std::is_same_v<Type, unsigned char> ||
       std::is_same_v<Type, wchar_t> || std::is_same_v<Type, char16_t> ||
       std::is_same_v<Type, char32_t> || std::is_same_v<Type, char8_t>;
 
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept string = container<Type> && requires(Type container) {
     requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
     container.length();
     container.data();
   };
+#else
+  template <typename T, typename = void>
+  struct string_impl : std::false_type {};
 
+  template <typename T>
+  struct string_impl<T, std::void_t<
+    std::enable_if_t<is_char_t<typename std::remove_cvref_t<T>::value_type>>,
+    decltype(std::declval<T>().length()),
+    decltype(std::declval<T>().data())>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool string = string_impl<T>::value && container<T>;
+#endif  
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept string_view = string<Type> && !requires(Type container) {
     container.resize(std::size_t{});
   };
+#else
+  template <typename T, typename = void>
+  struct string_view_impl : std::true_type {};
 
+  template <typename T>
+  struct string_view_impl<T, std::void_t<
+    decltype(std::declval<T>().resize(std::size_t{}))>> 
+      : std::false_type {};
 
+  template <typename T>
+  constexpr bool string_view = string<T> && string_view_impl<T>::value;
+#endif  
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept span = container<Type> && requires(Type t) {
-    t=Type{(typename Type::value_type*)nullptr ,std::size_t{} };
+    Type{(typename Type::value_type*)nullptr ,std::size_t{} };
     t.subspan(std::size_t{},std::size_t{});
   };
+#else
+  template <typename T, typename = void>
+  struct span_impl : std::false_type {};
+
+  template <typename T>
+  struct span_impl<T, std::void_t<
+    decltype(T{(typename T::value_type*)nullptr ,std::size_t{}}),
+    decltype(std::declval<T>().subspan(std::size_t{},std::size_t{}))>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool span = container<T> && span_impl<T>::value;
+#endif 
 
 
-
+#if __cpp_concepts < 201907L
   template <typename Type>
-  concept dynamic_span = span<Type> && std::is_same_v<std::integral_constant<std::size_t,Type::extent>,std::integral_constant<std::size_t,SIZE_MAX>>;
+  concept dynamic_span = span<Type> && Type::extent == SIZE_MAX;
+#else
+  template <typename T, typename = void>
+  struct dynamic_span_impl : std::false_type {};
 
+  template <typename T>
+  struct dynamic_span_impl<T, std::void_t<
+    std::enable_if_t<(T::extent == SIZE_MAX)>>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool dynamic_span = span<T> && dynamic_span_impl<T>::value;
+#endif
   template <typename Type>
-  concept static_span = span<Type> && !dynamic_span<Type>;
+  constexpr bool static_span = span<Type> && !dynamic_span<Type>;
 
 
-#if __cpp_lib_span >= 202002L
+#if __cpp_lib_span >= 202002L && __cpp_concepts>=201907L
 
   template <typename Type>
   concept continuous_container =
@@ -190,52 +342,126 @@ namespace detail {
   constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
 
   template <typename Type>
-  concept continuous_container =
+  constexpr bool continuous_container =
       container<Type> &&(is_std_vector_v<Type> || is_std_basic_string_v<Type>);
 #endif
 
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept map_container = container<Type> && requires(Type container) {
     typename std::remove_cvref_t<Type>::mapped_type;
   };
+#else
+template <typename T, typename = void>
+  struct map_container_impl : std::false_type {};
 
+  template <typename T>
+  struct map_container_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::mapped_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool map_container = container<T> && map_container_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
-  concept set_container = container<Type> && requires(Type container) {
+  concept set_container = container<Type> && requires {
     typename std::remove_cvref_t<Type>::key_type;
   };
+#else
+  template <typename T, typename = void>
+  struct set_container_impl : std::false_type {};
 
+  template <typename T>
+  struct set_container_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::key_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool set_container = container<T> && set_container_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept tuple = requires(Type tuple) {
     std::get<0>(tuple);
     sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
   };
+#else
+template <typename T, typename = void>
+  struct tuple_impl : std::false_type {};
 
+  template <typename T>
+  struct tuple_impl<T, std::void_t<
+    decltype(std::get<0>(std::declval<T>())),
+    decltype(sizeof(std::tuple_size<std::remove_cvref_t<T>>::value))>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool tuple = tuple_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept user_defined_refl = std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<Type&>())),Type&>;
+#else
+  template <typename T, typename = void>
+  struct user_defined_refl_impl : std::false_type {};
 
+  template <typename T>
+  struct user_defined_refl_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<T&>())),T&>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool user_defined_refl = user_defined_refl_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept tuple_size = requires(Type tuple) {
-    sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+    std::tuple_size<std::remove_cvref_t<Type>>::value;
   };
+#else
+  template <typename T, typename = void>
+  struct tuple_size_impl : std::false_type {};
 
+  template <typename T>
+  struct tuple_size_impl<T, std::void_t<
+    decltype(std::tuple_size<std::remove_cvref_t<T>>::value)>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool tuple_size = tuple_size_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept array = requires(Type arr) {
     arr.size();
     std::tuple_size<std::remove_cvref_t<Type>>{};
   };
+#else
+  template <typename T, typename = void>
+  struct array_impl : std::false_type {};
 
-  // this version not work, can't checkout the is_xx_v in
-  // ```require(Type){...}```
-  template <typename Type>
-  concept c_array1 = requires(Type arr) {
-    std::is_array_v<Type> == true;
-  };
+  template <typename T>
+  struct array_impl<T, std::void_t<
+    decltype(std::declval<T>().size()),
+    decltype(std::tuple_size<std::remove_cvref_t<T>>{})>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool array = array_impl<T>::value;
+#endif
+
 
   template <class T>
-  concept c_array =
-      std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> >
-  0;
+  constexpr bool c_array =
+      std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> > 0;
 
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept pair = requires(Type p) {
     typename std::remove_cvref_t<Type>::first_type;
@@ -243,7 +469,23 @@ namespace detail {
     p.first;
     p.second;
   };
+#else
+  template <typename T, typename = void>
+  struct pair_impl : std::false_type {};
 
+  template <typename T>
+  struct pair_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::first_type,
+    typename std::remove_cvref_t<T>::second_type,
+    decltype(std::declval<T>().first),
+    decltype(std::declval<T>().second)>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool pair = pair_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept expected = requires(Type e) {
     typename std::remove_cvref_t<Type>::value_type;
@@ -257,14 +499,46 @@ namespace detail {
       e.value();
     };
   };
+#else
+  template <typename T, typename = void>
+  struct expected_impl : std::false_type {};
 
+  template <typename T>
+  struct expected_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::value_type,
+    typename std::remove_cvref_t<T>::error_type,
+    typename std::remove_cvref_t<T>::unexpected_type,
+    decltype(std::declval<T>().has_value()),
+    decltype(std::declval<T>().error())>> 
+      : std::true_type {};
+    //TODO: check e.value()
+  template <typename T>
+  constexpr bool expected = expected_impl<T>::value;
+#endif
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
     typename std::remove_cvref_t<Type>::element_type;
   }
   &&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+#else
+  template <typename T, typename = void>
+  struct unique_ptr_impl : std::false_type {};
 
+  template <typename T>
+  struct unique_ptr_impl<T, std::void_t<
+    typename std::remove_cvref_t<T>::element_type,
+    decltype(std::declval<T>().operator*())>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool unique_ptr = unique_ptr_impl<T>::value;
+#endif
+
+
+#if __cpp_concepts < 201907L
   template <typename Type>
   concept optional = !expected<Type> && requires(Type optional) {
     optional.value();
@@ -272,6 +546,23 @@ namespace detail {
     optional.operator*();
     typename std::remove_cvref_t<Type>::value_type;
   };
+#else
+  template <typename T, typename = void>
+  struct optional_impl : std::false_type {};
+
+  template <typename T>
+  struct optional_impl<T, std::void_t<
+    decltype(std::declval<T>().value()),
+    decltype(std::declval<T>().has_value()),
+    decltype(std::declval<T>().operator*()),
+    typename std::remove_cvref_t<T>::value_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool optional = !expected<T> && optional_impl<T>::value;
+#endif
+
+
 
 
 
@@ -288,12 +579,6 @@ namespace detail {
   constexpr inline bool is_variant_v<std::variant<args...>> = true;
 
   template <typename T>
-  concept variant = is_variant_v<T>;
-
-  template <typename T>
-  concept is_compatible = is_compatible_v<T>;
-
-  template <typename T>
   constexpr inline bool is_trivial_tuple = false;
 
   template <typename T>
@@ -303,15 +588,15 @@ namespace detail {
   class sint;
 
   template <typename T>
-  concept varintable_t =
+  constexpr bool varintable_t =
       std::is_same_v<T, varint<int32_t>> || std::is_same_v<T, varint<int64_t>> ||
       std::is_same_v<T, varint<uint32_t>> || std::is_same_v<T, varint<uint64_t>>;
   template <typename T>
-  concept sintable_t =
+  constexpr bool sintable_t =
       std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
 
   template <typename T>
-  concept varint_t = varintable_t<T> || sintable_t<T>;
+  constexpr bool varint_t = varintable_t<T> || sintable_t<T>;
 
   
   template <typename Type>
@@ -348,7 +633,7 @@ namespace detail {
         else if constexpr (user_defined_refl<T>) {
           return false;
         }
-        else if constexpr (container<T> || optional<T> || variant<T> ||
+        else if constexpr (container<T> || optional<T> || is_variant_v<T> ||
                           unique_ptr<T> || expected<T> || container_adapter<T> ||
                           varint_t<T>) {
           return false;
@@ -406,11 +691,8 @@ namespace detail {
     operator T();
   };
 
-  template <typename T>
-  concept integral = std::is_integral_v<T>;
-
   struct UniversalIntegralType {
-    template <integral T>
+    template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
     operator T();
   };
 
@@ -419,12 +701,12 @@ namespace detail {
   };
 
   struct UniversalOptionalType {
-    template <optional U>
-    operator U();
+  template <typename U, typename = std::enable_if_t<optional<U>>>
+  operator U();
   };
 
   struct UniversalCompatibleType {
-    template <is_compatible U>
+    template <typename U, typename = std::enable_if_t<is_compatible_v<U>>>
     operator U();
   };
 

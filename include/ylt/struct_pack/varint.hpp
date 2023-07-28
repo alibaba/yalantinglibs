@@ -173,8 +173,17 @@ template <typename T>
   }
 }
 
-template <writer_t writer, typename T>
+template <
+#if __cpp_concepts < 201907L
+    writer_t writer,
+#else
+    typename writer,
+#endif
+    typename T>
 STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
+#if __cpp_concepts < 201907L
+  static_assert(writer_t<writer>, "The writer type must satisfy requirements!");
+#endif
   uint64_t v;
   if constexpr (sintable_t<T>) {
     v = encode_zigzag(t.get());
@@ -189,9 +198,16 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
   }
   writer_.write((char*)&v, sizeof(char));
 }
+#if __cpp_concepts < 201907L
 template <reader_t Reader>
+#else
+template <typename Reader>
+#endif
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint_impl(
     Reader& reader, uint64_t& v) {
+#if __cpp_concepts < 201907L
+  static_assert(reader_t<writer>, "The writer type must satisfy requirements!");
+#endif
   uint8_t now;
   constexpr const int8_t max_varint_length = sizeof(uint64_t) * 8 / 7 + 1;
   for (int8_t i = 0; i < max_varint_length; ++i) {
@@ -205,9 +221,18 @@ template <reader_t Reader>
   }
   return struct_pack::errc::invalid_buffer;
 }
-template <bool NotSkip = true, reader_t Reader, typename T>
+template <bool NotSkip = true,
+#if __cpp_concepts < 201907L
+          reader_t Reader,
+#else
+          typename Reader,
+#endif
+          typename T>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint(
     Reader& reader, T& t) {
+#if __cpp_concepts < 201907L
+  static_assert(reader_t<writer>, "The writer type must satisfy requirements!");
+#endif
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
   if constexpr (NotSkip) {
