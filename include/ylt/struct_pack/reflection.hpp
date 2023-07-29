@@ -76,7 +76,7 @@ constexpr std::size_t pack_alignment_v = 0;
 template <typename T>
 constexpr std::size_t alignment_v = 0;
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 
 template <typename T>
 concept writer_t = requires(T t) {
@@ -156,7 +156,7 @@ struct compatible;
 // clang-format off
 namespace detail {
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept deserialize_view = requires(Type container) {
     container.size();
@@ -185,7 +185,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   };
 
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept container_adapter = requires(Type container) {
     typename std::remove_cvref_t<Type>::value_type;
@@ -207,7 +207,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr bool container_adapter = container_adapter_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept container = requires(Type container) {
     typename std::remove_cvref_t<Type>::value_type;
@@ -238,7 +238,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
       std::is_same_v<Type, char32_t> || std::is_same_v<Type, char8_t>;
 
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept string = container<Type> && requires(Type container) {
     requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
@@ -260,7 +260,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr bool string = string_impl<T>::value && container<T>;
 #endif  
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept string_view = string<Type> && !requires(Type container) {
     container.resize(std::size_t{});
@@ -278,7 +278,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr bool string_view = string<T> && string_view_impl<T>::value;
 #endif  
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept span = container<Type> && requires(Type t) {
     Type{(typename Type::value_type*)nullptr ,std::size_t{} };
@@ -299,7 +299,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 #endif 
 
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept dynamic_span = span<Type> && Type::extent == SIZE_MAX;
 #else
@@ -346,7 +346,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
       container<Type> &&(is_std_vector_v<Type> || is_std_basic_string_v<Type>);
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept map_container = container<Type> && requires(Type container) {
     typename std::remove_cvref_t<Type>::mapped_type;
@@ -364,7 +364,7 @@ template <typename T, typename = void>
   constexpr bool map_container = container<T> && map_container_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept set_container = container<Type> && requires {
     typename std::remove_cvref_t<Type>::key_type;
@@ -382,7 +382,7 @@ template <typename T, typename = void>
   constexpr bool set_container = container<T> && set_container_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept tuple = requires(Type tuple) {
     std::get<0>(tuple);
@@ -402,7 +402,7 @@ template <typename T, typename = void>
   constexpr bool tuple = tuple_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept user_defined_refl = std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<Type&>())),Type&>;
 #else
@@ -418,7 +418,7 @@ template <typename T, typename = void>
   constexpr bool user_defined_refl = user_defined_refl_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept tuple_size = requires(Type tuple) {
     std::tuple_size<std::remove_cvref_t<Type>>::value;
@@ -436,7 +436,7 @@ template <typename T, typename = void>
   constexpr bool tuple_size = tuple_size_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept array = requires(Type arr) {
     arr.size();
@@ -461,7 +461,7 @@ template <typename T, typename = void>
   constexpr bool c_array =
       std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> > 0;
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept pair = requires(Type p) {
     typename std::remove_cvref_t<Type>::first_type;
@@ -485,7 +485,7 @@ template <typename T, typename = void>
   constexpr bool pair = pair_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept expected = requires(Type e) {
     typename std::remove_cvref_t<Type>::value_type;
@@ -516,7 +516,7 @@ template <typename T, typename = void>
   constexpr bool expected = expected_impl<T>::value;
 #endif
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
@@ -538,7 +538,7 @@ template <typename T, typename = void>
 #endif
 
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept optional = !expected<Type> && requires(Type optional) {
     optional.value();

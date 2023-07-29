@@ -1608,7 +1608,7 @@ get_serialize_runtime_info(const Args &...args) {
 }
 
 template <
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
     writer_t writer,
 #else
     typename writer,
@@ -1899,7 +1899,7 @@ class packer {
 };  // namespace detail
 
 template <serialize_config conf = serialize_config{},
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
           struct_pack::writer_t Writer,
 #else
           typename Writer,
@@ -1970,7 +1970,7 @@ struct memory_reader {
   }
   std::size_t tellg() { return (std::size_t)now; }
 };
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <reader_t Reader>
 #else
 template <typename Reader>

@@ -174,7 +174,7 @@ template <typename T>
 }
 
 template <
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
     writer_t writer,
 #else
     typename writer,
@@ -198,7 +198,7 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
   }
   writer_.write((char*)&v, sizeof(char));
 }
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <reader_t Reader>
 #else
 template <typename Reader>
@@ -222,7 +222,7 @@ template <typename Reader>
   return struct_pack::errc::invalid_buffer;
 }
 template <bool NotSkip = true,
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
           reader_t Reader,
 #else
           typename Reader,
