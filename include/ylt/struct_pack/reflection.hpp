@@ -37,6 +37,9 @@
 namespace struct_pack {
 namespace detail {
 
+template <typename T>
+using remove_cvref_t=std::remove_cv_t<std::remove_reference_t<T>>;
+
 [[noreturn]] inline void unreachable() {
   // Uses compiler specific extensions if possible.
   // Even if no extension is used, undefined behavior is still raised by
@@ -188,7 +191,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept container_adapter = requires(Type container) {
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
     container.size();
     container.pop();
   };
@@ -198,7 +201,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   struct container_adapter_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::value_type,
+    typename remove_cvref_t<T>::value_type,
     decltype(std::declval<T>().size()),
     decltype(std::declval<T>().pop())>>
       : std::true_type {};
@@ -210,7 +213,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept container = requires(Type container) {
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
     container.size();
     container.begin();
     container.end();
@@ -221,7 +224,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   struct container_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::value_type,
+    typename remove_cvref_t<T>::value_type,
     decltype(std::declval<T>().size()),
     decltype(std::declval<T>().begin()),
     decltype(std::declval<T>().end())>>
@@ -241,7 +244,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept string = container<Type> && requires(Type container) {
-    requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
+    requires is_char_t<typename remove_cvref_t<Type>::value_type>;
     container.length();
     container.data();
   };
@@ -251,7 +254,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   struct string_impl<T, std::void_t<
-    std::enable_if_t<is_char_t<typename std::remove_cvref_t<T>::value_type>>,
+    std::enable_if_t<is_char_t<typename remove_cvref_t<T>::value_type>>,
     decltype(std::declval<T>().length()),
     decltype(std::declval<T>().data())>> 
       : std::true_type {};
@@ -349,7 +352,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept map_container = container<Type> && requires(Type container) {
-    typename std::remove_cvref_t<Type>::mapped_type;
+    typename remove_cvref_t<Type>::mapped_type;
   };
 #else
 template <typename T, typename = void>
@@ -357,7 +360,7 @@ template <typename T, typename = void>
 
   template <typename T>
   struct map_container_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::mapped_type>> 
+    typename remove_cvref_t<T>::mapped_type>> 
       : std::true_type {};
 
   template <typename T>
@@ -367,7 +370,7 @@ template <typename T, typename = void>
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept set_container = container<Type> && requires {
-    typename std::remove_cvref_t<Type>::key_type;
+    typename remove_cvref_t<Type>::key_type;
   };
 #else
   template <typename T, typename = void>
@@ -375,7 +378,7 @@ template <typename T, typename = void>
 
   template <typename T>
   struct set_container_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::key_type>> 
+    typename remove_cvref_t<T>::key_type>> 
       : std::true_type {};
 
   template <typename T>
@@ -386,7 +389,7 @@ template <typename T, typename = void>
   template <typename Type>
   concept tuple = requires(Type tuple) {
     std::get<0>(tuple);
-    sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+    sizeof(std::tuple_size<remove_cvref_t<Type>>);
   };
 #else
 template <typename T, typename = void>
@@ -395,7 +398,7 @@ template <typename T, typename = void>
   template <typename T>
   struct tuple_impl<T, std::void_t<
     decltype(std::get<0>(std::declval<T>())),
-    decltype(sizeof(std::tuple_size<std::remove_cvref_t<T>>::value))>> 
+    decltype(sizeof(std::tuple_size<remove_cvref_t<T>>::value))>> 
       : std::true_type {};
 
   template <typename T>
@@ -421,7 +424,7 @@ template <typename T, typename = void>
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept tuple_size = requires(Type tuple) {
-    std::tuple_size<std::remove_cvref_t<Type>>::value;
+    std::tuple_size<remove_cvref_t<Type>>::value;
   };
 #else
   template <typename T, typename = void>
@@ -429,7 +432,7 @@ template <typename T, typename = void>
 
   template <typename T>
   struct tuple_size_impl<T, std::void_t<
-    decltype(std::tuple_size<std::remove_cvref_t<T>>::value)>> 
+    decltype(std::tuple_size<remove_cvref_t<T>>::value)>> 
       : std::true_type {};
 
   template <typename T>
@@ -440,7 +443,7 @@ template <typename T, typename = void>
   template <typename Type>
   concept array = requires(Type arr) {
     arr.size();
-    std::tuple_size<std::remove_cvref_t<Type>>{};
+    std::tuple_size<remove_cvref_t<Type>>{};
   };
 #else
   template <typename T, typename = void>
@@ -449,7 +452,7 @@ template <typename T, typename = void>
   template <typename T>
   struct array_impl<T, std::void_t<
     decltype(std::declval<T>().size()),
-    decltype(std::tuple_size<std::remove_cvref_t<T>>{})>> 
+    decltype(std::tuple_size<remove_cvref_t<T>>{})>> 
       : std::true_type {};
 
   template <typename T>
@@ -459,13 +462,13 @@ template <typename T, typename = void>
 
   template <class T>
   constexpr bool c_array =
-      std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> > 0;
+      std::is_array_v<T> && std::extent_v<remove_cvref_t<T>> > 0;
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept pair = requires(Type p) {
-    typename std::remove_cvref_t<Type>::first_type;
-    typename std::remove_cvref_t<Type>::second_type;
+    typename remove_cvref_t<Type>::first_type;
+    typename remove_cvref_t<Type>::second_type;
     p.first;
     p.second;
   };
@@ -475,8 +478,8 @@ template <typename T, typename = void>
 
   template <typename T>
   struct pair_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::first_type,
-    typename std::remove_cvref_t<T>::second_type,
+    typename remove_cvref_t<T>::first_type,
+    typename remove_cvref_t<T>::second_type,
     decltype(std::declval<T>().first),
     decltype(std::declval<T>().second)>> 
       : std::true_type {};
@@ -488,13 +491,13 @@ template <typename T, typename = void>
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept expected = requires(Type e) {
-    typename std::remove_cvref_t<Type>::value_type;
-    typename std::remove_cvref_t<Type>::error_type;
-    typename std::remove_cvref_t<Type>::unexpected_type;
+    typename remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::error_type;
+    typename remove_cvref_t<Type>::unexpected_type;
     e.has_value();
     e.error();
     requires std::is_same_v<void,
-                            typename std::remove_cvref_t<Type>::value_type> ||
+                            typename remove_cvref_t<Type>::value_type> ||
         requires(Type e) {
       e.value();
     };
@@ -505,9 +508,9 @@ template <typename T, typename = void>
 
   template <typename T>
   struct expected_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::value_type,
-    typename std::remove_cvref_t<T>::error_type,
-    typename std::remove_cvref_t<T>::unexpected_type,
+    typename remove_cvref_t<T>::value_type,
+    typename remove_cvref_t<T>::error_type,
+    typename remove_cvref_t<T>::unexpected_type,
     decltype(std::declval<T>().has_value()),
     decltype(std::declval<T>().error())>> 
       : std::true_type {};
@@ -520,7 +523,7 @@ template <typename T, typename = void>
   template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
-    typename std::remove_cvref_t<Type>::element_type;
+    typename remove_cvref_t<Type>::element_type;
   }
   &&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
 #else
@@ -529,7 +532,7 @@ template <typename T, typename = void>
 
   template <typename T>
   struct unique_ptr_impl<T, std::void_t<
-    typename std::remove_cvref_t<T>::element_type,
+    typename remove_cvref_t<T>::element_type,
     decltype(std::declval<T>().operator*())>> 
       : std::true_type {};
 
@@ -544,7 +547,7 @@ template <typename T, typename = void>
     optional.value();
     optional.has_value();
     optional.operator*();
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
   };
 #else
   template <typename T, typename = void>
@@ -555,7 +558,7 @@ template <typename T, typename = void>
     decltype(std::declval<T>().value()),
     decltype(std::declval<T>().has_value()),
     decltype(std::declval<T>().operator*()),
-    typename std::remove_cvref_t<T>::value_type>> 
+    typename remove_cvref_t<T>::value_type>> 
       : std::true_type {};
 
   template <typename T>
@@ -742,7 +745,7 @@ namespace detail {
 
   template <typename T>
   constexpr std::size_t members_count() {
-    using type = std::remove_cvref_t<T>;
+    using type = remove_cvref_t<T>;
     if constexpr (user_defined_refl<type>) {
       return decltype(STRUCT_PACK_FIELD_COUNT(std::declval<type>()))::value;
     }
@@ -759,7 +762,7 @@ namespace detail {
   template<typename Object,typename Visitor>
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(Object &&object,
                                                             Visitor &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+    using type = remove_cvref_t<decltype(object)>;
     if constexpr (user_defined_refl<type>) {
       return visit_members_by_user_defined_refl(object,visitor);
     }
@@ -771,7 +774,7 @@ namespace detail {
   template<typename Object,typename Visitor>
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
                                                             Visitor &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+    using type = remove_cvref_t<decltype(object)>;
     constexpr auto Count = decltype(STRUCT_PACK_FIELD_COUNT(object))::value;
     
     static_assert(Count <= MaxVisitMembers, "exceed max visit members");
@@ -913,7 +916,7 @@ namespace detail {
   template<typename Object,typename Visitor>
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_structure_binding(Object &&object,
                                                             Visitor &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+    using type = remove_cvref_t<decltype(object)>;
     constexpr auto Count = struct_pack::members_count<type>;
     if constexpr (Count == 0 && std::is_class_v<type> &&
                   !std::is_same_v<type, std::monostate>) {

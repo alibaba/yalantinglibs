@@ -239,7 +239,7 @@ template <typename T>
 
 template <typename U>
 constexpr auto get_types() {
-  using T = std::remove_cvref_t<U>;
+  using T = remove_cvref_t<U>;
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 string<T> || container<T> || optional<T> || unique_ptr<T> ||
                 is_variant_v<T> || expected<T> || array<T> || c_array<T> ||
@@ -266,7 +266,7 @@ constexpr auto get_types() {
     return visit_members(
         declval<T>(), []<typename... Args>(Args &&
                                                   ...) constexpr {
-          return declval<std::tuple<std::remove_cvref_t<Args>...>>();
+          return declval<std::tuple<remove_cvref_t<Args>...>>();
         });
     // clang-format on
   }
@@ -735,10 +735,10 @@ constexpr std::size_t default_alignment() {
     using type = decltype(get_types<T>());
     return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
       return (std::max)(
-          {(is_compatible_v<std::remove_cvref_t<std::tuple_element_t<I, type>>>
+          {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
                 ? std::size_t{0}
                 : align::alignment_v<
-                      std::remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+                      remove_cvref_t<std::tuple_element_t<I, type>>>)...});
     }
     (std::make_index_sequence<std::tuple_size_v<type>>());
   }
@@ -766,10 +766,10 @@ constexpr std::size_t pack_alignment_impl() {
     using type = decltype(get_types<T>());
     return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
       return (std::max)(
-          {(is_compatible_v<std::remove_cvref_t<std::tuple_element_t<I, type>>>
+          {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
                 ? std::size_t{0}
                 : align::alignment_v<
-                      std::remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+                      remove_cvref_t<std::tuple_element_t<I, type>>>)...});
     }
     (std::make_index_sequence<std::tuple_size_v<type>>());
   }
@@ -957,34 +957,34 @@ constexpr decltype(auto) get_type_literal() {
         static_assert(sz > 0, "The array's size must greater than zero!");
         return ret +
                get_type_literal<
-                   std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
+                   remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
                    ParentArgs...>() +
                get_size_literal<sz>();
       } else if constexpr (unique_ptr<Arg>) {
         return ret +
-               get_type_literal<std::remove_cvref_t<typename Arg::element_type>,
+               get_type_literal<remove_cvref_t<typename Arg::element_type>,
                                 Arg, ParentArgs...>();
       } else if constexpr (id == type_id::container_t ||
                            id == type_id::optional_t ||
                            id == type_id::string_t) {
         return ret +
-               get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+               get_type_literal<remove_cvref_t<typename Arg::value_type>,
                                 Arg, ParentArgs...>();
       } else if constexpr (id == type_id::set_container_t) {
         return ret +
-               get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+               get_type_literal<remove_cvref_t<typename Arg::key_type>,
                                 Arg, ParentArgs...>();
       } else if constexpr (id == type_id::map_container_t) {
         return ret +
-               get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+               get_type_literal<remove_cvref_t<typename Arg::key_type>,
                                 Arg, ParentArgs...>() +
-               get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>,
+               get_type_literal<remove_cvref_t<typename Arg::mapped_type>,
                                 Arg, ParentArgs...>();
       } else if constexpr (id == type_id::expected_t) {
         return ret +
-               get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+               get_type_literal<remove_cvref_t<typename Arg::value_type>,
                                 Arg, ParentArgs...>() +
-               get_type_literal<std::remove_cvref_t<typename Arg::error_type>,
+               get_type_literal<remove_cvref_t<typename Arg::error_type>,
                                 Arg, ParentArgs...>();
       } else if constexpr (id != type_id::compatible_t) {
         return ret;
@@ -997,7 +997,7 @@ constexpr decltype(auto) get_type_literal() {
 
 template <typename Args, typename... ParentArgs, std::size_t... I>
 constexpr decltype(auto) get_type_literal(std::index_sequence<I...>) {
-  return ((get_type_literal<std::remove_cvref_t<std::tuple_element_t<I, Args>>,
+  return ((get_type_literal<remove_cvref_t<std::tuple_element_t<I, Args>>,
                             ParentArgs...>()) +
           ...);
 }
@@ -1005,7 +1005,7 @@ constexpr decltype(auto) get_type_literal(std::index_sequence<I...>) {
 template <typename Args, typename... ParentArgs, std::size_t... I>
 constexpr decltype(auto) get_variant_literal(std::index_sequence<I...>) {
   return ((get_type_literal<
-              std::remove_cvref_t<std::variant_alternative_t<I, Args>>, Args,
+              remove_cvref_t<std::variant_alternative_t<I, Args>>, Args,
               ParentArgs...>()) +
           ...);
 }
@@ -1024,7 +1024,7 @@ constexpr decltype(auto) get_types_literal() {
     return get_types_literal<T::value_type, Args...>();
   }
   else {
-    constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
+    constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
     constexpr auto end =
         string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
     if constexpr (root_id == type_id::non_trivial_class_t ||
@@ -1050,7 +1050,7 @@ constexpr decltype(auto) get_types_literal() {
 template <typename T, typename Tuple, std::size_t... I>
 constexpr decltype(auto) get_types_literal(std::index_sequence<I...>) {
   return get_types_literal<
-      T, std::remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
+      T, remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
 }
 
 template <uint64_t version, typename Args, typename... ParentArgs>
@@ -1063,7 +1063,7 @@ template <uint64_t version, typename Args, typename... ParentArgs,
 constexpr bool check_if_compatible_element_exist_impl(
     std::index_sequence<I...>) {
   return (check_if_compatible_element_exist_impl_helper<
-              version, std::remove_cvref_t<std::tuple_element_t<I, Args>>,
+              version, remove_cvref_t<std::tuple_element_t<I, Args>>,
               ParentArgs...>() ||
           ...);
 }
@@ -1073,14 +1073,14 @@ template <uint64_t version, typename Arg, typename... ParentArgs,
 constexpr bool check_if_compatible_element_exist_impl_variant(
     std::index_sequence<I...>) {
   return (check_if_compatible_element_exist_impl_helper<
-              version, std::remove_cvref_t<std::variant_alternative_t<I, Arg>>,
+              version, remove_cvref_t<std::variant_alternative_t<I, Arg>>,
               ParentArgs...>() ||
           ...);
 }
 
 template <uint64_t version, typename Arg, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper() {
-  using T = std::remove_cvref_t<Arg>;
+  using T = remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   if constexpr (is_trivial_view_v<Arg>) {
     return check_if_compatible_element_exist_impl_helper<version,typename Arg::value_type, ParentArgs...>();
@@ -1111,7 +1111,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     }
     else if constexpr (id == type_id::array_t) {
       return check_if_compatible_element_exist_impl_helper<
-          version, std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          version, remove_cvref_t<typename get_array_element<T>::type>, T,
           ParentArgs...>();
     }
     else if constexpr (id == type_id::map_container_t) {
@@ -1144,7 +1144,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
 
 template <typename T, typename... Args>
 constexpr uint32_t get_types_code_impl() {
-  constexpr auto str = get_types_literal<T, std::remove_cvref_t<Args>...>();
+  constexpr auto str = get_types_literal<T, remove_cvref_t<Args>...>();
   return MD5::MD5Hash32Constexpr(str.data(), str.size());
 }
 
@@ -1159,9 +1159,9 @@ calculate_payload_size(const T &item, const Args &...items);
 
 template <typename T>
 constexpr size_info inline calculate_one_size(const T &item) {
-  constexpr auto id = get_type_id<std::remove_cvref_t<T>>();
+  constexpr auto id = get_type_id<remove_cvref_t<T>>();
   static_assert(id != detail::type_id::type_end_flag);
-  using type = std::remove_cvref_t<decltype(item)>;
+  using type = remove_cvref_t<decltype(item)>;
   static_assert(!std::is_pointer_v<type>);
   size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
   if constexpr (id == type_id::monostate_t) {
@@ -1236,7 +1236,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   else if constexpr (std::is_class_v<type>) {
     if constexpr (!pair<type> && !is_trivial_tuple<type>) {
       if constexpr (!user_defined_refl<type>)
-        static_assert(std::is_aggregate_v<std::remove_cvref_t<type>>,
+        static_assert(std::is_aggregate_v<remove_cvref_t<type>>,
                       "struct_pack only support aggregated type, or you should "
                       "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
     }
@@ -1278,7 +1278,7 @@ constexpr uint32_t get_types_code() {
 
 template <typename T, uint64_t version = 0>
 constexpr bool check_if_compatible_element_exist() {
-  using U = std::remove_cvref_t<T>;
+  using U = remove_cvref_t<T>;
   return detail::check_if_compatible_element_exist_impl<version, U>(
       std::make_index_sequence<std::tuple_size_v<U>>{});
 }
@@ -1299,7 +1299,7 @@ constexpr std::size_t calculate_compatible_version_size(
     std::index_sequence<I...>) {
   return (
       calculate_compatible_version_size<
-          std::remove_cvref_t<std::tuple_element_t<I, Args>>, ParentArgs...>() +
+          remove_cvref_t<std::tuple_element_t<I, Args>>, ParentArgs...>() +
       ...);
 }
 
@@ -1307,14 +1307,14 @@ template <typename Arg, typename... ParentArgs, std::size_t... I>
 constexpr std::size_t calculate_variant_compatible_version_size(
     std::index_sequence<I...>) {
   return (calculate_compatible_version_size<
-              std::remove_cvref_t<std::variant_alternative_t<I, Arg>>,
+              remove_cvref_t<std::variant_alternative_t<I, Arg>>,
               ParentArgs...>() +
           ...);
 }
 
 template <typename Arg, typename... ParentArgs>
 constexpr std::size_t calculate_compatible_version_size() {
-  using T = std::remove_cvref_t<Arg>;
+  using T = remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   std::size_t sz = 0;
   if constexpr (is_trivial_view_v<T>) {
@@ -1344,7 +1344,7 @@ constexpr std::size_t calculate_compatible_version_size() {
     }
     else if constexpr (id == type_id::array_t) {
       return calculate_compatible_version_size<
-          std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          remove_cvref_t<typename get_array_element<T>::type>, T,
           ParentArgs...>();
     }
     else if constexpr (id == type_id::map_container_t) {
@@ -1380,7 +1380,7 @@ template <typename Buffer, typename Args, typename... ParentArgs,
 constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz,
                                               std::index_sequence<I...>) {
   return (get_compatible_version_numbers<
-              Buffer, std::remove_cvref_t<std::tuple_element_t<I, Args>>,
+              Buffer, remove_cvref_t<std::tuple_element_t<I, Args>>,
               ParentArgs...>(buffer, sz),
           ...);
 }
@@ -1390,14 +1390,14 @@ template <typename Buffer, typename Arg, typename... ParentArgs,
 constexpr void get_variant_compatible_version_numbers(
     Buffer &buffer, std::size_t &sz, std::index_sequence<I...>) {
   return (get_compatible_version_numbers<
-              Buffer, std::remove_cvref_t<std::variant_alternative_t<I, Arg>>,
+              Buffer, remove_cvref_t<std::variant_alternative_t<I, Arg>>,
               ParentArgs...>(buffer, sz),
           ...);
 }
 
 template <typename Buffer, typename Arg, typename... ParentArgs>
 constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
-  using T = std::remove_cvref_t<Arg>;
+  using T = remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   if constexpr (is_trivial_view_v<T>) {
     return;
@@ -1428,7 +1428,7 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
     }
     else if constexpr (id == type_id::array_t) {
       get_compatible_version_numbers<
-          Buffer, std::remove_cvref_t<typename get_array_element<T>::type>, T,
+          Buffer, remove_cvref_t<typename get_array_element<T>::type>, T,
           ParentArgs...>(buffer, sz);
     }
     else if constexpr (id == type_id::map_container_t) {
@@ -1648,13 +1648,13 @@ class packer {
   template <typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
-      return get_types_code<std::remove_cvref_t<T>,
-                            std::remove_cvref_t<decltype(get_types<T>())>>();
+      return get_types_code<remove_cvref_t<T>,
+                            remove_cvref_t<decltype(get_types<T>())>>();
     }
     else {
       return get_types_code<
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>,
-          std::tuple<std::remove_cvref_t<T>, std::remove_cvref_t<Args>...>>();
+          std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>,
+          std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>>();
     }
   }
   template <serialize_config conf, typename T, typename... Args>
@@ -1710,7 +1710,7 @@ class packer {
 
   template <std::size_t size_type, uint64_t version, typename T>
   constexpr void inline serialize_one(const T &item) {
-    using type = std::remove_cvref_t<decltype(item)>;
+    using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
     if constexpr (is_trivial_view_v<T>) {
@@ -1815,7 +1815,7 @@ class packer {
           if constexpr (!pair<type> && !is_trivial_tuple<type>)
             if constexpr (!user_defined_refl<type>)
               static_assert(
-                  std::is_aggregate_v<std::remove_cvref_t<type>>,
+                  std::is_aggregate_v<remove_cvref_t<type>>,
                   "struct_pack only support aggregated type, or you should "
                   "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
           if constexpr (is_trivial_serializable<type>::value) {
@@ -2093,7 +2093,7 @@ class unpacker {
   template <typename U, size_t I>
   STRUCT_PACK_MAY_INLINE struct_pack::errc get_field(
       std::tuple_element_t<I, decltype(get_types<U>())> &field) {
-    using T = std::remove_cvref_t<U>;
+    using T = remove_cvref_t<U>;
     using Type = get_args_type<T>;
 
     constexpr bool has_compatible =
@@ -2216,7 +2216,7 @@ class unpacker {
   STRUCT_PACK_INLINE struct_pack::errc deserialize_compatible_fields(
       std::tuple_element_t<I, decltype(get_types<U>())> &field,
       std::index_sequence<Is...>) {
-    using T = std::remove_cvref_t<U>;
+    using T = remove_cvref_t<U>;
     using Type = get_args_type<T>;
     struct_pack::errc err_code;
     switch (size_type_) {
@@ -2284,7 +2284,7 @@ class unpacker {
   template <std::size_t size_type, uint64_t version, typename U, size_t I>
   STRUCT_PACK_INLINE struct_pack::errc get_field_impl(
       std::tuple_element_t<I, decltype(get_types<U>())> &field) {
-    using T = std::remove_cvref_t<U>;
+    using T = remove_cvref_t<U>;
 
     T t;
     struct_pack::errc err_code;
@@ -2298,7 +2298,7 @@ class unpacker {
     }
     else if constexpr (std::is_class_v<T>) {
       if constexpr (!user_defined_refl<T>)
-        static_assert(std::is_aggregate_v<std::remove_cvref_t<T>>,
+        static_assert(std::is_aggregate_v<remove_cvref_t<T>>,
                       "struct_pack only support aggregated type, or you should "
                       "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
       err_code = visit_members(t, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -2432,7 +2432,7 @@ class unpacker {
   template <size_t size_type, uint64_t version, bool NotSkip, typename T>
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
-    using type = std::remove_cvref_t<decltype(item)>;
+    using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
     if constexpr (is_trivial_view_v<type>) {
@@ -2683,7 +2683,7 @@ class unpacker {
         if constexpr (!pair<type> && !is_trivial_tuple<type>)
           if constexpr (!user_defined_refl<type>)
             static_assert(
-                std::is_aggregate_v<std::remove_cvref_t<type>>,
+                std::is_aggregate_v<remove_cvref_t<type>>,
                 "struct_pack only support aggregated type, or you should "
                 "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value) {
@@ -2852,8 +2852,8 @@ class unpacker {
   STRUCT_PACK_INLINE constexpr bool set_value(struct_pack::errc &err_code,
                                               FieldType &field, T &&t) {
     if constexpr (FieldIndex == I) {
-      static_assert(std::is_same_v<std::remove_cvref_t<FieldType>,
-                                   std::remove_cvref_t<T>>);
+      static_assert(std::is_same_v<remove_cvref_t<FieldType>,
+                                   remove_cvref_t<T>>);
       err_code = deserialize_one<size_type, version, true>(field);
       return /*don't skip=*/true;
     }
