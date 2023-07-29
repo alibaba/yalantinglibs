@@ -598,18 +598,14 @@ template <typename T, typename = void>
   template <typename T>
   constexpr bool varint_t = varintable_t<T> || sintable_t<T>;
 
-  
   template <typename Type>
   constexpr inline bool is_trivial_view_v = false;
-
-  template <typename Type>
-  concept trivial_view = is_trivial_view_v<Type>;
 
   template <typename T, bool ignore_compatible_field = false>
   struct is_trivial_serializable {
     private:
       static constexpr bool solve() {
-        if constexpr (is_compatible_v<T> || trivial_view<T>) {
+        if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
         }
         else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T> 
@@ -671,10 +667,8 @@ template <typename T, typename = void>
       static inline constexpr bool value = is_trivial_serializable::solve();
   };
 
-  template<typename T>
-  concept trivial_serializable=is_trivial_serializable<T>::value;
 }
-template <detail::trivial_serializable T>
+template <typename T, typename = std::enable_if_t<detail::is_trivial_serializable<T>::value>>
 struct trivial_view;
 namespace detail {
 

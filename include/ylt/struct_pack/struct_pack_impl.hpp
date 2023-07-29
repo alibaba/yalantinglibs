@@ -911,95 +911,88 @@ constexpr decltype(auto) get_variant_literal(std::index_sequence<I...>);
 
 template <typename Arg, typename... ParentArgs>
 constexpr decltype(auto) get_type_literal() {
-  constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
-  if constexpr (has_cycle) {
-    static_assert(has_cycle >= 2);
-    return string_literal<char, 1>{{static_cast<char>(type_id::circle_flag)}} +
-           get_size_literal<has_cycle - 2>();
+  if constexpr (is_trivial_view_v<Arg>) {
+    return get_type_literal<typename Arg::value_type, ParentArgs...>();
   }
   else {
-    constexpr auto id = get_type_id<Arg>();
-    constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
-    if constexpr (id == type_id::non_trivial_class_t ||
-                  id == type_id::trivial_class_t) {
-      using Args = decltype(get_types<Arg>());
-      constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
-          std::make_index_sequence<std::tuple_size_v<Args>>());
-      if constexpr (is_trivial_serializable<Arg, true>::value) {
-        static_assert(align::pack_alignment_v<Arg> <= align::alignment_v<Arg>,
-                      "If you add #pragma_pack to a struct, please specify the "
-                      "struct_pack::pack_alignment_v<T>.");
-        constexpr auto end = string_literal<char, 1>{
-            {static_cast<char>(type_id::type_end_flag)}};
-        return ret + body + get_size_literal<align::pack_alignment_v<Arg>>() +
-               get_size_literal<align::alignment_v<Arg>>() + end;
-      }
-      else {
+    constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
+    if constexpr (has_cycle) {
+      static_assert(has_cycle >= 2);
+      return string_literal<char, 1>{
+                 {static_cast<char>(type_id::circle_flag)}} +
+             get_size_literal<has_cycle - 2>();
+    } else {
+      constexpr auto id = get_type_id<Arg>();
+      constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
+      if constexpr (id == type_id::non_trivial_class_t ||
+                    id == type_id::trivial_class_t) {
+        using Args = decltype(get_types<Arg>());
+        constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
+            std::make_index_sequence<std::tuple_size_v<Args>>());
+        if constexpr (is_trivial_serializable<Arg, true>::value) {
+          static_assert(
+              align::pack_alignment_v<Arg> <= align::alignment_v<Arg>,
+              "If you add #pragma_pack to a struct, please specify the "
+              "struct_pack::pack_alignment_v<T>.");
+          constexpr auto end = string_literal<char, 1>{
+              {static_cast<char>(type_id::type_end_flag)}};
+          return ret + body + get_size_literal<align::pack_alignment_v<Arg>>() +
+                 get_size_literal<align::alignment_v<Arg>>() + end;
+        } else {
+          constexpr auto end = string_literal<char, 1>{
+              {static_cast<char>(type_id::type_end_flag)}};
+          return ret + body + end;
+        }
+      } else if constexpr (id == type_id::variant_t) {
+        constexpr auto sz = std::variant_size_v<Arg>;
+        static_assert(sz > 0, "empty param of std::variant is not allowed!");
+        static_assert(sz < 256, "too many alternative type in variant!");
+        constexpr auto body = get_variant_literal<Arg, ParentArgs...>(
+            std::make_index_sequence<std::variant_size_v<Arg>>());
         constexpr auto end = string_literal<char, 1>{
             {static_cast<char>(type_id::type_end_flag)}};
         return ret + body + end;
+      } else if constexpr (id == type_id::array_t) {
+        constexpr auto sz = get_array_size<Arg>();
+        static_assert(sz > 0, "The array's size must greater than zero!");
+        return ret +
+               get_type_literal<
+                   std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
+                   ParentArgs...>() +
+               get_size_literal<sz>();
+      } else if constexpr (unique_ptr<Arg>) {
+        return ret +
+               get_type_literal<std::remove_cvref_t<typename Arg::element_type>,
+                                Arg, ParentArgs...>();
+      } else if constexpr (id == type_id::container_t ||
+                           id == type_id::optional_t ||
+                           id == type_id::string_t) {
+        return ret +
+               get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+                                Arg, ParentArgs...>();
+      } else if constexpr (id == type_id::set_container_t) {
+        return ret +
+               get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+                                Arg, ParentArgs...>();
+      } else if constexpr (id == type_id::map_container_t) {
+        return ret +
+               get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
+                                Arg, ParentArgs...>() +
+               get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>,
+                                Arg, ParentArgs...>();
+      } else if constexpr (id == type_id::expected_t) {
+        return ret +
+               get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
+                                Arg, ParentArgs...>() +
+               get_type_literal<std::remove_cvref_t<typename Arg::error_type>,
+                                Arg, ParentArgs...>();
+      } else if constexpr (id != type_id::compatible_t) {
+        return ret;
+      } else {
+        return string_literal<char, 0>{};
       }
     }
-    else if constexpr (id == type_id::variant_t) {
-      constexpr auto sz = std::variant_size_v<Arg>;
-      static_assert(sz > 0, "empty param of std::variant is not allowed!");
-      static_assert(sz < 256, "too many alternative type in variant!");
-      constexpr auto body = get_variant_literal<Arg, ParentArgs...>(
-          std::make_index_sequence<std::variant_size_v<Arg>>());
-      constexpr auto end =
-          string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
-      return ret + body + end;
-    }
-    else if constexpr (id == type_id::array_t) {
-      constexpr auto sz = get_array_size<Arg>();
-      static_assert(sz > 0, "The array's size must greater than zero!");
-      return ret +
-             get_type_literal<
-                 std::remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
-                 ParentArgs...>() +
-             get_size_literal<sz>();
-    }
-    else if constexpr (unique_ptr<Arg>) {
-      return ret +
-             get_type_literal<std::remove_cvref_t<typename Arg::element_type>,
-                              Arg, ParentArgs...>();
-    }
-    else if constexpr (id == type_id::container_t ||
-                       id == type_id::optional_t || id == type_id::string_t) {
-      return ret +
-             get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
-                              Arg, ParentArgs...>();
-    }
-    else if constexpr (id == type_id::set_container_t) {
-      return ret + get_type_literal<std::remove_cvref_t<typename Arg::key_type>,
-                                    Arg, ParentArgs...>();
-    }
-    else if constexpr (id == type_id::map_container_t) {
-      return ret +
-             get_type_literal<std::remove_cvref_t<typename Arg::key_type>, Arg,
-                              ParentArgs...>() +
-             get_type_literal<std::remove_cvref_t<typename Arg::mapped_type>,
-                              Arg, ParentArgs...>();
-    }
-    else if constexpr (id == type_id::expected_t) {
-      return ret +
-             get_type_literal<std::remove_cvref_t<typename Arg::value_type>,
-                              Arg, ParentArgs...>() +
-             get_type_literal<std::remove_cvref_t<typename Arg::error_type>,
-                              Arg, ParentArgs...>();
-    }
-    else if constexpr (id != type_id::compatible_t) {
-      return ret;
-    }
-    else {
-      return string_literal<char, 0>{};
-    }
   }
-}
-
-template <trivial_view Arg, typename... ParentArgs>
-constexpr decltype(auto) get_type_literal() {
-  return get_type_literal<typename Arg::value_type, ParentArgs...>();
 }
 
 template <typename Args, typename... ParentArgs, std::size_t... I>
@@ -1027,33 +1020,31 @@ constexpr decltype(auto) get_types_literal_impl() {
 
 template <typename T, typename... Args>
 constexpr decltype(auto) get_types_literal() {
-  constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
-  constexpr auto end =
-      string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
-  if constexpr (root_id == type_id::non_trivial_class_t ||
-                root_id == type_id::trivial_class_t) {
-    constexpr auto begin =
-        string_literal<char, 1>{{static_cast<char>(root_id)}};
-    constexpr auto body = get_types_literal_impl<T, Args...>();
-    if constexpr (is_trivial_serializable<T, true>::value) {
-      static_assert(align::pack_alignment_v<T> <= align::alignment_v<T>,
-                    "If you add #pragma_pack to a struct, please specify the "
-                    "struct_pack::pack_alignment_v<T>.");
-      return begin + body + get_size_literal<align::pack_alignment_v<T>>() +
-             get_size_literal<align::alignment_v<T>>() + end;
-    }
-    else {
-      return begin + body + end;
-    }
+  if constexpr (is_trivial_view_v<T>) {
+    return get_types_literal<T::value_type, Args...>();
   }
   else {
-    return get_types_literal_impl<void, Args...>();
+    constexpr auto root_id = get_type_id<std::remove_cvref_t<T>>();
+    constexpr auto end =
+        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
+    if constexpr (root_id == type_id::non_trivial_class_t ||
+                  root_id == type_id::trivial_class_t) {
+      constexpr auto begin =
+          string_literal<char, 1>{{static_cast<char>(root_id)}};
+      constexpr auto body = get_types_literal_impl<T, Args...>();
+      if constexpr (is_trivial_serializable<T, true>::value) {
+        static_assert(align::pack_alignment_v<T> <= align::alignment_v<T>,
+                      "If you add #pragma_pack to a struct, please specify the "
+                      "struct_pack::pack_alignment_v<T>.");
+        return begin + body + get_size_literal<align::pack_alignment_v<T>>() +
+               get_size_literal<align::alignment_v<T>>() + end;
+      } else {
+        return begin + body + end;
+      }
+    } else {
+      return get_types_literal_impl<void, Args...>();
+    }
   }
-}
-
-template <trivial_view T, typename... Args>
-constexpr decltype(auto) get_types_literal() {
-  return get_types_literal<T::value_type, Args...>();
 }
 
 template <typename T, typename Tuple, std::size_t... I>
@@ -1063,9 +1054,6 @@ constexpr decltype(auto) get_types_literal(std::index_sequence<I...>) {
 }
 
 template <uint64_t version, typename Args, typename... ParentArgs>
-constexpr bool check_if_compatible_element_exist_impl_helper();
-
-template <uint64_t version, trivial_view Arg, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper();
 
 // This help function is just to improve unit test coverage. :)
@@ -1094,7 +1082,10 @@ template <uint64_t version, typename Arg, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper() {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
-  if constexpr (check_circle<Arg, ParentArgs...>()) {
+  if constexpr (is_trivial_view_v<Arg>) {
+    return check_if_compatible_element_exist_impl_helper<version,typename Arg::value_type, ParentArgs...>();
+  }
+  else if constexpr (check_circle<Arg, ParentArgs...>()) {
     return false;
   }
   else if constexpr (id == type_id::compatible_t) {
@@ -1151,12 +1142,6 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
   }
 }
 
-template <uint64_t version, trivial_view Arg, typename... ParentArgs>
-constexpr bool check_if_compatible_element_exist_impl_helper() {
-  return check_if_compatible_element_exist_impl_helper<
-      version, typename Arg::value_type, ParentArgs...>();
-}
-
 template <typename T, typename... Args>
 constexpr uint32_t get_types_code_impl() {
   constexpr auto str = get_types_literal<T, std::remove_cvref_t<Args>...>();
@@ -1184,6 +1169,9 @@ constexpr size_info inline calculate_one_size(const T &item) {
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                      id == type_id::int128_t || id == type_id::uint128_t) {
     ret.total = sizeof(type);
+  }
+  else if constexpr (is_trivial_view_v<type>) {
+    return calculate_one_size(item.get());
   }
   else if constexpr (detail::varint_t<type>) {
     ret.total = detail::calculate_varint_size(item);
@@ -1273,11 +1261,6 @@ constexpr size_info inline calculate_one_size(const T &item) {
   return ret;
 }
 
-template <trivial_view T>
-constexpr size_info inline calculate_one_size(const T &item) {
-  return calculate_one_size(item.get());
-}
-
 template <typename T, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const T &item, const Args &...items) {
@@ -1334,6 +1317,9 @@ constexpr std::size_t calculate_compatible_version_size() {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
   std::size_t sz = 0;
+  if constexpr (is_trivial_view_v<T>) {
+    return 0;
+  }
   if constexpr (check_circle<T, ParentArgs...>())
     sz = 0;
   else if constexpr (id == type_id::compatible_t) {
@@ -1386,11 +1372,6 @@ constexpr std::size_t calculate_compatible_version_size() {
   return sz;
 }
 
-template <trivial_view Arg, typename... ParentArgs>
-constexpr std::size_t calculate_compatible_version_size() {
-  return 0;
-}
-
 template <typename Buffer, typename Args, typename... ParentArgs>
 constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz);
 
@@ -1418,10 +1399,15 @@ template <typename Buffer, typename Arg, typename... ParentArgs>
 constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
   using T = std::remove_cvref_t<Arg>;
   constexpr auto id = get_type_id<T>();
-  if constexpr (check_circle<T, ParentArgs...>())
-    ;
+  if constexpr (is_trivial_view_v<T>) {
+    return;
+  }
+  else if constexpr (check_circle<T, ParentArgs...>()) {
+    return;
+  }
   else if constexpr (id == type_id::compatible_t) {
     buffer[sz++] = T::version_number;
+    return;
   }
   else {
     if constexpr (id == type_id::non_trivial_class_t ||
@@ -1469,10 +1455,6 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
   }
 }
 
-template <typename Buffer, trivial_view Arg, typename... ParentArgs>
-constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
-  return;
-};
 
 template <std::size_t sz>
 constexpr void STRUCT_PACK_INLINE
@@ -1731,47 +1713,43 @@ class packer {
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
-    if constexpr (version == UINT64_MAX) {
-      if constexpr (id == type_id::compatible_t) {
-        // do nothing
-      }
-      else if constexpr (std::is_same_v<type, std::monostate>) {
-        // do nothing
-      }
-      else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t) {
-        writer_.write((char *)&item, sizeof(type));
-      }
-      else if constexpr (unique_ptr<type>) {
-        bool has_value = (item != nullptr);
-        writer_.write((char *)&has_value, sizeof(char));
-        if (has_value) {
-          serialize_one<size_type, version>(*item);
-        }
-      }
-      else if constexpr (detail::varint_t<type>) {
-        detail::serialize_varint(writer_, item);
-      }
-      else if constexpr (id == type_id::array_t) {
-        if constexpr (is_trivial_serializable<type>::value) {
+    if constexpr (is_trivial_view_v<T>) {
+      return serialize_one<size_type, version>(item.get());
+    }
+    else if constexpr (version == UINT64_MAX) {
+        if constexpr (id == type_id::compatible_t) {
+          // do nothing
+        } else if constexpr (std::is_same_v<type, std::monostate>) {
+          // do nothing
+        } else if constexpr (std::is_fundamental_v<type> ||
+                             std::is_enum_v<type> || id == type_id::int128_t ||
+                             id == type_id::uint128_t) {
           writer_.write((char *)&item, sizeof(type));
-        }
-        else {
-          for (const auto &i : item) {
-            serialize_one<size_type, version>(i);
+        } else if constexpr (unique_ptr<type>) {
+          bool has_value = (item != nullptr);
+          writer_.write((char *)&has_value, sizeof(char));
+          if (has_value) {
+            serialize_one<size_type, version>(*item);
           }
-        }
-      }
-      else if constexpr (map_container<type> || container<type>) {
-        uint64_t size = item.size();
+        } else if constexpr (detail::varint_t<type>) {
+          detail::serialize_varint(writer_, item);
+        } else if constexpr (id == type_id::array_t) {
+          if constexpr (is_trivial_serializable<type>::value) {
+            writer_.write((char *)&item, sizeof(type));
+          } else {
+            for (const auto &i : item) {
+              serialize_one<size_type, version>(i);
+            }
+          }
+        } else if constexpr (map_container<type> || container<type>) {
+          uint64_t size = item.size();
 #ifdef STRUCT_PACK_OPTIMIZE
-        writer_.write((char *)&size, size_type);
-#else
-        if constexpr (size_type == 1) {
           writer_.write((char *)&size, size_type);
-        }
-        else {
-          switch ((info.metainfo() & 0b11000) >> 3) {
+#else
+          if constexpr (size_type == 1) {
+            writer_.write((char *)&size, size_type);
+          } else {
+            switch ((info.metainfo() & 0b11000) >> 3) {
             case 1:
               writer_.write((char *)&size, 2);
               break;
@@ -1783,164 +1761,136 @@ class packer {
               break;
             default:
               unreachable();
+            }
           }
-        }
 #endif
-        if constexpr (trivially_copyable_container<type>) {
-          using value_type = typename type::value_type;
-          auto container_size = 1ull * size * sizeof(value_type);
-          if SP_UNLIKELY (container_size >= PTRDIFF_MAX)
-            unreachable();
-          else {
-            writer_.write((char *)item.data(), container_size);
+          if constexpr (trivially_copyable_container<type>) {
+            using value_type = typename type::value_type;
+            auto container_size = 1ull * size * sizeof(value_type);
+            if SP_UNLIKELY (container_size >= PTRDIFF_MAX)
+              unreachable();
+            else {
+              writer_.write((char *)item.data(), container_size);
+            }
+            return;
+          } else {
+            for (const auto &i : item) {
+              serialize_one<size_type, version>(i);
+            }
           }
-          return;
+        } else if constexpr (container_adapter<type>) {
+          static_assert(!sizeof(type),
+                        "the container adapter type is not supported");
+        } else if constexpr (!pair<type> && tuple<type> &&
+                             !is_trivial_tuple<type>) {
+          std::apply(
+              [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                serialize_many<size_type, version>(items...);
+              },
+              item);
+        } else if constexpr (optional<type>) {
+          bool has_value = item.has_value();
+          writer_.write((char *)&has_value, sizeof(bool));
+          if (has_value) {
+            serialize_one<size_type, version>(*item);
+          }
+        } else if constexpr (is_variant_v<type>) {
+          static_assert(std::variant_size_v<type> < 256,
+                        "variant's size is too large");
+          uint8_t index = item.index();
+          writer_.write((char *)&index, sizeof(index));
+          std::visit(
+              [this](auto &&e) { this->serialize_one<size_type, version>(e); },
+              item);
+        } else if constexpr (expected<type>) {
+          bool has_value = item.has_value();
+          writer_.write((char *)&has_value, sizeof(has_value));
+          if (has_value) {
+            if constexpr (!std::is_same_v<typename type::value_type, void>)
+              serialize_one<size_type, version>(item.value());
+          } else {
+            serialize_one<size_type, version>(item.error());
+          }
+        } else if constexpr (std::is_class_v<type>) {
+          if constexpr (!pair<type> && !is_trivial_tuple<type>)
+            if constexpr (!user_defined_refl<type>)
+              static_assert(
+                  std::is_aggregate_v<std::remove_cvref_t<type>>,
+                  "struct_pack only support aggregated type, or you should "
+                  "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+          if constexpr (is_trivial_serializable<type>::value) {
+            writer_.write((char *)&item, sizeof(type));
+          } else if constexpr (is_trivial_serializable<type, true>::value) {
+            visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+              int i = 1;
+              (
+                  [&]() {
+                    serialize_one<size_type, version>(items);
+                    write_padding(align::padding_size<type>[i++]);
+                  }(),
+                  ...);
+            });
+          } else {
+            visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+              serialize_many<size_type, version>(items...);
+            });
+          }
+        } else {
+          static_assert(!sizeof(type), "the type is not supported yet");
         }
-        else {
+      } else if constexpr (exist_compatible_member<type, version>) {
+        if constexpr (id == type_id::compatible_t) {
+          if constexpr (version == type::version_number) {
+            bool has_value = item.has_value();
+            writer_.write((char *)&has_value, sizeof(bool));
+            if (has_value) {
+              serialize_one<size_type, UINT64_MAX>(*item);
+            }
+          }
+        } else if constexpr (unique_ptr<type>) {
+          if (item != nullptr) {
+            serialize_one<size_type, version>(*item);
+          }
+        } else if constexpr (id == type_id::array_t) {
           for (const auto &i : item) {
             serialize_one<size_type, version>(i);
           }
-        }
-      }
-      else if constexpr (container_adapter<type>) {
-        static_assert(!sizeof(type),
-                      "the container adapter type is not supported");
-      }
-      else if constexpr (!pair<type> && tuple<type> &&
-                         !is_trivial_tuple<type>) {
-        std::apply(
-            [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-              serialize_many<size_type, version>(items...);
-            },
-            item);
-      }
-      else if constexpr (optional<type>) {
-        bool has_value = item.has_value();
-        writer_.write((char *)&has_value, sizeof(bool));
-        if (has_value) {
-          serialize_one<size_type, version>(*item);
-        }
-      }
-      else if constexpr (is_variant_v<type>) {
-        static_assert(std::variant_size_v<type> < 256,
-                      "variant's size is too large");
-        uint8_t index = item.index();
-        writer_.write((char *)&index, sizeof(index));
-        std::visit(
-            [this](auto &&e) {
-              this->serialize_one<size_type, version>(e);
-            },
-            item);
-      }
-      else if constexpr (expected<type>) {
-        bool has_value = item.has_value();
-        writer_.write((char *)&has_value, sizeof(has_value));
-        if (has_value) {
-          if constexpr (!std::is_same_v<typename type::value_type, void>)
-            serialize_one<size_type, version>(item.value());
-        }
-        else {
-          serialize_one<size_type, version>(item.error());
-        }
-      }
-      else if constexpr (std::is_class_v<type>) {
-        if constexpr (!pair<type> && !is_trivial_tuple<type>)
-          if constexpr (!user_defined_refl<type>)
-            static_assert(
-                std::is_aggregate_v<std::remove_cvref_t<type>>,
-                "struct_pack only support aggregated type, or you should "
-                "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
-        if constexpr (is_trivial_serializable<type>::value) {
-          writer_.write((char *)&item, sizeof(type));
-        }
-        else if constexpr (is_trivial_serializable<type, true>::value) {
-          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-            int i = 1;
-            (
-                [&]() {
-                  serialize_one<size_type, version>(items);
-                  write_padding(align::padding_size<type>[i++]);
-                }(),
-                ...);
-          });
-        }
-        else {
+        } else if constexpr (map_container<type> || container<type>) {
+          for (const auto &i : item) {
+            serialize_one<size_type, version>(i);
+          }
+        } else if constexpr (!pair<type> && tuple<type> &&
+                             !is_trivial_tuple<type>) {
+          std::apply(
+              [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                serialize_many<size_type, version>(items...);
+              },
+              item);
+        } else if constexpr (optional<type>) {
+          if (item.has_value()) {
+            serialize_one<size_type, version>(*item);
+          }
+        } else if constexpr (is_variant_v<type>) {
+          std::visit(
+              [this](const auto &e) {
+                this->serialize_one<size_type, version>(e);
+              },
+              item);
+        } else if constexpr (expected<type>) {
+          if (item.has_value()) {
+            if constexpr (!std::is_same_v<typename type::value_type, void>)
+              serialize_one<size_type, version>(item.value());
+          } else {
+            serialize_one<size_type, version>(item.error());
+          }
+        } else if constexpr (std::is_class_v<type>) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             serialize_many<size_type, version>(items...);
           });
         }
       }
-      else {
-        static_assert(!sizeof(type), "the type is not supported yet");
-      }
+      return;
     }
-    else if constexpr (exist_compatible_member<type, version>) {
-      if constexpr (id == type_id::compatible_t) {
-        if constexpr (version == type::version_number) {
-          bool has_value = item.has_value();
-          writer_.write((char *)&has_value, sizeof(bool));
-          if (has_value) {
-            serialize_one<size_type, UINT64_MAX>(*item);
-          }
-        }
-      }
-      else if constexpr (unique_ptr<type>) {
-        if (item != nullptr) {
-          serialize_one<size_type, version>(*item);
-        }
-      }
-      else if constexpr (id == type_id::array_t) {
-        for (const auto &i : item) {
-          serialize_one<size_type, version>(i);
-        }
-      }
-      else if constexpr (map_container<type> || container<type>) {
-        for (const auto &i : item) {
-          serialize_one<size_type, version>(i);
-        }
-      }
-      else if constexpr (!pair<type> && tuple<type> &&
-                         !is_trivial_tuple<type>) {
-        std::apply(
-            [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-              serialize_many<size_type, version>(items...);
-            },
-            item);
-      }
-      else if constexpr (optional<type>) {
-        if (item.has_value()) {
-          serialize_one<size_type, version>(*item);
-        }
-      }
-      else if constexpr (is_variant_v<type>) {
-        std::visit(
-            [this](const auto &e) {
-              this->serialize_one<size_type, version>(e);
-            },
-            item);
-      }
-      else if constexpr (expected<type>) {
-        if (item.has_value()) {
-          if constexpr (!std::is_same_v<typename type::value_type, void>)
-            serialize_one<size_type, version>(item.value());
-        }
-        else {
-          serialize_one<size_type, version>(item.error());
-        }
-      }
-      else if constexpr (std::is_class_v<type>) {
-        visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-          serialize_many<size_type, version>(items...);
-        });
-      }
-    }
-    return;
-  }
-
-  template <std::size_t size_type, uint64_t version, trivial_view T>
-  constexpr void inline serialize_one(const T &item) {
-    serialize_one<size_type, version>(item.get());
-  }
 
   template <typename T>
   friend constexpr serialize_buffer_size get_needed_size(const T &t);
@@ -2485,7 +2435,19 @@ class unpacker {
     using type = std::remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type>();
-    if constexpr (version == UINT64_MAX) {
+    if constexpr (is_trivial_view_v<type>) {
+      static_assert(view_reader_t<Reader>,
+                    "The Reader isn't a view_reader, can't deserialize "
+                    "a trivial_view<T>");
+      const char *view = reader_.read_view(sizeof(typename T::value_type));
+      if SP_LIKELY (view != nullptr) {
+        item = *reinterpret_cast<const typename T::value_type *>(view);
+        code = errc::ok;
+      } else {
+        code = errc::no_buffer_space;
+      }
+    }
+    else if constexpr (version == UINT64_MAX) {
       if constexpr (id == type_id::compatible_t) {
         // do nothing
       }
@@ -2882,21 +2844,6 @@ class unpacker {
       }
     }
     return code;
-  }
-
-  template <size_t size_type, uint64_t version, bool NotSkip, trivial_view T>
-  constexpr struct_pack::errc inline deserialize_one(T &item) {
-    static_assert(view_reader_t<Reader>,
-                  "The Reader isn't a view_reader, can't deserialize "
-                  "a trivial_view<T>");
-    const char *view = reader_.read_view(sizeof(typename T::value_type));
-    if SP_LIKELY (view != nullptr) {
-      item = *reinterpret_cast<const typename T::value_type *>(view);
-      return errc::ok;
-    }
-    else {
-      return errc::no_buffer_space;
-    }
   }
 
   // partial deserialize_to
