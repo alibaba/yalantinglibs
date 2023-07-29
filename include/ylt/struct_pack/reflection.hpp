@@ -238,7 +238,11 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr bool is_char_t = std::is_same_v<Type, signed char> ||
       std::is_same_v<Type, char> || std::is_same_v<Type, unsigned char> ||
       std::is_same_v<Type, wchar_t> || std::is_same_v<Type, char16_t> ||
-      std::is_same_v<Type, char32_t> || std::is_same_v<Type, char8_t>;
+      std::is_same_v<Type, char32_t>
+#ifdef __cpp_lib_char8_t
+ || std::is_same_v<Type, char8_t>
+#endif
+;
 
 
 #if __cpp_concepts >= 201907L

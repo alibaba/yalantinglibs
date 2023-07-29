@@ -415,7 +415,11 @@ constexpr type_id get_integral_type() {
     return type_id::uint16_t;
   }
   // In struct_pack, the char will be saved as unsigned!
-  else if constexpr (std::is_same_v<char, T> || std::is_same_v<char8_t, T>) {
+  else if constexpr (std::is_same_v<char, T>
+#ifdef __cpp_lib_char8_t
+ || std::is_same_v<char8_t, T>
+#endif 
+) {
     return type_id::char_8_t;
   }
 #ifdef STRUCT_PACK_ENABLE_UNPORTABLE_TYPE

@@ -297,6 +297,7 @@ TEST_CASE("char test") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
+#ifdef __cpp_lib_char8_t
   {
     char8_t ch = u8'1', ch2;
     auto ret = serialize(ch);
@@ -304,6 +305,7 @@ TEST_CASE("char test") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
+#endif
   {
     char16_t ch = u'1', ch2;
     auto ret = serialize(ch);

@@ -324,7 +324,9 @@ TEST_CASE("testing fundamental types") {
     CHECK(std::unique(ar.begin(), ar.end()) == ar.end());
   }
   {
+#ifdef __cpp_lib_char8_t
     static_assert(get_type_literal<char>() == get_type_literal<char8_t>());
+#endif
     static_assert(get_type_literal<signed char>() ==
                   get_type_literal<int8_t>());
     static_assert(get_type_literal<unsigned char>() ==
