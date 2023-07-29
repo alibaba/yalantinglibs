@@ -43,7 +43,7 @@ class varint {
     T new_val = val & mask;
     return varint(new_val);
   }
-  template <std::unsigned_integral U>
+  template <typename U, typename = std::enable_if_t<std::is_unsigned_v<U>>>
   [[nodiscard]] auto operator<<(U shift) const noexcept {
     T new_val = val << shift;
     return varint(new_val);
@@ -104,7 +104,7 @@ class sint {
     T new_val = val & mask;
     return sint(new_val);
   }
-  template <std::unsigned_integral U>
+  template <typename U, typename = std::enable_if_t<std::is_unsigned_v<U>>>
   auto operator<<(U shift) const noexcept {
     T new_val = val << shift;
     return sint(new_val);
