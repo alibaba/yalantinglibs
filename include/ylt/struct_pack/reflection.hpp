@@ -704,32 +704,35 @@ namespace detail {
     operator U();
   };
 
+  template <typename T, typename construct_param_t, typename = void, typename... Args>
+  struct is_constructable_impl : std::false_type {};
+  template <typename T, typename construct_param_t, typename... Args>
+  struct is_constructable_impl<T, construct_param_t,
+  std::void_t<
+    decltype(T{{Args{}}..., {construct_param_t{}}})>, Args...>
+      : std::true_type {};
+
+  template <typename T, typename construct_param_t, typename... Args>
+  constexpr bool is_constructable=is_constructable_impl<T,construct_param_t,void,Args...>::value;
+
   template <typename T, typename... Args>
   constexpr std::size_t members_count_impl() {
-    if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
+    if constexpr (is_constructable<T,UniversalVectorType,Args...>) {
       return members_count_impl<T, Args..., UniversalVectorType>();
     }
-    else if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
+    else if constexpr (is_constructable<T,UniversalType,Args...>) {
       return members_count_impl<T, Args..., UniversalType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalOptionalType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalOptionalType,Args...>) {
       return members_count_impl<T, Args..., UniversalOptionalType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalIntegralType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalIntegralType,Args...>) {
       return members_count_impl<T, Args..., UniversalIntegralType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalNullptrType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalNullptrType,Args...>) {
       return members_count_impl<T, Args..., UniversalNullptrType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalCompatibleType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalCompatibleType,Args...>) {
       return members_count_impl<T, Args..., UniversalCompatibleType>();
     }
     else {
@@ -739,11 +742,15 @@ namespace detail {
 
   template <typename T>
   constexpr std::size_t members_count() {
-    if constexpr (tuple_size<T>) {
-      return std::tuple_size<T>::value;
+    using type = std::remove_cvref_t<T>;
+    if constexpr (user_defined_refl<type>) {
+      return decltype(STRUCT_PACK_FIELD_COUNT(std::declval<type>()))::value;
+    }
+    if constexpr (tuple_size<type>) {
+      return std::tuple_size<type>::value;
     }
     else {
-      return members_count_impl<T>();
+      return members_count_impl<type>();
     }
   }
 
