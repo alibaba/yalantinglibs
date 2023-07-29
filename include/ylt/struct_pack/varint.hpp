@@ -50,7 +50,7 @@ class varint {
   }
   template <typename U>
   [[nodiscard]] auto operator|=(U shift) noexcept {
-    if constexpr (std::same_as<U, varint<T>>) {
+    if constexpr (std::is_same_v<U, varint<T>>) {
       val |= shift.val;
     }
     else {
@@ -206,7 +206,7 @@ template <typename Reader>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint_impl(
     Reader& reader, uint64_t& v) {
 #if __cpp_concepts < 201907L
-  static_assert(reader_t<writer>, "The writer type must satisfy requirements!");
+  static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
 #endif
   uint8_t now;
   constexpr const int8_t max_varint_length = sizeof(uint64_t) * 8 / 7 + 1;
@@ -231,7 +231,7 @@ template <bool NotSkip = true,
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint(
     Reader& reader, T& t) {
 #if __cpp_concepts < 201907L
-  static_assert(reader_t<writer>, "The writer type must satisfy requirements!");
+  static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
 #endif
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
