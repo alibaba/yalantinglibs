@@ -45,9 +45,6 @@
 #include "tuple.hpp"
 #endif
 
-static_assert(std::endian::native == std::endian::little,
-              "only support little endian now");
-
 #include "reflection.hpp"
 
 namespace struct_pack {
@@ -1987,7 +1984,7 @@ class unpacker {
 
   STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {
 #if __cpp_concepts < 201907L
-    static_assert(reader_t<writer>,
+    static_assert(reader_t<Reader>,
                   "The writer type must satisfy requirements!");
 #endif
   }

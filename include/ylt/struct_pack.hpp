@@ -94,7 +94,7 @@ STRUCT_PACK_INLINE constexpr std::uint32_t get_type_code() {
                                  decltype(detail::get_types<Args...>())>();
   }
   else {
-    ret = detail::get_types_code<std::tuple<std::remove_cvref_t<Args>...>,
+    ret = detail::get_types_code<std::tuple<detail::remove_cvref_t<Args>...>,
                                  std::tuple<Args...>>();
   }
   ret = ret - ret % 2;
@@ -110,8 +110,8 @@ STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal() {
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    return detail::get_types_literal<std::tuple<std::remove_cvref_t<Args>...>,
-                                     std::remove_cvref_t<Args>...>();
+    return detail::get_types_literal<std::tuple<detail::remove_cvref_t<Args>...>,
+                                     detail::remove_cvref_t<Args>...>();
   }
 }
 
@@ -155,7 +155,7 @@ void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_buffer_size info,
 }
 
 template <serialize_config conf = serialize_config{},
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
           detail::struct_pack_buffer Buffer,
 #else
           typename Buffer,
@@ -178,7 +178,7 @@ void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
 }
 
 template <
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
     detail::struct_pack_buffer Buffer = std::vector<char>,
 #else
     typename Buffer = std::vector<char>,
@@ -196,7 +196,7 @@ template <
 }
 
 template <
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
     detail::struct_pack_buffer Buffer = std::vector<char>,
 #else
     typename Buffer = std::vector<char>,
@@ -214,7 +214,7 @@ serialize_with_offset(std::size_t offset, const Args &...args) {
   return buffer;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <
@@ -237,7 +237,7 @@ template <typename T, typename... Args>
   return in.deserialize(t, args...);
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, struct_pack::reader_t Reader>
 #else
 template <typename T, typename... Args, typename Reader,
@@ -272,7 +272,7 @@ template <typename T, typename... Args, typename Reader,
   }
   return ret;
 }
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <typename T, typename... Args, typename View>
@@ -307,7 +307,7 @@ template <typename T, typename... Args>
   return ret;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <typename T, typename... Args, typename View>
@@ -330,7 +330,7 @@ template <typename T, typename... Args>
   return ret;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <typename T, typename... Args, typename View>
@@ -354,7 +354,7 @@ template <typename T, typename... Args>
   }
   return ret;
 }
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, struct_pack::reader_t Reader>
 #else
 template <typename T, typename... Args, typename Reader>
@@ -373,7 +373,7 @@ template <typename T, typename... Args, typename Reader>
   return ret;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <typename T, typename... Args, typename View>
@@ -399,7 +399,7 @@ template <typename T, typename... Args>
   return ret;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
 template <typename T, typename... Args, typename View>
@@ -426,7 +426,7 @@ template <typename T, typename... Args>
   return ret;
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, size_t I, typename Field, detail::deserialize_view View>
 #else
 template <typename T, size_t I, typename Field, typename View,
@@ -456,7 +456,7 @@ template <typename T, size_t I, typename Field>
   return in.template get_field<T, I>(dst);
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, size_t I, typename Field, struct_pack::reader_t Reader>
 #else
 template <typename T, size_t I, typename Field, typename Reader,
@@ -472,7 +472,7 @@ template <typename T, size_t I, typename Field, typename Reader,
   return in.template get_field<T, I>(dst);
 }
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, size_t I, detail::deserialize_view View>
 #else
 template <typename T, size_t I, typename View,
@@ -498,7 +498,7 @@ template <typename T, size_t I>
   }
   return ret;
 }
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 template <typename T, size_t I, struct_pack::reader_t Reader>
 #else
 template <typename T, size_t I, typename Reader,
