@@ -1227,7 +1227,8 @@ struct A_v2 {
   } b;
   char c;
 };
-bool test_equal(const auto& v1, const auto& v2) {
+template<typename T1,typename T2>
+bool test_equal(const T1& v1, const T2& v2) {
   return v1.a == v2.a && v1.c == v2.c &&
          (v1.b.a == v2.b.a && v1.b.c == v2.b.c &&
           (v1.b.b.a == v2.b.b.a && v1.b.b.c == v2.b.b.c &&

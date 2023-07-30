@@ -160,10 +160,10 @@ TEST_CASE("testing pack object") {
   }
 }
 
-void test_container(auto &v) {
+template<typename T>
+void test_container(T &v) {
   auto ret = serialize(v);
 
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   CHECK(ec == struct_pack::errc{});

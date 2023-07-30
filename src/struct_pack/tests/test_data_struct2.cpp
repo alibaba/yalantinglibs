@@ -153,6 +153,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     std::u8string_view sv = u8"你好";
     auto ret = serialize(sv);
@@ -160,6 +161,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#endif
   {
     auto ret = serialize("hello"s);
     auto res = deserialize<string_view>(ret.data(), ret.size());
@@ -180,6 +182,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     std::u8string sv = u8"你好";
     auto ret = serialize(sv);
@@ -187,6 +190,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#endif
 }
 
 TEST_CASE("test wide string") {
@@ -199,6 +203,7 @@ TEST_CASE("test wide string") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     auto sv = std::u8string(u8"你好, struct pack");
     auto ret = serialize(sv);
@@ -207,6 +212,7 @@ TEST_CASE("test wide string") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#endif
   {
     auto sv = std::u16string(u"你好, struct pack");
     auto ret = serialize(sv);
@@ -242,6 +248,7 @@ TEST_CASE("test string_view") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     auto sv = std::u8string_view(u8"你好, struct pack");
     auto ret = serialize(sv);
@@ -250,6 +257,7 @@ TEST_CASE("test string_view") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#endif
   {
     auto sv = std::u16string_view(u"你好, struct pack");
     auto ret = serialize(sv);
@@ -364,7 +372,14 @@ struct Node {
   uint32_t UInt32Value;
   uint64_t UInt64Value;
   std::list<Node> Values;  // Recursive member
-  friend bool operator==(const Node& a, const Node& b) = default;
+  friend bool operator==(const Node& a, const Node& b) {
+    return a.Type==b.Type&&a.IsArray==b.IsArray&&a.Dimensions==b.Dimensions
+      &&a.IsStructure==b.IsStructure&&a.TypeName==b.TypeName&&a.Index==b.Index
+      &&a.BoolValue==b.BoolValue&&a.StringValue==b.StringValue&&a.FloatValue==b.FloatValue
+      &&a.DoubleValue==b.DoubleValue&&a.Int16Value==b.Int16Value&&a.Int32Value==b.Int32Value
+      &&a.Int64Value==b.Int64Value&&a.UInt16Value==b.UInt16Value&&a.UInt32Value==b.UInt32Value
+      &&a.UInt64Value==b.UInt64Value&&a.Values==b.Values;
+  }
 };
 
 TEST_CASE("testing recursive type") {

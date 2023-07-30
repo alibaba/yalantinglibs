@@ -5,10 +5,9 @@
 #include "test_struct.hpp"
 using namespace struct_pack;
 
-void test_container(auto &v) {
+template<typename T>
+void test_container(T &v) {
   auto ret = serialize(v);
-
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   CHECK(ec == struct_pack::errc{});
@@ -156,11 +155,10 @@ TEST_CASE("testing nonstd containers") {
     test_container(v);
   }
 }
-
-void test_tuple_like(auto &v) {
+template<typename T>
+void test_tuple_like(T &v) {
   auto ret = serialize(v);
 
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   CHECK(ec == struct_pack::errc{});
@@ -251,10 +249,10 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
   CHECK(obj.tp == obj1.tp);
 }
 #endif
-void test_c_array(auto &v) {
+template<typename T>
+void test_c_array(T &v) {
   auto ret = serialize(v);
 
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   REQUIRE(ec == struct_pack::errc{});
