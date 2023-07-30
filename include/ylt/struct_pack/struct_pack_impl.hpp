@@ -2430,6 +2430,16 @@ class unpacker {
     }
   }
 
+  template<typename U>
+  auto get_container_value_t(const U &) {
+    if constexpr (map_container<U>) {
+      return std::pair<typename U::key_type, typename U::mapped_type>{};
+    }
+    else {
+      return typename U::value_type{};
+    }
+  };
+
   template <size_t size_type, uint64_t version, bool NotSkip, typename T>
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
@@ -2542,14 +2552,7 @@ class unpacker {
           // value is the element of map/set container.
           // if the type is set, then value is set::value_type;
           // if the type is map, then value is pair<key_type,mapped_type>
-          decltype([]<typename U>(const U &) {
-            if constexpr (map_container<U>) {
-              return std::pair<typename U::key_type, typename U::mapped_type>{};
-            }
-            else {
-              return typename U::value_type{};
-            }
-          }(item)) value;
+          decltype(get_container_value_t(item)) value;
           if constexpr (is_trivial_serializable<decltype(value)>::value &&
                         !NotSkip) {
             return reader_.ignore(size * sizeof(value)) ? errc{}
