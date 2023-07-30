@@ -1026,7 +1026,9 @@ TEST_CASE("compatible convert to optional") {
 struct test_int_128 {
   __int128_t x;
   __uint128_t y;
-  bool operator==(const test_int_128 &) const = default;
+  bool operator==(const test_int_128& o) const {
+    return x==o.x&&y==o.y;
+  }
 };
 
 TEST_CASE("test 128-bit int") {

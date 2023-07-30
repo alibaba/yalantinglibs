@@ -88,7 +88,7 @@ STRUCT_PACK_INLINE std::string error_message(struct_pack::errc err) {
 template <typename... Args>
 STRUCT_PACK_INLINE constexpr std::uint32_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
-  std::uint32_t ret;
+  std::uint32_t ret = 0;
   if constexpr (sizeof...(Args) == 1) {
     ret = detail::get_types_code<Args...,
                                  decltype(detail::get_types<Args...>())>();

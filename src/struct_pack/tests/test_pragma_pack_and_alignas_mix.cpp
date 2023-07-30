@@ -259,7 +259,9 @@ namespace test_pragma_pack_and_alignas_and_compatible_mix {
 struct alignas(4) dummy_2_4_v1 {
   char a;
   int b;
-  friend bool operator==(const dummy_2_4_v1&, const dummy_2_4_v1&) = default;
+  bool operator==(const dummy_2_4_v1& o) {
+    return a==o.a && b==o.b;
+  }
 };
 #pragma pack()
 #pragma pack(2)
@@ -267,7 +269,9 @@ struct alignas(4) dummy_2_4_v2 {
   char a;
   struct_pack::compatible<int> c;
   int b;
-  friend bool operator==(const dummy_2_4_v2&, const dummy_2_4_v2&) = default;
+  bool operator==(const dummy_2_4_v2& o) {
+    return a==o.a && b==o.b && c==o.c;
+  }
 };
 #pragma pack()
 

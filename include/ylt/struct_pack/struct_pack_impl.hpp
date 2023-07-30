@@ -1500,7 +1500,7 @@ constexpr void STRUCT_PACK_INLINE compile_time_unique(
 
 template <typename T>
 constexpr auto STRUCT_PACK_INLINE get_sorted_compatible_version_numbers() {
-  std::array<uint64_t, calculate_compatible_version_size<T>()> buffer;
+  std::array<uint64_t, calculate_compatible_version_size<T>()> buffer{};
   std::size_t sz = 0;
   get_compatible_version_numbers<decltype(buffer), T>(buffer, sz);
   compile_time_sort(buffer);

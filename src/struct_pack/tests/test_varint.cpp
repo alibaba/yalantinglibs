@@ -646,7 +646,9 @@ TEST_CASE("test int64") {
 template <typename T>
 struct VarRect {
   T x0, y0, x1, y1;
-  bool operator==(const VarRect<T> &) const noexcept = default;
+  bool operator==(const VarRect<T> & o) const {
+    return x0==o.x0&&y0==o.y0&&x1==o.x1&&y1==o.y1;
+  }
 };
 template <typename T>
 struct nested_object2 {
@@ -655,7 +657,9 @@ struct nested_object2 {
   person p;
   complicated_object o;
   VarRect<T> x;
-  bool operator==(const nested_object2<T> &o) const = default;
+  bool operator==(const nested_object2<T> &O) const {
+    return id==O.id&&name==O.name&&p==O.p&&o==O.o&&x==O.x;
+  }
 };
 
 TEST_CASE("test nested") {
