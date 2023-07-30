@@ -1910,7 +1910,7 @@ STRUCT_PACK_MAY_INLINE void serialize_to(Writer &writer,
                                          const serialize_buffer_size &info,
                                          const Args &...args) {
 #if __cpp_concepts < 201907L
-  static_assert(writer_t<writer>, "The writer type must satisfy requirements!");
+  static_assert(writer_t<Writer>, "The writer type must satisfy requirements!");
 #endif
   static_assert(sizeof...(args) > 0);
   detail::packer<Writer, detail::get_args_type<Args...>> o(writer, info);
