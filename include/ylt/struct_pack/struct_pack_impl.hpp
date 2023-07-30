@@ -280,12 +280,12 @@ template <typename T, typename = void>
 struct trivially_copyable_container_impl : std::false_type {};
 
 template <typename T>
-struct trivially_copyable_container_impl<T, std::void_t<is_trivial_serializable<typename T::value_type>::value>>
+struct trivially_copyable_container_impl<T, std::void_t<std::enable_if_t<is_trivial_serializable<typename T::value_type>::value>>>
     : std::true_type {};
 
 template <typename Type>
 constexpr bool trivially_copyable_container =
-    continuous_container<Type> && trivially_copyable_container_impl::value;
+    continuous_container<Type> && trivially_copyable_container_impl<Type>::value;
 
 #else
 
