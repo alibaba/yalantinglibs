@@ -333,7 +333,7 @@ template <typename T, typename... Args>
 #if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
-template <typename T, typename... Args, typename View>
+template <typename T, typename... Args, typename View, typename = std::enable_if_t<detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
@@ -357,14 +357,9 @@ template <typename T, typename... Args>
 #if __cpp_concepts >= 201907L
 template <typename T, typename... Args, struct_pack::reader_t Reader>
 #else
-template <typename T, typename... Args, typename Reader>
+template <typename T, typename... Args, typename Reader, typename = std::enable_if_t<struct_pack::reader_t<Reader>> >
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(Reader &v) {
-#if __cpp_concepts < 201907L
-  static_assert(
-      struct_pack::reader_t<Reader>,
-      "The Reader is not satisfied struct_pack::reader_t requirement!");
-#endif
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
   if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{})
       [[unlikely]] {
