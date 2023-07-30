@@ -259,7 +259,7 @@ namespace test_pragma_pack_and_alignas_and_compatible_mix {
 struct alignas(4) dummy_2_4_v1 {
   char a;
   int b;
-  bool operator==(const dummy_2_4_v1& o) {
+  bool operator==(const dummy_2_4_v1& o) const {
     return a==o.a && b==o.b;
   }
 };
@@ -269,7 +269,7 @@ struct alignas(4) dummy_2_4_v2 {
   char a;
   struct_pack::compatible<int> c;
   int b;
-  bool operator==(const dummy_2_4_v2& o) {
+  bool operator==(const dummy_2_4_v2& o) const {
     return a==o.a && b==o.b && c==o.c;
   }
 };

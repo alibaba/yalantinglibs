@@ -855,8 +855,9 @@ struct compatible_with_version_20230110 {
 
 TEST_CASE("test compatible version number") {
   static_assert(struct_pack::detail::compatible_version_number<
-                    compatible_with_version_20230110> ==
-                std::array<uint64_t, 2>{0, 20230110});
+                    compatible_with_version_20230110>[0] == 0 &&
+                struct_pack::detail::compatible_version_number<
+                    compatible_with_version_20230110>[1] == 20230110);
 }
 
 TEST_CASE("test compatible_with_version") {
