@@ -115,13 +115,13 @@ STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal() {
   }
 }
 
-template <serialize_config conf = serialize_config{}, typename... Args>
+template <uint64_t conf = type_info_config::automatic, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_buffer_size
 get_needed_size(const Args &...args) {
   return detail::get_serialize_runtime_info<conf>(args...);
 }
 
-template <serialize_config conf = serialize_config{}, typename Writer,
+template <uint64_t conf = type_info_config::automatic, typename Writer,
           typename... Args>
 STRUCT_PACK_INLINE void serialize_to(Writer &writer, const Args &...args) {
   static_assert(sizeof...(args) > 0);
@@ -146,7 +146,7 @@ STRUCT_PACK_INLINE void serialize_to(Writer &writer, const Args &...args) {
   }
 }
 
-template <serialize_config conf = serialize_config{}, typename... Args>
+template <uint64_t conf = type_info_config::automatic, typename... Args>
 void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_buffer_size info,
                                      const Args &...args) noexcept {
   static_assert(sizeof...(args) > 0);
@@ -154,7 +154,7 @@ void STRUCT_PACK_INLINE serialize_to(char *buffer, serialize_buffer_size info,
   struct_pack::detail::serialize_to<conf>(writer, info, args...);
 }
 
-template <serialize_config conf = serialize_config{},
+template <uint64_t conf = type_info_config::automatic,
 #if __cpp_concepts >= 201907L
           detail::struct_pack_buffer Buffer,
 #else
@@ -183,7 +183,7 @@ template <
 #else
     typename Buffer = std::vector<char>,
 #endif
-    serialize_config conf = serialize_config{}, typename... Args>
+    uint64_t conf = type_info_config::automatic, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer serialize(const Args &...args) {
 #if __cpp_concepts < 201907L
   static_assert(detail::struct_pack_buffer<Buffer>,
@@ -201,7 +201,7 @@ template <
 #else
     typename Buffer = std::vector<char>,
 #endif
-    serialize_config conf = serialize_config{}, typename... Args>
+    uint64_t conf = type_info_config::automatic, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer
 serialize_with_offset(std::size_t offset, const Args &...args) {
 #if __cpp_concepts < 201907L

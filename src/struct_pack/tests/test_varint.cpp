@@ -726,9 +726,7 @@ TEST_CASE("test varint zip size") {
     std::vector<var_int32_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128 - 64);
     auto buf = struct_pack::serialize<
-        std::string,
-        serialize_config{.add_type_info =
-                             struct_pack::type_info_config::disable}>(vec);
+        std::string,struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -737,9 +735,7 @@ TEST_CASE("test varint zip size") {
     std::vector<var_int64_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128 - 64);
     auto buf = struct_pack::serialize<
-        std::string,
-        serialize_config{.add_type_info =
-                             struct_pack::type_info_config::disable}>(vec);
+        std::string,struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -748,9 +744,7 @@ TEST_CASE("test varint zip size") {
     std::vector<var_uint32_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128);
     auto buf = struct_pack::serialize<
-        std::string,
-        serialize_config{.add_type_info =
-                             struct_pack::type_info_config::disable}>(vec);
+        std::string,struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -759,9 +753,7 @@ TEST_CASE("test varint zip size") {
     std::vector<var_uint64_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128);
     auto buf = struct_pack::serialize<
-        std::string,
-        serialize_config{.add_type_info =
-                             struct_pack::type_info_config::disable}>(vec);
+        std::string, struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);

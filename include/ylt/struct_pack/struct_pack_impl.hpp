@@ -185,10 +185,10 @@ using var_int64_t = detail::sint<int64_t>;
 using var_uint32_t = detail::varint<uint32_t>;
 using var_uint64_t = detail::varint<uint64_t>;
 
-enum class type_info_config { automatic, disable, enable };
-
-struct serialize_config {
-  type_info_config add_type_info = type_info_config::automatic;
+enum type_info_config { 
+  automatic = 0, 
+  disable = 1, 
+  enable = 2
 };
 
 template <typename T>
@@ -201,7 +201,7 @@ STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal();
 struct serialize_buffer_size;
 
 namespace detail {
-template <serialize_config conf, typename... Args>
+template <uint64_t conf, typename... Args>
 STRUCT_PACK_INLINE constexpr serialize_buffer_size get_serialize_runtime_info(
     const Args &...args);
 }
@@ -217,7 +217,7 @@ struct serialize_buffer_size {
   constexpr unsigned char metainfo() const { return metainfo_; }
   constexpr operator std::size_t() const { return len_; }
 
-  template <serialize_config conf, typename... Args>
+  template <uint64_t conf, typename... Args>
   friend STRUCT_PACK_INLINE constexpr serialize_buffer_size
   struct_pack::detail::get_serialize_runtime_info(const Args &...args);
 };
@@ -1535,9 +1535,9 @@ using get_args_type =
     typename std::conditional<sizeof...(Args) == 1,
                               std::tuple_element_t<0, std::tuple<Args...>>,
                               std::tuple<Args...>>::type;
-template <serialize_config conf, typename T>
+template <uint64_t conf, typename T>
 constexpr bool check_if_add_type_literal() {
-  if constexpr (conf.add_type_info == type_info_config::automatic) {
+  if constexpr (conf == type_info_config::automatic) {
     if constexpr (enable_type_info<T> == type_info_config::automatic) {
       return serialize_static_config<T>::has_type_literal;
     }
@@ -1546,11 +1546,11 @@ constexpr bool check_if_add_type_literal() {
     }
   }
   else {
-    return conf.add_type_info == type_info_config::enable;
+    return conf == type_info_config::enable;
   }
 }
 
-template <serialize_config conf, typename... Args>
+template <uint64_t conf, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE constexpr serialize_buffer_size
 get_serialize_runtime_info(const Args &...args) {
   using Type = get_args_type<Args...>;
@@ -1628,7 +1628,7 @@ class packer {
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
-  template <serialize_config conf, std::size_t size_type, typename T,
+  template <uint64_t conf, std::size_t size_type, typename T,
             typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
     serialize_metainfo<conf, size_type == 1, T, Args...>();
@@ -1658,7 +1658,7 @@ class packer {
           std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>>();
     }
   }
-  template <serialize_config conf, typename T, typename... Args>
+  template <uint64_t conf, typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
     if constexpr (serialize_static_config<serialize_type>::has_compatible ||
@@ -1669,7 +1669,7 @@ class packer {
       return raw_types_code - raw_types_code % 2;
     }
   }
-  template <serialize_config conf, bool is_default_size_type, typename T,
+  template <uint64_t conf, bool is_default_size_type, typename T,
             typename... Args>
   constexpr void STRUCT_PACK_INLINE serialize_metainfo() {
     constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
@@ -1899,7 +1899,7 @@ class packer {
   const serialize_buffer_size &info;
 };  // namespace detail
 
-template <serialize_config conf = serialize_config{},
+template <uint64_t conf = type_info_config::automatic,
 #if __cpp_concepts >= 201907L
           struct_pack::writer_t Writer,
 #else
