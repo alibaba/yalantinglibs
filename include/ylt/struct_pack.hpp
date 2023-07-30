@@ -362,7 +362,7 @@ template <typename T, typename... Args, typename Reader>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(Reader &v) {
 #if __cpp_concepts < 201907L
   static_assert(
-      detail::struct_pack::reader_t<Reader>,
+      struct_pack::reader_t<Reader>,
       "The Reader is not satisfied struct_pack::reader_t requirement!");
 #endif
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
