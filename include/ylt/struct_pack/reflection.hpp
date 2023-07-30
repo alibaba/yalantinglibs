@@ -350,7 +350,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename Type>
   constexpr bool continuous_container =
-      container<Type> &&(is_std_vector_v<Type> || is_std_basic_string_v<Type>);
+      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type>));
 #endif
 
 #if __cpp_concepts >= 201907L
