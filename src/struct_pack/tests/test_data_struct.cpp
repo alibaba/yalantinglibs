@@ -5,7 +5,7 @@
 #include "test_struct.hpp"
 using namespace struct_pack;
 
-template<typename T>
+template <typename T>
 void test_container(T &v) {
   auto ret = serialize(v);
   T v1{};
@@ -155,7 +155,7 @@ TEST_CASE("testing nonstd containers") {
     test_container(v);
   }
 }
-template<typename T>
+template <typename T>
 void test_tuple_like(T &v) {
   auto ret = serialize(v);
 
@@ -249,7 +249,7 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
   CHECK(obj.tp == obj1.tp);
 }
 #endif
-template<typename T>
+template <typename T>
 void test_c_array(T &v) {
   auto ret = serialize(v);
 

@@ -646,8 +646,8 @@ TEST_CASE("test int64") {
 template <typename T>
 struct VarRect {
   T x0, y0, x1, y1;
-  bool operator==(const VarRect<T> & o) const {
-    return x0==o.x0&&y0==o.y0&&x1==o.x1&&y1==o.y1;
+  bool operator==(const VarRect<T> &o) const {
+    return x0 == o.x0 && y0 == o.y0 && x1 == o.x1 && y1 == o.y1;
   }
 };
 template <typename T>
@@ -658,7 +658,7 @@ struct nested_object2 {
   complicated_object o;
   VarRect<T> x;
   bool operator==(const nested_object2<T> &O) const {
-    return id==O.id&&name==O.name&&p==O.p&&o==O.o&&x==O.x;
+    return id == O.id && name == O.name && p == O.p && o == O.o && x == O.x;
   }
 };
 
@@ -729,8 +729,9 @@ TEST_CASE("test varint zip size") {
   {
     std::vector<var_int32_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128 - 64);
-    auto buf = struct_pack::serialize<
-        std::string,struct_pack::type_info_config::disable>(vec);
+    auto buf =
+        struct_pack::serialize<std::string,
+                               struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -738,8 +739,9 @@ TEST_CASE("test varint zip size") {
   {
     std::vector<var_int64_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128 - 64);
-    auto buf = struct_pack::serialize<
-        std::string,struct_pack::type_info_config::disable>(vec);
+    auto buf =
+        struct_pack::serialize<std::string,
+                               struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -747,8 +749,9 @@ TEST_CASE("test varint zip size") {
   {
     std::vector<var_uint32_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128);
-    auto buf = struct_pack::serialize<
-        std::string,struct_pack::type_info_config::disable>(vec);
+    auto buf =
+        struct_pack::serialize<std::string,
+                               struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
@@ -756,8 +759,9 @@ TEST_CASE("test varint zip size") {
   {
     std::vector<var_uint64_t> vec;
     for (int i = 0; i < 100; ++i) vec.push_back(rand() % 128);
-    auto buf = struct_pack::serialize<
-        std::string, struct_pack::type_info_config::disable>(vec);
+    auto buf =
+        struct_pack::serialize<std::string,
+                               struct_pack::type_info_config::disable>(vec);
     CHECK(buf.size() == 4 + 1 + 1 * 100);
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);

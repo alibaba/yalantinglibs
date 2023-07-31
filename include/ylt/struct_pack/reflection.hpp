@@ -38,7 +38,7 @@ namespace struct_pack {
 namespace detail {
 
 template <typename T>
-using remove_cvref_t=std::remove_cv_t<std::remove_reference_t<T>>;
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
 [[noreturn]] inline void unreachable() {
   // Uses compiler specific extensions if possible.

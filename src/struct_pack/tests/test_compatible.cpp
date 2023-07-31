@@ -271,13 +271,11 @@ struct compatible_nested1_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   } b;
   std::string c;
   bool operator==(const compatible_nested1_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -288,12 +286,12 @@ struct compatible_nested1 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   } b;
   std::string c;
   bool operator==(const compatible_nested1& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -324,14 +322,12 @@ struct compatible_nested2_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::vector<nested> b;
   std::string c;
   bool operator==(const compatible_nested2_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -342,13 +338,13 @@ struct compatible_nested2 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   std::vector<nested> b;
   std::string c;
   bool operator==(const compatible_nested2& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -383,14 +379,12 @@ struct compatible_nested3_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::optional<nested> b;
   std::string c;
   bool operator==(const compatible_nested3_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 struct compatible_nested3 {
@@ -400,13 +394,13 @@ struct compatible_nested3 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   std::optional<nested> b;
   std::string c;
   bool operator==(const compatible_nested3& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -437,14 +431,12 @@ struct compatible_nested4_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   struct_pack::expected<nested, int> b;
   std::string c;
   bool operator==(const compatible_nested4_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 struct compatible_nested4 {
@@ -454,13 +446,13 @@ struct compatible_nested4 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   struct_pack::expected<nested, int> b;
   std::string c;
   bool operator==(const compatible_nested4& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -491,14 +483,12 @@ struct compatible_nested5_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   struct_pack::expected<int, nested> b;
   std::string c;
   bool operator==(const compatible_nested5_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 struct compatible_nested5 {
@@ -508,13 +498,13 @@ struct compatible_nested5 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   struct_pack::expected<int, nested> b;
   std::string c;
   bool operator==(const compatible_nested5& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -554,14 +544,12 @@ struct compatible_nested6_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::variant<int, nested> b;
   std::string c;
   bool operator==(const compatible_nested6_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 struct compatible_nested6 {
@@ -571,13 +559,13 @@ struct compatible_nested6 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   std::variant<int, nested> b;
   std::string c;
   bool operator==(const compatible_nested6& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -611,9 +599,7 @@ struct compatible_nested7_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::unique_ptr<nested> b;
   std::string c;
@@ -642,7 +628,7 @@ struct compatible_nested7 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   std::unique_ptr<nested> b;
@@ -702,7 +688,7 @@ struct compatible_nested8_old {
   std::tuple<std::string, std::string> b;
   std::string c;
   bool operator==(const compatible_nested8_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -711,7 +697,7 @@ struct compatible_nested8 {
   std::tuple<std::string, struct_pack::compatible<std::string>, std::string> b;
   std::string c;
   bool operator==(const compatible_nested8& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -743,14 +729,12 @@ struct compatible_nested9_old {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-        return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::map<std::string, nested> b;
   std::string c;
   bool operator==(const compatible_nested9_old& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -761,13 +745,13 @@ struct compatible_nested9 {
     struct_pack::compatible<std::string> b;
     std::string c;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c;
+      return a == o.a && b == o.b && c == o.c;
     }
   };
   std::map<std::string, nested> b;
   std::string c;
   bool operator==(const compatible_nested9& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -804,14 +788,12 @@ struct compatible_with_version_0 {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::map<std::string, nested> b;
   std::string c;
   bool operator==(const compatible_with_version_0& o) const {
-    return a==o.a&&b==o.b&&c==o.c;
+    return a == o.a && b == o.b && c == o.c;
   }
 };
 
@@ -820,16 +802,14 @@ struct compatible_with_version_1 {
   struct nested {
     std::string a;
     std::string c;
-    bool operator==(const nested& o) const {
-      return a==o.a&&c==o.c;
-    }
+    bool operator==(const nested& o) const { return a == o.a && c == o.c; }
   };
   std::map<std::string, nested> b;
   std::string c;
   struct_pack::compatible<std::string> d;
   struct_pack::compatible<std::string> e;
   bool operator==(const compatible_with_version_1& o) const {
-    return a==o.a&&b==o.b&&c==o.c&&d==o.d&&e==o.e;
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e;
   }
 };
 
@@ -841,7 +821,7 @@ struct compatible_with_version_20230110 {
     std::string c;
     struct_pack::compatible<std::string, 20230110> d;
     bool operator==(const nested& o) const {
-      return a==o.a&&b==o.b&&c==o.c&&d==o.d;
+      return a == o.a && b == o.b && c == o.c && d == o.d;
     }
   };
   std::map<std::string, nested> b;
@@ -849,7 +829,7 @@ struct compatible_with_version_20230110 {
   struct_pack::compatible<std::string> d;
   struct_pack::compatible<std::string> e;
   bool operator==(const compatible_with_version_20230110& o) const {
-    return a==o.a&&b==o.b&&c==o.c&&d==o.d&&e==o.e;
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e;
   }
 };
 
@@ -1228,7 +1208,7 @@ struct A_v2 {
   } b;
   char c;
 };
-template<typename T1,typename T2>
+template <typename T1, typename T2>
 bool test_equal(const T1& v1, const T2& v2) {
   return v1.a == v2.a && v1.c == v2.c &&
          (v1.b.a == v2.b.a && v1.b.c == v2.b.c &&

@@ -373,12 +373,15 @@ struct Node {
   uint64_t UInt64Value;
   std::list<Node> Values;  // Recursive member
   friend bool operator==(const Node& a, const Node& b) {
-    return a.Type==b.Type&&a.IsArray==b.IsArray&&a.Dimensions==b.Dimensions
-      &&a.IsStructure==b.IsStructure&&a.TypeName==b.TypeName&&a.Index==b.Index
-      &&a.BoolValue==b.BoolValue&&a.StringValue==b.StringValue&&a.FloatValue==b.FloatValue
-      &&a.DoubleValue==b.DoubleValue&&a.Int16Value==b.Int16Value&&a.Int32Value==b.Int32Value
-      &&a.Int64Value==b.Int64Value&&a.UInt16Value==b.UInt16Value&&a.UInt32Value==b.UInt32Value
-      &&a.UInt64Value==b.UInt64Value&&a.Values==b.Values;
+    return a.Type == b.Type && a.IsArray == b.IsArray &&
+           a.Dimensions == b.Dimensions && a.IsStructure == b.IsStructure &&
+           a.TypeName == b.TypeName && a.Index == b.Index &&
+           a.BoolValue == b.BoolValue && a.StringValue == b.StringValue &&
+           a.FloatValue == b.FloatValue && a.DoubleValue == b.DoubleValue &&
+           a.Int16Value == b.Int16Value && a.Int32Value == b.Int32Value &&
+           a.Int64Value == b.Int64Value && a.UInt16Value == b.UInt16Value &&
+           a.UInt32Value == b.UInt32Value && a.UInt64Value == b.UInt64Value &&
+           a.Values == b.Values;
   }
 };
 

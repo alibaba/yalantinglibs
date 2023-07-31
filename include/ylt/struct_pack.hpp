@@ -110,8 +110,9 @@ STRUCT_PACK_INLINE constexpr decltype(auto) get_type_literal() {
         std::make_index_sequence<std::tuple_size_v<Types>>());
   }
   else {
-    return detail::get_types_literal<std::tuple<detail::remove_cvref_t<Args>...>,
-                                     detail::remove_cvref_t<Args>...>();
+    return detail::get_types_literal<
+        std::tuple<detail::remove_cvref_t<Args>...>,
+        detail::remove_cvref_t<Args>...>();
   }
 }
 
@@ -275,7 +276,8 @@ template <typename T, typename... Args, typename Reader,
 #if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
-template <typename T, typename... Args, typename View, typename = std::enable_if_t<detail::deserialize_view<View>>>
+template <typename T, typename... Args, typename View,
+          typename = std::enable_if_t<detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_to(
     T &t, const View &v, size_t &consume_len, Args &...args) {
@@ -333,7 +335,8 @@ template <typename T, typename... Args>
 #if __cpp_concepts >= 201907L
 template <typename T, typename... Args, detail::deserialize_view View>
 #else
-template <typename T, typename... Args, typename View, typename = std::enable_if_t<detail::deserialize_view<View>>>
+template <typename T, typename... Args, typename View,
+          typename = std::enable_if_t<detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
@@ -357,7 +360,8 @@ template <typename T, typename... Args>
 #if __cpp_concepts >= 201907L
 template <typename T, typename... Args, struct_pack::reader_t Reader>
 #else
-template <typename T, typename... Args, typename Reader, typename = std::enable_if_t<struct_pack::reader_t<Reader>> >
+template <typename T, typename... Args, typename Reader,
+          typename = std::enable_if_t<struct_pack::reader_t<Reader>>>
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(Reader &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;

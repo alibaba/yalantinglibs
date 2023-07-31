@@ -78,7 +78,7 @@
 namespace struct_pack {
 template <typename T, typename>
 struct trivial_view {
-private:
+ private:
   const T* ref;
 
  public:

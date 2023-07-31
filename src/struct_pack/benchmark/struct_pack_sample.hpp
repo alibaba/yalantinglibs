@@ -95,7 +95,7 @@ struct struct_pack_sample : public base_sample {
   }
 
  private:
-  template<typename T>
+  template <typename T>
   void serialize(SampleType sample_type, T &sample) {
     {
       struct_pack::serialize_to(buffer_, sample);
@@ -117,9 +117,8 @@ struct struct_pack_sample : public base_sample {
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
-  template<typename T>
+  template <typename T>
   void deserialize(SampleType sample_type, T &sample) {
-
     // get serialized buffer of sample for deserialize
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);

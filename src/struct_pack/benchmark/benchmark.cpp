@@ -25,7 +25,7 @@
 
 #include "config.hpp"
 using namespace std::string_literals;
-template<typename T>
+template <typename T>
 void calculate_ser_rate(const T& map, LibType base_line_type,
                         SampleType sample_type) {
   auto it = map.find(base_line_type);
@@ -72,7 +72,7 @@ void calculate_ser_rate(const T& map, LibType base_line_type,
 
   std::cout << "========================\n";
 }
-template<typename T>
+template <typename T>
 void run_benchmark(const T& map, LibType base_line_type) {
   std::cout << "======== calculate serialization rate ========\n";
   calculate_ser_rate(map, base_line_type, SampleType::RECT);
