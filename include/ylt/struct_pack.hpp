@@ -251,12 +251,12 @@ template <typename T, typename... Args, typename Reader,
   auto old_pos = reader.tellg();
   auto ret = in.deserialize_with_len(consume_len, t, args...);
   std::size_t delta = reader.tellg() - old_pos;
-  if (ret == errc{}) [[likely]] {
-    if (consume_len > 0) [[likely]] {
-      if (delta > consume_len) [[unlikely]] {
+  if SP_LIKELY (ret == errc{}) {
+    if SP_LIKELY (consume_len > 0) {
+      if SP_UNLIKELY (delta > consume_len) {
         ret = struct_pack::errc::invalid_buffer;
         if constexpr (struct_pack::seek_reader_t<Reader>)
-          if (!reader.seekg(old_pos)) [[unlikely]] {
+          if SP_UNLIKELY (!reader.seekg(old_pos)) {
             return struct_pack::errc::seek_failed;
           }
       }
@@ -267,7 +267,7 @@ template <typename T, typename... Args, typename Reader,
   }
   else {
     if constexpr (struct_pack::seek_reader_t<Reader>)
-      if (!reader.seekg(old_pos)) [[unlikely]] {
+      if SP_UNLIKELY (!reader.seekg(old_pos)) {
         return struct_pack::errc::seek_failed;
       }
   }
@@ -285,7 +285,7 @@ template <typename T, typename... Args, typename View,
                                (const char *)v.data() + v.size()};
   detail::unpacker in(reader);
   auto ret = in.deserialize_with_len(consume_len, t, args...);
-  if (ret == errc{}) [[likely]] {
+  if SP_LIKELY (ret == errc{}) {
     consume_len = (std::max)((size_t)(reader.now - v.data()), consume_len);
   }
   else {
@@ -300,7 +300,7 @@ template <typename T, typename... Args>
   detail::memory_reader reader{data, data + size};
   detail::unpacker in(reader);
   auto ret = in.deserialize_with_len(consume_len, t, args...);
-  if (ret == errc{}) [[likely]] {
+  if SP_LIKELY (ret == errc{}) {
     consume_len = (std::max)((size_t)(reader.now - data), consume_len);
   }
   else {
@@ -340,8 +340,8 @@ template <typename T, typename... Args, typename View,
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{})
-      [[unlikely]] {
+  auto errc = deserialize_to(ret.value(), v);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -365,8 +365,8 @@ template <typename T, typename... Args, typename Reader,
 #endif
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(Reader &v) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v); errc != struct_pack::errc{})
-      [[unlikely]] {
+  auto errc = deserialize_to(ret.value(), v);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -380,8 +380,8 @@ template <typename T, typename... Args, typename View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const View &v,
                                                   size_t &consume_len) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), v, consume_len);
-      errc != struct_pack::errc{}) [[unlikely]] {
+  auto errc = deserialize_to(ret.value(), v, consume_len);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -391,8 +391,8 @@ template <typename T, typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize(const char *data, size_t size,
                                                   size_t &consume_len) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to(ret.value(), data, size, consume_len);
-      errc != struct_pack::errc{}) [[unlikely]] {
+  auto errc = deserialize_to(ret.value(), data, size, consume_len);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -406,8 +406,8 @@ template <typename T, typename... Args, typename View>
 [[nodiscard]] STRUCT_PACK_INLINE auto deserialize_with_offset(const View &v,
                                                               size_t &offset) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to_with_offset(ret.value(), v, offset);
-      errc != struct_pack::errc{}) [[unlikely]] {
+  auto errc = deserialize_to_with_offset(ret.value(), v, offset);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -418,8 +418,8 @@ template <typename T, typename... Args>
                                                               size_t size,
                                                               size_t &offset) {
   expected<detail::get_args_type<T, Args...>, struct_pack::errc> ret;
-  if (auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
-      errc != struct_pack::errc{}) [[unlikely]] {
+  auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
+  if SP_UNLIKELY (errc != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{errc};
   }
   return ret;
@@ -480,8 +480,8 @@ template <typename T, size_t I, typename View,
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const View &v) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  if (auto ec = get_field_to<T, I>(ret.value(), v); ec != struct_pack::errc{})
-      [[unlikely]] {
+  auto ec = get_field_to<T, I>(ret.value(), v);
+  if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }
   return ret;
@@ -491,8 +491,8 @@ template <typename T, size_t I>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const char *data, size_t size) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  if (auto ec = get_field_to<T, I>(ret.value(), data, size);
-      ec != struct_pack::errc{}) [[unlikely]] {
+  auto ec = get_field_to<T, I>(ret.value(), data, size);
+  if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }
   return ret;
@@ -506,8 +506,8 @@ template <typename T, size_t I, typename Reader,
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(Reader &reader) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  if (auto ec = get_field_to<T, I>(ret.value(), reader);
-      ec != struct_pack::errc{}) [[unlikely]] {
+  auto ec = get_field_to<T, I>(ret.value(), reader);
+  if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }
   return ret;

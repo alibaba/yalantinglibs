@@ -26,8 +26,6 @@
 #include <variant>
 #include <vector>
 
-#include "ylt/struct_pack/struct_pack_impl.hpp"
-
 #if __has_include(<span>)
 #include <span>
 #endif

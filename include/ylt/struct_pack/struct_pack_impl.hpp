@@ -45,8 +45,6 @@
 #include "tuple.hpp"
 #endif
 
-#include "reflection.hpp"
-
 namespace struct_pack {
 
 /*!
@@ -2438,14 +2436,15 @@ class unpacker {
     std::pair<errc, std::uint64_t> ret;
     auto compatible_sz_len = metainfo & 0b11;
     if (compatible_sz_len) {
-      if SP_UNLIKELY (ret = deserialize_compatible(compatible_sz_len);
-                      ret.first != errc{}) {
+      ret = deserialize_compatible(compatible_sz_len);
+      if SP_UNLIKELY (ret.first != errc{}) {
         return ret;
       }
     }
     auto has_type_literal = metainfo & 0b100;
     if (has_type_literal) {
-      if SP_UNLIKELY (auto ec = deserialize_type_literal<T>(); ec != errc{}) {
+      auto ec = deserialize_type_literal<T>();
+      if SP_UNLIKELY (ec != errc{}) {
         return {ec, 0};
       }
     }
