@@ -46,7 +46,8 @@ struct message_pack_sample : public base_sample {
   }
 
  private:
-  void serialize(SampleType sample_type, auto &sample) {
+  template<typename T>
+  void serialize(SampleType sample_type, T &sample) {
     {
       msgpack::pack(buffer_, sample);
       buffer_.clear();
@@ -68,8 +69,8 @@ struct message_pack_sample : public base_sample {
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
-  void deserialize(SampleType sample_type, auto &sample) {
-    using T = std::remove_cvref_t<decltype(sample)>;
+  template<typename T>
+  void deserialize(SampleType sample_type, T &sample) {
 
     // get serialized buffer of sample for deserialize
     buffer_.clear();
