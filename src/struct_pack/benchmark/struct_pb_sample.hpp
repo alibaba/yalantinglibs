@@ -116,7 +116,7 @@ struct struct_pb_sample_t : public base_sample {
   }
 
  private:
-  template<typename T>
+  template <typename T>
   void serialize(SampleType sample_type, T& sample) {
     auto sz = struct_pb::internal::get_needed_size(sample);
     buffer_.resize(sz);
@@ -144,7 +144,7 @@ struct struct_pb_sample_t : public base_sample {
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
-  template<typename T>
+  template <typename T>
   void deserialize(SampleType sample_type, T& sample) {
     buffer_.clear();
     auto sz = struct_pb::internal::get_needed_size(sample);

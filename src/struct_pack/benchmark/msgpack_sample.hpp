@@ -46,7 +46,7 @@ struct message_pack_sample : public base_sample {
   }
 
  private:
-  template<typename T>
+  template <typename T>
   void serialize(SampleType sample_type, T &sample) {
     {
       msgpack::pack(buffer_, sample);
@@ -69,9 +69,8 @@ struct message_pack_sample : public base_sample {
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
-  template<typename T>
+  template <typename T>
   void deserialize(SampleType sample_type, T &sample) {
-
     // get serialized buffer of sample for deserialize
     buffer_.clear();
     msgpack::pack(buffer_, sample);
