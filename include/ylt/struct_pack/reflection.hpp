@@ -55,13 +55,18 @@ template <typename U>
 constexpr auto get_types();
 
 template <typename T, template <typename, typename, std::size_t> typename Op,
+          typename... Contexts, std::size_t... I>
+constexpr void for_each_impl(std::index_sequence<I...>, Contexts &...contexts) {
+  using type = decltype(get_types<T>());
+  (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), ...);
+}
+
+template <typename T, template <typename, typename, std::size_t> typename Op,
           typename... Contexts>
 constexpr void for_each(Contexts &...contexts) {
   using type = decltype(get_types<T>());
-  [&]<std::size_t... I>(std::index_sequence<I...>) {
-    (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), ...);
-  }
-  (std::make_index_sequence<std::tuple_size_v<type>>());
+  for_each_impl<T, Op>(std::make_index_sequence<std::tuple_size_v<type>>(),
+                          contexts...);
 }
 
 template <typename T>
@@ -611,6 +616,12 @@ template <typename T, typename = void>
   template <typename T, bool ignore_compatible_field = false>
   struct is_trivial_serializable {
     private:
+      template<typename U, std::size_t... I>
+      static constexpr bool class_visit_helper(std::index_sequence<I...>) {
+        return (is_trivial_serializable<std::tuple_element_t<I, U>,
+                                            ignore_compatible_field>::value &&
+                    ...);
+      }
       static constexpr bool solve() {
         if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
@@ -648,23 +659,11 @@ template <typename T, typename = void>
                                         ignore_compatible_field>::value;
         }
         else if constexpr (is_trivial_tuple<T>) {
-          return []<std::size_t... I>(std::index_sequence<I...>)
-              CONSTEXPR_INLINE_LAMBDA {
-            return (is_trivial_serializable<std::tuple_element_t<I, T>,
-                                            ignore_compatible_field>::value &&
-                    ...);
-          }
-          (std::make_index_sequence<std::tuple_size_v<T>>{});
+          return class_visit_helper<T>(std::make_index_sequence<std::tuple_size_v<T>>{});
         }
         else if constexpr (std::is_class_v<T>) {
-          using T_ = decltype(get_types<T>());
-          return []<std::size_t... I>(std::index_sequence<I...>)
-              CONSTEXPR_INLINE_LAMBDA {
-            return (is_trivial_serializable<std::tuple_element_t<I, T_>,
-                                            ignore_compatible_field>::value &&
-                    ...);
-          }
-          (std::make_index_sequence<std::tuple_size_v<T_>>{});
+          using U = decltype(get_types<T>());
+          return class_visit_helper<U>(std::make_index_sequence<std::tuple_size_v<U>>{});
         }
         else
           return false;

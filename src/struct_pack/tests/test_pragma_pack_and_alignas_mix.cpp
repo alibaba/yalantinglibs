@@ -325,14 +325,16 @@ TEST_CASE("testing mix and compatible nested") {
     auto result = struct_pack::deserialize<
         test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v2>(buffer);
     CHECK(result.has_value() == true);
-    CHECK(result == v2);
+    auto val=result.value();
+    CHECK(val == v2);
   }
   {
     auto buffer = struct_pack::serialize(v2);
     auto result = struct_pack::deserialize<
         test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v1>(buffer);
     CHECK(result.has_value() == true);
-    CHECK(result == v1);
+    auto val=result.value();
+    CHECK(val == v1);
   }
 }
 

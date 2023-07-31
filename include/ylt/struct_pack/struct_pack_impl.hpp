@@ -257,9 +257,8 @@ constexpr auto get_types() {
   else if constexpr (std::is_class_v<T>) {
     // clang-format off
     return visit_members(
-        declval<T>(), []<typename... Args>(Args &&
-                                                  ...) constexpr {
-          return declval<std::tuple<remove_cvref_t<Args>...>>();
+        declval<T>(), [](auto &&... args) constexpr {
+          return declval<std::tuple<remove_cvref_t<decltype(args)>...>>();
         });
     // clang-format on
   }
@@ -664,16 +663,20 @@ constexpr decltype(auto) get_size_literal() {
         "The size is too large.");
   }
 }
-template <typename arg, typename... ParentArgs>
-constexpr std::size_t check_circle() {
+
+template <typename Arg, typename... ParentArgs, std::size_t... I>
+constexpr std::size_t check_circle_impl(std::index_sequence<I...>) {
   using types_tuple = std::tuple<ParentArgs...>;
+  return (std::max)(
+      {(std::is_same_v<std::tuple_element_t<I, types_tuple>, Arg> ? I + 1
+                                                                  : 0)...});
+}
+
+template <typename Arg, typename... ParentArgs>
+constexpr std::size_t check_circle() {
   if constexpr (sizeof...(ParentArgs)) {
-    return []<std::size_t... I>(std::index_sequence<I...>) {
-      return (std::max)(
-          {(std::is_same_v<std::tuple_element_t<I, types_tuple>, arg> ? I + 1
-                                                                      : 0)...});
-    }
-    (std::make_index_sequence<sizeof...(ParentArgs)>());
+    return check_circle_impl<Arg, ParentArgs...>(
+        std::make_index_sequence<sizeof...(ParentArgs)>());
   }
   else {
     return 0;
@@ -726,18 +729,21 @@ constexpr std::size_t alignment_impl();
 template <typename T>
 constexpr std::size_t alignment_v = alignment_impl<T>();
 
+template <typename type, std::size_t... I>
+constexpr std::size_t default_alignment_helper(std::index_sequence<I...>) {
+  return (std::max)(
+      {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
+            ? std::size_t{0}
+            : align::alignment_v<
+                  remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+}
+
 template <typename T>
 constexpr std::size_t default_alignment() {
   if constexpr (!is_trivial_serializable<T>::value && !is_trivial_view_v<T>) {
     using type = decltype(get_types<T>());
-    return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-      return (std::max)(
-          {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
-                ? std::size_t{0}
-                : align::alignment_v<
-                      remove_cvref_t<std::tuple_element_t<I, type>>>)...});
-    }
-    (std::make_index_sequence<std::tuple_size_v<type>>());
+    return default_alignment_helper<type>(
+        std::make_index_sequence<std::tuple_size_v<type>>());
   }
   else if constexpr (is_trivial_view_v<T>) {
     return std::alignment_of_v<typename T::value_type>;
@@ -752,6 +758,15 @@ constexpr std::size_t default_alignment_v = default_alignment<T>();
 template <typename T>
 constexpr std::size_t alignment_impl();
 
+template <typename type, std::size_t... I>
+constexpr std::size_t pack_alignment_impl_helper(std::index_sequence<I...>) {
+  return (std::max)(
+      {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
+            ? std::size_t{0}
+            : align::alignment_v<
+                  remove_cvref_t<std::tuple_element_t<I, type>>>)...});
+}
+
 template <typename T>
 constexpr std::size_t pack_alignment_impl() {
   static_assert(std::is_class_v<T>);
@@ -761,14 +776,8 @@ constexpr std::size_t pack_alignment_impl() {
                 ret == 16);
   if constexpr (ret == 0) {
     using type = decltype(get_types<T>());
-    return [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-      return (std::max)(
-          {(is_compatible_v<remove_cvref_t<std::tuple_element_t<I, type>>>
-                ? std::size_t{0}
-                : align::alignment_v<
-                      remove_cvref_t<std::tuple_element_t<I, type>>>)...});
-    }
-    (std::make_index_sequence<std::tuple_size_v<type>>());
+    return pack_alignment_impl_helper<type>(
+        std::make_index_sequence<std::tuple_size_v<type>>());
   }
   else {
     return ret;
@@ -1633,6 +1642,15 @@ class packer {
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
+  template <std::size_t size_type, typename T, std::size_t... I,
+            typename... Args>
+  void serialize_expand_compatible_helper(const T &t, std::index_sequence<I...>,
+                                          const Args &...args) {
+    using Type = get_args_type<T, Args...>;
+    (serialize_many<size_type, compatible_version_number<Type>[I]>(t, args...),
+     ...);
+  }
+
   template <uint64_t conf, std::size_t size_type, typename T, typename... Args>
   STRUCT_PACK_INLINE void serialize(const T &t, const Args &...args) {
     serialize_metainfo<conf, size_type == 1, T, Args...>();
@@ -1640,12 +1658,8 @@ class packer {
     using Type = get_args_type<T, Args...>;
     if constexpr (serialize_static_config<Type>::has_compatible) {
       constexpr std::size_t sz = compatible_version_number<Type>.size();
-      [&]<std::size_t... I>(std::index_sequence<I...>) {
-        (serialize_many<size_type, compatible_version_number<Type>[I]>(t,
-                                                                       args...),
-         ...);
-      }
-      (std::make_index_sequence<sz>{});
+      return serialize_expand_compatible_helper<size_type, T, Args...>(
+          t, std::make_index_sequence<sz>{}, args...);
     }
   }
 
@@ -2512,7 +2526,7 @@ class unpacker {
         }
       }
       else if constexpr (unique_ptr<type>) {
-        bool has_value;
+        bool has_value{};
         if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
           return struct_pack::errc::no_buffer_space;
         }
@@ -2679,7 +2693,7 @@ class unpacker {
             item);
       }
       else if constexpr (optional<type> || expected<type>) {
-        bool has_value;
+        bool has_value{};
         if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
           return struct_pack::errc::no_buffer_space;
         }
@@ -2704,7 +2718,7 @@ class unpacker {
         }
       }
       else if constexpr (is_variant_v<type>) {
-        uint8_t index;
+        uint8_t index{};
         if SP_UNLIKELY (!reader_.read((char *)&index, sizeof(index))) {
           return struct_pack::errc::no_buffer_space;
         }
@@ -2774,7 +2788,7 @@ class unpacker {
             }
             return struct_pack::errc::no_buffer_space;
           }
-          bool has_value;
+          bool has_value{};
           if SP_UNLIKELY (!reader_.read((char *)&has_value, sizeof(bool))) {
             return struct_pack::errc::no_buffer_space;
           }
@@ -2908,17 +2922,24 @@ class unpacker {
   }
 
   template <size_t size_type, uint64_t version, size_t FieldIndex,
+            typename FieldType, typename... Args, std::size_t... I>
+  STRUCT_PACK_INLINE constexpr void for_each_helper(struct_pack::errc &code,
+                                                    FieldType &field,
+                                                    std::index_sequence<I...>,
+                                                    Args &&...items) {
+    [[maybe_unused]] auto result =
+        (!set_value<size_type, version, I, FieldIndex>(code, field,
+                                                       get_nth<I>(items...)) &&
+         ...);
+  }
+
+  template <size_t size_type, uint64_t version, size_t FieldIndex,
             typename FieldType, typename... Args>
-  STRUCT_PACK_INLINE constexpr decltype(auto) for_each(FieldType &field,
-                                                       Args &&...items) {
+  STRUCT_PACK_INLINE constexpr struct_pack::errc for_each(FieldType &field,
+                                                          Args &&...items) {
     struct_pack::errc code{};
-    [&]<std::size_t... I>(std::index_sequence<I...>) CONSTEXPR_INLINE_LAMBDA {
-      [[maybe_unused]] auto result =
-          (!set_value<size_type, version, I, FieldIndex>(
-               code, field, get_nth<I>(items...)) &&
-           ...);
-    }
-    (std::make_index_sequence<sizeof...(Args)>{});
+    for_each_helper<size_type, version, FieldIndex, FieldType>(
+        code, field, std::make_index_sequence<sizeof...(Args)>(), items...);
     return code;
   }
 
