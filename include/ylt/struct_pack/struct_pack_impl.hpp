@@ -1176,7 +1176,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   static_assert(id != detail::type_id::type_end_flag);
   using type = remove_cvref_t<decltype(item)>;
   static_assert(!std::is_pointer_v<type>);
-  size_info ret{.total = 0, .size_cnt = 0, .max_size = 0};
+  size_info ret{};
   if constexpr (id == type_id::monostate_t) {
   }
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
@@ -2476,16 +2476,6 @@ class unpacker {
     }
   }
 
-  template <typename U>
-  auto get_container_value_t(const U &) {
-    if constexpr (map_container<U>) {
-      return std::pair<typename U::key_type, typename U::mapped_type>{};
-    }
-    else {
-      return typename U::value_type{};
-    }
-  };
-
   template <size_t size_type, uint64_t version, bool NotSkip, typename T>
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
@@ -2595,11 +2585,29 @@ class unpacker {
         if SP_UNLIKELY (size == 0) {
           return {};
         }
-        if constexpr (map_container<type> || set_container<type>) {
-          // value is the element of map/set container.
-          // if the type is set, then value is set::value_type;
-          // if the type is map, then value is pair<key_type,mapped_type>
-          decltype(get_container_value_t(item)) value;
+        if constexpr (map_container<type>) {
+          std::pair<typename type::key_type, typename type::mapped_type>
+              value{};
+          if constexpr (is_trivial_serializable<decltype(value)>::value &&
+                        !NotSkip) {
+            return reader_.ignore(size * sizeof(value)) ? errc{}
+                                                        : errc::no_buffer_space;
+          }
+          else {
+            for (size_t i = 0; i < size; ++i) {
+              code = deserialize_one<size_type, version, NotSkip>(value);
+              if SP_UNLIKELY (code != struct_pack::errc{}) {
+                return code;
+              }
+              if constexpr (NotSkip) {
+                item.emplace(std::move(value));
+                // TODO: mapped_type can deserialize without be moved
+              }
+            }
+          }
+        }
+        else if constexpr (set_container<type>) {
+          typename type::value_type value{};
           if constexpr (is_trivial_serializable<decltype(value)>::value &&
                         !NotSkip) {
             return reader_.ignore(size * sizeof(value)) ? errc{}

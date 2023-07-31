@@ -750,7 +750,7 @@ namespace detail {
     if constexpr (user_defined_refl<type>) {
       return decltype(STRUCT_PACK_FIELD_COUNT(std::declval<type>()))::value;
     }
-    if constexpr (tuple_size<type>) {
+    else if constexpr (tuple_size<type>) {
       return std::tuple_size<type>::value;
     }
     else {
@@ -759,6 +759,14 @@ namespace detail {
   }
 
   constexpr static auto MaxVisitMembers = 64;
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
+                                                            Visitor &&visitor);
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_structure_binding(Object &&object,
+                                                            Visitor &&visitor);
 
   template<typename Object,typename Visitor>
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(Object &&object,
