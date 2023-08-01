@@ -39,7 +39,7 @@
 #define SP_LIKELY(expr) (expr)
 #endif
 
-#if __has_cpp_attribute(unlikely) && __cplusplus>= 202002L
+#if __has_cpp_attribute(unlikely) && __cplusplus >= 202002L
 #define SP_UNLIKELY(expr) (expr) [[unlikely]]
 #elif __GNUC__
 #define SP_UNLIKELY(expr) (__builtin_expect(!!(expr), 0))

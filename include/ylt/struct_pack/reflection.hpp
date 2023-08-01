@@ -64,7 +64,7 @@ template <typename T, template <typename, typename, std::size_t> typename Op,
 constexpr void for_each(Contexts &...contexts) {
   using type = decltype(get_types<T>());
   for_each_impl<T, Op>(std::make_index_sequence<std::tuple_size_v<type>>(),
-                          contexts...);
+                       contexts...);
 }
 
 template <typename T>
