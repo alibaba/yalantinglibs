@@ -21,7 +21,7 @@ inline auto create_rects(size_t object_count) {
 
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
-  person p{.id = 432798, .name = "tom", .age = 24, .salary = 65536.42};
+  person p{432798, "tom",  24,  65536.42};
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(p);
   }
@@ -31,27 +31,27 @@ inline auto create_persons(size_t object_count) {
 inline std::vector<Monster> create_monsters(size_t object_count) {
   std::vector<Monster> v{};
   Monster m = {
-      .pos = {1, 2, 3},
-      .mana = 16,
-      .hp = 24,
-      .name = "it is a test",
-      .inventory = "\1\2\3\4",
-      .color = Color::Red,
-      .weapons = {{"gun", 42}, {"shotgun", 56}},
-      .equipped = {"air craft", 67},
-      .path = {{7, 8, 9}, {71, 81, 91}},
+       {1, 2, 3},
+      16,
+      24,
+      "it is a test",
+       "\1\2\3\4",
+       Color::Red,
+       {{"gun", 42}, {"shotgun", 56}},
+      {"air craft", 67},
+      {{7, 8, 9}, {71, 81, 91}},
   };
 
   Monster m1 = {
-      .pos = {11, 22, 33},
-      .mana = 161,
-      .hp = 241,
-      .name = "it is a test, ok",
-      .inventory = "\24\25\26\24",
-      .color = Color::Red,
-      .weapons = {{"gun", 421}, {"shotgun", 561}},
-      .equipped = {"air craft", 671},
-      .path = {{71, 82, 93}, {711, 821, 931}},
+      {11, 22, 33},
+       161,
+      241,
+      "it is a test, ok",
+       "\24\25\26\24",
+       Color::Red,
+      {{"gun", 421}, {"shotgun", 561}},
+       {"air craft", 671},
+       {{71, 82, 93}, {711, 821, 931}},
   };
 
   for (std::size_t i = 0; i < object_count / 2; i++) {
