@@ -1862,12 +1862,8 @@ class packer {
         else if constexpr (is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
-            (
-                [&]() {
-                  serialize_one<size_type, version>(items);
-                  write_padding(align::padding_size<type>[i++]);
-                }(),
-                ...);
+            ((serialize_one<size_type, version>(items),write_padding(align::padding_size<type>[i++])),...);
+                
           });
         }
         else {
@@ -2764,18 +2760,14 @@ class unpacker {
         else if constexpr (is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
-            [[maybe_unused]] bool op =
-                ((
-                     [&]() {
-                       code =
-                           deserialize_one<size_type, version, NotSkip>(items);
-                       if SP_LIKELY (code == errc::ok) {
-                         code = ignore_padding(align::padding_size<type>[i]);
-                         ++i;
-                       }
-                     }(),
-                     code == errc::ok) &&
-                 ...);
+            auto f = [&](auto && item) {
+              code = deserialize_one<size_type, version, NotSkip>(item);
+              if SP_LIKELY (code == errc::ok) {
+                code = ignore_padding(align::padding_size<type>[i++]);
+              }
+              return code == errc::ok;
+            };
+            [[maybe_unused]] bool op = (f(items) && ...);
           });
         }
         else {

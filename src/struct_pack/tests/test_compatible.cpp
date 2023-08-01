@@ -1153,6 +1153,7 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
       {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
       {14, 1023213, 1432143231},
       'G'};
+    using to_T=nested_trival_v0<compatible_with_trival_field_v0>;
   auto op = [&](auto from) {
     from.set(113, 123.322134213, 'H', 890432.1, INT64_MAX - 1,
              {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
@@ -1161,8 +1162,8 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
                {798214321.98743, 821304.084321}, 'Q');
     {
       auto buffer = struct_pack::serialize(from);
-      auto result = struct_pack::deserialize<decltype(to)>(buffer);
-      CHECK(result.value() == to);
+      auto result = struct_pack::deserialize<to_T>(buffer);
+      CHECK(result == to);
     }
     {
       auto buffer = struct_pack::serialize(to);
