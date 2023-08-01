@@ -66,7 +66,7 @@ TEST_CASE("testing no #pragam pack") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 2);
-  T t{ 'a',  666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<test_pragma_pack::dummy>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)131, (char)131, (char)-1}};

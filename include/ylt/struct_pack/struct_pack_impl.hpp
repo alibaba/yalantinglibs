@@ -1098,7 +1098,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     return check_if_compatible_element_exist_impl_helper<
         version, typename Arg::value_type, ParentArgs...>();
   }
-  else if constexpr (check_circle<Arg, ParentArgs...>()) {
+  else if constexpr (check_circle<Arg, ParentArgs...>() != 0) {
     return false;
   }
   else if constexpr (id == type_id::compatible_t) {
