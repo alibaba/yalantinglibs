@@ -621,7 +621,10 @@ template <typename T, typename = void>
                     ...);
       }
       static constexpr bool solve() {
-        if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
+        if constexpr (std::is_same_v<T,std::monostate>) {
+          return true;
+        }
+        else if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
         }
         else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T> 
