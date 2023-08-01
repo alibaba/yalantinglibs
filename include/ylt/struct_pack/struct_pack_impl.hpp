@@ -671,7 +671,7 @@ constexpr std::size_t check_circle_impl(std::index_sequence<I...>) {
 
 template <typename Arg, typename... ParentArgs>
 constexpr std::size_t check_circle() {
-  if constexpr (sizeof...(ParentArgs)) {
+  if constexpr (sizeof...(ParentArgs) != 0) {
     return check_circle_impl<Arg, ParentArgs...>(
         std::make_index_sequence<sizeof...(ParentArgs)>());
   }
@@ -2079,7 +2079,7 @@ class unpacker {
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
       err_code = deserialize_compatibles<T, Args...>(
-          t, args..., std::make_index_sequence<sz>{});
+          t, std::make_index_sequence<sz>{}, args...);
     }
     return err_code;
   }
@@ -2131,7 +2131,7 @@ class unpacker {
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
       err_code = deserialize_compatibles<T, Args...>(
-          t, args..., std::make_index_sequence<sz>{});
+          t, std::make_index_sequence<sz>{}, args...);
     }
     return err_code;
   }
@@ -2193,7 +2193,7 @@ class unpacker {
  private:
   template <typename T, typename... Args, size_t... I>
   STRUCT_PACK_INLINE struct_pack::errc deserialize_compatibles(
-      T &t, Args &...args, std::index_sequence<I...>) {
+      T &t, std::index_sequence<I...>, Args &...args) {
     using Type = get_args_type<T, Args...>;
     struct_pack::errc err_code;
     switch (size_type_) {
