@@ -816,7 +816,9 @@ constexpr std::size_t alignment_impl() {
 }
 
 template <typename P, typename T, std::size_t I>
-struct calculate_trival_obj_size;
+struct calculate_trival_obj_size {
+  constexpr void operator()(std::size_t &total);
+};
 
 template <typename P, typename T, std::size_t I>
 struct calculate_padding_size_impl {
@@ -877,28 +879,29 @@ constexpr std::size_t total_padding_size = []() CONSTEXPR_INLINE_LAMBDA {
   return sum;
 }();
 
+
 template <typename P, typename T, std::size_t I>
-struct calculate_trival_obj_size {
-  constexpr void operator()(std::size_t &total) {
-    if constexpr (I == 0) {
-      total += total_padding_size<P>;
+constexpr void calculate_trival_obj_size<P,T,I>::operator()(std::size_t &total) {
+  if constexpr (I == 0) {
+    total += total_padding_size<P>;
+  }
+  if constexpr (!is_compatible_v<T>) {
+    if constexpr (is_trivial_serializable<T>::value) {
+      total += sizeof(T);
     }
-    if constexpr (!is_compatible_v<T>) {
-      if constexpr (is_trivial_serializable<T>::value) {
-        total += sizeof(T);
-      }
-      else if constexpr (is_trivial_view_v<T>) {
-        total += sizeof(typename T::value_type);
-      }
-      else {
-        static_assert(is_trivial_serializable<T, true>::value);
-        std::size_t offset = 0;
-        for_each<T, calculate_trival_obj_size>(offset);
-        total += offset;
-      }
+    else if constexpr (is_trivial_view_v<T>) {
+      total += sizeof(typename T::value_type);
+    }
+    else {
+      static_assert(is_trivial_serializable<T, true>::value);
+      std::size_t offset = 0;
+      for_each<T, calculate_trival_obj_size>(offset);
+      total += offset;
     }
   }
-};
+}
+
+
 }  // namespace align
 
 // This help function is just to improve unit test coverage. :)
