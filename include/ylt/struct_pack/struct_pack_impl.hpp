@@ -1277,7 +1277,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
 template <typename T, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const T &item, const Args &...items) {
-  if constexpr (sizeof...(items))
+  if constexpr (sizeof...(items) != 0)
     return calculate_one_size(item) + calculate_payload_size(items...);
   else
     return calculate_one_size(item);

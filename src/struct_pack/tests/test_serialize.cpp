@@ -34,7 +34,7 @@
 using namespace struct_pack;
 
 TEST_CASE("testing deserialize") {
-  person p{.age = 32, .name = "tom"};
+  person p{32, "tom"};
   auto ret = serialize(p);
   {
     auto res = deserialize<person>(ret);
@@ -673,9 +673,9 @@ TEST_CASE("test type info config") {
   SUBCASE("test_person") {
 #ifdef NDEBUG
     {
-      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      auto size = get_needed_size(person{24, "Betty"});
       CHECK(size == 14);
-      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      auto buffer = serialize(person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::automatic,
@@ -693,21 +693,21 @@ TEST_CASE("test type info config") {
     }
 #endif
     {
-      auto size = get_needed_size<type_info_config::disable>(
-          person{.age = 24, .name = "Betty"});
+      auto size =
+          get_needed_size<type_info_config::disable>(person{24, "Betty"});
       CHECK(size == 14);
       auto buffer = serialize<std::vector<char>, type_info_config::disable>(
-          person{.age = 24, .name = "Betty"});
+          person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(detail::check_if_add_type_literal<type_info_config::disable,
                                                       person>() == false);
     }
     {
-      auto size = get_needed_size<type_info_config::enable>(
-          person{.age = 24, .name = "Betty"});
+      auto size =
+          get_needed_size<type_info_config::enable>(person{24, "Betty"});
       CHECK(size == 21);
       auto buffer = serialize<std::vector<char>, type_info_config::enable>(
-          person{.age = 24, .name = "Betty"});
+          person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(detail::check_if_add_type_literal<type_info_config::enable,
                                                       person>() == true);
@@ -715,11 +715,9 @@ TEST_CASE("test type info config") {
   }
   SUBCASE("test_person_with_type_info") {
     {
-      auto size =
-          get_needed_size(person_with_type_info{.age = 24, .name = "Betty"});
+      auto size = get_needed_size(person_with_type_info{24, "Betty"});
       CHECK(size == 21);
-      auto buffer =
-          serialize(person_with_type_info{.age = 24, .name = "Betty"});
+      auto buffer = serialize(person_with_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::automatic,
@@ -727,10 +725,10 @@ TEST_CASE("test type info config") {
     }
     {
       auto size = get_needed_size<type_info_config::disable>(
-          person_with_type_info{.age = 24, .name = "Betty"});
+          person_with_type_info{24, "Betty"});
       CHECK(size == 14);
       auto buffer = serialize<std::vector<char>, type_info_config::disable>(
-          person_with_type_info{.age = 24, .name = "Betty"});
+          person_with_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::disable,
@@ -738,10 +736,10 @@ TEST_CASE("test type info config") {
     }
     {
       auto size = get_needed_size<type_info_config::enable>(
-          person_with_type_info{.age = 24, .name = "Betty"});
+          person_with_type_info{24, "Betty"});
       CHECK(size == 21);
       auto buffer = serialize<std::vector<char>, type_info_config::enable>(
-          person_with_type_info{.age = 24, .name = "Betty"});
+          person_with_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::enable,
@@ -750,11 +748,9 @@ TEST_CASE("test type info config") {
   }
   SUBCASE("test_person_with_no_type_info") {
     {
-      auto size =
-          get_needed_size(person_with_no_type_info{.age = 24, .name = "Betty"});
+      auto size = get_needed_size(person_with_no_type_info{24, "Betty"});
       CHECK(size == 14);
-      auto buffer =
-          serialize(person_with_no_type_info{.age = 24, .name = "Betty"});
+      auto buffer = serialize(person_with_no_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::automatic,
@@ -763,10 +759,10 @@ TEST_CASE("test type info config") {
     }
     {
       auto size = get_needed_size<type_info_config::disable>(
-          person_with_no_type_info{.age = 24, .name = "Betty"});
+          person_with_no_type_info{24, "Betty"});
       CHECK(size == 14);
       auto buffer = serialize<std::vector<char>, type_info_config::disable>(
-          person_with_no_type_info{.age = 24, .name = "Betty"});
+          person_with_no_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::disable,
@@ -775,10 +771,10 @@ TEST_CASE("test type info config") {
     }
     {
       auto size = get_needed_size<type_info_config::enable>(
-          person_with_no_type_info{.age = 24, .name = "Betty"});
+          person_with_no_type_info{24, "Betty"});
       CHECK(size == 21);
       auto buffer = serialize<std::vector<char>, type_info_config::enable>(
-          person_with_no_type_info{.age = 24, .name = "Betty"});
+          person_with_no_type_info{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::enable,
