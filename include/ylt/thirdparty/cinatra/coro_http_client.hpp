@@ -186,6 +186,7 @@ class coro_http_client {
 
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(std::make_shared<socket_t>(executor)),
+        read_buf_(socket_->read_buf_),
         executor_wrapper_(executor),
         timer_(&executor_wrapper_) {}
 
@@ -251,6 +252,10 @@ class coro_http_client {
       else {
         if (!base_path.empty() || !cert_file.empty())
           return false;
+      }
+
+      if (base_path.empty() && cert_file.empty()) {
+        ssl_ctx_->set_default_verify_paths();
       }
 
       ssl_ctx_->set_verify_mode(verify_mode);
@@ -1000,6 +1005,7 @@ class coro_http_client {
   struct socket_t {
     asio::ip::tcp::socket impl_;
     std::atomic<bool> has_closed_ = true;
+    asio::streambuf read_buf_;
     template <typename ioc_t>
     socket_t(ioc_t &&ioc) : impl_(std::forward<ioc_t>(ioc)) {}
   };
@@ -1489,24 +1495,22 @@ class coro_http_client {
 
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
-
+    std::shared_ptr sock = socket_;
+    auto on_ws_msg = std::move(on_ws_msg_);
     websocket ws{};
     while (true) {
-      std::weak_ptr socket = socket_;
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
-        auto sock = socket.lock();
-        if (!sock) {
+
+        if (sock->has_closed_) {
           co_return;
         }
-        if (!sock->has_closed_) {
-          close_socket(*sock);
-        }
 
-        if (on_ws_msg_)
-          on_ws_msg_(data);
+        close_socket(*sock);
 
+        if (on_ws_msg)
+          on_ws_msg(data);
         co_return;
       }
 
@@ -1646,10 +1650,9 @@ class coro_http_client {
   }
 
   coro_io::ExecutorWrapper<> executor_wrapper_;
-  std::unique_ptr<asio::io_context::work> work_;
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;
-  asio::streambuf read_buf_;
+  asio::streambuf &read_buf_;
   simple_buffer body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
@@ -1687,6 +1690,7 @@ class coro_http_client {
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
+
 #ifdef BENCHMARK_TEST
   std::string req_str_;
   bool stop_bench_ = false;
