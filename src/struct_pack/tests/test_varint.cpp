@@ -664,8 +664,7 @@ struct nested_object2 {
 
 TEST_CASE("test nested") {
   {
-    VarRect<var_int32_t> rect{
-        .x0 = INT32_MAX, .y0 = INT32_MIN, .x1 = 123, .y1 = 0};
+    VarRect<var_int32_t> rect{ INT32_MAX, INT32_MIN,  123,  0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int32_t>>(buf);
     CHECK(rect == rect2);
@@ -676,8 +675,7 @@ TEST_CASE("test nested") {
     CHECK(obj2 == obj);
   }
   {
-    VarRect<var_int64_t> rect{
-        .x0 = INT64_MAX, .y0 = INT64_MIN, .x1 = 123, .y1 = 0};
+    VarRect<var_int64_t> rect{INT64_MAX,  INT64_MIN,  123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int64_t>>(buf);
     CHECK(rect == rect2);
@@ -688,8 +686,7 @@ TEST_CASE("test nested") {
     CHECK(obj2 == obj);
   }
   {
-    VarRect<var_uint32_t> rect{
-        .x0 = UINT32_MAX, .y0 = 21321343, .x1 = 123, .y1 = 0};
+    VarRect<var_uint32_t> rect{ UINT32_MAX, 21321343,123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint32_t>>(buf);
     CHECK(rect == rect2);
@@ -700,8 +697,7 @@ TEST_CASE("test nested") {
     CHECK(obj2 == obj);
   }
   {
-    VarRect<var_uint64_t> rect{
-        .x0 = UINT64_MAX, .y0 = 1233143, .x1 = 123, .y1 = 0};
+    VarRect<var_uint64_t> rect{ UINT64_MAX,  1233143, 123,  0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint64_t>>(buf);
     CHECK(rect == rect2);
