@@ -879,6 +879,8 @@ constexpr std::size_t total_padding_size = []() CONSTEXPR_INLINE_LAMBDA {
   return sum;
 }();
 
+template <typename P,typename T,std::size_t I>
+using calculate_trival_obj_size_wrapper=calculate_trival_obj_size<P,T,I>;
 
 template <typename P, typename T, std::size_t I>
 constexpr void calculate_trival_obj_size<P,T,I>::operator()(std::size_t &total) {
@@ -895,7 +897,7 @@ constexpr void calculate_trival_obj_size<P,T,I>::operator()(std::size_t &total) 
     else {
       static_assert(is_trivial_serializable<T, true>::value);
       std::size_t offset = 0;
-      for_each<T, calculate_trival_obj_size>(offset);
+      for_each<T, calculate_trival_obj_size_wrapper>(offset);
       total += offset;
     }
   }
