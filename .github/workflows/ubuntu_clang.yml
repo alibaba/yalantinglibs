@@ -136,7 +136,7 @@ jobs:
       matrix:
         mode: [ Release, Debug ]
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
@@ -145,6 +145,9 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Install clang-6
+        run:  sudo apt-get install clang-6 clang++-6 
+
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -152,7 +155,7 @@ jobs:
 
       - name: Configure
         run: |
-          CXX=clang++ CC=clang 
+          CXX=clang++-6 CC=clang-6 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
