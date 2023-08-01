@@ -1473,7 +1473,7 @@ namespace detail {
                      a62, a63, a64);
     }
   }
-// clang-format on
+// clang-format off
 template <typename Func, typename... Args>
 constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
                                                             Args &...args) {
