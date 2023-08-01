@@ -683,9 +683,9 @@ TEST_CASE("test type info config") {
     }
 #else
     {
-      auto size = get_needed_size(person{.age = 24, .name = "Betty"});
+      auto size = get_needed_size(person{24, "Betty"});
       CHECK(size == 21);
-      auto buffer = serialize(person{.age = 24, .name = "Betty"});
+      auto buffer = serialize(person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<type_info_config::automatic,
@@ -1066,7 +1066,7 @@ TEST_CASE("test static span") {
   SUBCASE("test static span<int,4>") {
     {
       std::array<int, 4> ar = {1, 4, 5, 3};
-      span_test s = {.hello = "Hello", .sp = ar};
+      span_test s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       span_test2 s2;
       auto res = struct_pack::deserialize<span_test2>(buffer);
@@ -1076,9 +1076,9 @@ TEST_CASE("test static span") {
     }
     {
       std::array<int, 4> ar = {1, 4, 5, 32}, ar2;
-      span_test s = {.hello = "Hello", .sp = ar};
+      span_test s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
-      span_test s2 = {.sp = ar2};
+      span_test s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1086,9 +1086,9 @@ TEST_CASE("test static span") {
     }
     {
       std::array<int, 4> ar2;
-      span_test2 s = {.hello = "Hello", .ar = {1, 4, 5, 3}};
+      span_test2 s = {"Hello", {1, 4, 5, 3}};
       auto buffer = struct_pack::serialize(s);
-      span_test s2 = {.sp = ar2};
+      span_test s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1098,7 +1098,7 @@ TEST_CASE("test static span") {
   SUBCASE("test static span<std::string ,4>") {
     {
       std::array<std::string, 4> ar = {"1", "14", "145", "1453"};
-      span_test3 s = {.hello = "Hello", .sp = ar};
+      span_test3 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       auto res = struct_pack::deserialize<span_test4>(buffer);
       CHECK(res.has_value());
@@ -1107,9 +1107,9 @@ TEST_CASE("test static span") {
     }
     {
       std::array<std::string, 4> ar = {"1", "14", "145", "1453"}, ar2;
-      span_test3 s = {.hello = "Hello", .sp = ar};
+      span_test3 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
-      span_test3 s2 = {.sp = ar2};
+      span_test3 s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1117,9 +1117,9 @@ TEST_CASE("test static span") {
     }
     {
       std::array<std::string, 4> ar2;
-      span_test4 s = {.hello = "Hello", .ar = {"1", "14", "145", "1453"}};
+      span_test4 s = {"Hello", {"1", "14", "145", "1453"}};
       auto buffer = struct_pack::serialize(s);
-      span_test3 s2 = {.sp = ar2};
+      span_test3 s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1128,11 +1128,10 @@ TEST_CASE("test static span") {
   }
   SUBCASE("test static span<person ,4>") {
     {
-      std::array<person, 4> ar = {person{.age = 24, .name = "Betty"},
-                                  person{.age = 241, .name = "Betty2"},
-                                  person{.age = 2414, .name = "Betty3"},
-                                  person{.age = 24141, .name = "Betty4"}};
-      span_test5 s = {.hello = "Hello", .sp = ar};
+      std::array<person, 4> ar = {person{24, "Betty"}, person{241, "Betty2"},
+                                  person{2414, "Betty3"},
+                                  person{24141, "Betty4"}};
+      span_test5 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       auto res = struct_pack::deserialize<span_test6>(buffer);
       CHECK(res.has_value());
@@ -1140,14 +1139,13 @@ TEST_CASE("test static span") {
       CHECK(res.value().ar == ar);
     }
     {
-      std::array<person, 4> ar = {person{.age = 24, .name = "Betty"},
-                                  person{.age = 241, .name = "Betty2"},
-                                  person{.age = 2414, .name = "Betty3"},
-                                  person{.age = 24141, .name = "Betty4"}},
+      std::array<person, 4> ar = {person{24, "Betty"}, person{241, "Betty2"},
+                                  person{2414, "Betty3"},
+                                  person{24141, "Betty4"}},
                             ar2;
-      span_test5 s = {.hello = "Hello", .sp = ar};
+      span_test5 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
-      span_test5 s2 = {.sp = ar2};
+      span_test5 s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1155,13 +1153,11 @@ TEST_CASE("test static span") {
     }
     {
       std::array<person, 4> ar2;
-      span_test6 s = {.hello = "Hello",
-                      .ar = {person{.age = 24, .name = "Betty"},
-                             person{.age = 241, .name = "Betty2"},
-                             person{.age = 2414, .name = "Betty3"},
-                             person{.age = 24141, .name = "Betty4"}}};
+      span_test6 s = {"Hello",
+                      {person{24, "Betty"}, person{241, "Betty2"},
+                       person{2414, "Betty3"}, person{24141, "Betty4"}}};
       auto buffer = struct_pack::serialize(s);
-      span_test5 s2 = {.sp = ar2};
+      span_test5 s2 = {"", ar2};
       auto ec = struct_pack::deserialize_to(s2, buffer);
       CHECK(ec == struct_pack::errc{});
       CHECK(s.hello == s2.hello);
@@ -1199,7 +1195,7 @@ TEST_CASE("test dynamic span") {
   SUBCASE("test dynamic span<int>") {
     {
       std::vector<int> ar = {1, 4, 5, 3};
-      dspan_test s = {.hello = "Hello", .sp = ar};
+      dspan_test s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       dspan_test2 s2;
       auto res = struct_pack::deserialize<dspan_test2>(buffer);
@@ -1209,7 +1205,7 @@ TEST_CASE("test dynamic span") {
     }
     {
       std::vector<int> ar = {1, 4, 5, 32};
-      dspan_test s = {.hello = "Hello", .sp = ar};
+      dspan_test s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       dspan_test s2;
       auto ec = struct_pack::deserialize_to(s2, buffer);
@@ -1218,7 +1214,7 @@ TEST_CASE("test dynamic span") {
       CHECK(std::equal(ar.begin(), ar.end(), s2.sp.begin()));
     }
     {
-      dspan_test2 s = {.hello = "Hello", .ar = {1, 4, 5, 3}};
+      dspan_test2 s = {"Hello", {1, 4, 5, 3}};
       auto buffer = struct_pack::serialize(s);
       dspan_test s2;
       auto ec = struct_pack::deserialize_to(s2, buffer);
@@ -1230,7 +1226,7 @@ TEST_CASE("test dynamic span") {
   SUBCASE("test dynamic span<std::string>") {
     {
       std::vector<std::string> ar = {"1", "14", "145", "1453"};
-      dspan_test3 s = {.hello = "Hello", .sp = ar};
+      dspan_test3 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       auto res = struct_pack::deserialize<dspan_test4>(buffer);
       CHECK(res.has_value());
@@ -1240,11 +1236,10 @@ TEST_CASE("test dynamic span") {
   }
   SUBCASE("test dynamic span<person>") {
     {
-      std::vector<person> ar = {person{.age = 24, .name = "Betty"},
-                                person{.age = 241, .name = "Betty2"},
-                                person{.age = 2414, .name = "Betty3"},
-                                person{.age = 24141, .name = "Betty4"}};
-      dspan_test5 s = {.hello = "Hello", .sp = ar};
+      std::vector<person> ar = {person{24, "Betty"}, person{241, "Betty2"},
+                                person{2414, "Betty3"},
+                                person{24141, "Betty4"}};
+      dspan_test5 s = {"Hello", ar};
       auto buffer = struct_pack::serialize(s);
       auto res = struct_pack::deserialize<dspan_test6>(buffer);
       CHECK(res.has_value());

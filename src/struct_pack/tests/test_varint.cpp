@@ -669,11 +669,8 @@ TEST_CASE("test nested") {
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int32_t>>(buf);
     CHECK(rect == rect2);
-    nested_object2<var_int32_t> obj{.id = 123,
-                                    .name = "jfslkf",
-                                    .p = person{.age = 24, .name = "Hello"},
-                                    .o = complicated_object{},
-                                    .x = rect};
+    nested_object2<var_int32_t> obj{123, "jfslkf", person{24, "Hello"},
+                                    complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_int32_t>>(buf2);
     CHECK(obj2 == obj);
@@ -684,11 +681,8 @@ TEST_CASE("test nested") {
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int64_t>>(buf);
     CHECK(rect == rect2);
-    nested_object2<var_int64_t> obj{.id = 123,
-                                    .name = "jfslkf",
-                                    .p = person{.age = 24, .name = "Hello"},
-                                    .o = complicated_object{},
-                                    .x = rect};
+    nested_object2<var_int64_t> obj{123, "jfslkf", person{24, "Hello"},
+                                    complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_int64_t>>(buf2);
     CHECK(obj2 == obj);
@@ -699,11 +693,8 @@ TEST_CASE("test nested") {
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint32_t>>(buf);
     CHECK(rect == rect2);
-    nested_object2<var_uint32_t> obj{.id = 123,
-                                     .name = "jfslkf",
-                                     .p = person{.age = 24, .name = "Hello"},
-                                     .o = complicated_object{},
-                                     .x = rect};
+    nested_object2<var_uint32_t> obj{123, "jfslkf", person{24, "Hello"},
+                                     complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_uint32_t>>(buf2);
     CHECK(obj2 == obj);
@@ -714,11 +705,8 @@ TEST_CASE("test nested") {
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint64_t>>(buf);
     CHECK(rect == rect2);
-    nested_object2<var_uint64_t> obj{.id = 123,
-                                     .name = "jfslkf",
-                                     .p = person{.age = 24, .name = "Hello"},
-                                     .o = complicated_object{},
-                                     .x = rect};
+    nested_object2<var_uint64_t> obj{123, "jfslkf", person{24, "Hello"},
+                                     complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_uint64_t>>(buf2);
     CHECK(obj2 == obj);

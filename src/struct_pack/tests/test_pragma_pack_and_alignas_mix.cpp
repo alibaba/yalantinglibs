@@ -45,7 +45,7 @@ TEST_CASE("testing no one") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 2);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)131, (char)131, (char)-1}};
@@ -86,7 +86,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 1);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)130, (char)131, (char)-1}};
@@ -140,7 +140,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 1);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)130, (char)133, (char)-1}};

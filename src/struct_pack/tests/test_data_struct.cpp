@@ -467,26 +467,26 @@ TEST_CASE("test unique_ptr") {
     CHECK(*ret.value() == "Hello");
   }
   SUBCASE("ptr2person") {
-    auto buffer = struct_pack::serialize(std::make_unique<person>(
-        person{.age = 24, .name = std::string{"name24"}}));
+    auto buffer = struct_pack::serialize(
+        std::make_unique<person>(person{24, std::string{"name24"}}));
     auto ret = deserialize<std::unique_ptr<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
 
   SUBCASE("ptr2optional") {
-    auto buffer = struct_pack::serialize(std::make_unique<person>(
-        person{.age = 24, .name = std::string{"name24"}}));
+    auto buffer = struct_pack::serialize(
+        std::make_unique<person>(person{24, std::string{"name24"}}));
     auto ret = deserialize<std::optional<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
   SUBCASE("optional2ptr") {
-    auto buffer = struct_pack::serialize(
-        std::optional<person>{person{.age = 24, .name = "name24"}});
+    auto buffer =
+        struct_pack::serialize(std::optional<person>{person{24, "name24"}});
     auto ret = deserialize<std::unique_ptr<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
   SUBCASE("error template param") {
     auto buffer = struct_pack::serialize(

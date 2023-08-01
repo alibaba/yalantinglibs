@@ -919,7 +919,7 @@ constexpr decltype(auto) get_type_literal() {
   }
   else {
     constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
-    if constexpr (has_cycle) {
+    if constexpr (has_cycle != 0) {
       static_assert(has_cycle >= 2);
       return string_literal<char, 1>{
                  {static_cast<char>(type_id::circle_flag)}} +

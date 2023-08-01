@@ -168,7 +168,7 @@ TEST_CASE("test compatible") {
     struct_pack::serialize_to(buffer, p);
     struct_pack::serialize_to(buffer, p);
 
-    person1 p1, p0 = {.age = 20, .name = "tom"};
+    person1 p1, p0 = {20, "tom"};
     auto ec = struct_pack::deserialize_to(p1, buffer);
     CHECK(ec == struct_pack::errc{});
     CHECK(p1 == p0);
@@ -936,6 +936,12 @@ struct compatible_with_trival_field_v0 {
     return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
            memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc;
   }
+  void set(const int (&a)[4], char aa, const double (&b)[2], char cc) {
+    memcpy(this->a, a, sizeof(this->a));
+    this->aa = aa;
+    memcpy(this->b, b, sizeof(this->b));
+    this->cc = cc;
+  }
 };
 struct compatible_with_trival_field_v1 {
   int a[4];
@@ -948,6 +954,12 @@ struct compatible_with_trival_field_v1 {
     return memcmp(t.a, o.a, sizeof(a)) == 0 && t.aa == o.aa &&
            memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c;
   };
+  void set(const int (&a)[4], char aa, const double (&b)[2], char cc) {
+    memcpy(this->a, a, sizeof(this->a));
+    this->aa = aa;
+    memcpy(this->b, b, sizeof(this->b));
+    this->cc = cc;
+  }
 };
 
 struct compatible_with_trival_field_v2 {
@@ -963,6 +975,12 @@ struct compatible_with_trival_field_v2 {
            memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
            t.d == o.d;
   };
+  void set(const int (&a)[4], char aa, const double (&b)[2], char cc) {
+    memcpy(this->a, a, sizeof(this->a));
+    this->aa = aa;
+    memcpy(this->b, b, sizeof(this->b));
+    this->cc = cc;
+  }
 };
 
 struct compatible_with_trival_field_v3 {
@@ -979,6 +997,12 @@ struct compatible_with_trival_field_v3 {
            memcmp(t.b, o.b, sizeof(t.b)) == 0 && t.cc == o.cc && t.c == o.c &&
            t.d == o.d && t.e == o.e;
   };
+  void set(const int (&a)[4], char aa, const double (&b)[2], char cc) {
+    memcpy(this->a, a, sizeof(this->a));
+    this->aa = aa;
+    memcpy(this->b, b, sizeof(this->b));
+    this->cc = cc;
+  }
 };
 
 template <typename T>
@@ -997,6 +1021,17 @@ struct nested_trival_v0 {
     return t.a == o.a && t.b == o.b && t.c == o.c && t.d == o.d && t.e == o.e &&
            t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
            memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z;
+  }
+  void set(int a, double b, char c, float d, int64_t e, const char (&g)[10],
+           const int (&h)[3], char z) {
+    this->a = a;
+    this->b = b;
+    this->c = c;
+    this->d = d;
+    this->e = e;
+    memcpy(this->g, g, sizeof(this->g));
+    memcpy(this->h, h, sizeof(this->h));
+    this->z = z;
   }
 };
 
@@ -1024,6 +1059,17 @@ struct nested_trival_v1 {
                 memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i;
     return test;
   }
+  void set(int a, double b, char c, float d, int64_t e, const char (&g)[10],
+           const int (&h)[3], char z) {
+    this->a = a;
+    this->b = b;
+    this->c = c;
+    this->d = d;
+    this->e = e;
+    memcpy(this->g, g, sizeof(this->g));
+    memcpy(this->h, h, sizeof(this->h));
+    this->z = z;
+  }
 };
 
 template <typename T>
@@ -1045,6 +1091,17 @@ struct nested_trival_v2 {
            t.f == o.f && memcmp(t.g, o.g, sizeof(t.g)) == 0 &&
            memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
            t.j == o.j;
+  }
+  void set(int a, double b, char c, float d, int64_t e, const char (&g)[10],
+           const int (&h)[3], char z) {
+    this->a = a;
+    this->b = b;
+    this->c = c;
+    this->d = d;
+    this->e = e;
+    memcpy(this->g, g, sizeof(this->g));
+    memcpy(this->h, h, sizeof(this->h));
+    this->z = z;
   }
 };
 
@@ -1069,35 +1126,39 @@ struct nested_trival_v3 {
            memcmp(t.h, o.h, sizeof(t.h)) == 0 && t.z == o.z && t.i == o.i &&
            t.j == o.j && t.k == o.k;
   }
+  void set(int a, double b, char c, float d, int64_t e, const char (&g)[10],
+           const int (&h)[3], char z) {
+    this->a = a;
+    this->b = b;
+    this->c = c;
+    this->d = d;
+    this->e = e;
+    memcpy(this->g, g, sizeof(this->g));
+    memcpy(this->h, h, sizeof(this->h));
+    this->z = z;
+  }
 };
 
 TEST_CASE("test trival_serialzable_obj_with_compatible") {
   nested_trival_v0<compatible_with_trival_field_v0> to = {
-      .a = 113,
-      .b = 123.322134213,
-      .c = 'H',
-      .d = 890432.1,
-      .e = INT64_MAX - 1,
-      .f = {{123343, 7984321, 1987432, 1984327},
-            'I',
-            {798214321.98743, 821304.084321},
-            'Q'},
-      .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
-      .h = {14, 1023213, 1432143231},
-      .z = 'G'};
+      113,
+      123.322134213,
+      'H',
+      890432.1,
+      INT64_MAX - 1,
+      {{123343, 7984321, 1987432, 1984327},
+       'I',
+       {798214321.98743, 821304.084321},
+       'Q'},
+      {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
+      {14, 1023213, 1432143231},
+      'G'};
   auto op = [&](auto from) {
-    from = {.a = 113,
-            .b = 123.322134213,
-            .c = 'H',
-            .d = 890432.1,
-            .e = INT64_MAX - 1,
-            .f = {.a = {123343, 7984321, 1987432, 1984327},
-                  .aa = 'I',
-                  .b = {798214321.98743, 821304.084321},
-                  .cc = 'Q'},
-            .g = {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
-            .h = {14, 1023213, 1432143231},
-            .z = 'G'};
+    from.set(113, 123.322134213, 'H', 890432.1, INT64_MAX - 1,
+             {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
+             {14, 1023213, 1432143231}, 'G');
+    from.f.set({123343, 7984321, 1987432, 1984327}, 'I',
+               {798214321.98743, 821304.084321}, 'Q');
     {
       auto buffer = struct_pack::serialize(from);
       auto result = struct_pack::deserialize<decltype(to)>(buffer);
@@ -1218,23 +1279,11 @@ bool test_equal(const T1& v1, const T2& v2) {
 }
 TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
   A_v1 a_v1 = {
-      .a = .123,
-      .b = {.a = 123.12,
-            .b = {.a = 123.324,
-                  .b = {.a = 213, .b = {.a = 123.53, .c = 'A'}, .c = 'B'},
-                  .c = 'C'},
-            .c = 'D'},
-      .c = 'E'};
+      .123, {123.12, {123.324, {213, {123.53, 'A'}, 'B'}, 'C'}, 'D'}, 'E'};
   A_v2 a_v2 = {
-      .a = .123,
-      .b = {.a = 123.12,
-            .b = {.a = 123.324,
-                  .b = {.a = 213,
-                        .b = {.a = 123.53, .b = std::nullopt, .c = 'A'},
-                        .c = 'B'},
-                  .c = 'C'},
-            .c = 'D'},
-      .c = 'E'};
+      .123,
+      {123.12, {123.324, {213, {123.53, std::nullopt, 'A'}, 'B'}, 'C'}, 'D'},
+      'E'};
   {
     auto buffer = struct_pack::serialize(a_v1);
     auto result = struct_pack::deserialize<A_v2>(buffer);
