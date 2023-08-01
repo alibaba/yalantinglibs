@@ -1548,9 +1548,9 @@ struct serialize_static_config {
 
 template <typename... Args>
 using get_args_type =
-    typename std::conditional<sizeof...(Args) == 1,
+    remove_cvref_t<typename std::conditional<sizeof...(Args) == 1,
                               std::tuple_element_t<0, std::tuple<Args...>>,
-                              std::tuple<Args...>>::type;
+                              std::tuple<Args...>>::type>;
 template <uint64_t conf, typename T>
 constexpr bool check_if_add_type_literal() {
   if constexpr (conf == type_info_config::automatic) {
