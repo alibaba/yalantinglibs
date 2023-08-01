@@ -317,9 +317,9 @@ TEST_CASE("testing mix and compatible nested") {
     CHECK(literal == val);
   }
   test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v1 v1 = {
-      .a = 1, .b = 123321};
+      1, 123321};
   test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v2 v2 = {
-      .a = 1, .c = std::nullopt, .b = 123321};
+      1, std::nullopt, 123321};
   {
     auto buffer = struct_pack::serialize(v1);
     auto result = struct_pack::deserialize<
