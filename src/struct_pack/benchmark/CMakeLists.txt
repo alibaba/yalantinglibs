@@ -25,6 +25,7 @@ if (Protobuf_FOUND)
                 ${STRUCT_PACK_BENCHMARK_PROTO_SRCS2}
                 ${STRUCT_PACK_BENCHMARK_PROTO_HDRS2}
                 )
+        target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_STRUCT_PB)
     endif()
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
 endif ()

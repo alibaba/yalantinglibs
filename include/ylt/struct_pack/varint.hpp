@@ -20,7 +20,21 @@ class varint {
     val = t;
     return *this;
   }
-  [[nodiscard]] auto operator<=>(const varint&) const noexcept = default;
+  [[nodiscard]] auto operator<(const varint& o) const noexcept {
+    return val < o.val;
+  }
+  [[nodiscard]] auto operator<=(const varint& o) const noexcept {
+    return val <= o.val;
+  }
+  [[nodiscard]] auto operator>(const varint& o) const noexcept {
+    return val > o.val;
+  }
+  [[nodiscard]] auto operator>=(const varint& o) const noexcept {
+    return val >= o.val;
+  }
+  [[nodiscard]] auto operator!=(const varint& o) const noexcept {
+    return val != o.val;
+  }
   [[nodiscard]] bool operator==(const varint<T>& t) const noexcept {
     return val == t.val;
   }
@@ -29,14 +43,14 @@ class varint {
     T new_val = val & mask;
     return varint(new_val);
   }
-  template <std::unsigned_integral U>
+  template <typename U, typename = std::enable_if_t<std::is_unsigned_v<U>>>
   [[nodiscard]] auto operator<<(U shift) const noexcept {
     T new_val = val << shift;
     return varint(new_val);
   }
   template <typename U>
   [[nodiscard]] auto operator|=(U shift) noexcept {
-    if constexpr (std::same_as<U, varint<T>>) {
+    if constexpr (std::is_same_v<U, varint<T>>) {
       val |= shift.val;
     }
     else {
@@ -67,7 +81,21 @@ class sint {
     val = t;
     return *this;
   }
-  [[nodiscard]] auto operator<=>(const sint<T>&) const noexcept = default;
+  [[nodiscard]] auto operator<(const sint& o) const noexcept {
+    return val < o.val;
+  }
+  [[nodiscard]] auto operator<=(const sint& o) const noexcept {
+    return val <= o.val;
+  }
+  [[nodiscard]] auto operator>(const sint& o) const noexcept {
+    return val > o.val;
+  }
+  [[nodiscard]] auto operator>=(const sint& o) const noexcept {
+    return val >= o.val;
+  }
+  [[nodiscard]] auto operator!=(const sint& o) const noexcept {
+    return val != o.val;
+  }
   [[nodiscard]] bool operator==(T t) const noexcept { return val == t; }
   [[nodiscard]] bool operator==(const sint& t) const noexcept {
     return val == t.val;
@@ -76,7 +104,7 @@ class sint {
     T new_val = val & mask;
     return sint(new_val);
   }
-  template <std::unsigned_integral U>
+  template <typename U, typename = std::enable_if_t<std::is_unsigned_v<U>>>
   auto operator<<(U shift) const noexcept {
     T new_val = val << shift;
     return sint(new_val);
@@ -145,8 +173,17 @@ template <typename T>
   }
 }
 
-template <writer_t writer, typename T>
+template <
+#if __cpp_concepts >= 201907L
+    writer_t writer,
+#else
+    typename writer,
+#endif
+    typename T>
 STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
+#if __cpp_concepts < 201907L
+  static_assert(writer_t<writer>, "The writer type must satisfy requirements!");
+#endif
   uint64_t v;
   if constexpr (sintable_t<T>) {
     v = encode_zigzag(t.get());
@@ -161,13 +198,20 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
   }
   writer_.write((char*)&v, sizeof(char));
 }
+#if __cpp_concepts >= 201907L
 template <reader_t Reader>
+#else
+template <typename Reader>
+#endif
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint_impl(
     Reader& reader, uint64_t& v) {
+#if __cpp_concepts < 201907L
+  static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
+#endif
   uint8_t now;
   constexpr const int8_t max_varint_length = sizeof(uint64_t) * 8 / 7 + 1;
   for (int8_t i = 0; i < max_varint_length; ++i) {
-    if (!reader.read((char*)&now, sizeof(char))) [[unlikely]] {
+    if SP_UNLIKELY (!reader.read((char*)&now, sizeof(char))) {
       return struct_pack::errc::no_buffer_space;
     }
     v |= (1ull * (now & 0x7fu)) << (i * 7);
@@ -177,13 +221,22 @@ template <reader_t Reader>
   }
   return struct_pack::errc::invalid_buffer;
 }
-template <bool NotSkip = true, reader_t Reader, typename T>
+template <bool NotSkip = true,
+#if __cpp_concepts >= 201907L
+          reader_t Reader,
+#else
+          typename Reader,
+#endif
+          typename T>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint(
     Reader& reader, T& t) {
+#if __cpp_concepts < 201907L
+  static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
+#endif
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
   if constexpr (NotSkip) {
-    if (ec == struct_pack::errc{}) [[likely]] {
+    if SP_LIKELY (ec == struct_pack::errc{}) {
       if constexpr (sintable_t<T>) {
         t = decode_zigzag<int64_t>(v);
       }

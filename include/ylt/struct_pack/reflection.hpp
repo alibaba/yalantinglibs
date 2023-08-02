@@ -35,25 +35,44 @@
 namespace struct_pack {
 namespace detail {
 
+template <typename T>
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+[[noreturn]] inline void unreachable() {
+  // Uses compiler specific extensions if possible.
+  // Even if no extension is used, undefined behavior is still raised by
+  // an empty function body and the noreturn attribute.
+#ifdef __GNUC__  // GCC, Clang, ICC
+  __builtin_unreachable();
+#elif defined(_MSC_VER)  // msvc
+  __assume(false);
+#endif
+}
+
 template <typename U>
 constexpr auto get_types();
+
+template <typename T, template <typename, typename, std::size_t> typename Op,
+          typename... Contexts, std::size_t... I>
+constexpr void for_each_impl(std::index_sequence<I...>, Contexts &...contexts) {
+  using type = decltype(get_types<T>());
+  (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), ...);
+}
 
 template <typename T, template <typename, typename, std::size_t> typename Op,
           typename... Contexts>
 constexpr void for_each(Contexts &...contexts) {
   using type = decltype(get_types<T>());
-  [&]<std::size_t... I>(std::index_sequence<I...>) {
-    (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), ...);
-  }
-  (std::make_index_sequence<std::tuple_size_v<type>>());
+  for_each_impl<T, Op>(std::make_index_sequence<std::tuple_size_v<type>>(),
+                       contexts...);
 }
 
 template <typename T>
-consteval std::size_t members_count();
+constexpr std::size_t members_count();
 template <typename T>
-consteval std::size_t pack_align();
+constexpr std::size_t pack_align();
 template <typename T>
-consteval std::size_t alignment();
+constexpr std::size_t alignment();
 }  // namespace detail
 
 template <typename T>
@@ -62,6 +81,8 @@ template <typename T>
 constexpr std::size_t pack_alignment_v = 0;
 template <typename T>
 constexpr std::size_t alignment_v = 0;
+
+#if __cpp_concepts >= 201907L
 
 template <typename T>
 concept writer_t = requires(T t) {
@@ -85,16 +106,81 @@ concept seek_reader_t = reader_t<T> && requires(T t) {
   t.seekg(std::size_t{});
 };
 
+#else
+
+template <typename T, typename = void>
+struct writer_t_impl : std::false_type {};
+
+template <typename T>
+struct writer_t_impl<T, std::void_t<decltype(std::declval<T>().write(
+                            (const char *)nullptr, std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool writer_t = writer_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct reader_t_impl : std::false_type {};
+
+template <typename T>
+struct reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().read((char *)nullptr,
+                                                   std::size_t{})),
+                   decltype(std::declval<T>().ignore(std::size_t{})),
+                   decltype(std::declval<T>().tellg())>> : std::true_type {};
+
+template <typename T>
+constexpr bool reader_t = reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct view_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct view_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().read_view(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool view_reader_t = reader_t<T> &&view_reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct seek_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct seek_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().seekg(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool seek_reader_t = reader_t<T> &&seek_reader_t_impl<T>::value;
+
+#endif
+
 template <typename T, uint64_t version = 0>
 struct compatible;
 
 // clang-format off
 namespace detail {
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept deserialize_view = requires(Type container) {
     container.size();
     container.data();
   };
+#else
+
+template <typename T, typename = void>
+struct deserialize_view_impl : std::false_type {};
+template <typename T>
+struct deserialize_view_impl<
+    T, std::void_t<decltype(std::declval<T>().size()),decltype(std::declval<T>().data())>>
+    : std::true_type {};
+
+template <typename Type>
+constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
+
+#endif
 
   struct memory_writer {
     char *buffer;
@@ -104,56 +190,145 @@ namespace detail {
     }
   };
 
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept container_adapter = requires(Type container) {
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
     container.size();
     container.pop();
   };
+#else
+  template <typename T, typename = void>
+  struct container_adapter_impl : std::false_type {};
 
+  template <typename T>
+  struct container_adapter_impl<T, std::void_t<
+    typename remove_cvref_t<T>::value_type,
+    decltype(std::declval<T>().size()),
+    decltype(std::declval<T>().pop())>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool container_adapter = container_adapter_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept container = requires(Type container) {
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
     container.size();
     container.begin();
     container.end();
   };
+#else
+  template <typename T, typename = void>
+  struct container_impl : std::false_type {};
+
+  template <typename T>
+  struct container_impl<T, std::void_t<
+    typename remove_cvref_t<T>::value_type,
+    decltype(std::declval<T>().size()),
+    decltype(std::declval<T>().begin()),
+    decltype(std::declval<T>().end())>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool container = container_impl<T>::value;
+#endif  
 
   template <typename Type>
-  concept is_char_t = std::is_same_v<Type, signed char> ||
+  constexpr bool is_char_t = std::is_same_v<Type, signed char> ||
       std::is_same_v<Type, char> || std::is_same_v<Type, unsigned char> ||
       std::is_same_v<Type, wchar_t> || std::is_same_v<Type, char16_t> ||
-      std::is_same_v<Type, char32_t> || std::is_same_v<Type, char8_t>;
+      std::is_same_v<Type, char32_t>
+#ifdef __cpp_lib_char8_t
+ || std::is_same_v<Type, char8_t>
+#endif
+;
 
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept string = container<Type> && requires(Type container) {
-    requires is_char_t<typename std::remove_cvref_t<Type>::value_type>;
+    requires is_char_t<typename remove_cvref_t<Type>::value_type>;
     container.length();
     container.data();
   };
+#else
+  template <typename T, typename = void>
+  struct string_impl : std::false_type {};
 
+  template <typename T>
+  struct string_impl<T, std::void_t<
+    std::enable_if_t<is_char_t<typename remove_cvref_t<T>::value_type>>,
+    decltype(std::declval<T>().length()),
+    decltype(std::declval<T>().data())>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool string = string_impl<T>::value && container<T>;
+#endif  
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept string_view = string<Type> && !requires(Type container) {
     container.resize(std::size_t{});
   };
+#else
+  template <typename T, typename = void>
+  struct string_view_impl : std::true_type {};
 
+  template <typename T>
+  struct string_view_impl<T, std::void_t<
+    decltype(std::declval<T>().resize(std::size_t{}))>> 
+      : std::false_type {};
 
+  template <typename T>
+  constexpr bool string_view = string<T> && string_view_impl<T>::value;
+#endif  
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept span = container<Type> && requires(Type t) {
-    t=Type{(typename Type::value_type*)nullptr ,std::size_t{} };
+    Type{(typename Type::value_type*)nullptr ,std::size_t{} };
     t.subspan(std::size_t{},std::size_t{});
   };
+#else
+  template <typename T, typename = void>
+  struct span_impl : std::false_type {};
+
+  template <typename T>
+  struct span_impl<T, std::void_t<
+    decltype(T{(typename T::value_type*)nullptr ,std::size_t{}}),
+    decltype(std::declval<T>().subspan(std::size_t{},std::size_t{}))>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool span = container<T> && span_impl<T>::value;
+#endif 
 
 
-
+#if __cpp_concepts >= 201907L
   template <typename Type>
-  concept dynamic_span = span<Type> && std::is_same_v<std::integral_constant<std::size_t,Type::extent>,std::integral_constant<std::size_t,SIZE_MAX>>;
+  concept dynamic_span = span<Type> && Type::extent == SIZE_MAX;
+#else
+  template <typename T, typename = void>
+  struct dynamic_span_impl : std::false_type {};
 
+  template <typename T>
+  struct dynamic_span_impl<T, std::void_t<
+    std::enable_if_t<(T::extent == SIZE_MAX)>>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool dynamic_span = span<T> && dynamic_span_impl<T>::value;
+#endif
   template <typename Type>
-  concept static_span = span<Type> && !dynamic_span<Type>;
+  constexpr bool static_span = span<Type> && !dynamic_span<Type>;
 
 
-#if __cpp_lib_span >= 202002L
+#if __cpp_lib_span >= 202002L && __cpp_concepts>=201907L
 
   template <typename Type>
   concept continuous_container =
@@ -177,88 +352,227 @@ namespace detail {
   constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
 
   template <typename Type>
-  concept continuous_container =
-      container<Type> &&(is_std_vector_v<Type> || is_std_basic_string_v<Type>);
+  constexpr bool continuous_container =
+      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type>));
 #endif
 
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept map_container = container<Type> && requires(Type container) {
-    typename std::remove_cvref_t<Type>::mapped_type;
+    typename remove_cvref_t<Type>::mapped_type;
   };
+#else
+template <typename T, typename = void>
+  struct map_container_impl : std::false_type {};
 
+  template <typename T>
+  struct map_container_impl<T, std::void_t<
+    typename remove_cvref_t<T>::mapped_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool map_container = container<T> && map_container_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
-  concept set_container = container<Type> && requires(Type container) {
-    typename std::remove_cvref_t<Type>::key_type;
+  concept set_container = container<Type> && requires {
+    typename remove_cvref_t<Type>::key_type;
   };
+#else
+  template <typename T, typename = void>
+  struct set_container_impl : std::false_type {};
 
+  template <typename T>
+  struct set_container_impl<T, std::void_t<
+    typename remove_cvref_t<T>::key_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool set_container = container<T> && set_container_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept tuple = requires(Type tuple) {
     std::get<0>(tuple);
-    sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+    sizeof(std::tuple_size<remove_cvref_t<Type>>);
   };
+#else
+template <typename T, typename = void>
+  struct tuple_impl : std::false_type {};
 
+  template <typename T>
+  struct tuple_impl<T, std::void_t<
+    decltype(std::get<0>(std::declval<T>())),
+    decltype(sizeof(std::tuple_size<remove_cvref_t<T>>::value))>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool tuple = tuple_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept user_defined_refl = std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<Type&>())),Type&>;
+#else
+  template <typename T, typename = void>
+  struct user_defined_refl_impl : std::false_type {};
 
+  template <typename T>
+  struct user_defined_refl_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(STRUCT_PACK_REFL_FLAG(std::declval<T&>())),T&>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool user_defined_refl = user_defined_refl_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept tuple_size = requires(Type tuple) {
-    sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
+    std::tuple_size<remove_cvref_t<Type>>::value;
   };
+#else
+  template <typename T, typename = void>
+  struct tuple_size_impl : std::false_type {};
 
+  template <typename T>
+  struct tuple_size_impl<T, std::void_t<
+    decltype(std::tuple_size<remove_cvref_t<T>>::value)>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool tuple_size = tuple_size_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept array = requires(Type arr) {
     arr.size();
-    std::tuple_size<std::remove_cvref_t<Type>>{};
+    std::tuple_size<remove_cvref_t<Type>>{};
   };
+#else
+  template <typename T, typename = void>
+  struct array_impl : std::false_type {};
 
-  // this version not work, can't checkout the is_xx_v in
-  // ```require(Type){...}```
-  template <typename Type>
-  concept c_array1 = requires(Type arr) {
-    std::is_array_v<Type> == true;
-  };
+  template <typename T>
+  struct array_impl<T, std::void_t<
+    decltype(std::declval<T>().size()),
+    decltype(std::tuple_size<remove_cvref_t<T>>{})>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool array = array_impl<T>::value;
+#endif
+
 
   template <class T>
-  concept c_array =
-      std::is_array_v<T> && std::extent_v<std::remove_cvref_t<T>> >
-  0;
+  constexpr bool c_array =
+      std::is_array_v<T> && std::extent_v<remove_cvref_t<T>> > 0;
 
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept pair = requires(Type p) {
-    typename std::remove_cvref_t<Type>::first_type;
-    typename std::remove_cvref_t<Type>::second_type;
+    typename remove_cvref_t<Type>::first_type;
+    typename remove_cvref_t<Type>::second_type;
     p.first;
     p.second;
   };
+#else
+  template <typename T, typename = void>
+  struct pair_impl : std::false_type {};
 
+  template <typename T>
+  struct pair_impl<T, std::void_t<
+    typename remove_cvref_t<T>::first_type,
+    typename remove_cvref_t<T>::second_type,
+    decltype(std::declval<T>().first),
+    decltype(std::declval<T>().second)>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool pair = pair_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept expected = requires(Type e) {
-    typename std::remove_cvref_t<Type>::value_type;
-    typename std::remove_cvref_t<Type>::error_type;
-    typename std::remove_cvref_t<Type>::unexpected_type;
+    typename remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::error_type;
+    typename remove_cvref_t<Type>::unexpected_type;
     e.has_value();
     e.error();
     requires std::is_same_v<void,
-                            typename std::remove_cvref_t<Type>::value_type> ||
+                            typename remove_cvref_t<Type>::value_type> ||
         requires(Type e) {
       e.value();
     };
   };
+#else
+  template <typename T, typename = void>
+  struct expected_impl : std::false_type {};
 
+  template <typename T>
+  struct expected_impl<T, std::void_t<
+    typename remove_cvref_t<T>::value_type,
+    typename remove_cvref_t<T>::error_type,
+    typename remove_cvref_t<T>::unexpected_type,
+    decltype(std::declval<T>().has_value()),
+    decltype(std::declval<T>().error())>> 
+      : std::true_type {};
+    //TODO: check e.value()
+  template <typename T>
+  constexpr bool expected = expected_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
-    typename std::remove_cvref_t<Type>::element_type;
+    typename remove_cvref_t<Type>::element_type;
   }
   &&!requires(Type ptr, Type ptr2) { ptr = ptr2; };
+#else
+  template <typename T, typename = void>
+  struct unique_ptr_impl : std::false_type {};
 
+  template <typename T>
+  struct unique_ptr_impl<T, std::void_t<
+    typename remove_cvref_t<T>::element_type,
+    decltype(std::declval<T>().operator*())>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool unique_ptr = unique_ptr_impl<T>::value;
+#endif
+
+
+#if __cpp_concepts >= 201907L
   template <typename Type>
   concept optional = !expected<Type> && requires(Type optional) {
     optional.value();
     optional.has_value();
     optional.operator*();
-    typename std::remove_cvref_t<Type>::value_type;
+    typename remove_cvref_t<Type>::value_type;
   };
+#else
+  template <typename T, typename = void>
+  struct optional_impl : std::false_type {};
+
+  template <typename T>
+  struct optional_impl<T, std::void_t<
+    decltype(std::declval<T>().value()),
+    decltype(std::declval<T>().has_value()),
+    decltype(std::declval<T>().operator*()),
+    typename remove_cvref_t<T>::value_type>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool optional = !expected<T> && optional_impl<T>::value;
+#endif
+
+
 
 
 
@@ -275,12 +589,6 @@ namespace detail {
   constexpr inline bool is_variant_v<std::variant<args...>> = true;
 
   template <typename T>
-  concept variant = is_variant_v<T>;
-
-  template <typename T>
-  concept is_compatible = is_compatible_v<T>;
-
-  template <typename T>
   constexpr inline bool is_trivial_tuple = false;
 
   template <typename T>
@@ -290,28 +598,33 @@ namespace detail {
   class sint;
 
   template <typename T>
-  concept varintable_t =
+  constexpr bool varintable_t =
       std::is_same_v<T, varint<int32_t>> || std::is_same_v<T, varint<int64_t>> ||
       std::is_same_v<T, varint<uint32_t>> || std::is_same_v<T, varint<uint64_t>>;
   template <typename T>
-  concept sintable_t =
+  constexpr bool sintable_t =
       std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
 
   template <typename T>
-  concept varint_t = varintable_t<T> || sintable_t<T>;
+  constexpr bool varint_t = varintable_t<T> || sintable_t<T>;
 
-  
   template <typename Type>
   constexpr inline bool is_trivial_view_v = false;
-
-  template <typename Type>
-  concept trivial_view = is_trivial_view_v<Type>;
 
   template <typename T, bool ignore_compatible_field = false>
   struct is_trivial_serializable {
     private:
+      template<typename U, std::size_t... I>
+      static constexpr bool class_visit_helper(std::index_sequence<I...>) {
+        return (is_trivial_serializable<std::tuple_element_t<I, U>,
+                                            ignore_compatible_field>::value &&
+                    ...);
+      }
       static constexpr bool solve() {
-        if constexpr (is_compatible_v<T> || trivial_view<T>) {
+        if constexpr (std::is_same_v<T,std::monostate>) {
+          return true;
+        }
+        else if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
         }
         else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T> 
@@ -335,7 +648,7 @@ namespace detail {
         else if constexpr (user_defined_refl<T>) {
           return false;
         }
-        else if constexpr (container<T> || optional<T> || variant<T> ||
+        else if constexpr (container<T> || optional<T> || is_variant_v<T> ||
                           unique_ptr<T> || expected<T> || container_adapter<T> ||
                           varint_t<T>) {
           return false;
@@ -347,23 +660,11 @@ namespace detail {
                                         ignore_compatible_field>::value;
         }
         else if constexpr (is_trivial_tuple<T>) {
-          return []<std::size_t... I>(std::index_sequence<I...>)
-              CONSTEXPR_INLINE_LAMBDA {
-            return (is_trivial_serializable<std::tuple_element_t<I, T>,
-                                            ignore_compatible_field>::value &&
-                    ...);
-          }
-          (std::make_index_sequence<std::tuple_size_v<T>>{});
+          return class_visit_helper<T>(std::make_index_sequence<std::tuple_size_v<T>>{});
         }
         else if constexpr (std::is_class_v<T>) {
-          using T_ = decltype(get_types<T>());
-          return []<std::size_t... I>(std::index_sequence<I...>)
-              CONSTEXPR_INLINE_LAMBDA {
-            return (is_trivial_serializable<std::tuple_element_t<I, T_>,
-                                            ignore_compatible_field>::value &&
-                    ...);
-          }
-          (std::make_index_sequence<std::tuple_size_v<T_>>{});
+          using U = decltype(get_types<T>());
+          return class_visit_helper<U>(std::make_index_sequence<std::tuple_size_v<U>>{});
         }
         else
           return false;
@@ -373,10 +674,8 @@ namespace detail {
       static inline constexpr bool value = is_trivial_serializable::solve();
   };
 
-  template<typename T>
-  concept trivial_serializable=is_trivial_serializable<T>::value;
 }
-template <detail::trivial_serializable T>
+template <typename T, typename = std::enable_if_t<detail::is_trivial_serializable<T>::value>>
 struct trivial_view;
 namespace detail {
 
@@ -393,11 +692,8 @@ namespace detail {
     operator T();
   };
 
-  template <typename T>
-  concept integral = std::is_integral_v<T>;
-
   struct UniversalIntegralType {
-    template <integral T>
+    template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
     operator T();
   };
 
@@ -406,41 +702,44 @@ namespace detail {
   };
 
   struct UniversalOptionalType {
-    template <optional U>
-    operator U();
+  template <typename U, typename = std::enable_if_t<optional<U>>>
+  operator U();
   };
 
   struct UniversalCompatibleType {
-    template <is_compatible U>
+    template <typename U, typename = std::enable_if_t<is_compatible_v<U>>>
     operator U();
   };
 
+  template <typename T, typename construct_param_t, typename = void, typename... Args>
+  struct is_constructable_impl : std::false_type {};
+  template <typename T, typename construct_param_t, typename... Args>
+  struct is_constructable_impl<T, construct_param_t,
+  std::void_t<
+    decltype(T{{Args{}}..., {construct_param_t{}}})>, Args...>
+      : std::true_type {};
+
+  template <typename T, typename construct_param_t, typename... Args>
+  constexpr bool is_constructable=is_constructable_impl<T,construct_param_t,void,Args...>::value;
+
   template <typename T, typename... Args>
-  consteval std::size_t members_count_impl() {
-    if constexpr (requires { T{{Args{}}..., {UniversalVectorType{}}}; } == true) {
+  constexpr std::size_t members_count_impl() {
+    if constexpr (is_constructable<T,UniversalVectorType,Args...>) {
       return members_count_impl<T, Args..., UniversalVectorType>();
     }
-    else if constexpr (requires { T{{Args{}}..., {UniversalType{}}}; } == true) {
+    else if constexpr (is_constructable<T,UniversalType,Args...>) {
       return members_count_impl<T, Args..., UniversalType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalOptionalType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalOptionalType,Args...>) {
       return members_count_impl<T, Args..., UniversalOptionalType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalIntegralType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalIntegralType,Args...>) {
       return members_count_impl<T, Args..., UniversalIntegralType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalNullptrType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalNullptrType,Args...>) {
       return members_count_impl<T, Args..., UniversalNullptrType>();
     }
-    else if constexpr (requires {
-                         T{{Args{}}..., {UniversalCompatibleType{}}};
-                       } == true) {
+    else if constexpr (is_constructable<T,UniversalCompatibleType,Args...>) {
       return members_count_impl<T, Args..., UniversalCompatibleType>();
     }
     else {
@@ -449,20 +748,33 @@ namespace detail {
   }
 
   template <typename T>
-  consteval std::size_t members_count() {
-    if constexpr (tuple_size<T>) {
-      return std::tuple_size<T>::value;
+  constexpr std::size_t members_count() {
+    using type = remove_cvref_t<T>;
+    if constexpr (user_defined_refl<type>) {
+      return decltype(STRUCT_PACK_FIELD_COUNT(std::declval<type>()))::value;
+    }
+    else if constexpr (tuple_size<type>) {
+      return std::tuple_size<type>::value;
     }
     else {
-      return members_count_impl<T>();
+      return members_count_impl<type>();
     }
   }
 
   constexpr static auto MaxVisitMembers = 64;
 
-  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(auto &&object,
-                                                            auto &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
+                                                            Visitor &&visitor);
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_structure_binding(Object &&object,
+                                                            Visitor &&visitor);
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members(Object &&object,
+                                                            Visitor &&visitor) {
+    using type = remove_cvref_t<decltype(object)>;
     if constexpr (user_defined_refl<type>) {
       return visit_members_by_user_defined_refl(object,visitor);
     }
@@ -470,10 +782,11 @@ namespace detail {
       return visit_members_by_structure_binding(object,visitor);
     }
   }
-  
-  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(auto &&object,
-                                                            auto &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
+                                                            Visitor &&visitor) {
+    using type = remove_cvref_t<decltype(object)>;
     constexpr auto Count = decltype(STRUCT_PACK_FIELD_COUNT(object))::value;
     
     static_assert(Count <= MaxVisitMembers, "exceed max visit members");
@@ -611,9 +924,11 @@ namespace detail {
       static_assert(!sizeof(type), "empty struct/class is not allowed!");
     }
   }
-  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_structure_binding(auto &&object,
-                                                            auto &&visitor) {
-    using type = std::remove_cvref_t<decltype(object)>;
+
+  template<typename Object,typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_structure_binding(Object &&object,
+                                                            Visitor &&visitor) {
+    using type = remove_cvref_t<decltype(object)>;
     constexpr auto Count = struct_pack::members_count<type>;
     if constexpr (Count == 0 && std::is_class_v<type> &&
                   !std::is_same_v<type, std::monostate>) {
@@ -1161,533 +1476,532 @@ namespace detail {
                      a62, a63, a64);
     }
   }
-
-  template <template <size_t index, typename...> typename Func,
-            typename... Args>
-  constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
-                                                              auto &...args) {
-    switch (index) {
-      case 0:
-        return Func<0, Args...>::run(args...);
-      case 1:
-        return Func<1, Args...>::run(args...);
-      case 2:
-        return Func<2, Args...>::run(args...);
-      case 3:
-        return Func<3, Args...>::run(args...);
-      case 4:
-        return Func<4, Args...>::run(args...);
-      case 5:
-        return Func<5, Args...>::run(args...);
-      case 6:
-        return Func<6, Args...>::run(args...);
-      case 7:
-        return Func<7, Args...>::run(args...);
-      case 8:
-        return Func<8, Args...>::run(args...);
-      case 9:
-        return Func<9, Args...>::run(args...);
-      case 10:
-        return Func<10, Args...>::run(args...);
-      case 11:
-        return Func<11, Args...>::run(args...);
-      case 12:
-        return Func<12, Args...>::run(args...);
-      case 13:
-        return Func<13, Args...>::run(args...);
-      case 14:
-        return Func<14, Args...>::run(args...);
-      case 15:
-        return Func<15, Args...>::run(args...);
-      case 16:
-        return Func<16, Args...>::run(args...);
-      case 17:
-        return Func<17, Args...>::run(args...);
-      case 18:
-        return Func<18, Args...>::run(args...);
-      case 19:
-        return Func<19, Args...>::run(args...);
-      case 20:
-        return Func<20, Args...>::run(args...);
-      case 21:
-        return Func<21, Args...>::run(args...);
-      case 22:
-        return Func<22, Args...>::run(args...);
-      case 23:
-        return Func<23, Args...>::run(args...);
-      case 24:
-        return Func<24, Args...>::run(args...);
-      case 25:
-        return Func<25, Args...>::run(args...);
-      case 26:
-        return Func<26, Args...>::run(args...);
-      case 27:
-        return Func<27, Args...>::run(args...);
-      case 28:
-        return Func<28, Args...>::run(args...);
-      case 29:
-        return Func<29, Args...>::run(args...);
-      case 30:
-        return Func<30, Args...>::run(args...);
-      case 31:
-        return Func<31, Args...>::run(args...);
-      case 32:
-        return Func<32, Args...>::run(args...);
-      case 33:
-        return Func<33, Args...>::run(args...);
-      case 34:
-        return Func<34, Args...>::run(args...);
-      case 35:
-        return Func<35, Args...>::run(args...);
-      case 36:
-        return Func<36, Args...>::run(args...);
-      case 37:
-        return Func<37, Args...>::run(args...);
-      case 38:
-        return Func<38, Args...>::run(args...);
-      case 39:
-        return Func<39, Args...>::run(args...);
-      case 40:
-        return Func<40, Args...>::run(args...);
-      case 41:
-        return Func<41, Args...>::run(args...);
-      case 42:
-        return Func<42, Args...>::run(args...);
-      case 43:
-        return Func<43, Args...>::run(args...);
-      case 44:
-        return Func<44, Args...>::run(args...);
-      case 45:
-        return Func<45, Args...>::run(args...);
-      case 46:
-        return Func<46, Args...>::run(args...);
-      case 47:
-        return Func<47, Args...>::run(args...);
-      case 48:
-        return Func<48, Args...>::run(args...);
-      case 49:
-        return Func<49, Args...>::run(args...);
-      case 50:
-        return Func<50, Args...>::run(args...);
-      case 51:
-        return Func<51, Args...>::run(args...);
-      case 52:
-        return Func<52, Args...>::run(args...);
-      case 53:
-        return Func<53, Args...>::run(args...);
-      case 54:
-        return Func<54, Args...>::run(args...);
-      case 55:
-        return Func<55, Args...>::run(args...);
-      case 56:
-        return Func<56, Args...>::run(args...);
-      case 57:
-        return Func<57, Args...>::run(args...);
-      case 58:
-        return Func<58, Args...>::run(args...);
-      case 59:
-        return Func<59, Args...>::run(args...);
-      case 60:
-        return Func<60, Args...>::run(args...);
-      case 61:
-        return Func<61, Args...>::run(args...);
-      case 62:
-        return Func<62, Args...>::run(args...);
-      case 63:
-        return Func<63, Args...>::run(args...);
-      case 64:
-        return Func<64, Args...>::run(args...);
-      case 65:
-        return Func<65, Args...>::run(args...);
-      case 66:
-        return Func<66, Args...>::run(args...);
-      case 67:
-        return Func<67, Args...>::run(args...);
-      case 68:
-        return Func<68, Args...>::run(args...);
-      case 69:
-        return Func<69, Args...>::run(args...);
-      case 70:
-        return Func<70, Args...>::run(args...);
-      case 71:
-        return Func<71, Args...>::run(args...);
-      case 72:
-        return Func<72, Args...>::run(args...);
-      case 73:
-        return Func<73, Args...>::run(args...);
-      case 74:
-        return Func<74, Args...>::run(args...);
-      case 75:
-        return Func<75, Args...>::run(args...);
-      case 76:
-        return Func<76, Args...>::run(args...);
-      case 77:
-        return Func<77, Args...>::run(args...);
-      case 78:
-        return Func<78, Args...>::run(args...);
-      case 79:
-        return Func<79, Args...>::run(args...);
-      case 80:
-        return Func<80, Args...>::run(args...);
-      case 81:
-        return Func<81, Args...>::run(args...);
-      case 82:
-        return Func<82, Args...>::run(args...);
-      case 83:
-        return Func<83, Args...>::run(args...);
-      case 84:
-        return Func<84, Args...>::run(args...);
-      case 85:
-        return Func<85, Args...>::run(args...);
-      case 86:
-        return Func<86, Args...>::run(args...);
-      case 87:
-        return Func<87, Args...>::run(args...);
-      case 88:
-        return Func<88, Args...>::run(args...);
-      case 89:
-        return Func<89, Args...>::run(args...);
-      case 90:
-        return Func<90, Args...>::run(args...);
-      case 91:
-        return Func<91, Args...>::run(args...);
-      case 92:
-        return Func<92, Args...>::run(args...);
-      case 93:
-        return Func<93, Args...>::run(args...);
-      case 94:
-        return Func<94, Args...>::run(args...);
-      case 95:
-        return Func<95, Args...>::run(args...);
-      case 96:
-        return Func<96, Args...>::run(args...);
-      case 97:
-        return Func<97, Args...>::run(args...);
-      case 98:
-        return Func<98, Args...>::run(args...);
-      case 99:
-        return Func<99, Args...>::run(args...);
-      case 100:
-        return Func<100, Args...>::run(args...);
-      case 101:
-        return Func<101, Args...>::run(args...);
-      case 102:
-        return Func<102, Args...>::run(args...);
-      case 103:
-        return Func<103, Args...>::run(args...);
-      case 104:
-        return Func<104, Args...>::run(args...);
-      case 105:
-        return Func<105, Args...>::run(args...);
-      case 106:
-        return Func<106, Args...>::run(args...);
-      case 107:
-        return Func<107, Args...>::run(args...);
-      case 108:
-        return Func<108, Args...>::run(args...);
-      case 109:
-        return Func<109, Args...>::run(args...);
-      case 110:
-        return Func<110, Args...>::run(args...);
-      case 111:
-        return Func<111, Args...>::run(args...);
-      case 112:
-        return Func<112, Args...>::run(args...);
-      case 113:
-        return Func<113, Args...>::run(args...);
-      case 114:
-        return Func<114, Args...>::run(args...);
-      case 115:
-        return Func<115, Args...>::run(args...);
-      case 116:
-        return Func<116, Args...>::run(args...);
-      case 117:
-        return Func<117, Args...>::run(args...);
-      case 118:
-        return Func<118, Args...>::run(args...);
-      case 119:
-        return Func<119, Args...>::run(args...);
-      case 120:
-        return Func<120, Args...>::run(args...);
-      case 121:
-        return Func<121, Args...>::run(args...);
-      case 122:
-        return Func<122, Args...>::run(args...);
-      case 123:
-        return Func<123, Args...>::run(args...);
-      case 124:
-        return Func<124, Args...>::run(args...);
-      case 125:
-        return Func<125, Args...>::run(args...);
-      case 126:
-        return Func<126, Args...>::run(args...);
-      case 127:
-        return Func<127, Args...>::run(args...);
-      case 128:
-        return Func<128, Args...>::run(args...);
-      case 129:
-        return Func<129, Args...>::run(args...);
-      case 130:
-        return Func<130, Args...>::run(args...);
-      case 131:
-        return Func<131, Args...>::run(args...);
-      case 132:
-        return Func<132, Args...>::run(args...);
-      case 133:
-        return Func<133, Args...>::run(args...);
-      case 134:
-        return Func<134, Args...>::run(args...);
-      case 135:
-        return Func<135, Args...>::run(args...);
-      case 136:
-        return Func<136, Args...>::run(args...);
-      case 137:
-        return Func<137, Args...>::run(args...);
-      case 138:
-        return Func<138, Args...>::run(args...);
-      case 139:
-        return Func<139, Args...>::run(args...);
-      case 140:
-        return Func<140, Args...>::run(args...);
-      case 141:
-        return Func<141, Args...>::run(args...);
-      case 142:
-        return Func<142, Args...>::run(args...);
-      case 143:
-        return Func<143, Args...>::run(args...);
-      case 144:
-        return Func<144, Args...>::run(args...);
-      case 145:
-        return Func<145, Args...>::run(args...);
-      case 146:
-        return Func<146, Args...>::run(args...);
-      case 147:
-        return Func<147, Args...>::run(args...);
-      case 148:
-        return Func<148, Args...>::run(args...);
-      case 149:
-        return Func<149, Args...>::run(args...);
-      case 150:
-        return Func<150, Args...>::run(args...);
-      case 151:
-        return Func<151, Args...>::run(args...);
-      case 152:
-        return Func<152, Args...>::run(args...);
-      case 153:
-        return Func<153, Args...>::run(args...);
-      case 154:
-        return Func<154, Args...>::run(args...);
-      case 155:
-        return Func<155, Args...>::run(args...);
-      case 156:
-        return Func<156, Args...>::run(args...);
-      case 157:
-        return Func<157, Args...>::run(args...);
-      case 158:
-        return Func<158, Args...>::run(args...);
-      case 159:
-        return Func<159, Args...>::run(args...);
-      case 160:
-        return Func<160, Args...>::run(args...);
-      case 161:
-        return Func<161, Args...>::run(args...);
-      case 162:
-        return Func<162, Args...>::run(args...);
-      case 163:
-        return Func<163, Args...>::run(args...);
-      case 164:
-        return Func<164, Args...>::run(args...);
-      case 165:
-        return Func<165, Args...>::run(args...);
-      case 166:
-        return Func<166, Args...>::run(args...);
-      case 167:
-        return Func<167, Args...>::run(args...);
-      case 168:
-        return Func<168, Args...>::run(args...);
-      case 169:
-        return Func<169, Args...>::run(args...);
-      case 170:
-        return Func<170, Args...>::run(args...);
-      case 171:
-        return Func<171, Args...>::run(args...);
-      case 172:
-        return Func<172, Args...>::run(args...);
-      case 173:
-        return Func<173, Args...>::run(args...);
-      case 174:
-        return Func<174, Args...>::run(args...);
-      case 175:
-        return Func<175, Args...>::run(args...);
-      case 176:
-        return Func<176, Args...>::run(args...);
-      case 177:
-        return Func<177, Args...>::run(args...);
-      case 178:
-        return Func<178, Args...>::run(args...);
-      case 179:
-        return Func<179, Args...>::run(args...);
-      case 180:
-        return Func<180, Args...>::run(args...);
-      case 181:
-        return Func<181, Args...>::run(args...);
-      case 182:
-        return Func<182, Args...>::run(args...);
-      case 183:
-        return Func<183, Args...>::run(args...);
-      case 184:
-        return Func<184, Args...>::run(args...);
-      case 185:
-        return Func<185, Args...>::run(args...);
-      case 186:
-        return Func<186, Args...>::run(args...);
-      case 187:
-        return Func<187, Args...>::run(args...);
-      case 188:
-        return Func<188, Args...>::run(args...);
-      case 189:
-        return Func<189, Args...>::run(args...);
-      case 190:
-        return Func<190, Args...>::run(args...);
-      case 191:
-        return Func<191, Args...>::run(args...);
-      case 192:
-        return Func<192, Args...>::run(args...);
-      case 193:
-        return Func<193, Args...>::run(args...);
-      case 194:
-        return Func<194, Args...>::run(args...);
-      case 195:
-        return Func<195, Args...>::run(args...);
-      case 196:
-        return Func<196, Args...>::run(args...);
-      case 197:
-        return Func<197, Args...>::run(args...);
-      case 198:
-        return Func<198, Args...>::run(args...);
-      case 199:
-        return Func<199, Args...>::run(args...);
-      case 200:
-        return Func<200, Args...>::run(args...);
-      case 201:
-        return Func<201, Args...>::run(args...);
-      case 202:
-        return Func<202, Args...>::run(args...);
-      case 203:
-        return Func<203, Args...>::run(args...);
-      case 204:
-        return Func<204, Args...>::run(args...);
-      case 205:
-        return Func<205, Args...>::run(args...);
-      case 206:
-        return Func<206, Args...>::run(args...);
-      case 207:
-        return Func<207, Args...>::run(args...);
-      case 208:
-        return Func<208, Args...>::run(args...);
-      case 209:
-        return Func<209, Args...>::run(args...);
-      case 210:
-        return Func<210, Args...>::run(args...);
-      case 211:
-        return Func<211, Args...>::run(args...);
-      case 212:
-        return Func<212, Args...>::run(args...);
-      case 213:
-        return Func<213, Args...>::run(args...);
-      case 214:
-        return Func<214, Args...>::run(args...);
-      case 215:
-        return Func<215, Args...>::run(args...);
-      case 216:
-        return Func<216, Args...>::run(args...);
-      case 217:
-        return Func<217, Args...>::run(args...);
-      case 218:
-        return Func<218, Args...>::run(args...);
-      case 219:
-        return Func<219, Args...>::run(args...);
-      case 220:
-        return Func<220, Args...>::run(args...);
-      case 221:
-        return Func<221, Args...>::run(args...);
-      case 222:
-        return Func<222, Args...>::run(args...);
-      case 223:
-        return Func<223, Args...>::run(args...);
-      case 224:
-        return Func<224, Args...>::run(args...);
-      case 225:
-        return Func<225, Args...>::run(args...);
-      case 226:
-        return Func<226, Args...>::run(args...);
-      case 227:
-        return Func<227, Args...>::run(args...);
-      case 228:
-        return Func<228, Args...>::run(args...);
-      case 229:
-        return Func<229, Args...>::run(args...);
-      case 230:
-        return Func<230, Args...>::run(args...);
-      case 231:
-        return Func<231, Args...>::run(args...);
-      case 232:
-        return Func<232, Args...>::run(args...);
-      case 233:
-        return Func<233, Args...>::run(args...);
-      case 234:
-        return Func<234, Args...>::run(args...);
-      case 235:
-        return Func<235, Args...>::run(args...);
-      case 236:
-        return Func<236, Args...>::run(args...);
-      case 237:
-        return Func<237, Args...>::run(args...);
-      case 238:
-        return Func<238, Args...>::run(args...);
-      case 239:
-        return Func<239, Args...>::run(args...);
-      case 240:
-        return Func<240, Args...>::run(args...);
-      case 241:
-        return Func<241, Args...>::run(args...);
-      case 242:
-        return Func<242, Args...>::run(args...);
-      case 243:
-        return Func<243, Args...>::run(args...);
-      case 244:
-        return Func<244, Args...>::run(args...);
-      case 245:
-        return Func<245, Args...>::run(args...);
-      case 246:
-        return Func<246, Args...>::run(args...);
-      case 247:
-        return Func<247, Args...>::run(args...);
-      case 248:
-        return Func<248, Args...>::run(args...);
-      case 249:
-        return Func<249, Args...>::run(args...);
-      case 250:
-        return Func<250, Args...>::run(args...);
-      case 251:
-        return Func<251, Args...>::run(args...);
-      case 252:
-        return Func<252, Args...>::run(args...);
-      case 253:
-        return Func<253, Args...>::run(args...);
-      case 254:
-        return Func<254, Args...>::run(args...);
-      case 255:
-        return Func<255, Args...>::run(args...);
-      default:
-        return Func<256, Args...>::run(args...);
-        // index shouldn't bigger than 256
-    }
-  }  // namespace detail
+// clang-format off
+template <typename Func, typename... Args>
+constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
+                                                            Args &...args) {
+  switch (index) {
+    case 0:
+      return Func::template run<0>(args...);
+    case 1:
+      return Func::template run<1>(args...);
+    case 2:
+      return Func::template run<2>(args...);
+    case 3:
+      return Func::template run<3>(args...);
+    case 4:
+      return Func::template run<4>(args...);
+    case 5:
+      return Func::template run<5>(args...);
+    case 6:
+      return Func::template run<6>(args...);
+    case 7:
+      return Func::template run<7>(args...);
+    case 8:
+      return Func::template run<8>(args...);
+    case 9:
+      return Func::template run<9>(args...);
+    case 10:
+      return Func::template run<10>(args...);
+    case 11:
+      return Func::template run<11>(args...);
+    case 12:
+      return Func::template run<12>(args...);
+    case 13:
+      return Func::template run<13>(args...);
+    case 14:
+      return Func::template run<14>(args...);
+    case 15:
+      return Func::template run<15>(args...);
+    case 16:
+      return Func::template run<16>(args...);
+    case 17:
+      return Func::template run<17>(args...);
+    case 18:
+      return Func::template run<18>(args...);
+    case 19:
+      return Func::template run<19>(args...);
+    case 20:
+      return Func::template run<20>(args...);
+    case 21:
+      return Func::template run<21>(args...);
+    case 22:
+      return Func::template run<22>(args...);
+    case 23:
+      return Func::template run<23>(args...);
+    case 24:
+      return Func::template run<24>(args...);
+    case 25:
+      return Func::template run<25>(args...);
+    case 26:
+      return Func::template run<26>(args...);
+    case 27:
+      return Func::template run<27>(args...);
+    case 28:
+      return Func::template run<28>(args...);
+    case 29:
+      return Func::template run<29>(args...);
+    case 30:
+      return Func::template run<30>(args...);
+    case 31:
+      return Func::template run<31>(args...);
+    case 32:
+      return Func::template run<32>(args...);
+    case 33:
+      return Func::template run<33>(args...);
+    case 34:
+      return Func::template run<34>(args...);
+    case 35:
+      return Func::template run<35>(args...);
+    case 36:
+      return Func::template run<36>(args...);
+    case 37:
+      return Func::template run<37>(args...);
+    case 38:
+      return Func::template run<38>(args...);
+    case 39:
+      return Func::template run<39>(args...);
+    case 40:
+      return Func::template run<40>(args...);
+    case 41:
+      return Func::template run<41>(args...);
+    case 42:
+      return Func::template run<42>(args...);
+    case 43:
+      return Func::template run<43>(args...);
+    case 44:
+      return Func::template run<44>(args...);
+    case 45:
+      return Func::template run<45>(args...);
+    case 46:
+      return Func::template run<46>(args...);
+    case 47:
+      return Func::template run<47>(args...);
+    case 48:
+      return Func::template run<48>(args...);
+    case 49:
+      return Func::template run<49>(args...);
+    case 50:
+      return Func::template run<50>(args...);
+    case 51:
+      return Func::template run<51>(args...);
+    case 52:
+      return Func::template run<52>(args...);
+    case 53:
+      return Func::template run<53>(args...);
+    case 54:
+      return Func::template run<54>(args...);
+    case 55:
+      return Func::template run<55>(args...);
+    case 56:
+      return Func::template run<56>(args...);
+    case 57:
+      return Func::template run<57>(args...);
+    case 58:
+      return Func::template run<58>(args...);
+    case 59:
+      return Func::template run<59>(args...);
+    case 60:
+      return Func::template run<60>(args...);
+    case 61:
+      return Func::template run<61>(args...);
+    case 62:
+      return Func::template run<62>(args...);
+    case 63:
+      return Func::template run<63>(args...);
+    case 64:
+      return Func::template run<64>(args...);
+    case 65:
+      return Func::template run<65>(args...);
+    case 66:
+      return Func::template run<66>(args...);
+    case 67:
+      return Func::template run<67>(args...);
+    case 68:
+      return Func::template run<68>(args...);
+    case 69:
+      return Func::template run<69>(args...);
+    case 70:
+      return Func::template run<70>(args...);
+    case 71:
+      return Func::template run<71>(args...);
+    case 72:
+      return Func::template run<72>(args...);
+    case 73:
+      return Func::template run<73>(args...);
+    case 74:
+      return Func::template run<74>(args...);
+    case 75:
+      return Func::template run<75>(args...);
+    case 76:
+      return Func::template run<76>(args...);
+    case 77:
+      return Func::template run<77>(args...);
+    case 78:
+      return Func::template run<78>(args...);
+    case 79:
+      return Func::template run<79>(args...);
+    case 80:
+      return Func::template run<80>(args...);
+    case 81:
+      return Func::template run<81>(args...);
+    case 82:
+      return Func::template run<82>(args...);
+    case 83:
+      return Func::template run<83>(args...);
+    case 84:
+      return Func::template run<84>(args...);
+    case 85:
+      return Func::template run<85>(args...);
+    case 86:
+      return Func::template run<86>(args...);
+    case 87:
+      return Func::template run<87>(args...);
+    case 88:
+      return Func::template run<88>(args...);
+    case 89:
+      return Func::template run<89>(args...);
+    case 90:
+      return Func::template run<90>(args...);
+    case 91:
+      return Func::template run<91>(args...);
+    case 92:
+      return Func::template run<92>(args...);
+    case 93:
+      return Func::template run<93>(args...);
+    case 94:
+      return Func::template run<94>(args...);
+    case 95:
+      return Func::template run<95>(args...);
+    case 96:
+      return Func::template run<96>(args...);
+    case 97:
+      return Func::template run<97>(args...);
+    case 98:
+      return Func::template run<98>(args...);
+    case 99:
+      return Func::template run<99>(args...);
+    case 100:
+      return Func::template run<100>(args...);
+    case 101:
+      return Func::template run<101>(args...);
+    case 102:
+      return Func::template run<102>(args...);
+    case 103:
+      return Func::template run<103>(args...);
+    case 104:
+      return Func::template run<104>(args...);
+    case 105:
+      return Func::template run<105>(args...);
+    case 106:
+      return Func::template run<106>(args...);
+    case 107:
+      return Func::template run<107>(args...);
+    case 108:
+      return Func::template run<108>(args...);
+    case 109:
+      return Func::template run<109>(args...);
+    case 110:
+      return Func::template run<110>(args...);
+    case 111:
+      return Func::template run<111>(args...);
+    case 112:
+      return Func::template run<112>(args...);
+    case 113:
+      return Func::template run<113>(args...);
+    case 114:
+      return Func::template run<114>(args...);
+    case 115:
+      return Func::template run<115>(args...);
+    case 116:
+      return Func::template run<116>(args...);
+    case 117:
+      return Func::template run<117>(args...);
+    case 118:
+      return Func::template run<118>(args...);
+    case 119:
+      return Func::template run<119>(args...);
+    case 120:
+      return Func::template run<120>(args...);
+    case 121:
+      return Func::template run<121>(args...);
+    case 122:
+      return Func::template run<122>(args...);
+    case 123:
+      return Func::template run<123>(args...);
+    case 124:
+      return Func::template run<124>(args...);
+    case 125:
+      return Func::template run<125>(args...);
+    case 126:
+      return Func::template run<126>(args...);
+    case 127:
+      return Func::template run<127>(args...);
+    case 128:
+      return Func::template run<128>(args...);
+    case 129:
+      return Func::template run<129>(args...);
+    case 130:
+      return Func::template run<130>(args...);
+    case 131:
+      return Func::template run<131>(args...);
+    case 132:
+      return Func::template run<132>(args...);
+    case 133:
+      return Func::template run<133>(args...);
+    case 134:
+      return Func::template run<134>(args...);
+    case 135:
+      return Func::template run<135>(args...);
+    case 136:
+      return Func::template run<136>(args...);
+    case 137:
+      return Func::template run<137>(args...);
+    case 138:
+      return Func::template run<138>(args...);
+    case 139:
+      return Func::template run<139>(args...);
+    case 140:
+      return Func::template run<140>(args...);
+    case 141:
+      return Func::template run<141>(args...);
+    case 142:
+      return Func::template run<142>(args...);
+    case 143:
+      return Func::template run<143>(args...);
+    case 144:
+      return Func::template run<144>(args...);
+    case 145:
+      return Func::template run<145>(args...);
+    case 146:
+      return Func::template run<146>(args...);
+    case 147:
+      return Func::template run<147>(args...);
+    case 148:
+      return Func::template run<148>(args...);
+    case 149:
+      return Func::template run<149>(args...);
+    case 150:
+      return Func::template run<150>(args...);
+    case 151:
+      return Func::template run<151>(args...);
+    case 152:
+      return Func::template run<152>(args...);
+    case 153:
+      return Func::template run<153>(args...);
+    case 154:
+      return Func::template run<154>(args...);
+    case 155:
+      return Func::template run<155>(args...);
+    case 156:
+      return Func::template run<156>(args...);
+    case 157:
+      return Func::template run<157>(args...);
+    case 158:
+      return Func::template run<158>(args...);
+    case 159:
+      return Func::template run<159>(args...);
+    case 160:
+      return Func::template run<160>(args...);
+    case 161:
+      return Func::template run<161>(args...);
+    case 162:
+      return Func::template run<162>(args...);
+    case 163:
+      return Func::template run<163>(args...);
+    case 164:
+      return Func::template run<164>(args...);
+    case 165:
+      return Func::template run<165>(args...);
+    case 166:
+      return Func::template run<166>(args...);
+    case 167:
+      return Func::template run<167>(args...);
+    case 168:
+      return Func::template run<168>(args...);
+    case 169:
+      return Func::template run<169>(args...);
+    case 170:
+      return Func::template run<170>(args...);
+    case 171:
+      return Func::template run<171>(args...);
+    case 172:
+      return Func::template run<172>(args...);
+    case 173:
+      return Func::template run<173>(args...);
+    case 174:
+      return Func::template run<174>(args...);
+    case 175:
+      return Func::template run<175>(args...);
+    case 176:
+      return Func::template run<176>(args...);
+    case 177:
+      return Func::template run<177>(args...);
+    case 178:
+      return Func::template run<178>(args...);
+    case 179:
+      return Func::template run<179>(args...);
+    case 180:
+      return Func::template run<180>(args...);
+    case 181:
+      return Func::template run<181>(args...);
+    case 182:
+      return Func::template run<182>(args...);
+    case 183:
+      return Func::template run<183>(args...);
+    case 184:
+      return Func::template run<184>(args...);
+    case 185:
+      return Func::template run<185>(args...);
+    case 186:
+      return Func::template run<186>(args...);
+    case 187:
+      return Func::template run<187>(args...);
+    case 188:
+      return Func::template run<188>(args...);
+    case 189:
+      return Func::template run<189>(args...);
+    case 190:
+      return Func::template run<190>(args...);
+    case 191:
+      return Func::template run<191>(args...);
+    case 192:
+      return Func::template run<192>(args...);
+    case 193:
+      return Func::template run<193>(args...);
+    case 194:
+      return Func::template run<194>(args...);
+    case 195:
+      return Func::template run<195>(args...);
+    case 196:
+      return Func::template run<196>(args...);
+    case 197:
+      return Func::template run<197>(args...);
+    case 198:
+      return Func::template run<198>(args...);
+    case 199:
+      return Func::template run<199>(args...);
+    case 200:
+      return Func::template run<200>(args...);
+    case 201:
+      return Func::template run<201>(args...);
+    case 202:
+      return Func::template run<202>(args...);
+    case 203:
+      return Func::template run<203>(args...);
+    case 204:
+      return Func::template run<204>(args...);
+    case 205:
+      return Func::template run<205>(args...);
+    case 206:
+      return Func::template run<206>(args...);
+    case 207:
+      return Func::template run<207>(args...);
+    case 208:
+      return Func::template run<208>(args...);
+    case 209:
+      return Func::template run<209>(args...);
+    case 210:
+      return Func::template run<210>(args...);
+    case 211:
+      return Func::template run<211>(args...);
+    case 212:
+      return Func::template run<212>(args...);
+    case 213:
+      return Func::template run<213>(args...);
+    case 214:
+      return Func::template run<214>(args...);
+    case 215:
+      return Func::template run<215>(args...);
+    case 216:
+      return Func::template run<216>(args...);
+    case 217:
+      return Func::template run<217>(args...);
+    case 218:
+      return Func::template run<218>(args...);
+    case 219:
+      return Func::template run<219>(args...);
+    case 220:
+      return Func::template run<220>(args...);
+    case 221:
+      return Func::template run<221>(args...);
+    case 222:
+      return Func::template run<222>(args...);
+    case 223:
+      return Func::template run<223>(args...);
+    case 224:
+      return Func::template run<224>(args...);
+    case 225:
+      return Func::template run<225>(args...);
+    case 226:
+      return Func::template run<226>(args...);
+    case 227:
+      return Func::template run<227>(args...);
+    case 228:
+      return Func::template run<228>(args...);
+    case 229:
+      return Func::template run<229>(args...);
+    case 230:
+      return Func::template run<230>(args...);
+    case 231:
+      return Func::template run<231>(args...);
+    case 232:
+      return Func::template run<232>(args...);
+    case 233:
+      return Func::template run<233>(args...);
+    case 234:
+      return Func::template run<234>(args...);
+    case 235:
+      return Func::template run<235>(args...);
+    case 236:
+      return Func::template run<236>(args...);
+    case 237:
+      return Func::template run<237>(args...);
+    case 238:
+      return Func::template run<238>(args...);
+    case 239:
+      return Func::template run<239>(args...);
+    case 240:
+      return Func::template run<240>(args...);
+    case 241:
+      return Func::template run<241>(args...);
+    case 242:
+      return Func::template run<242>(args...);
+    case 243:
+      return Func::template run<243>(args...);
+    case 244:
+      return Func::template run<244>(args...);
+    case 245:
+      return Func::template run<245>(args...);
+    case 246:
+      return Func::template run<246>(args...);
+    case 247:
+      return Func::template run<247>(args...);
+    case 248:
+      return Func::template run<248>(args...);
+    case 249:
+      return Func::template run<249>(args...);
+    case 250:
+      return Func::template run<250>(args...);
+    case 251:
+      return Func::template run<251>(args...);
+    case 252:
+      return Func::template run<252>(args...);
+    case 253:
+      return Func::template run<253>(args...);
+    case 254:
+      return Func::template run<254>(args...);
+    case 255:
+      return Func::template run<255>(args...);
+    default:
+      unreachable();
+      // index shouldn't bigger than 256
+  }
+}  // namespace detail
 }  // namespace detail
 }  // namespace struct_pack
 
-
+// clang-format off
 #define STRUCT_PACK_ARG_COUNT(...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_INTERNAL_ARG_COUNT(0, ##__VA_ARGS__,\
 	64, 63, 62, 61, 60, \
 	59, 58, 57, 56, 55, 54, 53, 52, 51, 50, \

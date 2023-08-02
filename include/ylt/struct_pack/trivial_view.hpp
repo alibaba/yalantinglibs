@@ -62,7 +62,7 @@
  *   assert(result->name == name && result->data.get() == data);
  * }
  * ```
- * trivial_view<T> has same memory as T. So it's legal to serialize T then
+ * trivial_view<T> has same layout as T. So it's legal to serialize T then
  * deserialize to trivial_view<T>
  * ```cpp
  * void serialzie(Proto& proto) {
@@ -76,7 +76,7 @@
  */
 
 namespace struct_pack {
-template <detail::trivial_serializable T>
+template <typename T, typename>
 struct trivial_view {
  private:
   const T* ref;

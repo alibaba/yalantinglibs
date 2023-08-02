@@ -18,7 +18,6 @@
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
-#include <ylt/util/expected.hpp>
 using namespace struct_pack;
 using namespace doctest;
 // clang-format off
@@ -26,13 +25,8 @@ static std::string alignment_requirement_err_msg = "different alignment requirem
 // clang-format on
 TEST_SUITE_BEGIN("test_pragma_pack_and_alignas_mix");
 namespace test_pragma_pack_and_alignas_mix {
-template <typename T>
-concept Dummy = requires {
-  T().a;
-  T().b;
-};
 
-template <Dummy A, Dummy B>
+template <typename A, typename B>
 bool operator==(const A& a, const B& b) {
   return a.a == b.a && a.b == b.b;
 }
@@ -51,7 +45,7 @@ TEST_CASE("testing no one") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 2);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)131, (char)131, (char)-1}};
@@ -92,7 +86,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 1);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)130, (char)131, (char)-1}};
@@ -146,7 +140,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   static_assert(sizeof(T) == 4);
   static_assert(offsetof(T, a) == 0);
   static_assert(offsetof(T, b) == 1);
-  T t{.a = 'a', .b = 666};
+  T t{'a', 666};
   auto literal = struct_pack::get_type_literal<T>();
   string_literal<char, 6> val{
       {(char)-3, 12, 7, (char)130, (char)133, (char)-1}};
@@ -265,7 +259,7 @@ namespace test_pragma_pack_and_alignas_and_compatible_mix {
 struct alignas(4) dummy_2_4_v1 {
   char a;
   int b;
-  friend bool operator==(const dummy_2_4_v1&, const dummy_2_4_v1&) = default;
+  bool operator==(const dummy_2_4_v1& o) const { return a == o.a && b == o.b; }
 };
 #pragma pack()
 #pragma pack(2)
@@ -273,7 +267,9 @@ struct alignas(4) dummy_2_4_v2 {
   char a;
   struct_pack::compatible<int> c;
   int b;
-  friend bool operator==(const dummy_2_4_v2&, const dummy_2_4_v2&) = default;
+  bool operator==(const dummy_2_4_v2& o) const {
+    return a == o.a && b == o.b && c == o.c;
+  }
 };
 #pragma pack()
 
@@ -320,23 +316,25 @@ TEST_CASE("testing mix and compatible nested") {
     // clang-format on
     CHECK(literal == val);
   }
-  test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v1 v1 = {
-      .a = 1, .b = 123321};
+  test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v1 v1 = {1,
+                                                                      123321};
   test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v2 v2 = {
-      .a = 1, .c = std::nullopt, .b = 123321};
+      1, std::nullopt, 123321};
   {
     auto buffer = struct_pack::serialize(v1);
     auto result = struct_pack::deserialize<
         test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v2>(buffer);
     CHECK(result.has_value() == true);
-    CHECK(result == v2);
+    auto val = result.value();
+    CHECK(val == v2);
   }
   {
     auto buffer = struct_pack::serialize(v2);
     auto result = struct_pack::deserialize<
         test_pragma_pack_and_alignas_and_compatible_mix::dummy_2_4_v1>(buffer);
     CHECK(result.has_value() == true);
-    CHECK(result == v1);
+    auto val = result.value();
+    CHECK(val == v1);
   }
 }
 

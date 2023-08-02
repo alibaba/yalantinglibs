@@ -5,10 +5,9 @@
 #include "test_struct.hpp"
 using namespace struct_pack;
 
-void test_container(auto &v) {
+template <typename T>
+void test_container(T &v) {
   auto ret = serialize(v);
-
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   CHECK(ec == struct_pack::errc{});
@@ -156,11 +155,10 @@ TEST_CASE("testing nonstd containers") {
     test_container(v);
   }
 }
-
-void test_tuple_like(auto &v) {
+template <typename T>
+void test_tuple_like(T &v) {
   auto ret = serialize(v);
 
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   CHECK(ec == struct_pack::errc{});
@@ -202,7 +200,7 @@ TEST_CASE("testing std::array") {
   std::array<person, 2> v3{};
   test_tuple_like(v3);
 }
-
+#if __cplusplus >= 202002L
 TEST_CASE("test_trivial_copy_tuple") {
   tuplet::tuple tp = tuplet::make_tuple(1, 2);
 
@@ -250,11 +248,11 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
   CHECK(ec == struct_pack::errc{});
   CHECK(obj.tp == obj1.tp);
 }
-
-void test_c_array(auto &v) {
+#endif
+template <typename T>
+void test_c_array(T &v) {
   auto ret = serialize(v);
 
-  using T = std::remove_cvref_t<decltype(v)>;
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
   REQUIRE(ec == struct_pack::errc{});
@@ -324,7 +322,9 @@ TEST_CASE("testing fundamental types") {
     CHECK(std::unique(ar.begin(), ar.end()) == ar.end());
   }
   {
+#ifdef __cpp_lib_char8_t
     static_assert(get_type_literal<char>() == get_type_literal<char8_t>());
+#endif
     static_assert(get_type_literal<signed char>() ==
                   get_type_literal<int8_t>());
     static_assert(get_type_literal<unsigned char>() ==
@@ -467,26 +467,26 @@ TEST_CASE("test unique_ptr") {
     CHECK(*ret.value() == "Hello");
   }
   SUBCASE("ptr2person") {
-    auto buffer = struct_pack::serialize(std::make_unique<person>(
-        person{.age = 24, .name = std::string{"name24"}}));
+    auto buffer = struct_pack::serialize(
+        std::make_unique<person>(person{24, std::string{"name24"}}));
     auto ret = deserialize<std::unique_ptr<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
 
   SUBCASE("ptr2optional") {
-    auto buffer = struct_pack::serialize(std::make_unique<person>(
-        person{.age = 24, .name = std::string{"name24"}}));
+    auto buffer = struct_pack::serialize(
+        std::make_unique<person>(person{24, std::string{"name24"}}));
     auto ret = deserialize<std::optional<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
   SUBCASE("optional2ptr") {
-    auto buffer = struct_pack::serialize(
-        std::optional<person>{person{.age = 24, .name = "name24"}});
+    auto buffer =
+        struct_pack::serialize(std::optional<person>{person{24, "name24"}});
     auto ret = deserialize<std::unique_ptr<person>>(buffer);
     CHECK(ret.has_value());
-    CHECK(*ret.value() == person{.age = 24, .name = "name24"});
+    CHECK(*ret.value() == person{24, "name24"});
   }
   SUBCASE("error template param") {
     auto buffer = struct_pack::serialize(

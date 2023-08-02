@@ -1,11 +1,16 @@
 # struct_pack Tips
 This document introcude some tips about struct_pack
 ## compiler requires
-| compiler      | min support version |
-| ----------- | ------------------ |
-| GCC         | 10.1               |
-| Clang       | 10.0.0             |
-| MSVC        | 19.29(VS 16.11)    |
+
+struct_pack need compiler at least support C++17.
+
+| compiler      | tested min version    | 
+| ----------- | ------------------   |
+| GCC         | 9.1                               |
+| Clang       | 6.0                               |
+| MSVC        | Visual Studio 2019 (MSVC19.20)    |
+
+When C++20 standard was enabled, struct_pack has better performance by support memcpy user-defined trivial continuous container. In C++17, struct_pack only support memcpy container `std::array<T>`, `std::vector<T>`, `std::basic_string<T>` and `std::basic_string_view<T>`.
 ## macro
 | macro      | description |
 | ----------- | ------------------ |

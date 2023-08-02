@@ -67,7 +67,9 @@ struct nested_object {
   std::string name;
   person p;
   complicated_object o;
-  bool operator==(const nested_object &o) const = default;
+  bool operator==(const nested_object &O) const {
+    return id == O.id && name == O.name && p == O.p && o == O.o;
+  }
 };
 
 struct my_list {

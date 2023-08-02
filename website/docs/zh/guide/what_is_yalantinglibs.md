@@ -10,9 +10,9 @@
 
 [English Version](../../en/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs 是一个C++20基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
+yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
-yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的C++20基础工具库, 帮助用户构建高性能的现代C++应用。
+yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C++基础工具库, 帮助用户构建高性能的现代C++应用。
 
 | 测试平台 (编译器版本)                            | 状态                                                                                                   |
 |------------------------------------------------|----------------------------------------------------------------------------------------------------------|
@@ -25,10 +25,23 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的C++20�
 
 ## 编译器要求
 
+如果你的编译器只支持C++17，yalantinglibs 只会编译序列化库。(struct_*系列)
+
+确保你的编译器版本不低于:
+- clang6++ (libstdc++-8 以上)。
+- g++9 或更高版本。
+- msvc 14.20 或更高版本。
+
+
+
+如果你的编译器支持C++20，yalantinglibs会编译全部库。
+
 确保你的编译器版本不低于:
 - clang11++ (libstdc++-8 以上)。
 - g++10 或更高版本。
 - msvc 14.29 或更高版本。
+
+你也可以手动指定Cmake选项`-DENABLE_CPP_20=ON` 或 `-DENABLE_CPP_20=OFF`来控制。
 
 ## 安装&编译
 

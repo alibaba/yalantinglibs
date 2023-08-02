@@ -1,4 +1,4 @@
-name: Ubuntu 22.04 (gcc)
+name: Ubuntu (gcc)
 
 on:
   push:
@@ -119,6 +119,39 @@ jobs:
                 -DENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
                 -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 1 -V
+
+  ubuntu_gcc9:
+    strategy:
+      matrix:
+        mode: [ Release, Debug ]
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
+                -DUSE_CCACHE=${{env.ccache}} \
+                -DENABLE_CPP_20=OFF\
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}

@@ -8,7 +8,7 @@
 #include "no_op.h"
 #include "sample.hpp"
 
-#ifdef HAVE_PROTOBUF 
+#ifdef HAVE_PROTOBUF
 #include "data_def.struct_pb.h"
 #endif
 
@@ -116,7 +116,8 @@ struct struct_pb_sample_t : public base_sample {
   }
 
  private:
-  void serialize(SampleType sample_type, auto& sample) {
+  template <typename T>
+  void serialize(SampleType sample_type, T& sample) {
     auto sz = struct_pb::internal::get_needed_size(sample);
     buffer_.resize(sz);
     struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(), sample);
@@ -143,8 +144,8 @@ struct struct_pb_sample_t : public base_sample {
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
 
-  void deserialize(SampleType sample_type, auto& sample) {
-    using T = std::remove_cvref_t<decltype(sample)>;
+  template <typename T>
+  void deserialize(SampleType sample_type, T& sample) {
     buffer_.clear();
     auto sz = struct_pb::internal::get_needed_size(sample);
     buffer_.resize(sz);
