@@ -38,7 +38,7 @@ template <typename T>
 constexpr inline bool contiguous_iterator = std::contiguous_iterator<T>;
 
 #else
-IGUANA_INLINE int countr_zero(unsigned long long x) {
+IGUANA_INLINE int countr_zero(unsigned long long n) {
   // x will never be zero in iguana
 #if defined(_MSC_VER) && defined(_M_X64)
   unsigned long c;
