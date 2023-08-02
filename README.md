@@ -29,14 +29,14 @@ If your compiler don't support C++20, yalantinglibs will only compile the serial
 Make sure you have such compilers:
 
 - g++9 above;
-- clang++6 above (with stdlib = libc++-13/libstdc++-8 or later version); 
+- clang++6 above
 - msvc 14.20 above;
 
 Otherwise, yalantinglibs will compile all the libraries. 
 Make sure you have such compilers:
 
 - g++10 above;
-- clang++13 above (with stdlib = libc++-13/libstdc++-8 or later version); 
+- clang++13 above
 - msvc 14.29 above;
 
 You can also use cmake option `-DENABLE_CPP_20=ON` or `-DENABLE_CPP_20=OFF` to control it.
