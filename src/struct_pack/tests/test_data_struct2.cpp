@@ -49,23 +49,21 @@ TEST_CASE("test expected") {
 }
 
 TEST_CASE("testing object with containers, enum, tuple array, and pair") {
-  complicated_object v{
-      .color = Color::red,
-      .a = 42,
-      .b = "hello",
-      .c = {{20, "tom"}, {22, "jerry"}},
-      .d = {"hello", "world"},
-      .e = {1, 2},
-      .f = {{1, {20, "tom"}}},
-      .g = {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-      .h = {"aa", "bb"},
-      .i = {1, 2},
-      .j = {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-      .k = {{1, 2}, {1, 3}},
-      .m = {person{20, "tom"}, {22, "jerry"}},
-      .n = {person{20, "tom"}, {22, "jerry"}},
-      .o = std::make_pair("aa", person{20, "tom"}),
-  };
+  complicated_object v{Color::red,
+                       42,
+                       "hello",
+                       {{20, "tom"}, {22, "jerry"}},
+                       {"hello", "world"},
+                       {1, 2},
+                       {{1, {20, "tom"}}},
+                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+                       {"aa", "bb"},
+                       {1, 2},
+                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+                       {{1, 2}, {1, 3}},
+                       {person{20, "tom"}, {22, "jerry"}},
+                       {person{20, "tom"}, {22, "jerry"}},
+                       std::make_pair("aa", person{20, "tom"})};
   auto ret = serialize(v);
 
   complicated_object v1{};
@@ -76,7 +74,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
   CHECK(v == v1);
 
   SUBCASE("test nested object") {
-    nested_object nested{.id = 2, .name = "tom", .p = {20, "tom"}, .o = v};
+    nested_object nested{2, "tom", {20, "tom"}, v};
     ret = serialize(nested);
 
     nested_object nested1{};
@@ -153,6 +151,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     std::u8string_view sv = u8"你好";
     auto ret = serialize(sv);
@@ -160,6 +159,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#endif
   {
     auto ret = serialize("hello"s);
     auto res = deserialize<string_view>(ret.data(), ret.size());
@@ -180,6 +180,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     std::u8string sv = u8"你好";
     auto ret = serialize(sv);
@@ -187,6 +188,7 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#endif
 }
 
 TEST_CASE("test wide string") {
@@ -199,6 +201,7 @@ TEST_CASE("test wide string") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     auto sv = std::u8string(u8"你好, struct pack");
     auto ret = serialize(sv);
@@ -207,6 +210,7 @@ TEST_CASE("test wide string") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#endif
   {
     auto sv = std::u16string(u"你好, struct pack");
     auto ret = serialize(sv);
@@ -242,6 +246,7 @@ TEST_CASE("test string_view") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#if __cpp_char8_t >= 201811L
   {
     auto sv = std::u8string_view(u8"你好, struct pack");
     auto ret = serialize(sv);
@@ -250,6 +255,7 @@ TEST_CASE("test string_view") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(str == sv);
   }
+#endif
   {
     auto sv = std::u16string_view(u"你好, struct pack");
     auto ret = serialize(sv);
@@ -297,6 +303,7 @@ TEST_CASE("char test") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
+#ifdef __cpp_lib_char8_t
   {
     char8_t ch = u8'1', ch2;
     auto ret = serialize(ch);
@@ -304,6 +311,7 @@ TEST_CASE("char test") {
     REQUIRE(ec == struct_pack::errc{});
     CHECK(ch == ch2);
   }
+#endif
   {
     char16_t ch = u'1', ch2;
     auto ret = serialize(ch);
@@ -362,23 +370,121 @@ struct Node {
   uint32_t UInt32Value;
   uint64_t UInt64Value;
   std::list<Node> Values;  // Recursive member
-  friend bool operator==(const Node& a, const Node& b) = default;
+  friend bool operator==(const Node& a, const Node& b) {
+    return a.Type == b.Type && a.IsArray == b.IsArray &&
+           a.Dimensions == b.Dimensions && a.IsStructure == b.IsStructure &&
+           a.TypeName == b.TypeName && a.Index == b.Index &&
+           a.BoolValue == b.BoolValue && a.StringValue == b.StringValue &&
+           a.FloatValue == b.FloatValue && a.DoubleValue == b.DoubleValue &&
+           a.Int16Value == b.Int16Value && a.Int32Value == b.Int32Value &&
+           a.Int64Value == b.Int64Value && a.UInt16Value == b.UInt16Value &&
+           a.UInt32Value == b.UInt32Value && a.UInt64Value == b.UInt64Value &&
+           a.Values == b.Values;
+  }
 };
 
 TEST_CASE("testing recursive type") {
-  Node node = {.Type = 1,
-               .IsArray = false,
-               .Dimensions = {1, 2, 3},
-               .IsStructure = true,
-               .TypeName = "Hello",
-               .Index = 1141,
-               .Values = {
-                   Node{.Type = 1, .Index = 2},
-                   Node{.Type = 3, .Index = 7, .Values = {Node{.Index = 41}}},
-                   Node{.Type = 1, .Index = 2, .Values = {Node{.Index = 41}}},
-                   Node{.Type = 1,
-                        .Index = 2,
-                        .Values = {Node{.Index = 41, .Values = {}}}},
+  Node node = {1,
+               false,
+               {1, 2, 3},
+               true,
+               "Hello",
+               1141,
+               true,
+               "1",
+               1.2,
+               1.23,
+               1,
+               2,
+               3,
+               4,
+               5,
+               6,
+               {
+                   Node{1,
+                        false,
+                        {1, 2, 3},
+                        true,
+                        "Hello",
+                        1141,
+                        true,
+                        "1",
+                        1.2,
+                        1.23,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        {}},
+                   Node{1,
+                        false,
+                        {1, 2, 3},
+                        true,
+                        "Hello",
+                        1141,
+                        true,
+                        "1",
+                        1.2,
+                        1.23,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        {}},
+                   Node{1,
+                        false,
+                        {1, 2, 3},
+                        true,
+                        "Hello",
+                        1141,
+                        true,
+                        "1",
+                        1.2,
+                        1.23,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        {}},
+                   Node{1,
+                        false,
+                        {1, 2, 3},
+                        true,
+                        "Hello",
+                        1141,
+                        true,
+                        "1",
+                        1.2,
+                        1.23,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        {Node{1,
+                              false,
+                              {1, 2, 3},
+                              true,
+                              "Hello",
+                              1141,
+                              true,
+                              "1",
+                              1.2,
+                              1.23,
+                              1,
+                              2,
+                              3,
+                              4,
+                              5,
+                              6,
+                              {Node{}}}}},
                }};
   auto buffer = struct_pack::serialize(node);
   auto node2 = struct_pack::deserialize<Node>(buffer);
@@ -481,35 +587,30 @@ bool test_equal(const trival_test::A_v3& v1, const trival_test::A_v3& v2) {
 
 TEST_CASE("testing trivial_view type") {
   trival_test::A_v1 a_v1 = {
-      .a = 'A',
-      .b = {.a = 123.12,
-            .b = {.a = 1232132,
-                  .b = {.a = 12331,
-                        .b = {.a = 'G', .b = 114515, .c = 'A', .d = 104},
+      'A',
+      {123.12,
+       {1232132,
+        {12331,
+         {'G', 114515, 'A', 104},
 
-                        .d = 104.1423,
-                        .c = 'B'},
-                  .d = 'A',
-                  .c = 'C'},
-            .d = {123, 3214, 2134, 3214, 1324, 3214890, 184320, 832140, 321984},
-            .c = 'D'},
-      .c = 'E'};
-  trival_test::A_v2 a_v2 = {.a = 'A',
-                            .b = {.a = 123.12,
-                                  .b = {.a = 1232132,
-                                        .b = {.a = 12331,
-                                              .b = {.a = 'G',
-                                                    .b = 114515,
-                                                    .c = 'A',
-                                                    .d = a_v1.b.b.b.b.d},
-                                              .d = a_v1.b.b.b.d,
-                                              .c = 'B'},
-                                        .d = a_v1.b.b.d,
-                                        .c = 'C'},
-                                  .d = a_v1.b.d,
-                                  .c = 'D'},
-                            .c = 'E'};
-  trival_test::A_v3 a_v3 = {.a = 'A', .b = a_v1.b, .c = 'E'};
+         104.1423,
+         'B'},
+        'A',
+        'C'},
+       {123, 3214, 2134, 3214, 1324, 3214890, 184320, 832140, 321984},
+       'D'},
+      'E'};
+  trival_test::A_v2 a_v2 = {
+      'A',
+      {123.12,
+       {1232132,
+        {12331, {'G', 114515, 'A', a_v1.b.b.b.b.d}, a_v1.b.b.b.d, 'B'},
+        a_v1.b.b.d,
+        'C'},
+       a_v1.b.d,
+       'D'},
+      'E'};
+  trival_test::A_v3 a_v3 = {'A', a_v1.b, 'E'};
   {
     std::vector<char> buffer = struct_pack::serialize(a_v1);
     auto result = struct_pack::deserialize<trival_test::A_v1>(buffer);

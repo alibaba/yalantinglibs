@@ -15,7 +15,7 @@
 
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
-#if __has_include("data_def.struct_pb.h")
+#ifdef HAVE_STRUCT_PB
 #include "struct_pb_sample.hpp"
 #endif
 #endif
@@ -25,8 +25,8 @@
 
 #include "config.hpp"
 using namespace std::string_literals;
-
-void calculate_ser_rate(const auto& map, LibType base_line_type,
+template <typename T>
+void calculate_ser_rate(const T& map, LibType base_line_type,
                         SampleType sample_type) {
   auto it = map.find(base_line_type);
   if (it == map.end()) {
@@ -72,8 +72,8 @@ void calculate_ser_rate(const auto& map, LibType base_line_type,
 
   std::cout << "========================\n";
 }
-
-void run_benchmark(const auto& map, LibType base_line_type) {
+template <typename T>
+void run_benchmark(const T& map, LibType base_line_type) {
   std::cout << "======== calculate serialization rate ========\n";
   calculate_ser_rate(map, base_line_type, SampleType::RECT);
   calculate_ser_rate(map, base_line_type, SampleType::RECTS);
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
   map.emplace(LibType::MSGPACK, new message_pack_sample());
 #endif
 #ifdef HAVE_PROTOBUF
-#if __has_include("data_def.struct_pb.h")
+#ifdef HAVE_STRUCT_PB
   map.emplace(LibType::STRUCT_PB, new struct_pb_sample::struct_pb_sample_t());
 #endif
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
@@ -116,10 +116,8 @@ int main(int argc, char** argv) {
 
   run_benchmark(map, LibType::STRUCT_PACK);
 
-#ifdef HAVE_PROTOBUF
-#if __has_include("data_def.struct_pb.h")
+#ifdef HAVE_STRUCT_PB
   run_benchmark(map, LibType::STRUCT_PB);
-#endif
 #endif
 
   return 0;

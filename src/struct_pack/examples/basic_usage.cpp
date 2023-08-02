@@ -62,7 +62,7 @@ struct person {
 void basic_usage() {
   person p{20, "tom"};
 
-  person p2{.age = 21, .name = "Betty"};
+  person p2{/*.age =*/21, /*.name =*/"Betty"};
 
   // serialize api
   // api 1. serialize with default container
@@ -87,7 +87,7 @@ void basic_usage() {
   }
   // api 6. serialize varadic param
   {
-    person p2{.age = 21, .name = "Betty"};
+    person p2{/*.age =*/21, /*.name =*/"Betty"};
     auto buffer = struct_pack::serialize(p.age, p2.name);
   }
   // api 7. serialize to stream
