@@ -10,9 +10,9 @@
 
 [中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs is a collection of C++20 libraries, now it contains struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs(such as http.) in the future.
+yaLanTingLibs is a collection of modern c++ util libraries, now it contains struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs in the future.
 
-The target of yaLanTingLibs: provide very easy and high performance C++20 libraries for C++ developers, it can help to quickly build high performance applications.
+The target of yaLanTingLibs: provide very easy and high performance modern C++ libraries for developers, it can help to quickly build high performance applications.
 
 | OS (Compiler Version)                          | Status                                                                                                    |
 |------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
@@ -25,11 +25,21 @@ The target of yaLanTingLibs: provide very easy and high performance C++20 librar
 # Quick Start
 ## compiler requirements
 
-make sure you have such compilers:
+If your compiler don't support C++20, yalantinglibs will only compile the serialization libraries (struct_pack, struct_json, struct_xml, struct_yaml).
+Make sure you have such compilers:
+
+- g++9 above;
+- clang++6 above (with stdlib = libc++-13/libstdc++-8 or later version); 
+- msvc 14.20 above;
+
+Otherwise, yalantinglibs will compile all the libraries. 
+Make sure you have such compilers:
 
 - g++10 above;
 - clang++13 above (with stdlib = libc++-13/libstdc++-8 or later version); 
 - msvc 14.29 above;
+
+You can also use cmake option `-DENABLE_CPP_20=ON` or `-DENABLE_CPP_20=OFF` to control it.
 
 ## Install & Compile
 
