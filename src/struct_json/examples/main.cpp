@@ -16,7 +16,7 @@ bool operator==(const person& a, const person& b) {
 REFLECTION(person, name, age);
 
 int main() {
-  person p{.name = "tom", .age = 20};
+  person p{"tom", 20};
   std::string str;
 
   // struct to json

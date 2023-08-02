@@ -1,7 +1,9 @@
 #pragma once
 
 #include <array>
+#if __cplusplus >= 202002L
 #include <bit>
+#endif
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -36,11 +38,23 @@ template <typename T>
 constexpr inline bool contiguous_iterator = std::contiguous_iterator<T>;
 
 #else
-IGUANA_INLINE int countr_zero(unsigned long long x) {
+IGUANA_INLINE int countr_zero(unsigned long long n) {
   // x will never be zero in iguana
-  unsigned long pos;
-  _BitScanForward64(&pos, x);
-  return pos;
+#if defined(_MSC_VER) && defined(_M_X64)
+  unsigned long c;
+  _BitScanForward64(&c, n);
+  return static_cast<int>(c);
+#elif defined(_MSC_VER) && defined(_M_IX86)
+  unsigned long c;
+  if (static_cast<uint32_t>(n) != 0) {
+    _BitScanForward(&c, static_cast<uint32_t>(n));
+    return static_cast<int>(c);
+  }
+  else {
+    _BitScanForward(&c, static_cast<uint32_t>(n >> 32));
+    return static_cast<int>(c) + 32;
+  }
+#endif
 }
 
 namespace std {

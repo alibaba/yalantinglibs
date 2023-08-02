@@ -25,7 +25,9 @@ IGUANA_INLINE void parse_escape(U &value, It &&it, It &&end) {
   if (*it == 'u') {
     ++it;
     if (std::distance(it, end) <= 4)
-      throw std::runtime_error(R"(Expected 4 hexadecimal digits)");
+      IGUANA_UNLIKELY {
+        throw std::runtime_error(R"(Expected 4 hexadecimal digits)");
+      }
     auto code_point = parse_unicode_hex4(it);
     encode_utf8(value, code_point);
   }
@@ -92,12 +94,6 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   }
   value.value() =
       std::string_view(&*start, static_cast<size_t>(std::distance(start, it)));
-}
-
-template <typename U, typename It, std::enable_if_t<enum_v<U>, int> = 0>
-IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
-  using T = std::underlying_type_t<std::decay_t<U>>;
-  parse_item(reinterpret_cast<T &>(value), it, end);
 }
 
 template <bool skip = false, typename U, typename It,
@@ -197,7 +193,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
         IGUANA_UNLIKELY case '\\' : ++it;
         parse_escape(value, it, end);
         break;
-        IGUANA_UNLIKELY case ']' : return;
+        // IGUANA_UNLIKELY case ']' : return;
         IGUANA_UNLIKELY case '"' : ++it;
         return;
         IGUANA_LIKELY default : value.push_back(*it);
@@ -227,6 +223,27 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
     ++it;
   }
   throw std::runtime_error("Expected \"");
+}
+
+template <typename U, typename It, std::enable_if_t<enum_v<U>, int> = 0>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
+  static constexpr auto str_to_enum = get_enum_map<true, std::decay_t<U>>();
+  if constexpr (bool_v<decltype(str_to_enum)>) {
+    // not defined a specialization template
+    using T = std::underlying_type_t<std::decay_t<U>>;
+    parse_item(reinterpret_cast<T &>(value), it, end);
+  }
+  else {
+    std::string_view enum_names;
+    parse_item(enum_names, it, end);
+    auto it = str_to_enum.find(enum_names);
+    if (it != str_to_enum.end())
+      IGUANA_LIKELY { value = it->second; }
+    else {
+      throw std::runtime_error(std::string(enum_names) +
+                               " missing corresponding value in enum_value");
+    }
+  }
 }
 
 template <typename U, typename It, std::enable_if_t<fixed_array_v<U>, int> = 0>
@@ -655,9 +672,8 @@ inline void parse_object(jobject &result, It &&it, It &&end) {
   skip_ws(it, end);
 
   while (true) {
-    if (it == end) {
-      break;
-    }
+    if (it == end)
+      IGUANA_UNLIKELY { throw std::runtime_error("Expected }"); }
     std::string key;
     detail::parse_item(key, it, end);
 

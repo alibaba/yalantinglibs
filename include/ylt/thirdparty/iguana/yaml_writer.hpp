@@ -5,24 +5,28 @@
 
 namespace iguana {
 
-template <typename Stream, refletable T>
+template <typename Stream, typename T,
+          std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces = 0);
 
-template <typename Stream, refletable T>
+template <typename Stream, typename T,
+          std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
   ss.push_back('\n');
   to_yaml(std::forward<T>(t), ss, min_spaces);
 }
 
 // TODO: support more string style, support escape
-template <bool appendLf = true, typename Stream, string_t T>
+template <bool appendLf = true, typename Stream, typename T,
+          std::enable_if_t<string_container_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
   ss.append(t.data(), t.size());
   if constexpr (appendLf)
     ss.push_back('\n');
 }
 
-template <bool appendLf = true, typename Stream, num_t T>
+template <bool appendLf = true, typename Stream, typename T,
+          std::enable_if_t<num_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T value, size_t min_spaces) {
   char temp[65];
   auto p = detail::to_chars(temp, value);
@@ -47,21 +51,41 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, bool value,
     ss.push_back('\n');
 }
 
-template <bool appendLf = true, typename Stream, enum_t T>
+template <bool appendLf = true, typename Stream, typename T,
+          std::enable_if_t<enum_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T value, size_t min_spaces) {
-  render_yaml_value(ss, static_cast<std::underlying_type_t<T>>(value),
-                    min_spaces);
+  static constexpr auto enum_to_str = get_enum_map<false, std::decay_t<T>>();
+  if constexpr (bool_v<decltype(enum_to_str)>) {
+    render_yaml_value(ss, static_cast<std::underlying_type_t<T>>(value),
+                      min_spaces);
+  }
+  else {
+    auto it = enum_to_str.find(value);
+    if (it != enum_to_str.end())
+      IGUANA_LIKELY {
+        auto str = it->second;
+        render_yaml_value(ss, std::string_view(str.data(), str.size()),
+                          min_spaces);
+      }
+    else {
+      throw std::runtime_error(
+          std::to_string(static_cast<std::underlying_type_t<T>>(value)) +
+          " is a missing value in enum_value");
+    }
+  }
 }
 
-template <typename Stream, optional_t T>
+template <typename Stream, typename T, std::enable_if_t<optional_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces);
 
-template <typename Stream, unique_ptr_t T>
+template <typename Stream, typename T,
+          std::enable_if_t<unique_ptr_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces);
 
-template <typename Stream, sequence_container_t T>
+template <typename Stream, typename T,
+          std::enable_if_t<sequence_container_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &t,
                                      size_t min_spaces) {
   ss.push_back('\n');
@@ -72,7 +96,7 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &t,
   }
 }
 
-template <typename Stream, tuple_t T>
+template <typename Stream, typename T, std::enable_if_t<tuple_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
   ss.push_back('\n');
   for_each(std::forward<T>(t),
@@ -83,7 +107,8 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
            });
 }
 
-template <typename Stream, map_container T>
+template <typename Stream, typename T,
+          std::enable_if_t<map_container_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &t,
                                      size_t min_spaces) {
   ss.push_back('\n');
@@ -95,7 +120,7 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &t,
   }
 }
 
-template <typename Stream, optional_t T>
+template <typename Stream, typename T, std::enable_if_t<optional_v<T>, int>>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces) {
   if (!val) {
@@ -107,7 +132,7 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
   }
 }
 
-template <typename Stream, unique_ptr_t T>
+template <typename Stream, typename T, std::enable_if_t<unique_ptr_v<T>, int>>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces) {
   if (!val) {
@@ -124,7 +149,7 @@ constexpr auto write_yaml_key = [](auto &s, auto i,
   s.append(name.data(), name.size());
 };
 
-template <typename Stream, refletable T>
+template <typename Stream, typename T, std::enable_if_t<refletable_v<T>, int>>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces) {
   for_each(std::forward<T>(t),
            [&t, &s, min_spaces](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
@@ -145,10 +170,11 @@ IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces) {
            });
 }
 
-template <typename Stream, non_refletable T>
+template <typename Stream, typename T,
+          std::enable_if_t<non_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s) {
-  if constexpr (tuple_t<T> || map_container<T> || sequence_container_t<T> ||
-                optional_t<T> || unique_ptr_t<T>)
+  if constexpr (tuple_v<T> || map_container_v<T> || sequence_container_v<T> ||
+                optional_v<T> || unique_ptr_v<T>)
     render_yaml_value(s, std::forward<T>(t), 0);
   else
     static_assert(!sizeof(T), "don't suppport this type");
