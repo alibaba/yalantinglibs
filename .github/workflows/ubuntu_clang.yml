@@ -1,4 +1,4 @@
-name: Ubuntu 22.04 (clang)
+name: Ubuntu (clang)
 
 on:
   push:
@@ -131,7 +131,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         run: ctest -C ${{matrix.mode}} -j 1 -V
 
-  ubuntu_clang7:
+  ubuntu_clang10:
     strategy:
       matrix:
         mode: [ Release, Debug ]

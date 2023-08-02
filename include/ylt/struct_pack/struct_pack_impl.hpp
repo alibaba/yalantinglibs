@@ -870,7 +870,7 @@ constexpr auto calculate_padding_size() {
 template <typename T>
 constexpr std::array<std::size_t, struct_pack::members_count<T> + 1>
     padding_size = calculate_padding_size<T>();
-template<typename T>
+template <typename T>
 constexpr std::size_t get_total_padding_size() {
   std::size_t sum = 0;
   for (auto &e : padding_size<T>) {
@@ -2763,7 +2763,7 @@ class unpacker {
         else if constexpr (is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
-            auto f = [&](auto && item) {
+            auto f = [&](auto &&item) {
               code = deserialize_one<size_type, version, NotSkip>(item);
               if SP_LIKELY (code == errc::ok) {
                 code = ignore_padding(align::padding_size<type>[i++]);

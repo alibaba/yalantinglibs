@@ -8,7 +8,7 @@ using namespace struct_pack;
 
 struct compatible12;
 struct compatible1 {
-  struct_pack::compatible<int,114514> c;
+  struct_pack::compatible<int, 114514> c;
   std::unique_ptr<compatible12> i;
   friend bool operator<(const compatible1& self, const compatible1& other) {
     return false;
@@ -1153,23 +1153,23 @@ TEST_CASE("test trival_serialzable_obj_with_compatible") {
       {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
       {14, 1023213, 1432143231},
       'G'};
-    using to_T=nested_trival_v0<compatible_with_trival_field_v0>;
+  using to_T = nested_trival_v0<compatible_with_trival_field_v0>;
   auto op = [&](auto from) {
     from.set(113, 123.322134213, 'H', 890432.1, INT64_MAX - 1,
              {'H', 'E', 'L', 'L', 'O', 'H', 'I', 'H', 'I', '\0'},
              {14, 1023213, 1432143231}, 'G');
     from.f.set({123343, 7984321, 1987432, 1984327}, 'I',
                {798214321.98743, 821304.084321}, 'Q');
-    {  
+    {
       auto buffer = struct_pack::serialize(from);
-      //auto result = struct_pack::deserialize<to_T>(buffer);
-      //assert(result.value() == to);
-      //CHECK(result == to);
+      // auto result = struct_pack::deserialize<to_T>(buffer);
+      // assert(result.value() == to);
+      // CHECK(result == to);
     }
     {
       auto buffer = struct_pack::serialize(to);
-      //auto result = struct_pack::deserialize<decltype(from)>(buffer);
-      //CHECK(result == from);
+      // auto result = struct_pack::deserialize<decltype(from)>(buffer);
+      // CHECK(result == from);
     }
   };
   SUBCASE("test outer v0") {
