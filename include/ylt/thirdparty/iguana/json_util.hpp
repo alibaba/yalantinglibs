@@ -15,15 +15,13 @@ class numeric_str {
   template <typename T>
   T convert() {
     static_assert(num_v<T>, "T must be numeric type");
-    if (val_.empty()) [[unlikely]] {
-      throw std::runtime_error("Failed to parse number");
-    }
+    if (val_.empty())
+      IGUANA_UNLIKELY { throw std::runtime_error("Failed to parse number"); }
     T res;
     auto [_, ec] =
         detail::from_chars(val_.data(), val_.data() + val_.size(), res);
-    if (ec != std::errc{}) [[unlikely]] {
-      throw std::runtime_error("Failed to parse number");
-    }
+    if (ec != std::errc{})
+      IGUANA_UNLIKELY { throw std::runtime_error("Failed to parse number"); }
     return res;
   }
 
