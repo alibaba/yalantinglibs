@@ -870,20 +870,23 @@ constexpr auto calculate_padding_size() {
 template <typename T>
 constexpr std::array<std::size_t, struct_pack::members_count<T> + 1>
     padding_size = calculate_padding_size<T>();
-template <typename T>
-constexpr std::size_t total_padding_size = []() CONSTEXPR_INLINE_LAMBDA {
+template<typename T>
+constexpr std::size_t get_total_padding_size() {
   std::size_t sum = 0;
   for (auto &e : padding_size<T>) {
     sum += e;
   }
   return sum;
-}();
-
-template <typename P,typename T,std::size_t I>
-using calculate_trival_obj_size_wrapper=calculate_trival_obj_size<P,T,I>;
+};
+template <typename T>
+constexpr std::size_t total_padding_size = get_total_padding_size<T>();
 
 template <typename P, typename T, std::size_t I>
-constexpr void calculate_trival_obj_size<P,T,I>::operator()(std::size_t &total) {
+using calculate_trival_obj_size_wrapper = calculate_trival_obj_size<P, T, I>;
+
+template <typename P, typename T, std::size_t I>
+constexpr void calculate_trival_obj_size<P, T, I>::operator()(
+    std::size_t &total) {
   if constexpr (I == 0) {
     total += total_padding_size<P>;
   }
@@ -902,7 +905,6 @@ constexpr void calculate_trival_obj_size<P,T,I>::operator()(std::size_t &total) 
     }
   }
 }
-
 
 }  // namespace align
 
@@ -1073,8 +1075,6 @@ constexpr decltype(auto) get_types_literal(std::index_sequence<I...>) {
 template <uint64_t version, typename Args, typename... ParentArgs>
 constexpr bool check_if_compatible_element_exist_impl_helper();
 
-// This help function is just to improve unit test coverage. :)
-// Same as `get_type_literal_help_coverage`
 template <uint64_t version, typename Args, typename... ParentArgs,
           std::size_t... I>
 constexpr bool check_if_compatible_element_exist_impl(
@@ -1107,7 +1107,10 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     return false;
   }
   else if constexpr (id == type_id::compatible_t) {
-    return T::version_number == version;
+    if constexpr (version != UINT64_MAX)
+      return T::version_number == version;
+    else
+      return true;
   }
   else {
     if constexpr (id == type_id::non_trivial_class_t ||
@@ -1294,18 +1297,18 @@ constexpr uint32_t get_types_code() {
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename T, uint64_t version = 0>
+template <typename T, uint64_t version = UINT64_MAX>
 constexpr bool check_if_compatible_element_exist() {
   using U = remove_cvref_t<T>;
   return detail::check_if_compatible_element_exist_impl<version, U>(
       std::make_index_sequence<std::tuple_size_v<U>>{});
 }
 
-template <typename T, uint64_t version = 0>
+template <typename T, uint64_t version = UINT64_MAX>
 constexpr bool exist_compatible_member =
     check_if_compatible_element_exist<decltype(get_types<T>()), version>();
 // clang-format off
-template <typename T, uint64_t version = 0>
+template <typename T, uint64_t version = UINT64_MAX>
 constexpr bool unexist_compatible_member = !
 exist_compatible_member<decltype(get_types<T>()), version>;
 // clang-format on
@@ -1547,10 +1550,9 @@ struct serialize_static_config {
 };
 
 template <typename... Args>
-using get_args_type =
-    remove_cvref_t<typename std::conditional<sizeof...(Args) == 1,
-                              std::tuple_element_t<0, std::tuple<Args...>>,
-                              std::tuple<Args...>>::type>;
+using get_args_type = remove_cvref_t<typename std::conditional<
+    sizeof...(Args) == 1, std::tuple_element_t<0, std::tuple<Args...>>,
+    std::tuple<Args...>>::type>;
 template <uint64_t conf, typename T>
 constexpr bool check_if_add_type_literal() {
   if constexpr (conf == type_info_config::automatic) {
@@ -1862,8 +1864,9 @@ class packer {
         else if constexpr (is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
-            ((serialize_one<size_type, version>(items),write_padding(align::padding_size<type>[i++])),...);
-                
+            ((serialize_one<size_type, version>(items),
+              write_padding(align::padding_size<type>[i++])),
+             ...);
           });
         }
         else {
