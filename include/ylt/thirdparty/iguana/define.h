@@ -1,6 +1,9 @@
 #pragma once
 
 #include <array>
+#if __cplusplus >= 202002L
+#include <bit>
+#endif
 #include <string>
 #include <string_view>
 #include <type_traits>
