@@ -102,7 +102,9 @@ class appender {
         if (queue_.try_dequeue(record)) {
           enable_console_ ? write_record<false, true>(record)
                           : write_record<false, false>(record);
-        }else {
+        }
+
+        if (queue_.size_approx() == 0) {
           std::unique_lock lock(que_mtx_);
           cnd_.wait(lock, [&]() {
             return queue_.size_approx() > 0 || stop_;
