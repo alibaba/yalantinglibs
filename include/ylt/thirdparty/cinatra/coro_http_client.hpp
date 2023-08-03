@@ -265,12 +265,12 @@ class coro_http_client {
         ssl_ctx_->set_verify_callback(
             asio::ssl::host_name_verification(domain));
 
-      ssl_stream_ =
+      socket_->ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, *ssl_ctx_);
       // Set SNI Hostname (many hosts need this to handshake successfully)
       if (!sni_hostname_.empty()) {
-        SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
+        SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
                                  sni_hostname_.c_str());
       }
       use_ssl_ = true;
@@ -937,12 +937,12 @@ class coro_http_client {
   async_simple::coro::Lazy<std::error_code> handle_shake() {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      if (ssl_stream_ == nullptr) {
+      if (socket_->ssl_stream_ == nullptr) {
         co_return std::make_error_code(std::errc::not_a_stream);
       }
 
       auto ec = co_await coro_io::async_handshake(
-          ssl_stream_, asio::ssl::stream_base::client);
+          socket_->ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
         CINATRA_LOG_ERROR << "handle failed " << ec.message();
       }
@@ -1006,6 +1006,9 @@ class coro_http_client {
     asio::ip::tcp::socket impl_;
     std::atomic<bool> has_closed_ = true;
     asio::streambuf read_buf_;
+#ifdef CINATRA_ENABLE_SSL
+    std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
+#endif
     template <typename ioc_t>
     socket_t(ioc_t &&ioc) : impl_(std::forward<ioc_t>(ioc)) {}
   };
@@ -1490,6 +1493,7 @@ class coro_http_client {
     return resp_headers;
   }
 
+  // this function must be called before async_ws_connect.
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
 
@@ -1533,8 +1537,8 @@ class coro_http_client {
           data.net_err = ec;
           data.status = 404;
           close_socket(*socket_);
-          if (on_ws_msg_)
-            on_ws_msg_(data);
+          if (on_ws_msg)
+            on_ws_msg(data);
           co_return;
         }
       }
@@ -1559,12 +1563,12 @@ class coro_http_client {
 
         data.net_err = asio::error::eof;
         data.status = 404;
-        if (on_ws_msg_)
-          on_ws_msg_(data);
+        if (on_ws_msg)
+          on_ws_msg(data);
         co_return;
       }
-      if (on_ws_msg_)
-        on_ws_msg_(data);
+      if (on_ws_msg)
+        on_ws_msg(data);
     }
   }
 
@@ -1573,7 +1577,7 @@ class coro_http_client {
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
+      return coro_io::async_read(*socket_->ssl_stream_, buffer, size_to_read);
     }
     else {
 #endif
@@ -1588,7 +1592,7 @@ class coro_http_client {
       AsioBuffer &&buffer) {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return coro_io::async_write(*ssl_stream_, buffer);
+      return coro_io::async_write(*socket_->ssl_stream_, buffer);
     }
     else {
 #endif
@@ -1603,7 +1607,7 @@ class coro_http_client {
       AsioBuffer &buffer, asio::string_view delim) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return coro_io::async_read_until(*ssl_stream_, buffer, delim);
+      return coro_io::async_read_until(*socket_->ssl_stream_, buffer, delim);
     }
     else {
 #endif
@@ -1675,7 +1679,6 @@ class coro_http_client {
 
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
   std::string sni_hostname_ = "";
