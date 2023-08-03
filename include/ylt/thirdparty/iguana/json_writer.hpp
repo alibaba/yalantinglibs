@@ -242,7 +242,7 @@ IGUANA_INLINE void to_json(T &&t, Stream &s) {
   s.push_back('{');
   for_each(std::forward<T>(t),
            [&t, &s](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             using M = decltype(iguana_reflect_members(std::forward<T>(t)));
+             using M = decltype(iguana_reflect_type(std::forward<T>(t)));
              constexpr auto Idx = decltype(i)::value;
              constexpr auto Count = M::value();
              static_assert(Idx < Count);

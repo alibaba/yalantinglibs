@@ -15,6 +15,30 @@ bool operator==(const person& a, const person& b) {
 
 REFLECTION(person, name, age);
 
+class some_object {
+  int id;
+  std::string name;
+
+ public:
+  some_object() = default;
+  some_object(int i, std::string str) : id(i), name(str) {}
+  int get_id() const { return id; }
+  std::string get_name() const { return name; }
+  REFLECTION(some_object, id, name);
+};
+
+void test_inner_object() {
+  some_object obj{20, "tom"};
+  std::string str;
+  iguana::to_json(obj, str);
+  std::cout << str << "\n";
+
+  some_object obj1;
+  iguana::from_json(obj1, str);
+  assert(obj1.get_id() == 20);
+  assert(obj1.get_name() == "tom");
+}
+
 int main() {
   person p{"tom", 20};
   std::string str;
@@ -33,4 +57,6 @@ int main() {
   struct_json::parse(val, str);
   assert(val.at<std::string>("name") == "tom");
   assert(val.at<int>("age") == 20);
+
+  test_inner_object();
 }

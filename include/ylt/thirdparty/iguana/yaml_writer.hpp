@@ -153,7 +153,7 @@ template <typename Stream, typename T, std::enable_if_t<refletable_v<T>, int>>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces) {
   for_each(std::forward<T>(t),
            [&t, &s, min_spaces](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             using M = decltype(iguana_reflect_members(std::forward<T>(t)));
+             using M = decltype(iguana_reflect_type(std::forward<T>(t)));
              constexpr auto Idx = decltype(i)::value;
              constexpr auto Count = M::value();
              static_assert(Idx < Count);

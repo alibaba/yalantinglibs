@@ -231,6 +231,30 @@ void required_field() {
   }
 }
 
+class some_object {
+  int id;
+  std::string name;
+
+ public:
+  some_object() = default;
+  some_object(int i, std::string str) : id(i), name(str) {}
+  int get_id() const { return id; }
+  std::string get_name() const { return name; }
+  REFLECTION(some_object, id, name);
+};
+
+void test_inner_object() {
+  some_object obj{20, "tom"};
+  std::string str;
+  iguana::to_xml(obj, str);
+  std::cout << str << "\n";
+
+  some_object obj1;
+  iguana::from_xml(obj1, str);
+  assert(obj1.get_id() == 20);
+  assert(obj1.get_name() == "tom");
+}
+
 int main() {
   basic_usage();
   type_to_string();
@@ -238,4 +262,5 @@ int main() {
   attribute();
   get_error();
   required_field();
+  test_inner_object();
 }
