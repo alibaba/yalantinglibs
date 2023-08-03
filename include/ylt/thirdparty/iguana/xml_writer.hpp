@@ -162,7 +162,7 @@ IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name) {
   }
   for_each(std::forward<T>(t),
            [&](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             using M = decltype(iguana_reflect_members(std::forward<T>(t)));
+             using M = decltype(iguana_reflect_type(std::forward<T>(t)));
              using value_type = std::remove_cvref_t<decltype(t.*v)>;
              constexpr auto Idx = decltype(i)::value;
              constexpr auto Count = M::value();
