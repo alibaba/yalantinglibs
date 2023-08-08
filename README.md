@@ -484,11 +484,7 @@ see [Build Website](https://github.com/alibaba/yalantinglibs/blob/main/website/R
 
 # Discussion group
 
-DingTalk group
-
-<center>
-<img src="./website/docs/public/img/yalantinglibs_ding_talk_group.png" alt="dingtalk" width="200" height="200" align="bottom" />
-</center>
+DingTalk group id: 645010455
 
 ## License
 
