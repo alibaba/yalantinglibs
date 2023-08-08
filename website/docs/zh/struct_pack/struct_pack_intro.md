@@ -176,10 +176,9 @@ assert(nested2==nested1);
 namespace test {
 class person : std::vector<int> {
  private:
-  std::string mess;
+  int age;
 
  public:
-  int age;
   std::string name;
   auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
