@@ -67,6 +67,7 @@ class person {
  private:
   std::string name_;
   int age_;
+  
 
  public:
   auto operator==(const person& rhs) const {
@@ -76,9 +77,9 @@ class person {
   person(int age, const std::string& name) : age_(age), name_(name) {}
 
   int& age() { return age_; };
- // const int& age() const { return age_; };
+  const int& age() const { return age_; };
   std::string& name() { return name_; };
- // const std::string& name() const { return name_; };
+  const std::string& name() const { return name_; };
 };
 STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
@@ -267,3 +268,5 @@ TEST_CASE("test complicated_object") {
   CHECK(result);
   CHECK(result.value() == o);
 }
+
+

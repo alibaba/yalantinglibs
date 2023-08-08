@@ -28,13 +28,13 @@
 
 // 1. make sure your type has a default constructor
 // 2. add marco STRUCT_PACK_REFL(Type, field1, field2...) in the same namespace
+// 3. The field can be public or private, it's OK.
 namespace example {
 class person : std::vector<int> {
  private:
-  std::string mess;
+  int age;
 
  public:
-  int age;
   std::string name;
   auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
@@ -46,29 +46,10 @@ class person : std::vector<int> {
 STRUCT_PACK_REFL(person, age, name);
 }  // namespace example
 
-// 3. if you want to use private field, add friend declartion marco
-
+// 4. We also support member function in marco STRUCT_PACK_REFL(Type,
+// MemFuncName1, MemFuncName2...)
+// 5. Make sure the function has const version and non-const version overload.
 namespace example2 {
-class person {
- private:
-  int age;
-  std::string name;
-
- public:
-  auto operator==(const person& rhs) const {
-    return age == rhs.age && name == rhs.name;
-  }
-  person() = default;
-  person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
-};
-STRUCT_PACK_REFL(person, age, name);
-}  // namespace example2
-
-// 4. you can also add function which return class member reference as
-// struct_pack field.
-
-namespace example3 {
 class person {
  private:
   int age_;
@@ -86,10 +67,35 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
+}  // namespace example2
+
+// 6. you can also mix the field and function with any order in marco
+// STRUCT_PACK_REFL
+namespace example3 {
+class person {
+ private:
+  int age_;
+  std::string name_;
+  double salary;
+
+ public:
+  auto operator==(const person& rhs) const {
+    return age_ == rhs.age_ && name_ == rhs.name_ && salary == rhs.salary;
+  }
+  person() = default;
+  person(int age, const std::string& name, double salary)
+      : age_(age), name_(name) {}
+
+  int& age() { return age_; };
+  const int& age() const { return age_; };
+  std::string& name() { return name_; };
+  const std::string& name() const { return name_; };
+};
+STRUCT_PACK_REFL(person, name, age, salary);
 }  // namespace example3
 
-// 5. Remember, the STURCT_PACK_REFL marco disable the trivial_serialize
+// 7. Remember, the STURCT_PACK_REFL marco disable the trivial_serialize
 // optimize. So don't use it for trivial type.
 namespace example4 {
 struct point {
@@ -99,18 +105,34 @@ STRUCT_PACK_REFL(point, x, y, z);
 struct point2 {
   int x, y, z;
 };
+// The point & point2 are different type
+static_assert(struct_pack::get_type_code<example4::point>() !=
+              struct_pack::get_type_code<example4::point2>());
 }  // namespace example4
 
-// 6. example5::person ,example::person, example2::person, example3:person are
-// same type in struct_pack type system.
+// 8. The order of field in STRUCT_PACK_REFL will change the type of struct in
+// struct_pack type system
 namespace example5 {
-struct person {
+class person {
   int age;
   std::string name;
   auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
   }
 };
+
+STRUCT_PACK_REFL(person, age, name);
+class person2 {
+  int age;
+  std::string name;
+  auto operator==(const person2& rhs) const {
+    return age == rhs.age && name == rhs.name;
+  }
+};
+STRUCT_PACK_REFL(person2, name, age);
+// person & person 2 are different type
+static_assert(struct_pack::get_type_code<person>() !=
+              struct_pack::get_type_code<person2>());
 }  // namespace example5
 
 //clang-format off
@@ -130,22 +152,10 @@ void non_aggregated_type() {
     assert(p == p2.value());
   }
   {
-    example2::person p{20, "tom"};
+    example3::person p{20, "tom", 114.514};
     auto buffer = struct_pack::serialize(p);
     auto p3 = struct_pack::deserialize<example2::person>(buffer);
     assert(p3);
     assert(p == p3.value());
-  }
-  {
-    assert(struct_pack::get_type_code<example4::point>() !=
-           struct_pack::get_type_code<example4::point2>());
-  }
-  {
-    assert(struct_pack::get_type_code<example5::person>() ==
-           struct_pack::get_type_code<example::person>());
-    assert(struct_pack::get_type_code<example5::person>() ==
-           struct_pack::get_type_code<example2::person>());
-    assert(struct_pack::get_type_code<example5::person>() ==
-           struct_pack::get_type_code<example3::person>());
   }
 }

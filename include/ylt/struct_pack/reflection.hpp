@@ -2002,6 +2002,23 @@ constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
 template <std::size_t Idx>
 using Idx_t = std::integral_constant<std::size_t, Idx>;
 
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) member_function_resolve(U X, Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) member_function_resolve(U (T::*X)(), Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) const_member_function_resolve(U X, Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) const_member_function_resolve(U (T::*X)() const,
+                                                           Idx_t<Idx>) {
+  return X;
+};
 }  // namespace detail
 }  // namespace struct_pack
 
@@ -2095,130 +2112,42 @@ using Idx_t = std::integral_constant<std::size_t, Idx>;
 #define STRUCT_PACK_DOARG63(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG62(s,f,p,__VA_ARGS__)) s f(62,t,p)
 #define STRUCT_PACK_DOARG64(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG63(s,f,p,__VA_ARGS__)) s f(63,t,p)
 
-#define STRUCT_PACK_MAKE_ARGS0(Type)
-#define STRUCT_PACK_MAKE_ARGS1(Type)     Type
-#define STRUCT_PACK_MAKE_ARGS2(Type)     STRUCT_PACK_MAKE_ARGS1(Type), Type
-#define STRUCT_PACK_MAKE_ARGS3(Type)     STRUCT_PACK_MAKE_ARGS2(Type), Type
-#define STRUCT_PACK_MAKE_ARGS4(Type)     STRUCT_PACK_MAKE_ARGS3(Type), Type
-#define STRUCT_PACK_MAKE_ARGS5(Type)     STRUCT_PACK_MAKE_ARGS4(Type), Type
-#define STRUCT_PACK_MAKE_ARGS6(Type)     STRUCT_PACK_MAKE_ARGS5(Type), Type
-#define STRUCT_PACK_MAKE_ARGS7(Type)     STRUCT_PACK_MAKE_ARGS6(Type), Type
-#define STRUCT_PACK_MAKE_ARGS8(Type)     STRUCT_PACK_MAKE_ARGS7(Type), Type
-#define STRUCT_PACK_MAKE_ARGS9(Type)     STRUCT_PACK_MAKE_ARGS8(Type), Type
-#define STRUCT_PACK_MAKE_ARGS10(Type)    STRUCT_PACK_MAKE_ARGS9(Type), Type
-#define STRUCT_PACK_MAKE_ARGS11(Type)    STRUCT_PACK_MAKE_ARGS10(Type), Type
-#define STRUCT_PACK_MAKE_ARGS12(Type)    STRUCT_PACK_MAKE_ARGS11(Type), Type
-#define STRUCT_PACK_MAKE_ARGS13(Type)    STRUCT_PACK_MAKE_ARGS12(Type), Type
-#define STRUCT_PACK_MAKE_ARGS14(Type)    STRUCT_PACK_MAKE_ARGS13(Type), Type
-#define STRUCT_PACK_MAKE_ARGS15(Type)    STRUCT_PACK_MAKE_ARGS14(Type), Type
-#define STRUCT_PACK_MAKE_ARGS16(Type)    STRUCT_PACK_MAKE_ARGS15(Type), Type
-#define STRUCT_PACK_MAKE_ARGS17(Type)    STRUCT_PACK_MAKE_ARGS16(Type), Type
-#define STRUCT_PACK_MAKE_ARGS18(Type)    STRUCT_PACK_MAKE_ARGS17(Type), Type
-#define STRUCT_PACK_MAKE_ARGS19(Type)    STRUCT_PACK_MAKE_ARGS18(Type), Type
-#define STRUCT_PACK_MAKE_ARGS20(Type)    STRUCT_PACK_MAKE_ARGS19(Type), Type
-#define STRUCT_PACK_MAKE_ARGS21(Type)    STRUCT_PACK_MAKE_ARGS20(Type), Type
-#define STRUCT_PACK_MAKE_ARGS22(Type)    STRUCT_PACK_MAKE_ARGS21(Type), Type
-#define STRUCT_PACK_MAKE_ARGS23(Type)    STRUCT_PACK_MAKE_ARGS22(Type), Type
-#define STRUCT_PACK_MAKE_ARGS24(Type)    STRUCT_PACK_MAKE_ARGS23(Type), Type
-#define STRUCT_PACK_MAKE_ARGS25(Type)    STRUCT_PACK_MAKE_ARGS24(Type), Type
-#define STRUCT_PACK_MAKE_ARGS26(Type)    STRUCT_PACK_MAKE_ARGS25(Type), Type
-#define STRUCT_PACK_MAKE_ARGS27(Type)    STRUCT_PACK_MAKE_ARGS26(Type), Type
-#define STRUCT_PACK_MAKE_ARGS28(Type)    STRUCT_PACK_MAKE_ARGS27(Type), Type
-#define STRUCT_PACK_MAKE_ARGS29(Type)    STRUCT_PACK_MAKE_ARGS28(Type), Type
-#define STRUCT_PACK_MAKE_ARGS30(Type)    STRUCT_PACK_MAKE_ARGS29(Type), Type
-#define STRUCT_PACK_MAKE_ARGS31(Type)    STRUCT_PACK_MAKE_ARGS30(Type), Type
-#define STRUCT_PACK_MAKE_ARGS32(Type)    STRUCT_PACK_MAKE_ARGS31(Type), Type
-#define STRUCT_PACK_MAKE_ARGS33(Type)    STRUCT_PACK_MAKE_ARGS32(Type), Type
-#define STRUCT_PACK_MAKE_ARGS34(Type)    STRUCT_PACK_MAKE_ARGS33(Type), Type
-#define STRUCT_PACK_MAKE_ARGS35(Type)    STRUCT_PACK_MAKE_ARGS34(Type), Type
-#define STRUCT_PACK_MAKE_ARGS36(Type)    STRUCT_PACK_MAKE_ARGS35(Type), Type
-#define STRUCT_PACK_MAKE_ARGS37(Type)    STRUCT_PACK_MAKE_ARGS36(Type), Type
-#define STRUCT_PACK_MAKE_ARGS38(Type)    STRUCT_PACK_MAKE_ARGS37(Type), Type
-#define STRUCT_PACK_MAKE_ARGS39(Type)    STRUCT_PACK_MAKE_ARGS38(Type), Type
-#define STRUCT_PACK_MAKE_ARGS40(Type)    STRUCT_PACK_MAKE_ARGS39(Type), Type
-#define STRUCT_PACK_MAKE_ARGS41(Type)    STRUCT_PACK_MAKE_ARGS40(Type), Type
-#define STRUCT_PACK_MAKE_ARGS42(Type)    STRUCT_PACK_MAKE_ARGS41(Type), Type
-#define STRUCT_PACK_MAKE_ARGS43(Type)    STRUCT_PACK_MAKE_ARGS42(Type), Type
-#define STRUCT_PACK_MAKE_ARGS44(Type)    STRUCT_PACK_MAKE_ARGS43(Type), Type
-#define STRUCT_PACK_MAKE_ARGS45(Type)    STRUCT_PACK_MAKE_ARGS44(Type), Type
-#define STRUCT_PACK_MAKE_ARGS46(Type)    STRUCT_PACK_MAKE_ARGS45(Type), Type
-#define STRUCT_PACK_MAKE_ARGS47(Type)    STRUCT_PACK_MAKE_ARGS46(Type), Type
-#define STRUCT_PACK_MAKE_ARGS48(Type)    STRUCT_PACK_MAKE_ARGS47(Type), Type
-#define STRUCT_PACK_MAKE_ARGS49(Type)    STRUCT_PACK_MAKE_ARGS48(Type), Type
-#define STRUCT_PACK_MAKE_ARGS50(Type)    STRUCT_PACK_MAKE_ARGS49(Type), Type
-#define STRUCT_PACK_MAKE_ARGS51(Type)    STRUCT_PACK_MAKE_ARGS50(Type), Type
-#define STRUCT_PACK_MAKE_ARGS52(Type)    STRUCT_PACK_MAKE_ARGS51(Type), Type
-#define STRUCT_PACK_MAKE_ARGS53(Type)    STRUCT_PACK_MAKE_ARGS52(Type), Type
-#define STRUCT_PACK_MAKE_ARGS54(Type)    STRUCT_PACK_MAKE_ARGS53(Type), Type
-#define STRUCT_PACK_MAKE_ARGS55(Type)    STRUCT_PACK_MAKE_ARGS54(Type), Type
-#define STRUCT_PACK_MAKE_ARGS56(Type)    STRUCT_PACK_MAKE_ARGS55(Type), Type
-#define STRUCT_PACK_MAKE_ARGS57(Type)    STRUCT_PACK_MAKE_ARGS56(Type), Type
-#define STRUCT_PACK_MAKE_ARGS58(Type)    STRUCT_PACK_MAKE_ARGS57(Type), Type
-#define STRUCT_PACK_MAKE_ARGS59(Type)    STRUCT_PACK_MAKE_ARGS58(Type), Type
-#define STRUCT_PACK_MAKE_ARGS60(Type)    STRUCT_PACK_MAKE_ARGS59(Type), Type
-#define STRUCT_PACK_MAKE_ARGS61(Type)    STRUCT_PACK_MAKE_ARGS60(Type), Type
-#define STRUCT_PACK_MAKE_ARGS62(Type)    STRUCT_PACK_MAKE_ARGS61(Type), Type
-#define STRUCT_PACK_MAKE_ARGS63(Type)    STRUCT_PACK_MAKE_ARGS62(Type), Type
-#define STRUCT_PACK_MAKE_ARGS64(Type)    STRUCT_PACK_MAKE_ARGS63(Type), Type
 
 #define STRUCT_PACK_STEALER_DECL(Type)\
-template <typename T, std::size_t Idx, typename = void>\
-struct STRUCT_PACK_##Type##_IS_PRIVATE_FIELD : std::true_type {};\
-template <typename T, std::size_t Idx, typename = void>\
-struct STRUCT_PACK_##Type##_IS_PRIVATE_FUNCTION : std::true_type {};\
-template <typename T, std::size_t Idx, typename = void>\
-constexpr bool STRUCT_PACK_##Type##_IS_PRIVATE = STRUCT_PACK_##Type##_IS_PRIVATE_FIELD<T, Idx>::value&&\
-    STRUCT_PACK_##Type##_IS_PRIVATE_FUNCTION<T, Idx>::value;\
 template <typename T, auto field, std::size_t Idx>\
 struct STRUCT_PACK_STEALER;\
+template <typename T,auto field, std::size_t Idx>\
+struct STRUCT_PACK_STEALER_CONST;\
 template <auto field, std::size_t Idx>\
 struct STRUCT_PACK_STEALER<Type,field,Idx> {\
   friend auto& STRUCT_PACK_STEAL(Type& t, struct_pack::detail::Idx_t<Idx>) {\
-    if constexpr (STRUCT_PACK_##Type##_IS_PRIVATE<Type, Idx>) {\
-      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
-        return (t.*field)();\
-      }\
-      else if constexpr (std::is_member_pointer_v<decltype(field)>) {\
-        return t.*field;\
-      }\
-      else {\
-        static_assert(sizeof(Type), "The parameters for STRUCT_PACK_REFL is error");\
-      }\
+    if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
+      return (t.*field)();\
     }\
     else {\
-      static int useless;\
-      return useless;\
-    }\
-  }\
-  friend const auto& STRUCT_PACK_STEAL(const Type& t, struct_pack::detail::Idx_t<Idx>) {\
-    if constexpr (STRUCT_PACK_##Type##_IS_PRIVATE<Type, Idx>) {\
-      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
-        return (t.*field)();\
-      }\
-      else if constexpr (std::is_member_pointer_v<decltype(field)>) {\
-        return t.*field;\
-      }\
-      else {\
-        static_assert(sizeof(Type), "The parameters for STRUCT_PACK_REFL is error");\
-      }\
-    }\
-    else {\
-      static int useless;\
-      return useless;\
+      return t.*field;\
     }\
   }\
 };\
+template <auto field, std::size_t Idx>\
+struct STRUCT_PACK_STEALER_CONST<Type,field,Idx> {\
+  friend const auto& STRUCT_PACK_STEAL(const Type& t, struct_pack::detail::Idx_t<Idx>) {\
+    if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
+      return (t.*field)();\
+    }\
+    else {\
+      return t.*field;\
+    }\
+  }\
+};
 
 #define STRUCT_PACK_VISIT_PRIVATE_HELPER(Idx, X , Bank) \
 auto& STRUCT_PACK_STEAL(Bank& bank, struct_pack::detail::Idx_t<Idx>);\
 const auto& STRUCT_PACK_STEAL(const Bank& bank, struct_pack::detail::Idx_t<Idx>);\
-template <typename T>\
-struct STRUCT_PACK_##Bank##_IS_PRIVATE_FUNCTION<T, Idx, std::void_t<decltype(T{}.X())> >\
-    : std::false_type {};\
-template <typename T>\
-struct STRUCT_PACK_##Bank##_IS_PRIVATE_FIELD<T, Idx, std::void_t<decltype(T{}.X)> >\
-    : std::false_type {};\
-template struct STRUCT_PACK_STEALER<Bank, &Bank::X, Idx>;\
+template struct STRUCT_PACK_STEALER<\
+    Bank, struct_pack::detail::member_function_resolve<Bank>(&Bank::X, struct_pack::detail::Idx_t<Idx>{}), Idx>;\
+template struct STRUCT_PACK_STEALER_CONST<\
+    Bank, struct_pack::detail::const_member_function_resolve<Bank>(&Bank::X, struct_pack::detail::Idx_t<Idx>{}), Idx>;
 
 #define STRUCT_PACK_MAKE_ARGS(Type,Count) \
   STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS,Count)(Type)
@@ -2231,18 +2160,28 @@ template struct STRUCT_PACK_STEALER<Bank, &Bank::X, Idx>;\
 #define STRUCT_PACK_RETURN_ELEMENT(Idx, X , parent) \
 if constexpr (Idx == I) {\
     return c.X;\
-}\
+}
 
-#define STRUCT_PACK_GET_INDEX(Idx, Type, parent) \
+#define STRUCT_PACK_GET_INDEX(Idx, _, Type) \
 auto& STRUCT_PACK_GET_##Idx(Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+    return STRUCT_PACK_STEAL(c,struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>{});\
+}
 
-#define STRUCT_PACK_GET_INDEX_CONST(Idx, Type, parent) \
+#define STRUCT_PACK_GET_INDEX_CONST(Idx, _, Type) \
 const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+    return STRUCT_PACK_STEAL(c,struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>{});\
+}
 
 #define STRUCT_PACK_REFL(Type,...) \
 STRUCT_PACK_STEALER_DECL(Type) \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_VISIT_PRIVATE_HELPER,Type,__VA_ARGS__) 
+STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_VISIT_PRIVATE_HELPER,Type,__VA_ARGS__) \
+Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
+template<typename T> \
+constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL(); \
+template<> \
+constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);} \
+decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
+  return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
+} \
+STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX,Type,__VA_ARGS__) \
+STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX_CONST,Type,__VA_ARGS__) 

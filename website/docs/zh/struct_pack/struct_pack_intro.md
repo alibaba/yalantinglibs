@@ -196,28 +196,6 @@ STRUCT_PACK_REFL(person, name, age);
 它使得struct_pack可以支持那些非聚合的结构体类型，允许用户自定义构造函数，继承其他类型，添加不序列化的字段等等。
 ```
 
-有时，用户需要序列化/反序列化那些private字段，这可以通过函数`STRUCT_PACK_FRIEND_DECL(typenmae)`;来支持。
-```cpp
-namespace example2 {
-class person {
- private:
-  int age;
-  std::string name;
-
- public:
-  auto operator==(const person& rhs) const {
-    return age == rhs.age && name == rhs.name;
-  }
-  person() = default;
-  person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
-};
-STRUCT_PACK_REFL(person, age, name);
-}  // namespace example2
-```
-
-该宏必须声明在结构体内部，其原理是将struct_pack与反射有关的函数注册为友元函数。
-
 用户甚至可以在`STRUCT_PACK_REFL`中注册成员函数，这极大的扩展了struct_pack的灵活性。
 
 ```cpp
