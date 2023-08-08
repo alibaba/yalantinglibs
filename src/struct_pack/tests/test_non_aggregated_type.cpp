@@ -67,7 +67,6 @@ class person {
  private:
   std::string name_;
   int age_;
-  
 
  public:
   auto operator==(const person& rhs) const {
@@ -268,5 +267,3 @@ TEST_CASE("test complicated_object") {
   CHECK(result);
   CHECK(result.value() == o);
 }
-
-

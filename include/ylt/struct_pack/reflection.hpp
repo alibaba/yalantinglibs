@@ -2112,76 +2112,127 @@ constexpr inline decltype(auto) const_member_function_resolve(U (T::*X)() const,
 #define STRUCT_PACK_DOARG63(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG62(s,f,p,__VA_ARGS__)) s f(62,t,p)
 #define STRUCT_PACK_DOARG64(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG63(s,f,p,__VA_ARGS__)) s f(63,t,p)
 
+// clang-format on
 
-#define STRUCT_PACK_STEALER_DECL(Type)\
-template <typename T, auto field, std::size_t Idx>\
-struct STRUCT_PACK_STEALER;\
-template <typename T,auto field, std::size_t Idx>\
-struct STRUCT_PACK_STEALER_CONST;\
-template <auto field, std::size_t Idx>\
-struct STRUCT_PACK_STEALER<Type,field,Idx> {\
-  friend auto& STRUCT_PACK_STEAL(Type& t, struct_pack::detail::Idx_t<Idx>) {\
-    if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
-      return (t.*field)();\
-    }\
-    else {\
-      return t.*field;\
-    }\
-  }\
-};\
-template <auto field, std::size_t Idx>\
-struct STRUCT_PACK_STEALER_CONST<Type,field,Idx> {\
-  friend const auto& STRUCT_PACK_STEAL(const Type& t, struct_pack::detail::Idx_t<Idx>) {\
-    if constexpr (std::is_member_function_pointer_v<decltype(field)>) {\
-      return (t.*field)();\
-    }\
-    else {\
-      return t.*field;\
-    }\
-  }\
-};
+#define STRUCT_PACK_STEALER_DECL(Type)                                         \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(         \
+      Type *, U X, struct_pack::detail::Idx_t<Idx>) {                          \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(         \
+      Type *, U (T::*X)(), struct_pack::detail::Idx_t<Idx>) {                  \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE(   \
+      Type *, U X, struct_pack::detail::Idx_t<Idx>) {                          \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE(   \
+      Type *, U (T::*X)() const, struct_pack::detail::Idx_t<Idx>) {            \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, auto field, std::size_t Idx>                           \
+  struct STRUCT_PACK_STEALER;                                                  \
+  template <typename T, auto field, std::size_t Idx>                           \
+  struct STRUCT_PACK_STEALER_CONST;                                            \
+  template <auto field, std::size_t Idx>                                       \
+  struct STRUCT_PACK_STEALER<Type, field, Idx> {                               \
+    friend auto &STRUCT_PACK_STEAL(Type &t, struct_pack::detail::Idx_t<Idx>) { \
+      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {      \
+        return (t.*field)();                                                   \
+      }                                                                        \
+      else {                                                                   \
+        return t.*field;                                                       \
+      }                                                                        \
+    }                                                                          \
+  };                                                                           \
+  template <auto field, std::size_t Idx>                                       \
+  struct STRUCT_PACK_STEALER_CONST<Type, field, Idx> {                         \
+    friend const auto &STRUCT_PACK_STEAL(const Type &t,                        \
+                                         struct_pack::detail::Idx_t<Idx>) {    \
+      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {      \
+        return (t.*field)();                                                   \
+      }                                                                        \
+      else {                                                                   \
+        return t.*field;                                                       \
+      }                                                                        \
+    }                                                                          \
+  };
 
-#define STRUCT_PACK_VISIT_PRIVATE_HELPER(Idx, X , Bank) \
-auto& STRUCT_PACK_STEAL(Bank& bank, struct_pack::detail::Idx_t<Idx>);\
-const auto& STRUCT_PACK_STEAL(const Bank& bank, struct_pack::detail::Idx_t<Idx>);\
-template struct STRUCT_PACK_STEALER<\
-    Bank, struct_pack::detail::member_function_resolve<Bank>(&Bank::X, struct_pack::detail::Idx_t<Idx>{}), Idx>;\
-template struct STRUCT_PACK_STEALER_CONST<\
-    Bank, struct_pack::detail::const_member_function_resolve<Bank>(&Bank::X, struct_pack::detail::Idx_t<Idx>{}), Idx>;
+#define STRUCT_PACK_VISIT_PRIVATE_HELPER(Idx, X, Bank)                       \
+  auto &STRUCT_PACK_STEAL(Bank &bank, struct_pack::detail::Idx_t<Idx>);      \
+  const auto &STRUCT_PACK_STEAL(const Bank &bank,                            \
+                                struct_pack::detail::Idx_t<Idx>);            \
+  template <typename T>                                                      \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(       \
+      Bank *, auto (T::*x)()->decltype(std::declval<T &>().X()),             \
+      struct_pack::detail::Idx_t<Idx>) {                                     \
+    return x;                                                                \
+  };                                                                         \
+  template <typename T>                                                      \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE( \
+      Bank *, auto (T::*x)() const->decltype(std::declval<const T &>().X()), \
+      struct_pack::detail::Idx_t<Idx>) {                                     \
+    return x;                                                                \
+  };                                                                         \
+  template struct STRUCT_PACK_STEALER<                                       \
+      Bank,                                                                  \
+      STRUCT_PACK_MEMBER_FUNCTION_RESOLVE<Bank>(                             \
+          (Bank *)nullptr, &Bank::X, struct_pack::detail::Idx_t<Idx>{}),     \
+      Idx>;                                                                  \
+  template struct STRUCT_PACK_STEALER_CONST<                                 \
+      Bank,                                                                  \
+      STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE<Bank>(                       \
+          (Bank *)nullptr, &Bank::X, struct_pack::detail::Idx_t<Idx>{}),     \
+      Idx>;
 
-#define STRUCT_PACK_MAKE_ARGS(Type,Count) \
-  STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS,Count)(Type)
+#define STRUCT_PACK_MAKE_ARGS(Type, Count) \
+  STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS, Count)(Type)
 
-#define STRUCT_PACK_EXPAND_EACH_(sepatator,fun,parent,...) \
-		STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_CONCAT(STRUCT_PACK_DOARG,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))(sepatator,fun,parent,__VA_ARGS__))
-#define STRUCT_PACK_EXPAND_EACH(sepatator,fun,parent,...) \
-		STRUCT_PACK_EXPAND_EACH_(sepatator,fun,parent,__VA_ARGS__)
+#define STRUCT_PACK_EXPAND_EACH_(sepatator, fun, parent, ...) \
+  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_CONCAT(                \
+      STRUCT_PACK_DOARG, STRUCT_PACK_ARG_COUNT(__VA_ARGS__))( \
+      sepatator, fun, parent, __VA_ARGS__))
+#define STRUCT_PACK_EXPAND_EACH(sepatator, fun, parent, ...) \
+  STRUCT_PACK_EXPAND_EACH_(sepatator, fun, parent, __VA_ARGS__)
 
-#define STRUCT_PACK_RETURN_ELEMENT(Idx, X , parent) \
-if constexpr (Idx == I) {\
-    return c.X;\
-}
+#define STRUCT_PACK_RETURN_ELEMENT(Idx, X, parent) \
+  if constexpr (Idx == I) {                        \
+    return c.X;                                    \
+  }
 
-#define STRUCT_PACK_GET_INDEX(Idx, _, Type) \
-auto& STRUCT_PACK_GET_##Idx(Type& c) {\
-    return STRUCT_PACK_STEAL(c,struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>{});\
-}
+#define STRUCT_PACK_GET_INDEX(Idx, _, Type)                                  \
+  auto &STRUCT_PACK_GET_##Idx(Type &c) {                                     \
+    return STRUCT_PACK_STEAL(                                                \
+        c, struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - \
+                                      1 - Idx>{});                           \
+  }
 
-#define STRUCT_PACK_GET_INDEX_CONST(Idx, _, Type) \
-const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
-    return STRUCT_PACK_STEAL(c,struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>{});\
-}
+#define STRUCT_PACK_GET_INDEX_CONST(Idx, _, Type)                            \
+  const auto &STRUCT_PACK_GET_##Idx(const Type &c) {                         \
+    return STRUCT_PACK_STEAL(                                                \
+        c, struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - \
+                                      1 - Idx>{});                           \
+  }
 
-#define STRUCT_PACK_REFL(Type,...) \
-STRUCT_PACK_STEALER_DECL(Type) \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_VISIT_PRIVATE_HELPER,Type,__VA_ARGS__) \
-Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
-template<typename T> \
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL(); \
-template<> \
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);} \
-decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
-  return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
-} \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX,Type,__VA_ARGS__) \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX_CONST,Type,__VA_ARGS__) 
+#define STRUCT_PACK_REFL(Type, ...)                                      \
+  STRUCT_PACK_STEALER_DECL(Type)                                         \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_VISIT_PRIVATE_HELPER, Type,      \
+                          __VA_ARGS__)                                   \
+  Type &STRUCT_PACK_REFL_FLAG(Type &t) { return t; }                     \
+  template <typename T>                                                  \
+  constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL();                  \
+  template <>                                                            \
+  constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {           \
+    return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);                           \
+  }                                                                      \
+  decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &) {                 \
+    return std::integral_constant<std::size_t,                           \
+                                  STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
+  }                                                                      \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_GET_INDEX, Type, __VA_ARGS__)    \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_GET_INDEX_CONST, Type, __VA_ARGS__)

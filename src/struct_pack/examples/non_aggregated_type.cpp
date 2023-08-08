@@ -106,8 +106,8 @@ struct point2 {
   int x, y, z;
 };
 // The point & point2 are different type
-static_assert(struct_pack::get_type_code<example4::point>() !=
-              struct_pack::get_type_code<example4::point2>());
+static_assert(struct_pack::get_type_code<point>() !=
+              struct_pack::get_type_code<point2>());
 }  // namespace example4
 
 // 8. The order of field in STRUCT_PACK_REFL will change the type of struct in
