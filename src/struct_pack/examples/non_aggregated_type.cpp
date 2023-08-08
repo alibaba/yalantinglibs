@@ -154,7 +154,7 @@ void non_aggregated_type() {
   {
     example3::person p{20, "tom", 114.514};
     auto buffer = struct_pack::serialize(p);
-    auto p3 = struct_pack::deserialize<example2::person>(buffer);
+    auto p3 = struct_pack::deserialize<example3::person>(buffer);
     assert(p3);
     assert(p == p3.value());
   }
