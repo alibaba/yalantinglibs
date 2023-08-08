@@ -221,7 +221,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
 ```
 The member function registed must return a reference, and this function must have a const version overload & non-const overload.

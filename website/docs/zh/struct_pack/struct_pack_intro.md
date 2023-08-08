@@ -217,7 +217,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
 
 注册的成员函数必须返回一个引用，并且该函数具有常量和非常量的重载。
