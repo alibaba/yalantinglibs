@@ -13,6 +13,9 @@ template <typename U, typename It,
           std::enable_if_t<sequence_container_v<U>, int> = 0>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end);
 
+template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int> = 0>
+IGUANA_INLINE void parse_item(U &value, It &&it, It &&end);
+
 template <typename U, typename It, std::enable_if_t<refletable_v<U>, int> = 0>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   from_json(value, it, end);
@@ -445,7 +448,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   }
 }
 
-template <typename U, typename It, std::enable_if_t<unique_ptr_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int>>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   skip_ws(it, end);
   if (it < end && *it == '"')
@@ -458,7 +461,12 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   }
   else {
     using value_type = typename std::remove_reference_t<U>::element_type;
-    value = std::make_unique<value_type>();
+    if constexpr (unique_ptr_v<U>) {
+      value = std::make_unique<value_type>();
+    }
+    else {
+      value = std::make_shared<value_type>();
+    }
     parse_item(*value, it, end);
   }
 }
@@ -632,7 +640,7 @@ template <bool Is_view = false, typename It>
 void parse(jvalue &result, It &&it, It &&end);
 
 template <bool Is_view = false, typename It>
-inline void parse_array(jarray &result, It &&it, It &&end) {
+inline void parse(jarray &result, It &&it, It &&end) {
   skip_ws(it, end);
   match<'['>(it, end);
   if (*it == ']')
@@ -660,7 +668,7 @@ inline void parse_array(jarray &result, It &&it, It &&end) {
 }
 
 template <bool Is_view = false, typename It>
-inline void parse_object(jobject &result, It &&it, It &&end) {
+inline void parse(jobject &result, It &&it, It &&end) {
   skip_ws(it, end);
   match<'{'>(it, end);
   if (*it == '}')
@@ -740,11 +748,11 @@ inline void parse(jvalue &result, It &&it, It &&end) {
       break;
     case '[':
       result.template emplace<jarray>();
-      parse_array<Is_view>(std::get<jarray>(result), it, end);
+      parse<Is_view>(std::get<jarray>(result), it, end);
       break;
     case '{': {
       result.template emplace<jobject>();
-      parse_object<Is_view>(std::get<jobject>(result), it, end);
+      parse<Is_view>(std::get<jobject>(result), it, end);
       break;
     }
     default:
@@ -754,6 +762,7 @@ inline void parse(jvalue &result, It &&it, It &&end) {
   skip_ws(it, end);
 }
 
+// when Is_view is true, parse str as string_view
 template <bool Is_view = false, typename It>
 inline void parse(jvalue &result, It &&it, It &&end, std::error_code &ec) {
   try {
