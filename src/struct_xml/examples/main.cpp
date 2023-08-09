@@ -255,7 +255,32 @@ void test_inner_object() {
   assert(obj1.get_name() == "tom");
 }
 
+struct shared_object {
+  std::shared_ptr<std::vector<std::shared_ptr<int>>> vec;
+  std::string b;
+  std::shared_ptr<int> c;
+  std::vector<std::shared_ptr<int>> d;
+};
+REFLECTION(shared_object, vec, b, c, d);
+
+void test_sp() {
+  auto vec = std::make_shared<std::vector<std::shared_ptr<int>>>();
+  vec->push_back(std::make_unique<int>(42));
+  vec->push_back(std::make_unique<int>(21));
+  shared_object contents{std::move(vec),
+                         "test",
+                         std::make_shared<int>(24),
+                         {std::make_shared<int>(1), std::make_shared<int>(4)}};
+  std::string str;
+  iguana::to_xml(contents, str);
+
+  shared_object cont;
+  iguana::from_xml(cont, str);  // throw exception.
+  std::cout << cont.b << "\n";
+}
+
 int main() {
+  test_sp();
   basic_usage();
   type_to_string();
   nested_xml();
