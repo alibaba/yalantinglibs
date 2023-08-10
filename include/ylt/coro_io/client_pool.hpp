@@ -139,7 +139,8 @@ class client_pool : public std::enable_shared_from_this<
 
   async_simple::coro::Lazy<client_connect_helper> connect_client(
       client_connect_helper helper) {
-    if (!client_t::is_ok(co_await helper.client->connect(host_name_))) {
+    auto result = co_await helper.client->connect(host_name_);
+    if (!client_t::is_ok(result)) {
       co_await reconnect(helper.client);
     }
     co_return std::move(helper);
