@@ -584,6 +584,41 @@ namespace iguana::detail {
   MAKE_META_DATA_IMPL(STRUCT_NAME,                                            \
                       MAKE_ARG_LIST(N, &STRUCT_NAME::FIELD, __VA_ARGS__))
 
+#define REFLECTION_ALIAS_IMPL(STRUCT_NAME, ALIAS, N, ...) \
+  MAKE_META_DATA_IMPL_ALIAS(STRUCT_NAME, ALIAS, __VA_ARGS__)
+
+#define FLDALIAS(a, b) \
+  std::pair { a, b }
+
+template <typename... Args>
+constexpr auto get_mem_ptr_tp(Args... pair) {
+  return std::make_tuple(std::get<0>(pair)...);
+}
+
+template <size_t N, typename... Args>
+constexpr std::array<frozen::string, N> get_alias_arr(Args... pairs) {
+  return std::array<frozen::string, sizeof...(Args)>{
+      frozen::string(std::get<1>(pairs))...};
+}
+
+#define MAKE_META_DATA_IMPL_ALIAS(STRUCT_NAME, ALIAS, ...)                    \
+  [[maybe_unused]] inline static auto iguana_reflect_members(                 \
+      STRUCT_NAME const &) {                                                  \
+    struct reflect_members {                                                  \
+      constexpr decltype(auto) static apply_impl() {                          \
+        return iguana::detail::get_mem_ptr_tp(__VA_ARGS__);                   \
+      }                                                                       \
+      using size_type = std::integral_constant<                               \
+          size_t, std::tuple_size_v<decltype(std::make_tuple(__VA_ARGS__))>>; \
+      constexpr static std::string_view name() { return ALIAS; }              \
+      constexpr static size_t value() { return size_type::value; }            \
+      constexpr static std::array<frozen::string, size_type::value> arr() {   \
+        return iguana::detail::get_alias_arr<size_type::value>(__VA_ARGS__);  \
+      }                                                                       \
+    };                                                                        \
+    return reflect_members{};                                                 \
+  }
+
 #define MAKE_META_DATA_IMPL_EMPTY(STRUCT_NAME)                              \
   inline auto iguana_reflect_members(STRUCT_NAME const &) {                 \
     struct reflect_members {                                                \
@@ -660,6 +695,11 @@ inline constexpr auto get_iguana_struct_map() {
                  __VA_ARGS__)
 
 #define REFLECTION_EMPTY(STRUCT_NAME) MAKE_META_DATA_EMPTY(STRUCT_NAME)
+
+#define REFLECTION_ALIAS(STRUCT_NAME, ALIAS, ...) \
+  REFLECTION_ALIAS_IMPL(                          \
+      STRUCT_NAME, ALIAS,                         \
+      std::tuple_size_v<decltype(std::make_tuple(__VA_ARGS__))>, __VA_ARGS__)
 
 #ifdef _MSC_VER
 #define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __COUNTER__)
