@@ -123,7 +123,7 @@ class client_pool : public std::enable_shared_from_this<
   async_simple::coro::Lazy<void> reconnect(std::unique_ptr<client_t>& client) {
     auto pre_time_point = std::chrono::steady_clock::now();
     bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
-    for (int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
+    for (unsigned int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
       auto post_time_point = std::chrono::steady_clock::now();
       auto wait_time =
           pool_config_.reconnect_wait_time - (post_time_point - pre_time_point);
@@ -206,11 +206,12 @@ class client_pool : public std::enable_shared_from_this<
       if (clients.collecter_cnt_.compare_exchange_strong(expected, 1)) {
         collect_idle_timeout_client(
             this->shared_from_this(), clients,
-            std::max((is_short_client
-                          ? (std::min)(pool_config_.idle_timeout,
-                                       pool_config_.short_connect_idle_timeout)
-                          : pool_config_.idle_timeout),
-                     std::chrono::milliseconds{50}),
+            (std::max)(
+                (is_short_client
+                     ? (std::min)(pool_config_.idle_timeout,
+                                  pool_config_.short_connect_idle_timeout)
+                     : pool_config_.idle_timeout),
+                std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
             .via(coro_io::get_global_executor())
             .start([](auto&&) {
@@ -283,8 +284,7 @@ class client_pool : public std::enable_shared_from_this<
       : host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection) {
-  };
+        free_clients_(pool_config.max_connection){};
 
   client_pool(private_construct_token t, client_pools_t* pools_manager_,
               std::string_view host_name, const pool_config& pool_config,
@@ -293,8 +293,7 @@ class client_pool : public std::enable_shared_from_this<
         host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection) {
-  };
+        free_clients_(pool_config.max_connection){};
 
   template <typename T>
   async_simple::coro::Lazy<return_type<T>> send_request(
