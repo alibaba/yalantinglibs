@@ -36,6 +36,7 @@
 #include <random>
 #include <shared_mutex>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -45,6 +46,7 @@
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
+#include "ylt/easylog.hpp"
 namespace coro_io {
 
 template <typename client_t, typename io_context_pool_t>
@@ -100,20 +102,34 @@ class client_pool : public std::enable_shared_from_this<
   struct client_connect_helper {
     std::unique_ptr<client_t> client;
     std::weak_ptr<client_pool> pool_watcher;
+    std::weak_ptr<bool> spinlock_watcher;
     client_connect_helper(std::unique_ptr<client_t>&& client,
-                          std::weak_ptr<client_pool>&& pool_watcher)
-        : client(std::move(client)), pool_watcher(std::move(pool_watcher)) {}
+                          std::weak_ptr<client_pool>&& pool_watcher,
+                          std::weak_ptr<bool>&& spinlock_watcher)
+        : client(std::move(client)),
+          pool_watcher(std::move(pool_watcher)),
+          spinlock_watcher(std::move(spinlock_watcher)) {}
     client_connect_helper(client_connect_helper&& o)
         : client(std::move(o.client)),
-          pool_watcher(std::move(o.pool_watcher)) {}
+          pool_watcher(std::move(o.pool_watcher)),
+          spinlock_watcher(std::move(o.spinlock_watcher)) {}
     client_connect_helper& operator=(client_connect_helper&& o) {
       client = std::move(o.client);
       pool_watcher = std::move(o.pool_watcher);
+      spinlock_watcher = std::move(o.spinlock_watcher);
       return *this;
     }
     ~client_connect_helper() {
       if (client) {
         if (auto pool = pool_watcher.lock(); pool) {
+          int cnt = 0;
+          while (spinlock_watcher.lock()) {
+            std::this_thread::yield();
+            ++cnt;
+            if (cnt % 10000 == 0) {
+              ELOGV(WARN, "spinlock cost too much time, spin count:%d", cnt);
+            }
+          }
           pool->collect_free_client(std::move(client));
         }
       }
@@ -167,9 +183,10 @@ class client_pool : public std::enable_shared_from_this<
       if (!client->init_config(client_config)) {
         co_return nullptr;
       }
+      auto spinlock = std::make_shared<bool>(false);
       auto result = co_await async_simple::coro::collectAny(
-          connect_client(client_connect_helper{std::move(client),
-                                               this->shared_from_this()}),
+          connect_client(client_connect_helper{
+              std::move(client), this->shared_from_this(), spinlock}),
           coro_io::sleep_for(rand_time()));
       if (result.index() == 0) {  // connect finish in 100ms
         co_return std::move(std::get<0>(result).value().client);
@@ -178,11 +195,13 @@ class client_pool : public std::enable_shared_from_this<
         std::unique_ptr<client_t> cli;
         if (short_connect_clients_.try_dequeue(cli) ||
             free_clients_.try_dequeue(cli)) {
+          spinlock = nullptr;
           co_return std::move(cli);
         }
         else {
           async_simple::Promise<std::unique_ptr<client_t>> promise;
           promise_queue.enqueue(&promise);
+          spinlock = nullptr;
           if (short_connect_clients_.try_dequeue(cli) ||
               free_clients_.try_dequeue(cli)) {
             collect_free_client(std::move(cli));
