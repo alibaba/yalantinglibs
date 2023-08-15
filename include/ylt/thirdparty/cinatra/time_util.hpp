@@ -100,9 +100,8 @@ inline constexpr std::array<component_of_time_format, 32> get_format() {
 }
 }  // namespace time_util
 
-template <time_format Format = time_format::http_format>
-inline std::pair<bool, std::time_t> get_timestamp(
-    const std::string &gmt_time_str) {
+template <time_format Format = time_format::http_format, typename String>
+inline std::pair<bool, std::time_t> get_timestamp(const String &gmt_time_str) {
   using namespace time_util;
   std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
