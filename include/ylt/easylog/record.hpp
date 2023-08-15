@@ -117,7 +117,11 @@ class record_t {
       const auto end = jkj::dragonbox::to_chars(data, temp);
       ss_.append(temp, std::distance(temp, end));
     }
+    else if constexpr (std::is_same_v<bool, U>) {
+      data ? ss_.append("true") : ss_.append("false");
+    }
     else if constexpr (std::is_same_v<char, U>) {
+      data ? ss_.append("true") : ss_.append("false");
       ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {

@@ -41,6 +41,7 @@ TEST_CASE("test basic") {
   std::unique_ptr<int> ptr(new int(42));
   ELOG_INFO << ptr.get();
   ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
+  ELOG_INFO << false << ", " << true;
 
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
