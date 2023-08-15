@@ -76,12 +76,18 @@ class client_pool : public std::enable_shared_from_this<
         break;
       }
       while (true) {
+        ELOG_DEBUG << "start collect timeout client of pool{"
+                   << self->host_name_
+                   << "}, now client count: " << clients.size();
         std::size_t is_all_cleared = clients.clear_old(clear_cnt);
+        ELOG_DEBUG << "finish collect timeout client of pool{"
+                   << self->host_name_
+                   << "}, now client cnt: " << clients.size();
         if (is_all_cleared != 0) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
           } catch (std::exception& e) {
-            std::cout << e.what() << std::endl;
+            ELOG_ERROR << "unexcepted yield exception: " << e.what();
           }
         }
         else {
@@ -127,7 +133,8 @@ class client_pool : public std::enable_shared_from_this<
             std::this_thread::yield();
             ++cnt;
             if (cnt % 10000 == 0) {
-              ELOGV(WARN, "spinlock cost too much time, spin count:%d", cnt);
+              ELOG_WARN << "spinlock of client{" << client.get()
+                        << "}cost too much time, spin count: " << cnt;
             }
           }
           pool->collect_free_client(std::move(client));
@@ -137,28 +144,47 @@ class client_pool : public std::enable_shared_from_this<
   };
 
   async_simple::coro::Lazy<void> reconnect(std::unique_ptr<client_t>& client) {
-    auto pre_time_point = std::chrono::steady_clock::now();
-    bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
-    for (unsigned int i = 0; !ok && i < pool_config_.connect_retry_count; ++i) {
+    for (unsigned int i = 0; i < pool_config_.connect_retry_count; ++i) {
+      ELOG_DEBUG << "try to reconnect client{" << client.get() << "},host:{"
+                 << client->get_host() << ":" << client->get_port()
+                 << "}, try count:" << i
+                 << "max retry limit:" << pool_config_.connect_retry_count;
+      auto pre_time_point = std::chrono::steady_clock::now();
+      bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
       auto post_time_point = std::chrono::steady_clock::now();
-      auto wait_time =
-          pool_config_.reconnect_wait_time - (post_time_point - pre_time_point);
-      if (wait_time > std::chrono::milliseconds{10})
+      auto cost_time = post_time_point - pre_time_point;
+      ELOG_DEBUG << "reconnect client{" << client.get()
+                 << "} cost time: " << cost_time / std::chrono::milliseconds{1}
+                 << "ms";
+      if (ok) {
+        ELOG_DEBUG << "reconnect client{" << client.get() << "} success";
+        co_return;
+      }
+      ELOG_DEBUG << "reconnect client{" << client.get()
+                 << "} failed. If client close:{" << client->has_closed()
+                 << "}";
+      auto wait_time = pool_config_.reconnect_wait_time - cost_time;
+      if (wait_time.count() > 0)
         co_await coro_io::sleep_for(wait_time);
-      pre_time_point = post_time_point;
-      ok = (client_t::is_ok(co_await client->reconnect(host_name_)));
     }
-    if (!ok) {
-      client = nullptr;
-    }
+    ELOG_WARN << "reconnect client{" << client.get()
+              << "} out of max limit, stop retry. connect failed";
+    client = nullptr;
   }
 
   async_simple::coro::Lazy<client_connect_helper> connect_client(
       client_connect_helper helper) {
+    ELOG_DEBUG << "try to connect client{" << helper.client.get()
+               << "} to host:" << host_name_;
     auto result = co_await helper.client->connect(host_name_);
     if (!client_t::is_ok(result)) {
+      ELOG_DEBUG << "connect client{" << helper.client.get() << "} to failed. ";
       co_await reconnect(helper.client);
     }
+    if (helper.client) {
+      ELOG_DEBUG << "connect client{" << helper.client.get() << "} successful!";
+    }
+
     co_return std::move(helper);
   }
 
@@ -177,13 +203,14 @@ class client_pool : public std::enable_shared_from_this<
       short_connect_clients_.try_dequeue(client);
     }
     assert(client == nullptr || !client->has_closed());
-
     if (client == nullptr) {
       client = std::make_unique<client_t>(*io_context_pool_.get_executor());
       if (!client->init_config(client_config)) {
+        ELOG_ERROR << "init client config{" << client.get() << "} failed.";
         co_return nullptr;
       }
       auto spinlock = std::make_shared<bool>(false);
+      auto client_ptr = client.get();
       auto result = co_await async_simple::coro::collectAny(
           connect_client(client_connect_helper{
               std::move(client), this->shared_from_this(), spinlock}),
@@ -192,10 +219,13 @@ class client_pool : public std::enable_shared_from_this<
         co_return std::move(std::get<0>(result).value().client);
       }
       else if (result.index() == 1) {  // connect time cost more than 100ms
+        ELOG_DEBUG << "slow connection of client{" << client_ptr
+                   << "}, try to get free client from pool.";
         std::unique_ptr<client_t> cli;
         if (short_connect_clients_.try_dequeue(cli) ||
             free_clients_.try_dequeue(cli)) {
           spinlock = nullptr;
+          ELOG_DEBUG << "get free client{" << cli.get() << "} from pool.";
           co_return std::move(cli);
         }
         else {
@@ -206,14 +236,21 @@ class client_pool : public std::enable_shared_from_this<
               free_clients_.try_dequeue(cli)) {
             collect_free_client(std::move(cli));
           }
-          co_return co_await promise.getFuture();
+          ELOG_DEBUG << "wait for free client waiter promise{" << &promise
+                     << "} response.";
+          auto cli = co_await promise.getFuture();
+          ELOG_DEBUG << "get free client{" << cli.get() << "} from promise{"
+                     << &promise << "}";
+          co_return std::move(cli);
         }
       }
       else {
+        ELOG_ERROR << "unknown collectAny index";
         co_return nullptr;
       }
     }
     else {
+      ELOG_DEBUG << "get free client{" << client.get() << "}. from queue";
       co_return std::move(client);
     }
   }
@@ -224,6 +261,8 @@ class client_pool : public std::enable_shared_from_this<
     if (clients.enqueue(std::move(client)) == 1) {
       std::size_t expected = 0;
       if (clients.collecter_cnt_.compare_exchange_strong(expected, 1)) {
+        ELOG_DEBUG << "start timeout client collecter of client_pool{"
+                   << host_name_ << "}";
         collect_idle_timeout_client(
             this->shared_from_this(), clients,
             (std::max)(
@@ -241,18 +280,30 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
+    ELOG_DEBUG << "collect free client{" << client.get() << "}";
     if (client && !client->has_closed()) {
       async_simple::Promise<std::unique_ptr<client_t>>* promise = nullptr;
       if (promise_queue.try_dequeue(promise)) {
         promise->setValue(std::move(client));
+        ELOG_DEBUG << "collect free client{" << client.get()
+                   << "} wake up promise{" << promise << "}";
       }
       else if (free_clients_.size() < pool_config_.max_connection) {
+        ELOG_DEBUG << "collect free client{" << client.get() << "} enqueue";
         enqueue(free_clients_, std::move(client), false);
       }
       else {
+        ELOG_DEBUG << "out of max connection limit <<"
+                   << pool_config_.max_connection << ", collect free client{"
+                   << client.get() << "} enqueue short connect queue";
         enqueue(short_connect_clients_, std::move(client), true);
       }
     }
+    else {
+      ELOG_DEBUG << "client{" << client.get()
+                 << "} is nullptr or is closed. we won't collect it";
+    }
+
     return;
   };
 
@@ -319,8 +370,11 @@ class client_pool : public std::enable_shared_from_this<
   async_simple::coro::Lazy<return_type<T>> send_request(
       T op, typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
+    ELOG_TRACE << "try send request to " << host_name_;
     auto client = co_await get_client(client_config);
     if (!client) {
+      ELOG_WARN << "send request to " << host_name_
+                << " failed. connection refused.";
       co_return return_type<T>{tl::unexpect, std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
@@ -358,8 +412,11 @@ class client_pool : public std::enable_shared_from_this<
       T op, std::string_view endpoint,
       typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
+    ELOG_TRACE << "try send request to " << endpoint;
     auto client = co_await get_client(client_config);
     if (!client) {
+      ELOG_WARN << "send request to " << endpoint
+                << " failed. connection refused.";
       co_return return_type_with_host<T>{tl::unexpect,
                                          std::errc::connection_refused};
     }
@@ -443,13 +500,20 @@ class client_pools {
 #endif
       if (iter == client_pool_manager_.end()) {
         shared_lock.unlock();
-        std::lock_guard lock{mutex_};
-        std::tie(iter, has_inserted) =
-            client_pool_manager_.emplace(host_name, nullptr);
+        auto pool = std::make_shared<client_pool_t>(
+            typename client_pool_t::private_construct_token{}, this, host_name,
+            pool_config, io_context_pool_);
+        {
+          std::lock_guard lock{mutex_};
+          std::tie(iter, has_inserted) =
+              client_pool_manager_.emplace(host_name, nullptr);
+          if (has_inserted) {
+            iter->second = pool;
+          }
+        }
         if (has_inserted) {
-          iter->second = std::make_shared<client_pool_t>(
-              typename client_pool_t::private_construct_token{}, this,
-              host_name, pool_config, io_context_pool_);
+          ELOG_DEBUG << "add new client pool of {" << host_name
+                     << "} to hash table";
         }
       }
       return iter->second;

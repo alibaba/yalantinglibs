@@ -96,7 +96,12 @@ class logger {
     }
   }
 
-  Severity min_severity_ = Severity::TRACE;
+  Severity min_severity_ =
+#if NDEBUG
+      Severity::WARN;
+#else
+      Severity::TRACE;
+#endif
   bool async_ = false;
   bool enable_console_ = true;
   appender *appender_ = nullptr;
