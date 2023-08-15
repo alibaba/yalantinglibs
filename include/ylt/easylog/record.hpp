@@ -117,7 +117,11 @@ class record_t {
       const auto end = jkj::dragonbox::to_chars(data, temp);
       ss_.append(temp, std::distance(temp, end));
     }
+    else if constexpr (std::is_same_v<bool, U>) {
+      data ? ss_.append("true") : ss_.append("false");
+    }
     else if constexpr (std::is_same_v<char, U>) {
+      data ? ss_.append("true") : ss_.append("false");
       ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {
@@ -127,6 +131,11 @@ class record_t {
     else if constexpr (std::is_integral_v<U>) {
       char buf[32];
       auto [ptr, ec] = std::to_chars(buf, buf + 32, data);
+      ss_.append(buf, std::distance(buf, ptr));
+    }
+    else if constexpr (std::is_pointer_v<U>) {
+      char buf[32] = {"0x"};
+      auto [ptr, ec] = std::to_chars(buf + 2, buf + 32, (uintptr_t)data, 16);
       ss_.append(buf, std::distance(buf, ptr));
     }
     else {

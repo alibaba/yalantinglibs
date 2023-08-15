@@ -259,7 +259,7 @@ class appender {
 
   void write(record_t &&r) {
     queue_.enqueue(std::move(r));
-    cnd_.notify_all();
+    cnd_.notify_one();
   }
 
   void flush() {
