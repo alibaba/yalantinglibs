@@ -271,7 +271,7 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d,
   co_await timer.async_await();
 }
 template <typename Duration>
-inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
+inline async_simple::coro::Lazy<void> sleep_for(Duration d) {
   if (auto executor = co_await async_simple::CurrentExecutor();
       executor != nullptr) {
     co_await async_simple::coro::sleep(d);

@@ -24,7 +24,7 @@ template <typename Stream, typename T,
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v);
 
 template <typename Stream, typename T,
-          std::enable_if_t<unique_ptr_v<T>, int> = 0>
+          std::enable_if_t<smart_ptr_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v);
 
 template <typename Stream, typename T,
@@ -203,7 +203,7 @@ constexpr auto write_json_key = [](auto &s, auto i,
   s.push_back('"');
 };
 
-template <typename Stream, typename T, std::enable_if_t<unique_ptr_v<T>, int>>
+template <typename Stream, typename T, std::enable_if_t<smart_ptr_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v) {
   if (v) {
     render_json_value(ss, *v);

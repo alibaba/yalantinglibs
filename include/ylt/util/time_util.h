@@ -20,9 +20,8 @@
 namespace ylt {
 using time_format = cinatra::time_format;
 
-template <time_format Format = time_format::http_format>
-inline std::pair<bool, std::time_t> get_timestamp(
-    const std::string &gmt_time_str) {
+template <time_format Format = time_format::http_format, typename String>
+inline std::pair<bool, std::time_t> get_timestamp(const String &gmt_time_str) {
   return cinatra::get_timestamp<Format>(gmt_time_str);
 }
 

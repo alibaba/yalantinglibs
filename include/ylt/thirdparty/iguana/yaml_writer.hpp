@@ -80,7 +80,7 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces);
 
 template <typename Stream, typename T,
-          std::enable_if_t<unique_ptr_v<T>, int> = 0>
+          std::enable_if_t<smart_ptr_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces);
 
@@ -132,7 +132,7 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
   }
 }
 
-template <typename Stream, typename T, std::enable_if_t<unique_ptr_v<T>, int>>
+template <typename Stream, typename T, std::enable_if_t<smart_ptr_v<T>, int>>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
                                      size_t min_spaces) {
   if (!val) {
@@ -174,7 +174,7 @@ template <typename Stream, typename T,
           std::enable_if_t<non_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s) {
   if constexpr (tuple_v<T> || map_container_v<T> || sequence_container_v<T> ||
-                optional_v<T> || unique_ptr_v<T>)
+                optional_v<T> || smart_ptr_v<T>)
     render_yaml_value(s, std::forward<T>(t), 0);
   else
     static_assert(!sizeof(T), "don't suppport this type");

@@ -75,94 +75,6 @@ struct multipart_t {
   size_t size = 0;
 };
 
-class simple_buffer {
- public:
-  inline static constexpr size_t sbuf_init_size = 4096;
-  simple_buffer(size_t init_size = sbuf_init_size)
-      : size_(0), alloc_size_(init_size) {
-    if (init_size == 0) {
-      data_ = nullptr;
-    }
-    else {
-      data_ = (char *)::malloc(init_size);
-      if (!data_) {
-        throw std::bad_alloc();
-      }
-    }
-  }
-
-  ~simple_buffer() { ::free(data_); }
-
-  simple_buffer(const simple_buffer &) = delete;
-  simple_buffer &operator=(const simple_buffer &) = delete;
-
-  simple_buffer(simple_buffer &&other)
-      : size_(other.size_), data_(other.data_), alloc_size_(other.alloc_size_) {
-    other.size_ = other.alloc_size_ = 0;
-    other.data_ = nullptr;
-  }
-
-  simple_buffer &operator=(simple_buffer &&other) {
-    ::free(data_);
-
-    size_ = other.size_;
-    alloc_size_ = other.alloc_size_;
-    data_ = other.data_;
-
-    other.size_ = other.alloc_size_ = 0;
-    other.data_ = nullptr;
-
-    return *this;
-  }
-
-  char *data() { return data_; }
-
-  const char *data() const { return data_; }
-
-  size_t size() const { return size_; }
-  size_t alloc_size() const { return alloc_size_; }
-
-  char *release() {
-    char *tmp = data_;
-    size_ = 0;
-    data_ = nullptr;
-    alloc_size_ = 0;
-    return tmp;
-  }
-
-  void init(size_t len) {
-    if (alloc_size_ - size_ >= len) {
-      size_ = len;
-      return;
-    }
-
-    size_t nsize = (alloc_size_ > 0) ? alloc_size_ * 2 : sbuf_init_size;
-
-    while (nsize < size_ + len) {
-      size_t tmp_nsize = nsize * 2;
-      if (tmp_nsize <= nsize) {
-        nsize = size_ + len;
-        break;
-      }
-      nsize = tmp_nsize;
-    }
-
-    void *tmp = ::realloc(data_, nsize);
-    if (!tmp) {
-      throw std::bad_alloc();
-    }
-
-    data_ = static_cast<char *>(tmp);
-    alloc_size_ = nsize;
-    size_ = nsize;
-  }
-
- private:
-  size_t size_;
-  size_t alloc_size_;
-  char *data_;
-};
-
 class coro_http_client {
  public:
   struct config {
@@ -299,12 +211,7 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  std::unique_ptr<char[]> release_buf() {
-    if (body_.size() == 0) {
-      return nullptr;
-    }
-    return std::unique_ptr<char[]>(body_.release());
-  }
+  std::string release_buf() { return std::move(body_); }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
@@ -1223,7 +1130,7 @@ class coro_http_client {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          body_.init(content_len);
+          body_.resize(content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
           memcpy(body_.data(), data_ptr, content_len);
           read_buf_.consume(read_buf_.size());
@@ -1236,7 +1143,7 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      body_.init(content_len);
+      body_.resize(content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       memcpy(body_.data(), data_ptr, part_size);
       read_buf_.consume(part_size);
@@ -1657,7 +1564,7 @@ class coro_http_client {
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &read_buf_;
-  simple_buffer body_{};
+  std::string body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
 

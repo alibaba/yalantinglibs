@@ -193,7 +193,7 @@ class multithread_context_pool {
   ~multithread_context_pool() { stop(); }
 
   void run() {
-    for (int i = 0; i < thd_num_; i++) {
+    for (std::size_t i = 0; i < thd_num_; i++) {
       thds_.emplace_back([this] {
         ioc_.run();
       });
