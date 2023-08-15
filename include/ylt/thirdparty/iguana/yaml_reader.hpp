@@ -241,7 +241,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
 template <typename U, typename It, std::enable_if_t<optional_v<U>, int> = 0>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces);
 
-template <typename U, typename It, std::enable_if_t<unique_ptr_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int> = 0>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces);
 
 // minspaces : The minimum indentation
@@ -418,12 +418,17 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
   }
 }
 
-template <typename U, typename It, std::enable_if_t<unique_ptr_v<U>, int>>
+template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int>>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
   using T = std::remove_reference_t<U>;
-  value = std::make_unique<typename T::element_type>();
+  if constexpr (unique_ptr_v<T>) {
+    value = std::make_unique<typename T::element_type>();
+  }
+  else {
+    value = std::make_shared<typename T::element_type>();
+  }
   static_assert(!string_v<typename T::element_type>,
-                "unique_ptr<string> is not allowed");
+                "smart_ptr<string> is not allowed");
   parse_item(*value, it, end, min_spaces);
 }
 

@@ -255,7 +255,63 @@ void test_inner_object() {
   assert(obj1.get_name() == "tom");
 }
 
+struct shared_object {
+  std::shared_ptr<std::vector<std::shared_ptr<int>>> vec;
+  std::string b;
+  std::shared_ptr<int> c;
+  std::vector<std::shared_ptr<int>> d;
+};
+REFLECTION(shared_object, vec, b, c, d);
+
+void test_sp() {
+  auto vec = std::make_shared<std::vector<std::shared_ptr<int>>>();
+  vec->push_back(std::make_unique<int>(42));
+  vec->push_back(std::make_unique<int>(21));
+  shared_object contents{std::move(vec),
+                         "test",
+                         std::make_shared<int>(24),
+                         {std::make_shared<int>(1), std::make_shared<int>(4)}};
+  std::string str;
+  iguana::to_xml(contents, str);
+
+  shared_object cont;
+  iguana::from_xml(cont, str);  // throw exception.
+  std::cout << cont.b << "\n";
+}
+
+struct next_obj_t {
+  int x;
+  int y;
+};
+REFLECTION_ALIAS(next_obj_t, "next", FLDALIAS(&next_obj_t::x, "w"),
+                 FLDALIAS(&next_obj_t::y, "h"));
+
+struct out_object {
+  std::unique_ptr<int> id;
+  std::string_view name;
+  next_obj_t obj;
+  REFLECTION_ALIAS(out_object, "qi", FLDALIAS(&out_object::id, "i"),
+                   FLDALIAS(&out_object::name, "na"),
+                   FLDALIAS(&out_object::obj, "obj"));
+};
+
+void test_alias() {
+  out_object m{std::make_unique<int>(20), "tom", {21, 42}};
+  std::string xml_str;
+  iguana::to_xml(m, xml_str);
+
+  std::cout << xml_str << "\n";
+
+  out_object m1;
+  iguana::from_xml(m1, xml_str);
+  assert(m1.name == "tom");
+  assert(m1.obj.x == 21);
+  assert(m1.obj.y == 42);
+}
+
 int main() {
+  test_alias();
+  test_sp();
   basic_usage();
   type_to_string();
   nested_xml();

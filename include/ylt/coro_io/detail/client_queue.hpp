@@ -15,7 +15,6 @@
  */
 #pragma once
 #include <atomic>
-#include <iterator>
 
 #include "ylt/util/concurrentqueue.h"
 namespace coro_io::detail {
@@ -49,9 +48,7 @@ class client_queue {
       : queue_{moodycamel::ConcurrentQueue<client_t>{reserve_size},
                moodycamel::ConcurrentQueue<client_t>{reserve_size}} {};
   std::size_t size() const noexcept { return size_[0] + size_[1]; }
-  void reselect() noexcept {
-    const int_fast16_t index = (selected_index_ ^= 1);
-  }
+  void reselect() noexcept { selected_index_ ^= 1; }
   std::size_t enqueue(client_t&& c) {
     const int_fast16_t index = selected_index_;
     auto cnt = ++size_[index];
@@ -77,7 +74,7 @@ class client_queue {
     }
     return false;
   }
-  std::size_t clear_old(int max_clear_cnt) {
+  std::size_t clear_old(std::size_t max_clear_cnt) {
     const int_fast16_t index = selected_index_ ^ 1;
     if (size_[index]) {
       std::size_t result =

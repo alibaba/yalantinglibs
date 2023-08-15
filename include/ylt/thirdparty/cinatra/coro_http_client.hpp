@@ -75,94 +75,6 @@ struct multipart_t {
   size_t size = 0;
 };
 
-class simple_buffer {
- public:
-  inline static constexpr size_t sbuf_init_size = 4096;
-  simple_buffer(size_t init_size = sbuf_init_size)
-      : size_(0), alloc_size_(init_size) {
-    if (init_size == 0) {
-      data_ = nullptr;
-    }
-    else {
-      data_ = (char *)::malloc(init_size);
-      if (!data_) {
-        throw std::bad_alloc();
-      }
-    }
-  }
-
-  ~simple_buffer() { ::free(data_); }
-
-  simple_buffer(const simple_buffer &) = delete;
-  simple_buffer &operator=(const simple_buffer &) = delete;
-
-  simple_buffer(simple_buffer &&other)
-      : size_(other.size_), data_(other.data_), alloc_size_(other.alloc_size_) {
-    other.size_ = other.alloc_size_ = 0;
-    other.data_ = nullptr;
-  }
-
-  simple_buffer &operator=(simple_buffer &&other) {
-    ::free(data_);
-
-    size_ = other.size_;
-    alloc_size_ = other.alloc_size_;
-    data_ = other.data_;
-
-    other.size_ = other.alloc_size_ = 0;
-    other.data_ = nullptr;
-
-    return *this;
-  }
-
-  char *data() { return data_; }
-
-  const char *data() const { return data_; }
-
-  size_t size() const { return size_; }
-  size_t alloc_size() const { return alloc_size_; }
-
-  char *release() {
-    char *tmp = data_;
-    size_ = 0;
-    data_ = nullptr;
-    alloc_size_ = 0;
-    return tmp;
-  }
-
-  void init(size_t len) {
-    if (alloc_size_ - size_ >= len) {
-      size_ = len;
-      return;
-    }
-
-    size_t nsize = (alloc_size_ > 0) ? alloc_size_ * 2 : sbuf_init_size;
-
-    while (nsize < size_ + len) {
-      size_t tmp_nsize = nsize * 2;
-      if (tmp_nsize <= nsize) {
-        nsize = size_ + len;
-        break;
-      }
-      nsize = tmp_nsize;
-    }
-
-    void *tmp = ::realloc(data_, nsize);
-    if (!tmp) {
-      throw std::bad_alloc();
-    }
-
-    data_ = static_cast<char *>(tmp);
-    alloc_size_ = nsize;
-    size_ = nsize;
-  }
-
- private:
-  size_t size_;
-  size_t alloc_size_;
-  char *data_;
-};
-
 class coro_http_client {
  public:
   struct config {
@@ -175,6 +87,7 @@ class coro_http_client {
     std::string proxy_auth_username;
     std::string proxy_auth_passwd;
     std::string proxy_auth_token;
+    bool enable_tcp_no_delay;
 #ifdef CINATRA_ENABLE_SSL
     bool use_ssl = false;
     std::string base_path;
@@ -215,6 +128,9 @@ class coro_http_client {
     }
     if (!conf.proxy_auth_token.empty()) {
       set_proxy_bearer_token_auth(conf.proxy_auth_token);
+    }
+    if (conf.enable_tcp_no_delay) {
+      enable_tcp_no_delay_ = conf.enable_tcp_no_delay;
     }
 #ifdef CINATRA_ENABLE_SSL
     if (conf.use_ssl) {
@@ -299,12 +215,7 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  std::unique_ptr<char[]> release_buf() {
-    if (body_.size() == 0) {
-      return nullptr;
-    }
-    return std::unique_ptr<char[]>(body_.release());
-  }
+  std::string release_buf() { return std::move(body_); }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
@@ -745,13 +656,27 @@ class coro_http_client {
   void reset() {
     if (!has_closed())
       close_socket(*socket_);
-    socket_->has_closed_ = true;
+
     socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
     if (!socket_->impl_.is_open()) {
-      socket_->impl_.open(asio::ip::tcp::v4());
+      std::error_code ec;
+      socket_->impl_.open(asio::ip::tcp::v4(), ec);
+      if (ec) {
+        CINATRA_LOG_WARNING << "client reset socket failed, reason: "
+                            << ec.message();
+        return;
+      }
     }
+
+    socket_->has_closed_ = true;
 #ifdef CINATRA_ENABLE_SSL
     sni_hostname_ = "";
+    if (use_ssl_) {
+      socket_->ssl_stream_ = nullptr;
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+    }
 #endif
 #ifdef BENCHMARK_TEST
     req_str_.clear();
@@ -883,7 +808,12 @@ class coro_http_client {
           break;
         }
 
-        socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+        if (enable_tcp_no_delay_) {
+          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
+          if (ec) {
+            break;
+          }
+        }
 
         if (u.is_ssl) {
           if (ec = co_await handle_shake(); ec) {
@@ -1223,7 +1153,7 @@ class coro_http_client {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          body_.init(content_len);
+          body_.resize(content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
           memcpy(body_.data(), data_ptr, content_len);
           read_buf_.consume(read_buf_.size());
@@ -1236,7 +1166,7 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      body_.init(content_len);
+      body_.resize(content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       memcpy(body_.data(), data_ptr, part_size);
       read_buf_.consume(part_size);
@@ -1386,7 +1316,13 @@ class coro_http_client {
         co_return resp_data{ec, 404};
       }
 
-      socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+      if (enable_tcp_no_delay_) {
+        std::error_code ec;
+        socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
+        if (ec) {
+          co_return resp_data{ec, 404};
+        }
+      }
 
       if (u.is_ssl) {
         if (auto ec = co_await handle_shake(); ec) {
@@ -1657,7 +1593,7 @@ class coro_http_client {
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &read_buf_;
-  simple_buffer body_{};
+  std::string body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
 
@@ -1692,6 +1628,7 @@ class coro_http_client {
       std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
+  bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
 
 #ifdef BENCHMARK_TEST

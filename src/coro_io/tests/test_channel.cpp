@@ -79,9 +79,8 @@ TEST_CASE("test single host") {
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
       auto res = co_await channel.send_request(
-          [&i, &hosts](
-              coro_rpc::coro_rpc_client &client,
-              std::string_view host) -> async_simple::coro::Lazy<void> {
+          [&hosts](coro_rpc::coro_rpc_client &client,
+                   std::string_view host) -> async_simple::coro::Lazy<void> {
             CHECK(host == hosts[0]);
             co_return;
           });

@@ -119,7 +119,7 @@ IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
 }
 
 template <bool pretty, size_t spaces, typename Stream, typename T,
-          std::enable_if_t<unique_ptr_v<T>, int> = 0>
+          std::enable_if_t<smart_ptr_v<T>, int> = 0>
 IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
                                     std::string_view name) {
   if (value) {
@@ -142,7 +142,8 @@ template <bool pretty, size_t spaces, typename Stream, typename T,
           std::enable_if_t<sequence_container_v<T>, int>>
 IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
                                     std::string_view name) {
-  using value_type = typename std::remove_cvref_t<T>::value_type;
+  using value_type =
+      underline_type_t<typename std::remove_cvref_t<T>::value_type>;
   for (const auto &v : value) {
     if constexpr (attr_v<value_type>) {
       render_xml_value<pretty, spaces>(ss, v, name);
@@ -163,7 +164,7 @@ IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name) {
   for_each(std::forward<T>(t),
            [&](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
              using M = decltype(iguana_reflect_type(std::forward<T>(t)));
-             using value_type = std::remove_cvref_t<decltype(t.*v)>;
+             using value_type = underline_type_t<decltype(t.*v)>;
              constexpr auto Idx = decltype(i)::value;
              constexpr auto Count = M::value();
              constexpr std::string_view tag_name =

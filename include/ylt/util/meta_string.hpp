@@ -130,7 +130,7 @@ struct meta_string {
     constexpr size_t n = substr_len(pos, count);
 
     meta_string<n> result;
-    for (int i = 0; i < n; ++i) {
+    for (std::size_t i = 0; i < n; ++i) {
       result[i] = elements_[pos + i];
     }
     return result;

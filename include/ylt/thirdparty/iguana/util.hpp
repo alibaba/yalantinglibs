@@ -123,6 +123,13 @@ constexpr inline bool unique_ptr_v =
     is_template_instant_of<std::unique_ptr, std::remove_cvref_t<T>>::value;
 
 template <typename T>
+constexpr inline bool shared_ptr_v =
+    is_template_instant_of<std::shared_ptr, std::remove_cvref_t<T>>::value;
+
+template <typename T>
+constexpr inline bool smart_ptr_v = shared_ptr_v<T> || unique_ptr_v<T>;
+
+template <typename T>
 struct is_variant : std::false_type {};
 
 template <typename... T>
@@ -134,7 +141,7 @@ constexpr inline bool variant_v = is_variant<std::remove_cvref_t<T>>::value;
 template <class T>
 constexpr inline bool non_refletable_v =
     container_v<T> || c_array_v<T> || tuple_v<T> || optional_v<T> ||
-    unique_ptr_v<T> || std::is_fundamental_v<std::remove_cvref_t<T>> ||
+    smart_ptr_v<T> || std::is_fundamental_v<std::remove_cvref_t<T>> ||
     variant_v<T>;
 
 template <typename T>
@@ -143,6 +150,29 @@ constexpr inline bool refletable_v = is_reflection_v<std::remove_cvref_t<T>>;
 template <typename T>
 constexpr inline bool plain_v =
     string_container_v<T> || num_v<T> || char_v<T> || bool_v<T> || enum_v<T>;
+
+template <typename T>
+struct underline_type {
+  using type = T;
+};
+
+template <typename T>
+struct underline_type<std::unique_ptr<T>> {
+  using type = typename underline_type<T>::type;
+};
+
+template <typename T>
+struct underline_type<std::shared_ptr<T>> {
+  using type = typename underline_type<T>::type;
+};
+
+template <typename T>
+struct underline_type<std::optional<T>> {
+  using type = typename underline_type<T>::type;
+};
+
+template <typename T>
+using underline_type_t = typename underline_type<std::remove_cvref_t<T>>::type;
 
 template <char... C, typename It>
 IGUANA_INLINE void match(It &&it, It &&end) {
