@@ -689,6 +689,10 @@ class coro_http_client {
     co_return co_await connect(std::move(uri));
   }
 
+  std::string_view get_host() { return host_; }
+
+  std::string_view get_port() { return port_; }
+
   template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
       S uri, http_method method, String filename,
@@ -800,10 +804,10 @@ class coro_http_client {
       }
       if (socket_->has_closed_) {
         auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
-        std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
-        std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
+        host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
+        port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
         if (ec = co_await coro_io::async_connect(&executor_wrapper_,
-                                                 socket_->impl_, host, port);
+                                                 socket_->impl_, host_, port_);
             ec) {
           break;
         }
@@ -1308,10 +1312,10 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
     if (socket_->has_closed_) {
-      std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
-      std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec = co_await coro_io::async_connect(&executor_wrapper_,
-                                                    socket_->impl_, host, port);
+      host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
+      port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
+      if (auto ec = co_await coro_io::async_connect(
+              &executor_wrapper_, socket_->impl_, host_, port_);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -1612,6 +1616,8 @@ class coro_http_client {
   std::function<void(resp_data)> on_ws_msg_;
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
+  std::string host_;
+  std::string port_;
 
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
