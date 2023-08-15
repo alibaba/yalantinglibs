@@ -87,6 +87,7 @@ class coro_http_client {
     std::string proxy_auth_username;
     std::string proxy_auth_passwd;
     std::string proxy_auth_token;
+    bool enable_tcp_no_delay;
 #ifdef CINATRA_ENABLE_SSL
     bool use_ssl = false;
     std::string base_path;
@@ -127,6 +128,9 @@ class coro_http_client {
     }
     if (!conf.proxy_auth_token.empty()) {
       set_proxy_bearer_token_auth(conf.proxy_auth_token);
+    }
+    if (conf.enable_tcp_no_delay) {
+      enable_tcp_no_delay_ = conf.enable_tcp_no_delay;
     }
 #ifdef CINATRA_ENABLE_SSL
     if (conf.use_ssl) {
@@ -652,13 +656,27 @@ class coro_http_client {
   void reset() {
     if (!has_closed())
       close_socket(*socket_);
-    socket_->has_closed_ = true;
+
     socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
     if (!socket_->impl_.is_open()) {
-      socket_->impl_.open(asio::ip::tcp::v4());
+      std::error_code ec;
+      socket_->impl_.open(asio::ip::tcp::v4(), ec);
+      if (ec) {
+        CINATRA_LOG_WARNING << "client reset socket failed, reason: "
+                            << ec.message();
+        return;
+      }
     }
+
+    socket_->has_closed_ = true;
 #ifdef CINATRA_ENABLE_SSL
     sni_hostname_ = "";
+    if (use_ssl_) {
+      socket_->ssl_stream_ = nullptr;
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+    }
 #endif
 #ifdef BENCHMARK_TEST
     req_str_.clear();
@@ -790,7 +808,12 @@ class coro_http_client {
           break;
         }
 
-        socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+        if (enable_tcp_no_delay_) {
+          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
+          if (ec) {
+            break;
+          }
+        }
 
         if (u.is_ssl) {
           if (ec = co_await handle_shake(); ec) {
@@ -1293,7 +1316,13 @@ class coro_http_client {
         co_return resp_data{ec, 404};
       }
 
-      socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+      if (enable_tcp_no_delay_) {
+        std::error_code ec;
+        socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
+        if (ec) {
+          co_return resp_data{ec, 404};
+        }
+      }
 
       if (u.is_ssl) {
         if (auto ec = co_await handle_shake(); ec) {
@@ -1599,6 +1628,7 @@ class coro_http_client {
       std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
+  bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
 
 #ifdef BENCHMARK_TEST
