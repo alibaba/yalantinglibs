@@ -129,6 +129,11 @@ class record_t {
       auto [ptr, ec] = std::to_chars(buf, buf + 32, data);
       ss_.append(buf, std::distance(buf, ptr));
     }
+    else if constexpr (std::is_pointer_v<U>) {
+      char buf[32] = {"0x"};
+      auto [ptr, ec] = std::to_chars(buf + 2, buf + 32, (uintptr_t)data, 16);
+      ss_.append(buf, std::distance(buf, ptr));
+    }
     else {
       ss_.append(data);
     }
