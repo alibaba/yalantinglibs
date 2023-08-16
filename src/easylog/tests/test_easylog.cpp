@@ -42,6 +42,16 @@ TEST_CASE("test basic") {
   ELOG_INFO << ptr.get();
   ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
   ELOG_INFO << false << ", " << true;
+  char buf[5] = {"test"};
+  std::string_view sv = "test";
+  std::string str = "test";
+  std::array<char, 5> arr{"test"};
+  std::stringstream ss;
+  ss << "test";
+  ELOG_INFO << arr << ", " << ss;
+
+  auto id = std::this_thread::get_id();
+  ELOG_INFO << buf << ", " << str << ", " << sv << ", " << id;
 
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
