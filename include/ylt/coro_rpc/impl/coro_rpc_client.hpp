@@ -144,6 +144,10 @@ class coro_rpc_client {
     read_buf_.resize(default_read_buf_size_);
   }
 
+  std::string_view get_host() const { return config_.host; }
+
+  std::string_view get_port() const { return config_.port; }
+
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
 #ifdef YLT_ENABLE_SSL
