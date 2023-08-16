@@ -143,8 +143,10 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
                           GET_STRING(__FILE__, __LINE__))             \
             .ref()
 
+#ifndef ELOG
 #define ELOG(severity, ...) \
   ELOG_IMPL(easylog::Severity::severity, __VA_ARGS__, 0)
+#endif
 
 #define ELOGV_IMPL(severity, Id, fmt, ...)                            \
   if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
@@ -161,29 +163,69 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
     }                                                                 \
   }
 
+#ifndef ELOGV
 #define ELOGV(severity, ...) \
   ELOGV_IMPL(easylog::Severity::severity, 0, __VA_ARGS__, "\n")
+#endif
 
+#ifndef MELOGV
 #define MELOGV(severity, Id, ...) \
   ELOGV_IMPL(easylog::Severity::severity, Id, __VA_ARGS__, "\n")
+#endif
 
+#ifndef ELOG_TRACE
 #define ELOG_TRACE ELOG(TRACE)
+#endif
+#ifndef ELOG_DEBUG
 #define ELOG_DEBUG ELOG(DEBUG)
+#endif
+#ifndef ELOG_INFO
 #define ELOG_INFO ELOG(INFO)
+#endif
+#ifndef ELOG_WARN
 #define ELOG_WARN ELOG(WARN)
+#endif
+#ifndef ELOG_ERROR
 #define ELOG_ERROR ELOG(ERROR)
+#endif
+#ifndef ELOG_CRITICAL
 #define ELOG_CRITICAL ELOG(CRITICAL)
+#endif
 
+#ifndef MELOG_TRACE
 #define MELOG_TRACE(id) ELOG(INFO, id)
+#endif
+#ifndef MELOG_DEBUG
 #define MELOG_DEBUG(id) ELOG(DEBUG, id)
+#endif
+#ifndef MELOG_INFO
 #define MELOG_INFO(id) ELOG(INFO, id)
+#endif
+#ifndef MELOG_WARN
 #define MELOG_WARN(id) ELOG(WARN, id)
+#endif
+#ifndef MELOG_ERROR
 #define MELOG_ERROR(id) ELOG(ERROR, id)
+#endif
+#ifndef MELOG_CRITICAL
 #define MELOG_CRITICAL(id) ELOG(CRITICAL, id)
+#endif
 
+#ifndef ELOGT
 #define ELOGT ELOG_TRACE
+#endif
+#ifndef ELOGD
 #define ELOGD ELOG_DEBUG
+#endif
+#ifndef ELOGI
 #define ELOGI ELOG_INFO
+#endif
+#ifndef ELOGW
 #define ELOGW ELOG_WARN
+#endif
+#ifndef ELOGE
 #define ELOGE ELOG_ERROR
+#endif
+#ifndef ELOGC
 #define ELOGC ELOG_CRITICAL
+#endif
