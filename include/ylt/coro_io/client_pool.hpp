@@ -133,7 +133,8 @@ class client_pool : public std::enable_shared_from_this<
             std::this_thread::yield();
             ++cnt;
             if (cnt % 10000 == 0) {
-              ELOG_WARN << "spinlock of client{" << client.get()
+              ELOG_WARN << "spinlock of client{" << client.get() << "},host:{"
+                        << client->get_host() << ":" << client->get_port()
                         << "}cost too much time, spin count: " << cnt;
             }
           }
@@ -167,7 +168,8 @@ class client_pool : public std::enable_shared_from_this<
       if (wait_time.count() > 0)
         co_await coro_io::sleep_for(wait_time);
     }
-    ELOG_WARN << "reconnect client{" << client.get()
+    ELOG_WARN << "reconnect client{" << client.get() << "},host:{"
+              << client->get_host() << ":" << client->get_port()
               << "} out of max limit, stop retry. connect failed";
     client = nullptr;
   }

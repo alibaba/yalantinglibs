@@ -31,44 +31,45 @@ Lazy<void> show_rpc_call() {
   assert(ec == std::errc{});
   auto ret = co_await client.call<hello_world>();
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "hello_world err: " << ret.error().msg << std::endl;
   }
   assert(ret.value() == "hello_world"s);
 
   auto ret_int = co_await client.call<A_add_B>(12, 30);
   if (!ret_int) {
-    std::cout << "err: " << ret_int.error().msg << std::endl;
+    std::cout << "A_add_B err: " << ret_int.error().msg << std::endl;
   }
   assert(ret_int.value() == 42);
 
   ret = co_await client.call<coro_echo>("coro_echo");
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "coro_echo err: " << ret.error().msg << std::endl;
   }
   assert(ret.value() == "coro_echo"s);
 
   ret = co_await client.call<hello_with_delay>("hello_with_delay"s);
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "hello_with_delay err: " << ret.error().msg << std::endl;
   }
   assert(ret.value() == "hello_with_delay"s);
 
-  ret = co_await client.call<nested_echo>("hello_with_delay"s);
+  ret = co_await client.call<nested_echo>("nested_echo"s);
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "nested_echo err: " << ret.error().msg << std::endl;
   }
-  assert(ret.value() == "hello_with_delay"s);
+  assert(ret.value() == "nested_echo"s);
 
   ret = co_await client.call<&HelloService::hello>();
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "HelloService::hello err: " << ret.error().msg << std::endl;
   }
   assert(ret.value() == "HelloService::hello"s);
 
   ret = co_await client.call<&HelloService::hello_with_delay>(
       "HelloService::hello_with_delay"s);
   if (!ret) {
-    std::cout << "err: " << ret.error().msg << std::endl;
+    std::cout << "HelloService::hello_with_delay err: " << ret.error().msg
+              << std::endl;
   }
   assert(ret.value() == "HelloService::hello_with_delay"s);
 }
