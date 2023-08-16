@@ -52,6 +52,32 @@ enum { ERROR = 0 };
 
 namespace easylog {
 
+namespace detail {
+template <class T>
+constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
+                                      std::extent_v<std::remove_cvref_t<T>> > 0;
+
+template <typename Type, typename = void>
+struct has_data : std::false_type {};
+
+template <typename T>
+struct has_data<T, std::void_t<decltype(std::declval<T>().data())>>
+    : std::true_type {};
+
+template <typename T>
+constexpr inline bool has_data_v = has_data<std::remove_cvref_t<T>>::value;
+
+template <typename Type, typename = void>
+struct has_str : std::false_type {};
+
+template <typename T>
+struct has_str<T, std::void_t<decltype(std::declval<T>().str())>>
+    : std::true_type {};
+
+template <typename T>
+constexpr inline bool has_str_v = has_str<std::remove_cvref_t<T>>::value;
+}  // namespace detail
+
 enum class Severity {
   NONE = 0,
   TRACE = 1,
@@ -138,8 +164,23 @@ class record_t {
       auto [ptr, ec] = std::to_chars(buf + 2, buf + 32, (uintptr_t)data, 16);
       ss_.append(buf, std::distance(buf, ptr));
     }
-    else {
+    else if constexpr (std::is_same_v<std::string, U> ||
+                       std::is_same_v<std::string_view, U>) {
+      ss_.append(data.data(), data.size());
+    }
+    else if constexpr (detail::c_array_v<U>) {
       ss_.append(data);
+    }
+    else if constexpr (detail::has_data_v<U>) {
+      ss_.append(data.data());
+    }
+    else if constexpr (detail::has_str_v<U>) {
+      ss_.append(data.str());
+    }
+    else {
+      std::stringstream ss;
+      ss << data;
+      ss_.append(ss.str());
     }
 
     return *this;
