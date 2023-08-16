@@ -227,7 +227,9 @@ class client_pool : public std::enable_shared_from_this<
         if (short_connect_clients_.try_dequeue(cli) ||
             free_clients_.try_dequeue(cli)) {
           spinlock = nullptr;
-          ELOG_DEBUG << "get free client{" << cli.get() << "} from pool.";
+          ELOG_DEBUG << "get free client{" << cli.get()
+                     << "} from pool. skip wait client{" << client_ptr
+                     << "} connect";
           co_return std::move(cli);
         }
         else {
@@ -239,15 +241,17 @@ class client_pool : public std::enable_shared_from_this<
             collect_free_client(std::move(cli));
           }
           ELOG_DEBUG << "wait for free client waiter promise{" << &promise
-                     << "} response.";
+                     << "} response because slow client{" << client_ptr << "}";
           auto cli = co_await promise.getFuture();
           ELOG_DEBUG << "get free client{" << cli.get() << "} from promise{"
-                     << &promise << "}";
+                     << &promise << "}. skip wait client{" << client_ptr
+                     << "} connect";
           co_return std::move(cli);
         }
       }
       else {
-        ELOG_ERROR << "unknown collectAny index";
+        ELOG_ERROR << "unknown collectAny index while wait client{"
+                   << client_ptr << "} connect";
         co_return nullptr;
       }
     }
