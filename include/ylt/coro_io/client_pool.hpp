@@ -233,20 +233,48 @@ class client_pool : public std::enable_shared_from_this<
           co_return std::move(cli);
         }
         else {
-          async_simple::Promise<std::unique_ptr<client_t>> promise;
-          promise_queue.enqueue(&promise);
+          auto promise = std::make_unique<
+              async_simple::Promise<std::unique_ptr<client_t>>>();
+          auto* promise_address = promise.get();
+          promise_queue.enqueue(promise_address);
           spinlock = nullptr;
           if (short_connect_clients_.try_dequeue(cli) ||
               free_clients_.try_dequeue(cli)) {
             collect_free_client(std::move(cli));
           }
-          ELOG_DEBUG << "wait for free client waiter promise{" << &promise
-                     << "} response because slow client{" << client_ptr << "}";
-          auto cli = co_await promise.getFuture();
-          ELOG_DEBUG << "get free client{" << cli.get() << "} from promise{"
-                     << &promise << "}. skip wait client{" << client_ptr
-                     << "} connect";
-          co_return std::move(cli);
+          ELOG_DEBUG << "wait for free client waiter promise{"
+                     << promise_address << "} response because slow client{"
+                     << client_ptr << "}";
+
+          auto res = co_await collectAny(
+              [](auto promise)
+                  -> async_simple::coro::Lazy<std::unique_ptr<client_t>> {
+                co_return co_await promise->getFuture();
+              }(std::move(promise)),
+              coro_io::sleep_for(this->pool_config_.max_connection_time));
+          if (res.index() == 0) {
+            auto& res0 = std::get<0>(res);
+            if (!res0.hasError()) {
+              auto& cli = res0.value();
+              ELOG_DEBUG << "get free client{" << cli.get() << "} from promise{"
+                         << promise_address << "}. skip wait client{"
+                         << client_ptr << "} connect";
+              co_return std::move(cli);
+            }
+            else {
+              ELOG_ERROR << "Unexcepted branch";
+              co_return nullptr;
+            }
+          }
+          else {
+            ELOG_ERROR << "Unexcepted branch. Out of max limitation of connect "
+                          "time, connect "
+                          "failed. skip wait client{"
+                       << client_ptr << "} connect. "
+                       << "skip wait promise {" << promise_address
+                       << "} response";
+            co_return nullptr;
+          }
         }
       }
       else {
@@ -341,6 +369,7 @@ class client_pool : public std::enable_shared_from_this<
     std::chrono::milliseconds reconnect_wait_time{1000};
     std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
+    std::chrono::milliseconds max_connection_time{60000};
     typename client_t::config client_config;
   };
 
