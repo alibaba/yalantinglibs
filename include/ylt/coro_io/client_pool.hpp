@@ -235,8 +235,8 @@ class client_pool : public std::enable_shared_from_this<
         else {
           auto promise = std::make_unique<
               async_simple::Promise<std::unique_ptr<client_t>>>();
-          void* promise_address = promise.get();
-          promise_queue.enqueue(promise.get());
+          auto* promise_address = promise.get();
+          promise_queue.enqueue(promise_address);
           spinlock = nullptr;
           if (short_connect_clients_.try_dequeue(cli) ||
               free_clients_.try_dequeue(cli)) {
@@ -247,10 +247,10 @@ class client_pool : public std::enable_shared_from_this<
                      << client_ptr << "}";
 
           auto res = co_await collectAny(
-              [promise = std::move(promise)]()
+              [](auto promise)
                   -> async_simple::coro::Lazy<std::unique_ptr<client_t>> {
                 co_return co_await promise->getFuture();
-              }(),
+              }(std::move(promise)),
               coro_io::sleep_for(this->pool_config_.max_connection_time));
           if (res.index() == 0) {
             auto& res0 = std::get<0>(res);
