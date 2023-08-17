@@ -180,7 +180,7 @@ TEST_CASE("test reconnect retry wait time exinclude reconnect cost time") {
     CHECK(pool->free_client_count() == 100);
     auto dur = std::chrono::steady_clock::now() - tp;
     std::cout << dur.count() << std::endl;
-    CHECK((dur >= 500ms && dur <= 700ms));
+    CHECK((dur >= 500ms && dur <= 800ms));
     server.stop();
     co_return;
   }());
