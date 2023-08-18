@@ -194,16 +194,21 @@ class record_t {
   }
 
   template <typename... Args>
-  record_t &sprintf(const char *fmt, Args... args) {
-    printf_string_format(fmt, args...);
+  record_t &sprintf(const char *fmt, Args &&...args) {
+    printf_string_format(fmt, std::forward<Args>(args)...);
+    return *this;
+  }
 
+  template <typename String>
+  record_t &format(String &&str) {
+    ss_.append(str.data());
     return *this;
   }
 
  private:
   template <typename... Args>
-  void printf_string_format(const char *fmt, Args... args) {
-    size_t size = snprintf(nullptr, 0, fmt, args...);
+  void printf_string_format(const char *fmt, Args &&...args) {
+    size_t size = snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
 
 #ifdef YLT_ENABLE_PMR
 #if __has_include(<memory_resource>)

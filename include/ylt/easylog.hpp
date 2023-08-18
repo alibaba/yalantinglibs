@@ -19,6 +19,20 @@
 #include <utility>
 #include <vector>
 
+#ifdef HAS_STD_FORMAT
+#if __has_include(<format>)
+#include <format>
+#endif
+#endif
+
+#ifdef HAS_FMT_LIB
+#ifndef FMT_HEADER_ONLY
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
+#endif
+
+#endif
+
 #include "easylog/appender.hpp"
 
 namespace easylog {
@@ -216,6 +230,44 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #ifndef MELOGV
 #define MELOGV(severity, Id, ...) \
   ELOGV_IMPL(easylog::Severity::severity, Id, __VA_ARGS__, "\n")
+#endif
+
+#if defined(HAS_FMT_LIB) || defined(HAS_STD_FORMAT)
+
+#define ELOGFMT_IMPL0(severity, Id, prefix, format_str, ...)          \
+  if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
+    ;                                                                 \
+  }                                                                   \
+  else {                                                              \
+    easylog::logger<Id>::instance() +=                                \
+        easylog::record_t(std::chrono::system_clock::now(), severity, \
+                          GET_STRING(__FILE__, __LINE__))             \
+            .format(prefix::format(format_str, __VA_ARGS__));         \
+    if (severity == easylog::Severity::CRITICAL) {                    \
+      easylog::flush<Id>();                                           \
+      std::exit(EXIT_FAILURE);                                        \
+    }                                                                 \
+  }
+
+#ifdef HAS_FMT_LIB
+#define ELOGFMT_IMPL(severity, Id, ...) \
+  ELOGFMT_IMPL0(severity, Id, fmt, __VA_ARGS__)
+#endif
+
+#ifdef HAS_STD_FORMAT
+#define ELOGFMT_IMPL(severity, Id, ...) \
+  ELOGFMT_IMPL0(severity, Id, std, __VA_ARGS__)
+#endif
+
+#ifndef ELOGFMT
+#define ELOGFMT(severity, ...) \
+  ELOGFMT_IMPL(easylog::Severity::severity, 0, __VA_ARGS__)
+#endif
+
+#ifndef MELOGFMT
+#define MELOGFMT(severity, Id, ...) \
+  ELOGFMT_IMPL(easylog::Severity::severity, Id, __VA_ARGS__)
+#endif
 #endif
 
 #ifndef ELOG_TRACE
