@@ -18,6 +18,8 @@
 #include <charconv>
 #include <chrono>
 #include <cstring>
+
+#include "ylt/util/time_util.h"
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -176,6 +178,11 @@ class record_t {
     }
     else if constexpr (detail::has_str_v<U>) {
       ss_.append(data.str());
+    }
+    else if constexpr (std::is_same_v<std::chrono::system_clock::time_point,
+                                      U>) {
+      ss_.append(
+          ylt::get_local_time_str(std::chrono::system_clock::to_time_t(data)));
     }
     else {
       std::stringstream ss;

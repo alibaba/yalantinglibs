@@ -72,6 +72,21 @@ class logger {
 
   void stop_async_log() { appender_->stop(); }
 
+  // set and get
+  void set_min_severity(Severity severity) { min_severity_ = severity; }
+  Severity get_min_severity() { return min_severity_; }
+
+  void set_console(bool enable) {
+    enable_console_ = enable;
+    if (appender_) {
+      appender_->enable_console(enable);
+    }
+  }
+  bool get_console() { return enable_console_; }
+
+  void set_async(bool enable) { async_ = enable; }
+  bool get_async() { return async_; }
+
  private:
   logger() {
     static appender appender{};
@@ -115,6 +130,36 @@ inline void init_log(Severity min_severity, const std::string &filename = "",
                      bool flush_every_time = false) {
   logger<Id>::instance().init(min_severity, async, enable_console, filename,
                               max_file_size, max_files, flush_every_time);
+}
+
+template <size_t Id = 0>
+inline void set_min_severity(Severity severity) {
+  logger<Id>::instance().set_min_severity(severity);
+}
+
+template <size_t Id = 0>
+inline Severity get_min_severity() {
+  return logger<Id>::instance().get_min_severity();
+}
+
+template <size_t Id = 0>
+inline void set_console(bool enable) {
+  logger<Id>::instance().set_console(enable);
+}
+
+template <size_t Id = 0>
+inline bool get_console() {
+  return logger<Id>::instance().get_console();
+}
+
+template <size_t Id = 0>
+inline void set_async(bool enable) {
+  logger<Id>::instance().set_async(enable);
+}
+
+template <size_t Id = 0>
+inline bool get_async() {
+  return logger<Id>::instance().get_async();
 }
 
 template <size_t Id = 0>
