@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <ylt/util/time_util.h>
+
 #include <filesystem>
 #include <ylt/easylog.hpp>
 
@@ -37,6 +39,24 @@ TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
   easylog::init_log(Severity::DEBUG, filename, false, true, 5000, 1, true);
+
+  std::chrono::seconds seconds(3);
+  std::chrono::system_clock::time_point p(seconds);
+  std::chrono::system_clock::now();
+
+  std::time_t now = std::time(0);
+  std::chrono::system_clock::time_point pt =
+      std::chrono::system_clock::from_time_t(now);
+  ELOG_INFO << pt;
+  ELOG_INFO << std::chrono::system_clock::now();
+
+  easylog::set_console(false);
+  ELOG_INFO << "no console";
+  easylog::set_console(true);
+
+  easylog::set_min_severity(Severity::WARN);
+  ELOG_INFO << "info log";
+  easylog::set_min_severity(Severity::DEBUG);
 
   std::unique_ptr<int> ptr(new int(42));
   ELOG_INFO << ptr.get();
