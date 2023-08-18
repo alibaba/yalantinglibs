@@ -73,6 +73,11 @@ TEST_CASE("test basic") {
   auto id = std::this_thread::get_id();
   ELOG_INFO << buf << ", " << str << ", " << sv << ", " << id;
 
+#if defined(HAS_FMT_LIB) || defined(HAS_STD_FORMAT)
+  ELOGFMT(INFO, "{} {}", 20, 42);
+  ELOGFMT(INFO, "it is a long string test {} {}", 42, "fmt");
+#endif
+
   ELOGV(INFO, "test");
   ELOGV(INFO, "it is a long string test %d %s", 2, "ok");
   CHECK(get_last_line(filename).rfind("test 2 ok") != std::string::npos);
