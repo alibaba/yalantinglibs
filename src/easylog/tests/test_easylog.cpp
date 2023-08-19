@@ -87,6 +87,10 @@ TEST_CASE("test basic") {
   CHECK(get_last_line(filename).rfind("rpc header data_len: 42, buf sz: 20") !=
         std::string::npos);
 
+  ELOG(WARN) << "warn";
+  ELOG(WARNING) << "warning";
+  ELOG(FATAL) << "fatal";
+
   ELOG(INFO) << "test log";
   easylog::flush();
   CHECK(get_last_line(filename).rfind("test log") != std::string::npos);
