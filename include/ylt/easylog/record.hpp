@@ -86,8 +86,10 @@ enum class Severity {
   DEBUG = 2,
   INFO = 3,
   WARN = 4,
-  ERROR = 5,
-  CRITICAL = 6,
+  WARNING = 5,
+  ERROR = 6,
+  CRITICAL = 7,
+  FATAL = 8,
 };
 
 inline std::string_view severity_str(Severity severity) {
@@ -99,10 +101,12 @@ inline std::string_view severity_str(Severity severity) {
     case Severity::INFO:
       return "INFO    ";
     case Severity::WARN:
+    case Severity::WARNING:
       return "WARNING ";
     case Severity::ERROR:
       return "ERROR   ";
     case Severity::CRITICAL:
+    case Severity::FATAL:
       return "CRITICAL";
     default:
       return "NONE    ";
