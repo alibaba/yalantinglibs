@@ -55,6 +55,7 @@ struct_pack支持以下约束类型：
 | variant       | variant类型                          | std::variant                                                                                                                        |
 | expected      | expected类型，包含期望结果或错误码   | std::expected, tl::expected                                                                                                         |
 | unique_ptr    | unique_ptr类型，一个独占所有权的指针 | std::unique_ptr                                                                                                                     |
+| bitset        | 定长的bit数组，将8个bit压缩为一个bool存储 | std::bitset                                                                                                        |
 
 下面我们列出各类型的详细约束条件, 用户可以根据约束条件来定义自己的数据结构：
 
@@ -202,6 +203,19 @@ concept unique_ptr = requires(Type ptr) {
 ```
 
 如果该对象的值为空指针，struct_pack会对其进行压缩。
+
+### bitset类型
+
+该类需要具有成员函数：`size()`,`flip()`,`set()`,`reset()`,`count()`,并且`size()`函数是constexpr的。该类型的内存布局必须是平凡的，并且将8个bit压缩为一个字节。
+```cpp
+  template <typename Type>
+  concept bitset = requires (Type t){
+    t.flip();
+    t.set();
+    t.reset();
+    t.count();
+  } && (Type{}.size()+7)/8 == sizeof(Type);
+```
 
 ## 结构体
 

@@ -394,6 +394,31 @@ template <typename T, typename = void>
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
+  concept bitset = requires (Type t){
+    t.flip();
+    t.set();
+    t.reset();
+    t.count();
+  } && (Type{}.size()+7)/8 == sizeof(Type);
+#else
+  template <typename T, typename = void>
+  struct bitset_container_impl : std::false_type {};
+
+  template <typename T>
+  struct bitset_container_impl<T, std::void_t<
+    typename std::array<int,std::declval<T>().size()>,
+    decltype(std::declval<T>().flip()),
+    decltype(std::declval<T>().set()),
+    decltype(std::declval<T>().reset()),
+    decltype(std::declval<T>().count())>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool bitset = bitset_container_impl<T>::value && sizeof(T)==(T{}.size()+7)/8;
+#endif
+
+#if __cpp_concepts >= 201907L
+  template <typename Type>
   concept tuple = requires(Type tuple) {
     std::get<0>(tuple);
     sizeof(std::tuple_size<remove_cvref_t<Type>>);
@@ -627,7 +652,7 @@ template <typename T, typename = void>
         else if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
         }
-        else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T> 
+        else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>  || bitset<T>
 #if __GNUC__ || __clang__
         || std::is_same_v<__int128,T> || std::is_same_v<unsigned __int128,T>
 #endif

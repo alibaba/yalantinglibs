@@ -201,6 +201,19 @@ concept unique_ptr = requires(Type ptr) {
 
 If the value of this object is a null pointer, struct_pack will compress it.
 
+### bitset
+
+The class needs to provide: `size()`,`flip()`,`set()`,`reset()`,`count()`,and the function `size()` is constexpr. The layout of this type must be trivial and store 8 bit into one byte.
+```cpp
+  template <typename Type>
+  concept bitset = requires (Type t){
+    t.flip();
+    t.set();
+    t.reset();
+    t.count();
+  } && (Type{}.size()+7)/8 == sizeof(Type);
+```
+
 ## Struct 
 
 `struct_pack` supports `struct`. Up to **64** fields are supported and nested fields are supported too. All members
