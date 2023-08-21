@@ -73,7 +73,7 @@ TEST_CASE("test basic") {
   auto id = std::this_thread::get_id();
   ELOG_INFO << buf << ", " << str << ", " << sv << ", " << id;
 
-#if defined(HAS_FMT_LIB) || defined(HAS_STD_FORMAT)
+#if __has_include(<fmt/format.h>) || __has_include(<format>)
   ELOGFMT(INFO, "{} {}", 20, 42);
   ELOGFMT(INFO, "it is a long string test {} {}", 42, "fmt");
 #endif
