@@ -1,17 +1,18 @@
-import {LocaleSpecificConfig, DefaultTheme} from 'vitepress'
+import { LocaleSpecificConfig, DefaultTheme } from 'vitepress'
 import * as data from './zh_data'
 
 export const zh_themeConfig = <DefaultTheme.Config>
     {
         nav: [
-            {text: '指南', link: data.guidLinks[0].link},
-            {text: 'Issues', link: 'https://github.com/alibaba/yalantinglibs/issues'}
+            { text: '指南', link: data.guidLinks[0].link },
+            { text: 'Issues', link: 'https://github.com/alibaba/yalantinglibs/issues' }
         ],
         sidebar: [
-            {text: '指南', items: data.guidLinks,},
-            {text: 'struct_pack', items: data.struct_pack_Links,},
-            {text: 'struct_pb', items: data.struct_pb_Links,},
-            {text: 'coro_rpc', items: data.coro_rpc_Links},
+            { text: '指南', items: data.guidLinks, },
+            { text: 'struct_pack', items: data.struct_pack_Links, },
+            { text: 'struct_pb', items: data.struct_pb_Links, },
+            { text: 'coro_rpc', items: data.coro_rpc_Links },
+            { text: 'easylog', items: data.easylog_Links },
         ]
     };
 
@@ -24,5 +25,5 @@ export const zh_LocaleConfig = <LocaleSpecificConfig>{
 
     // titleTemplate?: string | boolean
     // head?: HeadConfig[]
-    themeConfig:zh_themeConfig
+    themeConfig: zh_themeConfig
 };
