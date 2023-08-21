@@ -25,7 +25,7 @@ The target of yaLanTingLibs: provide very easy and high performance modern C++ l
 # Quick Start
 ## compiler requirements
 
-If your compiler don't support C++20, yalantinglibs will only compile the serialization libraries (struct_pack, struct_json, struct_xml, struct_yaml).
+If your compiler don't support C++20, yalantinglibs will only compile the serialization libraries (struct_pack, struct_json, struct_xml, struct_yaml, easylog support C++17).
 Make sure you have such compilers:
 
 - g++9 above;
@@ -445,19 +445,11 @@ No dependency.
 
 No dependency.
 
-### struct_json
-
-- [iguana](https://github.com/qicosmos/iguana)
-
 ### struct_pb (optional)
 
 - [protobuf](https://protobuf.dev/)
 
-### struct_xml
-
-- [iguana](https://github.com/qicosmos/iguana)
-
-### struct_yaml
+### struct_json、struct_xml、struct_yaml
 
 - [iguana](https://github.com/qicosmos/iguana)
 
