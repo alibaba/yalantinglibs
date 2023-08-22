@@ -60,6 +60,10 @@ struct person {
 
 //clang-format off
 void basic_usage() {
+  std::vector<int> a = {1, 2, 3};
+  auto sz =
+      struct_pack::get_needed_size<struct_pack::type_info_config::disable>(a);
+
   person p{20, "tom"};
 
   person p2{/*.age =*/21, /*.name =*/"Betty"};
