@@ -217,7 +217,6 @@ class coro_http_client {
   // return body_, the user will own body's lifetime.
   std::string release_buf() {
     if (body_.empty()) {
-      assert(!resp_chunk_str_.empty());
       return std::move(resp_chunk_str_);
     }
 
