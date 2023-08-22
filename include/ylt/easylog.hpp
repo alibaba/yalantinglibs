@@ -19,18 +19,15 @@
 #include <utility>
 #include <vector>
 
-#ifdef HAS_STD_FORMAT
 #if __has_include(<format>)
 #include <format>
 #endif
-#endif
 
-#ifdef HAS_FMT_LIB
+#if __has_include(<fmt/format.h>)
 #ifndef FMT_HEADER_ONLY
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #endif
-
 #endif
 
 #include "easylog/appender.hpp"
@@ -232,7 +229,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
   ELOGV_IMPL(easylog::Severity::severity, Id, __VA_ARGS__, "\n")
 #endif
 
-#if defined(HAS_FMT_LIB) || defined(HAS_STD_FORMAT)
+#if __has_include(<fmt/format.h>) || __has_include(<format>)
 
 #define ELOGFMT_IMPL0(severity, Id, prefix, format_str, ...)          \
   if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
@@ -249,12 +246,12 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
     }                                                                 \
   }
 
-#ifdef HAS_FMT_LIB
+#if __has_include(<fmt/format.h>)
 #define ELOGFMT_IMPL(severity, Id, ...) \
   ELOGFMT_IMPL0(severity, Id, fmt, __VA_ARGS__)
 #endif
 
-#ifdef HAS_STD_FORMAT
+#if __has_include(<format>)
 #define ELOGFMT_IMPL(severity, Id, ...) \
   ELOGFMT_IMPL0(severity, Id, std, __VA_ARGS__)
 #endif

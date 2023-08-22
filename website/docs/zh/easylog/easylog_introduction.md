@@ -23,13 +23,8 @@ ELOG(INFO) << "easylog " << 42;
 // printf输出
 ELOGV(INFO, "easylog %d", 42);
 
-// fmt::format 输出
-#if defined(HAS_FMT_LIB)
-  ELOGFMT(INFO, "easylog {}", 42);
-#endif
-
-// std::format 输出
-#if defined(HAS_STD_FORMAT)
+// fmt::format/std::format 输出
+#if __has_include(<fmt/format.h>) || __has_include(<format>)
   ELOGFMT(INFO, "easylog {}", 42);
 #endif
 ```
