@@ -215,7 +215,13 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  std::string release_buf() { return std::move(body_); }
+  std::string release_buf() {
+    if (body_.empty()) {
+      return std::move(resp_chunk_str_);
+    }
+
+    return std::move(body_);
+  }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
