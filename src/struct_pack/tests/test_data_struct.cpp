@@ -1,8 +1,11 @@
+#include <bitset>
 #include <memory>
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/reflection.hpp"
+#include "ylt/struct_pack/struct_pack_impl.hpp"
 using namespace struct_pack;
 
 template <typename T>
@@ -617,5 +620,34 @@ TEST_CASE("test unique_ptr") {
     auto p2 = struct_pack::deserialize<test_unique_ptr>(buffer);
     CHECK(p2.has_value());
     CHECK(p2.value() == p);
+  }
+}
+
+TEST_CASE("test bitset") {
+  SUBCASE("test serialize size") {
+    std::bitset<255> ar;
+    constexpr auto sz =
+        struct_pack::get_needed_size<struct_pack::type_info_config::disable>(
+            ar);
+    static_assert(sz.size() == 36);
+  }
+  SUBCASE("test serialize/deserialize") {
+    std::bitset<255> ar;
+    ar.set();
+    auto buffer = struct_pack::serialize(ar);
+    auto result = struct_pack::deserialize<std::bitset<255>>(buffer);
+    CHECK(result.has_value());
+    CHECK(result.value() == ar);
+  }
+  SUBCASE("test type check") {
+    std::bitset<255> ar;
+    auto buffer = struct_pack::serialize(ar);
+    auto result = struct_pack::deserialize<std::bitset<256>>(buffer);
+    CHECK(result.has_value() == false);
+  }
+  SUBCASE("test trivial copy") {
+    std::array<std::bitset<255>, 10> ar;
+    static_assert(
+        struct_pack::detail::is_trivial_serializable<decltype(ar)>::value);
   }
 }

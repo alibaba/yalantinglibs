@@ -233,7 +233,7 @@ constexpr auto get_types() {
   if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
                 string<T> || container<T> || optional<T> || unique_ptr<T> ||
                 is_variant_v<T> || expected<T> || array<T> || c_array<T> ||
-                std::is_same_v<std::monostate, T>
+                std::is_same_v<std::monostate, T> || bitset<T>
 #if __GNUC__ || __clang__
                 || std::is_same_v<__int128, T> ||
                 std::is_same_v<unsigned __int128, T>
@@ -342,6 +342,7 @@ enum class type_id {
   optional_t,
   variant_t,
   expected_t,
+  bitset_t,
   // monostate, or void
   monostate_t = 250,
   // circle_flag
@@ -546,6 +547,9 @@ constexpr type_id get_type_id() {
                      std::is_same_v<T, void>) {
     return type_id::monostate_t;
   }
+  else if constexpr (bitset<T>) {
+    return type_id::bitset_t;
+  }
   else if constexpr (string<T>) {
     return type_id::string_t;
   }
@@ -694,6 +698,9 @@ template <typename T>
 std::size_t constexpr get_array_size() {
   if constexpr (array<T> || c_array<T>) {
     return sizeof(T) / sizeof(typename get_array_element<T>::type);
+  }
+  else if constexpr (bitset<T>) {
+    return T{}.size();
   }
   else {
     return T::extent;
@@ -975,6 +982,11 @@ constexpr decltype(auto) get_type_literal() {
                    ParentArgs...>() +
                get_size_literal<sz>();
       }
+      else if constexpr (id == type_id::bitset_t) {
+        constexpr auto sz = get_array_size<Arg>();
+        static_assert(sz > 0, "The array's size must greater than zero!");
+        return ret + get_size_literal<sz>();
+      }
       else if constexpr (unique_ptr<Arg>) {
         return ret +
                get_type_literal<remove_cvref_t<typename Arg::element_type>, Arg,
@@ -1188,7 +1200,8 @@ constexpr size_info inline calculate_one_size(const T &item) {
   if constexpr (id == type_id::monostate_t) {
   }
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                     id == type_id::int128_t || id == type_id::uint128_t) {
+                     id == type_id::int128_t || id == type_id::uint128_t ||
+                     id == type_id::bitset_t) {
     ret.total = sizeof(type);
   }
   else if constexpr (is_trivial_view_v<type>) {
@@ -1747,7 +1760,8 @@ class packer {
         // do nothing
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t) {
+                         id == type_id::int128_t || id == type_id::uint128_t ||
+                         id == type_id::bitset_t) {
         writer_.write((char *)&item, sizeof(type));
       }
       else if constexpr (unique_ptr<type>) {
@@ -2507,7 +2521,8 @@ class unpacker {
         // do nothing
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t) {
+                         id == type_id::int128_t || id == type_id::uint128_t ||
+                         id == type_id::bitset_t) {
         if constexpr (NotSkip) {
           if SP_UNLIKELY (!reader_.read((char *)&item, sizeof(type))) {
             return struct_pack::errc::no_buffer_space;
