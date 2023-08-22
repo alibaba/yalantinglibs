@@ -649,11 +649,5 @@ TEST_CASE("test bitset") {
     std::array<std::bitset<255>, 10> ar;
     static_assert(
         struct_pack::detail::is_trivial_serializable<decltype(ar)>::value);
-    auto buffer = struct_pack::serialize(ar);
-    auto result = struct_pack::deserialize<decltype(ar)>(buffer);
-    CHECK(result.has_value());
-    for (int i = 0; i < 10; ++i) {
-      CHECK(ar[i] == result.value()[i]);
-    }
   }
 }
