@@ -402,19 +402,30 @@ template <typename T, typename = void>
   } && (Type{}.size()+7)/8 == sizeof(Type);
 #else
   template <typename T, typename = void>
-  struct bitset_container_impl : std::false_type {};
+  struct bitset_impl : std::false_type {};
+
 
   template <typename T>
-  struct bitset_container_impl<T, std::void_t<
-    typename std::array<int,std::declval<T>().size()>,
+  struct bitset_impl<T, std::void_t<
     decltype(std::declval<T>().flip()),
     decltype(std::declval<T>().set()),
     decltype(std::declval<T>().reset()),
-    decltype(std::declval<T>().count())>> 
+    decltype(std::declval<T>().count()),
+    decltype(std::declval<T>().size())>> 
       : std::true_type {};
 
+  template<typename T>
+  constexpr bool bitset_size_checker() {
+    if constexpr (bitset_impl<T>::value) {
+      return (T{}.size()+7)/8==sizeof(T);
+    }
+    else {
+      return false;
+    }
+  }
+
   template <typename T>
-  constexpr bool bitset = bitset_container_impl<T>::value && sizeof(T)==(T{}.size()+7)/8;
+  constexpr bool bitset = bitset_impl<T>::value && bitset_size_checker<T>();
 #endif
 
 #if __cpp_concepts >= 201907L
