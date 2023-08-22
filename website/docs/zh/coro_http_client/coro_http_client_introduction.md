@@ -236,7 +236,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 ```
 
 # http 重连
-当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用reconnect 去重连host，这样就可以服用http client 了。
+当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用reconnect 去重连host，这样就可以复用http client 了。
 
 ```c++
   coro_http_client client1{};
@@ -416,7 +416,7 @@ client 配置项：
 把config项设置之后，调用init_config 设置http client 的参数。
 ```c++
 coro_http_client client{};
-cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};
+coro_http_client::config conf{.req_timeout_duration = 60s};
 client.init_config(conf);
 auto r = async_simple::coro::syncAwait(
     client.async_http_connect("http://www.baidu.com"));
