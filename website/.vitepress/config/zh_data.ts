@@ -30,6 +30,10 @@ export const easylog_Links = [
     { text: 'easylog简介', link: '/zh/easylog/easylog_introduction' },
 ];
 
+export const coro_http_client_Links = [
+    { text: 'coro_http_client简介', link: '/zh/coro_http_client/coro_http_client_introduction' },
+];
+
 export const aboutLinks = [
     { text: 'purecpp', link: '/zh/about/community' }, //TODO 未来支持英语
     { text: 'contribute', link: '/zh/about/contribute' },
