@@ -75,6 +75,110 @@ struct multipart_t {
   size_t size = 0;
 };
 
+class simple_buffer {
+ public:
+  inline static constexpr size_t sbuf_init_size = 4096;
+  simple_buffer(size_t initsz = sbuf_init_size) : m_size(0), m_alloc(initsz) {
+    if (initsz == 0) {
+      m_data = nullptr;
+    }
+    else {
+      m_data = (char *)::malloc(initsz);
+      if (!m_data) {
+        throw std::bad_alloc();
+      }
+    }
+  }
+
+  ~simple_buffer() { ::free(m_data); }
+
+  simple_buffer(const simple_buffer &) = delete;
+  simple_buffer &operator=(const simple_buffer &) = delete;
+
+  simple_buffer(simple_buffer &&other)
+      : m_size(other.m_size), m_data(other.m_data), m_alloc(other.m_alloc) {
+    other.m_size = other.m_alloc = 0;
+    other.m_data = nullptr;
+  }
+
+  simple_buffer &operator=(simple_buffer &&other) {
+    ::free(m_data);
+
+    m_size = other.m_size;
+    m_alloc = other.m_alloc;
+    m_data = other.m_data;
+
+    other.m_size = other.m_alloc = 0;
+    other.m_data = nullptr;
+
+    return *this;
+  }
+
+  void init(size_t len) {
+    if (m_alloc - m_size < len) {
+      expand_buffer(len);
+    }
+  }
+
+  bool empty() { return m_size == 0; }
+
+  void write(const char *buf, size_t len) {
+    assert(buf || len == 0);
+
+    if (!buf)
+      return;
+
+    if (m_alloc - m_size < len) {
+      expand_buffer(len);
+    }
+    std::memcpy(m_data + m_size, buf, len);
+    m_size += len;
+  }
+
+  char *data() { return m_data; }
+
+  const char *data() const { return m_data; }
+
+  size_t size() const { return m_size; }
+
+  char *release() {
+    char *tmp = m_data;
+    m_size = 0;
+    m_data = nullptr;
+    m_alloc = 0;
+    return tmp;
+  }
+
+  void clear() { m_size = 0; }
+
+ private:
+  void expand_buffer(size_t len) {
+    size_t nsize = (m_alloc > 0) ? m_alloc * 2 : sbuf_init_size;
+
+    while (nsize < m_size + len) {
+      size_t tmp_nsize = nsize * 2;
+      if (tmp_nsize <= nsize) {
+        nsize = m_size + len;
+        break;
+      }
+      nsize = tmp_nsize;
+    }
+
+    void *tmp = ::realloc(m_data, nsize);
+    if (!tmp) {
+      throw std::bad_alloc();
+    }
+
+    m_data = static_cast<char *>(tmp);
+    m_alloc = nsize;
+  }
+
+ private:
+  size_t m_size;
+  char *m_data;
+  size_t m_alloc;
+};
+
 class coro_http_client {
  public:
   struct config {
@@ -215,12 +319,11 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  std::string release_buf() {
+  std::unique_ptr<char[]> release_buf() {
     if (body_.empty()) {
-      return std::move(resp_chunk_str_);
+      return std::unique_ptr<char[]>(resp_chunk_str_.release());
     }
-
-    return std::move(body_);
+    return std::unique_ptr<char[]>(body_.release());
   }
 
   // only make socket connet(or handshake) to the host
@@ -777,6 +880,9 @@ class coro_http_client {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
+    if (!body_.empty()) {
+      body_.clear();
+    }
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
@@ -1163,9 +1269,9 @@ class coro_http_client {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          body_.resize(content_len);
+          body_.init(content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-          memcpy(body_.data(), data_ptr, content_len);
+          body_.write(data_ptr, content_len);
           read_buf_.consume(read_buf_.size());
         }
         co_await handle_entire_content(data, content_len, is_ranges, ctx);
@@ -1176,9 +1282,9 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      body_.resize(content_len);
+      body_.init(content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      memcpy(body_.data(), data_ptr, part_size);
+      body_.write(data_ptr, part_size);
       read_buf_.consume(part_size);
 
       if (std::tie(ec, size) = co_await async_read(
@@ -1308,7 +1414,7 @@ class coro_http_client {
         ec = co_await ctx.stream->async_write(data_ptr, chunk_size);
       }
       else {
-        resp_chunk_str_.append(data_ptr, chunk_size);
+        resp_chunk_str_.write(data_ptr, chunk_size);
       }
 
       read_buf_.consume(chunk_size + CRCF.size());
@@ -1603,7 +1709,7 @@ class coro_http_client {
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &read_buf_;
-  std::string body_{};
+  simple_buffer body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
 
@@ -1641,7 +1747,7 @@ class coro_http_client {
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = false;
-  std::string resp_chunk_str_;
+  simple_buffer resp_chunk_str_;
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;
