@@ -135,6 +135,12 @@ class simple_buffer {
     m_size += len;
   }
 
+  // set \0 at the tail.
+  void set_string_end() {
+    write("\0", 1);
+    m_size -= 1;
+  }
+
   char *data() { return m_data; }
 
   const char *data() const { return m_data; }
@@ -204,6 +210,7 @@ class coro_http_client {
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(std::make_shared<socket_t>(executor)),
         read_buf_(socket_->read_buf_),
+        chunked_buf_(socket_->chunked_buf_),
         executor_wrapper_(executor),
         timer_(&executor_wrapper_) {}
 
@@ -1052,6 +1059,7 @@ class coro_http_client {
     asio::ip::tcp::socket impl_;
     std::atomic<bool> has_closed_ = true;
     asio::streambuf read_buf_;
+    asio::streambuf chunked_buf_;
 #ifdef CINATRA_ENABLE_SSL
     std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
 #endif
@@ -1299,6 +1307,7 @@ class coro_http_client {
     } while (0);
 
     if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.set_string_end();
       data.resp_body =
           std::string_view{resp_chunk_str_.data(), resp_chunk_str_.size()};
     }
@@ -1311,9 +1320,14 @@ class coro_http_client {
                                                        bool is_ranges,
                                                        auto &ctx) {
     if (content_len > 0) {
-      auto data_ptr = read_buf_.size() == 0
-                          ? body_.data()
-                          : asio::buffer_cast<const char *>(read_buf_.data());
+      const char *data_ptr;
+      if (read_buf_.size() == 0) {
+        body_.set_string_end();
+        data_ptr = body_.data();
+      }
+      else {
+        data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      }
 
       if (is_ranges) {
         if (ctx.stream) {
@@ -1357,7 +1371,8 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
     while (true) {
-      if (std::tie(ec, size) = co_await async_read_until(read_buf_, CRCF); ec) {
+      if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
+          ec) {
         break;
       }
 
@@ -1371,12 +1386,13 @@ class coro_http_client {
       }
 #endif
 
-      size_t buf_size = read_buf_.size();
+      size_t buf_size = chunked_buf_.size();
       size_t additional_size = buf_size - size;
-      const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      const char *data_ptr =
+          asio::buffer_cast<const char *>(chunked_buf_.data());
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
-      read_buf_.consume(size);
+      chunked_buf_.consume(size);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       if (inject_chunk_valid == ClientInjectAction::chunk_error) {
         chunk_size = -1;
@@ -1394,7 +1410,7 @@ class coro_http_client {
 
       if (chunk_size == 0) {
         // all finished, no more data
-        read_buf_.consume(CRCF.size());
+        chunked_buf_.consume(CRCF.size());
         data.status = 200;
         data.eof = true;
         break;
@@ -1403,13 +1419,14 @@ class coro_http_client {
       if (additional_size < size_t(chunk_size + 2)) {
         // not a complete chunk, read left chunk data.
         size_t size_to_read = chunk_size + 2 - additional_size;
-        if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
+        if (std::tie(ec, size) =
+                co_await async_read(chunked_buf_, size_to_read);
             ec) {
           break;
         }
       }
 
-      data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
       if (ctx.stream) {
         ec = co_await ctx.stream->async_write(data_ptr, chunk_size);
       }
@@ -1417,7 +1434,7 @@ class coro_http_client {
         resp_chunk_str_.write(data_ptr, chunk_size);
       }
 
-      read_buf_.consume(chunk_size + CRCF.size());
+      chunked_buf_.consume(chunk_size + CRCF.size());
     }
     co_return ec;
   }
@@ -1709,6 +1726,7 @@ class coro_http_client {
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &read_buf_;
+  asio::streambuf &chunked_buf_;
   simple_buffer body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
