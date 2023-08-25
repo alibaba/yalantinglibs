@@ -150,7 +150,7 @@ struct person {
 REFLECTION(person, name, age);
 
 void basic_usage() {
-  std::string xml = R"(
+  std::string_view xml = R"(
 <person>
     <name>tom</name>
     <age>20</age>
