@@ -30,24 +30,21 @@
 #include <stddef.h>
 #include <string.h>
 
+#include <string_view>
+
 #ifdef _MSC_VER
 #define ssize_t intptr_t
 #endif
 
-/* $Id: 67fd3ee74103ada60258d8a16e868f483abcca87 $ */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace cinatra {
+struct http_header {
+  std::string_view name;
+  std::string_view value;
+};
+namespace detail {
 
 /* contains name and value of a header (name == NULL if is a continuing line
  * of a multiline header */
-struct phr_header {
-  const char *name;
-  size_t name_len;
-  const char *value;
-  size_t value_len;
-};
 
 /* returns number of bytes consumed if successful, -2 if request is partial,
  * -1 if failed */
@@ -299,10 +296,13 @@ static const char *parse_http_version(const char *buf, const char *buf_end,
 }
 
 static const char *parse_headers(const char *buf, const char *buf_end,
-                                 struct phr_header *headers,
-                                 size_t *num_headers, size_t max_headers,
-                                 int *ret) {
+                                 http_header *headers, size_t *num_headers,
+                                 size_t max_headers, int *ret) {
   for (;; ++*num_headers) {
+    const char *name;
+    size_t name_len;
+    const char *value;
+    size_t value_len;
     CHECK_EOF();
     if (*buf == '\015') {
       ++buf;
@@ -320,7 +320,7 @@ static const char *parse_headers(const char *buf, const char *buf_end,
     if (!(*num_headers != 0 && (*buf == ' ' || *buf == '\t'))) {
       /* parsing name, but do not discard SP before colon, see
        * http://www.mozilla.org/security/announce/2006/mfsa2006-33.html */
-      headers[*num_headers].name = buf;
+      name = buf;
       static const char ALIGNED(16) ranges1[] =
           "\x00 "  /* control chars and up to SP */
           "\"\""   /* 0x22 */
@@ -346,8 +346,7 @@ static const char *parse_headers(const char *buf, const char *buf_end,
         ++buf;
         CHECK_EOF();
       }
-      if ((headers[*num_headers].name_len = buf - headers[*num_headers].name) ==
-          0) {
+      if ((name_len = buf - name) == 0) {
         *ret = -1;
         return NULL;
       }
@@ -360,14 +359,15 @@ static const char *parse_headers(const char *buf, const char *buf_end,
       }
     }
     else {
-      headers[*num_headers].name = NULL;
-      headers[*num_headers].name_len = 0;
+      name = NULL;
+      name_len = 0;
     }
-    if ((buf = get_token_to_eol(buf, buf_end, &headers[*num_headers].value,
-                                &headers[*num_headers].value_len, ret)) ==
+    if ((buf = get_token_to_eol(buf, buf_end, &value, &value_len, ret)) ==
         NULL) {
       return NULL;
     }
+    headers[*num_headers] = {std::string_view{name, name_len},
+                             std::string_view{value, value_len}};
   }
   return buf;
 }
@@ -375,7 +375,7 @@ static const char *parse_headers(const char *buf, const char *buf_end,
 static const char *parse_request(const char *buf, const char *buf_end,
                                  const char **method, size_t *method_len,
                                  const char **path, size_t *path_len,
-                                 int *minor_version, struct phr_header *headers,
+                                 int *minor_version, http_header *headers,
                                  size_t *num_headers, size_t max_headers,
                                  int *ret) {
   /* skip first empty line (some clients add CRLF after POST content) */
@@ -414,7 +414,7 @@ static const char *parse_request(const char *buf, const char *buf_end,
 inline int phr_parse_request(const char *buf_start, size_t len,
                              const char **method, size_t *method_len,
                              const char **path, size_t *path_len,
-                             int *minor_version, struct phr_header *headers,
+                             int *minor_version, http_header *headers,
                              size_t *num_headers, size_t last_len) {
   const char *buf = buf_start, *buf_end = buf_start + len;
   size_t max_headers = *num_headers;
@@ -445,9 +445,8 @@ inline int phr_parse_request(const char *buf_start, size_t len,
 inline const char *parse_response(const char *buf, const char *buf_end,
                                   int *minor_version, int *status,
                                   const char **msg, size_t *msg_len,
-                                  struct phr_header *headers,
-                                  size_t *num_headers, size_t max_headers,
-                                  int *ret) {
+                                  http_header *headers, size_t *num_headers,
+                                  size_t max_headers, int *ret) {
   /* parse "HTTP/1.x" */
   if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
     return NULL;
@@ -480,7 +479,7 @@ inline const char *parse_response(const char *buf, const char *buf_end,
 
 inline int phr_parse_response(const char *buf_start, size_t len,
                               int *minor_version, int *status, const char **msg,
-                              size_t *msg_len, struct phr_header *headers,
+                              size_t *msg_len, http_header *headers,
                               size_t *num_headers, size_t last_len) {
   const char *buf = buf_start, *buf_end = buf + len;
   size_t max_headers = *num_headers;
@@ -507,7 +506,7 @@ inline int phr_parse_response(const char *buf_start, size_t len,
 }
 
 inline int phr_parse_headers(const char *buf_start, size_t len,
-                             struct phr_header *headers, size_t *num_headers,
+                             http_header *headers, size_t *num_headers,
                              size_t last_len) {
   const char *buf = buf_start, *buf_end = buf + len;
   size_t max_headers = *num_headers;
@@ -672,13 +671,10 @@ Exit:
 inline int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder) {
   return decoder->_state == CHUNKED_IN_CHUNK_DATA;
 }
-
+}  // namespace detail
+}  // namespace cinatra
 #undef CHECK_EOF
 #undef EXPECT_CHAR
 #undef ADVANCE_TOKEN
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

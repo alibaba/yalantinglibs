@@ -353,6 +353,12 @@ inline bool iequal(const char *s, size_t l, const char *t, size_t size) {
   return true;
 }
 
+inline bool iequal(std::string_view a, std::string_view b) {
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char a, char b) {
+    return tolower(a) == tolower(b);
+  });
+}
+
 template <typename T>
 inline bool find_strIC(const T &src, const T &dest) {
   auto it = std::search(src.begin(), src.end(), dest.begin(), dest.end(),
