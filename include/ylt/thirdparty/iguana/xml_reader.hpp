@@ -444,7 +444,8 @@ IGUANA_INLINE void from_xml(U &value, It &&it, It &&end) {
   detail::parse_item(value, it, end, key);
 }
 
-template <typename U, typename View, std::enable_if_t<string_v<View>, int> = 0>
+template <typename U, typename View,
+          std::enable_if_t<string_container_v<View>, int> = 0>
 IGUANA_INLINE void from_xml(U &value, const View &view) {
   from_xml(value, std::begin(view), std::end(view));
 }
