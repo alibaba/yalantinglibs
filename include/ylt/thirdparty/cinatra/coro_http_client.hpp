@@ -22,6 +22,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
+#include "picohttpparser.h"
 #include "response_cv.hpp"
 #include "uri.hpp"
 #include "websocket.hpp"
@@ -50,11 +51,13 @@ inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
 
+struct http_header;
+
 struct resp_data {
   std::error_code net_err;
   int status;
   std::string_view resp_body;
-  std::vector<std::pair<std::string, std::string>> resp_headers;
+  std::span<http_header> resp_headers;
   bool eof;
 #ifdef BENCHMARK_TEST
   uint64_t total;
@@ -1216,7 +1219,7 @@ class coro_http_client {
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
-    data.resp_headers = get_headers(parser);
+    data.resp_headers = parser.get_headers();
     data.status = parser.status();
     return {};
   }
@@ -1234,8 +1237,7 @@ class coro_http_client {
         break;
       }
 
-      http_parser parser;
-      ec = handle_header(data, parser, size);
+      ec = handle_header(data, parser_, size);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       if (inject_header_valid == ClientInjectAction::header_error) {
         ec = std::make_error_code(std::errc::protocol_error);
@@ -1248,32 +1250,38 @@ class coro_http_client {
         break;
       }
 
-      is_keep_alive = parser.keep_alive();
+      is_keep_alive = parser_.keep_alive();
       if (method == http_method::HEAD) {
         co_return data;
       }
 
-      bool is_ranges = parser.is_ranges();
+      bool is_ranges = parser_.is_ranges();
       if (is_ranges) {
         is_keep_alive = true;
       }
-      if (parser.is_chunked()) {
+      if (parser_.is_chunked()) {
         is_keep_alive = true;
+        if (read_buf_.size() > 0) {
+          const char *data_ptr =
+              asio::buffer_cast<const char *>(read_buf_.data());
+          chunked_buf_.sputn(data_ptr, read_buf_.size());
+          read_buf_.consume(read_buf_.size());
+        }
         ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
 
       redirect_uri_.clear();
-      bool is_redirect = parser.is_location();
+      bool is_redirect = parser_.is_location();
       if (is_redirect)
-        redirect_uri_ = parser.get_header_value("Location");
+        redirect_uri_ = parser_.get_header_value("Location");
 
-      size_t content_len = (size_t)parser.body_len();
+      size_t content_len = (size_t)parser_.body_len();
 #ifdef BENCHMARK_TEST
-      total_len_ = parser.total_len();
+      total_len_ = parser_.total_len();
 #endif
 
-      if ((size_t)parser.body_len() <= read_buf_.size()) {
+      if ((size_t)parser_.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
@@ -1548,20 +1556,6 @@ class coro_http_client {
     co_return resp_data{{}, 200};
   }
 
-  std::vector<std::pair<std::string, std::string>> get_headers(
-      http_parser &parser) {
-    std::vector<std::pair<std::string, std::string>> resp_headers;
-
-    auto [headers, num_headers] = parser.get_headers();
-    for (size_t i = 0; i < num_headers; i++) {
-      resp_headers.emplace_back(
-          std::string(headers[i].name, headers[i].name_len),
-          std::string(headers[i].value, headers[i].value_len));
-    }
-
-    return resp_headers;
-  }
-
   // this function must be called before async_ws_connect.
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
@@ -1722,6 +1716,7 @@ class coro_http_client {
     return has_http_scheme;
   }
 
+  http_parser parser_;
   coro_io::ExecutorWrapper<> executor_wrapper_;
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;

@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 namespace cinatra {
 struct null_logger_t {
