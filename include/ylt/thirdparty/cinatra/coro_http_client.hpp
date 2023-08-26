@@ -78,6 +78,8 @@ struct multipart_t {
   size_t size = 0;
 };
 
+inline void free_simple_buffer(char *ptr) { ::free(ptr); }
+
 class simple_buffer {
  public:
   inline static constexpr size_t sbuf_init_size = 4096;
@@ -149,6 +151,8 @@ class simple_buffer {
   const char *data() const { return m_data; }
 
   size_t size() const { return m_size; }
+
+  void increase_size(size_t size) { m_size += size; }
 
   char *release() {
     char *tmp = m_data;
@@ -329,11 +333,13 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  std::unique_ptr<char[]> release_buf() {
+  auto release_buf() {
     if (body_.empty()) {
-      return std::unique_ptr<char[]>(resp_chunk_str_.release());
+      return std::unique_ptr<char[], decltype(&free_simple_buffer)>(
+          resp_chunk_str_.release(), &free_simple_buffer);
     }
-    return std::unique_ptr<char[]>(body_.release());
+    return std::unique_ptr<char[], decltype(&free_simple_buffer)>(
+        body_.release(), &free_simple_buffer);
   }
 
   // only make socket connet(or handshake) to the host
@@ -1309,7 +1315,7 @@ class coro_http_client {
           ec) {
         break;
       }
-
+      body_.increase_size(size_to_read);
       // Now get entire content, additional data will discard.
       co_await handle_entire_content(data, content_len, is_ranges, ctx);
     } while (0);
