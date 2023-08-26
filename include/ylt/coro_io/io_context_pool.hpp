@@ -255,13 +255,15 @@ inline T &g_block_io_context_pool(
 }
 
 template <typename T = io_context_pool>
-inline auto get_global_executor() {
-  return g_io_context_pool<T>().get_executor();
+inline auto get_global_executor(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  return g_io_context_pool<T>(pool_size).get_executor();
 }
 
 template <typename T = io_context_pool>
-inline auto get_global_block_executor() {
-  return g_block_io_context_pool<T>().get_executor();
+inline auto get_global_block_executor(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  return g_block_io_context_pool<T>(pool_size).get_executor();
 }
 
 }  // namespace coro_io
