@@ -342,7 +342,7 @@ async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri);
   auto result = async_simple::coro::syncAwait(client.async_upload_multipart(uri));
 ```
 
-## multipart 格式下载
+## chunked 格式下载
 ```c++
 async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                    std::string filename,
@@ -350,13 +350,8 @@ async_simple::coro::Lazy<resp_data> async_download(std::string uri,
 ```
 传入uri 和本地要保存的带路径的文件名即可，client 会自动下载并保存到文件中，直到全部下载完成。
 
-## chunked 格式下载
-chunked 下载接口和multipart 下载接口是相同的，client 内部会区分是chunked 格式还multipart 格式。
-
-传入uri 和本地要保存的带路径的文件名即可，client 会自动下载并保存到文件中，直到全部下载完成。
-
 ## ranges 格式下载
-ranges 下载接口和multipart、chunked 下载接口相同，需要填写ranges:
+ranges 下载接口和chunked 下载接口相同，需要填写ranges:
 ```c++
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
@@ -375,8 +370,8 @@ ranges 下载接口和multipart、chunked 下载接口相同，需要填写range
 ```
 ranges 按照"m-n,x-y,..." 的格式填写，下载的内容将会保存到文件里。
 
-## chunked\multipart\ranges 格式下载到内存
-如果下载的数据量比较小，不希望放到文件里，希望放到内存里，那么直接使用async_get、async_post 等接口即可，chunked\multipart\ranges 等下载数据将会保存到resp_data.resp_body 中。
+## chunked\ranges 格式下载到内存
+如果下载的数据量比较小，不希望放到文件里，希望放到内存里，那么直接使用async_get、async_post 等接口即可，chunked\ranges 等下载数据将会保存到resp_data.resp_body 中。
 
 # http client 配置项
 client 配置项：
@@ -488,4 +483,41 @@ websocket 例子:
 
   // 发送websocket 数据
   async_simple::coro::syncAwait(client.async_send_ws(send_str));
+```
+
+# 线程模型
+coro_http_client 默认情况下是共享一个全局“线程池”，这个“线程池”准确来说是一个io_context pool，coro_http_client 的线程模型是一个client一个io_context，
+io_context 和 client 是一对多的关系。io_context pool 默认的线程数是机器的核数，如果希望控制pool 的线程数可以调用coro_io::get_global_executor(pool_size) 去设置
+总的线程数。
+
+
+client 不是线程安全的，要确保只有一个线程在调用client，如果希望并发请求服务端有两种方式：
+
+方式一：
+
+创建多个client 去请求服务端， 全局的“线程池”，会用轮询的方式为每个client 分配一个线程。
+
+方式二：
+
+通过多个协程去请求服务端
+
+```c++
+  coro_http_client client;
+  std::vector<async_simple::coro::Lazy<resp_data>> futures;
+  for (int i = 0; i < 10; ++i) {
+    futures.push_back(client.async_get("http://www.baidu.com/"));
+  }
+
+  auto out = co_await async_simple::coro::collectAll(std::move(futures));
+
+  for (auto &item : out) {
+    auto result = item.value();
+    CHECK(result.status == 200);
+  }
+```
+
+# 设置解析http response 的最大header 数量
+默认情况下，最多可以解析100 个http header，如果希望解析更多http header 需要define一个宏CINATRA_MAX_HTTP_HEADER_FIELD_SIZE，通过它来设置解析的最大header 数, 在include client 头文件之前定义：
+```c++
+#define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 200  // 将解析的最大header 数设置为200
 ```
