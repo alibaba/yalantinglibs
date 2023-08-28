@@ -44,18 +44,26 @@ int main() {
 
 ### http 同步请求接口
 ```c++
+/// http header
+/// \param name header 名称
+/// \param value header 值
+struct http_header {
+  std::string_view name;
+  std::string_view value;
+};
+
 /// http 响应的结构体
 /// \param net_err 网络错误，默认为空
 /// \param status http 响应的状态码，正常一般为200
 /// \param resp_body http 响应body，类型为std::string_view，如果希望保存到后面延迟处理则需要将resp_body 拷贝走
-/// \param resp_headers http 响应头
+/// \param resp_headers http 响应头，headers 都是string_view，生命周期和本次请求响应的生命周期一致，如果需要延迟使用则需要拷贝走
 /// \param eof http 响应是否结束，一般请求eof 为true，eof对于文件下载才有意义，
 ///            下载的中间过程中eof 为false，最后一个包时eof才为true)
 struct resp_data {
   std::error_code net_err;
   int status;
   std::string_view resp_body;
-  std::vector<std::pair<std::string, std::string>> resp_headers;
+  std::span<http_header> resp_headers;
   bool eof;
 };
 
@@ -195,14 +203,13 @@ void test_coro_http_client() {
   data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
 
-  std::string uri2 = "https://www.baidu.com";
-  std::string uri3 = "https://cn.bing.com";
-  coro_http_client client{};
-  client.init_ssl("../../include/cinatra", "server.crt");
-  data = co_await client.async_get(uri2);
+  std::string uri2 = "https://cn.bing.com";
+  coro_http_client client1{};
+  client1.init_ssl();
+  data = co_await client1.async_get(uri2);
   print(data.status);
 
-  data = co_await client.async_get(uri3);
+  data = co_await client1.async_get(uri3);
   print(data.status);  
 }
 #endif
