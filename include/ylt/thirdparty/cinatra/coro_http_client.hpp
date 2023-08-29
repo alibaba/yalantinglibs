@@ -24,6 +24,7 @@
 #include "http_parser.hpp"
 #include "picohttpparser.h"
 #include "response_cv.hpp"
+#include "string_resize.hpp"
 #include "uri.hpp"
 #include "websocket.hpp"
 #include "ylt/coro_io/coro_file.hpp"
@@ -76,120 +77,6 @@ struct multipart_t {
   std::string filename;
   std::string content;
   size_t size = 0;
-};
-
-inline void free_simple_buffer(char *ptr) { ::free(ptr); }
-
-class simple_buffer {
- public:
-  inline static constexpr size_t sbuf_init_size = 4096;
-  simple_buffer(size_t initsz = sbuf_init_size) : m_size(0), m_alloc(initsz) {
-    if (initsz == 0) {
-      m_data = nullptr;
-    }
-    else {
-      m_data = (char *)::malloc(initsz);
-      if (!m_data) {
-        throw std::bad_alloc();
-      }
-    }
-  }
-
-  ~simple_buffer() { ::free(m_data); }
-
-  simple_buffer(const simple_buffer &) = delete;
-  simple_buffer &operator=(const simple_buffer &) = delete;
-
-  simple_buffer(simple_buffer &&other)
-      : m_size(other.m_size), m_data(other.m_data), m_alloc(other.m_alloc) {
-    other.m_size = other.m_alloc = 0;
-    other.m_data = nullptr;
-  }
-
-  simple_buffer &operator=(simple_buffer &&other) {
-    ::free(m_data);
-
-    m_size = other.m_size;
-    m_alloc = other.m_alloc;
-    m_data = other.m_data;
-
-    other.m_size = other.m_alloc = 0;
-    other.m_data = nullptr;
-
-    return *this;
-  }
-
-  void init(size_t len) {
-    if (m_alloc - m_size < len) {
-      expand_buffer(len);
-    }
-  }
-
-  bool empty() { return m_size == 0; }
-
-  void write(const char *buf, size_t len) {
-    assert(buf || len == 0);
-
-    if (!buf)
-      return;
-
-    if (m_alloc - m_size < len) {
-      expand_buffer(len);
-    }
-    std::memcpy(m_data + m_size, buf, len);
-    m_size += len;
-  }
-
-  // set \0 at the tail.
-  void set_string_end() {
-    write("\0", 1);
-    m_size -= 1;
-  }
-
-  char *data() { return m_data; }
-
-  const char *data() const { return m_data; }
-
-  size_t size() const { return m_size; }
-
-  void increase_size(size_t size) { m_size += size; }
-
-  char *release() {
-    char *tmp = m_data;
-    m_size = 0;
-    m_data = nullptr;
-    m_alloc = 0;
-    return tmp;
-  }
-
-  void clear() { m_size = 0; }
-
- private:
-  void expand_buffer(size_t len) {
-    size_t nsize = (m_alloc > 0) ? m_alloc * 2 : sbuf_init_size;
-
-    while (nsize < m_size + len) {
-      size_t tmp_nsize = nsize * 2;
-      if (tmp_nsize <= nsize) {
-        nsize = m_size + len;
-        break;
-      }
-      nsize = tmp_nsize;
-    }
-
-    void *tmp = ::realloc(m_data, nsize);
-    if (!tmp) {
-      throw std::bad_alloc();
-    }
-
-    m_data = static_cast<char *>(tmp);
-    m_alloc = nsize;
-  }
-
- private:
-  size_t m_size;
-  char *m_data;
-  size_t m_alloc;
 };
 
 class coro_http_client {
@@ -333,13 +220,11 @@ class coro_http_client {
 #endif
 
   // return body_, the user will own body's lifetime.
-  auto release_buf() {
+  std::string release_buf() {
     if (body_.empty()) {
-      return std::unique_ptr<char[], decltype(&free_simple_buffer)>(
-          resp_chunk_str_.release(), &free_simple_buffer);
+      return std::move(resp_chunk_str_);
     }
-    return std::unique_ptr<char[], decltype(&free_simple_buffer)>(
-        body_.release(), &free_simple_buffer);
+    return std::move(body_);
   }
 
   // only make socket connet(or handshake) to the host
@@ -1291,9 +1176,9 @@ class coro_http_client {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          body_.init(content_len);
+          detail::resize(body_, content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-          body_.write(data_ptr, content_len);
+          memcpy(body_.data(), data_ptr, content_len);
           read_buf_.consume(read_buf_.size());
         }
         co_await handle_entire_content(data, content_len, is_ranges, ctx);
@@ -1304,9 +1189,9 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      body_.init(content_len);
+      detail::resize(body_, content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      body_.write(data_ptr, part_size);
+      memcpy(body_.data(), data_ptr, part_size);
       read_buf_.consume(part_size);
 
       if (std::tie(ec, size) = co_await async_read(
@@ -1315,13 +1200,12 @@ class coro_http_client {
           ec) {
         break;
       }
-      body_.increase_size(size_to_read);
+
       // Now get entire content, additional data will discard.
       co_await handle_entire_content(data, content_len, is_ranges, ctx);
     } while (0);
 
     if (!resp_chunk_str_.empty()) {
-      resp_chunk_str_.set_string_end();
       data.resp_body =
           std::string_view{resp_chunk_str_.data(), resp_chunk_str_.size()};
     }
@@ -1336,7 +1220,6 @@ class coro_http_client {
     if (content_len > 0) {
       const char *data_ptr;
       if (read_buf_.size() == 0) {
-        body_.set_string_end();
         data_ptr = body_.data();
       }
       else {
@@ -1445,7 +1328,7 @@ class coro_http_client {
         ec = co_await ctx.stream->async_write(data_ptr, chunk_size);
       }
       else {
-        resp_chunk_str_.write(data_ptr, chunk_size);
+        resp_chunk_str_.append(data_ptr, chunk_size);
       }
 
       chunked_buf_.consume(chunk_size + CRCF.size());
@@ -1728,7 +1611,7 @@ class coro_http_client {
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &read_buf_;
   asio::streambuf &chunked_buf_;
-  simple_buffer body_{};
+  std::string body_;
 
   std::unordered_map<std::string, std::string> req_headers_;
 
@@ -1766,7 +1649,7 @@ class coro_http_client {
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = false;
-  simple_buffer resp_chunk_str_;
+  std::string resp_chunk_str_;
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;
