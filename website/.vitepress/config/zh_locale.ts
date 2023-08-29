@@ -14,6 +14,7 @@ export const zh_themeConfig = <DefaultTheme.Config>
             { text: 'coro_rpc', items: data.coro_rpc_Links },
             { text: 'easylog', items: data.easylog_Links },
             { text: 'coro_http_client', items: data.coro_http_client_Links },
+            { text: 'struct_xxx', items: data.struct_xxx_Links },
         ]
     };
 
