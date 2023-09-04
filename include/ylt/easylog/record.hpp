@@ -81,15 +81,15 @@ constexpr inline bool has_str_v = has_str<std::remove_cvref_t<T>>::value;
 }  // namespace detail
 
 enum class Severity {
-  NONE = 0,
-  TRACE = 1,
-  DEBUG = 2,
-  INFO = 3,
-  WARN = 4,
-  WARNING = 5,
-  ERROR = 6,
-  CRITICAL = 7,
-  FATAL = 8,
+  NONE,
+  TRACE,
+  DEBUG,
+  INFO,
+  WARN,
+  WARNING = WARN,
+  ERROR,
+  CRITICAL,
+  FATAL = CRITICAL,
 };
 
 inline std::string_view severity_str(Severity severity) {
@@ -101,12 +101,10 @@ inline std::string_view severity_str(Severity severity) {
     case Severity::INFO:
       return "INFO    ";
     case Severity::WARN:
-    case Severity::WARNING:
       return "WARNING ";
     case Severity::ERROR:
       return "ERROR   ";
     case Severity::CRITICAL:
-    case Severity::FATAL:
       return "CRITICAL";
     default:
       return "NONE    ";
