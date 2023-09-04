@@ -52,7 +52,7 @@ void use_smart_pointer() {
   iguana::to_json(p, str);
 
   person1 p1;
-  iguana::from_json(p1, str); // here throw exception
+  iguana::from_json(p1, str);  // here throw exception
 
   assert(*p1.name == "tom");
   assert(*p1.age == 42);
