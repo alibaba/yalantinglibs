@@ -35,6 +35,13 @@ std::string get_last_line(const std::string& filename) {
   return last_line;
 }
 
+TEST_CASE("test severity") {
+  CHECK(easylog::severity_str(easylog::Severity::WARN) ==
+        easylog::severity_str(easylog::Severity::WARNING));
+  CHECK(easylog::severity_str(easylog::Severity::CRITICAL) ==
+        easylog::severity_str(easylog::Severity::FATAL));
+}
+
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
@@ -88,7 +95,9 @@ TEST_CASE("test basic") {
         std::string::npos);
 
   ELOG(WARN) << "warn";
+  CHECK(get_last_line(filename).find("WARNING") != std::string::npos);
   ELOG(WARNING) << "warning";
+  CHECK(get_last_line(filename).find("WARNING") != std::string::npos);
 
   ELOG(INFO) << "test log";
   easylog::flush();
