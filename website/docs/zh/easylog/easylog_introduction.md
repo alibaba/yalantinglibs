@@ -34,15 +34,15 @@ ELOGV(INFO, "easylog %d", 42);
 easylog 定义了如下日志级别：
 ```c++
 enum class Severity {
-  NONE = 0,
-  TRACE = 1,
-  DEBUG = 2,
-  INFO = 3,
-  WARN = 4,
-  WARNING = 5,
-  ERROR = 6,
-  CRITICAL = 7,
-  FATAL = 8,
+  NONE,
+  TRACE,
+  DEBUG,
+  INFO,
+  WARN,
+  WARNING = WARN,
+  ERROR,
+  CRITICAL,
+  FATAL = CRITICAL,
 };
 ```
 用户可以根据需要输出这几种级别的日志，默认的日志级别是DEBUG，其中WARN 和 WARNING 是等价的，CRITICAL 和FATAL 是等价的，主要是为了适配其它日志库。
