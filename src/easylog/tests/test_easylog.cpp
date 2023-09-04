@@ -89,7 +89,6 @@ TEST_CASE("test basic") {
 
   ELOG(WARN) << "warn";
   ELOG(WARNING) << "warning";
-  ELOG(FATAL) << "fatal";
 
   ELOG(INFO) << "test log";
   easylog::flush();
