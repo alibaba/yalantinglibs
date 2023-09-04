@@ -39,6 +39,25 @@ void test_inner_object() {
   assert(obj1.get_name() == "tom");
 }
 
+struct person1 {
+  std::shared_ptr<std::string> name;
+  std::unique_ptr<int64_t> age;
+};
+REFLECTION(person1, name, age);
+
+void use_smart_pointer() {
+  person1 p{std::make_shared<std::string>("tom"),
+            std::make_unique<int64_t>(42)};
+  std::string str;
+  iguana::to_json(p, str);
+
+  person1 p1;
+  iguana::from_json(p1, str); // here throw exception
+
+  assert(*p1.name == "tom");
+  assert(*p1.age == 42);
+}
+
 int main() {
   person p{"tom", 20};
   std::string str;
@@ -59,4 +78,5 @@ int main() {
   assert(val.at<int>("age") == 20);
 
   test_inner_object();
+  use_smart_pointer();
 }
