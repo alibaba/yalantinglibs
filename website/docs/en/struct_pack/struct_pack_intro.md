@@ -175,16 +175,15 @@ assert(nested2==nested1);
 
 ### custom reflection
 
-Sometimes user need support non-aggregated type, or adjust the order of each field, which can be supported by macro function `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`.
+Sometimes user need support non-aggregated type, or adjust the order of each field, which can be supported by macro function `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`. The field can be private or public.
 
 ```cpp
 namespace test {
 class person : std::vector<int> {
  private:
-  std::string mess;
+  int age;
 
  public:
-  int age;
   std::string name;
   auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
@@ -197,30 +196,8 @@ STRUCT_PACK_REFL(person, name, age);
 
 The first argument of `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)` is the name of the type reflected, the others are the field names.
 The macro must be defined in the same namespace of the reflected type.
-The macro allow struct_pack support non-aggregated type, allow user define constructor, derived from other type or add some field which don't serialize.
+The macro allow struct_pack support non-aggregated type, allow user define constructor, derived from other type or ignore some field.
 ```
-
-Sometimes, user want to serialize/deserialize some private fields, which can be supported by macro function `STRUCT_PACK_FRIEND_DECL(typename)`.
-```cpp
-namespace example2 {
-class person {
- private:
-  int age;
-  std::string name;
-
- public:
-  auto operator==(const person& rhs) const {
-    return age == rhs.age && name == rhs.name;
-  }
-  person() = default;
-  person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
-};
-STRUCT_PACK_REFL(person, age, name);
-}  // namespace example2
-```
-
-This macro must declared inside the struct, it regist struct_pack reflection function as friend function.
 
 User can even register member function in macro function `STRUCT_PACK_REFL`, which greatly expands the flexibility of struct_pack.
 
@@ -244,7 +221,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
 ```
 The member function registed must return a reference, and this function must have a const version overload & non-const overload.

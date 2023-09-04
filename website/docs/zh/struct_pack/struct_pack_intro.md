@@ -176,10 +176,9 @@ assert(nested2==nested1);
 namespace test {
 class person : std::vector<int> {
  private:
-  std::string mess;
+  int age;
 
  public:
-  int age;
   std::string name;
   auto operator==(const person& rhs) const {
     return age == rhs.age && name == rhs.name;
@@ -195,28 +194,6 @@ STRUCT_PACK_REFL(person, name, age);
 如果该类型不具有默认构造函数，则无法使用函数`struct_pack::deserialize`,不过你依然可以使用`struct_pack::deserialize_to`来实现反序列化。
 它使得struct_pack可以支持那些非聚合的结构体类型，允许用户自定义构造函数，继承其他类型，添加不序列化的字段等等。
 ```
-
-有时，用户需要序列化/反序列化那些private字段，这可以通过函数`STRUCT_PACK_FRIEND_DECL(typenmae)`;来支持。
-```cpp
-namespace example2 {
-class person {
- private:
-  int age;
-  std::string name;
-
- public:
-  auto operator==(const person& rhs) const {
-    return age == rhs.age && name == rhs.name;
-  }
-  person() = default;
-  person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
-};
-STRUCT_PACK_REFL(person, age, name);
-}  // namespace example2
-```
-
-该宏必须声明在结构体内部，其原理是将struct_pack与反射有关的函数注册为友元函数。
 
 用户甚至可以在`STRUCT_PACK_REFL`中注册成员函数，这极大的扩展了struct_pack的灵活性。
 
@@ -239,7 +216,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
 
 注册的成员函数必须返回一个引用，并且该函数具有常量和非常量的重载。

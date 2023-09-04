@@ -2034,6 +2034,27 @@ constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
       // index shouldn't bigger than 256
   }
 }  // namespace detail
+
+template <std::size_t Idx>
+using Idx_t = std::integral_constant<std::size_t, Idx>;
+
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) member_function_resolve(U X, Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) member_function_resolve(U (T::*X)(), Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) const_member_function_resolve(U X, Idx_t<Idx>) {
+  return X;
+};
+template <typename T, typename U, std::size_t Idx>
+constexpr inline decltype(auto) const_member_function_resolve(U (T::*X)() const,
+                                                           Idx_t<Idx>) {
+  return X;
+};
 }  // namespace detail
 }  // namespace struct_pack
 
@@ -2061,188 +2082,193 @@ constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
 
 #define STRUCT_PACK_MARCO_EXPAND(...) __VA_ARGS__
 
-#define STRUCT_PACK_DOARG0(s,f,o) 
-#define STRUCT_PACK_DOARG1(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG0(s,f,__VA_ARGS__))  s f(0,t)
-#define STRUCT_PACK_DOARG2(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG1(s,f,__VA_ARGS__))  s f(1,t) 
-#define STRUCT_PACK_DOARG3(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG2(s,f,__VA_ARGS__))  s f(2,t)
-#define STRUCT_PACK_DOARG4(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG3(s,f,__VA_ARGS__))  s f(3,t)
-#define STRUCT_PACK_DOARG5(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG4(s,f,__VA_ARGS__))  s f(4,t)
-#define STRUCT_PACK_DOARG6(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG5(s,f,__VA_ARGS__))  s f(5,t)
-#define STRUCT_PACK_DOARG7(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG6(s,f,__VA_ARGS__))  s f(6,t)
-#define STRUCT_PACK_DOARG8(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG7(s,f,__VA_ARGS__)) s f(7,t)
-#define STRUCT_PACK_DOARG9(s,f,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG8(s,f,__VA_ARGS__)) s f(8,t)
-#define STRUCT_PACK_DOARG10(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG9(s,f,__VA_ARGS__)) s f(9,t)
-#define STRUCT_PACK_DOARG11(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG10(s,f,__VA_ARGS__)) s f(10,t)
-#define STRUCT_PACK_DOARG12(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG11(s,f,__VA_ARGS__)) s f(11,t)
-#define STRUCT_PACK_DOARG13(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG12(s,f,__VA_ARGS__)) s f(12,t)
-#define STRUCT_PACK_DOARG14(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG13(s,f,__VA_ARGS__)) s f(13,t)
-#define STRUCT_PACK_DOARG15(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG14(s,f,__VA_ARGS__)) s f(14,t)
-#define STRUCT_PACK_DOARG16(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG15(s,f,__VA_ARGS__)) s f(15,t)
-#define STRUCT_PACK_DOARG17(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG16(s,f,__VA_ARGS__)) s f(16,t)
-#define STRUCT_PACK_DOARG18(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG17(s,f,__VA_ARGS__)) s f(17,t)
-#define STRUCT_PACK_DOARG19(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG18(s,f,__VA_ARGS__)) s f(18,t)
-#define STRUCT_PACK_DOARG20(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG19(s,f,__VA_ARGS__)) s f(19,t)
-#define STRUCT_PACK_DOARG21(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG20(s,f,__VA_ARGS__)) s f(20,t)
-#define STRUCT_PACK_DOARG22(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG21(s,f,__VA_ARGS__)) s f(21,t)
-#define STRUCT_PACK_DOARG23(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG22(s,f,__VA_ARGS__)) s f(22,t)
-#define STRUCT_PACK_DOARG24(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG23(s,f,__VA_ARGS__)) s f(23,t)
-#define STRUCT_PACK_DOARG25(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG24(s,f,__VA_ARGS__)) s f(24,t)
-#define STRUCT_PACK_DOARG26(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG25(s,f,__VA_ARGS__)) s f(25,t)
-#define STRUCT_PACK_DOARG27(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG26(s,f,__VA_ARGS__)) s f(26,t)
-#define STRUCT_PACK_DOARG28(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG27(s,f,__VA_ARGS__)) s f(27,t)
-#define STRUCT_PACK_DOARG29(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG28(s,f,__VA_ARGS__)) s f(28,t)
-#define STRUCT_PACK_DOARG30(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG29(s,f,__VA_ARGS__)) s f(29,t)
-#define STRUCT_PACK_DOARG31(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG30(s,f,__VA_ARGS__)) s f(30,t)
-#define STRUCT_PACK_DOARG32(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG31(s,f,__VA_ARGS__)) s f(31,t)
-#define STRUCT_PACK_DOARG33(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG32(s,f,__VA_ARGS__)) s f(32,t)
-#define STRUCT_PACK_DOARG34(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG33(s,f,__VA_ARGS__)) s f(33,t)
-#define STRUCT_PACK_DOARG35(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG34(s,f,__VA_ARGS__)) s f(34,t)
-#define STRUCT_PACK_DOARG36(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG35(s,f,__VA_ARGS__)) s f(35,t)
-#define STRUCT_PACK_DOARG37(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG36(s,f,__VA_ARGS__)) s f(36,t)
-#define STRUCT_PACK_DOARG38(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG37(s,f,__VA_ARGS__)) s f(37,t)
-#define STRUCT_PACK_DOARG39(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG38(s,f,__VA_ARGS__)) s f(38,t)
-#define STRUCT_PACK_DOARG40(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG39(s,f,__VA_ARGS__)) s f(39,t)
-#define STRUCT_PACK_DOARG41(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG40(s,f,__VA_ARGS__)) s f(40,t)
-#define STRUCT_PACK_DOARG42(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG41(s,f,__VA_ARGS__)) s f(41,t)
-#define STRUCT_PACK_DOARG43(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG42(s,f,__VA_ARGS__)) s f(42,t)
-#define STRUCT_PACK_DOARG44(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG43(s,f,__VA_ARGS__)) s f(43,t)
-#define STRUCT_PACK_DOARG45(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG44(s,f,__VA_ARGS__)) s f(44,t)
-#define STRUCT_PACK_DOARG46(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG45(s,f,__VA_ARGS__)) s f(45,t)
-#define STRUCT_PACK_DOARG47(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG46(s,f,__VA_ARGS__)) s f(46,t)
-#define STRUCT_PACK_DOARG48(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG47(s,f,__VA_ARGS__)) s f(47,t)
-#define STRUCT_PACK_DOARG49(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG48(s,f,__VA_ARGS__)) s f(48,t)
-#define STRUCT_PACK_DOARG50(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG49(s,f,__VA_ARGS__)) s f(49,t)
-#define STRUCT_PACK_DOARG51(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG50(s,f,__VA_ARGS__)) s f(50,t)
-#define STRUCT_PACK_DOARG52(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG51(s,f,__VA_ARGS__)) s f(51,t)
-#define STRUCT_PACK_DOARG53(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG52(s,f,__VA_ARGS__)) s f(52,t)
-#define STRUCT_PACK_DOARG54(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG53(s,f,__VA_ARGS__)) s f(53,t)
-#define STRUCT_PACK_DOARG55(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG54(s,f,__VA_ARGS__)) s f(54,t)
-#define STRUCT_PACK_DOARG56(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG55(s,f,__VA_ARGS__)) s f(55,t)
-#define STRUCT_PACK_DOARG57(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG56(s,f,__VA_ARGS__)) s f(56,t)
-#define STRUCT_PACK_DOARG58(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG57(s,f,__VA_ARGS__)) s f(57,t)
-#define STRUCT_PACK_DOARG59(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG58(s,f,__VA_ARGS__)) s f(58,t)
-#define STRUCT_PACK_DOARG60(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG59(s,f,__VA_ARGS__)) s f(59,t)
-#define STRUCT_PACK_DOARG61(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG60(s,f,__VA_ARGS__)) s f(60,t)
-#define STRUCT_PACK_DOARG62(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG61(s,f,__VA_ARGS__)) s f(61,t)
-#define STRUCT_PACK_DOARG63(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG62(s,f,__VA_ARGS__)) s f(62,t)
-#define STRUCT_PACK_DOARG64(s,f,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG63(s,f,__VA_ARGS__)) s f(63,t)
+#define STRUCT_PACK_DOARG0(s,f,p,o) 
+#define STRUCT_PACK_DOARG1(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG0(s,f,p,__VA_ARGS__))  s f(0,t,p)
+#define STRUCT_PACK_DOARG2(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG1(s,f,p,__VA_ARGS__))  s f(1,t,p) 
+#define STRUCT_PACK_DOARG3(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG2(s,f,p,__VA_ARGS__))  s f(2,t,p)
+#define STRUCT_PACK_DOARG4(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG3(s,f,p,__VA_ARGS__))  s f(3,t,p)
+#define STRUCT_PACK_DOARG5(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG4(s,f,p,__VA_ARGS__))  s f(4,t,p)
+#define STRUCT_PACK_DOARG6(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG5(s,f,p,__VA_ARGS__))  s f(5,t,p)
+#define STRUCT_PACK_DOARG7(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG6(s,f,p,__VA_ARGS__))  s f(6,t,p)
+#define STRUCT_PACK_DOARG8(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG7(s,f,p,__VA_ARGS__)) s  f(7,t,p)
+#define STRUCT_PACK_DOARG9(s,f,p,t,...)  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG8(s,f,p,__VA_ARGS__)) s  f(8,t,p)
+#define STRUCT_PACK_DOARG10(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG9(s,f,p,__VA_ARGS__)) s  f(9,t,p)
+#define STRUCT_PACK_DOARG11(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG10(s,f,p,__VA_ARGS__)) s f(10,t,p)
+#define STRUCT_PACK_DOARG12(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG11(s,f,p,__VA_ARGS__)) s f(11,t,p)
+#define STRUCT_PACK_DOARG13(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG12(s,f,p,__VA_ARGS__)) s f(12,t,p)
+#define STRUCT_PACK_DOARG14(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG13(s,f,p,__VA_ARGS__)) s f(13,t,p)
+#define STRUCT_PACK_DOARG15(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG14(s,f,p,__VA_ARGS__)) s f(14,t,p)
+#define STRUCT_PACK_DOARG16(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG15(s,f,p,__VA_ARGS__)) s f(15,t,p)
+#define STRUCT_PACK_DOARG17(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG16(s,f,p,__VA_ARGS__)) s f(16,t,p)
+#define STRUCT_PACK_DOARG18(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG17(s,f,p,__VA_ARGS__)) s f(17,t,p)
+#define STRUCT_PACK_DOARG19(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG18(s,f,p,__VA_ARGS__)) s f(18,t,p)
+#define STRUCT_PACK_DOARG20(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG19(s,f,p,__VA_ARGS__)) s f(19,t,p)
+#define STRUCT_PACK_DOARG21(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG20(s,f,p,__VA_ARGS__)) s f(20,t,p)
+#define STRUCT_PACK_DOARG22(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG21(s,f,p,__VA_ARGS__)) s f(21,t,p)
+#define STRUCT_PACK_DOARG23(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG22(s,f,p,__VA_ARGS__)) s f(22,t,p)
+#define STRUCT_PACK_DOARG24(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG23(s,f,p,__VA_ARGS__)) s f(23,t,p)
+#define STRUCT_PACK_DOARG25(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG24(s,f,p,__VA_ARGS__)) s f(24,t,p)
+#define STRUCT_PACK_DOARG26(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG25(s,f,p,__VA_ARGS__)) s f(25,t,p)
+#define STRUCT_PACK_DOARG27(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG26(s,f,p,__VA_ARGS__)) s f(26,t,p)
+#define STRUCT_PACK_DOARG28(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG27(s,f,p,__VA_ARGS__)) s f(27,t,p)
+#define STRUCT_PACK_DOARG29(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG28(s,f,p,__VA_ARGS__)) s f(28,t,p)
+#define STRUCT_PACK_DOARG30(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG29(s,f,p,__VA_ARGS__)) s f(29,t,p)
+#define STRUCT_PACK_DOARG31(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG30(s,f,p,__VA_ARGS__)) s f(30,t,p)
+#define STRUCT_PACK_DOARG32(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG31(s,f,p,__VA_ARGS__)) s f(31,t,p)
+#define STRUCT_PACK_DOARG33(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG32(s,f,p,__VA_ARGS__)) s f(32,t,p)
+#define STRUCT_PACK_DOARG34(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG33(s,f,p,__VA_ARGS__)) s f(33,t,p)
+#define STRUCT_PACK_DOARG35(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG34(s,f,p,__VA_ARGS__)) s f(34,t,p)
+#define STRUCT_PACK_DOARG36(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG35(s,f,p,__VA_ARGS__)) s f(35,t,p)
+#define STRUCT_PACK_DOARG37(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG36(s,f,p,__VA_ARGS__)) s f(36,t,p)
+#define STRUCT_PACK_DOARG38(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG37(s,f,p,__VA_ARGS__)) s f(37,t,p)
+#define STRUCT_PACK_DOARG39(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG38(s,f,p,__VA_ARGS__)) s f(38,t,p)
+#define STRUCT_PACK_DOARG40(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG39(s,f,p,__VA_ARGS__)) s f(39,t,p)
+#define STRUCT_PACK_DOARG41(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG40(s,f,p,__VA_ARGS__)) s f(40,t,p)
+#define STRUCT_PACK_DOARG42(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG41(s,f,p,__VA_ARGS__)) s f(41,t,p)
+#define STRUCT_PACK_DOARG43(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG42(s,f,p,__VA_ARGS__)) s f(42,t,p)
+#define STRUCT_PACK_DOARG44(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG43(s,f,p,__VA_ARGS__)) s f(43,t,p)
+#define STRUCT_PACK_DOARG45(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG44(s,f,p,__VA_ARGS__)) s f(44,t,p)
+#define STRUCT_PACK_DOARG46(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG45(s,f,p,__VA_ARGS__)) s f(45,t,p)
+#define STRUCT_PACK_DOARG47(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG46(s,f,p,__VA_ARGS__)) s f(46,t,p)
+#define STRUCT_PACK_DOARG48(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG47(s,f,p,__VA_ARGS__)) s f(47,t,p)
+#define STRUCT_PACK_DOARG49(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG48(s,f,p,__VA_ARGS__)) s f(48,t,p)
+#define STRUCT_PACK_DOARG50(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG49(s,f,p,__VA_ARGS__)) s f(49,t,p)
+#define STRUCT_PACK_DOARG51(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG50(s,f,p,__VA_ARGS__)) s f(50,t,p)
+#define STRUCT_PACK_DOARG52(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG51(s,f,p,__VA_ARGS__)) s f(51,t,p)
+#define STRUCT_PACK_DOARG53(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG52(s,f,p,__VA_ARGS__)) s f(52,t,p)
+#define STRUCT_PACK_DOARG54(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG53(s,f,p,__VA_ARGS__)) s f(53,t,p)
+#define STRUCT_PACK_DOARG55(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG54(s,f,p,__VA_ARGS__)) s f(54,t,p)
+#define STRUCT_PACK_DOARG56(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG55(s,f,p,__VA_ARGS__)) s f(55,t,p)
+#define STRUCT_PACK_DOARG57(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG56(s,f,p,__VA_ARGS__)) s f(56,t,p)
+#define STRUCT_PACK_DOARG58(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG57(s,f,p,__VA_ARGS__)) s f(57,t,p)
+#define STRUCT_PACK_DOARG59(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG58(s,f,p,__VA_ARGS__)) s f(58,t,p)
+#define STRUCT_PACK_DOARG60(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG59(s,f,p,__VA_ARGS__)) s f(59,t,p)
+#define STRUCT_PACK_DOARG61(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG60(s,f,p,__VA_ARGS__)) s f(60,t,p)
+#define STRUCT_PACK_DOARG62(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG61(s,f,p,__VA_ARGS__)) s f(61,t,p)
+#define STRUCT_PACK_DOARG63(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG62(s,f,p,__VA_ARGS__)) s f(62,t,p)
+#define STRUCT_PACK_DOARG64(s,f,p,t,...) STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_DOARG63(s,f,p,__VA_ARGS__)) s f(63,t,p)
 
-#define STRUCT_PACK_MAKE_ARGS0(Type)
-#define STRUCT_PACK_MAKE_ARGS1(Type)     Type
-#define STRUCT_PACK_MAKE_ARGS2(Type)     STRUCT_PACK_MAKE_ARGS1(Type), Type
-#define STRUCT_PACK_MAKE_ARGS3(Type)     STRUCT_PACK_MAKE_ARGS2(Type), Type
-#define STRUCT_PACK_MAKE_ARGS4(Type)     STRUCT_PACK_MAKE_ARGS3(Type), Type
-#define STRUCT_PACK_MAKE_ARGS5(Type)     STRUCT_PACK_MAKE_ARGS4(Type), Type
-#define STRUCT_PACK_MAKE_ARGS6(Type)     STRUCT_PACK_MAKE_ARGS5(Type), Type
-#define STRUCT_PACK_MAKE_ARGS7(Type)     STRUCT_PACK_MAKE_ARGS6(Type), Type
-#define STRUCT_PACK_MAKE_ARGS8(Type)     STRUCT_PACK_MAKE_ARGS7(Type), Type
-#define STRUCT_PACK_MAKE_ARGS9(Type)     STRUCT_PACK_MAKE_ARGS8(Type), Type
-#define STRUCT_PACK_MAKE_ARGS10(Type)    STRUCT_PACK_MAKE_ARGS9(Type), Type
-#define STRUCT_PACK_MAKE_ARGS11(Type)    STRUCT_PACK_MAKE_ARGS10(Type), Type
-#define STRUCT_PACK_MAKE_ARGS12(Type)    STRUCT_PACK_MAKE_ARGS11(Type), Type
-#define STRUCT_PACK_MAKE_ARGS13(Type)    STRUCT_PACK_MAKE_ARGS12(Type), Type
-#define STRUCT_PACK_MAKE_ARGS14(Type)    STRUCT_PACK_MAKE_ARGS13(Type), Type
-#define STRUCT_PACK_MAKE_ARGS15(Type)    STRUCT_PACK_MAKE_ARGS14(Type), Type
-#define STRUCT_PACK_MAKE_ARGS16(Type)    STRUCT_PACK_MAKE_ARGS15(Type), Type
-#define STRUCT_PACK_MAKE_ARGS17(Type)    STRUCT_PACK_MAKE_ARGS16(Type), Type
-#define STRUCT_PACK_MAKE_ARGS18(Type)    STRUCT_PACK_MAKE_ARGS17(Type), Type
-#define STRUCT_PACK_MAKE_ARGS19(Type)    STRUCT_PACK_MAKE_ARGS18(Type), Type
-#define STRUCT_PACK_MAKE_ARGS20(Type)    STRUCT_PACK_MAKE_ARGS19(Type), Type
-#define STRUCT_PACK_MAKE_ARGS21(Type)    STRUCT_PACK_MAKE_ARGS20(Type), Type
-#define STRUCT_PACK_MAKE_ARGS22(Type)    STRUCT_PACK_MAKE_ARGS21(Type), Type
-#define STRUCT_PACK_MAKE_ARGS23(Type)    STRUCT_PACK_MAKE_ARGS22(Type), Type
-#define STRUCT_PACK_MAKE_ARGS24(Type)    STRUCT_PACK_MAKE_ARGS23(Type), Type
-#define STRUCT_PACK_MAKE_ARGS25(Type)    STRUCT_PACK_MAKE_ARGS24(Type), Type
-#define STRUCT_PACK_MAKE_ARGS26(Type)    STRUCT_PACK_MAKE_ARGS25(Type), Type
-#define STRUCT_PACK_MAKE_ARGS27(Type)    STRUCT_PACK_MAKE_ARGS26(Type), Type
-#define STRUCT_PACK_MAKE_ARGS28(Type)    STRUCT_PACK_MAKE_ARGS27(Type), Type
-#define STRUCT_PACK_MAKE_ARGS29(Type)    STRUCT_PACK_MAKE_ARGS28(Type), Type
-#define STRUCT_PACK_MAKE_ARGS30(Type)    STRUCT_PACK_MAKE_ARGS29(Type), Type
-#define STRUCT_PACK_MAKE_ARGS31(Type)    STRUCT_PACK_MAKE_ARGS30(Type), Type
-#define STRUCT_PACK_MAKE_ARGS32(Type)    STRUCT_PACK_MAKE_ARGS31(Type), Type
-#define STRUCT_PACK_MAKE_ARGS33(Type)    STRUCT_PACK_MAKE_ARGS32(Type), Type
-#define STRUCT_PACK_MAKE_ARGS34(Type)    STRUCT_PACK_MAKE_ARGS33(Type), Type
-#define STRUCT_PACK_MAKE_ARGS35(Type)    STRUCT_PACK_MAKE_ARGS34(Type), Type
-#define STRUCT_PACK_MAKE_ARGS36(Type)    STRUCT_PACK_MAKE_ARGS35(Type), Type
-#define STRUCT_PACK_MAKE_ARGS37(Type)    STRUCT_PACK_MAKE_ARGS36(Type), Type
-#define STRUCT_PACK_MAKE_ARGS38(Type)    STRUCT_PACK_MAKE_ARGS37(Type), Type
-#define STRUCT_PACK_MAKE_ARGS39(Type)    STRUCT_PACK_MAKE_ARGS38(Type), Type
-#define STRUCT_PACK_MAKE_ARGS40(Type)    STRUCT_PACK_MAKE_ARGS39(Type), Type
-#define STRUCT_PACK_MAKE_ARGS41(Type)    STRUCT_PACK_MAKE_ARGS40(Type), Type
-#define STRUCT_PACK_MAKE_ARGS42(Type)    STRUCT_PACK_MAKE_ARGS41(Type), Type
-#define STRUCT_PACK_MAKE_ARGS43(Type)    STRUCT_PACK_MAKE_ARGS42(Type), Type
-#define STRUCT_PACK_MAKE_ARGS44(Type)    STRUCT_PACK_MAKE_ARGS43(Type), Type
-#define STRUCT_PACK_MAKE_ARGS45(Type)    STRUCT_PACK_MAKE_ARGS44(Type), Type
-#define STRUCT_PACK_MAKE_ARGS46(Type)    STRUCT_PACK_MAKE_ARGS45(Type), Type
-#define STRUCT_PACK_MAKE_ARGS47(Type)    STRUCT_PACK_MAKE_ARGS46(Type), Type
-#define STRUCT_PACK_MAKE_ARGS48(Type)    STRUCT_PACK_MAKE_ARGS47(Type), Type
-#define STRUCT_PACK_MAKE_ARGS49(Type)    STRUCT_PACK_MAKE_ARGS48(Type), Type
-#define STRUCT_PACK_MAKE_ARGS50(Type)    STRUCT_PACK_MAKE_ARGS49(Type), Type
-#define STRUCT_PACK_MAKE_ARGS51(Type)    STRUCT_PACK_MAKE_ARGS50(Type), Type
-#define STRUCT_PACK_MAKE_ARGS52(Type)    STRUCT_PACK_MAKE_ARGS51(Type), Type
-#define STRUCT_PACK_MAKE_ARGS53(Type)    STRUCT_PACK_MAKE_ARGS52(Type), Type
-#define STRUCT_PACK_MAKE_ARGS54(Type)    STRUCT_PACK_MAKE_ARGS53(Type), Type
-#define STRUCT_PACK_MAKE_ARGS55(Type)    STRUCT_PACK_MAKE_ARGS54(Type), Type
-#define STRUCT_PACK_MAKE_ARGS56(Type)    STRUCT_PACK_MAKE_ARGS55(Type), Type
-#define STRUCT_PACK_MAKE_ARGS57(Type)    STRUCT_PACK_MAKE_ARGS56(Type), Type
-#define STRUCT_PACK_MAKE_ARGS58(Type)    STRUCT_PACK_MAKE_ARGS57(Type), Type
-#define STRUCT_PACK_MAKE_ARGS59(Type)    STRUCT_PACK_MAKE_ARGS58(Type), Type
-#define STRUCT_PACK_MAKE_ARGS60(Type)    STRUCT_PACK_MAKE_ARGS59(Type), Type
-#define STRUCT_PACK_MAKE_ARGS61(Type)    STRUCT_PACK_MAKE_ARGS60(Type), Type
-#define STRUCT_PACK_MAKE_ARGS62(Type)    STRUCT_PACK_MAKE_ARGS61(Type), Type
-#define STRUCT_PACK_MAKE_ARGS63(Type)    STRUCT_PACK_MAKE_ARGS62(Type), Type
-#define STRUCT_PACK_MAKE_ARGS64(Type)    STRUCT_PACK_MAKE_ARGS63(Type), Type
+// clang-format on
 
+#define STRUCT_PACK_STEALER_DECL(Type)                                         \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(         \
+      Type *, U X, struct_pack::detail::Idx_t<Idx>) {                          \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(         \
+      Type *, U (T::*X)(), struct_pack::detail::Idx_t<Idx>) {                  \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE(   \
+      Type *, U X, struct_pack::detail::Idx_t<Idx>) {                          \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, typename U, std::size_t Idx>                           \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE(   \
+      Type *, U (T::*X)() const, struct_pack::detail::Idx_t<Idx>) {            \
+    return X;                                                                  \
+  };                                                                           \
+  template <typename T, auto field, std::size_t Idx>                           \
+  struct STRUCT_PACK_STEALER;                                                  \
+  template <typename T, auto field, std::size_t Idx>                           \
+  struct STRUCT_PACK_STEALER_CONST;                                            \
+  template <auto field, std::size_t Idx>                                       \
+  struct STRUCT_PACK_STEALER<Type, field, Idx> {                               \
+    friend auto &STRUCT_PACK_STEAL(Type &t, struct_pack::detail::Idx_t<Idx>) { \
+      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {      \
+        return (t.*field)();                                                   \
+      }                                                                        \
+      else {                                                                   \
+        return t.*field;                                                       \
+      }                                                                        \
+    }                                                                          \
+  };                                                                           \
+  template <auto field, std::size_t Idx>                                       \
+  struct STRUCT_PACK_STEALER_CONST<Type, field, Idx> {                         \
+    friend const auto &STRUCT_PACK_STEAL(const Type &t,                        \
+                                         struct_pack::detail::Idx_t<Idx>) {    \
+      if constexpr (std::is_member_function_pointer_v<decltype(field)>) {      \
+        return (t.*field)();                                                   \
+      }                                                                        \
+      else {                                                                   \
+        return t.*field;                                                       \
+      }                                                                        \
+    }                                                                          \
+  };
 
-#define STRUCT_PACK_MAKE_ARGS(Type,Count) \
-  STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS,Count)(Type)
+#define STRUCT_PACK_VISIT_PRIVATE_HELPER(Idx, X, Bank)                       \
+  auto &STRUCT_PACK_STEAL(Bank &bank, struct_pack::detail::Idx_t<Idx>);      \
+  const auto &STRUCT_PACK_STEAL(const Bank &bank,                            \
+                                struct_pack::detail::Idx_t<Idx>);            \
+  template <typename T>                                                      \
+  constexpr inline decltype(auto) STRUCT_PACK_MEMBER_FUNCTION_RESOLVE(       \
+      Bank *, auto (T::*x)()->decltype(std::declval<T &>().X()),             \
+      struct_pack::detail::Idx_t<Idx>) {                                     \
+    return x;                                                                \
+  };                                                                         \
+  template <typename T>                                                      \
+  constexpr inline decltype(auto) STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE( \
+      Bank *, auto (T::*x)() const->decltype(std::declval<const T &>().X()), \
+      struct_pack::detail::Idx_t<Idx>) {                                     \
+    return x;                                                                \
+  };                                                                         \
+  template struct STRUCT_PACK_STEALER<                                       \
+      Bank,                                                                  \
+      STRUCT_PACK_MEMBER_FUNCTION_RESOLVE<Bank>(                             \
+          (Bank *)nullptr, &Bank::X, struct_pack::detail::Idx_t<Idx>{}),     \
+      Idx>;                                                                  \
+  template struct STRUCT_PACK_STEALER_CONST<                                 \
+      Bank,                                                                  \
+      STRUCT_PACK_CONST_MEMBER_FUNCTION_RESOLVE<Bank>(                       \
+          (Bank *)nullptr, &Bank::X, struct_pack::detail::Idx_t<Idx>{}),     \
+      Idx>;
 
-#define STRUCT_PACK_EXPAND_EACH_(sepatator,fun,...) \
-		STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_CONCAT(STRUCT_PACK_DOARG,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))(sepatator,fun,__VA_ARGS__))
-#define STRUCT_PACK_EXPAND_EACH(sepatator,fun,...) \
-		STRUCT_PACK_EXPAND_EACH_(sepatator,fun,__VA_ARGS__)
+#define STRUCT_PACK_MAKE_ARGS(Type, Count) \
+  STRUCT_PACK_CONCAT(STRUCT_PACK_MAKE_ARGS, Count)(Type)
 
-#define STRUCT_PACK_RETURN_ELEMENT(Idx, X) \
-if constexpr (Idx == I) {\
-    return c.X;\
-}\
+#define STRUCT_PACK_EXPAND_EACH_(sepatator, fun, parent, ...) \
+  STRUCT_PACK_MARCO_EXPAND(STRUCT_PACK_CONCAT(                \
+      STRUCT_PACK_DOARG, STRUCT_PACK_ARG_COUNT(__VA_ARGS__))( \
+      sepatator, fun, parent, __VA_ARGS__))
+#define STRUCT_PACK_EXPAND_EACH(sepatator, fun, parent, ...) \
+  STRUCT_PACK_EXPAND_EACH_(sepatator, fun, parent, __VA_ARGS__)
 
-#define STRUCT_PACK_GET_INDEX(Idx, Type) \
-auto& STRUCT_PACK_GET_##Idx(Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+#define STRUCT_PACK_RETURN_ELEMENT(Idx, X, parent) \
+  if constexpr (Idx == I) {                        \
+    return c.X;                                    \
+  }
 
-#define STRUCT_PACK_GET_INDEX_CONST(Idx, Type) \
-const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+#define STRUCT_PACK_GET_INDEX(Idx, _, Type)                                  \
+  auto &STRUCT_PACK_GET_##Idx(Type &c) {                                     \
+    return STRUCT_PACK_STEAL(                                                \
+        c, struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - \
+                                      1 - Idx>{});                           \
+  }
 
-#define STRUCT_PACK_REFL(Type,...) \
-Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
-template<typename T> \
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL(); \
-template<> \
-constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);} \
-decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
-  return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
-} \
-template<std::size_t I> auto& STRUCT_PACK_GET(Type& c) { \
-  STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__) \
-  else { \
-	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>()); \
-  } \
-} \
-template<std::size_t I> const auto& STRUCT_PACK_GET(const Type& c) { \
-  STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_RETURN_ELEMENT,__VA_ARGS__) \
-  else { \
-	static_assert(I < STRUCT_PACK_FIELD_COUNT_IMPL<Type>()); \
-  } \
-} \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))) \
-STRUCT_PACK_EXPAND_EACH(,STRUCT_PACK_GET_INDEX_CONST,STRUCT_PACK_MAKE_ARGS(Type,STRUCT_PACK_ARG_COUNT(__VA_ARGS__))) \
+#define STRUCT_PACK_GET_INDEX_CONST(Idx, _, Type)                            \
+  const auto &STRUCT_PACK_GET_##Idx(const Type &c) {                         \
+    return STRUCT_PACK_STEAL(                                                \
+        c, struct_pack::detail::Idx_t<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - \
+                                      1 - Idx>{});                           \
+  }
 
-#define STRUCT_PACK_FRIEND_DECL(Type) \
-template <std::size_t I> \
-friend auto& STRUCT_PACK_GET(Type& c); \
-template <std::size_t I> \
-friend const auto& STRUCT_PACK_GET(const Type& c);
+#define STRUCT_PACK_REFL(Type, ...)                                      \
+  STRUCT_PACK_STEALER_DECL(Type)                                         \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_VISIT_PRIVATE_HELPER, Type,      \
+                          __VA_ARGS__)                                   \
+  Type &STRUCT_PACK_REFL_FLAG(Type &t) { return t; }                     \
+  template <typename T>                                                  \
+  constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL();                  \
+  template <>                                                            \
+  constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {           \
+    return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);                           \
+  }                                                                      \
+  decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &) {                 \
+    return std::integral_constant<std::size_t,                           \
+                                  STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
+  }                                                                      \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_GET_INDEX, Type, __VA_ARGS__)    \
+  STRUCT_PACK_EXPAND_EACH(, STRUCT_PACK_GET_INDEX_CONST, Type, __VA_ARGS__)

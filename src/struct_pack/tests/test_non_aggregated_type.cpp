@@ -55,7 +55,6 @@ class person {
   }
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
 };
 STRUCT_PACK_REFL(person, age, name);
 }  // namespace example2
@@ -81,7 +80,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+STRUCT_PACK_REFL(person, age, name);
 }  // namespace example3
 
 // 5. Remember, the STURCT_PACK_REFL marco disable the trivial_serialize
@@ -162,7 +161,6 @@ class complicated_object {
            j == o.j && k == o.k && m == o.m && n[0] == o.n[0] &&
            n[1] == o.n[1] && this->o == o.o;
   }
-  STRUCT_PACK_FRIEND_DECL(complicated_object);
 };
 STRUCT_PACK_REFL(complicated_object, a, b, c, d, e, f, g, h, i, j, k, m, n, o);
 }  // namespace example6
