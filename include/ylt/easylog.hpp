@@ -52,7 +52,8 @@ class logger {
       append_format(record);
     }
 
-    if (record.get_severity() == Severity::CRITICAL) {
+    if (record.get_severity() == Severity::CRITICAL ||
+        record.get_severity() == Severity::FATAL) {
       flush();
       std::exit(EXIT_FAILURE);
     }
@@ -213,7 +214,8 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .sprintf(fmt, __VA_ARGS__);                               \
-    if (severity == easylog::Severity::CRITICAL) {                    \
+    if (severity == easylog::Severity::CRITICAL ||                    \
+        severity == easylog::Severity::FATAL) {                       \
       easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
     }                                                                 \
@@ -240,7 +242,8 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
             .format(prefix::format(format_str, __VA_ARGS__));         \
-    if (severity == easylog::Severity::CRITICAL) {                    \
+    if (severity == easylog::Severity::CRITICAL ||                    \
+        severity == Severity::FATAL) {                                \
       easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
     }                                                                 \
@@ -285,6 +288,9 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #ifndef ELOG_CRITICAL
 #define ELOG_CRITICAL ELOG(CRITICAL)
 #endif
+#ifndef ELOG_FATAL
+#define ELOG_FATAL ELOG(FATAL)
+#endif
 
 #ifndef MELOG_TRACE
 #define MELOG_TRACE(id) ELOG(INFO, id)
@@ -301,8 +307,8 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #ifndef MELOG_ERROR
 #define MELOG_ERROR(id) ELOG(ERROR, id)
 #endif
-#ifndef MELOG_CRITICAL
-#define MELOG_CRITICAL(id) ELOG(CRITICAL, id)
+#ifndef MELOG_FATAL
+#define MELOG_FATAL(id) ELOG(FATAL, id)
 #endif
 
 #ifndef ELOGT
@@ -322,4 +328,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #endif
 #ifndef ELOGC
 #define ELOGC ELOG_CRITICAL
+#endif
+#ifndef ELOGF
+#define ELOGF ELOG_FATAL
 #endif
