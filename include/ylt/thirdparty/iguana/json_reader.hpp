@@ -451,8 +451,6 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
 template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int>>
 IGUANA_INLINE void parse_item(U &value, It &&it, It &&end) {
   skip_ws(it, end);
-  if (it < end && *it == '"')
-    IGUANA_LIKELY { ++it; }
   if (it == end)
     IGUANA_UNLIKELY { throw std::runtime_error("Unexexpected eof"); }
   if (*it == 'n') {
