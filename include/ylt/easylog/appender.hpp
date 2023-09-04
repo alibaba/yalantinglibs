@@ -242,11 +242,11 @@ class appender {
 
   void add_color(Severity severity) {
 #if defined(_WIN32)
-    if (severity == Severity::WARN)
+    if (severity == Severity::WARN || severity == Severity::WARNING)
       windows_set_color(color_type::black, color_type::yellow);
     if (severity == Severity::ERROR)
       windows_set_color(color_type::black, color_type::red);
-    if (severity == Severity::CRITICAL)
+    if (severity == Severity::CRITICAL || severity == Severity::FATAL)
       windows_set_color(color_type::white_bright, color_type::red);
 #elif __APPLE__
 #else
