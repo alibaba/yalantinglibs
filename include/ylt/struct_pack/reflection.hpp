@@ -2208,22 +2208,22 @@ if constexpr (Idx == I) {\
 }\
 
 #define STRUCT_PACK_GET_INDEX(Idx, Type) \
-auto& STRUCT_PACK_GET_##Idx(Type& c) {\
+inline auto& STRUCT_PACK_GET_##Idx(Type& c) {\
     return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
 }\
 
 #define STRUCT_PACK_GET_INDEX_CONST(Idx, Type) \
-const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
+inline const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
     return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
 }\
 
 #define STRUCT_PACK_REFL(Type,...) \
-Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
+inline Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \
 template<typename T> \
 constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL(); \
 template<> \
 constexpr std::size_t STRUCT_PACK_FIELD_COUNT_IMPL<Type>() {return STRUCT_PACK_ARG_COUNT(__VA_ARGS__);} \
-decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
+inline decltype(auto) STRUCT_PACK_FIELD_COUNT(const Type &){ \
   return std::integral_constant<std::size_t,STRUCT_PACK_ARG_COUNT(__VA_ARGS__)>{}; \
 } \
 template<std::size_t I> auto& STRUCT_PACK_GET(Type& c) { \
