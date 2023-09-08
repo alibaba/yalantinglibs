@@ -307,12 +307,12 @@ async_simple::coro::Lazy<resp_data> async_trace(std::string uri);
 
 ## chunked 格式上传
 ```c++
-template <typename S, typename String>
+template <typename S, typename File>
 async_simple::coro::Lazy<resp_data> async_upload_chunked(
-    S uri, http_method method, String filename,
+    S uri, http_method method, File file,
     std::unordered_map<std::string, std::string> headers = {});
 ```
-method 一般是POST 或者PUT，filename 是带路径的文件名，headers 是请求头，这些参数填好之后，coro_http_client 会自动将文件分块上传到服务器，直到全部上传完成之后才co_return，中间上传出错也会返回。 
+method 一般是POST 或者PUT，file 可以是带路径的文件名，也可以是一个iostream 流，headers 是请求头，这些参数填好之后，coro_http_client 会自动将文件分块上传到服务器，直到全部上传完成之后才co_return，中间上传出错也会返回。 
 
 chunked 每块的大小默认为1MB，如果希望修改分块大小可以通过set_max_single_part_size 接口去设置大小，或者通过config 里面的max_single_part_size配置项去设置。
 

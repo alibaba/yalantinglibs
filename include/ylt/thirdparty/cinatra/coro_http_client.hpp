@@ -52,6 +52,30 @@ inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
 
+template <class, class = void>
+struct is_stream : std::false_type {};
+
+template <class T>
+struct is_stream<
+    T, std::void_t<decltype(std::declval<T>().read(nullptr, 0),
+                            std::declval<T>().async_read(nullptr, 0))>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool is_stream_v = is_stream<T>::value;
+
+template <class, class = void>
+struct is_smart_ptr : std::false_type {};
+
+template <class T>
+struct is_smart_ptr<
+    T, std::void_t<decltype(std::declval<T>().get(), *std::declval<T>(),
+                            is_stream_v<typename T::element_type>)>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool is_stream_ptr_v = is_smart_ptr<T>::value;
+
 struct http_header;
 
 struct resp_data {
@@ -703,9 +727,10 @@ class coro_http_client {
 
   std::string_view get_port() { return port_; }
 
-  template <typename S, typename String>
+  template <typename S, typename File>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
-      S uri, http_method method, String filename,
+      S uri, http_method method, File file,
+      req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
@@ -713,16 +738,25 @@ class coro_http_client {
       }
     });
 
-    req_context<> ctx{req_content_type::text};
+    req_context<> ctx{content_type};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
       co_return resp_data{{}, 404};
     }
 
-    if (!std::filesystem::exists(filename)) {
-      co_return resp_data{
-          std::make_error_code(std::errc::no_such_file_or_directory), 404};
+    constexpr bool is_stream_file = is_stream_ptr_v<File>;
+    if constexpr (is_stream_file) {
+      if (!file) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+    else {
+      if (!std::filesystem::exists(file)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
     }
 
     add_header("Transfer-Encoding", "chunked");
@@ -749,17 +783,31 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    coro_io::coro_file file(filename, coro_io::open_mode::read);
     std::string file_data;
-    file_data.resize(max_single_part_size_);
+    detail::resize(file_data, max_single_part_size_);
     std::string chunk_size_str;
-    while (!file.eof()) {
-      auto [rd_ec, rd_size] =
-          co_await file.async_read(file_data.data(), file_data.size());
-      auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
-          file_data.data(), rd_size, chunk_size_str, file.eof());
-      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
-        co_return resp_data{ec, 404};
+
+    if constexpr (is_stream_file) {
+      while (!file->eof()) {
+        size_t rd_size =
+            file->read(file_data.data(), file_data.size()).gcount();
+        auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+            file_data.data(), rd_size, chunk_size_str, file->eof());
+        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+          co_return resp_data{ec, 404};
+        }
+      }
+    }
+    else {
+      coro_io::coro_file coro_file(file, coro_io::open_mode::read);
+      while (!coro_file.eof()) {
+        auto [rd_ec, rd_size] =
+            co_await coro_file.async_read(file_data.data(), file_data.size());
+        auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+            file_data.data(), rd_size, chunk_size_str, coro_file.eof());
+        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+          co_return resp_data{ec, 404};
+        }
       }
     }
 
