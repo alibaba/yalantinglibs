@@ -7,6 +7,7 @@
 #include <future>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -825,16 +826,24 @@ class coro_http_client {
   template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_request(
       S uri, http_method method, req_context<String> ctx,
-      std::unordered_map<std::string, std::string> headers = {}) {
+      std::unordered_map<std::string, std::string> headers = {},
+      std::span<char> out_buf = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
     if (!body_.empty()) {
       body_.clear();
     }
+    if (!out_buf.empty()) {
+      out_buf_ = out_buf;
+    }
+
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
+      }
+      if (!out_buf_.empty()) {
+        out_buf_ = {};
       }
     });
 
@@ -1220,13 +1229,27 @@ class coro_http_client {
       total_len_ = parser_.total_len();
 #endif
 
-      if ((size_t)parser_.body_len() <= read_buf_.size()) {
+      bool is_out_buf = !out_buf_.empty();
+      if (is_out_buf) {
+        if (content_len > 0 && out_buf_.size() < content_len) {
+          data.status = 404;
+          data.net_err = std::make_error_code(std::errc::no_buffer_space);
+          co_return data;
+        }
+      }
+
+      if (content_len <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          detail::resize(body_, content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-          memcpy(body_.data(), data_ptr, content_len);
+          if (is_out_buf) {
+            memcpy(out_buf_.data(), data_ptr, content_len);
+          }
+          else {
+            detail::resize(body_, content_len);
+            memcpy(body_.data(), data_ptr, content_len);
+          }
           read_buf_.consume(read_buf_.size());
         }
         co_await handle_entire_content(data, content_len, is_ranges, ctx);
@@ -1237,16 +1260,32 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      detail::resize(body_, content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      memcpy(body_.data(), data_ptr, part_size);
+      if (is_out_buf) {
+        memcpy(out_buf_.data(), data_ptr, part_size);
+      }
+      else {
+        detail::resize(body_, content_len);
+        memcpy(body_.data(), data_ptr, part_size);
+      }
+
       read_buf_.consume(part_size);
 
-      if (std::tie(ec, size) = co_await async_read(
-              asio::buffer(body_.data() + part_size, size_to_read),
-              size_to_read);
-          ec) {
-        break;
+      if (is_out_buf) {
+        if (std::tie(ec, size) = co_await async_read(
+                asio::buffer(out_buf_.data() + part_size, size_to_read),
+                size_to_read);
+            ec) {
+          break;
+        }
+      }
+      else {
+        if (std::tie(ec, size) = co_await async_read(
+                asio::buffer(body_.data() + part_size, size_to_read),
+                size_to_read);
+            ec) {
+          break;
+        }
       }
 
       // Now get entire content, additional data will discard.
@@ -1268,7 +1307,12 @@ class coro_http_client {
     if (content_len > 0) {
       const char *data_ptr;
       if (read_buf_.size() == 0) {
-        data_ptr = body_.data();
+        if (out_buf_.empty()) {
+          data_ptr = body_.data();
+        }
+        else {
+          data_ptr = out_buf_.data();
+        }
       }
       else {
         data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
@@ -1698,6 +1742,7 @@ class coro_http_client {
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
+  std::span<char> out_buf_;
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;
