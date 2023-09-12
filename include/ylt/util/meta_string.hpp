@@ -61,8 +61,7 @@ struct meta_string {
 
 #if __has_include(<span>) && __cplusplus > 201703L
   template <std::same_as<char>... Ts>
-  constexpr meta_string(Ts... chars) noexcept
-    requires(sizeof...(Ts) == N)
+  constexpr meta_string(Ts... chars) noexcept requires(sizeof...(Ts) == N)
       : elements_{chars...} {}
 #endif
 

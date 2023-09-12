@@ -57,7 +57,7 @@ namespace easylog {
 namespace detail {
 template <class T>
 constexpr inline bool c_array_v =
-    std::is_array_v<remove_cvref_t<T>> && std::extent_v<remove_cvref_t<T>> > 0;
+    std::is_array_v<remove_cvref_t<T>> &&std::extent_v<remove_cvref_t<T>> > 0;
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
