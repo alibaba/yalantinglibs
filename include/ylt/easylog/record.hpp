@@ -57,7 +57,8 @@ namespace easylog {
 namespace detail {
 template <class T>
 constexpr inline bool c_array_v =
-    std::is_array_v<remove_cvref_t<T>> &&std::extent_v<remove_cvref_t<T>> > 0;
+    std::is_array_v<nostd::remove_cvref_t<T>>
+        &&std::extent_v<nostd::remove_cvref_t<T>> > 0;
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
@@ -67,7 +68,7 @@ struct has_data<T, std::void_t<decltype(std::declval<T>().data())>>
     : std::true_type {};
 
 template <typename T>
-constexpr inline bool has_data_v = has_data<remove_cvref_t<T>>::value;
+constexpr inline bool has_data_v = has_data<nostd::remove_cvref_t<T>>::value;
 
 template <typename Type, typename = void>
 struct has_str : std::false_type {};
@@ -77,7 +78,7 @@ struct has_str<T, std::void_t<decltype(std::declval<T>().str())>>
     : std::true_type {};
 
 template <typename T>
-constexpr inline bool has_str_v = has_str<remove_cvref_t<T>>::value;
+constexpr inline bool has_str_v = has_str<nostd::remove_cvref_t<T>>::value;
 }  // namespace detail
 
 enum class Severity {
@@ -142,7 +143,7 @@ class record_t {
 
   template <typename T>
   record_t &operator<<(const T &data) {
-    using U = remove_cvref_t<T>;
+    using U = nostd::remove_cvref_t<T>;
     if constexpr (std::is_floating_point_v<U>) {
       char temp[40];
       const auto end = jkj::dragonbox::to_chars(data, temp);

@@ -17,12 +17,14 @@
 #include <functional>
 #include <memory>
 
+namespace nostd {
 template <class T>
 struct remove_cvref {
   typedef std::remove_cv_t<std::remove_reference_t<T>> type;
 };
 template <class T>
 using remove_cvref_t = typename remove_cvref<T>::type;
+}  // namespace nostd
 
 namespace coro_rpc {
 template <typename Function>
@@ -30,52 +32,52 @@ struct function_traits;
 
 template <typename Return, typename... Arguments>
 struct function_traits<Return (*)(Arguments...)> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
 };
 
 template <typename Return, typename... Arguments>
 struct function_traits<Return (*)(Arguments...) noexcept> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
 };
 
 template <typename Return, typename... Arguments>
 struct function_traits<Return(Arguments...)> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
 };
 
 template <typename Return, typename... Arguments>
 struct function_traits<Return(Arguments...) noexcept> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return (This::*)(Arguments...)> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
   using class_type = This;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return (This::*)(Arguments...) noexcept> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
   using class_type = This;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return (This::*)(Arguments...) const> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
   using class_type = This;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return (This::*)(Arguments...) const noexcept> {
-  using parameters_type = std::tuple<remove_cvref_t<Arguments>...>;
+  using parameters_type = std::tuple<nostd::remove_cvref_t<Arguments>...>;
   using return_type = Return;
   using class_type = This;
 };
@@ -150,7 +152,7 @@ struct function_traits : function_traits<decltype(&Function::operator())> {};
 
 template <typename Function>
 using function_parameters_t =
-    typename function_traits<remove_cvref_t<Function>>::parameters_type;
+    typename function_traits<nostd::remove_cvref_t<Function>>::parameters_type;
 
 template <typename Function>
 using last_parameters_type_t =
@@ -159,11 +161,11 @@ using last_parameters_type_t =
 
 template <typename Function>
 using function_return_type_t =
-    typename function_traits<remove_cvref_t<Function>>::return_type;
+    typename function_traits<nostd::remove_cvref_t<Function>>::return_type;
 
 template <typename Function>
 using class_type_t =
-    typename function_traits<remove_cvref_t<Function>>::class_type;
+    typename function_traits<nostd::remove_cvref_t<Function>>::class_type;
 
 template <typename F, typename... Args>
 struct is_invocable
