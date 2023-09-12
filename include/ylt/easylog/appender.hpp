@@ -46,7 +46,7 @@ inline void to_int(int num, char *p, int &size) {
     p[--size] = c;
 }
 
-inline char *get_time_str(const auto &now) {
+inline char *get_time_str(const std::chrono::system_clock::time_point &now) {
   static thread_local char buf[33];
   static thread_local std::chrono::seconds last_sec_{};
 

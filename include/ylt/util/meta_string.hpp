@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 #include <compare>
 #include <concepts>
 #include <span>
@@ -38,11 +38,11 @@ struct meta_string {
 
   constexpr meta_string() noexcept : elements_{} {}
 
-  constexpr meta_string(const char (&data)[N + 1]) noexcept {
+  constexpr meta_string(const char (&data)[N + 1]) noexcept : elements_{} {
     for (size_t i = 0; i < N + 1; i++) elements_[i] = data[i];
   }
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
   template <std::size_t... Ns>
   constexpr meta_string(std::span<const char, Ns>... data) noexcept
       : elements_{} {
@@ -59,9 +59,10 @@ struct meta_string {
     ((iter = std::copy(data.begin(), data.end(), iter)), ...);
   }
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
   template <std::same_as<char>... Ts>
-  constexpr meta_string(Ts... chars) noexcept requires(sizeof...(Ts) == N)
+  constexpr meta_string(Ts... chars) noexcept
+    requires(sizeof...(Ts) == N)
       : elements_{chars...} {}
 #endif
 
@@ -148,7 +149,7 @@ struct meta_string {
 template <std::size_t N>
 meta_string(const char (&)[N]) -> meta_string<N - 1>;
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <std::size_t... Ns>
 meta_string(std::span<const char, Ns>...) -> meta_string<(Ns + ...)>;
 #endif
@@ -156,12 +157,12 @@ meta_string(std::span<const char, Ns>...) -> meta_string<(Ns + ...)>;
 template <std::size_t... Ns>
 meta_string(const meta_string<Ns>&...) -> meta_string<(Ns + ...)>;
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <std::same_as<char>... Ts>
 meta_string(Ts...) -> meta_string<sizeof...(Ts)>;
 #endif
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <std::size_t M, std::size_t N>
 constexpr auto operator<=>(const meta_string<M>& left,
                            const meta_string<N>& right) noexcept {
@@ -208,7 +209,7 @@ constexpr auto operator+(const char (&left)[M],
   return s;
 }
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <meta_string S, meta_string Delim>
 struct split_of {
   static constexpr auto value = [] {

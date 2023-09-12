@@ -26,7 +26,7 @@
 #include <variant>
 #include <vector>
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 #include <span>
 #endif
 
@@ -85,26 +85,27 @@ constexpr std::size_t alignment_v = 0;
 #if __cpp_concepts >= 201907L
 
 template <typename T>
-concept writer_t = requires(T t) {
-  t.write((const char *)nullptr, std::size_t{});
-};
+concept writer_t =
+    requires(T t) { t.write((const char *)nullptr, std::size_t{}); };
 
 template <typename T>
 concept reader_t = requires(T t) {
-  t.read((char *)nullptr, std::size_t{});
-  t.ignore(std::size_t{});
-  t.tellg();
-};
+                     t.read((char *)nullptr, std::size_t{});
+                     t.ignore(std::size_t{});
+                     t.tellg();
+                   };
 
 template <typename T>
-concept view_reader_t = reader_t<T> && requires(T t) {
-  { t.read_view(std::size_t{}) } -> std::convertible_to<const char *>;
-};
+concept view_reader_t =
+    reader_t<T> && requires(T t) {
+                     {
+                       t.read_view(std::size_t{})
+                       } -> std::convertible_to<const char *>;
+                   };
 
 template <typename T>
-concept seek_reader_t = reader_t<T> && requires(T t) {
-  t.seekg(std::size_t{});
-};
+concept seek_reader_t =
+    reader_t<T> && requires(T t) { t.seekg(std::size_t{}); };
 
 #else
 
@@ -141,7 +142,7 @@ struct view_reader_t_impl<
     : std::true_type {};
 
 template <typename T>
-constexpr bool view_reader_t = reader_t<T> &&view_reader_t_impl<T>::value;
+constexpr bool view_reader_t = reader_t<T> && view_reader_t_impl<T>::value;
 
 template <typename T, typename = void>
 struct seek_reader_t_impl : std::false_type {};
@@ -152,7 +153,7 @@ struct seek_reader_t_impl<
     : std::true_type {};
 
 template <typename T>
-constexpr bool seek_reader_t = reader_t<T> &&seek_reader_t_impl<T>::value;
+constexpr bool seek_reader_t = reader_t<T> && seek_reader_t_impl<T>::value;
 
 #endif
 
