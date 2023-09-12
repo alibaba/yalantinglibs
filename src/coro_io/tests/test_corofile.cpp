@@ -156,6 +156,23 @@ void create_file(std::string filename, size_t file_size,
 //   }
 // }
 
+async_simple::coro::Lazy<void> foo() { co_return; }
+
+TEST_CASE("test currentThreadInExecutor") {
+  CHECK(*coro_io::get_current() == nullptr);
+  CHECK(coro_io::get_global_executor()->currentContextId() == 0);
+  CHECK_NOTHROW(
+      async_simple::coro::syncAwait(foo().via(coro_io::get_global_executor())));
+  auto executor = coro_io::get_global_executor();
+
+  foo().via(executor).start([executor](auto&&) {
+    auto ptr = &executor->get_asio_executor().context();
+    CHECK(ptr == *coro_io::get_current());
+    size_t id = executor->currentContextId();
+    CHECK(id > 0);
+  });
+}
+
 TEST_CASE("read write 100 small files") {
   size_t total = 100;
   std::vector<std::string> filenames;

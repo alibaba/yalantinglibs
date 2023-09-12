@@ -31,6 +31,11 @@
 
 namespace coro_io {
 
+inline asio::io_context **get_current() {
+  static thread_local asio::io_context *current = nullptr;
+  return &current;
+}
+
 template <typename ExecutorImpl = asio::io_context::executor_type>
 class ExecutorWrapper : public async_simple::Executor {
  private:
@@ -70,6 +75,17 @@ class ExecutorWrapper : public async_simple::Executor {
   auto get_asio_executor() { return executor_; }
 
   operator ExecutorImpl() { return executor_; }
+
+  bool currentThreadInExecutor() const override {
+    auto ctx = get_current();
+    return *ctx == &executor_.context();
+  }
+
+  size_t currentContextId() const override {
+    auto ctx = get_current();
+    auto ptr = *ctx;
+    return ptr ? (size_t)ptr : 0;
+  }
 
  private:
   void schedule(Func func, Duration dur) override {
@@ -120,6 +136,8 @@ class io_context_pool {
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
           [](io_context_ptr svr) {
+            auto ctx = get_current();
+            *ctx = svr.get();
             svr->run();
           },
           io_contexts_[i]));
