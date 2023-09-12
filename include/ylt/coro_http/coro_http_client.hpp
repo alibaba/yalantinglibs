@@ -31,6 +31,7 @@ using coro_http_client = cinatra::coro_http_client;
 using req_content_type = cinatra::req_content_type;
 using resp_data = cinatra::resp_data;
 using http_method = cinatra::http_method;
-template <typename String>
+using http_header = cinatra::http_header;
+template <typename String = std::string>
 using req_context = cinatra::req_context<String>;
 }  // namespace coro_http

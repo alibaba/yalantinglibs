@@ -141,8 +141,26 @@ async_simple::coro::Lazy<void> ranges_download_files(
   std::cout << result.status << "\n";
 }
 
+void use_out_buf() {
+  using namespace coro_http;
+  std::string str;
+  str.resize(10);
+  std::string url = "http://cn.bing.com";
+
+  str.resize(6400);
+  coro_http_client client;
+  auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                  std::span<char>{str.data(), str.size()});
+  auto result = async_simple::coro::syncAwait(ret);
+  bool ok = result.status == 200 || result.status == 301;
+  assert(ok);
+  std::string_view sv(str.data(), result.resp_body.size());
+  assert(result.resp_body == sv);
+}
+
 int main() {
   test_sync_client();
+  use_out_buf();
 
   coro_http::coro_http_client client{};
   async_simple::coro::syncAwait(test_async_client(client));
