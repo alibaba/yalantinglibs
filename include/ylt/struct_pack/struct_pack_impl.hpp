@@ -920,8 +920,7 @@ constexpr decltype(auto) get_type_end_flag() {
            get_size_literal<Arg::struct_pack_id>();
   }
   else {
-    return string_literal<char, 1>{
-        {static_cast<char>(type_id::type_end_flag)}};
+    return string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
   }
 }
 
@@ -946,8 +945,7 @@ constexpr decltype(auto) get_type_literal() {
     }
     else {
       constexpr auto id = get_type_id<Arg>();
-      constexpr auto begin =
-          string_literal<char, 1>{{static_cast<char>(id)}};
+      constexpr auto begin = string_literal<char, 1>{{static_cast<char>(id)}};
       if constexpr (id == type_id::non_trivial_class_t ||
                     id == type_id::trivial_class_t) {
         using Args = decltype(get_types<Arg>());
@@ -1062,8 +1060,8 @@ constexpr decltype(auto) get_types_literal() {
     if constexpr (root_id == type_id::non_trivial_class_t ||
                   root_id == type_id::trivial_class_t) {
       constexpr auto end = get_type_end_flag<remove_cvref_t<T>>();
-      constexpr auto begin = string_literal<char, 1>{
-          {static_cast<char>(root_id)}};
+      constexpr auto begin =
+          string_literal<char, 1>{{static_cast<char>(root_id)}};
       constexpr auto body = get_types_literal_impl<T, Args...>();
       if constexpr (is_trivial_serializable<T, true>::value) {
         static_assert(align::pack_alignment_v<T> <= align::alignment_v<T>,
