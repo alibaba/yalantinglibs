@@ -87,7 +87,7 @@ constexpr std::size_t pack_alignment_v = 0;
 template <typename T>
 constexpr std::size_t alignment_v = 0;
 
-#if __cpp_concepts < 201907L
+#if __cpp_concepts >= 201907L
 
 template <typename T>
 concept has_user_defined_id = requires {
