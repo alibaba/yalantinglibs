@@ -375,33 +375,33 @@ struct foo {
   std::vector<int> a;
   std::list<foo> b;
 };
-
+struct bar;
 struct bar {
   std::vector<int> a;
-  std::deque<bar> b;
+  std::vector<bar> b;
 };
 
 struct foo_with_ID {
   std::vector<int> a;
-  std::list<foo> b;
+  std::list<foo_with_ID> b;
   constexpr static std::size_t struct_pack_id = 0;
 };
 
 struct bar_with_ID {
   std::vector<int> a;
-  std::map<int, bar> b;
+  std::map<int, bar_with_ID> b;
   constexpr static std::size_t struct_pack_id = 0;
 };
 
 struct foo_with_ID1 {
   std::vector<int> a;
-  std::list<foo> b;
+  std::list<foo_with_ID1> b;
   constexpr static std::size_t struct_pack_id = 1;
 };
 
 struct bar_with_ID1 {
   std::vector<int> a;
-  std::deque<bar> b;
+  std::vector<bar_with_ID1> b;
   constexpr static std::size_t struct_pack_id = 1;
 };
 
