@@ -38,11 +38,11 @@ struct string_literal {
 
   constexpr bool empty() const { return !Size; }
 
-  constexpr char &operator[](std::size_t sz) { return ar[sz]; }
+  constexpr CharType &operator[](std::size_t sz) { return ar[sz]; }
 
   constexpr const char &operator[](std::size_t sz) const { return ar[sz]; }
 
-  constexpr const char *data() const { return &ar[0]; }
+  constexpr const CharType *data() const { return &ar[0]; }
 
  private:
   CharType ar[Size + 1];

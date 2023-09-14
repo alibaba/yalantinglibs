@@ -49,6 +49,11 @@ using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 #endif
 }
 
+template <typename T>
+[[noreturn]] constexpr T declval() {
+  unreachable();
+}
+
 template <typename U>
 constexpr auto get_types();
 
@@ -81,6 +86,28 @@ template <typename T>
 constexpr std::size_t pack_alignment_v = 0;
 template <typename T>
 constexpr std::size_t alignment_v = 0;
+
+#if __cpp_concepts < 201907L
+
+template <typename T>
+concept has_user_defined_id = requires {
+  typename std::integral_constant<std::size_t, T::struct_pack_id>;
+};
+
+#else
+
+template <typename T, typename = void>
+struct has_user_defined_id_impl : std::false_type {};
+
+template <typename T>
+struct has_user_defined_id_impl<
+    T, std::void_t<std::integral_constant<std::size_t, T::struct_pack_id>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool has_user_defined_id = has_user_defined_id_impl<T>::value;
+
+#endif
 
 #if __cpp_concepts >= 201907L
 

@@ -222,11 +222,6 @@ template <typename... T>
 constexpr inline bool is_trivial_tuple<tuplet::tuple<T...>> = true;
 #endif
 
-template <typename T>
-[[noreturn]] constexpr T declval() {
-  unreachable();
-}
-
 template <typename U>
 constexpr auto get_types() {
   using T = remove_cvref_t<U>;
@@ -347,6 +342,8 @@ enum class type_id {
   monostate_t = 250,
   // circle_flag
   circle_flag = 251,
+  // end helper with user defined type ID
+  type_end_flag_with_id = 252,
   trivial_class_t = 253,
   // struct type
   non_trivial_class_t = 254,
@@ -915,11 +912,19 @@ constexpr void calculate_trival_obj_size<P, T, I>::operator()(
 
 }  // namespace align
 
-// This help function is just to improve unit test coverage. :)
-// The original lambada in `get_type_literal` is a compile-time expression.
-// Currently, the unit test coverage tools like
-// [Coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html)
-// can not detect code that is run at compile time.
+template <typename Arg>
+constexpr decltype(auto) get_type_end_flag() {
+  if constexpr (has_user_defined_id<Arg>) {
+    return string_literal<char, 1>{
+               {static_cast<char>(type_id::type_end_flag_with_id)}} +
+           get_size_literal<Arg::struct_pack_id>();
+  }
+  else {
+    return string_literal<char, 1>{
+        {static_cast<char>(type_id::type_end_flag)}};
+  }
+}
+
 template <typename Args, typename... ParentArgs, std::size_t... I>
 constexpr decltype(auto) get_type_literal(std::index_sequence<I...>);
 
@@ -941,10 +946,12 @@ constexpr decltype(auto) get_type_literal() {
     }
     else {
       constexpr auto id = get_type_id<Arg>();
-      constexpr auto ret = string_literal<char, 1>{{static_cast<char>(id)}};
+      constexpr auto begin =
+          string_literal<char, 1>{{static_cast<char>(id)}};
       if constexpr (id == type_id::non_trivial_class_t ||
                     id == type_id::trivial_class_t) {
         using Args = decltype(get_types<Arg>());
+        constexpr auto end = get_type_end_flag<Arg>();
         constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
             std::make_index_sequence<std::tuple_size_v<Args>>());
         if constexpr (is_trivial_serializable<Arg, true>::value) {
@@ -952,15 +959,12 @@ constexpr decltype(auto) get_type_literal() {
               align::pack_alignment_v<Arg> <= align::alignment_v<Arg>,
               "If you add #pragma_pack to a struct, please specify the "
               "struct_pack::pack_alignment_v<T>.");
-          constexpr auto end = string_literal<char, 1>{
-              {static_cast<char>(type_id::type_end_flag)}};
-          return ret + body + get_size_literal<align::pack_alignment_v<Arg>>() +
+          return begin + body +
+                 get_size_literal<align::pack_alignment_v<Arg>>() +
                  get_size_literal<align::alignment_v<Arg>>() + end;
         }
         else {
-          constexpr auto end = string_literal<char, 1>{
-              {static_cast<char>(type_id::type_end_flag)}};
-          return ret + body + end;
+          return begin + body + end;
         }
       }
       else if constexpr (id == type_id::variant_t) {
@@ -971,12 +975,12 @@ constexpr decltype(auto) get_type_literal() {
             std::make_index_sequence<std::variant_size_v<Arg>>());
         constexpr auto end = string_literal<char, 1>{
             {static_cast<char>(type_id::type_end_flag)}};
-        return ret + body + end;
+        return begin + body + end;
       }
       else if constexpr (id == type_id::array_t) {
         constexpr auto sz = get_array_size<Arg>();
         static_assert(sz > 0, "The array's size must greater than zero!");
-        return ret +
+        return begin +
                get_type_literal<
                    remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
                    ParentArgs...>() +
@@ -985,38 +989,39 @@ constexpr decltype(auto) get_type_literal() {
       else if constexpr (id == type_id::bitset_t) {
         constexpr auto sz = get_array_size<Arg>();
         static_assert(sz > 0, "The array's size must greater than zero!");
-        return ret + get_size_literal<sz>();
+        return begin + get_size_literal<sz>();
       }
       else if constexpr (unique_ptr<Arg>) {
-        return ret +
+        return begin +
                get_type_literal<remove_cvref_t<typename Arg::element_type>, Arg,
                                 ParentArgs...>();
       }
       else if constexpr (id == type_id::container_t ||
                          id == type_id::optional_t || id == type_id::string_t) {
-        return ret + get_type_literal<remove_cvref_t<typename Arg::value_type>,
-                                      Arg, ParentArgs...>();
+        return begin +
+               get_type_literal<remove_cvref_t<typename Arg::value_type>, Arg,
+                                ParentArgs...>();
       }
       else if constexpr (id == type_id::set_container_t) {
-        return ret + get_type_literal<remove_cvref_t<typename Arg::key_type>,
-                                      Arg, ParentArgs...>();
+        return begin + get_type_literal<remove_cvref_t<typename Arg::key_type>,
+                                        Arg, ParentArgs...>();
       }
       else if constexpr (id == type_id::map_container_t) {
-        return ret +
+        return begin +
                get_type_literal<remove_cvref_t<typename Arg::key_type>, Arg,
                                 ParentArgs...>() +
                get_type_literal<remove_cvref_t<typename Arg::mapped_type>, Arg,
                                 ParentArgs...>();
       }
       else if constexpr (id == type_id::expected_t) {
-        return ret +
+        return begin +
                get_type_literal<remove_cvref_t<typename Arg::value_type>, Arg,
                                 ParentArgs...>() +
                get_type_literal<remove_cvref_t<typename Arg::error_type>, Arg,
                                 ParentArgs...>();
       }
       else if constexpr (id != type_id::compatible_t) {
-        return ret;
+        return begin;
       }
       else {
         return string_literal<char, 0>{};
@@ -1054,12 +1059,11 @@ constexpr decltype(auto) get_types_literal() {
   }
   else {
     constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
-    constexpr auto end =
-        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
     if constexpr (root_id == type_id::non_trivial_class_t ||
                   root_id == type_id::trivial_class_t) {
-      constexpr auto begin =
-          string_literal<char, 1>{{static_cast<char>(root_id)}};
+      constexpr auto end = get_type_end_flag<remove_cvref_t<T>>();
+      constexpr auto begin = string_literal<char, 1>{
+          {static_cast<char>(root_id)}};
       constexpr auto body = get_types_literal_impl<T, Args...>();
       if constexpr (is_trivial_serializable<T, true>::value) {
         static_assert(align::pack_alignment_v<T> <= align::alignment_v<T>,

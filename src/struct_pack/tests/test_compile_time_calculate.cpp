@@ -1,4 +1,6 @@
+#include <iostream>
 #include <memory>
+#include <type_traits>
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
@@ -345,5 +347,85 @@ TEST_CASE("type calculate") {
         "tuple<tuple<T1>,T2> & tuple<tuple<T1,T2>> should get different MD5");
     CHECK(!deserialize<std::tuple<std::tuple<int>, int>>(
         serialize(std::tuple<std::tuple<int, int>>{})));
+  }
+}
+
+struct foo_trivial {
+  int a;
+  double b;
+};
+
+struct foo_trivial_with_ID {
+  int a;
+  double b;
+  constexpr static std::size_t struct_pack_id = 1;
+};
+struct foo_trivial_with_ID2 {
+  int a;
+  double b;
+  constexpr static int struct_pack_id = 2;
+};
+struct bar_trivial_with_ID2 {
+  uint32_t a;
+  double b;
+  constexpr static int struct_pack_id = 2;
+};
+
+struct foo {
+  std::vector<int> a;
+  std::list<foo> b;
+};
+
+struct bar {
+  std::vector<int> a;
+  std::deque<bar> b;
+};
+
+struct foo_with_ID {
+  std::vector<int> a;
+  std::list<foo> b;
+  constexpr static std::size_t struct_pack_id = 0;
+};
+
+struct bar_with_ID {
+  std::vector<int> a;
+  std::map<int, bar> b;
+  constexpr static std::size_t struct_pack_id = 0;
+};
+
+struct foo_with_ID1 {
+  std::vector<int> a;
+  std::list<foo> b;
+  constexpr static std::size_t struct_pack_id = 1;
+};
+
+struct bar_with_ID1 {
+  std::vector<int> a;
+  std::deque<bar> b;
+  constexpr static std::size_t struct_pack_id = 1;
+};
+
+TEST_CASE("test user defined ID") {
+  {
+    static_assert(has_user_defined_id<foo_trivial_with_ID>);
+    static_assert(struct_pack::get_type_literal<foo_trivial>() !=
+                  struct_pack::get_type_literal<foo_trivial_with_ID>());
+    static_assert(struct_pack::get_type_literal<foo_trivial_with_ID2>() !=
+                  struct_pack::get_type_literal<foo_trivial_with_ID>());
+    static_assert(struct_pack::get_type_literal<foo_trivial_with_ID2>() !=
+                  struct_pack::get_type_literal<bar_trivial_with_ID2>());
+  }
+  {
+    static_assert(has_user_defined_id<foo_with_ID>);
+    static_assert(struct_pack::get_type_literal<foo>() !=
+                  struct_pack::get_type_literal<foo_with_ID>());
+    static_assert(struct_pack::get_type_literal<foo_with_ID>() !=
+                  struct_pack::get_type_literal<foo_with_ID1>());
+    auto a = struct_pack::get_type_literal<foo_with_ID1>();
+    auto b = struct_pack::get_type_literal<bar_with_ID1>();
+    static_assert(struct_pack::get_type_literal<foo_with_ID1>() ==
+                  struct_pack::get_type_literal<bar_with_ID1>());
+    static_assert(struct_pack::get_type_literal<foo_with_ID>() !=
+                  struct_pack::get_type_literal<bar_with_ID>());
   }
 }
