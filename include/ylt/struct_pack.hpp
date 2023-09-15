@@ -512,4 +512,48 @@ template <typename T, size_t I, typename Reader,
   }
   return ret;
 }
+
+template <typename BaseClass, typename... DerivedClasses,
+          detail::deserialize_view View>
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::shared_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(const View &v) {
+  static_assert(sizeof...(DerivedClasses) > 0);
+  static_assert(struct_pack::detail::public_base_class_checker<
+                    BaseClass, std::tuple<DerivedClasses...>>::value,
+                "The First template argument is not the public");
+  static_assert(!struct_pack::detail::MD5_set<
+                std::tuple<DerivedClasses...>>::has_hash_collision);
+  detail::memory_reader reader{v.data(), v.size()};
+  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+}
+template <typename BaseClass, typename... DerivedClasses>
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::shared_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(const char *data, size_t size) {
+  static_assert(sizeof...(DerivedClasses) > 0);
+  static_assert(struct_pack::detail::public_base_class_checker<
+                BaseClass, std::tuple<DerivedClasses...>>::value);
+  static_assert(!struct_pack::detail::MD5_set<
+                std::tuple<DerivedClasses...>>::has_hash_collision);
+  detail::memory_reader reader{data, data + size};
+  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+}
+template <typename BaseClass, typename... DerivedClasses,
+          struct_pack::reader_t Reader>
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::shared_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(Reader &reader) {
+  static_assert(sizeof...(DerivedClasses) > 0);
+  static_assert(struct_pack::detail::public_base_class_checker<
+                BaseClass, std::tuple<DerivedClasses...>>::value);
+  static_assert(!struct_pack::detail::MD5_set<
+                std::tuple<DerivedClasses...>>::has_hash_collision);
+  struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc> ret;
+  auto ec = struct_pack::detail::deserialize_derived_class(ret.value(), reader);
+  if SP_UNLIKELY (ec != struct_pack::errc{}) {
+    ret = unexpected<struct_pack::errc>{ec};
+  }
+}
+
 }  // namespace struct_pack
