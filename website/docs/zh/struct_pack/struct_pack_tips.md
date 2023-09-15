@@ -26,6 +26,10 @@ struct_pack需要你的编译器良好的支持C++17标准。
 ##  类型校验
 struct_pack在编译期会根据被序列化的对象的类型生成类型字符串，并根据该字符串生成一个32位的MD5并取其高31位作为类型校验码。反序列化时会检查校验码是否和待反序列化的类型相同。
 为了缓解可能出现的哈希冲突，在debug模式下，struct_pack会存储完整的类型字符串。因此debug模式下生成的二进制体积比release略大。
+用户也可以通过`struct_pack::type_info_config::enable`手动控制是否启动类型字符串。
+```cpp
+auto result=struct_pack::serialize<struct_pack::type_info_config::enable>(person);
+```
 ##  类型约束
 
 1. 序列化的类型必须是struct_pack类型系统中的合法类型。详见：struct_pack的类型系统。See document：[struct_pack 类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)。
