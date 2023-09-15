@@ -23,7 +23,10 @@ When C++20 standard was enabled, struct_pack has better performance by support m
 4. define macro `STRUCT_PACK_OPTIMIZE`.
 ## Type Check
 struct_pack will generate a name for the serialized type during compilation, and get a 32-bit MD5 based on the string, then take its upper 31 bits for type check. When deserializing, it will check whether the hash code stored is the same as the type to be deserialized. 
-In order to alleviate possible hash collisions, in debug mode, struct_pack will store the complete type name instead of hash code. Therefore, the binary size in debug mode is slightly larger than release.
+In order to alleviate possible hash collisions, in debug mode, struct_pack will store the complete type name instead of hash code. Therefore, the binary size in debug mode is slightly larger than release. User can also enable it manually by add option `struct_pack::type_info_config::enable`:
+```cpp
+auto result=struct_pack::serialize<struct_pack::type_info_config::enable>(person);
+```
 ## Type requires
 
 1. The type to serialize should be legal struct_pack type.。See document：[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)。

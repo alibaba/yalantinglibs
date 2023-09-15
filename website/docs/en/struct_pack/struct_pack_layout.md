@@ -59,6 +59,7 @@ Current configurations are:
 2. `ADD_TYPE_INFO`(1 bit). It is a flag indicating if type information is present
 - 0 : full type information not present (0 in release mode)
 - 1 : full type information present
+You can also control it manually. See [link](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_tips.html#type-check)
 
 3. `LEN_SIZE` (2 bits). It records the maximum number of bytes of the containers.
 - 00 : 1 byte  (in range of uint8_t, 0~256)
