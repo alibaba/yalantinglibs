@@ -513,8 +513,13 @@ template <typename T, size_t I, typename Reader,
   }
   return ret;
 }
+#if __cpp_concepts >= 201907L
 template <typename BaseClass, typename... DerivedClasses,
           struct_pack::reader_t Reader>
+#else
+template <typename BaseClass, typename... DerivedClasses, typename Reader,
+          typename = std::enable_if_t<struct_pack::reader_t<Reader>>>
+#endif
 [[nodiscard]] STRUCT_PACK_INLINE
     struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
     deserialize_derived_class(Reader &reader) {
@@ -543,8 +548,14 @@ template <typename BaseClass, typename... DerivedClasses,
     return ret;
   }
 }
+#if __cpp_concepts >= 201907L
 template <typename BaseClass, typename... DerivedClasses,
           detail::deserialize_view View>
+#else
+template <
+    typename BaseClass, typename... DerivedClasses, typename View,
+    typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
+#endif
 [[nodiscard]] STRUCT_PACK_INLINE
     struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
     deserialize_derived_class(const View &v) {
