@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -512,4 +513,61 @@ template <typename T, size_t I, typename Reader,
   }
   return ret;
 }
+#if __cpp_concepts >= 201907L
+template <typename BaseClass, typename... DerivedClasses,
+          struct_pack::reader_t Reader>
+#else
+template <typename BaseClass, typename... DerivedClasses, typename Reader,
+          typename = std::enable_if_t<struct_pack::reader_t<Reader>>>
+#endif
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(Reader &reader) {
+  static_assert(sizeof...(DerivedClasses) > 0,
+                "There must have a least one derived class");
+  static_assert(
+      struct_pack::detail::public_base_class_checker<
+          BaseClass, std::tuple<DerivedClasses...>>::value,
+      "the First type should be the base class of all derived class ");
+  constexpr auto has_hash_collision =
+      struct_pack::detail::MD5_set<DerivedClasses...>::has_hash_collision;
+  if constexpr (has_hash_collision != 0) {
+    static_assert(!sizeof(std::tuple_element_t<has_hash_collision,
+                                               std::tuple<DerivedClasses...>>),
+                  "hash collision happened, consider add member `static "
+                  "constexpr uint64_t struct_pack_id` for collision type. ");
+  }
+  else {
+    struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc> ret;
+    auto ec = struct_pack::detail::deserialize_derived_class<BaseClass,
+                                                             DerivedClasses...>(
+        ret.value(), reader);
+    if SP_UNLIKELY (ec != struct_pack::errc{}) {
+      ret = unexpected<struct_pack::errc>{ec};
+    }
+    return ret;
+  }
+}
+#if __cpp_concepts >= 201907L
+template <typename BaseClass, typename... DerivedClasses,
+          detail::deserialize_view View>
+#else
+template <
+    typename BaseClass, typename... DerivedClasses, typename View,
+    typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
+#endif
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(const View &v) {
+  detail::memory_reader reader{v.data(), v.data() + v.size()};
+  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+}
+template <typename BaseClass, typename... DerivedClasses>
+[[nodiscard]] STRUCT_PACK_INLINE
+    struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
+    deserialize_derived_class(const char *data, size_t size) {
+  detail::memory_reader reader{data, data + size};
+  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+}
+
 }  // namespace struct_pack

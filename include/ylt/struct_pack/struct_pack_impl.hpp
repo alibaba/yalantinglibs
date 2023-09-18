@@ -39,6 +39,7 @@
 #include "reflection.hpp"
 #include "trivial_view.hpp"
 #include "varint.hpp"
+#include "ylt/struct_pack.hpp"
 
 #if __cplusplus >= 202002L
 #include "tuple.hpp"
@@ -919,6 +920,11 @@ constexpr decltype(auto) get_type_end_flag() {
                {static_cast<char>(type_id::type_end_flag_with_id)}} +
            get_size_literal<Arg::struct_pack_id>();
   }
+  else if constexpr (has_user_defined_id_ADL<Arg>) {
+    return string_literal<char, 1>{
+               {static_cast<char>(type_id::type_end_flag_with_id)}} +
+           get_size_literal<struct_pack_id((Arg *)nullptr)>();
+  }
   else {
     return string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
   }
@@ -1180,7 +1186,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
 template <typename T, typename... Args>
 constexpr uint32_t get_types_code_impl() {
   constexpr auto str = get_types_literal<T, remove_cvref_t<Args>...>();
-  return MD5::MD5Hash32Constexpr(str.data(), str.size());
+  return MD5::MD5Hash32Constexpr(str.data(), str.size()) & 0xFFFFFFFE;
 }
 
 template <typename T, typename Tuple, size_t... I>
@@ -1491,9 +1497,8 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
   }
 }
 
-template <std::size_t sz>
-constexpr void STRUCT_PACK_INLINE
-compile_time_sort(std::array<uint64_t, sz> &array) {
+template <typename T, std::size_t sz>
+constexpr void STRUCT_PACK_INLINE compile_time_sort(std::array<T, sz> &array) {
   // FIXME: use faster compile-time sort
   for (std::size_t i = 0; i < array.size(); ++i) {
     for (std::size_t j = i + 1; j < array.size(); ++j) {
@@ -1700,10 +1705,10 @@ class packer {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
     if constexpr (serialize_static_config<serialize_type>::has_compatible ||
                   check_if_add_type_literal<conf, serialize_type>()) {
-      return raw_types_code - raw_types_code % 2 + 1;
+      return raw_types_code + 1;
     }
     else {  // default case, only has hash_code
-      return raw_types_code - raw_types_code % 2;
+      return raw_types_code;
     }
   }
   template <uint64_t conf, bool is_default_size_type, typename T,
@@ -2036,6 +2041,16 @@ struct memory_reader {
   }
   std::size_t tellg() { return (std::size_t)now; }
 };
+
+template <typename Reader>
+struct MD5_reader_wrapper;
+
+template <typename T>
+constexpr bool is_MD5_reader_wrapper = false;
+
+template <typename T>
+constexpr bool is_MD5_reader_wrapper<MD5_reader_wrapper<T>> = true;
+
 #if __cpp_concepts >= 201907L
 template <reader_t Reader>
 #else
@@ -2384,6 +2399,7 @@ class unpacker {
     static STRUCT_PACK_INLINE constexpr void run(unpack &unpacker,
                                                  variant_t &v) {
       if constexpr (index >= std::variant_size_v<variant_t>) {
+        unreachable();
         return;
       }
       else {
@@ -2434,14 +2450,19 @@ class unpacker {
   STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
   deserialize_metainfo() {
     uint32_t current_types_code;
-    if SP_UNLIKELY (!reader_.read((char *)&current_types_code,
-                                  sizeof(uint32_t))) {
-      return {struct_pack::errc::no_buffer_space, 0};
+    if constexpr (is_MD5_reader_wrapper<Reader>) {
+      reader_.read_head((char *)&current_types_code);
     }
-    constexpr uint32_t types_code =
-        get_types_code<T, decltype(get_types<T>())>();
-    if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
-      return {struct_pack::errc::invalid_buffer, 0};
+    else {
+      if SP_UNLIKELY (!reader_.read((char *)&current_types_code,
+                                    sizeof(uint32_t))) {
+        return {struct_pack::errc::no_buffer_space, 0};
+      }
+      constexpr uint32_t types_code =
+          get_types_code<T, decltype(get_types<T>())>();
+      if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
+        return {struct_pack::errc::invalid_buffer, 0};
+      }
     }
     if SP_LIKELY (current_types_code % 2 == 0)  // unexist extended metainfo
     {
@@ -2974,5 +2995,127 @@ class unpacker {
   unsigned char size_type_;
 };
 
+struct MD5_pair {
+  uint32_t md5;
+  uint32_t index;
+  constexpr friend bool operator<(const MD5_pair &l, const MD5_pair &r) {
+    return l.md5 < r.md5;
+  }
+  constexpr friend bool operator>(const MD5_pair &l, const MD5_pair &r) {
+    return l.md5 > r.md5;
+  }
+  constexpr friend bool operator==(const MD5_pair &l, const MD5_pair &r) {
+    return l.md5 == r.md5;
+  }
+};
+
+template <typename... DerivedClasses>
+struct MD5_set {
+  static constexpr int size = sizeof...(DerivedClasses);
+  static_assert(size <= 256);
+
+ private:
+  template <std::size_t... Index>
+  static constexpr std::array<MD5_pair, size> calculate_md5(
+      std::index_sequence<Index...>) {
+    std::array<MD5_pair, size> md5{};
+    ((md5[Index] =
+          MD5_pair{get_types_code<DerivedClasses,
+                                  decltype(get_types<DerivedClasses>())>() &
+                       0xFFFFFFFE,
+                   Index}),
+     ...);
+    compile_time_sort(md5);
+    return md5;
+  }
+  static constexpr std::size_t has_hash_collision_impl() {
+    for (std::size_t i = 1; i < size; ++i) {
+      if (value[i - 1] == value[i]) {
+        return value[i].index;
+      }
+    }
+    return 0;
+  }
+
+ public:
+  static constexpr std::array<MD5_pair, size> value =
+      calculate_md5(std::make_index_sequence<size>());
+  static constexpr std::size_t has_hash_collision = has_hash_collision_impl();
+};
+
+template <typename BaseClass, typename DerivedClasses>
+struct public_base_class_checker {
+  static_assert(std::tuple_size_v<DerivedClasses> <= 256);
+
+ private:
+  template <std::size_t... Index>
+  static constexpr bool calculate_md5(std::index_sequence<Index...>) {
+    return (std::is_base_of_v<BaseClass,
+                              std::tuple_element_t<Index, DerivedClasses>> &&
+            ...);
+  }
+
+ public:
+  static constexpr bool value = public_base_class_checker::calculate_md5(
+      std::make_index_sequence<std::tuple_size_v<DerivedClasses>>());
+};
+
+template <typename DerivedClasses>
+struct deserialize_derived_class_helper {
+  template <size_t index, typename BaseClass, typename unpack>
+  static STRUCT_PACK_INLINE constexpr struct_pack::errc run(
+      std::unique_ptr<BaseClass> &base, unpack &unpacker) {
+    if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
+      unreachable();
+      return struct_pack::errc{};
+    }
+    else {
+      using derived_class = std::tuple_element_t<index, DerivedClasses>;
+      base = std::make_unique<derived_class>();
+      return unpacker.deserialize(*(derived_class *)base.get());
+    }
+  }
+};
+
+template <typename Reader>
+struct MD5_reader_wrapper : public Reader {
+  MD5_reader_wrapper(Reader &&reader) : Reader(std::move(reader)) {
+    is_failed = !Reader::read((char *)&head_chars, sizeof(head_chars));
+  }
+  bool read_head(char *target) {
+    memcpy(target, &head_chars, sizeof(head_chars));
+    return true;
+  }
+  Reader &&release_reader() { return std::move(*(Reader *)this); }
+  bool is_failed;
+  uint32_t get_md5() { return head_chars & 0xFFFFFFFE; }
+
+ private:
+  std::uint32_t head_chars;
+  std::size_t read_pos;
+};
+
+template <typename BaseClass, typename... DerivedClasses, typename Reader>
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_derived_class(
+    std::unique_ptr<BaseClass> &base, Reader &reader) {
+  MD5_reader_wrapper wrapper{std::move(reader)};
+  if (wrapper.is_failed) {
+    return struct_pack::errc::no_buffer_space;
+  }
+  unpacker<MD5_reader_wrapper<Reader>> unpack{wrapper};
+  constexpr auto &MD5s = MD5_set<DerivedClasses...>::value;
+  static_assert(MD5s.size() == sizeof...(DerivedClasses));
+  MD5_pair md5_pair{wrapper.get_md5(), 0};
+  auto result = std::lower_bound(MD5s.begin(), MD5s.end(), md5_pair);
+  if (result == MD5s.end() || result->md5 != md5_pair.md5) {
+    return struct_pack::errc::invalid_buffer;
+  }
+  auto ret = template_switch<
+      deserialize_derived_class_helper<std::tuple<DerivedClasses...>>>(
+      result->index, base, unpack);
+  reader = std::move(wrapper.release_reader());
+  return ret;
+}
 }  // namespace detail
+
 }  // namespace struct_pack

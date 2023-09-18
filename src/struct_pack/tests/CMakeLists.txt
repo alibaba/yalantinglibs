@@ -12,6 +12,7 @@ add_executable(struct_pack_test
         test_stream.cpp
         test_compatible.cpp
         test_non_aggregated_type.cpp
+        test_derived.cpp
         main.cpp
         )
 add_test(NAME struct_pack_test COMMAND struct_pack_test)

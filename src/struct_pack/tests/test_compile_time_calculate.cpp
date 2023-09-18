@@ -405,9 +405,17 @@ struct bar_with_ID1 {
   constexpr static std::size_t struct_pack_id = 1;
 };
 
+struct bar_with_ID2 {
+  std::vector<int> a;
+  std::vector<bar_with_ID2> b;
+};
+constexpr int struct_pack_id(bar_with_ID2*) { return 11; }
+
 TEST_CASE("test user defined ID") {
+  static_assert(struct_pack::detail::has_user_defined_id_ADL<bar_with_ID2>);
   {
-    static_assert(has_user_defined_id<foo_trivial_with_ID>);
+    static_assert(
+        struct_pack::detail::has_user_defined_id<foo_trivial_with_ID>);
     static_assert(struct_pack::get_type_literal<foo_trivial>() !=
                   struct_pack::get_type_literal<foo_trivial_with_ID>());
     static_assert(struct_pack::get_type_literal<foo_trivial_with_ID2>() !=
@@ -416,7 +424,7 @@ TEST_CASE("test user defined ID") {
                   struct_pack::get_type_literal<bar_trivial_with_ID2>());
   }
   {
-    static_assert(has_user_defined_id<foo_with_ID>);
+    static_assert(struct_pack::detail::has_user_defined_id<foo_with_ID>);
     static_assert(struct_pack::get_type_literal<foo>() !=
                   struct_pack::get_type_literal<foo_with_ID>());
     static_assert(struct_pack::get_type_literal<foo_with_ID>() !=
@@ -427,5 +435,7 @@ TEST_CASE("test user defined ID") {
                   struct_pack::get_type_literal<bar_with_ID1>());
     static_assert(struct_pack::get_type_literal<foo_with_ID>() !=
                   struct_pack::get_type_literal<bar_with_ID>());
+    static_assert(struct_pack::get_type_literal<bar_with_ID2>() !=
+                  struct_pack::get_type_literal<bar_with_ID1>());
   }
 }
