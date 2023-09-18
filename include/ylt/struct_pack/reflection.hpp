@@ -199,10 +199,20 @@ struct constant_checker{};
 template <typename T, typename = void>
 struct has_user_defined_id_ADL_impl : std::false_type {};
 
+#ifdef _MSC_VER
+// FIXME: we can't check if it's compile-time calculated in msvc with C++17
+template <typename T>
+struct has_user_defined_id_ADL_impl<
+    T, std::void_t<decltype(struct_pack_id((T*)nullptr))>>
+    : std::true_type {};
+#else
+
 template <typename T>
 struct has_user_defined_id_ADL_impl<
     T, std::void_t<constant_checker<struct_pack_id((T*)nullptr)>>>
     : std::true_type {};
+
+#endif
 
 template <typename T>
 constexpr bool has_user_defined_id_ADL = has_user_defined_id_ADL_impl<T>::value;
