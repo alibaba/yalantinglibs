@@ -193,12 +193,15 @@ struct has_user_defined_id_impl<
 template <typename T>
 constexpr bool has_user_defined_id = has_user_defined_id_impl<T>::value;
 
+template <std::size_t sz>
+struct constant_checker{};
+
 template <typename T, typename = void>
 struct has_user_defined_id_ADL_impl : std::false_type {};
 
 template <typename T>
 struct has_user_defined_id_ADL_impl<
-    T, std::void_t<std::integral_constant<std::size_t, struct_pack_id((T*)nullptr)>>>
+    T, std::void_t<decltype(constant_checker<struct_pack_id((T*)nullptr)>)>>
     : std::true_type {};
 
 template <typename T>
