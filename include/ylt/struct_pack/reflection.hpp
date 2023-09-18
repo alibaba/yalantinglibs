@@ -201,7 +201,7 @@ struct has_user_defined_id_ADL_impl : std::false_type {};
 
 template <typename T>
 struct has_user_defined_id_ADL_impl<
-    T, std::void_t<decltype(constant_checker<struct_pack_id((T*)nullptr)>)>>
+    T, std::void_t<constant_checker<struct_pack_id((T*)nullptr)>>>
     : std::true_type {};
 
 template <typename T>
