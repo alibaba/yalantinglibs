@@ -3072,7 +3072,7 @@ struct deserialize_derived_class_helper {
     else {
       using derived_class = std::tuple_element_t<index, DerivedClasses>;
       base = std::make_unique<derived_class>();
-      return unpacker.template deserialize(*(derived_class *)base.get());
+      return unpacker.deserialize(*(derived_class *)base.get());
     }
   }
 };
@@ -3095,8 +3095,7 @@ struct MD5_reader_wrapper : public Reader {
   std::size_t read_pos;
 };
 
-template <typename BaseClass, typename... DerivedClasses,
-          typename Reader>
+template <typename BaseClass, typename... DerivedClasses, typename Reader>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_derived_class(
     std::unique_ptr<BaseClass> &base, Reader &reader) {
   MD5_reader_wrapper wrapper{std::move(reader)};
