@@ -118,6 +118,11 @@ class appender {
         if (stop_) {
           if (queue_.size_approx() > 0) {
             while (queue_.try_dequeue(record)) {
+              if (max_files_ > 0 && file_size_ > max_file_size_ &&
+                  static_cast<size_t>(-1) != file_size_) {
+                roll_log_files();
+              }
+
               enable_console_ ? write_record<false, true>(record)
                               : write_record<false, false>(record);
             }
@@ -304,6 +309,7 @@ class appender {
 
  private:
   void open_log_file() {
+    file_size_ = 0;
     std::string filename = build_filename();
     file_.open(filename, std::ios::binary | std::ios::out | std::ios::app);
     if (file_) {
