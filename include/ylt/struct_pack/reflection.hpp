@@ -90,28 +90,6 @@ constexpr std::size_t alignment_v = 0;
 #if __cpp_concepts >= 201907L
 
 template <typename T>
-concept has_user_defined_id = requires {
-  typename std::integral_constant<std::size_t, T::struct_pack_id>;
-};
-
-#else
-
-template <typename T, typename = void>
-struct has_user_defined_id_impl : std::false_type {};
-
-template <typename T>
-struct has_user_defined_id_impl<
-    T, std::void_t<std::integral_constant<std::size_t, T::struct_pack_id>>>
-    : std::true_type {};
-
-template <typename T>
-constexpr bool has_user_defined_id = has_user_defined_id_impl<T>::value;
-
-#endif
-
-#if __cpp_concepts >= 201907L
-
-template <typename T>
 concept writer_t = requires(T t) {
   t.write((const char *)nullptr, std::size_t{});
 };
@@ -188,6 +166,45 @@ struct compatible;
 
 // clang-format off
 namespace detail {
+
+#if __cpp_concepts >= 201907L
+
+template <typename T>
+concept has_user_defined_id = requires {
+  typename std::integral_constant<std::size_t, T::struct_pack_id>;
+};
+
+template <typename T>
+concept has_user_defined_id_ADL = requires {
+  typename std::integral_constant<std::size_t,
+                                  struct_pack_id((T*)nullptr)>;
+};
+
+#else
+
+template <typename T, typename = void>
+struct has_user_defined_id_impl : std::false_type {};
+
+template <typename T>
+struct has_user_defined_id_impl<
+    T, std::void_t<std::integral_constant<std::size_t, T::struct_pack_id>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool has_user_defined_id = has_user_defined_id_impl<T>::value;
+
+template <typename T, typename = void>
+struct has_user_defined_id_ADL_impl : std::false_type {};
+
+template <typename T>
+struct has_user_defined_id_ADL_impl<
+    T, std::void_t<std::integral_constant<std::size_t, struct_pack_id((T*)nullptr)>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool has_user_defined_id_ADL = has_user_defined_id_ADL_impl<T>::value;
+
+#endif
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
