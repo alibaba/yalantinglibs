@@ -3096,7 +3096,7 @@ struct MD5_reader_wrapper : public Reader {
 };
 
 template <typename BaseClass, typename... DerivedClasses,
-          struct_pack::reader_t Reader>
+          typename Reader>
 [[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_derived_class(
     std::unique_ptr<BaseClass> &base, Reader &reader) {
   MD5_reader_wrapper wrapper{std::move(reader)};
