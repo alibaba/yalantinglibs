@@ -345,9 +345,8 @@ enum class type_id {
   circle_flag = 251,
   // end helper with user defined type ID
   type_end_flag_with_id = 252,
-  trivial_class_t = 253,
-  // struct type
-  non_trivial_class_t = 254,
+  // class type
+  struct_t = 253,
   // end helper
   type_end_flag = 255,
 };
@@ -579,13 +578,10 @@ constexpr type_id get_type_id() {
     return type_id::expected_t;
   }
   else if constexpr (is_trivial_tuple<T> || pair<T>) {
-    return type_id::trivial_class_t;
-  }
-  else if constexpr (tuple<T>) {
-    return type_id::non_trivial_class_t;
+    return type_id::struct_t;
   }
   else if constexpr (std::is_class_v<T>) {
-    return type_id::trivial_class_t;
+    return type_id::struct_t;
   }
   else {
     static_assert(!sizeof(T), "not supported type");
@@ -952,8 +948,7 @@ constexpr decltype(auto) get_type_literal() {
     else {
       constexpr auto id = get_type_id<Arg>();
       constexpr auto begin = string_literal<char, 1>{{static_cast<char>(id)}};
-      if constexpr (id == type_id::non_trivial_class_t ||
-                    id == type_id::trivial_class_t) {
+      if constexpr (id == type_id::struct_t) {
         using Args = decltype(get_types<Arg>());
         constexpr auto end = get_type_end_flag<Arg>();
         constexpr auto body = get_type_literal<Args, Arg, ParentArgs...>(
@@ -1063,8 +1058,7 @@ constexpr decltype(auto) get_types_literal() {
   }
   else {
     constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
-    if constexpr (root_id == type_id::non_trivial_class_t ||
-                  root_id == type_id::trivial_class_t) {
+    if constexpr (root_id == type_id::struct_t) {
       constexpr auto end = get_type_end_flag<remove_cvref_t<T>>();
       constexpr auto begin =
           string_literal<char, 1>{{static_cast<char>(root_id)}};
@@ -1133,8 +1127,7 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
       return true;
   }
   else {
-    if constexpr (id == type_id::non_trivial_class_t ||
-                  id == type_id::trivial_class_t) {
+    if constexpr (id == type_id::struct_t) {
       using subArgs = decltype(get_types<T>());
       return check_if_compatible_element_exist_impl<version, subArgs, T,
                                                     ParentArgs...>(
@@ -1367,8 +1360,7 @@ constexpr std::size_t calculate_compatible_version_size() {
     sz = 1;
   }
   else {
-    if constexpr (id == type_id::non_trivial_class_t ||
-                  id == type_id::trivial_class_t) {
+    if constexpr (id == type_id::struct_t) {
       using subArgs = decltype(get_types<T>());
       return calculate_compatible_version_size<subArgs, T, ParentArgs...>(
           std::make_index_sequence<std::tuple_size_v<subArgs>>());
@@ -1452,8 +1444,7 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
     return;
   }
   else {
-    if constexpr (id == type_id::non_trivial_class_t ||
-                  id == type_id::trivial_class_t) {
+    if constexpr (id == type_id::struct_t) {
       using subArgs = decltype(get_types<T>());
       get_compatible_version_numbers<Buffer, subArgs, T, ParentArgs...>(
           buffer, sz, std::make_index_sequence<std::tuple_size_v<subArgs>>());

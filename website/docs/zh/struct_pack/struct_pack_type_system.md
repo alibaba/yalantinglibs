@@ -221,59 +221,11 @@ concept unique_ptr = requires(Type ptr) {
 
 struct_pack支持结构体类型。结构体内可以包含最多64个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
 
-struct_pack将结构体分为两种：
-
-### struct/class/std::pair/tuplet::tuple
-
-例如：
-
-```cpp
-struct person {
-  int age;
-  std::string name;
-};
-```
-```cpp
-struct person2 {
-  std::string name;
-  int age;
-};
-STRUCT_PACK_REFL(person2,age,name)
-```
-和
-```cpp
-std::pair<int,std::string>
-```
-以及
-```cpp
-tuplet::tuple<int,std::string>
-```
-在 struct_pack中被视作相同的类型。
-
-### std::tuple
-
-由于历史原因，其内存布局和普通的struct不同，因此我们在类型系统中将其视作不同的类型。
-
-例如:
-
-```cpp
-struct person {
-  int age;
-  std::string name;
-};
-```
-
-和
-
-```cpp
-std::tuple<int,std::string>
-```
-
-这两者是不同的类型。
+struct_pack的结构体类型可以为：struct/class/std::pair/tuplet::tuple/std::tuple
 
 ### 平凡结构体
 
-假如一个类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，并且该类型未使用`STRUCT_PACK_REFL`宏注册，则该类型被视为平凡结构体类型。
+假如一个结构体类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，并且该类型未使用`STRUCT_PACK_REFL`宏注册，则该结构体被视为平凡结构体类型。
 
 平凡字段是下面几种类型中的一种：
 1. 基本类型
@@ -320,6 +272,7 @@ STRUCT_PACK_REFL(bar,a,b,c);
 static_assert(struct_pack::get_type_code<foo>()!=struct_pack::get_type_code<bar>());
 ```
 
+此外，std::tuple也一定不是平凡结构体。
 
 ## 兼容类型
 

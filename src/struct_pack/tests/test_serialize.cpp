@@ -200,7 +200,22 @@ TEST_CASE("testing exceptions") {
   }
 }
 
-TEST_CASE("testing serialize/deserialize varadic params") {
+TEST_CASE("testing serialize/deserialize variadic params") {
+  {
+    person p{24, "Betty"};
+    auto buffer = struct_pack::serialize(p);
+    auto res = struct_pack::deserialize<int, std::string>(buffer);
+    CHECK(res);
+    CHECK(std::get<0>(res.value()) == 24);
+    CHECK(std::get<1>(res.value()) == "Betty");
+  }
+  {
+    person p{24, "Betty"};
+    auto buffer = struct_pack::serialize(24, "Betty");
+    auto res = struct_pack::deserialize<person>(buffer);
+    CHECK(res);
+    CHECK(res.value() == p);
+  }
   {
     auto ret = struct_pack::serialize(1, 2, 3, 4, 5);
     auto res = struct_pack::deserialize<std::tuple<int, int, int, int, int>>(
@@ -570,18 +585,18 @@ TEST_CASE("test get type code") {
     auto str = get_type_literal<int, int, short>();
     static_assert(str.size() == 5);
     string_literal<char, 5> val{
-        {(char)-2, 1, 1, 7, (char)-1}};  //{'1','1','7'};
+        {(char)-3, 1, 1, 7, (char)-1}};  //{'1','1','7'};
     CHECK(str == val);
 
     auto str1 = get_type_literal<int64_t, uint64_t>();
     static_assert(str1.size() == 4);
-    string_literal<char, 4> val1{{(char)-2, 3, 4, (char)-1}};  //{'3','4'};
+    string_literal<char, 4> val1{{(char)-3, 3, 4, (char)-1}};  //{'3','4'};
     CHECK(str1 == val1);
 
     auto str2 =
         get_type_literal<int64_t, uint64_t, struct_pack::compatible<int32_t>>();
     static_assert(str2.size() == 4);
-    string_literal<char, 4> val2{{(char)-2, 3, 4, (char)-1}};
+    string_literal<char, 4> val2{{(char)-3, 3, 4, (char)-1}};
     CHECK(str2 == val2);
   }
 }
