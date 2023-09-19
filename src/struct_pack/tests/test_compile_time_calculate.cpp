@@ -285,18 +285,25 @@ TEST_CASE("type calculate") {
         serialize(tuplet::tuple<int, std::string>{})));
   }
   {
-    static_assert(get_type_code<std::tuple<int, std::string>>() !=
-                      get_type_code<person>(),
-                  "different class accord and trival_class"
-                  "concept should get different MD5");
-    CHECK(!deserialize<std::tuple<int, std::string>>(serialize(person{})));
+    static_assert(get_type_code<std::tuple<int, float>>() !=
+                      get_type_code<std::pair<int, float>>(),
+                  "tuple is not trival copyable, we got different layout");
+    CHECK(!deserialize<std::pair<int, float>>(
+        serialize(std::tuple<int, float>{})));
   }
   {
-    static_assert(get_type_code<std::pair<int, std::string>>() !=
+    static_assert(get_type_code<std::tuple<int, std::string>>() ==
+                      get_type_code<person>(),
+                  "same type should "
+                  "get same MD5");
+    CHECK(deserialize<std::tuple<int, std::string>>(serialize(person{})));
+  }
+  {
+    static_assert(get_type_code<std::pair<int, std::string>>() ==
                       get_type_code<std::tuple<int, std::string>>(),
-                  "different class accord and trival_class concept should "
-                  "get different MD5");
-    CHECK(!deserialize<std::pair<int, std::string>>(
+                  "same type should "
+                  "get same MD5");
+    CHECK(deserialize<std::pair<int, std::string>>(
         serialize(std::tuple<int, std::string>{})));
   }
   {
