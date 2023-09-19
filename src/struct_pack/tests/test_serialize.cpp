@@ -199,7 +199,7 @@ TEST_CASE("testing exceptions") {
     CHECK(ret3.error() == struct_pack::errc::no_buffer_space);
   }
 }
-
+using namespace std::string_literals;
 TEST_CASE("testing serialize/deserialize variadic params") {
   {
     person p{24, "Betty"};
@@ -211,7 +211,7 @@ TEST_CASE("testing serialize/deserialize variadic params") {
   }
   {
     person p{24, "Betty"};
-    auto buffer = struct_pack::serialize(24, "Betty");
+    auto buffer = struct_pack::serialize(24, "Betty"s);
     auto res = struct_pack::deserialize<person>(buffer);
     CHECK(res);
     CHECK(res.value() == p);
