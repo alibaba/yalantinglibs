@@ -1305,10 +1305,11 @@ calculate_payload_size(const T &item, const Args &...items) {
     return calculate_one_size(item);
 }
 
-template <typename T, typename Tuple>
+template <typename T>
 constexpr uint32_t get_types_code() {
-  return detail::get_types_code<T, Tuple>(
-      std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+  using tuple_t = decltype(get_types<T>());
+  return detail::get_types_code<T, tuple_t>(
+      std::make_index_sequence<std::tuple_size_v<tuple_t>>{});
 }
 
 template <typename T, uint64_t version = UINT64_MAX>
@@ -1682,12 +1683,10 @@ class packer {
   template <typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
-      return get_types_code<remove_cvref_t<T>,
-                            remove_cvref_t<decltype(get_types<T>())>>();
+      return get_types_code<remove_cvref_t<T>>();
     }
     else {
       return get_types_code<
-          std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>,
           std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>>();
     }
   }
@@ -2449,8 +2448,7 @@ class unpacker {
                                     sizeof(uint32_t))) {
         return {struct_pack::errc::no_buffer_space, 0};
       }
-      constexpr uint32_t types_code =
-          get_types_code<T, decltype(get_types<T>())>();
+      constexpr uint32_t types_code = get_types_code<T>();
       if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
         return {struct_pack::errc::invalid_buffer, 0};
       }
@@ -3010,12 +3008,7 @@ struct MD5_set {
   static constexpr std::array<MD5_pair, size> calculate_md5(
       std::index_sequence<Index...>) {
     std::array<MD5_pair, size> md5{};
-    ((md5[Index] =
-          MD5_pair{get_types_code<DerivedClasses,
-                                  decltype(get_types<DerivedClasses>())>() &
-                       0xFFFFFFFE,
-                   Index}),
-     ...);
+    ((md5[Index] = MD5_pair{get_types_code<DerivedClasses>(), Index}), ...);
     compile_time_sort(md5);
     return md5;
   }
