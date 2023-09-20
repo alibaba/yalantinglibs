@@ -1,4 +1,4 @@
-#include "test_derived.h"
+#include "test_derived.hpp"
 namespace test1 {
 struct Base {
   int id = 17;
@@ -120,7 +120,6 @@ TEST_CASE("test hash collision") {
       0);
 }
 
-
 TEST_CASE("test unique_ptr<Base>") {
   using namespace test2;
   static_assert(struct_pack::detail::is_base_class<base>);
@@ -140,7 +139,6 @@ TEST_CASE("test unique_ptr<Base>") {
     CHECK(vec[i]->get_name() == vec2[i]->get_name());
   }
 }
-
 
 TEST_CASE("test unique_ptr<Base> with virtual base") {
   using namespace test3;
