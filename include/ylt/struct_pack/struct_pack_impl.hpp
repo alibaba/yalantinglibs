@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -34,12 +35,12 @@
 #include <variant>
 #include <vector>
 
+#include "derived_helper.hpp"
 #include "error_code.hpp"
 #include "md5_constexpr.hpp"
 #include "reflection.hpp"
 #include "trivial_view.hpp"
 #include "varint.hpp"
-#include "ylt/struct_pack.hpp"
 
 #if __cplusplus >= 202002L
 #include "tuple.hpp"
@@ -339,6 +340,7 @@ enum class type_id {
   variant_t,
   expected_t,
   bitset_t,
+  unique_derived_class_t,
   // monostate, or void
   monostate_t = 250,
   // circle_flag
@@ -541,7 +543,7 @@ constexpr type_id get_type_id() {
     return get_varint_type<T>();
   }
   else if constexpr (std::is_same_v<T, std::monostate> ||
-                     std::is_same_v<T, void>) {
+                     std::is_same_v<T, void> || std::is_abstract_v<T>) {
     return type_id::monostate_t;
   }
   else if constexpr (bitset<T>) {
@@ -562,8 +564,16 @@ constexpr type_id get_type_id() {
   else if constexpr (container<T>) {
     return type_id::container_t;
   }
-  else if constexpr (optional<T> || unique_ptr<T>) {
+  else if constexpr (optional<T>) {
     return type_id::optional_t;
+  }
+  else if constexpr (unique_ptr<T>) {
+    if constexpr (is_base_class<typename T::element_type>) {
+      return type_id::unique_derived_class_t;
+    }
+    else {
+      return type_id::optional_t;
+    }
   }
   else if constexpr (is_variant_v<T>) {
     static_assert(
@@ -701,21 +711,6 @@ std::size_t constexpr get_array_size() {
   }
 }
 
-struct size_info {
-  std::size_t total;
-  std::size_t size_cnt;
-  std::size_t max_size;
-  constexpr size_info &operator+=(const size_info &other) {
-    this->total += other.total;
-    this->size_cnt += other.size_cnt;
-    this->max_size = (std::max)(this->max_size, other.max_size);
-    return *this;
-  }
-  constexpr size_info operator+(const size_info &other) {
-    return {this->total + other.total, this->size_cnt += other.size_cnt,
-            (std::max)(this->max_size, other.max_size)};
-  }
-};
 template <typename T>
 constexpr size_info inline calculate_one_size(const T &item);
 
@@ -1135,8 +1130,15 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        return check_if_compatible_element_exist_impl_helper<
-            version, typename T::element_type, T, ParentArgs...>();
+        if constexpr (is_base_class<typename T::element_type>) {
+          return check_if_compatible_element_exist_impl<
+              version, derived_class_set_t<typename T::element_type>, T,
+              ParentArgs...>();
+        }
+        else {
+          return check_if_compatible_element_exist_impl_helper<
+              version, typename T::element_type, T, ParentArgs...>();
+        }
       }
       else {
         return check_if_compatible_element_exist_impl_helper<
@@ -1244,10 +1246,31 @@ constexpr size_info inline calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (optional<type> || unique_ptr<type>) {
+  else if constexpr (optional<type>) {
     ret.total = sizeof(char);
     if (item) {
       ret += calculate_one_size(*item);
+    }
+  }
+  else if constexpr (unique_ptr<type>) {
+    ret.total = sizeof(char);
+    if (item) {
+      if constexpr (is_base_class<typename type::element_type>) {
+        ret.total += sizeof(uint32_t);
+        bool is_ok;
+        auto index = search_type_by_md5<typename type::element_type>(
+            item->get_struct_pack_id(), is_ok);
+        if SP_UNLIKELY (!is_ok) {
+          throw std::runtime_error{
+              "illegal struct_pack_id in virtual function."};
+        }
+        ret += template_switch<calculate_one_size_derived_class_helper<
+            derived_class_set_t<typename type::element_type>>>(index,
+                                                               item.get());
+      }
+      else {
+        ret += calculate_one_size(*item);
+      }
     }
   }
   else if constexpr (is_variant_v<type>) {
@@ -1368,8 +1391,15 @@ constexpr std::size_t calculate_compatible_version_size() {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        sz = calculate_compatible_version_size<typename T::element_type, T,
-                                               ParentArgs...>();
+        if constexpr (is_base_class<typename T::element_type>) {
+          sz = calculate_compatible_version_size<
+              derived_class_set_t<typename T::element_type>, T,
+              ParentArgs...>();
+        }
+        else {
+          sz = calculate_compatible_version_size<typename T::element_type, T,
+                                                 ParentArgs...>();
+        }
       }
       else {
         sz = calculate_compatible_version_size<typename T::value_type, T,
@@ -1452,8 +1482,15 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
     }
     else if constexpr (id == type_id::optional_t) {
       if constexpr (unique_ptr<T>) {
-        get_compatible_version_numbers<Buffer, typename T::element_type, T,
-                                       ParentArgs...>(buffer, sz);
+        if constexpr (is_base_class<typename T::element_type>) {
+          sz = get_compatible_version_numbers<
+              Buffer, derived_class_set_t<typename T::element_type>, T,
+              ParentArgs...>(buffer, sz);
+        }
+        else {
+          get_compatible_version_numbers<Buffer, typename T::element_type, T,
+                                         ParentArgs...>(buffer, sz);
+        }
       }
       else {
         get_compatible_version_numbers<Buffer, typename T::value_type, T,
@@ -1485,46 +1522,6 @@ constexpr void get_compatible_version_numbers(Buffer &buffer, std::size_t &sz) {
     else if constexpr (id == type_id::variant_t) {
       get_variant_compatible_version_numbers<Buffer, T, T, ParentArgs...>(
           buffer, sz, std::make_index_sequence<std::variant_size_v<T>>{});
-    }
-  }
-}
-
-template <typename T, std::size_t sz>
-constexpr void STRUCT_PACK_INLINE compile_time_sort(std::array<T, sz> &array) {
-  // FIXME: use faster compile-time sort
-  for (std::size_t i = 0; i < array.size(); ++i) {
-    for (std::size_t j = i + 1; j < array.size(); ++j) {
-      if (array[i] > array[j]) {
-        auto tmp = array[i];
-        array[i] = array[j];
-        array[j] = tmp;
-      }
-    }
-  }
-  return;
-}
-
-template <std::size_t sz>
-constexpr std::size_t STRUCT_PACK_INLINE
-calculate_uniqued_size(const std::array<uint64_t, sz> &input) {
-  std::size_t unique_cnt = sz;
-  for (std::size_t i = 1; i < input.size(); ++i) {
-    if (input[i] == input[i - 1]) {
-      --unique_cnt;
-    }
-  }
-  return unique_cnt;
-}
-
-template <std::size_t sz1, std::size_t sz2>
-constexpr void STRUCT_PACK_INLINE compile_time_unique(
-    const std::array<uint64_t, sz1> &input, std::array<uint64_t, sz2> &output) {
-  std::size_t j = 0;
-  static_assert(sz1 != 0, "not allow empty input!");
-  output[0] = input[0];
-  for (std::size_t i = 1; i < input.size(); ++i) {
-    if (input[i] != input[i - 1]) {
-      output[++j] = input[i];
     }
   }
 }
@@ -1658,6 +1655,9 @@ class packer {
   packer(const packer &) = delete;
   packer &operator=(const packer &) = delete;
 
+  template <typename DerivedClasses, typename size_type, typename version>
+  friend struct serialize_one_derived_class_helper;
+
   template <std::size_t size_type, typename T, std::size_t... I,
             typename... Args>
   void serialize_expand_compatible_helper(const T &t, std::index_sequence<I...>,
@@ -1765,7 +1765,22 @@ class packer {
         bool has_value = (item != nullptr);
         writer_.write((char *)&has_value, sizeof(char));
         if (has_value) {
-          serialize_one<size_type, version>(*item);
+          if constexpr (is_base_class<typename type::element_type>) {
+            bool is_ok;
+            uint32_t id = item->get_struct_pack_id();
+            auto index = search_type_by_md5<typename type::element_type>(
+                item->get_struct_pack_id(), is_ok);
+            assert(is_ok);
+            writer_.write((char *)&id, sizeof(uint32_t));
+            template_switch<serialize_one_derived_class_helper<
+                derived_class_set_t<typename type::element_type>,
+                std::integral_constant<std::size_t, size_type>,
+                std::integral_constant<std::uint64_t, version>>>(index, this,
+                                                                 item.get());
+          }
+          else {
+            serialize_one<size_type, version>(*item);
+          }
         }
       }
       else if constexpr (detail::varint_t<type>) {
@@ -1902,7 +1917,20 @@ class packer {
       }
       else if constexpr (unique_ptr<type>) {
         if (item != nullptr) {
-          serialize_one<size_type, version>(*item);
+          if constexpr (is_base_class<typename type::element_type>) {
+            bool is_ok;
+            auto index = search_type_by_md5<typename type::element_type>(
+                item->get_struct_pack_id(), is_ok);
+            assert(is_ok);
+            template_switch<serialize_one_derived_class_helper<
+                derived_class_set_t<typename type::element_type>,
+                std::integral_constant<std::size_t, size_type>,
+                std::integral_constant<std::uint64_t, version>>>(index, this,
+                                                                 item.get());
+          }
+          else {
+            serialize_one<size_type, version>(*item);
+          }
         }
       }
       else if constexpr (id == type_id::array_t) {
@@ -2051,6 +2079,10 @@ class unpacker {
   unpacker() = delete;
   unpacker(const unpacker &) = delete;
   unpacker &operator=(const unpacker &) = delete;
+
+  template <typename DerivedClasses, typename size_type, typename version,
+            typename NotSkip>
+  friend struct deserialize_one_derived_class_helper;
 
   STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {
 #if __cpp_concepts < 201907L
@@ -2552,8 +2584,27 @@ class unpacker {
         if (!has_value) {
           return {};
         }
-        item = std::make_unique<typename T::element_type>();
-        deserialize_one<size_type, version, NotSkip>(*item);
+        if constexpr (is_base_class<typename type::element_type>) {
+          uint32_t id;
+          reader_.read((char *)&id, sizeof(id));
+          bool ok;
+          auto index = search_type_by_md5<typename type::element_type>(id, ok);
+          if SP_UNLIKELY (!ok) {
+            return {};
+          }
+          else {
+            return template_switch<deserialize_one_derived_class_helper<
+                derived_class_set_t<typename type::element_type>,
+                std::integral_constant<std::size_t, size_type>,
+                std::integral_constant<std::uint64_t, version>,
+                std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
+                                                                 item);
+          }
+        }
+        else {
+          item = std::make_unique<typename type::element_type>();
+          deserialize_one<size_type, version, NotSkip>(*item);
+        }
       }
       else if constexpr (detail::varint_t<type>) {
         code = detail::deserialize_varint<NotSkip>(reader_, item);
@@ -2838,7 +2889,21 @@ class unpacker {
         if (item == nullptr) {
           return {};
         }
-        deserialize_one<size_type, version, NotSkip>(*item);
+        if constexpr (is_base_class<typename type::element_type>) {
+          uint32_t id = item->get_struct_pack_id();
+          bool ok;
+          auto index = search_type_by_md5<typename type::element_type>(id, ok);
+          assert(ok);
+          return template_switch<deserialize_one_derived_class_helper<
+              derived_class_set_t<typename type::element_type>,
+              std::integral_constant<std::size_t, size_type>,
+              std::integral_constant<std::uint64_t, version>,
+              std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
+                                                               item);
+        }
+        else {
+          deserialize_one<size_type, version, NotSkip>(*item);
+        }
       }
       else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
@@ -2984,89 +3049,15 @@ class unpacker {
   unsigned char size_type_;
 };
 
-struct MD5_pair {
-  uint32_t md5;
-  uint32_t index;
-  constexpr friend bool operator<(const MD5_pair &l, const MD5_pair &r) {
-    return l.md5 < r.md5;
-  }
-  constexpr friend bool operator>(const MD5_pair &l, const MD5_pair &r) {
-    return l.md5 > r.md5;
-  }
-  constexpr friend bool operator==(const MD5_pair &l, const MD5_pair &r) {
-    return l.md5 == r.md5;
-  }
-};
-
-template <typename... DerivedClasses>
-struct MD5_set {
-  static constexpr int size = sizeof...(DerivedClasses);
-  static_assert(size <= 256);
-
- private:
-  template <std::size_t... Index>
-  static constexpr std::array<MD5_pair, size> calculate_md5(
-      std::index_sequence<Index...>) {
-    std::array<MD5_pair, size> md5{};
-    ((md5[Index] = MD5_pair{get_types_code<DerivedClasses>(), Index}), ...);
-    compile_time_sort(md5);
-    return md5;
-  }
-  static constexpr std::size_t has_hash_collision_impl() {
-    for (std::size_t i = 1; i < size; ++i) {
-      if (value[i - 1] == value[i]) {
-        return value[i].index;
-      }
-    }
-    return 0;
-  }
-
- public:
-  static constexpr std::array<MD5_pair, size> value =
-      calculate_md5(std::make_index_sequence<size>());
-  static constexpr std::size_t has_hash_collision = has_hash_collision_impl();
-};
-
-template <typename BaseClass, typename DerivedClasses>
-struct public_base_class_checker {
-  static_assert(std::tuple_size_v<DerivedClasses> <= 256);
-
- private:
-  template <std::size_t... Index>
-  static constexpr bool calculate_md5(std::index_sequence<Index...>) {
-    return (std::is_base_of_v<BaseClass,
-                              std::tuple_element_t<Index, DerivedClasses>> &&
-            ...);
-  }
-
- public:
-  static constexpr bool value = public_base_class_checker::calculate_md5(
-      std::make_index_sequence<std::tuple_size_v<DerivedClasses>>());
-};
-
-template <typename DerivedClasses>
-struct deserialize_derived_class_helper {
-  template <size_t index, typename BaseClass, typename unpack>
-  static STRUCT_PACK_INLINE constexpr struct_pack::errc run(
-      std::unique_ptr<BaseClass> &base, unpack &unpacker) {
-    if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
-      unreachable();
-      return struct_pack::errc{};
-    }
-    else {
-      using derived_class = std::tuple_element_t<index, DerivedClasses>;
-      base = std::make_unique<derived_class>();
-      return unpacker.deserialize(*(derived_class *)base.get());
-    }
-  }
-};
-
 template <typename Reader>
 struct MD5_reader_wrapper : public Reader {
   MD5_reader_wrapper(Reader &&reader) : Reader(std::move(reader)) {
     is_failed = !Reader::read((char *)&head_chars, sizeof(head_chars));
   }
   bool read_head(char *target) {
+    if SP_UNLIKELY (is_failed) {
+      return false;
+    }
     memcpy(target, &head_chars, sizeof(head_chars));
     return true;
   }
@@ -3087,8 +3078,7 @@ template <typename BaseClass, typename... DerivedClasses, typename Reader>
     return struct_pack::errc::no_buffer_space;
   }
   unpacker<MD5_reader_wrapper<Reader>> unpack{wrapper};
-  constexpr auto &MD5s = MD5_set<DerivedClasses...>::value;
-  static_assert(MD5s.size() == sizeof...(DerivedClasses));
+  constexpr auto &MD5s = MD5_set<std::tuple<DerivedClasses...>>::value;
   MD5_pair md5_pair{wrapper.get_md5(), 0};
   auto result = std::lower_bound(MD5s.begin(), MD5s.end(), md5_pair);
   if (result == MD5s.end() || result->md5 != md5_pair.md5) {
