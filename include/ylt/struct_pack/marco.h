@@ -1,4 +1,3 @@
-#pragma once
 /*
  * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
@@ -14,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 #if defined __clang__
 #define STRUCT_PACK_INLINE __attribute__((always_inline)) inline
 #define CONSTEXPR_INLINE_LAMBDA __attribute__((always_inline)) constexpr
