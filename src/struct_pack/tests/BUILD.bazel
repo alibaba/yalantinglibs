@@ -2,7 +2,7 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_test(
     name = "test_serialize",
-    srcs = glob(["*.cpp"]) + ["test_struct.hpp"],
+    srcs = glob(["*.cpp"]) + ["test_struct.hpp"]+["test_derived.hpp"],
     copts = ["-std=c++20"],
     defines = ["STRUCT_PACK_ENABLE_UNPORTABLE_TYPE"],
     deps = [

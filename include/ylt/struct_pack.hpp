@@ -20,6 +20,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "struct_pack/derived_marco.hpp"
 #include "struct_pack/struct_pack_impl.hpp"
 
 #if __has_include(<expected>) && __cplusplus > 202002L
@@ -91,7 +92,12 @@ STRUCT_PACK_INLINE constexpr std::uint32_t get_type_code() {
   static_assert(sizeof...(Args) > 0);
   std::uint32_t ret = 0;
   if constexpr (sizeof...(Args) == 1) {
-    ret = detail::get_types_code<Args...>();
+    if constexpr (std::is_abstract_v<Args...>) {
+      struct_pack::detail::unreachable();
+    }
+    else {
+      ret = detail::get_types_code<Args...>();
+    }
   }
   else {
     ret = detail::get_types_code<std::tuple<detail::remove_cvref_t<Args>...>>();
@@ -527,8 +533,8 @@ template <typename BaseClass, typename... DerivedClasses, typename Reader,
       struct_pack::detail::public_base_class_checker<
           BaseClass, std::tuple<DerivedClasses...>>::value,
       "the First type should be the base class of all derived class ");
-  constexpr auto has_hash_collision =
-      struct_pack::detail::MD5_set<DerivedClasses...>::has_hash_collision;
+  constexpr auto has_hash_collision = struct_pack::detail::MD5_set<
+      std::tuple<DerivedClasses...>>::has_hash_collision;
   if constexpr (has_hash_collision != 0) {
     static_assert(!sizeof(std::tuple_element_t<has_hash_collision,
                                                std::tuple<DerivedClasses...>>),

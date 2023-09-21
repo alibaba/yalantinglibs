@@ -46,3 +46,17 @@
 #else
 #define SP_UNLIKELY(expr) (expr)
 #endif
+
+#if defined(__clang__)
+#if __has_feature(cxx_rtti)
+#define STRUCT_PACK_RTTI_ENABLED
+#endif
+#elif defined(__GNUC__)
+#if defined(__GXX_RTTI)
+#define STRUCT_PACK_RTTI_ENABLED
+#endif
+#elif defined(_MSC_VER)
+#if defined(_CPPRTTI)
+#define STRUCT_PACK_RTTI_ENABLED
+#endif
+#endif
