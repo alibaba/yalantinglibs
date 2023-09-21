@@ -196,7 +196,10 @@ constexpr std::size_t search_type_by_md5(uint32_t id, bool &ok) {
   constexpr auto &MD5s = MD5_set<derived_class_set_t<Base>>::value;
   auto result = std::lower_bound(MD5s.begin(), MD5s.end(), MD5_pair{id, 0});
   ok = (result != MD5s.end() && result->md5 == id);
-  return result->index;
+  if (!ok)
+    return MD5s.size();
+  else
+    return result->index;
 }
 
 template <typename T>

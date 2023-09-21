@@ -39,8 +39,10 @@
 namespace struct_pack {
 namespace detail {
 
-template <typename T>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+template <typename... Args>
+using get_args_type = remove_cvref_t<typename std::conditional<
+    sizeof...(Args) == 1, std::tuple_element_t<0, std::tuple<Args...>>,
+    std::tuple<Args...>>::type>;
 
 template <typename U>
 constexpr auto get_types();
@@ -785,6 +787,30 @@ template <typename T, typename = void>
 template <typename T, typename = std::enable_if_t<detail::is_trivial_serializable<T>::value>>
 struct trivial_view;
 namespace detail {
+
+#if __cpp_concepts < 201907L
+
+template <typename T, typename = void>
+struct trivially_copyable_container_impl : std::false_type {};
+
+template <typename T>
+struct trivially_copyable_container_impl<T, std::void_t<std::enable_if_t<is_trivial_serializable<typename T::value_type>::value>>>
+    : std::true_type {};
+
+template <typename Type>
+constexpr bool trivially_copyable_container =
+    continuous_container<Type> && trivially_copyable_container_impl<Type>::value;
+
+#else
+
+template <typename Type>
+constexpr bool trivially_copyable_container =
+    continuous_container<Type> &&
+    requires(Type container) {
+      requires is_trivial_serializable<typename Type::value_type>::value;
+    };
+
+#endif
 
   template <typename Type>
   constexpr inline bool is_trivial_view_v<struct_pack::trivial_view<Type>> = true;

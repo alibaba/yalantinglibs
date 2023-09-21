@@ -1,3 +1,4 @@
+#pragma once
 #include <memory>
 #include <string>
 #include <string_view>
@@ -7,7 +8,6 @@
 #include "ylt/struct_pack.hpp"
 #include "ylt/struct_pack/derived_helper.hpp"
 #include "ylt/struct_pack/derived_marco.hpp"
-#include "ylt/struct_pack/struct_pack_impl.hpp"
 #include "ylt/struct_pack/util.h"
 namespace test2 {
 

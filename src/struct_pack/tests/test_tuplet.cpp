@@ -7,6 +7,7 @@
 #include <string>
 #include <type_traits>
 #include <ylt/struct_pack.hpp>
+#include <ylt/struct_pack/tuple.hpp>
 
 #include "doctest.h"
 

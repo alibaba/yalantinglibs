@@ -4,8 +4,6 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
-#include "ylt/struct_pack/reflection.hpp"
-#include "ylt/struct_pack/struct_pack_impl.hpp"
 using namespace struct_pack;
 
 template <typename T>
