@@ -340,7 +340,7 @@ enum class type_id {
   variant_t,
   expected_t,
   bitset_t,
-  unique_derived_class_t,
+  polymorphic_unique_ptr_t,
   // monostate, or void
   monostate_t = 250,
   // circle_flag
@@ -569,7 +569,7 @@ constexpr type_id get_type_id() {
   }
   else if constexpr (unique_ptr<T>) {
     if constexpr (is_base_class<typename T::element_type>) {
-      return type_id::unique_derived_class_t;
+      return type_id::polymorphic_unique_ptr_t;
     }
     else {
       return type_id::optional_t;
@@ -587,10 +587,7 @@ constexpr type_id get_type_id() {
   else if constexpr (expected<T>) {
     return type_id::expected_t;
   }
-  else if constexpr (is_trivial_tuple<T> || pair<T>) {
-    return type_id::struct_t;
-  }
-  else if constexpr (std::is_class_v<T>) {
+  else if constexpr (is_trivial_tuple<T> || pair<T> || std::is_class_v<T>) {
     return type_id::struct_t;
   }
   else {

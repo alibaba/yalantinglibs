@@ -728,6 +728,9 @@ template <typename T, typename = void>
         if constexpr (std::is_same_v<T,std::monostate>) {
           return true;
         }
+        else if constexpr (std::is_abstract_v<T>) {
+          return false;
+        }
         else if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
           return ignore_compatible_field;
         }
