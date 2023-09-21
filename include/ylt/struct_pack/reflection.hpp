@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <set>
@@ -167,13 +168,6 @@ concept has_user_defined_id_ADL = requires {
                                   struct_pack_id((T*)nullptr)>;
 };
 
-
-template <typename T>
-concept is_base_class = requires (T* t){
-  std::is_same_v<uint32_t,decltype(t->get_struct_pack_id())>;
-  typename struct_pack::detail::derived_class_set_t<T>;
-};
-
 #else
 
 template <typename T, typename = void>
@@ -210,6 +204,29 @@ struct has_user_defined_id_ADL_impl<
 
 template <typename T>
 constexpr bool has_user_defined_id_ADL = has_user_defined_id_ADL_impl<T>::value;
+
+#endif
+
+
+
+#if __cpp_concepts >= 201907L
+template <typename T>
+concept is_base_class = requires (T* t) {
+  std::is_same_v<uint32_t,decltype(t->get_struct_pack_id())>;
+  typename struct_pack::detail::derived_class_set_t<T>;
+};
+#else
+template <typename T, typename = void>
+struct is_base_class_impl : std::false_type {};
+
+template <typename T>
+struct is_base_class_impl<
+    T, std::void_t<
+    std::enable_if<std::is_same_v<decltype(((T*)nullptr)->get_struct_pack_id()), uint32_t>>,
+    typename struct_pack::detail::derived_class_set_t<T>>>
+    : std::true_type {};
+template <typename T>
+constexpr bool is_base_class=is_base_class_impl<T>::value;
 
 #endif
 
