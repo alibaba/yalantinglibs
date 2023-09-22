@@ -28,9 +28,9 @@ namespace struct_pack {
 
 struct serialize_buffer_size;
 namespace detail {
-template <typename T, typename... Args>
+template <typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
-calculate_payload_size(const T &item, const Args &...items);
+calculate_payload_size(const Args &...items);
 
 template <typename T>
 constexpr size_info inline calculate_one_size(const T &item) {
@@ -64,7 +64,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
   }
   else if constexpr (container<type>) {
     ret.size_cnt += 1;
-    ret.max_size = (std::max)(ret.max_size, item.size());
+    ret.max_size = item.size();
     if constexpr (trivially_copyable_container<type>) {
       using value_type = typename type::value_type;
       ret.total = item.size() * sizeof(value_type);
@@ -158,13 +158,10 @@ constexpr size_info inline calculate_one_size(const T &item) {
   return ret;
 }
 
-template <typename T, typename... Args>
+template <typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
-calculate_payload_size(const T &item, const Args &...items) {
-  if constexpr (sizeof...(items) != 0)
-    return calculate_one_size(item) + calculate_payload_size(items...);
-  else
-    return calculate_one_size(item);
+calculate_payload_size(const Args &...items) {
+  return (calculate_one_size(items) + ...);
 }
 template <uint64_t conf, typename... Args>
 STRUCT_PACK_INLINE constexpr serialize_buffer_size get_serialize_runtime_info(
