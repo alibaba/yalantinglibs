@@ -550,6 +550,10 @@ class client_pools {
           ELOG_DEBUG << "add new client pool of {" << host_name
                      << "} to hash table";
         }
+        else {
+          ELOG_DEBUG << "add new client pool of {" << host_name
+                     << "} failed, element existed.";
+        }
       }
       return iter->second;
     }
