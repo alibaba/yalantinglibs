@@ -600,7 +600,7 @@ class unpacker {
           bool ok;
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           if SP_UNLIKELY (!ok) {
-            return {};
+            return errc::invalid_buffer;
           }
           else {
             return template_switch<deserialize_one_derived_class_helper<

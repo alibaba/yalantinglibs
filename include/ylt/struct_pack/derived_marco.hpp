@@ -35,4 +35,4 @@
 #define STRUCT_PACK_DERIVED_DECL(base, ...)                         \
   STRUCT_PACK_EXPAND_EACH(, GET_STRUCT_PACK_ID_IMPL_FOR_LOOP, base, \
                           __VA_ARGS__)                              \
-  STRUCT_PACK_DERIVED_IMPL(base, __VA_ARGS__)\
+  STRUCT_PACK_DERIVED_IMPL(base, __VA_ARGS__)
