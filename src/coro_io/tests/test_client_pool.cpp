@@ -108,6 +108,7 @@ TEST_CASE("test client pool") {
     CHECK(pool->free_client_count() == 0);
     server.stop();
   }());
+  ELOG_DEBUG << "test client pool over.";
 }
 TEST_CASE("test idle timeout yield") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
@@ -127,6 +128,7 @@ TEST_CASE("test idle timeout yield") {
     CHECK(pool->free_client_count() == 0);
     server.stop();
   }());
+  ELOG_DEBUG << "test idle timeout yield over.";
 }
 
 TEST_CASE("test reconnect") {
@@ -149,6 +151,7 @@ TEST_CASE("test reconnect") {
     server.stop();
     co_return;
   }());
+  ELOG_DEBUG << "test reconnect over.";
 }
 
 struct mock_client : public coro_rpc::coro_rpc_client {
@@ -161,7 +164,7 @@ struct mock_client : public coro_rpc::coro_rpc_client {
     co_return ec;
   }
 };
-TEST_CASE("test reconnect retry wait time exinclude reconnect cost time") {
+TEST_CASE("test reconnect retry wait time exclude reconnect cost time") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     auto tp = std::chrono::steady_clock::now();
     auto pool = coro_io::client_pool<mock_client>::create(
@@ -184,6 +187,8 @@ TEST_CASE("test reconnect retry wait time exinclude reconnect cost time") {
     server.stop();
     co_return;
   }());
+  ELOG_DEBUG
+      << "test reconnect retry wait time exclude reconnect cost time over.";
 }
 
 TEST_CASE("test collect_free_client") {
@@ -204,6 +209,7 @@ TEST_CASE("test collect_free_client") {
     server.stop();
     co_return;
   }());
+  ELOG_DEBUG << "test collect_free_client over.";
 }
 
 TEST_CASE("test client pools parallel r/w") {
@@ -214,8 +220,10 @@ TEST_CASE("test client pools parallel r/w") {
       CHECK(cli->get_host_name() == std::to_string(i));
     }
     auto rw = [&pool](int i) -> Lazy<void> {
+      ELOG_DEBUG << "start to insert {" << i << "} to hash table.";
       auto cli = pool[std::to_string(i)];
       CHECK(cli->get_host_name() == std::to_string(i));
+      ELOG_DEBUG << "end to insert {" << i << "} to hash table.";
       co_return;
     };
 
@@ -228,4 +236,5 @@ TEST_CASE("test client pools parallel r/w") {
     }
     co_await collectAll(std::move(works));
   }());
+  ELOG_DEBUG << "test client pools parallel r/w over.";
 }
