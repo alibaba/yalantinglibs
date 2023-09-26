@@ -280,11 +280,14 @@ class coro_http_client {
 
   bool has_closed() { return socket_->has_closed_; }
 
+  const auto &get_headers() { return req_headers_; }
+
+  void set_headers(std::unordered_map<std::string, std::string> req_headers) {
+    req_headers_ = std::move(req_headers);
+  }
+
   bool add_header(std::string key, std::string val) {
     if (key.empty())
-      return false;
-
-    if (key == "Host")
       return false;
 
     req_headers_[key] = std::move(val);
@@ -760,7 +763,12 @@ class coro_http_client {
       }
     }
 
-    add_header("Transfer-Encoding", "chunked");
+    if (headers.empty()) {
+      add_header("Transfer-Encoding", "chunked");
+    }
+    else {
+      headers.emplace("Transfer-Encoding", "chunked");
+    }
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
@@ -1074,7 +1082,12 @@ class coro_http_client {
       req_str.append(" HTTP/1.1\r\n");
     }
     else {
-      req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+      if (req_headers_.find("Host") == req_headers_.end()) {
+        req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+      }
+      else {
+        req_str.append(" HTTP/1.1\r\n");
+      }
     }
 
     auto type_str = get_content_type_str(ctx.content_type);
