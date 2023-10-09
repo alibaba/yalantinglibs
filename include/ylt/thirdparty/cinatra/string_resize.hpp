@@ -18,39 +18,39 @@ inline void resize(std::string& str, std::size_t sz) {
 inline void resize(std::string& str, std::size_t sz) { str.resize(sz); }
 #else
 
-#if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION)
-template <typename Money_t, Money_t std::string::*p>
+template <typename Function, Function func_ptr>
 class string_thief {
  public:
-  friend void string_set_length_hacker(std::string& bank, std::size_t sz) {
-    (bank.*p)(sz);
-  }
-};
-#elif defined(_MSVC_STL_VERSION)
-template <typename Money_t, Money_t std::string::*p>
-class string_thief {
- public:
-  friend void string_set_length_hacker(std::string& bank, std::size_t sz) {
-    (bank.*p)._Myval2._Mysize = sz;
-  }
-};
+  friend void string_set_length_hacker(std::string& self, std::size_t sz) {
+#if defined(_MSVC_STL_VERSION)
+    (self.*func_ptr)._Myval2._Mysize = sz;
+#else
+#if (_GLIBCXX_USE_CXX11_ABI == 0) && defined(__GLIBCXX__)
+    (self.*func_ptr)()->_M_set_length_and_sharable(sz);
+#else
+    (self.*func_ptr)(sz);
 #endif
+#endif
+  }
+};
 
 #if defined(__GLIBCXX__)  // libstdc++
-template class string_thief<void(std::string::size_type),
+#if (_GLIBCXX_USE_CXX11_ABI == 0)
+template class string_thief<decltype(&std::string::_M_rep),
+                            &std::string::_M_rep>;
+#else
+template class string_thief<decltype(&std::string::_M_set_length),
                             &std::string::_M_set_length>;
+#endif
 #elif defined(_LIBCPP_VERSION)
-template class string_thief<void(std::string::size_type),
+template class string_thief<decltype(&std::string::__set_size),
                             &std::string::__set_size>;
 #elif defined(_MSVC_STL_VERSION)
-template class string_thief<decltype(std::string::_Mypair),
+template class string_thief<decltype(&std::string::_Mypair),
                             &std::string::_Mypair>;
 #endif
 
-#if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
-    defined(_MSVC_STL_VERSION)
-void string_set_length_hacker(std::string& bank, std::size_t sz);
-#endif
+void string_set_length_hacker(std::string&, std::size_t);
 
 inline void resize(std::string& str, std::size_t sz) {
 #if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
