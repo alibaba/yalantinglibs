@@ -23,3 +23,8 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/binary_data
         ${CMAKE_BINARY_DIR}/output/tests/binary_data)
+add_custom_command(
+        TARGET struct_pack_test PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/binary_data
+        ${CMAKE_BINARY_DIR}/src/struct_pack/tests/binary_data)

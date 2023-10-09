@@ -64,22 +64,22 @@ struct complicated_object {
   }
 };
 
-inline complicated_object create_complicated_object(){
+inline complicated_object create_complicated_object() {
   return complicated_object{Color::red,
-                       42,
-                       "hello",
-                       {{20, "tom"}, {22, "jerry"}},
-                       {"hello", "world"},
-                       {1, 2},
-                       {{1, {20, "tom"}}},
-                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                       {"aa", "bb"},
-                       {1, 2},
-                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                       {{1, 2}, {1, 3}},
-                       {person{20, "tom"}, {22, "jerry"}},
-                       {person{20, "tom"}, {22, "jerry"}},
-                       std::make_pair("aa", person{20, "tom"})};
+                            42,
+                            "hello",
+                            {{20, "tom"}, {22, "jerry"}},
+                            {"hello", "world"},
+                            {1, 2},
+                            {{1, {20, "tom"}}},
+                            {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+                            {"aa", "bb"},
+                            {1, 2},
+                            {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+                            {{1, 2}, {1, 3}},
+                            {person{20, "tom"}, {22, "jerry"}},
+                            {person{20, "tom"}, {22, "jerry"}},
+                            std::make_pair("aa", person{20, "tom"})};
 }
 
 struct nested_object {
