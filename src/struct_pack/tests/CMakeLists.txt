@@ -13,7 +13,18 @@ add_executable(struct_pack_test
         test_compatible.cpp
         test_non_aggregated_type.cpp
         test_derived.cpp
+        test_cross_platform.cpp
         main.cpp
         )
 add_test(NAME struct_pack_test COMMAND struct_pack_test)
 target_compile_definitions(struct_pack_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
+add_custom_command(
+        TARGET struct_pack_test PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/binary_data
+        ${CMAKE_BINARY_DIR}/output/tests/binary_data)
+add_custom_command(
+        TARGET struct_pack_test PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/binary_data
+        ${CMAKE_BINARY_DIR}/src/struct_pack/tests/binary_data)

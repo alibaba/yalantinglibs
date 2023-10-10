@@ -1,4 +1,5 @@
 #include <array>
+#include <bitset>
 #include <deque>
 #include <list>
 #include <map>
@@ -7,6 +8,7 @@
 #include <span>
 #include <stack>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -61,6 +63,24 @@ struct complicated_object {
            n[1] == o.n[1] && this->o == o.o;
   }
 };
+
+inline complicated_object create_complicated_object() {
+  return complicated_object{Color::red,
+                            42,
+                            "hello",
+                            {{20, "tom"}, {22, "jerry"}},
+                            {"hello", "world"},
+                            {1, 2},
+                            {{1, {20, "tom"}}},
+                            {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+                            {"aa", "bb"},
+                            {1, 2},
+                            {{1, {20, "tom"}}},
+                            {{1, 2}},
+                            {person{20, "tom"}, {22, "jerry"}},
+                            {person{15, "tom"}, {31, "jerry"}},
+                            std::make_pair("aa", person{20, "tom"})};
+}
 
 struct nested_object {
   int id;

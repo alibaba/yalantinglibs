@@ -49,21 +49,7 @@ TEST_CASE("test expected") {
 }
 
 TEST_CASE("testing object with containers, enum, tuple array, and pair") {
-  complicated_object v{Color::red,
-                       42,
-                       "hello",
-                       {{20, "tom"}, {22, "jerry"}},
-                       {"hello", "world"},
-                       {1, 2},
-                       {{1, {20, "tom"}}},
-                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                       {"aa", "bb"},
-                       {1, 2},
-                       {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                       {{1, 2}, {1, 3}},
-                       {person{20, "tom"}, {22, "jerry"}},
-                       {person{20, "tom"}, {22, "jerry"}},
-                       std::make_pair("aa", person{20, "tom"})};
+  complicated_object v = create_complicated_object();
   auto ret = serialize(v);
 
   complicated_object v1{};
