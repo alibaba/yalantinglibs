@@ -75,10 +75,10 @@ inline complicated_object create_complicated_object() {
                             {{1, {20, "tom"}}, {1, {22, "jerry"}}},
                             {"aa", "bb"},
                             {1, 2},
-                            {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                            {{1, 2}, {1, 3}},
-                            {person{20, "tom"}},
-                            {person{26, "tom"}},
+                            {{1, {20, "tom"}}},
+                            {{1, 2}},
+                            {person{20, "tom"}, {22, "jerry"}},
+                            {person{15, "tom"}, {31, "jerry"}},
                             std::make_pair("aa", person{20, "tom"})};
 }
 
