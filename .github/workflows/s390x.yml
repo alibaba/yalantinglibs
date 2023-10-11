@@ -29,9 +29,7 @@ jobs:
             lscpu | grep Endian
             CXX=g++ CC=gcc 
             cmake -B ${{github.workspace}}/build \
-                  -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
-                  -DUSE_CCACHE=${{env.ccache}} \
-                  -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
-                  -DBUILD_STRUCT_PB=OFF
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF  -DBUILD_STRUCT_PB=OFF
             cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
             ctest -C ${{matrix.mode}} -j 1 -V
