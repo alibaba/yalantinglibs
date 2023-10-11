@@ -1,0 +1,45 @@
+name: IBM S390X
+
+on:
+  workflow_call:
+  push:
+   branches: [ main, develop ]
+  pull_request:
+   branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-ubuntu-s390x:
+    name: Build Linux on s390x arch and run unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mode: [ Debug, Release ] #[Release, Debug]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v3
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.mode}}
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc 
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
+                -DUSE_CCACHE=${{env.ccache}} \
+                -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j 1 -V
