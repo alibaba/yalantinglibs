@@ -31,5 +31,6 @@ jobs:
             cmake -B ${{github.workspace}}/build \
                   -DCMAKE_BUILD_TYPE=Release \
                   -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF  -DBUILD_STRUCT_PB=OFF
-            cmake --build ${{github.workspace}}/build
+            cmake --build ${{github.workspace}}/build -j
+            cd ${{github.workspace}}/build
             ctest -j 1 -V
