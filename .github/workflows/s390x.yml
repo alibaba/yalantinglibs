@@ -10,8 +10,6 @@ on:
 
 jobs:
   build-ubuntu-s390x:
-    name: Build Linux on s390x arch and run unit tests
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         mode: [ Debug, Release ] #[Release, Debug]
