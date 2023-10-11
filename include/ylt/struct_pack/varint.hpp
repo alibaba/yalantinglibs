@@ -19,6 +19,7 @@
 #include <system_error>
 #include <type_traits>
 
+#include "endian_wrapper.hpp"
 #include "reflection.hpp"
 namespace struct_pack {
 
