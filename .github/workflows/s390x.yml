@@ -10,7 +10,7 @@ on:
 jobs:
   build-ubuntu-s390x:
     name: Build Linux on s390x arch and run unit tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: uraimo/run-on-arch-action@v2
@@ -18,7 +18,7 @@ jobs:
         id: runcmd
         with:
           arch: s390x
-          distro: ubuntu-22.04
+          distro: ubuntu-latest
           install: |
             apt-get update -q -y
             apt-get -y install cmake
