@@ -1,7 +1,6 @@
 name: IBM S390X
 
 on:
-  workflow_call:
   push:
    branches: [ main, develop ]
   pull_request:
@@ -10,15 +9,12 @@ on:
 
 jobs:
   build-ubuntu-s390x:
-    strategy:
-      matrix:
-        mode: [ Debug,  Release ] #[Release, Debug]
+    name: Build Linux on s390x arch and run unit tests
     runs-on: ubuntu-22.04
-
     steps:
       - uses: actions/checkout@v3
       - uses: uraimo/run-on-arch-action@v2
-      - name: Test
+        name: Test
         id: runcmd
         with:
           arch: s390x
@@ -27,12 +23,11 @@ jobs:
             apt-get update -q -y
             apt-get -y install cmake
             apt-get -y install make
-            apt-get -y install ninja
             apt-get -y install g++
           run: |
             lscpu | grep Endian
             CXX=g++ CC=gcc 
-            cmake -B ${{github.workspace}}/build -G Ninja \
+            cmake -B ${{github.workspace}}/build \
                   -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                   -DUSE_CCACHE=${{env.ccache}} \
                   -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
