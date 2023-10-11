@@ -208,10 +208,10 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
   }
   while (v >= 0x80) {
     uint8_t temp = v | 0x80u;
-    writer_.write((char*)&temp, sizeof(temp));
+    write_wrapper<sizeof(char)>(writer_, (char*)&temp);
     v >>= 7;
   }
-  writer_.write((char*)&v, sizeof(char));
+  write_wrapper<sizeof(char)>(writer_, (char*)&v);
 }
 #if __cpp_concepts >= 201907L
 template <reader_t Reader>

@@ -7,6 +7,19 @@
 using namespace struct_pack;
 using namespace doctest;
 
+void data_gen() {
+  {
+    std::ofstream ifs("binary_data/test_cross_platform.dat");
+    auto object = create_complicated_object();
+    serialize_to<struct_pack::type_info_config::enable>(ifs, object);
+  }
+  {
+    std::ofstream ifs("binary_data/test_cross_platform_without_debug_info.dat");
+    auto object = create_complicated_object();
+    serialize_to<struct_pack::type_info_config::disable>(ifs, object);
+  }
+}
+
 TEST_CASE("testing deserialize other platform data") {
   std::ifstream ifs("binary_data/test_cross_platform.dat");
   if (!ifs.is_open()) {
