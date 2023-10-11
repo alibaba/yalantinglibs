@@ -12,22 +12,14 @@ jobs:
   build-ubuntu-s390x:
     strategy:
       matrix:
-        mode: [ Debug, Release ] #[Release, Debug]
+        mode: [ Debug,  Release ] #[Release, Debug]
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v3
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ github.job }}-${{ matrix.mode}}
-
-      - name: Configure
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@v2
+      - name: Test
+        id: runcmd
         with:
           arch: s390x
           distro: ubuntu-22.04
@@ -38,6 +30,7 @@ jobs:
             apt-get -y install ninja
             apt-get -y install g++
           run: |
+            lscpu | grep Endian
             CXX=g++ CC=gcc 
             cmake -B ${{github.workspace}}/build -G Ninja \
                   -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
