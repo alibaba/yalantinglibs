@@ -18,7 +18,7 @@
 #include "ylt/struct_pack/util.h"
 namespace struct_pack::detail {
 
-template <std::size_t block_size, writer_t writer_t>
+template <std::size_t block_size, typename writer_t>
 void write_wrapper(writer_t& writer, const char* data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     writer.write(data, block_size);
@@ -99,7 +99,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     static_assert(sizeof(writer), "illegal block size(should be 1,2,4,8,16)");
   }
 }
-template <std::size_t block_size, writer_t writer_t>
+template <std::size_t block_size, typename writer_t>
 void write_wrapper(writer_t& writer, const char* data,
                    std::size_t block_count) {
   if constexpr (is_system_little_endian || block_size == 1) {
@@ -116,7 +116,7 @@ void write_wrapper(writer_t& writer, const char* data,
     }
   }
 }
-template <std::size_t block_size, reader_t reader_t>
+template <std::size_t block_size, typename reader_t>
 bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     return static_cast<bool>(reader.read(data, block_size));
@@ -196,7 +196,7 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
     }
   }
 }
-template <std::size_t block_size, reader_t reader_t>
+template <std::size_t block_size, typename reader_t>
 bool read_wrapper(reader_t& reader, char* SP_RESTRICT data,
                   std::size_t block_count) {
   if constexpr (is_system_little_endian || block_size == 1) {

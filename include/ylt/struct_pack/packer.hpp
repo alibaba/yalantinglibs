@@ -17,8 +17,8 @@
 #include <cstdint>
 
 #include "calculate_size.hpp"
-#include "reflection.hpp"
 #include "endian_wrapper.hpp"
+#include "reflection.hpp"
 #include "ylt/struct_pack/util.h"
 namespace struct_pack::detail {
 template <

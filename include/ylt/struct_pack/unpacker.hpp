@@ -789,7 +789,7 @@ class unpacker {
                 if SP_UNLIKELY (view == nullptr) {
                   return struct_pack::errc::no_buffer_space;
                 }
-                item = {(value_type *)(view), size64};
+                item = {(value_type *)(view), (std::size_t)size64};
               }
               else {
                 if SP_UNLIKELY (mem_sz >= PTRDIFF_MAX)
