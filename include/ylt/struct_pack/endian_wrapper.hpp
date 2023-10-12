@@ -94,10 +94,10 @@ void write_wrapper(writer_t& writer, const char* data) {
   }
   else if constexpr (block_size == 2) {
 #ifdef _MSC_VER
-    auto tmp = _byteswap_ushort(*data);
+    auto tmp = _byteswap_ushort(*(uint16_t*)data);
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap16(*data);
+    auto tmp = __builtin_bswap16(*(uint16_t*)data);
     writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 1, 1);
@@ -106,10 +106,10 @@ void write_wrapper(writer_t& writer, const char* data) {
   }
   else if constexpr (block_size == 4) {
 #ifdef _MSC_VER
-    auto tmp = _byteswap_ulong(*data);
+    auto tmp = _byteswap_ulong(*(uint32_t*)data);
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap32(*data);
+    auto tmp = __builtin_bswap32(*(uint32_t*)data);
     writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 3, 1);
@@ -120,10 +120,10 @@ void write_wrapper(writer_t& writer, const char* data) {
   }
   else if constexpr (block_size == 8) {
 #ifdef _MSC_VER
-    auto tmp = _byteswap_uint64(*data);
+    auto tmp = _byteswap_uint64(*(uint64_t*)data);
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap64(*data);
+    auto tmp = __builtin_bswap64(*(uint64_t*)data);
     writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 7, 1);
@@ -138,7 +138,7 @@ void write_wrapper(writer_t& writer, const char* data) {
   }
   else if constexpr (block_size == 16) {
 #ifdef _MSC_VER
-    auto tmp1 = _byteswap_uint64(*data), tmp2 = _byteswap_uint64(*data + 8);
+    auto tmp1 = _byteswap_uint64(*(uint64_t*)data), tmp2 = _byteswap_uint64(*(uint64_t*)(data + 8));
     writer.write(&tmp2, block_size);
     writer.write(&tmp1, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
@@ -190,7 +190,7 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
   else {
     std::array<char, block_size> tmp;
     bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
-    if SP_UNLIKELY (res) {
+    if SP_UNLIKELY (!res) {
       return res;
     }
     if constexpr (block_size == 2) {
