@@ -39,8 +39,6 @@
 namespace struct_pack {
 namespace detail {
 
-
-
 template <typename... Args>
 using get_args_type = remove_cvref_t<typename std::conditional<
     sizeof...(Args) == 1, std::tuple_element_t<0, std::tuple<Args...>>,

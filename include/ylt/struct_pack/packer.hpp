@@ -247,7 +247,8 @@ class packer {
         }
 #endif
         if constexpr (trivially_copyable_container<type> &&
-                      is_little_endian_copyable<sizeof(typename type::value_type)>) {
+                      is_little_endian_copyable<sizeof(
+                          typename type::value_type)>) {
           using value_type = typename type::value_type;
           write_wrapper<sizeof(value_type)>(writer_, (char *)item.data(),
                                             item.size());
