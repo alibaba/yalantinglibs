@@ -1,9 +1,11 @@
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 using namespace struct_pack;
 using namespace doctest;
 
@@ -21,6 +23,9 @@ void data_gen() {
 }
 
 TEST_CASE("testing deserialize other platform data") {
+  std::cout << "Now endian:"
+            << (struct_pack::detail::is_system_little_endian ? "little" : "big")
+            << std::endl;
   std::ifstream ifs("binary_data/test_cross_platform.dat");
   if (!ifs.is_open()) {
     ifs.open("src/struct_pack/tests/binary_data/test_cross_platform.dat");

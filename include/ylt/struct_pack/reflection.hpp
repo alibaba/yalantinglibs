@@ -39,8 +39,11 @@
 namespace struct_pack {
 namespace detail {
 
-constexpr inline bool is_system_little_endian =
-    static_cast<const unsigned char &>(1) == 1;
+constexpr inline bool is_system_little_endian_impl(int value = 0x01) {
+  return static_cast<const unsigned char &>(value) == 1;
+}
+
+constexpr inline bool is_system_little_endian = is_system_little_endian_impl();
 
 template <typename... Args>
 using get_args_type = remove_cvref_t<typename std::conditional<

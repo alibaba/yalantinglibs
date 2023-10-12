@@ -40,7 +40,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     auto tmp = _byteswap_ulong(*data);
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap16(*data);
+    auto tmp = __builtin_bswap32(*data);
     writer.write(&tmp, block_size);
 #else
     writer.write(data + 3, 1);
@@ -54,7 +54,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     auto tmp = _byteswap_uint64(*data);
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap16(*data);
+    auto tmp = __builtin_bswap64(*data);
     writer.write(&tmp, block_size);
 #else
     writer.write(data + 7, 1);
