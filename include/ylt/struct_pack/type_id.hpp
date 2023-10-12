@@ -154,7 +154,7 @@ constexpr type_id get_integral_type() {
                   "sizeof(bool)!=1, which is not supported.");
     return type_id::bool_t;
   }
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
   //-std=gnu++20
   else if constexpr (std::is_same_v<__int128, T>) {
     return type_id::int128_t;
@@ -250,7 +250,7 @@ constexpr type_id get_type_id() {
     return get_integral_type<std::underlying_type_t<T>>();
   }
   else if constexpr (std::is_integral_v<T>
-#if __GNUC__ || __CLANG__
+#if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
                      || std::is_same_v<__int128, T> ||
                      std::is_same_v<unsigned __int128, T>
 #endif

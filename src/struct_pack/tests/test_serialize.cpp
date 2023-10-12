@@ -1019,7 +1019,7 @@ TEST_CASE("compatible convert to optional") {
   CHECK(b.value() == "hello world");
   CHECK(a.value() == "hello world");
 }
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
 struct test_int_128 {
   __int128_t x;
   __uint128_t y;
