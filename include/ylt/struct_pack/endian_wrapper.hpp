@@ -142,8 +142,8 @@ void write_wrapper(writer_t& writer, const char* data) {
     writer.write(&tmp1, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
     auto tmp1 = __builtin_bswap64(*data), tmp2 = __builtin_bswap64(*data + 8);
-    writer.write((char*)&tmp2, block_size);
-    writer.write((char*)&tmp1, block_size);
+    writer.write((char*)&tmp2, 8);
+    writer.write((char*)&tmp1, 8);
 #else
     writer.write(data + 15, 1);
     writer.write(data + 14, 1);
