@@ -1205,8 +1205,13 @@ struct dspan_test6 {
   std::string hello;
   std::vector<person> ar;
 };
+struct dspan_test7 {
+  std::string hello;
+  std::vector<uint8_t> ar;
+};
 
 TEST_CASE("test dynamic span") {
+#ifdef TEST_IN_LITTLE_ENDIAN
   SUBCASE("test dynamic span<int>") {
     {
       std::vector<int> ar = {1, 4, 5, 3};
@@ -1262,6 +1267,17 @@ TEST_CASE("test dynamic span") {
       CHECK(res.value().ar == ar);
     }
   }
+#endif
+  SUBCASE("test dynamic span<uint8_t>") {
+    {
+      std::vector<uint8_t> ar = {1, 2, 132, 214};
+      dspan_test7 s = {"Hello", ar};
+      auto buffer = struct_pack::serialize(s);
+      auto res = struct_pack::deserialize<dspan_test7>(buffer);
+      CHECK(res.has_value());
+      CHECK(res.value().hello == s.hello);
+      CHECK(res.value().ar == ar);
+    }
+  }
 }
-
 #endif

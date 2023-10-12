@@ -581,8 +581,9 @@ class unpacker {
                     "The Reader isn't a view_reader, can't deserialize "
                     "a trivial_view<T>");
       static_assert(
-          is_system_little_endian || sizeof(typename type::value_type) == 1,
-          "get a trivial view in big-endian system is limited.");
+          is_little_endian_copyable<sizeof(typename type::value_type)>,
+          "get a trivial view with byte width > 1 in big-endian system is "
+          "not allowed.");
       const char *view = reader_.read_view(sizeof(typename T::value_type));
       if SP_LIKELY (view != nullptr) {
         item = *reinterpret_cast<const typename T::value_type *>(view);
@@ -600,10 +601,20 @@ class unpacker {
         // do nothing
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t ||
-                         id == type_id::bitset_t) {
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         if constexpr (NotSkip) {
           if SP_UNLIKELY (!read_wrapper<sizeof(type)>(reader_, (char *)&item)) {
+            return struct_pack::errc::no_buffer_space;
+          }
+        }
+        else {
+          return reader_.ignore(sizeof(type)) ? errc{} : errc::no_buffer_space;
+        }
+      }
+      else if constexpr (id == type_id::bitset_t) {
+        if constexpr (NotSkip) {
+          if SP_UNLIKELY (!read_wrapper<sizeof(char)>(reader_, (char *)&item,
+                                                      sizeof(type))) {
             return struct_pack::errc::no_buffer_space;
           }
         }
@@ -646,7 +657,8 @@ class unpacker {
         code = detail::deserialize_varint<NotSkip>(reader_, item);
       }
       else if constexpr (id == type_id::array_t) {
-        if constexpr (is_trivial_serializable<type>::value) {
+        if constexpr (is_trivial_serializable<type>::value &&
+                      is_little_endian_copyable<sizeof(item[0])>) {
           if constexpr (NotSkip) {
             if SP_UNLIKELY (!read_wrapper<sizeof(item[0])>(
                                 reader_, (char *)&item,
@@ -782,16 +794,16 @@ class unpacker {
                     view_reader_t<Reader>,
                     "The Reader isn't a view_reader, can't deserialize "
                     "a string_view/span");
-                static_assert(
-                    sizeof(value_type) == 1 || is_system_little_endian,
-                    "zero-copy in big endian is limit.");
+                static_assert(is_little_endian_copyable<sizeof(value_type)>,
+                              "zero-copy in big endian is limit.");
                 const char *view = reader_.read_view(mem_sz);
                 if SP_UNLIKELY (view == nullptr) {
                   return struct_pack::errc::no_buffer_space;
                 }
                 item = {(value_type *)(view), (std::size_t)size64};
               }
-              else {
+              else if constexpr (is_little_endian_copyable<sizeof(
+                                     value_type)>) {
                 if SP_UNLIKELY (mem_sz >= PTRDIFF_MAX)
                   unreachable();
                 else {
@@ -799,6 +811,15 @@ class unpacker {
                   if SP_UNLIKELY (!read_wrapper<sizeof(value_type)>(
                                       reader_, (char *)item.data(), size64)) {
                     return struct_pack::errc::no_buffer_space;
+                  }
+                }
+              }
+              else {
+                item.resize(size64);
+                for (auto &i : item) {
+                  code = deserialize_one<size_type, version, NotSkip>(i);
+                  if SP_UNLIKELY (code != struct_pack::errc{}) {
+                    return code;
                   }
                 }
               }
@@ -897,7 +918,7 @@ class unpacker {
                 "struct_pack only support aggregated type, or you should "
                 "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value &&
-                      is_system_little_endian) {
+                      is_little_endian_copyable<sizeof(type)>) {
           if constexpr (NotSkip) {
             if SP_UNLIKELY (!read_wrapper<sizeof(type)>(reader_,
                                                         (char *)&item)) {
@@ -910,7 +931,7 @@ class unpacker {
           }
         }
         else if constexpr ((is_trivial_serializable<type>::value &&
-                            !is_system_little_endian) ||
+                            !is_little_endian_copyable<sizeof(type)>) ||
                            is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;

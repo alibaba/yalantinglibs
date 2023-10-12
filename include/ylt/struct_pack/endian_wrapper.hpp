@@ -82,6 +82,10 @@ constexpr inline bool is_system_little_endian =
     (BYTEORDER_ENDIAN == BYTEORDER_LITTLE_ENDIAN);
 #endif
 
+template <std::size_t block_size>
+constexpr inline bool is_little_endian_copyable =
+    is_system_little_endian || block_size == 1;
+
 template <std::size_t block_size, typename writer_t>
 void write_wrapper(writer_t& writer, const char* data) {
   if constexpr (is_system_little_endian || block_size == 1) {
@@ -93,7 +97,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
     auto tmp = __builtin_bswap16(*data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 1, 1);
     writer.write(data, 1);
@@ -105,7 +109,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
     auto tmp = __builtin_bswap32(*data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 3, 1);
     writer.write(data + 2, 1);
@@ -119,7 +123,7 @@ void write_wrapper(writer_t& writer, const char* data) {
     writer.write(&tmp, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
     auto tmp = __builtin_bswap64(*data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
 #else
     writer.write(data + 7, 1);
     writer.write(data + 6, 1);
@@ -138,8 +142,8 @@ void write_wrapper(writer_t& writer, const char* data) {
     writer.write(&tmp1, block_size);
 #elif defined(__clang__) || defined(__GNUC__)
     auto tmp1 = __builtin_bswap64(*data), tmp2 = __builtin_bswap64(*data + 8);
-    writer.write(&tmp2, block_size);
-    writer.write(&tmp1, block_size);
+    writer.write((char*)&tmp2, block_size);
+    writer.write((char*)&tmp1, block_size);
 #else
     writer.write(data + 15, 1);
     writer.write(data + 14, 1);
@@ -160,7 +164,7 @@ void write_wrapper(writer_t& writer, const char* data) {
 #endif
   }
   else {
-    static_assert(sizeof(writer), "illegal block size(should be 1,2,4,8,16)");
+    static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8,16)");
   }
 }
 template <std::size_t block_size, typename writer_t>
@@ -174,10 +178,7 @@ void write_wrapper(writer_t& writer, const char* data,
       writer.write(data, total_sz);
   }
   else {
-    for (std::size_t i = 0; i < block_count; ++i) {
-      write_wrapper<block_size>(writer, data);
-      data += block_size;
-    }
+    static_assert(!sizeof(writer_t), "illegal use");
   }
 }
 template <std::size_t block_size, typename reader_t>
@@ -187,7 +188,7 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
   }
   else {
     std::array<char, block_size> tmp;
-    bool res = static_cast<bool>(reader.read(&tmp, block_size));
+    bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
     if SP_UNLIKELY (res) {
       return res;
     }
@@ -256,8 +257,10 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
 #endif
     }
     else {
-      static_assert(sizeof(reader), "illegal block size(should be 1,2,4,8,16)");
+      static_assert(!sizeof(reader),
+                    "illegal block size(should be 1,2,4,8,16)");
     }
+    return true;
   }
 }
 template <std::size_t block_size, typename reader_t>
@@ -271,12 +274,7 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data,
       return static_cast<bool>(reader.read(data, total_sz));
   }
   else {
-    for (std::size_t i = 0; i < block_count; ++i) {
-      if SP_UNLIKELY (!read_wrapper<block_size>(reader, data)) {
-        return false;
-      }
-      data += block_size;
-    }
+    static_assert(!sizeof(reader_t), "illegal use");
   }
 }
 };  // namespace struct_pack::detail

@@ -17,7 +17,13 @@ add_executable(struct_pack_test
         main.cpp
         )
 add_test(NAME struct_pack_test COMMAND struct_pack_test)
+include (TestBigEndian)
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+if(NOT IS_BIG_ENDIAN)
+target_compile_definitions(struct_pack_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE  TEST_IN_LITTLE_ENDIAN)
+else()
 target_compile_definitions(struct_pack_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
+endif()
 add_custom_command(
         TARGET struct_pack_test PRE_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory

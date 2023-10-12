@@ -19,6 +19,7 @@
 #include "calculate_size.hpp"
 #include "endian_wrapper.hpp"
 #include "reflection.hpp"
+#include "ylt/struct_pack/type_id.hpp"
 #include "ylt/struct_pack/util.h"
 namespace struct_pack::detail {
 template <
@@ -158,9 +159,11 @@ class packer {
         // do nothing
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t ||
-                         id == type_id::bitset_t) {
+                         id == type_id::int128_t || id == type_id::uint128_t) {
         write_wrapper<sizeof(item)>(writer_, (char *)&item);
+      }
+      else if constexpr (id == type_id::bitset_t) {
+        write_wrapper<sizeof(char)>(writer_, (char *)&item, sizeof(item));
       }
       else if constexpr (unique_ptr<type>) {
         bool has_value = (item != nullptr);
@@ -188,9 +191,10 @@ class packer {
         detail::serialize_varint(writer_, item);
       }
       else if constexpr (id == type_id::array_t) {
-        if constexpr (is_trivial_serializable<type>::value) {
-          write_wrapper<sizeof(decltype(item[0]))>(
-              writer_, (char *)&item, sizeof(type) / sizeof(decltype(item[0])));
+        if constexpr (is_trivial_serializable<type>::value &&
+                      is_little_endian_copyable<sizeof(item[0])>) {
+          write_wrapper<sizeof(item[0])>(writer_, (char *)&item,
+                                         sizeof(type) / sizeof(item[0]));
         }
         else {
           for (const auto &i : item) {
@@ -242,7 +246,8 @@ class packer {
           }
         }
 #endif
-        if constexpr (trivially_copyable_container<type>) {
+        if constexpr (trivially_copyable_container<type> &&
+                      is_little_endian_copyable<sizeof(typename type::value_type)>) {
           using value_type = typename type::value_type;
           write_wrapper<sizeof(value_type)>(writer_, (char *)item.data(),
                                             item.size());
@@ -303,11 +308,11 @@ class packer {
                 "struct_pack only support aggregated type, or you should "
                 "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value &&
-                      is_system_little_endian) {
+                      is_little_endian_copyable<sizeof(type)>) {
           write_wrapper<sizeof(type)>(writer_, (char *)&item);
         }
         else if constexpr ((is_trivial_serializable<type>::value &&
-                            !is_system_little_endian) ||
+                            !is_little_endian_copyable<sizeof(type)>) ||
                            is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
