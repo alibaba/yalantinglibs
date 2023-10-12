@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <type_traits>
+#include <bit>
 
 #include "reflection.hpp"
 #include "ylt/struct_pack/util.h"
