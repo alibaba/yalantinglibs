@@ -19,8 +19,6 @@
 #include "calculate_size.hpp"
 #include "endian_wrapper.hpp"
 #include "reflection.hpp"
-#include "ylt/struct_pack/type_id.hpp"
-#include "ylt/struct_pack/util.h"
 namespace struct_pack::detail {
 template <
 #if __cpp_concepts >= 201907L
@@ -121,7 +119,8 @@ class packer {
       if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
         constexpr auto type_literal =
             struct_pack::get_type_literal<T, Args...>();
-        write_wrapper<1>(writer_, type_literal.data(), type_literal.size() + 1);
+        write_bytes_array(writer_, type_literal.data(),
+                          type_literal.size() + 1);
       }
     }
   }
@@ -163,7 +162,7 @@ class packer {
         write_wrapper<sizeof(item)>(writer_, (char *)&item);
       }
       else if constexpr (id == type_id::bitset_t) {
-        write_wrapper<sizeof(char)>(writer_, (char *)&item, sizeof(item));
+        write_bytes_array(writer_, (char *)&item, sizeof(item));
       }
       else if constexpr (unique_ptr<type>) {
         bool has_value = (item != nullptr);
@@ -193,8 +192,7 @@ class packer {
       else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value &&
                       is_little_endian_copyable<sizeof(item[0])>) {
-          write_wrapper<sizeof(item[0])>(writer_, (char *)&item,
-                                         sizeof(type) / sizeof(item[0]));
+          write_bytes_array(writer_, (char *)&item, sizeof(type));
         }
         else {
           for (const auto &i : item) {
@@ -250,8 +248,8 @@ class packer {
                       is_little_endian_copyable<sizeof(
                           typename type::value_type)>) {
           using value_type = typename type::value_type;
-          write_wrapper<sizeof(value_type)>(writer_, (char *)item.data(),
-                                            item.size());
+          write_bytes_array(writer_, (char *)item.data(),
+                            item.size() * sizeof(typename type::value_type));
           return;
         }
         else {

@@ -44,7 +44,6 @@
 #include "type_id.hpp"
 #include "type_trait.hpp"
 #include "varint.hpp"
-#include "ylt/struct_pack/util.h"
 
 namespace struct_pack {
 
@@ -488,7 +487,7 @@ class unpacker {
     }
     else {
       char buffer[literal.size() + 1];
-      if SP_UNLIKELY (!read_wrapper<1>(reader_, buffer, literal.size() + 1)) {
+      if SP_UNLIKELY (!read_bytes_array(reader_, buffer, literal.size() + 1)) {
         return errc::no_buffer_space;
       }
       if SP_UNLIKELY (memcmp(buffer, literal.data(), literal.size() + 1)) {
@@ -613,8 +612,8 @@ class unpacker {
       }
       else if constexpr (id == type_id::bitset_t) {
         if constexpr (NotSkip) {
-          if SP_UNLIKELY (!read_wrapper<sizeof(char)>(reader_, (char *)&item,
-                                                      sizeof(type))) {
+          if SP_UNLIKELY (!read_bytes_array(reader_, (char *)&item,
+                                            sizeof(type))) {
             return struct_pack::errc::no_buffer_space;
           }
         }
@@ -660,9 +659,8 @@ class unpacker {
         if constexpr (is_trivial_serializable<type>::value &&
                       is_little_endian_copyable<sizeof(item[0])>) {
           if constexpr (NotSkip) {
-            if SP_UNLIKELY (!read_wrapper<sizeof(item[0])>(
-                                reader_, (char *)&item,
-                                sizeof(item) / sizeof(item[0]))) {
+            if SP_UNLIKELY (!read_bytes_array(reader_, (char *)&item,
+                                              sizeof(item))) {
               return struct_pack::errc::no_buffer_space;
             }
           }
@@ -681,12 +679,12 @@ class unpacker {
         }
       }
       else if constexpr (container<type>) {
-        uint8_t size8;
         uint16_t size16;
         uint32_t size32;
         uint64_t size64;
         bool result;
         if constexpr (size_type == 1) {
+          uint8_t size8;
           if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size8)) {
             return struct_pack::errc::no_buffer_space;
           }
@@ -808,8 +806,9 @@ class unpacker {
                   unreachable();
                 else {
                   item.resize(size64);
-                  if SP_UNLIKELY (!read_wrapper<sizeof(value_type)>(
-                                      reader_, (char *)item.data(), size64)) {
+                  if SP_UNLIKELY (!read_bytes_array(
+                                      reader_, (char *)item.data(),
+                                      size64 * sizeof(value_type))) {
                     return struct_pack::errc::no_buffer_space;
                   }
                 }

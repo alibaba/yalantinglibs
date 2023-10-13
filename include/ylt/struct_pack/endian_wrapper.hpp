@@ -157,15 +157,13 @@ void write_wrapper(writer_t& writer, const char* data) {
     static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8,16)");
   }
 }
-template <std::size_t block_size, typename writer_t>
-void write_wrapper(writer_t& writer, const char* data,
-                   std::size_t block_count) {
-  if constexpr (is_system_little_endian || block_size == 1) {
-    auto total_sz = block_count * block_size;
-    if SP_UNLIKELY (total_sz >= PTRDIFF_MAX)
+template <typename writer_t>
+void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
+  if constexpr (is_system_little_endian) {
+    if SP_UNLIKELY (length >= PTRDIFF_MAX)
       unreachable();
     else
-      writer.write(data, total_sz);
+      writer.write(data, length);
   }
   else {
     static_assert(!sizeof(writer_t), "illegal use");
@@ -202,15 +200,14 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
     return true;
   }
 }
-template <std::size_t block_size, typename reader_t>
-bool read_wrapper(reader_t& reader, char* SP_RESTRICT data,
-                  std::size_t block_count) {
-  if constexpr (is_system_little_endian || block_size == 1) {
-    auto total_sz = block_count * block_size;
-    if SP_UNLIKELY (total_sz >= PTRDIFF_MAX)
+template <typename reader_t>
+bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
+                      std::size_t length) {
+  if constexpr (is_system_little_endian) {
+    if SP_UNLIKELY (length >= PTRDIFF_MAX)
       unreachable();
     else
-      return static_cast<bool>(reader.read(data, total_sz));
+      return static_cast<bool>(reader.read(data, length));
   }
   else {
     static_assert(!sizeof(reader_t), "illegal use");
