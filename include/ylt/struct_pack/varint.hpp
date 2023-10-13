@@ -212,7 +212,13 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
     write_wrapper<sizeof(char)>(writer_, (char*)&temp);
     v >>= 7;
   }
-  write_wrapper<sizeof(char)>(writer_, (char*)&v);
+  if constexpr (is_system_little_endian) {
+    write_wrapper<sizeof(char)>(writer_, (char*)&v);
+  }
+  else {
+    uint8_t tmp = v;
+    write_wrapper<sizeof(char)>(writer_, (char*)&tmp);
+  }
 }
 #if __cpp_concepts >= 201907L
 template <reader_t Reader>
