@@ -3,6 +3,7 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/endian_wrapper.hpp"
 
 using namespace struct_pack;
 
@@ -188,8 +189,11 @@ TEST_CASE("test compatible") {
       CHECK(sz == buffer.size());
       CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
+      std::uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
+      if constexpr (!detail::is_system_little_endian) {
+        r_sz = detail::bswap16(r_sz);
+      }
       CHECK(r_sz == sz);
       auto big2 =
           deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
@@ -211,8 +215,11 @@ TEST_CASE("test compatible") {
       CHECK(sz == buffer.size());
       CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
+      std::uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
+      if constexpr (!detail::is_system_little_endian) {
+        r_sz = detail::bswap16(r_sz);
+      }
       CHECK(r_sz == sz);
       auto big2 =
           deserialize<std::tuple<compatible<std::array<char, array_sz>>>>(
@@ -234,8 +241,11 @@ TEST_CASE("test compatible") {
       CHECK(sz == buffer.size());
       CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
-      std::size_t r_sz = 0;
+      uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
+      if constexpr (!detail::is_system_little_endian) {
+        r_sz = detail::bswap16(r_sz);
+      }
       CHECK(r_sz == sz);
       auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
       CHECK(big2);
@@ -255,8 +265,11 @@ TEST_CASE("test compatible") {
       CHECK(sz == buffer.size());
       CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 2);
-      std::size_t r_sz = 0;
+      uint32_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 4);
+      if constexpr (!detail::is_system_little_endian) {
+        r_sz = detail::bswap32(r_sz);
+      }
       CHECK(r_sz == sz);
       auto big2 = deserialize<std::tuple<compatible<std::string>>>(buffer);
       CHECK(big2);

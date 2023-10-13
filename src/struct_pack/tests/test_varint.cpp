@@ -11,70 +11,80 @@ TEST_CASE("test uint32") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint32_t v = UINT32_MAX;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
 }
 
@@ -84,133 +94,152 @@ TEST_CASE("test int32") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 * 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = 128 * 128 * 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = (128 * 128 * 128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = INT32_MAX;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int32_t v = INT32_MIN;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int32_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
 }
 
@@ -220,119 +249,136 @@ TEST_CASE("test uint64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 * 128 * 128 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v =
@@ -340,21 +386,24 @@ TEST_CASE("test uint64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = 1ull * 128 * 128 * 128 * 128 * 128 * 128 * 128 * 128 * 128;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_uint64_t v = UINT64_MAX;
     auto buf = serialize(v);
     auto v2 = deserialize<var_uint64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
 }
 
@@ -364,196 +413,224 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 1);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 2);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 3);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 * 128 * 128 / 2 - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 4);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = 128 * 128 * 128 * 128 / 2;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (128 * 128 * 128 * 128 / 2 + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 / 2) - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 5);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 / 2);
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = ((1ll * 128 * 128 * 128 * 128 * 128 / 2) + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 / 2) - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 6);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 / 2);
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = ((1ll * 128 * 128 * 128 * 128 * 128 * 128 / 2) + 1) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 * 128 / 2) - 1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 * 128 / 2) * -1;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 7);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 * 128 / 2);
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -561,7 +638,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -569,7 +647,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -577,14 +656,16 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 8);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = (1ll * 128 * 128 * 128 * 128 * 128 * 128 * 128 * 128 / 2);
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -592,7 +673,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -600,7 +682,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -608,7 +691,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 9);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -616,7 +700,8 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v =
@@ -625,21 +710,24 @@ TEST_CASE("test int64") {
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = INT64_MAX;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
   {
     var_int64_t v = INT64_MIN;
     auto buf = serialize(v);
     auto v2 = deserialize<var_int64_t>(buf);
     CHECK(detail::calculate_payload_size(v).total == 10);
-    CHECK(v == v2);
+    CHECK(v2.has_value());
+    CHECK(v == v2.value());
   }
 }
 
@@ -667,44 +755,52 @@ TEST_CASE("test nested") {
     VarRect<var_int32_t> rect{INT32_MAX, INT32_MIN, 123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int32_t>>(buf);
+    CHECK(rect2.has_value());
     CHECK(rect == rect2);
     nested_object2<var_int32_t> obj{123, "jfslkf", person{24, "Hello"},
                                     complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_int32_t>>(buf2);
+    CHECK(obj2.has_value());
     CHECK(obj2 == obj);
   }
   {
     VarRect<var_int64_t> rect{INT64_MAX, INT64_MIN, 123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_int64_t>>(buf);
+    CHECK(rect2.has_value());
     CHECK(rect == rect2);
     nested_object2<var_int64_t> obj{123, "jfslkf", person{24, "Hello"},
                                     complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_int64_t>>(buf2);
+    CHECK(obj2.has_value());
     CHECK(obj2 == obj);
   }
   {
     VarRect<var_uint32_t> rect{UINT32_MAX, 21321343, 123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint32_t>>(buf);
+    CHECK(rect2.has_value());
     CHECK(rect == rect2);
     nested_object2<var_uint32_t> obj{123, "jfslkf", person{24, "Hello"},
                                      complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_uint32_t>>(buf2);
+    CHECK(obj2.has_value());
     CHECK(obj2 == obj);
   }
   {
     VarRect<var_uint64_t> rect{UINT64_MAX, 1233143, 123, 0};
     auto buf = serialize(rect);
     auto rect2 = deserialize<VarRect<var_uint64_t>>(buf);
+    CHECK(rect2.has_value());
     CHECK(rect == rect2);
     nested_object2<var_uint64_t> obj{123, "jfslkf", person{24, "Hello"},
                                      complicated_object{}, rect};
     auto buf2 = serialize(obj);
     auto obj2 = deserialize<nested_object2<var_uint64_t>>(buf2);
+    CHECK(obj2.has_value());
     CHECK(obj2 == obj);
   }
 }

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #pragma once
-#include <type_traits>
 #include <bit>
+#include <cstdint>
+#include <type_traits>
 
 #include "reflection.hpp"
 #include "ylt/struct_pack/util.h"
@@ -87,82 +88,70 @@ template <std::size_t block_size>
 constexpr inline bool is_little_endian_copyable =
     is_system_little_endian || block_size == 1;
 
+template <typename T>
+T swap_endian(T u) {
+  union {
+    T u;
+    unsigned char u8[sizeof(T)];
+  } source, dest;
+  source.u = u;
+  for (size_t k = 0; k < sizeof(T); k++)
+    dest.u8[k] = source.u8[sizeof(T) - k - 1];
+  return dest.u;
+}
+
+inline uint16_t bswap16(uint16_t raw) {
+#ifdef _MSC_VER
+  return _byteswap_ushort(raw);
+#elif defined(__clang__) || defined(__GNUC__)
+  return __builtin_bswap16(raw);
+#else
+  return swap_endian(raw);
+#endif
+};
+
+inline uint32_t bswap32(uint32_t raw) {
+#ifdef _MSC_VER
+  return _byteswap_ulong(raw);
+#elif defined(__clang__) || defined(__GNUC__)
+  return __builtin_bswap32(raw);
+#else
+  return swap_endian(raw);
+#endif
+};
+
+inline uint64_t bswap64(uint64_t raw) {
+#ifdef _MSC_VER
+  return _byteswap_uint64(raw);
+#elif defined(__clang__) || defined(__GNUC__)
+  return __builtin_bswap64(raw);
+#else
+  return swap_endian(raw);
+#endif
+};
+
 template <std::size_t block_size, typename writer_t>
 void write_wrapper(writer_t& writer, const char* data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     writer.write(data, block_size);
   }
   else if constexpr (block_size == 2) {
-#ifdef _MSC_VER
-    auto tmp = _byteswap_ushort(*(uint16_t*)data);
+    auto tmp = bswap16(*(uint16_t*)data);
     writer.write(&tmp, block_size);
-#elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap16(*(uint16_t*)data);
-    writer.write((char*)&tmp, block_size);
-#else
-    writer.write(data + 1, 1);
-    writer.write(data, 1);
-#endif
   }
   else if constexpr (block_size == 4) {
-#ifdef _MSC_VER
-    auto tmp = _byteswap_ulong(*(uint32_t*)data);
+    auto tmp = bswap32(*(uint32_t*)data);
     writer.write(&tmp, block_size);
-#elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap32(*(uint32_t*)data);
-    writer.write((char*)&tmp, block_size);
-#else
-    writer.write(data + 3, 1);
-    writer.write(data + 2, 1);
-    writer.write(data + 1, 1);
-    writer.write(data, 1);
-#endif
   }
   else if constexpr (block_size == 8) {
-#ifdef _MSC_VER
-    auto tmp = _byteswap_uint64(*(uint64_t*)data);
+    auto tmp = bswap64(*(uint64_t*)data);
     writer.write(&tmp, block_size);
-#elif defined(__clang__) || defined(__GNUC__)
-    auto tmp = __builtin_bswap64(*(uint64_t*)data);
-    writer.write((char*)&tmp, block_size);
-#else
-    writer.write(data + 7, 1);
-    writer.write(data + 6, 1);
-    writer.write(data + 5, 1);
-    writer.write(data + 4, 1);
-    writer.write(data + 3, 1);
-    writer.write(data + 2, 1);
-    writer.write(data + 1, 1);
-    writer.write(data, 1);
-#endif
   }
   else if constexpr (block_size == 16) {
-#ifdef _MSC_VER
-    auto tmp1 = _byteswap_uint64(*(uint64_t*)data), tmp2 = _byteswap_uint64(*(uint64_t*)(data + 8));
+    auto tmp1 = bswap64(*(uint64_t*)data),
+         tmp2 = bswap64(*(uint64_t*)(data + 8));
     writer.write(&tmp2, block_size);
     writer.write(&tmp1, block_size);
-#elif defined(__clang__) || defined(__GNUC__)
-    auto tmp1 = __builtin_bswap64(*data), tmp2 = __builtin_bswap64(*data + 8);
-    writer.write((char*)&tmp2, 8);
-    writer.write((char*)&tmp1, 8);
-#else
-    writer.write(data + 15, 1);
-    writer.write(data + 14, 1);
-    writer.write(data + 13, 1);
-    writer.write(data + 12, 1);
-    writer.write(data + 11, 1);
-    writer.write(data + 10, 1);
-    writer.write(data + 9, 1);
-    writer.write(data + 8, 1);
-    writer.write(data + 7, 1);
-    writer.write(data + 6, 1);
-    writer.write(data + 5, 1);
-    writer.write(data + 4, 1);
-    writer.write(data + 3, 1);
-    writer.write(data + 2, 1);
-    writer.write(data + 1, 1);
-    writer.write(data, 1);
-#endif
   }
   else {
     static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8,16)");
@@ -194,68 +183,17 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
       return res;
     }
     if constexpr (block_size == 2) {
-#ifdef _MSC_VER
-      *(uint16_t*)data = _byteswap_ushort(*(uint16_t*)&tmp);
-#elif defined(__clang__) || defined(__GNUC__)
-      *(uint16_t*)data = __builtin_bswap16(*(uint16_t*)&tmp);
-#else
-      data[0] = tmp[1];
-      data[1] = tmp[0];
-#endif
+      *(uint16_t*)data = bswap16(*(uint16_t*)&tmp);
     }
     else if constexpr (block_size == 4) {
-#ifdef _MSC_VER
-      *(uint32_t*)data = _byteswap_ulong(*(uint32_t*)&tmp);
-#elif defined(__clang__) || defined(__GNUC__)
-      *(uint32_t*)data = __builtin_bswap32(*(uint32_t*)&tmp);
-#else
-      data[0] = tmp[3];
-      data[1] = tmp[2];
-      data[2] = tmp[1];
-      data[3] = tmp[0];
-#endif
+      *(uint32_t*)data = bswap32(*(uint32_t*)&tmp);
     }
     else if constexpr (block_size == 8) {
-#ifdef _MSC_VER
-      *(uint64_t*)data = _byteswap_uint64(*(uint64_t*)&tmp);
-#elif defined(__clang__) || defined(__GNUC__)
-      *(uint64_t*)data = __builtin_bswap64(*(uint64_t*)&tmp);
-#else
-      data[0] = tmp[7];
-      data[1] = tmp[6];
-      data[2] = tmp[5];
-      data[3] = tmp[4];
-      data[4] = tmp[3];
-      data[5] = tmp[2];
-      data[6] = tmp[1];
-      data[7] = tmp[0];
-#endif
+      *(uint64_t*)data = bswap64(*(uint64_t*)&tmp);
     }
     else if constexpr (block_size == 16) {
-#ifdef _MSC_VER
-      *(uint64_t*)(data + 8) = _byteswap_uint64(*(uint64_t*)&tmp);
-      *(uint64_t*)data = _byteswap_uint64(*(uint64_t*)(&tmp + 8));
-#elif defined(__clang__) || defined(__GNUC__)
-      *(uint64_t*)(data + 8) = __builtin_bswap64(*(uint64_t*)&tmp);
-      *(uint64_t*)data = __builtin_bswap64(*(uint64_t*)(&tmp + 8));
-#else
-      data[0] = tmp[15];
-      data[1] = tmp[14];
-      data[2] = tmp[13];
-      data[3] = tmp[12];
-      data[4] = tmp[11];
-      data[5] = tmp[10];
-      data[6] = tmp[9];
-      data[7] = tmp[8];
-      data[8] = tmp[7];
-      data[9] = tmp[6];
-      data[10] = tmp[5];
-      data[11] = tmp[4];
-      data[12] = tmp[3];
-      data[13] = tmp[2];
-      data[14] = tmp[1];
-      data[15] = tmp[0];
-#endif
+      *(uint64_t*)(data + 8) = bswap64(*(uint64_t*)&tmp);
+      *(uint64_t*)data = bswap64(*(uint64_t*)(&tmp + 8));
     }
     else {
       static_assert(!sizeof(reader),
