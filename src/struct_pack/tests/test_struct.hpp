@@ -40,6 +40,15 @@ struct empty {};
 
 enum class Color { red, black, white };
 
+struct trivial_one {
+  int a;
+  double b;
+  float c;
+  auto operator==(const trivial_one &rhs) const {
+    return a == rhs.a && b == rhs.b && c == rhs.c;
+  }
+};
+
 struct complicated_object {
   Color color;
   int a;
@@ -56,30 +65,34 @@ struct complicated_object {
   std::array<person, 2> m;
   person n[2];
   std::pair<std::string, person> o;
+  std::vector<std::array<trivial_one, 2>> p;
   bool operator==(const complicated_object &o) const {
     return color == o.color && a == o.a && b == o.b && c == o.c && d == o.d &&
            e == o.e && f == o.f && g == o.g && h == o.h && i == o.i &&
            j == o.j && k == o.k && m == o.m && n[0] == o.n[0] &&
-           n[1] == o.n[1] && this->o == o.o;
+           n[1] == o.n[1] && this->o == o.o && p == o.p;
   }
 };
 
 inline complicated_object create_complicated_object() {
-  return complicated_object{Color::red,
-                            42,
-                            "hello",
-                            {{20, "tom"}, {22, "jerry"}},
-                            {"hello", "world"},
-                            {1, 2},
-                            {{1, {20, "tom"}}},
-                            {{1, {20, "tom"}}, {1, {22, "jerry"}}},
-                            {"aa", "bb"},
-                            {1, 2},
-                            {{1, {20, "tom"}}},
-                            {{1, 2}},
-                            {person{20, "tom"}, {22, "jerry"}},
-                            {person{15, "tom"}, {31, "jerry"}},
-                            std::make_pair("aa", person{20, "tom"})};
+  return complicated_object{
+      Color::red,
+      42,
+      "hello",
+      {{20, "tom"}, {22, "jerry"}},
+      {"hello", "world"},
+      {1, 2},
+      {{1, {20, "tom"}}},
+      {{1, {20, "tom"}}, {1, {22, "jerry"}}},
+      {"aa", "bb"},
+      {1, 2},
+      {{1, {20, "tom"}}},
+      {{1, 2}},
+      {person{20, "tom"}, {22, "jerry"}},
+      {person{15, "tom"}, {31, "jerry"}},
+      std::make_pair("aa", person{20, "tom"}),
+      {{trivial_one{1232114, 1.7, 2.4}, trivial_one{12315, 1.4, 2.6}},
+       {trivial_one{4, 0.7, 1.4}, trivial_one{1123115, 11111.4, 2213321.6}}}};
 }
 
 struct nested_object {

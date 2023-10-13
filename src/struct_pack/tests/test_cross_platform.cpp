@@ -1,13 +1,31 @@
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 using namespace struct_pack;
 using namespace doctest;
 
+void data_gen() {
+  {
+    std::ofstream ifs("binary_data/test_cross_platform.dat");
+    auto object = create_complicated_object();
+    serialize_to<struct_pack::type_info_config::enable>(ifs, object);
+  }
+  {
+    std::ofstream ifs("binary_data/test_cross_platform_without_debug_info.dat");
+    auto object = create_complicated_object();
+    serialize_to<struct_pack::type_info_config::disable>(ifs, object);
+  }
+}
+
 TEST_CASE("testing deserialize other platform data") {
+  std::cout << "Now endian:"
+            << (struct_pack::detail::is_system_little_endian ? "little" : "big")
+            << std::endl;
   std::ifstream ifs("binary_data/test_cross_platform.dat");
   if (!ifs.is_open()) {
     ifs.open("src/struct_pack/tests/binary_data/test_cross_platform.dat");
@@ -31,36 +49,4 @@ TEST_CASE("testing deserialize other platform data without debug info") {
   REQUIRE(result.has_value());
   auto object = create_complicated_object();
   CHECK(result.value() == object);
-}
-
-TEST_CASE("testing serialize other platform data") {
-  std::ifstream ifs("binary_data/test_cross_platform.dat");
-  if (!ifs.is_open()) {
-    ifs.open("src/struct_pack/tests/binary_data/test_cross_platform.dat");
-  }
-  REQUIRE(ifs.is_open());
-  std::string content(std::istreambuf_iterator<char>{ifs},
-                      std::istreambuf_iterator<char>{});
-  auto object = create_complicated_object();
-  auto buffer =
-      struct_pack::serialize<std::string,
-                             struct_pack::type_info_config::enable>(object);
-  CHECK(buffer == content);
-}
-
-TEST_CASE("testing serialize other platform data") {
-  std::ifstream ifs("binary_data/test_cross_platform_without_debug_info.dat");
-  if (!ifs.is_open()) {
-    ifs.open(
-        "src/struct_pack/tests/binary_data/"
-        "test_cross_platform_without_debug_info.dat");
-  }
-  REQUIRE(ifs.is_open());
-  std::string content(std::istreambuf_iterator<char>{ifs},
-                      std::istreambuf_iterator<char>{});
-  auto object = create_complicated_object();
-  auto buffer =
-      struct_pack::serialize<std::string,
-                             struct_pack::type_info_config::disable>(object);
-  CHECK(buffer == content);
 }

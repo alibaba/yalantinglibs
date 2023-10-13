@@ -737,7 +737,7 @@ template <typename T, typename = void>
           return ignore_compatible_field;
         }
         else if constexpr (std::is_enum_v<T> || std::is_fundamental_v<T>  || bitset<T>
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
         || std::is_same_v<__int128,T> || std::is_same_v<unsigned __int128,T>
 #endif
         ) {

@@ -1,8 +1,8 @@
 # struct_pack 使用提示
 本文档介绍一些struct_pack的细节，包括一些优化和约束。
-## 编译器支持
+## 约束条件
 
-struct_pack需要你的编译器良好的支持C++17标准。
+struct_pack需要你的编译器良好的支持C++17标准。我们已在GCC/Clang/MSVC编译器下进行了测试
 
 | 编译器      | 已测试的最低版本    | 
 | ----------- | ------------------   |
@@ -10,14 +10,21 @@ struct_pack需要你的编译器良好的支持C++17标准。
 | Clang       | 6.0                               |
 | MSVC        | Visual Studio 2019 (MSVC19.20)    |
 
+struct_pack是跨平台的。它可以在小端/大端，32位/64位架构下正常工作。
+
 当启用C++20标准时，struct_pack具有更好的性能，能支持自定义的内存连续的可平凡拷贝容器。
 而在C++17标准下，struct_pack仅支持标准库中已有的`std::array<T>`, `std::vector<T>`, `std::basic_string<T>` 和 `std::basic_string_view<T>`，不支持其他自定义容器类型的平凡拷贝。
+
+## 端序
+
+struct_pack即使在大端架构下，也会将数据保存为小端格式。当对象的宽度大于1字节时，平凡复制优化和零复制优化将被禁用。因此，struct_pack在小端架构中的性能优于大端架构。
 
 ## 宏
 | 宏      | 作用 |
 | ----------- | ------------------ |
 | STRUCT_PACK_OPTIMIZE               |增加模板实例化的数量，通过牺牲编译时间和二进制体积来换取更好的性能    |
 |STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |允许序列化unportable的类型，如wchar_t和wstring，请注意，这些类型序列化出的二进制数据可能无法正常的在其他平台下反序列化|
+| STRUCT_PACK_ENABLE_INT128 | 允许序列化128位整数，包括__uint128和__int128类型。请注意，只有部分编译器在部分架构下支持该类型。
 ## 如何让序列化or反序列化更加高效
 1. 考虑使用string_view代替string, 使用span代替vector/array；
 2. 把平凡字段封装到一个单独的结构体中，优化拷贝速度；

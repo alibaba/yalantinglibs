@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 #pragma once
+#include <cstdint>
+
 #include "calculate_size.hpp"
+#include "endian_wrapper.hpp"
 #include "reflection.hpp"
 namespace struct_pack::detail {
 template <
@@ -88,20 +91,36 @@ class packer {
   constexpr void STRUCT_PACK_INLINE serialize_metainfo() {
     constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
                                (is_default_size_type ? 0 : 1);
-    writer_.write((char *)&hash_head, sizeof(uint32_t));
+    write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
     if constexpr (hash_head % 2) {  // has more metainfo
       auto metainfo = info.metainfo();
-      writer_.write((char *)&metainfo, sizeof(char));
+      write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
       if constexpr (serialize_static_config<serialize_type>::has_compatible) {
-        constexpr std::size_t sz[] = {0, 2, 4, 8};
-        auto len_size = sz[metainfo & 0b11];
-        auto len = info.size();
-        writer_.write((char *)&len, len_size);
+        uint16_t len16;
+        uint32_t len32;
+        uint64_t len64;
+        switch (metainfo & 0b11) {
+          case 1:
+            len16 = info.size();
+            write_wrapper<2>(writer_, (char *)&len16);
+            break;
+          case 2:
+            len32 = info.size();
+            write_wrapper<4>(writer_, (char *)&len32);
+            break;
+          case 3:
+            len64 = info.size();
+            write_wrapper<8>(writer_, (char *)&len64);
+            break;
+          default:
+            unreachable();
+        }
       }
       if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
         constexpr auto type_literal =
             struct_pack::get_type_literal<T, Args...>();
-        writer_.write(type_literal.data(), type_literal.size() + 1);
+        write_bytes_array(writer_, type_literal.data(),
+                          type_literal.size() + 1);
       }
     }
   }
@@ -119,7 +138,7 @@ class packer {
   constexpr void STRUCT_PACK_INLINE write_padding(std::size_t sz) {
     if (sz > 0) {
       constexpr char buf = 0;
-      for (std::size_t i = 0; i < sz; ++i) writer_.write(&buf, 1);
+      for (std::size_t i = 0; i < sz; ++i) write_wrapper<1>(writer_, &buf);
     }
   }
 
@@ -139,13 +158,15 @@ class packer {
         // do nothing
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
-                         id == type_id::int128_t || id == type_id::uint128_t ||
-                         id == type_id::bitset_t) {
-        writer_.write((char *)&item, sizeof(type));
+                         id == type_id::int128_t || id == type_id::uint128_t) {
+        write_wrapper<sizeof(item)>(writer_, (char *)&item);
+      }
+      else if constexpr (id == type_id::bitset_t) {
+        write_bytes_array(writer_, (char *)&item, sizeof(item));
       }
       else if constexpr (unique_ptr<type>) {
         bool has_value = (item != nullptr);
-        writer_.write((char *)&has_value, sizeof(char));
+        write_wrapper<sizeof(char)>(writer_, (char *)&has_value);
         if (has_value) {
           if constexpr (is_base_class<typename type::element_type>) {
             bool is_ok;
@@ -153,7 +174,7 @@ class packer {
             auto index = search_type_by_md5<typename type::element_type>(
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
-            writer_.write((char *)&id, sizeof(uint32_t));
+            write_wrapper<sizeof(uint32_t)>(writer_, (char *)&id);
             template_switch<serialize_one_derived_class_helper<
                 derived_class_set_t<typename type::element_type>,
                 std::integral_constant<std::size_t, size_type>,
@@ -169,8 +190,9 @@ class packer {
         detail::serialize_varint(writer_, item);
       }
       else if constexpr (id == type_id::array_t) {
-        if constexpr (is_trivial_serializable<type>::value) {
-          writer_.write((char *)&item, sizeof(type));
+        if constexpr (is_trivial_serializable<type>::value &&
+                      is_little_endian_copyable<sizeof(item[0])>) {
+          write_bytes_array(writer_, (char *)&item, sizeof(type));
         }
         else {
           for (const auto &i : item) {
@@ -179,37 +201,55 @@ class packer {
         }
       }
       else if constexpr (map_container<type> || container<type>) {
-        uint64_t size = item.size();
-#ifdef STRUCT_PACK_OPTIMIZE
-        writer_.write((char *)&size, size_type);
-#else
         if constexpr (size_type == 1) {
-          writer_.write((char *)&size, size_type);
+          uint8_t size = item.size();
+          write_wrapper<size_type>(writer_, (char *)&size);
+        }
+#ifdef STRUCT_PACK_OPTIMIZE
+        else if constexpr (size_type == 2) {
+          uint16_t size = item.size();
+          write_wrapper<size_type>(writer_, (char *)&size);
+        }
+        else if constexpr (size_type == 4) {
+          uint32_t size = item.size();
+          write_wrapper<size_type>(writer_, (char *)&size);
+        }
+        else if constexpr (size_type == 8) {
+          uint64_t size = item.size();
+          write_wrapper<size_type>(writer_, (char *)&size);
         }
         else {
+          static_assert(!sizeof(item), "illegal size_type.");
+        }
+#else
+        else {
+          uint16_t size16;
+          uint32_t size32;
+          uint64_t size64;
           switch ((info.metainfo() & 0b11000) >> 3) {
             case 1:
-              writer_.write((char *)&size, 2);
+              size16 = item.size();
+              write_wrapper<2>(writer_, (char *)&size16);
               break;
             case 2:
-              writer_.write((char *)&size, 4);
+              size32 = item.size();
+              write_wrapper<4>(writer_, (char *)&size32);
               break;
             case 3:
-              writer_.write((char *)&size, 8);
+              size64 = item.size();
+              write_wrapper<8>(writer_, (char *)&size64);
               break;
             default:
               unreachable();
           }
         }
 #endif
-        if constexpr (trivially_copyable_container<type>) {
+        if constexpr (trivially_copyable_container<type> &&
+                      is_little_endian_copyable<sizeof(
+                          typename type::value_type)>) {
           using value_type = typename type::value_type;
-          auto container_size = 1ull * size * sizeof(value_type);
-          if SP_UNLIKELY (container_size >= PTRDIFF_MAX)
-            unreachable();
-          else {
-            writer_.write((char *)item.data(), container_size);
-          }
+          write_bytes_array(writer_, (char *)item.data(),
+                            item.size() * sizeof(typename type::value_type));
           return;
         }
         else {
@@ -232,7 +272,7 @@ class packer {
       }
       else if constexpr (optional<type>) {
         bool has_value = item.has_value();
-        writer_.write((char *)&has_value, sizeof(bool));
+        write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
           serialize_one<size_type, version>(*item);
         }
@@ -241,7 +281,7 @@ class packer {
         static_assert(std::variant_size_v<type> < 256,
                       "variant's size is too large");
         uint8_t index = item.index();
-        writer_.write((char *)&index, sizeof(index));
+        write_wrapper<sizeof(uint8_t)>(writer_, (char *)&index);
         std::visit(
             [this](auto &&e) {
               this->serialize_one<size_type, version>(e);
@@ -250,7 +290,7 @@ class packer {
       }
       else if constexpr (expected<type>) {
         bool has_value = item.has_value();
-        writer_.write((char *)&has_value, sizeof(has_value));
+        write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
           if constexpr (!std::is_same_v<typename type::value_type, void>)
             serialize_one<size_type, version>(item.value());
@@ -266,10 +306,13 @@ class packer {
                 std::is_aggregate_v<remove_cvref_t<type>>,
                 "struct_pack only support aggregated type, or you should "
                 "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
-        if constexpr (is_trivial_serializable<type>::value) {
-          writer_.write((char *)&item, sizeof(type));
+        if constexpr (is_trivial_serializable<type>::value &&
+                      is_little_endian_copyable<sizeof(type)>) {
+          write_wrapper<sizeof(type)>(writer_, (char *)&item);
         }
-        else if constexpr (is_trivial_serializable<type, true>::value) {
+        else if constexpr ((is_trivial_serializable<type>::value &&
+                            !is_little_endian_copyable<sizeof(type)>) ||
+                           is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
             ((serialize_one<size_type, version>(items),
@@ -291,7 +334,7 @@ class packer {
       if constexpr (id == type_id::compatible_t) {
         if constexpr (version == type::version_number) {
           bool has_value = item.has_value();
-          writer_.write((char *)&has_value, sizeof(bool));
+          write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
           if (has_value) {
             serialize_one<size_type, UINT64_MAX>(*item);
           }

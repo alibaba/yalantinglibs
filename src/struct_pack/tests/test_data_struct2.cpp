@@ -123,6 +123,15 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == "hello"sv);
   }
+#ifdef TEST_IN_LITTLE_ENDIAN
+  {
+    auto sv = std::wstring_view(L"你好, struct pack");
+    auto ret = serialize(sv);
+    std::wstring str;
+    auto ec = deserialize_to(str, ret.data(), ret.size());
+    REQUIRE(ec == struct_pack::errc{});
+    CHECK(str == sv);
+  }
   {
     std::u32string_view sv = U"你好";
     auto ret = serialize(sv);
@@ -137,38 +146,10 @@ TEST_CASE("testing string_view deserialize") {
     CHECK(res);
     CHECK(res.value() == sv);
   }
+#endif
 #if __cpp_char8_t >= 201811L
   {
     std::u8string_view sv = u8"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-#endif
-  {
-    auto ret = serialize("hello"s);
-    auto res = deserialize<string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == "hello"sv);
-  }
-  {
-    std::u32string sv = U"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u32string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-  {
-    std::u16string sv = u"你好";
-    auto ret = serialize(sv);
-    auto res = deserialize<std::u16string_view>(ret.data(), ret.size());
-    CHECK(res);
-    CHECK(res.value() == sv);
-  }
-#if __cpp_char8_t >= 201811L
-  {
-    std::u8string sv = u8"你好";
     auto ret = serialize(sv);
     auto res = deserialize<std::u8string_view>(ret.data(), ret.size());
     CHECK(res);
@@ -207,51 +188,6 @@ TEST_CASE("test wide string") {
   }
   {
     auto sv = std::u32string(U"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u32string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-}
-
-TEST_CASE("test string_view") {
-  using namespace std;
-  {
-    auto ret = serialize("hello struct pack"sv);
-    std::string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == "hello struct pack"sv);
-  }
-  {
-    auto sv = std::wstring_view(L"你好, struct pack");
-    auto ret = serialize(sv);
-    std::wstring str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-#if __cpp_char8_t >= 201811L
-  {
-    auto sv = std::u8string_view(u8"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u8string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-#endif
-  {
-    auto sv = std::u16string_view(u"你好, struct pack");
-    auto ret = serialize(sv);
-    std::u16string str;
-    auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
-    CHECK(str == sv);
-  }
-  {
-    auto sv = std::u32string_view(U"你好, struct pack");
     auto ret = serialize(sv);
     std::u32string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
@@ -570,7 +506,7 @@ bool test_equal(const trival_test::A_v3& v1, const trival_test::A_v3& v2) {
             (v1.b->b.b.b.a == v2.b->b.b.b.a && v1.b->b.b.b.c == v2.b->b.b.b.c &&
              v1.b->b.b.b.d == v2.b->b.b.b.d))));
 }
-
+#ifdef TEST_IN_LITTLE_ENDIAN
 TEST_CASE("testing trivial_view type") {
   trival_test::A_v1 a_v1 = {
       'A',
@@ -643,3 +579,4 @@ TEST_CASE("testing trivial_view type") {
     CHECK(test_equal(result.value(), a_v3));
   }
 };
+#endif

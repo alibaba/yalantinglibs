@@ -19,6 +19,7 @@
 #include <system_error>
 #include <type_traits>
 
+#include "endian_wrapper.hpp"
 #include "reflection.hpp"
 namespace struct_pack {
 
@@ -208,10 +209,16 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
   }
   while (v >= 0x80) {
     uint8_t temp = v | 0x80u;
-    writer_.write((char*)&temp, sizeof(temp));
+    write_wrapper<sizeof(char)>(writer_, (char*)&temp);
     v >>= 7;
   }
-  writer_.write((char*)&v, sizeof(char));
+  if constexpr (is_system_little_endian) {
+    write_wrapper<sizeof(char)>(writer_, (char*)&v);
+  }
+  else {
+    uint8_t tmp = v;
+    write_wrapper<sizeof(char)>(writer_, (char*)&tmp);
+  }
 }
 #if __cpp_concepts >= 201907L
 template <reader_t Reader>

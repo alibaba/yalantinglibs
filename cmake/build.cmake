@@ -1,4 +1,4 @@
-message(STATUS "-------------COMPILE Setting-------------")
+message(STATUS "-------------COMPILE SETTING-------------")
 
 # CPP Standard
 foreach(i ${CMAKE_CXX_COMPILE_FEATURES})
@@ -29,6 +29,14 @@ message(STATUS "BUILD_WITH_LIBCXX: ${BUILD_WITH_LIBCXX}")
 if(BUILD_WITH_LIBCXX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 else()
+endif()
+
+include (TestBigEndian)
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+if(IS_BIG_ENDIAN)
+ message(STATUS "ENDIAN: BIG")
+else()
+ message(STATUS "ENDIAN: LITTLE")
 endif()
 
 # force use lld if your compiler is clang

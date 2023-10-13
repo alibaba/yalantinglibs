@@ -60,3 +60,11 @@
 #define STRUCT_PACK_RTTI_ENABLED
 #endif
 #endif
+
+#if defined __clang__ || __GNUC__
+#define SP_RESTRICT __restrict__
+#elif defined _MSC_VER
+#define SP_RESTRICT __restrict
+#else
+#define SP_RESTRICT
+#endif

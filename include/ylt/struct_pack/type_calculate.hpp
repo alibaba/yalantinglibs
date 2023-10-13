@@ -682,7 +682,7 @@ constexpr auto get_types() {
                 string<T> || container<T> || optional<T> || unique_ptr<T> ||
                 is_variant_v<T> || expected<T> || array<T> || c_array<T> ||
                 std::is_same_v<std::monostate, T> || bitset<T>
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
                 || std::is_same_v<__int128, T> ||
                 std::is_same_v<unsigned __int128, T>
 #endif
