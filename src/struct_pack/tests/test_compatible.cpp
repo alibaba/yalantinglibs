@@ -187,7 +187,6 @@ TEST_CASE("test compatible") {
       CHECK(sz == 255);
       auto buffer = serialize(big);
       CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
       std::uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
@@ -213,7 +212,6 @@ TEST_CASE("test compatible") {
       CHECK(sz == 256);
       auto buffer = serialize(big);
       CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
       std::uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
@@ -239,7 +237,6 @@ TEST_CASE("test compatible") {
       CHECK(sz == 65535);
       auto buffer = serialize(big);
       CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 1);
       uint16_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 2);
@@ -263,7 +260,6 @@ TEST_CASE("test compatible") {
       CHECK(sz == 65538);
       auto buffer = serialize(big);
       CHECK(sz == buffer.size());
-      CHECK(buffer[0] % 2 == 1);
       CHECK((buffer[4] & 0b11) == 2);
       uint32_t r_sz = 0;
       memcpy(&r_sz, &buffer[5], 4);

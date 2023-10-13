@@ -137,21 +137,21 @@ void write_wrapper(writer_t& writer, const char* data) {
   }
   else if constexpr (block_size == 2) {
     auto tmp = bswap16(*(uint16_t*)data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
   }
   else if constexpr (block_size == 4) {
     auto tmp = bswap32(*(uint32_t*)data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
   }
   else if constexpr (block_size == 8) {
     auto tmp = bswap64(*(uint64_t*)data);
-    writer.write(&tmp, block_size);
+    writer.write((char*)&tmp, block_size);
   }
   else if constexpr (block_size == 16) {
     auto tmp1 = bswap64(*(uint64_t*)data),
          tmp2 = bswap64(*(uint64_t*)(data + 8));
-    writer.write(&tmp2, block_size);
-    writer.write(&tmp1, block_size);
+    writer.write((char*)&tmp2, block_size);
+    writer.write((char*)&tmp1, block_size);
   }
   else {
     static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8,16)");

@@ -63,6 +63,9 @@ TEST_CASE("test hash conflict detected") {
   int32_t value = 42;
   auto ret = serialize(value);
   auto fake_hash = struct_pack::get_type_code<float>() | 0b1;
+  if constexpr (!detail::is_system_little_endian) {
+    fake_hash = detail::bswap32(fake_hash);
+  }
   memcpy(ret.data(), &fake_hash, sizeof(fake_hash));
   auto res = deserialize<float>(ret);
   CHECK(!res);
