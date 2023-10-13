@@ -159,15 +159,10 @@ void write_wrapper(writer_t& writer, const char* data) {
 }
 template <typename writer_t>
 void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
-  if constexpr (is_system_little_endian) {
-    if SP_UNLIKELY (length >= PTRDIFF_MAX)
-      unreachable();
-    else
-      writer.write(data, length);
-  }
-  else {
-    static_assert(!sizeof(writer_t), "illegal use");
-  }
+  if SP_UNLIKELY (length >= PTRDIFF_MAX)
+    unreachable();
+  else
+    writer.write(data, length);
 }
 template <std::size_t block_size, typename reader_t>
 bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
@@ -203,14 +198,9 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
 template <typename reader_t>
 bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
                       std::size_t length) {
-  if constexpr (is_system_little_endian) {
-    if SP_UNLIKELY (length >= PTRDIFF_MAX)
-      unreachable();
-    else
-      return static_cast<bool>(reader.read(data, length));
-  }
-  else {
-    static_assert(!sizeof(reader_t), "illegal use");
-  }
+  if SP_UNLIKELY (length >= PTRDIFF_MAX)
+    unreachable();
+  else
+    return static_cast<bool>(reader.read(data, length));
 }
 };  // namespace struct_pack::detail
