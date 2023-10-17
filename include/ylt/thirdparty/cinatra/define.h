@@ -4,8 +4,70 @@
 #include <string_view>
 #include <unordered_map>
 namespace fs = std::filesystem;
+using namespace std::string_view_literals;
 
 namespace cinatra {
+enum class http_method {
+  UNKNOW,
+  DEL,
+  GET,
+  HEAD,
+  POST,
+  PUT,
+  PATCH,
+  CONNECT,
+  OPTIONS,
+  TRACE
+};
+constexpr inline auto GET = http_method::GET;
+constexpr inline auto POST = http_method::POST;
+constexpr inline auto DEL = http_method::DEL;
+constexpr inline auto HEAD = http_method::HEAD;
+constexpr inline auto PUT = http_method::PUT;
+constexpr inline auto CONNECT = http_method::CONNECT;
+#ifdef TRACE
+#undef TRACE
+constexpr inline auto TRACE = http_method::TRACE;
+#endif
+constexpr inline auto OPTIONS = http_method::OPTIONS;
+
+inline constexpr std::string_view method_name(http_method mthd) {
+  switch (mthd) {
+    case cinatra::http_method::DEL:
+      return "DELETE"sv;
+      break;
+    case cinatra::http_method::GET:
+      return "GET"sv;
+      break;
+    case cinatra::http_method::HEAD:
+      return "HEAD"sv;
+      break;
+    case cinatra::http_method::POST:
+      return "POST"sv;
+      break;
+    case cinatra::http_method::PUT:
+      return "PUT"sv;
+      break;
+    case cinatra::http_method::PATCH:
+      return "PATCH"sv;
+      break;
+    case cinatra::http_method::CONNECT:
+      return "CONNECT"sv;
+      break;
+    case cinatra::http_method::OPTIONS:
+      return "OPTIONS"sv;
+      break;
+    case cinatra::http_method::TRACE:
+      return "TRACE"sv;
+      break;
+    default:
+      return "UNKONWN"sv;
+      break;
+  }
+}
+
+enum class transfer_type { CHUNKED, ACCEPT_RANGES };
+
 enum class content_type {
   string,
   multipart,

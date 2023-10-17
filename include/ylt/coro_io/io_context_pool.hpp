@@ -115,7 +115,7 @@ class io_context_pool {
 
     easylog::logger<>::instance();
     for (std::size_t i = 0; i < pool_size; ++i) {
-      io_context_ptr io_context(new asio::io_context);
+      io_context_ptr io_context(new asio::io_context(1));
       work_ptr work(new asio::io_context::work(*io_context));
       io_contexts_.push_back(io_context);
       auto executor = std::make_unique<coro_io::ExecutorWrapper<>>(

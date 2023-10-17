@@ -16,6 +16,9 @@
 #include <iostream>
 
 #include "ylt/coro_http/coro_http_client.hpp"
+#include "ylt/coro_http/coro_http_server.hpp"
+
+using namespace std::chrono_literals;
 
 void test_sync_client() {
   {
@@ -158,7 +161,42 @@ void use_out_buf() {
   assert(result.resp_body == sv);
 }
 
+void test_coro_http_server() {
+  using namespace coro_http;
+  coro_http::coro_http_server server(1, 9001);
+  server.set_http_handler<coro_http::GET, coro_http::POST>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        // response in io thread.
+        resp.set_status_and_content(coro_http::status_type::ok, "hello world");
+      });
+
+  server.set_http_handler<coro_http::GET, coro_http::POST>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          // coroutine in other thread.
+          resp.set_status_and_content(coro_http::status_type::ok,
+                                      "hello world in coro");
+        });
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  resp_data result;
+  result = client.get("http://127.0.0.1:9001/");
+  assert(result.status == 200);
+  assert(result.resp_body == "hello world");
+
+  result = client.get("http://127.0.0.1:9001/coro");
+  assert(result.status == 200);
+  assert(result.resp_body == "hello world in coro");
+}
+
 int main() {
+  test_coro_http_server();
   test_sync_client();
   use_out_buf();
 

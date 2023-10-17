@@ -221,7 +221,7 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
-  auto &executor = socket.get_executor();
+  auto executor = socket.get_executor();
   co_return co_await awaitor.await_resume([&](auto handler) {
     asio::post(executor, [&, handler]() {
       asio::error_code ignored_ec;
@@ -280,6 +280,22 @@ inline async_simple::coro::Lazy<void> sleep_for(Duration d) {
     co_return co_await sleep_for(d,
                                  coro_io::g_io_context_pool().get_executor());
   }
+}
+
+template <typename Func>
+inline async_simple::coro::Lazy<void> post(
+    Func func,
+    coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
+  callback_awaitor<void> awaitor;
+
+  co_return co_await awaitor.await_resume(
+      [e, func = std::move(func)](auto handler) {
+        auto executor = e->get_asio_executor();
+        asio::post(executor, [=, func = std::move(func)]() {
+          func();
+          handler.resume();
+        });
+      });
 }
 
 template <typename Socket, typename AsioBuffer>
