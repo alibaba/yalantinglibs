@@ -4,9 +4,9 @@
 #include <type_traits>
 
 // member function
-#define TIMAX_FUNCTION_TRAITS(...)                                             \
-  template <typename ReturnType, typename ClassType, typename... Args>         \
-  struct function_traits_impl<ReturnType (ClassType::*)(Args...) __VA_ARGS__>  \
+#define TIMAX_FUNCTION_TRAITS(...)                                            \
+  template <typename ReturnType, typename ClassType, typename... Args>        \
+  struct function_traits_impl<ReturnType (ClassType::*)(Args...) __VA_ARGS__> \
       : function_traits_impl<ReturnType(Args...)> {};
 
 namespace timax {
@@ -22,7 +22,8 @@ namespace timax {
  * 6. function with generic operator call           ==> template <typeanme ...
  * Args> &T::operator()
  */
-template <typename T> struct function_traits_impl;
+template <typename T>
+struct function_traits_impl;
 
 template <typename T>
 struct function_traits
@@ -30,14 +31,15 @@ struct function_traits
 
 template <typename Ret, typename... Args>
 struct function_traits_impl<Ret(Args...)> {
-public:
+ public:
   enum { arity = sizeof...(Args) };
   typedef Ret function_type(Args...);
   typedef Ret result_type;
   using stl_function_type = std::function<function_type>;
   typedef Ret (*pointer)(Args...);
 
-  template <size_t I> struct args {
+  template <size_t I>
+  struct args {
     static_assert(I < arity,
                   "index is out of range, index must less than sizeof Args");
     using type = typename std::tuple_element<I, std::tuple<Args...>>::type;
@@ -73,22 +75,22 @@ struct function_traits_impl
     : function_traits_impl<decltype(&Callable::operator())> {};
 
 template <typename Function>
-typename function_traits<Function>::stl_function_type
-to_function(const Function &lambda) {
+typename function_traits<Function>::stl_function_type to_function(
+    const Function &lambda) {
   return static_cast<typename function_traits<Function>::stl_function_type>(
       lambda);
 }
 
 template <typename Function>
-typename function_traits<Function>::stl_function_type
-to_function(Function &&lambda) {
+typename function_traits<Function>::stl_function_type to_function(
+    Function &&lambda) {
   return static_cast<typename function_traits<Function>::stl_function_type>(
       std::forward<Function>(lambda));
 }
 
 template <typename Function>
-typename function_traits<Function>::pointer
-to_function_pointer(const Function &lambda) {
+typename function_traits<Function>::pointer to_function_pointer(
+    const Function &lambda) {
   return static_cast<typename function_traits<Function>::pointer>(lambda);
 }
-} // namespace timax
+}  // namespace timax
