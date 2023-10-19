@@ -175,7 +175,7 @@ class coro_http_client {
   ~coro_http_client() { async_close(); }
 
   void async_close() {
-    if (socket_->has_closed_)
+    if (socket_ == nullptr || socket_->has_closed_)
       return;
 
     asio::dispatch(executor_wrapper_.get_asio_executor(), [socket = socket_] {
@@ -365,33 +365,45 @@ class coro_http_client {
   void set_read_fix() { read_fix_ = 1; }
 #endif
 
-  async_simple::coro::Lazy<resp_data> async_patch(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_patch(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     return async_request(std::move(uri), cinatra::http_method::PATCH,
-                         cinatra::req_context<>{});
+                         cinatra::req_context<>{}, std::move(headers));
   }
 
-  async_simple::coro::Lazy<resp_data> async_options(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_options(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     return async_request(std::move(uri), cinatra::http_method::OPTIONS,
-                         cinatra::req_context<>{});
+                         cinatra::req_context<>{}, std::move(headers));
   }
 
-  async_simple::coro::Lazy<resp_data> async_trace(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_trace(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     return async_request(std::move(uri), cinatra::http_method::TRACE,
-                         cinatra::req_context<>{});
+                         cinatra::req_context<>{}, std::move(headers));
   }
 
-  async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_head(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     return async_request(std::move(uri), cinatra::http_method::HEAD,
-                         cinatra::req_context<>{});
+                         cinatra::req_context<>{}, std::move(headers));
   }
 
   // CONNECT example.com HTTP/1.1
-  async_simple::coro::Lazy<resp_data> async_http_connect(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_http_connect(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     return async_request(std::move(uri), cinatra::http_method::CONNECT,
-                         cinatra::req_context<>{});
+                         cinatra::req_context<>{}, std::move(headers));
   }
 
-  async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
+  async_simple::coro::Lazy<resp_data> async_get(
+      std::string uri,
+      std::unordered_map<std::string, std::string> headers = {}) {
     resp_data data{};
 #ifdef BENCHMARK_TEST
     if (!req_str_.empty()) {
@@ -462,7 +474,7 @@ class coro_http_client {
 
     req_context<> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
-                                  std::move(ctx));
+                                  std::move(ctx), std::move(headers));
 #ifdef BENCHMARK_TEST
     data.total = total_len_;
 #endif
@@ -477,33 +489,41 @@ class coro_http_client {
     }
   }
 
-  resp_data get(std::string uri) {
-    return async_simple::coro::syncAwait(async_get(std::move(uri)));
+  resp_data get(std::string uri,
+                std::unordered_map<std::string, std::string> headers = {}) {
+    return async_simple::coro::syncAwait(
+        async_get(std::move(uri), std::move(headers)));
   }
 
   resp_data post(std::string uri, std::string content,
-                 req_content_type content_type) {
-    return async_simple::coro::syncAwait(
-        async_post(std::move(uri), std::move(content), content_type));
+                 req_content_type content_type,
+                 std::unordered_map<std::string, std::string> headers = {}) {
+    return async_simple::coro::syncAwait(async_post(
+        std::move(uri), std::move(content), content_type, std::move(headers)));
   }
 
   async_simple::coro::Lazy<resp_data> async_post(
-      std::string uri, std::string content, req_content_type content_type) {
+      std::string uri, std::string content, req_content_type content_type,
+      std::unordered_map<std::string, std::string> headers = {}) {
     req_context<> ctx{content_type, "", std::move(content)};
-    return async_request(std::move(uri), http_method::POST, std::move(ctx));
+    return async_request(std::move(uri), http_method::POST, std::move(ctx),
+                         std::move(headers));
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
-      std::string uri, std::string content, req_content_type content_type) {
+      std::string uri, std::string content, req_content_type content_type,
+      std::unordered_map<std::string, std::string> headers = {}) {
     req_context<> ctx{content_type, "", std::move(content)};
-    return async_request(std::move(uri), http_method::DEL, std::move(ctx));
+    return async_request(std::move(uri), http_method::DEL, std::move(ctx),
+                         std::move(headers));
   }
 
-  async_simple::coro::Lazy<resp_data> async_put(std::string uri,
-                                                std::string content,
-                                                req_content_type content_type) {
+  async_simple::coro::Lazy<resp_data> async_put(
+      std::string uri, std::string content, req_content_type content_type,
+      std::unordered_map<std::string, std::string> headers = {}) {
     req_context<> ctx{content_type, "", std::move(content)};
-    return async_request(std::move(uri), http_method::PUT, std::move(ctx));
+    return async_request(std::move(uri), http_method::PUT, std::move(ctx),
+                         std::move(headers));
   }
 
   bool add_str_part(std::string name, std::string content) {
@@ -1135,22 +1155,26 @@ class coro_http_client {
       req_str.append(ctx.req_str);
 
     size_t content_len = ctx.content.size();
-    bool should_add = false;
+    bool should_add_len = false;
     if (content_len > 0) {
-      should_add = true;
+      should_add_len = true;
     }
     else {
       if ((method == http_method::POST || method == http_method::PUT) &&
           ctx.content_type != req_content_type::multipart) {
-        should_add = true;
+        should_add_len = true;
       }
     }
 
-    if (is_chunked) {
-      should_add = false;
+    if (req_headers_.find("Content-Length") != req_headers_.end()) {
+      should_add_len = false;
     }
 
-    if (should_add) {
+    if (is_chunked) {
+      should_add_len = false;
+    }
+
+    if (should_add_len) {
       char buf[32];
       auto [ptr, ec] = std::to_chars(buf, buf + 32, content_len);
       req_str.append("Content-Length: ")
