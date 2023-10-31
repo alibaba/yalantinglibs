@@ -31,6 +31,12 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Install newer Clang
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -40,7 +46,7 @@ jobs:
         run: |
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
@@ -69,6 +75,12 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v3
 
+      - name: Install newer Clang
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
       - name: Check protoc
         run: protoc --version
 
@@ -81,7 +93,7 @@ jobs:
           CXX=clang++ CC=clang 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
-                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++\
+                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17\
                 -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
