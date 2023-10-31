@@ -14,7 +14,8 @@ long current_time_mills() {
 
 TEST_CASE("test smooth_bursty_rate_limiter simple") {
   coro_io::smooth_bursty_rate_limiter rate_limiter(1);
-  std::chrono::milliseconds wait_time = async_simple::coro::syncAwait(rate_limiter.acquire(1));
+  std::chrono::milliseconds wait_time =
+      async_simple::coro::syncAwait(rate_limiter.acquire(1));
   CHECK_EQ(0, wait_time.count());
 }
 
@@ -45,7 +46,8 @@ TEST_CASE("test smooth_bursty_rate_limiter single thread") {
   long start_mills = current_time_mills();
   coro_io::smooth_bursty_rate_limiter rate_limiter(permits_per_second);
   for (int i = 0; i < permits_to_acquire; i++) {
-    std::chrono::milliseconds wait_mills = async_simple::coro::syncAwait(rate_limiter.acquire(1));
+    std::chrono::milliseconds wait_mills =
+        async_simple::coro::syncAwait(rate_limiter.acquire(1));
     ELOG_INFO << "wait for " << wait_mills.count();
   }
   double cost = (current_time_mills() - start_mills) / 1000.0;
