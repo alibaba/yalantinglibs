@@ -154,4 +154,4 @@ class SmoothBurstyRateLimiter : public AbstractSmoothRateLimiter {
    */
   double max_burst_seconds_ = 0;
 };
-}  // namespace coro_io%
+}  // namespace coro_io
