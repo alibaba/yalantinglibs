@@ -16,29 +16,29 @@
 #pragma once
 
 #include <async_simple/coro/Lazy.h>
-#include <async_simple/coro/Mutex.h>
-#include <async_simple/coro/Sleep.h>
+#include <async_simple/coro/SpinLock.h>
 #include <async_simple/coro/SyncAwait.h>
 
 #include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <ylt/easylog.hpp>
+#include <ylt/coro_io/coro_io.hpp>
 
 namespace coro_io {
 class RateLimiter {
  public:
   async_simple::coro::Lazy<double> acquire(int permits) {
-    co_await this->mutex_.coLock();
+    co_await this->lock_.coLock();
     long wait_mills = reserveAndGetWaitLength(permits, currentTimeMills());
-    this->mutex_.unlock();
-    co_await async_simple::coro::sleep(std::chrono::milliseconds(wait_mills));
+    this->lock_.unlock();
+    co_await coro_io::sleep_for(std::chrono::milliseconds(wait_mills));
     co_return 1.0 * wait_mills / 1000;
   }
   async_simple::coro::Lazy<void> setRate(double permitsPerSecond) {
-    co_await this->mutex_.coLock();
+    co_await this->lock_.coLock();
     doSetRate(permitsPerSecond, currentTimeMills());
-    this->mutex_.unlock();
+    this->lock_.unlock();
   }
 
  protected:
@@ -59,7 +59,7 @@ class RateLimiter {
     return std::max(moment_available - now_micros, 0L);
   }
 
-  async_simple::coro::Mutex mutex_;
+  async_simple::coro::SpinLock lock_;
 };
 
 class AbstractSmoothRateLimiter : public RateLimiter {
