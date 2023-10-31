@@ -72,8 +72,8 @@ class abstract_smooth_rate_limiter : public rate_limiter {
  protected:
   virtual void do_set_rate(double permits_per_second,
                            double stable_internal_micros) = 0;
-  virtual long stored_permits_to_wait_time(double stored_permits,
-                                           double permits_to_take) = 0;
+  virtual std::chrono::milliseconds stored_permits_to_wait_time(
+      double stored_permits, double permits_to_take) = 0;
   virtual double cool_down_internal_micros() = 0;
   void resync(std::chrono::steady_clock::time_point now_micros) {
     // if next_free_ticket is in the past, resync to now
@@ -110,10 +110,11 @@ class abstract_smooth_rate_limiter : public rate_limiter {
     double stored_permits_to_spend =
         std::min((double)required_permits, this->stored_permits_);
     double fresh_permits = required_permits - stored_permits_to_spend;
-    std::chrono::milliseconds wait_micros = std::chrono::milliseconds(
+    std::chrono::milliseconds wait_micros =
         stored_permits_to_wait_time(this->stored_permits_,
                                     stored_permits_to_spend) +
-        (long)(fresh_permits * this->stable_internal_micros_));
+        std::chrono::milliseconds(
+            (long)(fresh_permits * this->stable_internal_micros_));
     this->next_free_ticket_micros_ += wait_micros;
     this->stored_permits_ -= stored_permits_to_spend;
     return return_value;
@@ -159,9 +160,9 @@ class smooth_bursty_rate_limiter : public abstract_smooth_rate_limiter {
                << ", stored_permits_:" << this->stored_permits_;
   }
 
-  long stored_permits_to_wait_time(double stored_permits,
-                                   double permits_to_take) {
-    return 0L;
+  std::chrono::milliseconds stored_permits_to_wait_time(
+      double stored_permits, double permits_to_take) {
+    return std::chrono::milliseconds(0);
   }
 
   double cool_down_internal_micros() { return this->stable_internal_micros_; }
