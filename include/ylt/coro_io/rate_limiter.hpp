@@ -28,12 +28,12 @@
 namespace coro_io {
 class rate_limiter {
  public:
-  async_simple::coro::Lazy<double> acquire(int permits) {
+  async_simple::coro::Lazy<std::chrono::milliseconds> acquire(int permits) {
     co_await this->lock_.coLock();
-    long wait_mills = reserve_and_get_wait_length(permits, current_time_mills());
+    std::chrono::milliseconds wait_mills = reserve_and_get_wait_length(permits, current_time_mills());
     this->lock_.unlock();
     co_await coro_io::sleep_for(std::chrono::milliseconds(wait_mills));
-    co_return 1.0 * wait_mills / 1000;
+    co_return wait_mills;
   }
   async_simple::coro::Lazy<void> set_rate(double permitsPerSecond) {
     co_await this->lock_.coLock();
@@ -42,21 +42,19 @@ class rate_limiter {
   }
 
  protected:
-  virtual void do_set_rate(double permitsPerSecond, long now_micros) = 0;
-  virtual long reserve_earliest_available(int permits, long now_micros) = 0;
-  long current_time_mills() {
+  virtual void do_set_rate(double permitsPerSecond, std::chrono::milliseconds now_micros) = 0;
+  virtual std::chrono::milliseconds reserve_earliest_available(int permits, std::chrono::milliseconds now_micros) = 0;
+  std::chrono::milliseconds current_time_mills() {
     std::chrono::system_clock::time_point now =
         std::chrono::system_clock::now();
-    std::chrono::milliseconds ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            now.time_since_epoch());
-    return ms.count();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch());
   }
 
  private:
-  long reserve_and_get_wait_length(int permits, long now_micros) {
-    long moment_available = reserve_earliest_available(permits, now_micros);
-    return std::max(moment_available - now_micros, 0L);
+  std::chrono::milliseconds reserve_and_get_wait_length(int permits, std::chrono::milliseconds now_micros) {
+    std::chrono::milliseconds moment_available = reserve_earliest_available(permits, now_micros);
+    return std::max(moment_available - now_micros, std::chrono::milliseconds(0));
   }
 
   async_simple::coro::SpinLock lock_;
@@ -69,33 +67,33 @@ class abstract_smooth_rate_limiter : public rate_limiter {
   virtual long stored_permits_to_wait_time(double stored_permits,
                                        double permits_to_take) = 0;
   virtual double cool_down_internal_micros() = 0;
-  void resync(long now_micros) {
+  void resync(std::chrono::milliseconds now_micros) {
     // if next_free_ticket is in the past, resync to now
-    ELOG_DEBUG << "now micros: " << now_micros << ", next_free_ticket_micros_: "
-               << this->next_free_ticket_micros_;
+    ELOG_DEBUG << "now micros: " << now_micros.count() << ", next_free_ticket_micros_: "
+               << this->next_free_ticket_micros_.count();
     if (now_micros > this->next_free_ticket_micros_) {
-      double newPermits = (now_micros - this->next_free_ticket_micros_) /
+      double newPermits = (now_micros.count() - this->next_free_ticket_micros_.count()) /
                           cool_down_internal_micros();
       this->stored_permits_ =
           std::min(this->max_permits_, this->stored_permits_ + newPermits);
       this->next_free_ticket_micros_ = now_micros;
     }
   }
-  void do_set_rate(double permits_per_second, long now_micros) override {
+  void do_set_rate(double permits_per_second, std::chrono::milliseconds now_micros) override {
     resync(now_micros);
     double stable_internal_micros = 1000 / permits_per_second;
     this->stable_internal_micros_ = stable_internal_micros;
     do_set_rate(permits_per_second, stable_internal_micros);
   }
-  long reserve_earliest_available(int required_permits, long now_micros) {
+  std::chrono::milliseconds reserve_earliest_available(int required_permits, std::chrono::milliseconds now_micros) {
     resync(now_micros);
-    long return_value = this->next_free_ticket_micros_;
+    std::chrono::milliseconds return_value = this->next_free_ticket_micros_;
     double stored_permits_to_spend =
         std::min((double)required_permits, this->stored_permits_);
     double fresh_permits = required_permits - stored_permits_to_spend;
-    long wait_micros = stored_permits_to_wait_time(this->stored_permits_,
+    std::chrono::milliseconds wait_micros = std::chrono::milliseconds(stored_permits_to_wait_time(this->stored_permits_,
                                                stored_permits_to_spend) +
-                       (long)(fresh_permits * this->stable_internal_micros_);
+                       (long)(fresh_permits * this->stable_internal_micros_));
     this->next_free_ticket_micros_ += wait_micros;
     this->stored_permits_ -= stored_permits_to_spend;
     return return_value;
@@ -119,7 +117,7 @@ class abstract_smooth_rate_limiter : public rate_limiter {
    * granting a request, this is pushed further in the future. Large requests
    * push this further than small requests.
    */
-  long next_free_ticket_micros_ = 0;
+  std::chrono::milliseconds next_free_ticket_micros_{0};
 };
 
 class smooth_bursty_rate_limiter : public abstract_smooth_rate_limiter {
