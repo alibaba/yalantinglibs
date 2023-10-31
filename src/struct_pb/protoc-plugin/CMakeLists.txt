@@ -11,7 +11,7 @@ if (Protobuf_FOUND)
         RUNTIME DESTINATION bin
     )
 else ()
-    message(WARNING "struct_pb is skipped. To build struct_pb protoc plugin, you must install libprotoc first!!!\n"
+    message(STATUS "struct_pb is skipped. To build struct_pb protoc plugin, you need to install libprotoc first\n"
             "see https://alibaba.github.io/yalantinglibs/en/struct_pb/struct_pb_generating_your_struct.html"
             )
 endif ()
