@@ -64,16 +64,17 @@ TEST_CASE("test SmoothBurstyRateLimiter multi coroutine") {
   double cost_diff = 0.1;
 
   coro_io::SmoothBurstyRateLimiter rateLimiter(permits_per_second);
-  auto consumer = [&]() -> async_simple::coro::Lazy<void> {
+  auto consumer = [&](int coroutine_num) -> async_simple::coro::Lazy<void> {
     for (int i = 0; i < permits_to_acquire_every_coroutine; i++) {
       co_await rateLimiter.acquire(1);
+      ELOG_INFO << "coroutine " << coroutine_num << " acquired";
     }
   };
 
   auto consumerListLazy = [&]() -> async_simple::coro::Lazy<void> {
     std::vector<async_simple::coro::Lazy<void>> lazyList;
     for (int i = 0; i < num_of_coroutine; i++) {
-      lazyList.push_back(consumer());
+      lazyList.push_back(consumer(i));
     }
     co_await collectAllPara(std::move(lazyList));
   };
