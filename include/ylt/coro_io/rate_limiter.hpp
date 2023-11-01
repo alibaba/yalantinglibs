@@ -50,8 +50,6 @@ class rate_limiter {
       int permits, std::chrono::steady_clock::time_point now_micros) = 0;
   std::chrono::steady_clock::time_point current_time_mills() {
     return std::chrono::steady_clock::now();
-    // return std::chrono::duration_cast<std::chrono::milliseconds>(
-    //     now.time_since_epoch());
   }
 
  private:
@@ -114,7 +112,7 @@ class abstract_smooth_rate_limiter : public rate_limiter {
         stored_permits_to_wait_time(this->stored_permits_,
                                     stored_permits_to_spend) +
         std::chrono::milliseconds(
-            (long)(fresh_permits * this->stable_internal_micros_));
+            (int64_t)(fresh_permits * this->stable_internal_micros_));
     this->next_free_ticket_micros_ += wait_micros;
     this->stored_permits_ -= stored_permits_to_spend;
     return return_value;

@@ -4,7 +4,7 @@
 #include <ylt/coro_io/io_context_pool.hpp>
 #include <ylt/coro_io/rate_limiter.hpp>
 
-long current_time_mills() {
+int64_t current_time_mills() {
   std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
   std::chrono::milliseconds ms =
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -30,7 +30,7 @@ TEST_CASE("test smooth_bursty_rate_limiter acquire multi permits") {
   // acquire much enough, next acquire will wait
   async_simple::coro::syncAwait(rate_limiter.acquire(permits_to_acquire));
 
-  long start_mills = current_time_mills();
+  int64_t start_mills = current_time_mills();
   async_simple::coro::syncAwait(rate_limiter.acquire(1));
   double cost = (current_time_mills() - start_mills) / 1000.0;
   CHECK(cost > expected_cost - cost_diff);
@@ -43,7 +43,7 @@ TEST_CASE("test smooth_bursty_rate_limiter single thread") {
   double expected_cost = (permits_to_acquire - 1) * (1 / permits_per_second);
   double cost_diff = 0.1;
 
-  long start_mills = current_time_mills();
+  int64_t start_mills = current_time_mills();
   coro_io::smooth_bursty_rate_limiter rate_limiter(permits_per_second);
   for (int i = 0; i < permits_to_acquire; i++) {
     std::chrono::milliseconds wait_mills =
@@ -81,7 +81,7 @@ TEST_CASE("test smooth_bursty_rate_limiter multi coroutine") {
     co_await collectAllPara(std::move(lazy_list));
   };
 
-  long start_mills = current_time_mills();
+  int64_t start_mills = current_time_mills();
   syncAwait(consumer_list_lazy().via(
       coro_io::g_block_io_context_pool<coro_io::multithread_context_pool>(1)
           .get_executor()));
