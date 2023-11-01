@@ -81,12 +81,12 @@ struct http_header;
 
 struct resp_data {
   std::error_code net_err;
-  int status;
+  int status = 0;
+  bool eof = false;
   std::string_view resp_body;
   std::span<http_header> resp_headers;
-  bool eof;
 #ifdef BENCHMARK_TEST
-  uint64_t total;
+  uint64_t total = 0;
 #endif
 };
 
@@ -104,7 +104,7 @@ struct multipart_t {
   size_t size = 0;
 };
 
-class coro_http_client {
+class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
   struct config {
     std::optional<std::chrono::steady_clock::duration> conn_timeout_duration;
@@ -1578,6 +1578,7 @@ class coro_http_client {
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
 
+    auto self = this->shared_from_this();
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
