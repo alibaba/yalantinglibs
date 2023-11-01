@@ -3,6 +3,7 @@ add_executable(coro_io_test
         test_corofile.cpp
         test_channel.cpp
         test_client_pool.cpp
+        test_rate_limiter.cpp
         main.cpp
         )
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
