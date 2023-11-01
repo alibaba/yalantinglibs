@@ -29,17 +29,17 @@ namespace coro_io {
 class rate_limiter {
  public:
   async_simple::coro::Lazy<std::chrono::milliseconds> acquire(int permits) {
-    co_await this->lock_.coLock();
-    std::chrono::milliseconds wait_mills =
-        reserve_and_get_wait_length(permits, current_time_mills());
-    this->lock_.unlock();
+    std::chrono::milliseconds wait_mills;
+    {
+      auto scope = co_await this->lock_.coScopedLock();
+      wait_mills = reserve_and_get_wait_length(permits, current_time_mills());
+    }
     co_await coro_io::sleep_for(std::chrono::milliseconds(wait_mills));
     co_return wait_mills;
   }
   async_simple::coro::Lazy<void> set_rate(double permitsPerSecond) {
-    co_await this->lock_.coLock();
+    auto scope = co_await this->lock_.coScopedLock();
     do_set_rate(permitsPerSecond, current_time_mills());
-    this->lock_.unlock();
   }
 
  protected:
