@@ -118,6 +118,12 @@ jobs:
       - name: Install liburing
         run: sudo apt-get install liburing-dev
 
+      - name: Install newer Clang
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
@@ -133,7 +139,7 @@ jobs:
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
                 -DENABLE_IO_URING=${{matrix.io_uring}} \
-                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++\
+                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17\
                 -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
       - name: Build
