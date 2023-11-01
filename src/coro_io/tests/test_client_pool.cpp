@@ -220,10 +220,10 @@ TEST_CASE("test client pools parallel r/w") {
       CHECK(cli->get_host_name() == std::to_string(i));
     }
     auto rw = [&pool](int i) -> Lazy<void> {
-      ELOG_DEBUG << "start to insert {" << i << "} to hash table.";
+      //      ELOG_DEBUG << "start to insert {" << i << "} to hash table.";
       auto cli = pool[std::to_string(i)];
       CHECK(cli->get_host_name() == std::to_string(i));
-      ELOG_DEBUG << "end to insert {" << i << "} to hash table.";
+      //      ELOG_DEBUG << "end to insert {" << i << "} to hash table.";
       co_return;
     };
 
