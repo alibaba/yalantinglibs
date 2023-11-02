@@ -27,24 +27,4 @@
 
 #include <cinatra/coro_http_server.hpp>
 
-namespace coro_http {
-using coro_http_server = cinatra::coro_http_server;
-using coro_http_request = cinatra::coro_http_request;
-using coro_http_response = cinatra::coro_http_response;
-using status_type = cinatra::status_type;
-using http_method = cinatra::http_method;
-using uri_t = cinatra::uri_t;
-using req_content_type = cinatra::req_content_type;
-
-constexpr inline auto GET = cinatra::http_method::GET;
-constexpr inline auto POST = cinatra::http_method::POST;
-constexpr inline auto DEL = cinatra::http_method::DEL;
-constexpr inline auto HEAD = cinatra::http_method::HEAD;
-constexpr inline auto PUT = cinatra::http_method::PUT;
-constexpr inline auto CONNECT = cinatra::http_method::CONNECT;
-#ifdef TRACE
-#undef TRACE
-constexpr inline auto TRACE = cinatra::http_method::TRACE;
-#endif
-constexpr inline auto OPTIONS = cinatra::http_method::OPTIONS;
-}  // namespace coro_http
+namespace coro_http = cinatra;
