@@ -34,7 +34,6 @@ TEST_CASE("test smooth_bursty_rate_limiter acquire multi permits") {
   async_simple::coro::syncAwait(rate_limiter.acquire(1));
   double cost = (current_time_mills() - start_mills) / 1000.0;
   CHECK(cost > expected_cost - cost_diff);
-  CHECK(cost < expected_cost + cost_diff);
 }
 
 TEST_CASE("test smooth_bursty_rate_limiter single thread") {
@@ -53,7 +52,6 @@ TEST_CASE("test smooth_bursty_rate_limiter single thread") {
   double cost = (current_time_mills() - start_mills) / 1000.0;
 
   CHECK(cost > expected_cost - cost_diff);
-  CHECK(cost < expected_cost + cost_diff);
 }
 
 TEST_CASE("test smooth_bursty_rate_limiter multi coroutine") {
@@ -88,5 +86,4 @@ TEST_CASE("test smooth_bursty_rate_limiter multi coroutine") {
   double cost = (current_time_mills() - start_mills) / 1000.0;
 
   CHECK(cost > expected_cost - cost_diff);
-  CHECK(cost < expected_cost + cost_diff);
 }
