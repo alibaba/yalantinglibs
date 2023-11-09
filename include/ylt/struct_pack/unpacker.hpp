@@ -83,7 +83,7 @@ struct memory_reader {
 #if __cpp_concepts >= 201907L
 template <reader_t Reader, uint64_t conf = sp_config::DEFAULT>
 #else
-template <typename Reader>
+template <typename Reader, uint64_t conf = sp_config::DEFAULT>
 #endif
 class unpacker {
  public:
