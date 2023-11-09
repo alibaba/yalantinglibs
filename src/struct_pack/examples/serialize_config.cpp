@@ -39,9 +39,7 @@ struct rect {
 void serialize_config() {
   // serialize with config
   rect r{1, -1, 0, 5};
-  auto buffer =
-      struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(
-          r);
+  auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(r);
   // only need 4 bytes
   assert(buffer.size() == 4);
   // deserialize with config

@@ -708,8 +708,8 @@ TEST_CASE("test type info config") {
       auto size =
           get_needed_size<sp_config::DISABLE_TYPE_INFO>(person{24, "Betty"});
       CHECK(size == 14);
-      auto buffer = serialize<sp_config::DISABLE_TYPE_INFO>(
-          person{24, "Betty"});
+      auto buffer =
+          serialize<sp_config::DISABLE_TYPE_INFO>(person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<sp_config::DISABLE_TYPE_INFO,
@@ -719,8 +719,7 @@ TEST_CASE("test type info config") {
       auto size =
           get_needed_size<sp_config::ENABLE_TYPE_INFO>(person{24, "Betty"});
       CHECK(size == 21);
-      auto buffer = serialize<sp_config::ENABLE_TYPE_INFO>(
-          person{24, "Betty"});
+      auto buffer = serialize<sp_config::ENABLE_TYPE_INFO>(person{24, "Betty"});
       CHECK(buffer.size() == size);
       static_assert(
           detail::check_if_add_type_literal<sp_config::ENABLE_TYPE_INFO,

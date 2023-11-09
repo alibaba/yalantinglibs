@@ -234,11 +234,11 @@ serialize_with_offset(std::size_t offset, const Args &...args) {
 
 template <uint64_t conf,
 #if __cpp_concepts >= 201907L
-    detail::struct_pack_buffer Buffer = std::vector<char>,
+          detail::struct_pack_buffer Buffer = std::vector<char>,
 #else
-    typename Buffer = std::vector<char>,
+          typename Buffer = std::vector<char>,
 #endif
-    typename... Args>
+          typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer serialize(const Args &...args) {
 #if __cpp_concepts < 201907L
   static_assert(detail::struct_pack_buffer<Buffer>,
@@ -252,11 +252,11 @@ template <uint64_t conf,
 
 template <uint64_t conf,
 #if __cpp_concepts >= 201907L
-    detail::struct_pack_buffer Buffer = std::vector<char>,
+          detail::struct_pack_buffer Buffer = std::vector<char>,
 #else
-    typename Buffer = std::vector<char>,
+          typename Buffer = std::vector<char>,
 #endif
-    typename... Args>
+          typename... Args>
 [[nodiscard]] STRUCT_PACK_INLINE Buffer
 serialize_with_offset(std::size_t offset, const Args &...args) {
 #if __cpp_concepts < 201907L
