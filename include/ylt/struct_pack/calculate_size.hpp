@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <cstdint>
-
 #include "alignment.hpp"
 #include "marco.h"
 #include "reflection.hpp"
@@ -25,7 +23,6 @@
 #include "type_trait.hpp"
 #include "util.h"
 #include "varint.hpp"
-#include "ylt/struct_pack/type_calculate.hpp"
 
 namespace struct_pack {
 

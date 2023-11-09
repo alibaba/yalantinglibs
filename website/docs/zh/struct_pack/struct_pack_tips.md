@@ -52,7 +52,8 @@ struct rect {
 
 ### 使用ADL作为序列化配置
 
-在类型`rect`相同的namespace 下添加函数`set_sp_config`即可
+在类型`rect`相同的namespace 下添加函数`set_sp_config`即可。
+
 ```cpp
 inline constexpr struct_pack::sp_config set_sp_config(rect*) {
   return struct_pack::DISABLE_ALL_META_INFO;

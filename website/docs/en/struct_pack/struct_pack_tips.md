@@ -32,7 +32,7 @@ struct_pack will save the data as little-endian even if the arch is big-endian. 
 ## Type Check
 struct_pack will generate a name for the serialized type during compilation, and get a 32-bit MD5 based on the string, then take its upper 31 bits for type check. When deserializing, it will check whether the hash code stored is the same as the type to be deserialized. 
 In order to alleviate possible hash collisions, in debug mode, struct_pack will store the complete type name instead of hash code. Therefore, the binary size in debug mode is slightly larger than release. 
-##  序列化设置
+## serialization config
 struct_pack allows user to configure the content of the metadata via `struct_pack::sp_config`, which currently has the following settings:
 | enum value      | description |
 | ----------- | ------------------ |
@@ -53,6 +53,7 @@ struct rect {
 ### Using ADL as a Serialization Configuration
 
 we can declare a function `set_sp_config` in the same namespace of type `rect`: 
+
 ```cpp
 inline constexpr struct_pack::sp_config set_sp_config(rect*) {
   return struct_pack::DISABLE_ALL_META_INFO;
