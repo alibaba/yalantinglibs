@@ -653,26 +653,144 @@ struct serialize_static_config {
 };
 }  // namespace detail
 
-enum type_info_config { automatic = 0, disable = 1, enable = 2 };
-
-template <typename T>
-constexpr inline type_info_config enable_type_info =
-    type_info_config::automatic;
 namespace detail {
 
 template <uint64_t conf, typename T>
 constexpr bool check_if_add_type_literal() {
-  if constexpr (conf == type_info_config::automatic) {
-    if constexpr (enable_type_info<T> == type_info_config::automatic) {
-      return serialize_static_config<T>::has_type_literal;
+  constexpr auto config = conf & 0b11;
+  if constexpr (config == sp_config::DEFAULT) {
+    if constexpr (struct_pack::detail::user_defined_config<T>) {
+      constexpr auto config = set_sp_config((T *)nullptr) & 0b11;
+      if constexpr (config == sp_config::DEFAULT) {
+        return serialize_static_config<T>::has_type_literal;
+      }
+      else {
+        return config == sp_config::ENABLE_TYPE_INFO;
+      }
     }
     else {
-      return enable_type_info<T> == type_info_config::enable;
+      return serialize_static_config<T>::has_type_literal;
     }
   }
   else {
-    return conf == type_info_config::enable;
+    return config == sp_config::ENABLE_TYPE_INFO;
   }
+}
+
+template <typename Arg, typename... ParentArgs>
+constexpr bool check_if_has_container();
+
+template <typename Arg, typename... ParentArgs, std::size_t... I>
+constexpr bool check_if_has_container_helper(std::index_sequence<I...> idx) {
+  return ((check_if_has_container<remove_cvref_t<std::tuple_element_t<I, Arg>>,
+                                  ParentArgs...>()) ||
+          ...);
+}
+
+template <typename Arg, typename... ParentArgs, std::size_t... I>
+constexpr bool check_if_has_container_variant_helper(
+    std::index_sequence<I...> idx) {
+  return ((check_if_has_container<
+              remove_cvref_t<std::variant_alternative_t<I, Arg>>, Arg,
+              ParentArgs...>()) ||
+          ...);
+}
+
+template <typename Arg, typename... ParentArgs>
+constexpr bool check_if_has_container() {
+  if constexpr (is_trivial_view_v<Arg>) {
+    return check_if_has_container<typename Arg::value_type, ParentArgs...>();
+  }
+  else {
+    constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
+    if constexpr (has_cycle != 0) {
+      return false;
+    }
+    else {
+      constexpr auto id = get_type_id<Arg>();
+      if constexpr (id == type_id::struct_t) {
+        using Args = decltype(get_types<Arg>());
+        return check_if_has_container_helper<Args, Arg, ParentArgs...>(
+            std::make_index_sequence<std::tuple_size_v<Args>>());
+      }
+      else if constexpr (id == type_id::variant_t) {
+        constexpr auto sz = std::variant_size_v<Arg>;
+        static_assert(sz > 0, "empty param of std::variant is not allowed!");
+        static_assert(sz < 256, "too many alternative type in variant!");
+        return check_if_has_container_variant_helper<Arg, ParentArgs...>(
+            std::make_index_sequence<std::variant_size_v<Arg>>());
+      }
+      else if constexpr (id == type_id::array_t) {
+        return check_if_has_container<
+            remove_cvref_t<decltype(std::declval<Arg>()[0])>, Arg,
+            ParentArgs...>();
+      }
+      else if constexpr (id == type_id::bitset_t) {
+        return false;
+      }
+      else if constexpr (unique_ptr<Arg>) {
+        return check_if_has_container<
+            remove_cvref_t<typename Arg::element_type>, Arg, ParentArgs...>();
+      }
+      else if constexpr (id == type_id::container_t ||
+                         id == type_id::string_t ||
+                         id == type_id::set_container_t ||
+                         id == type_id::map_container_t) {
+        return true;
+      }
+      else if constexpr (id == type_id::optional_t ||
+                         id == type_id::compatible_t) {
+        return check_if_has_container<remove_cvref_t<typename Arg::value_type>,
+                                      Arg, ParentArgs...>();
+      }
+      else if constexpr (id == type_id::expected_t) {
+        return check_if_has_container<remove_cvref_t<typename Arg::value_type>,
+                                      Arg, ParentArgs...>() ||
+               check_if_has_container<remove_cvref_t<typename Arg::error_type>,
+                                      Arg, ParentArgs...>();
+      }
+      else {
+        return false;
+      }
+    }
+  }
+}
+
+template <uint64_t conf, typename T>
+constexpr bool check_if_disable_hash_head_impl() {
+  constexpr auto config = conf & 0b11;
+  if constexpr (config != sp_config::DISABLE_ALL_META_INFO) {
+    if constexpr (struct_pack::detail::user_defined_config<T>) {
+      constexpr auto config = set_sp_config((T *)nullptr) & 0b11;
+      if constexpr (config == sp_config::DISABLE_ALL_META_INFO) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+template <uint64_t conf, typename T>
+constexpr bool check_if_disable_hash_head() {
+  if constexpr (check_if_disable_hash_head_impl<conf, T>()) {
+    static_assert(
+        !check_if_compatible_element_exist<decltype(get_types<T>())>(),
+        "It's not allow add compatible member when you disable hash head");
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+template <uint64_t conf, typename T>
+constexpr bool check_has_metainfo() {
+  return serialize_static_config<T>::has_compatible ||
+         (!check_if_disable_hash_head<conf, T>() &&
+          check_if_add_type_literal<conf, T>()) ||
+         ((check_if_disable_hash_head<conf, T>() &&
+           check_if_has_container<T>()));
 }
 
 template <typename U>

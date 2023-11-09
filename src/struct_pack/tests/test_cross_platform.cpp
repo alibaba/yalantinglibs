@@ -13,12 +13,12 @@ void data_gen() {
   {
     std::ofstream ifs("binary_data/test_cross_platform.dat");
     auto object = create_complicated_object();
-    serialize_to<struct_pack::type_info_config::enable>(ifs, object);
+    serialize_to<struct_pack::sp_config::ENABLE_TYPE_INFO>(ifs, object);
   }
   {
     std::ofstream ifs("binary_data/test_cross_platform_without_debug_info.dat");
     auto object = create_complicated_object();
-    serialize_to<struct_pack::type_info_config::disable>(ifs, object);
+    serialize_to<struct_pack::sp_config::DISABLE_TYPE_INFO>(ifs, object);
   }
 }
 

@@ -14,6 +14,7 @@ add_executable(struct_pack_test
         test_non_aggregated_type.cpp
         test_derived.cpp
         test_cross_platform.cpp
+        test_disable_meta_info.cpp
         main.cpp
         )
 add_test(NAME struct_pack_test COMMAND struct_pack_test)

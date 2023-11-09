@@ -222,10 +222,13 @@ struct flatbuffer_sample_t : public base_sample {
     uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_sample_name(sample_type);
-    ScopedTimer timer(bench_name.data(), ns);
-    for (int i = 0; i < ITERATIONS; ++i) {
-      auto obj = flatbuffers::GetRoot<fb::Monsters>(builder.GetBufferPointer());
-      no_op((char *)obj);
+    {
+      ScopedTimer timer(bench_name.data(), ns);
+      for (int i = 0; i < ITERATIONS; ++i) {
+        auto obj =
+            flatbuffers::GetRoot<fb::Monsters>(builder.GetBufferPointer());
+        no_op((char *)obj);
+      }
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

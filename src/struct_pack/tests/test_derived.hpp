@@ -6,9 +6,6 @@
 
 #include "doctest.h"
 #include "ylt/struct_pack.hpp"
-#include "ylt/struct_pack/derived_helper.hpp"
-#include "ylt/struct_pack/derived_marco.hpp"
-#include "ylt/struct_pack/util.h"
 namespace test2 {
 
 struct base {

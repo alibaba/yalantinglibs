@@ -169,25 +169,6 @@ struct deserialize_one_derived_class_helper {
   }
 };
 
-template <typename DerivedClasses, typename size_type, typename version>
-struct deserialize_one_compatible_in_derived_class_helper {
-  template <size_t index, typename unpacker, typename Pointer>
-  static STRUCT_PACK_INLINE constexpr struct_pack::errc run(unpacker *self,
-                                                            Pointer &base) {
-    if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
-      unreachable();
-    }
-    else {
-      using derived_class = std::tuple_element_t<index, DerivedClasses>;
-#ifdef STRUCT_PACK_RTTI_ENABLED
-      assert(dynamic_cast<derived_class *>(base.get()));
-#endif
-      return self->template deserialize_one<size_type::value, version::value>(
-          *(derived_class *)base.get());
-    }
-  }
-};
-
 template <typename Base>
 using derived_class_set_t = decltype(struct_pack_derived_decl((Base *)nullptr));
 

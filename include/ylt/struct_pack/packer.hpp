@@ -78,8 +78,7 @@ class packer {
   template <uint64_t conf, typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
-    if constexpr (serialize_static_config<serialize_type>::has_compatible ||
-                  check_if_add_type_literal<conf, serialize_type>()) {
+    if constexpr (check_has_metainfo<conf, T>()) {
       return raw_types_code + 1;
     }
     else {  // default case, only has hash_code
@@ -91,7 +90,9 @@ class packer {
   constexpr void STRUCT_PACK_INLINE serialize_metainfo() {
     constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
                                (is_default_size_type ? 0 : 1);
-    write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
+    if constexpr (!check_if_disable_hash_head<conf, serialize_type>()) {
+      write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
+    }
     if constexpr (hash_head % 2) {  // has more metainfo
       auto metainfo = info.metainfo();
       write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
@@ -412,7 +413,7 @@ class packer {
   const serialize_buffer_size &info;
 };
 
-template <uint64_t conf = type_info_config::automatic,
+template <uint64_t conf = sp_config::DEFAULT,
 #if __cpp_concepts >= 201907L
           struct_pack::writer_t Writer,
 #else
