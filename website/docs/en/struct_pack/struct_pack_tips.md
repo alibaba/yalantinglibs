@@ -31,10 +31,48 @@ struct_pack will save the data as little-endian even if the arch is big-endian. 
 4. define macro `STRUCT_PACK_OPTIMIZE`.
 ## Type Check
 struct_pack will generate a name for the serialized type during compilation, and get a 32-bit MD5 based on the string, then take its upper 31 bits for type check. When deserializing, it will check whether the hash code stored is the same as the type to be deserialized. 
-In order to alleviate possible hash collisions, in debug mode, struct_pack will store the complete type name instead of hash code. Therefore, the binary size in debug mode is slightly larger than release. User can also enable it manually by add option `struct_pack::type_info_config::enable`:
+In order to alleviate possible hash collisions, in debug mode, struct_pack will store the complete type name instead of hash code. Therefore, the binary size in debug mode is slightly larger than release. 
+## serialization config
+struct_pack allows user to configure the content of the metadata via `struct_pack::sp_config`, which currently has the following settings:
+| enum value      | description |
+| ----------- | ------------------ |
+| DEFAULT               |default value          |
+| DISABLE_TYPE_INFO  | Prohibit storing full type information in serialized data, even in DEBUG mode|
+| ENABLE_TYPE_INFO | Prohibit storing full type information in serialized data, even in DEBUG mode|
+| DISABLE_META_INFO| Force full type information to be stored in serialized data, even if not in DEBUG mode|
+
+Note that when serialization is configured with the DISABLE_META_INFO option, it must be ensured that deserialization also uses this option, otherwise the behavior is undefined and the probability is that deserialization will fail.
+
+For example：
 ```cpp
-auto result=struct_pack::serialize<struct_pack::type_info_config::enable>(person);
+struct rect {
+  var_int a, b, c, d;
+};
 ```
+
+### Using ADL as a Serialization Configuration
+
+we can declare a function `set_sp_config` in the same namespace of type `rect`: 
+
+```cpp
+inline constexpr struct_pack::sp_config set_sp_config(rect*) {
+  return struct_pack::DISABLE_ALL_META_INFO;
+}
+```
+
+### Configuration using template parameters
+
+For example
+
+```cpp
+auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(rect{});
+auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,rect>(buffer);
+```
+
+When both are configured, the template parameter takes precedence over the ADL.
+
+Currently we do not allow the `DISABLE_ALL_META_INFO` configuration to be enabled with a compatible field.
+
 ## Type requires
 
 1. The type to serialize should be legal struct_pack type.。See document：[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)。

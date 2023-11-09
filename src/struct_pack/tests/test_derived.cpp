@@ -95,7 +95,8 @@ TEST_CASE("testing derived") {
   auto f21 = Base::deserialize(vecs[3]);
   auto f41 = Base::deserialize(vecs[4]);
   auto base1 = Base::deserialize(vecs[5]);
-  CHECK(*(foo*)(f1->get()) == f);
+  auto& i = *(foo*)(f1->get());
+  CHECK(i == f);
   CHECK(*(foo2*)(f21->get()) == f2);
   CHECK(*(bar*)(b1->get()) == b);
   CHECK(*(gua*)(g1->get()) == g);

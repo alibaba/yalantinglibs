@@ -625,7 +625,7 @@ TEST_CASE("test bitset") {
   SUBCASE("test serialize size") {
     std::bitset<255> ar;
     constexpr auto sz =
-        struct_pack::get_needed_size<struct_pack::type_info_config::disable>(
+        struct_pack::get_needed_size<struct_pack::sp_config::DISABLE_TYPE_INFO>(
             ar);
     static_assert(sz.size() == 36);
   }

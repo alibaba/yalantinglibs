@@ -37,6 +37,14 @@
 #include "util.h"
 
 namespace struct_pack {
+
+enum sp_config {
+  DEFAULT = 0,
+  DISABLE_TYPE_INFO = 0b1,
+  ENABLE_TYPE_INFO = 0b10,
+  DISABLE_ALL_META_INFO = 0b11
+};
+
 namespace detail {
 
 template <typename... Args>
@@ -532,6 +540,22 @@ template <typename T, typename = void>
 
   template <typename T>
   constexpr bool user_defined_refl = user_defined_refl_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
+  template <typename Type>
+  concept user_defined_config = std::is_same_v<decltype(set_sp_config(std::declval<Type*>())),struct_pack::sp_config>;
+#else
+  template <typename T, typename = void>
+  struct user_defined_config_impl : std::false_type {};
+
+  template <typename T>
+  struct user_defined_config_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(set_sp_config(std::declval<T*>())),struct_pack::sp_config>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool user_defined_config = user_defined_config_impl<T>::value;
 #endif
 
 #if __cpp_concepts >= 201907L

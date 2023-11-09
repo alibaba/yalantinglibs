@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/type_calculate.hpp"
 #if __cplusplus >= 202002L
 #include <ylt/struct_pack/tuple.hpp>
 #endif
@@ -448,4 +449,29 @@ TEST_CASE("test user defined ID") {
     static_assert(struct_pack::get_type_literal<bar_with_ID2>() !=
                   struct_pack::get_type_literal<bar_with_ID1>());
   }
+}
+template <typename T>
+struct test_has_container0 {
+  T hi;
+};
+
+template <typename T>
+struct test_has_container {
+  int a;
+  double b;
+  std::array<std::tuple<std::pair<int, test_has_container0<T>>, int, int>, 10>
+      c;
+};
+
+TEST_CASE("test has container") {
+  static_assert(
+      !struct_pack::detail::check_if_has_container<test_has_container<int>>());
+  static_assert(struct_pack::detail::check_if_has_container<
+                test_has_container<std::vector<int>>>());
+  static_assert(struct_pack::detail::check_if_has_container<
+                test_has_container<std::string>>());
+  static_assert(struct_pack::detail::check_if_has_container<
+                test_has_container<std::map<int, int>>>());
+  static_assert(struct_pack::detail::check_if_has_container<
+                test_has_container<std::set<int>>>());
 }

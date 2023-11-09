@@ -16,6 +16,7 @@
 
 void basic_usage();
 void non_aggregated_type();
+void serialize_config();
 
 int main() {
   basic_usage();

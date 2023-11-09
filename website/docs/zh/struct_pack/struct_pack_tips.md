@@ -33,10 +33,45 @@ struct_pack即使在大端架构下，也会将数据保存为小端格式。当
 ##  类型校验
 struct_pack在编译期会根据被序列化的对象的类型生成类型字符串，并根据该字符串生成一个32位的MD5并取其高31位作为类型校验码。反序列化时会检查校验码是否和待反序列化的类型相同。
 为了缓解可能出现的哈希冲突，在debug模式下，struct_pack会存储完整的类型字符串。因此debug模式下生成的二进制体积比release略大。
-用户也可以通过`struct_pack::type_info_config::enable`手动控制是否启动类型字符串。
+##  序列化设置
+struct_pack允许通过`struct_pack::sp_config`来配置序列化生成的元数据内容，目前的设置项有以下几个：
+| 枚举值      | 作用 |
+| ----------- | ------------------ |
+| DEFAULT               |默认值          |
+| DISABLE_TYPE_INFO  |禁止在序列化数据中存储完整类型信息，即使在DEBUG模式下|
+| ENABLE_TYPE_INFO | 强制在序列化数据中存储完整类型信息，即使不在DEBUG模式下|
+| DISABLE_META_INFO| 禁用元信息和4字节的类型校验码，从而减小二进制数据的体积|
+需要注意的是，当序列化配置了DISABLE_META_INFO选项时，必须保证反序列化也使用了该选项，否则行为未定义，大概率反序列化会失败。
+
+假设有类型：
 ```cpp
-auto result=struct_pack::serialize<struct_pack::type_info_config::enable>(person);
+struct rect {
+  var_int a, b, c, d;
+};
 ```
+
+### 使用ADL作为序列化配置
+
+在类型`rect`相同的namespace 下添加函数`set_sp_config`即可。
+
+```cpp
+inline constexpr struct_pack::sp_config set_sp_config(rect*) {
+  return struct_pack::DISABLE_ALL_META_INFO;
+}
+```
+
+### 使用模板参数配置
+
+该方法要求每次序列化时都将配置作为模板参数传入：
+
+```cpp
+auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(rect{});
+auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,rect>(buffer);
+```
+
+当同时配置了两者时，模板参数的优先级高于ADL。      
+目前我们不允许在具有compatible字段的情况下启用`DISABLE_ALL_META_INFO`配置。
+
 ##  类型约束
 
 1. 序列化的类型必须是struct_pack类型系统中的合法类型。详见：struct_pack的类型系统。See document：[struct_pack 类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)。

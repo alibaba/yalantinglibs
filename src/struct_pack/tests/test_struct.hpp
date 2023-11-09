@@ -5,7 +5,6 @@
 #include <map>
 #include <memory>
 #include <set>
-#include <span>
 #include <stack>
 #include <string>
 #include <string_view>
@@ -14,6 +13,14 @@
 #include <vector>
 #include <ylt/struct_pack.hpp>
 #include <ylt/util/expected.hpp>
+
+struct rect {
+  int a, b, c, d;
+  auto operator==(const rect &rhs) const {
+    return a == rhs.a && b == rhs.b && c == rhs.c && d == rhs.d;
+  }
+};
+
 struct person {
   int age;
   std::string name;

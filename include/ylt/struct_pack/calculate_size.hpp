@@ -173,7 +173,7 @@ struct serialize_buffer_size {
   unsigned char metainfo_;
 
  public:
-  constexpr serialize_buffer_size() : len_(sizeof(uint32_t)), metainfo_(0) {}
+  constexpr serialize_buffer_size() : len_(0), metainfo_(0) {}
   constexpr std::size_t size() const { return len_; }
   constexpr unsigned char metainfo() const { return metainfo_; }
   constexpr operator std::size_t() const { return len_; }
@@ -189,53 +189,64 @@ get_serialize_runtime_info(const Args &...args) {
   using Type = get_args_type<Args...>;
   constexpr bool has_compatible = serialize_static_config<Type>::has_compatible;
   constexpr bool has_type_literal = check_if_add_type_literal<conf, Type>();
+  constexpr bool disable_hash_head = check_if_disable_hash_head<conf, Type>();
+  constexpr bool has_container = check_if_has_container<Type>();
+  constexpr bool has_compile_time_determined_meta_info =
+      check_has_metainfo<conf, Type>();
   serialize_buffer_size ret;
   auto sz_info = calculate_payload_size(args...);
-
-  if SP_LIKELY (sz_info.max_size < (int64_t{1} << 8)) {
-    ret.len_ += sz_info.total + sz_info.size_cnt;
-    ret.metainfo_ = 0b00000;
-    constexpr bool has_compile_time_determined_meta_info =
-        has_compatible || has_type_literal;
-    if constexpr (has_compile_time_determined_meta_info) {
-      ret.len_ += sizeof(unsigned char);
-    }
+  if constexpr (has_compile_time_determined_meta_info) {
+    ret.len_ = sizeof(unsigned char);
+  }
+  if constexpr (!has_container) {
+    ret.len_ += sz_info.total;
   }
   else {
-    if (sz_info.max_size < (int64_t{1} << 16)) {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 2;
-      ret.metainfo_ = 0b01000;
-    }
-    else if (sz_info.max_size < (int64_t{1} << 32)) {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 4;
-      ret.metainfo_ = 0b10000;
+    if SP_LIKELY (sz_info.max_size < (int64_t{1} << 8)) {
+      ret.len_ += sz_info.total + sz_info.size_cnt;
     }
     else {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 8;
-      ret.metainfo_ = 0b11000;
+      if (sz_info.max_size < (int64_t{1} << 16)) {
+        ret.len_ += sz_info.total + sz_info.size_cnt * 2;
+        ret.metainfo_ = 0b01000;
+      }
+      else if (sz_info.max_size < (int64_t{1} << 32)) {
+        ret.len_ += sz_info.total + sz_info.size_cnt * 4;
+        ret.metainfo_ = 0b10000;
+      }
+      else {
+        ret.len_ += sz_info.total + sz_info.size_cnt * 8;
+        ret.metainfo_ = 0b11000;
+      }
+      if constexpr (!has_compile_time_determined_meta_info) {
+        ret.len_ += sizeof(unsigned char);
+      }
+      // size_type >= 1 , has metainfo
     }
-    // size_type >= 1 , has metainfo
-    ret.len_ += sizeof(unsigned char);
   }
-  if constexpr (has_type_literal) {
-    constexpr auto type_literal = struct_pack::get_type_literal<Args...>();
-    // struct_pack::get_type_literal<Args...>().size() crash in clang13. Bug?
-    ret.len_ += type_literal.size() + 1;
-    ret.metainfo_ |= 0b100;
-  }
-  if constexpr (has_compatible) {  // calculate bytes count of serialize
-                                   // length
-    if SP_LIKELY (ret.len_ + 2 < (int64_t{1} << 16)) {
-      ret.len_ += 2;
-      ret.metainfo_ |= 0b01;
+  if constexpr (!disable_hash_head) {
+    ret.len_ += sizeof(uint32_t);  // for record hash code
+    if constexpr (has_type_literal) {
+      constexpr auto type_literal = struct_pack::get_type_literal<Args...>();
+      // struct_pack::get_type_literal<Args...>().size() crash in clang13.
+      // Bug?
+      ret.len_ += type_literal.size() + 1;
+      ret.metainfo_ |= 0b100;
     }
-    else if (ret.len_ + 4 < (int64_t{1} << 32)) {
-      ret.len_ += 4;
-      ret.metainfo_ |= 0b10;
-    }
-    else {
-      ret.len_ += 8;
-      ret.metainfo_ |= 0b11;
+    if constexpr (has_compatible) {  // calculate bytes count of serialize
+                                     // length
+      if SP_LIKELY (ret.len_ + 2 < (int64_t{1} << 16)) {
+        ret.len_ += 2;
+        ret.metainfo_ |= 0b01;
+      }
+      else if (ret.len_ + 4 < (int64_t{1} << 32)) {
+        ret.len_ += 4;
+        ret.metainfo_ |= 0b10;
+      }
+      else {
+        ret.len_ += 8;
+        ret.metainfo_ |= 0b11;
+      }
     }
   }
   return ret;

@@ -81,9 +81,9 @@ struct memory_reader {
 };
 
 #if __cpp_concepts >= 201907L
-template <reader_t Reader>
+template <reader_t Reader, uint64_t conf = sp_config::DEFAULT>
 #else
-template <typename Reader>
+template <typename Reader, uint64_t conf = sp_config::DEFAULT>
 #endif
 class unpacker {
  public:
@@ -502,46 +502,73 @@ class unpacker {
   STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
   deserialize_metainfo() {
     uint32_t current_types_code;
-    if constexpr (is_MD5_reader_wrapper<Reader>) {
-      reader_.read_head((char *)&current_types_code);
+    if constexpr (check_if_disable_hash_head<conf, T>()) {
+      if constexpr (is_MD5_reader_wrapper<Reader>) {
+        static_assert(!sizeof(T),
+                      "it's illegal if you want to deserialize a derived class "
+                      "without md5");
+      }
+      else if constexpr (check_if_has_container<T>()) {
+        unsigned char metainfo;
+        if SP_UNLIKELY (!read_wrapper<sizeof(unsigned char)>(
+                            reader_, (char *)&metainfo)) {
+          return {struct_pack::errc::no_buffer_space, 0};
+        }
+        size_type_ = (metainfo & 0b11000) >> 3;
+        return {};
+      }
+      else {
+        size_type_ = 0;
+        return {};
+      }
     }
     else {
-      if SP_UNLIKELY (!read_wrapper<sizeof(uint32_t)>(
-                          reader_, (char *)&current_types_code)) {
+      if constexpr (is_MD5_reader_wrapper<Reader>) {
+        reader_.read_head((char *)&current_types_code);
+        if SP_LIKELY (current_types_code % 2 == 0)  // unexist metainfo
+        {
+          size_type_ = 0;
+          return {};
+        }
+      }
+      else {
+        if SP_UNLIKELY (!read_wrapper<sizeof(uint32_t)>(
+                            reader_, (char *)&current_types_code)) {
+          return {struct_pack::errc::no_buffer_space, 0};
+        }
+        constexpr uint32_t types_code = get_types_code<T>();
+        if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
+          return {struct_pack::errc::invalid_buffer, 0};
+        }
+        if SP_LIKELY (current_types_code % 2 == 0)  // unexist metainfo
+        {
+          size_type_ = 0;
+          return {};
+        }
+      }
+      unsigned char metainfo;
+      if SP_UNLIKELY (!read_wrapper<sizeof(unsigned char)>(reader_,
+                                                           (char *)&metainfo)) {
         return {struct_pack::errc::no_buffer_space, 0};
       }
-      constexpr uint32_t types_code = get_types_code<T>();
-      if SP_UNLIKELY ((current_types_code / 2) != (types_code / 2)) {
-        return {struct_pack::errc::invalid_buffer, 0};
+      std::pair<errc, std::uint64_t> ret;
+      auto compatible_sz_len = metainfo & 0b11;
+      if (compatible_sz_len) {
+        ret = deserialize_compatible(compatible_sz_len);
+        if SP_UNLIKELY (ret.first != errc{}) {
+          return ret;
+        }
       }
-    }
-    if SP_LIKELY (current_types_code % 2 == 0)  // unexist extended metainfo
-    {
-      size_type_ = 0;
-      return {};
-    }
-    unsigned char metainfo;
-    if SP_UNLIKELY (!read_wrapper<sizeof(unsigned char)>(reader_,
-                                                         (char *)&metainfo)) {
-      return {struct_pack::errc::no_buffer_space, 0};
-    }
-    std::pair<errc, std::uint64_t> ret;
-    auto compatible_sz_len = metainfo & 0b11;
-    if (compatible_sz_len) {
-      ret = deserialize_compatible(compatible_sz_len);
-      if SP_UNLIKELY (ret.first != errc{}) {
-        return ret;
+      auto has_type_literal = metainfo & 0b100;
+      if (has_type_literal) {
+        auto ec = deserialize_type_literal<T>();
+        if SP_UNLIKELY (ec != errc{}) {
+          return {ec, 0};
+        }
       }
+      size_type_ = (metainfo & 0b11000) >> 3;
+      return ret;
     }
-    auto has_type_literal = metainfo & 0b100;
-    if (has_type_literal) {
-      auto ec = deserialize_type_literal<T>();
-      if SP_UNLIKELY (ec != errc{}) {
-        return {ec, 0};
-      }
-    }
-    size_type_ = (metainfo & 0b11000) >> 3;
-    return ret;
   }
 
   template <size_t size_type, uint64_t version, bool NotSkip>
