@@ -555,7 +555,7 @@ template <typename T, typename = void>
       : std::true_type {};
 
   template <typename T>
-  constexpr bool user_defined_config = user_defined_refl_impl<T>::value;
+  constexpr bool user_defined_config = user_defined_config_impl<T>::value;
 #endif
 
 #if __cpp_concepts >= 201907L
