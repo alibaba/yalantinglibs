@@ -25,7 +25,7 @@ namespace struct_pack::detail {
 template <typename T>
 constexpr bool struct_pack_byte =
     std::is_same_v<char, T> || std::is_same_v<unsigned char, T> ||
-    std::is_same_v<std::byte, T>;
+    std::is_same_v<signed char, T> || std::is_same_v<std::byte, T>;
 
 template <typename T>
 #if __cpp_concepts < 201907L

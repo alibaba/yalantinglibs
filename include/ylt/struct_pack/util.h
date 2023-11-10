@@ -15,6 +15,10 @@
  */
 #pragma once
 #include <array>
+#include <cstddef>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include "marco.h"
 namespace struct_pack::detail {
@@ -75,6 +79,47 @@ constexpr void STRUCT_PACK_INLINE compile_time_unique(
     if (input[i] != input[i - 1]) {
       output[++j] = input[i];
     }
+  }
+}
+
+template <typename T>
+struct char_hacker {
+  char_hacker() {}
+  char_hacker(const char_hacker &) {}
+  char_hacker(char_hacker &&) {}
+  char_hacker &operator=(const char_hacker &) { return *this; }
+  char_hacker &operator=(char_hacker &&) { return *this; }
+  T ch_;
+};
+
+}  // namespace struct_pack::detail
+
+namespace std {
+template <typename T>
+struct is_trivial<struct_pack::detail::char_hacker<T>> : std::true_type {};
+}  // namespace std
+
+namespace struct_pack::detail {
+template <typename T>
+void uninit_resize(T &container, std::size_t size) {
+  if constexpr (std::is_same_v<T, std::string> ||
+                std::is_same_v<T, std::basic_string<signed char>> ||
+                std::is_same_v<T, std::basic_string<unsigned char>>) {
+    auto &container_wrapper = *reinterpret_cast<
+        std::basic_string<char_hacker<typename T::value_type>> *>(&container);
+    container_wrapper.resize(size);
+  }
+  else if constexpr (std::is_same_v<T, std::vector<char>> ||
+                     std::is_same_v<T, std::vector<unsigned char>> ||
+                     std::is_same_v<T, std::vector<signed char>> ||
+                     std::is_same_v<T, std::vector<std::byte>>) {
+    auto &container_wrapper =
+        *reinterpret_cast<std::vector<char_hacker<typename T::value_type>> *>(
+            &container);
+    container_wrapper.resize(size);
+  }
+  else {
+    container.resize(size);
   }
 }
 }  // namespace struct_pack::detail
