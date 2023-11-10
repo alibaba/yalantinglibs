@@ -101,7 +101,8 @@ class abstract_smooth_rate_limiter : public rate_limiter {
     do_set_rate(permits_per_second, stable_internal_micros);
   }
   std::chrono::steady_clock::time_point reserve_earliest_available(
-      int required_permits, std::chrono::steady_clock::time_point now_micros) {
+      int required_permits,
+      std::chrono::steady_clock::time_point now_micros) override {
     resync(now_micros);
     std::chrono::steady_clock::time_point return_value =
         this->next_free_ticket_micros_;

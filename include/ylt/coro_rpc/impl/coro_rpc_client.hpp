@@ -669,6 +669,7 @@ class coro_rpc_client {
     }
 
     auto &header = *(coro_rpc_protocol::req_header *)buffer.data();
+    header = {};
     header.magic = coro_rpc_protocol::magic_number;
     header.function_id = func_id<func>();
 #ifdef UNIT_TEST_INJECT

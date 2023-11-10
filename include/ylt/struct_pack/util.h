@@ -89,11 +89,8 @@ inline void resize(std::basic_string<ch> &str, std::size_t sz) {
     return sz;
   });
 }
-#elif (defined(__clang_major__) && __clang_major__ <= 11) || \
-    (defined(_MSC_VER) && _MSC_VER <= 1920)
-// old clang has bug in global friend function. discard it.
+#elif (defined(_MSC_VER) && _MSC_VER <= 1920)
 // old msvc don't support visit private, discard it.
-inline void resize(std::string &str, std::size_t sz) { str.resize(sz); }
 
 #else
 
@@ -104,10 +101,16 @@ class string_thief {
 #if defined(_MSVC_STL_VERSION)
     (self.*func_ptr)._Myval2._Mysize = sz;
 #else
+#if defined(_LIBCPP_VERSION)
+    (self.*func_ptr)(sz);
+#else
 #if (_GLIBCXX_USE_CXX11_ABI == 0) && defined(__GLIBCXX__)
     (self.*func_ptr)()->_M_set_length_and_sharable(sz);
 #else
+#if defined(__GLIBCXX__)
     (self.*func_ptr)(sz);
+#endif
+#endif
 #endif
 #endif
   }
@@ -142,12 +145,65 @@ inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   string_set_length_hacker(str, sz);
   str[sz] = '\0';
 #else
-  str.resize(sz);
+  raw_str.resize(sz);
 #endif
 }
 
 #endif
 
+#if (defined(_MSC_VER) && _MSC_VER <= 1920)
+#else
+void vector_set_length_hacker(std::vector<char> &self, std::size_t sz);
+
+template <typename Function, Function func_ptr>
+class vector_thief {
+ public:
+  friend void vector_set_length_hacker(std::vector<char> &self,
+                                       std::size_t sz) {
+#if defined(_MSVC_STL_VERSION)
+    (self.*func_ptr)._Myval2._Mylast = self.data() + sz;
+#else
+#if defined(_LIBCPP_VERSION)
+#if _LIBCPP_VERSION < 14000
+    ((*(std::__vector_base<char, std::allocator<char>> *)(&self)).*func_ptr) =
+        self.data() + sz;
+#else
+    (self.*func_ptr) = self.data() + sz;
+#endif
+#else
+#if defined(__GLIBCXX__)
+    ((*(std::_Vector_base<char, std::allocator<char>> *)(&self)).*func_ptr)
+        ._M_finish = self.data() + sz;
+#endif
+#endif
+#endif
+  }
+};
+
+#if defined(__GLIBCXX__)  // libstdc++
+template class vector_thief<decltype(&std::vector<char>::_M_impl),
+                            &std::vector<char>::_M_impl>;
+#elif defined(_LIBCPP_VERSION)
+template class vector_thief<decltype(&std::vector<char>::__end_),
+                            &std::vector<char>::__end_>;
+#elif defined(_MSVC_STL_VERSION)
+template class vector_thief<decltype(&std::vector<char>::_Mypair),
+                            &std::vector<char>::_Mypair>;
+#endif
+
+template <typename ch>
+inline void resize(std::vector<ch> &raw_vec, std::size_t sz) {
+#if defined(__GLIBCXX__) ||                                       \
+    (defined(_LIBCPP_VERSION) && defined(_LIBCPP_HAS_NO_ASAN)) || \
+    defined(_MSVC_STL_VERSION)
+  std::vector<char> &vec = *reinterpret_cast<std::vector<char> *>(&raw_vec);
+  vec.reserve(sz);
+  vector_set_length_hacker(vec, sz);
+#else
+  raw_vec.resize(sz);
+#endif
+}
+#endif
 
 template <typename T>
 inline void resize(T &str, std::size_t sz) {
