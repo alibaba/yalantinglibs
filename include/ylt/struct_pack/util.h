@@ -82,44 +82,76 @@ constexpr void STRUCT_PACK_INLINE compile_time_unique(
   }
 }
 
-template <typename T>
-struct char_hacker {
-  char_hacker() {}
-  char_hacker(const char_hacker &) {}
-  char_hacker(char_hacker &&) {}
-  char_hacker &operator=(const char_hacker &) { return *this; }
-  char_hacker &operator=(char_hacker &&) { return *this; }
-  T ch_;
+#if __cpp_lib_string_resize_and_overwrite >= 202110L
+template <typename ch>
+inline void resize(std::basic_string<ch> &str, std::size_t sz) {
+  str.resize_and_overwrite(sz, [](ch *, std::size_t sz) {
+    return sz;
+  });
+}
+#elif (defined(__clang_major__) && __clang_major__ <= 11) || \
+    (defined(_MSC_VER) && _MSC_VER <= 1920)
+// old clang has bug in global friend function. discard it.
+// old msvc don't support visit private, discard it.
+inline void resize(std::string &str, std::size_t sz) { str.resize(sz); }
+
+#else
+
+template <typename Function, Function func_ptr>
+class string_thief {
+ public:
+  friend void string_set_length_hacker(std::string &self, std::size_t sz) {
+#if defined(_MSVC_STL_VERSION)
+    (self.*func_ptr)._Myval2._Mysize = sz;
+#else
+#if (_GLIBCXX_USE_CXX11_ABI == 0) && defined(__GLIBCXX__)
+    (self.*func_ptr)()->_M_set_length_and_sharable(sz);
+#else
+    (self.*func_ptr)(sz);
+#endif
+#endif
+  }
 };
 
-}  // namespace struct_pack::detail
+#if defined(__GLIBCXX__)  // libstdc++
+#if (_GLIBCXX_USE_CXX11_ABI == 0)
+template class string_thief<decltype(&std::string::_M_rep),
+                            &std::string::_M_rep>;
+#else
+template class string_thief<decltype(&std::string::_M_set_length),
+                            &std::string::_M_set_length>;
+#endif
+#elif defined(_LIBCPP_VERSION)
+template class string_thief<decltype(&std::string::__set_size),
+                            &std::string::__set_size>;
+#elif defined(_MSVC_STL_VERSION)
+template class string_thief<decltype(&std::string::_Mypair),
+                            &std::string::_Mypair>;
+#endif
 
-namespace std {
-template <typename T>
-struct is_trivial<struct_pack::detail::char_hacker<T>> : std::true_type {};
-}  // namespace std
+void string_set_length_hacker(std::string &, std::size_t);
 
-namespace struct_pack::detail {
-template <typename T>
-void uninit_resize(T &container, std::size_t size) {
-  if constexpr (std::is_same_v<T, std::string> ||
-                std::is_same_v<T, std::basic_string<signed char>> ||
-                std::is_same_v<T, std::basic_string<unsigned char>>) {
-    auto &container_wrapper = *reinterpret_cast<
-        std::basic_string<char_hacker<typename T::value_type>> *>(&container);
-    container_wrapper.resize(size);
+template <typename ch>
+inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
+  std::string &str = *reinterpret_cast<std::string *>(&raw_str);
+#if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
+    defined(_MSVC_STL_VERSION)
+  if (sz > str.capacity()) {
+    str.reserve(sz);
   }
-  else if constexpr (std::is_same_v<T, std::vector<char>> ||
-                     std::is_same_v<T, std::vector<unsigned char>> ||
-                     std::is_same_v<T, std::vector<signed char>> ||
-                     std::is_same_v<T, std::vector<std::byte>>) {
-    auto &container_wrapper =
-        *reinterpret_cast<std::vector<char_hacker<typename T::value_type>> *>(
-            &container);
-    container_wrapper.resize(size);
-  }
-  else {
-    container.resize(size);
-  }
+  string_set_length_hacker(str, sz);
+  str[sz] = '\0';
+#else
+  str.resize(sz);
+#endif
 }
+
+#endif
+
+
+template <typename T>
+inline void resize(T &str, std::size_t sz) {
+  str.resize(sz);
+}
+
 }  // namespace struct_pack::detail

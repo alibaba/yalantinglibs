@@ -152,7 +152,7 @@ STRUCT_PACK_INLINE void serialize_to(Writer &writer, const Args &...args) {
     auto data_offset = writer.size();
     auto info = detail::get_serialize_runtime_info<conf>(args...);
     auto total = data_offset + info.size();
-    detail::uninit_resize(writer, total);
+    detail::resize(writer, total);
     auto real_writer =
         struct_pack::detail::memory_writer{(char *)writer.data() + data_offset};
     struct_pack::detail::serialize_to<conf>(real_writer, info, args...);
@@ -189,7 +189,7 @@ void STRUCT_PACK_INLINE serialize_to_with_offset(Buffer &buffer,
   static_assert(sizeof...(args) > 0);
   auto info = detail::get_serialize_runtime_info<conf>(args...);
   auto old_size = buffer.size();
-  detail::uninit_resize(buffer, old_size + offset + info.size());
+  detail::resize(buffer, old_size + offset + info.size());
   auto writer = struct_pack::detail::memory_writer{(char *)buffer.data() +
                                                    old_size + offset};
   struct_pack::detail::serialize_to<conf>(writer, info, args...);
