@@ -103,7 +103,7 @@ class channel {
                             g_clients_pool<client_t, io_context_pool_t>()) {
     channel ch;
     ch.init(hosts, config, client_pools);
-    return std::move(ch);
+    return ch;
   }
 
  private:
