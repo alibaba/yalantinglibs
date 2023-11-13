@@ -27,6 +27,7 @@
 #if __has_include(<memory_resource>)
 #include <memory_resource>
 #endif
+#include <array>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -56,8 +57,8 @@ namespace easylog {
 
 namespace detail {
 template <class T>
-constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
-                                      std::extent_v<std::remove_cvref_t<T>> > 0;
+constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> ||
+                                  std::extent_v<std::remove_cvref_t<T>>;
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
@@ -92,23 +93,18 @@ enum class Severity {
   FATAL = CRITICAL,
 };
 
-inline std::string_view severity_str(Severity severity) {
-  switch (severity) {
-    case Severity::TRACE:
-      return "TRACE   ";
-    case Severity::DEBUG:
-      return "DEBUG   ";
-    case Severity::INFO:
-      return "INFO    ";
-    case Severity::WARN:
-      return "WARNING ";
-    case Severity::ERROR:
-      return "ERROR   ";
-    case Severity::CRITICAL:
-      return "CRITICAL";
-    default:
-      return "NONE    ";
-  }
+inline constexpr std::string_view severity_str(Severity severity) {
+  constexpr auto strings = std::to_array<std::string_view>({
+      "NONE    ",
+      "TRACE   ",
+      "DEBUG   ",
+      "INFO    ",
+      "WARNING ",
+      "ERROR   ",
+      "CRITICAL",
+  });
+
+  return strings[static_cast<size_t>(severity)];
 }
 
 class record_t {
@@ -151,7 +147,6 @@ class record_t {
       data ? ss_.append("true") : ss_.append("false");
     }
     else if constexpr (std::is_same_v<char, U>) {
-      data ? ss_.append("true") : ss_.append("false");
       ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {
