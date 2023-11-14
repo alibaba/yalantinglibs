@@ -27,7 +27,6 @@
 #if __has_include(<memory_resource>)
 #include <memory_resource>
 #endif
-#include <array>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -57,8 +56,8 @@ namespace easylog {
 
 namespace detail {
 template <class T>
-constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> ||
-                                  std::extent_v<std::remove_cvref_t<T>>;
+constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
+                                  (std::extent_v<std::remove_cvref_t<T>> > 0);
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
@@ -93,18 +92,23 @@ enum class Severity {
   FATAL = CRITICAL,
 };
 
-inline constexpr std::string_view severity_str(Severity severity) {
-  constexpr auto strings = std::to_array<std::string_view>({
-      "NONE    ",
-      "TRACE   ",
-      "DEBUG   ",
-      "INFO    ",
-      "WARNING ",
-      "ERROR   ",
-      "CRITICAL",
-  });
-
-  return strings[static_cast<size_t>(severity)];
+inline std::string_view severity_str(Severity severity) {
+  switch (severity) {
+    case Severity::TRACE:
+      return "TRACE   ";
+    case Severity::DEBUG:
+      return "DEBUG   ";
+    case Severity::INFO:
+      return "INFO    ";
+    case Severity::WARN:
+      return "WARNING ";
+    case Severity::ERROR:
+      return "ERROR   ";
+    case Severity::CRITICAL:
+      return "CRITICAL";
+    default:
+      return "NONE    ";
+  }
 }
 
 class record_t {
