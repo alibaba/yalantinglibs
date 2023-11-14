@@ -56,8 +56,9 @@ namespace easylog {
 
 namespace detail {
 template <class T>
-constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
-                                      std::extent_v<std::remove_cvref_t<T>> > 0;
+constexpr inline bool c_array_v =
+    std::is_array_v<nostd::remove_cvref_t<T>>
+        &&std::extent_v<nostd::remove_cvref_t<T>> > 0;
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
@@ -67,7 +68,7 @@ struct has_data<T, std::void_t<decltype(std::declval<T>().data())>>
     : std::true_type {};
 
 template <typename T>
-constexpr inline bool has_data_v = has_data<std::remove_cvref_t<T>>::value;
+constexpr inline bool has_data_v = has_data<nostd::remove_cvref_t<T>>::value;
 
 template <typename Type, typename = void>
 struct has_str : std::false_type {};
@@ -77,7 +78,7 @@ struct has_str<T, std::void_t<decltype(std::declval<T>().str())>>
     : std::true_type {};
 
 template <typename T>
-constexpr inline bool has_str_v = has_str<std::remove_cvref_t<T>>::value;
+constexpr inline bool has_str_v = has_str<nostd::remove_cvref_t<T>>::value;
 }  // namespace detail
 
 enum class Severity {
@@ -114,7 +115,8 @@ inline std::string_view severity_str(Severity severity) {
 class record_t {
  public:
   record_t() = default;
-  record_t(auto tm_point, Severity severity, std::string_view str)
+  record_t(std::chrono::system_clock::time_point tm_point, Severity severity,
+           std::string_view str)
       : tm_point_(tm_point),
         severity_(severity),
         tid_(_get_tid()),
@@ -141,7 +143,7 @@ class record_t {
 
   template <typename T>
   record_t &operator<<(const T &data) {
-    using U = std::remove_cvref_t<T>;
+    using U = nostd::remove_cvref_t<T>;
     if constexpr (std::is_floating_point_v<U>) {
       char temp[40];
       const auto end = jkj::dragonbox::to_chars(data, temp);

@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 #include <span>
 
 #include "meta_string.hpp"
@@ -37,7 +37,7 @@
 
 namespace refvalue {
 namespace detail {
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <meta_string Signature>
 struct parse_qualified_function_name {
 #if defined(_MSC_VER) && defined(_WIN64)
@@ -202,7 +202,7 @@ struct qualified_name_of {
 template <auto Func>
 inline constexpr auto&& qualified_name_of_v = qualified_name_of<Func>::value;
 
-#if __has_include(<span>)
+#if __has_include(<span>) && __cplusplus > 201703L
 template <auto Func>
 struct name_of {
   static constexpr auto value = [] {
