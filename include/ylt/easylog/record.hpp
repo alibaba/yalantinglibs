@@ -57,7 +57,7 @@ namespace easylog {
 namespace detail {
 template <class T>
 constexpr inline bool c_array_v = std::is_array_v<std::remove_cvref_t<T>> &&
-                                      std::extent_v<std::remove_cvref_t<T>> > 0;
+                                  (std::extent_v<std::remove_cvref_t<T>> > 0);
 
 template <typename Type, typename = void>
 struct has_data : std::false_type {};
@@ -151,7 +151,6 @@ class record_t {
       data ? ss_.append("true") : ss_.append("false");
     }
     else if constexpr (std::is_same_v<char, U>) {
-      data ? ss_.append("true") : ss_.append("false");
       ss_.push_back(data);
     }
     else if constexpr (std::is_enum_v<U>) {
