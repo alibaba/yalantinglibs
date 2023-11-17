@@ -249,9 +249,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #if __has_include(<fmt/format.h>)
 #define ELOGFMT_IMPL(severity, Id, ...) \
   ELOGFMT_IMPL0(severity, Id, fmt, __VA_ARGS__)
-#endif
-
-#if __has_include(<format>)
+#else
 #define ELOGFMT_IMPL(severity, Id, ...) \
   ELOGFMT_IMPL0(severity, Id, std, __VA_ARGS__)
 #endif
