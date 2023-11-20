@@ -81,16 +81,20 @@ enum class type_id {
 template <typename T, uint64_t parent_tag>
 constexpr type_id get_varint_type() {
   if constexpr (is_enable_fast_varint_coding(parent_tag)) {
-    if constexpr (std::is_same_v<var_int32_t, T>) {
+    if constexpr (std::is_same_v<var_int32_t, T> ||
+                  std::is_same_v<int32_t, T>) {
       return type_id::fast_vint32_t;
     }
-    else if constexpr (std::is_same_v<var_int64_t, T>) {
+    else if constexpr (std::is_same_v<var_int64_t, T> ||
+                       std::is_same_v<int64_t, T>) {
       return type_id::fast_vint64_t;
     }
-    else if constexpr (std::is_same_v<var_uint32_t, T>) {
+    else if constexpr (std::is_same_v<var_uint32_t, T> ||
+                       std::is_same_v<uint32_t, T>) {
       return type_id::fast_vuint32_t;
     }
-    else if constexpr (std::is_same_v<var_uint64_t, T>) {
+    else if constexpr (std::is_same_v<var_uint64_t, T> ||
+                       std::is_same_v<uint64_t, T>) {
       return type_id::fast_vuint64_t;
     }
     else {
@@ -98,16 +102,20 @@ constexpr type_id get_varint_type() {
     }
   }
   else {
-    if constexpr (std::is_same_v<var_int32_t, T>) {
+    if constexpr (std::is_same_v<var_int32_t, T> ||
+                  std::is_same_v<int32_t, T>) {
       return type_id::vint32_t;
     }
-    else if constexpr (std::is_same_v<var_int64_t, T>) {
+    else if constexpr (std::is_same_v<var_int64_t, T> ||
+                       std::is_same_v<int64_t, T>) {
       return type_id::vint64_t;
     }
-    else if constexpr (std::is_same_v<var_uint32_t, T>) {
+    else if constexpr (std::is_same_v<var_uint32_t, T> ||
+                       std::is_same_v<uint32_t, T>) {
       return type_id::vuint32_t;
     }
-    else if constexpr (std::is_same_v<var_uint64_t, T>) {
+    else if constexpr (std::is_same_v<var_uint64_t, T> ||
+                       std::is_same_v<uint64_t, T>) {
       return type_id::vuint64_t;
     }
     else {
@@ -269,6 +277,9 @@ constexpr type_id get_type_id() {
   if constexpr (optional<T> && is_compatible_v<T>) {
     return type_id::compatible_t;
   }
+  else if constexpr (detail::varint_t<T, parent_tag>) {
+    return get_varint_type<T, parent_tag>();
+  }
   else if constexpr (std::is_enum_v<T>) {
     return get_integral_type<std::underlying_type_t<T>>();
   }
@@ -282,9 +293,6 @@ constexpr type_id get_type_id() {
   }
   else if constexpr (std::is_floating_point_v<T>) {
     return get_floating_point_type<T>();
-  }
-  else if constexpr (detail::varint_t<T>) {
-    return get_varint_type<T, parent_tag>();
   }
   else if constexpr (std::is_same_v<T, std::monostate> ||
                      std::is_same_v<T, void> || std::is_abstract_v<T>) {

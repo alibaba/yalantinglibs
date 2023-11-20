@@ -229,7 +229,7 @@ STRUCT_PACK_INLINE void serialize_varint(writer& writer_, const T& t) {
 #endif
   uint64_t v;
   if constexpr (sintable_t<T>) {
-    v = encode_zigzag(t.get());
+    v = encode_zigzag(get_varint_value(t));
   }
   else {
     v = t;
@@ -304,6 +304,29 @@ template <bool NotSkip = true,
   // between one and ten bytes, with small values using fewer bytes.
   // return decode_varint_v1(f);
 }
+
+template <typename T>
+const auto& get_varint_value(const T& v) {
+  if constexpr (varint_t<T>) {
+    return v.get();
+  }
+  else {
+    return v;
+  }
+}
+
+template <typename T>
+auto& get_varint_value(T& v) {
+  if constexpr (varint_t<T>) {
+    return v.get();
+  }
+  else {
+    return v;
+  }
+}
+
+
+
 }  // namespace detail
 using var_int32_t = detail::sint<int32_t>;
 using var_int64_t = detail::sint<int64_t>;

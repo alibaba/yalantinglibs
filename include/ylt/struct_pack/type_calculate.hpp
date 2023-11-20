@@ -693,7 +693,7 @@ constexpr bool check_if_add_type_literal() {
       }
     }
     else if constexpr (struct_pack::detail::user_defined_config<T>) {
-      constexpr auto config = T::sp_config & 0b11;
+      constexpr auto config = T::struct_pack_config & 0b11;
       if constexpr (config == sp_config::DEFAULT) {
         return serialize_static_config<T>::has_type_literal;
       }
@@ -799,8 +799,8 @@ constexpr bool check_if_disable_hash_head_impl() {
         return true;
       }
     }
-    else if constexpr (struct_pack::detail::user_defined_config_by_ADL<T>) {
-      constexpr auto config = T::sp_config & 0b11;
+    else if constexpr (struct_pack::detail::user_defined_config<T>) {
+      constexpr auto config = T::struct_pack_config & 0b11;
       if constexpr (config == sp_config::DISABLE_ALL_META_INFO) {
         return true;
       }

@@ -152,16 +152,19 @@ class packer {
   static constexpr void STRUCT_PACK_INLINE
   get_fast_varint_width_impl(std::bitset<sz> &vec, int &i, const Arg &item,
                              uint64_t &unsigned_max, int64_t &signed_max) {
-    if constexpr (varint_t<Arg>) {
-      if (item.get() != 0) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      if (get_varint_value(item) != 0) {
         vec[i] = 1;
-        if constexpr (std::is_unsigned_v<
-                          std::remove_reference_t<decltype(item.get())>>) {
-          unsigned_max = std::max<uint64_t>(unsigned_max, item.get());
+        if constexpr (std::is_unsigned_v<std::remove_reference_t<
+                          decltype(get_varint_value(item))>>) {
+          unsigned_max =
+              std::max<uint64_t>(unsigned_max, get_varint_value(item));
         }
         else {
-          signed_max = std::max<int64_t>(
-              signed_max, item.get() > 0 ? item.get() : -(item.get() + 1));
+          signed_max = std::max<int64_t>(signed_max,
+                                         get_varint_value(item) > 0
+                                             ? get_varint_value(item)
+                                             : -(get_varint_value(item) + 1));
         }
       }
       else {
@@ -186,9 +189,10 @@ class packer {
 
   template <uint64_t parent_tag, std::size_t sz, typename Arg>
   constexpr void STRUCT_PACK_INLINE serialize_one_fast_varint(const Arg &item) {
-    if constexpr (varint_t<Arg>) {
-      if (item.get())
-        low_bytes_write_wrapper<std::min(sz, sizeof(Arg))>(writer_, item.get());
+    if constexpr (varint_t<Arg, parent_tag>) {
+      if (get_varint_value(item))
+        low_bytes_write_wrapper<std::min(sz, sizeof(Arg))>(
+            writer_, get_varint_value(item));
     }
   }
 
@@ -241,6 +245,14 @@ class packer {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
+      else if constexpr (detail::varint_t<type, parent_tag>) {
+        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
+          // do nothing
+        }
+        else {
+          detail::serialize_varint(writer_, item);
+        }
+      }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                          id == type_id::int128_t || id == type_id::uint128_t) {
         write_wrapper<sizeof(item)>(writer_, (char *)&item);
@@ -268,14 +280,6 @@ class packer {
           else {
             serialize_one<size_type, version>(*item);
           }
-        }
-      }
-      else if constexpr (detail::varint_t<type>) {
-        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
-          // do nothing
-        }
-        else {
-          detail::serialize_varint(writer_, item);
         }
       }
       else if constexpr (id == type_id::array_t) {

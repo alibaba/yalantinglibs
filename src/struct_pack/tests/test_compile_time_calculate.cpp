@@ -477,34 +477,63 @@ TEST_CASE("test has container") {
                 test_has_container<std::set<int>>>());
 }
 
-struct fast_varint_example_1 {
+struct fast_varint_example_ct1 {
   var_int32_t a;
-  var_int32_t b;
-  var_int32_t c;
-  var_int32_t d;
-  bool operator==(const fast_varint_example_1& o) const {
-    return a == o.a && b == o.b && c == o.c && d == o.d;
-  }
+  var_int64_t b;
+  var_uint32_t c;
+  var_uint64_t d;
   static constexpr struct_pack::sp_config struct_pack_config = USE_FAST_VARINT;
 };
 
-struct fast_varint_example_2 {
+struct fast_varint_example_ct2 {
   var_int32_t a;
-  var_int32_t b;
-  var_int32_t c;
-  var_int32_t d;
-  bool operator==(const fast_varint_example_1& o) const {
-    return a == o.a && b == o.b && c == o.c && d == o.d;
-  }
+  var_int64_t b;
+  var_uint32_t c;
+  var_uint64_t d;
 };
-
-constexpr auto set_sp_config(fast_varint_example_2*) {
+constexpr auto set_sp_config(fast_varint_example_ct2*) {
   return struct_pack::sp_config::USE_FAST_VARINT;
 }
+struct fast_varint_example_ct3 {
+  int32_t a;
+  int64_t b;
+  uint32_t c;
+  uint64_t d;
+  static constexpr auto struct_pack_config =
+      USE_FAST_VARINT | ENCODING_WITH_VARINT;
+};
+
+struct fast_varint_example_ct4 {
+  int32_t a;
+  int64_t b;
+  uint32_t c;
+  uint64_t d;
+  static constexpr auto struct_pack_config = ENCODING_WITH_VARINT;
+};
 
 TEST_CASE("test fast varint tag") {
-  static_assert(
-      struct_pack::detail::user_defined_config<fast_varint_example_1>);
-  static_assert(
-      struct_pack::detail::user_defined_config_by_ADL<fast_varint_example_2>);
+  using namespace struct_pack::detail;
+  static_assert(user_defined_config<fast_varint_example_ct1>);
+  static_assert(user_defined_config_by_ADL<fast_varint_example_ct2>);
+  static_assert(user_defined_config<fast_varint_example_ct3>);
+  constexpr auto type_info1 =
+      struct_pack::get_type_literal<fast_varint_example_ct1>();
+  constexpr auto type_info2 =
+      struct_pack::get_type_literal<fast_varint_example_ct2>();
+  constexpr auto type_info3 =
+      struct_pack::get_type_literal<fast_varint_example_ct3>();
+  constexpr auto type_info4 =
+      struct_pack::get_type_literal<fast_varint_example_ct4>();
+  constexpr auto fast_varint_info = struct_pack::string_literal<char, 6>{
+      {(char)type_id::struct_t, (char)type_id::fast_vint32_t,
+       (char)type_id::fast_vint64_t, (char)type_id::fast_vuint32_t,
+       (char)type_id::fast_vuint64_t, (char)type_id::type_end_flag}};
+  constexpr auto varint_info = struct_pack::string_literal<char, 6>{
+      {(char)type_id::struct_t, (char)type_id::vint32_t,
+       (char)type_id::vint64_t, (char)type_id::vuint32_t,
+       (char)type_id::vuint64_t, (char)type_id::type_end_flag}};
+  CHECK(type_info1 == type_info2);
+  CHECK(type_info1 == type_info3);
+  CHECK(type_info3 != type_info4);
+  CHECK(type_info1 == fast_varint_info);
 }

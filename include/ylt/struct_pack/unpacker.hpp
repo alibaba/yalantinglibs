@@ -616,21 +616,24 @@ class unpacker {
     }
   }
 
-  template <uint64_t parent_tag, std::size_t width, std::size_t bitset_width,
-            typename Arg>
+  template <uint64_t parent_tag, bool no_skip, std::size_t width,
+            std::size_t bitset_width, typename Arg>
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
       std::bitset<bitset_width> &vec, int &i, Arg &item) {
-    if constexpr (varint_t<Arg>) {
-      constexpr auto real_width =
-          std::min(width, sizeof(typename Arg::value_type));
+    if constexpr (varint_t<Arg, parent_tag>) {
+      constexpr auto real_width = std::min(width, sizeof(Arg));
       if (!vec[i++])
         return {};
+      else if constexpr (!no_skip) {
+        reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
+      }
       else {
         bool ec;
-        if constexpr (std::is_unsigned_v<
-                          std::remove_reference_t<decltype(item.get())>>) {
-          item.get() = 0;
-          bool ec = low_bytes_read_wrapper<real_width>(reader_, item.get());
+        if constexpr (std::is_unsigned_v<std::remove_reference_t<
+                          decltype(get_varint_value(item))>>) {
+          get_varint_value(item) = 0;
+          bool ec = low_bytes_read_wrapper<real_width>(reader_,
+                                                       get_varint_value(item));
           if SP_UNLIKELY (!ec) {
             return errc::no_buffer_space;
           }
@@ -650,18 +653,19 @@ class unpacker {
       return {};
     }
   }
-  template <uint64_t parent_tag, std::size_t width, std::size_t bitset_width,
-            typename Arg, typename... Args>
+  template <uint64_t parent_tag, bool no_skip, std::size_t width,
+            std::size_t bitset_width, typename Arg, typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_fast_varint_helper(
       std::bitset<bitset_width> &vec, int &i, Arg &item, Args &...items) {
-    auto ec = deserialize_one_fast_varint<parent_tag, width>(vec, i, item);
+    auto ec =
+        deserialize_one_fast_varint<parent_tag, no_skip, width>(vec, i, item);
     if constexpr (sizeof...(items)) {
       if SP_UNLIKELY (ec != errc{}) {
         return ec;
       }
       else {
-        return deserialize_fast_varint_helper<parent_tag, width>(vec, i,
-                                                                 items...);
+        return deserialize_fast_varint_helper<parent_tag, no_skip, width>(
+            vec, i, items...);
       }
     }
     else {
@@ -669,7 +673,7 @@ class unpacker {
     }
   }
 
-  template <uint64_t parent_tag, typename... Args>
+  template <uint64_t parent_tag, bool no_skip, typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE
   deserialize_fast_varint(Args &...items) {
     constexpr auto cnt = calculate_fast_varint_count<parent_tag, Args...>();
@@ -688,16 +692,20 @@ class unpacker {
       struct_pack::errc ec;
       switch (width) {
         case 0:
-          ec = deserialize_fast_varint_helper<parent_tag, 1>(vec, i, items...);
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 1>(vec, i,
+                                                                      items...);
           break;
         case 1:
-          ec = deserialize_fast_varint_helper<parent_tag, 2>(vec, i, items...);
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 2>(vec, i,
+                                                                      items...);
           break;
         case 2:
-          ec = deserialize_fast_varint_helper<parent_tag, 4>(vec, i, items...);
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 4>(vec, i,
+                                                                      items...);
           break;
         case 3:
-          ec = deserialize_fast_varint_helper<parent_tag, 8>(vec, i, items...);
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 8>(vec, i,
+                                                                      items...);
           break;
         default:
           unreachable();
@@ -736,6 +744,14 @@ class unpacker {
       }
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
+      }
+      else if constexpr (detail::varint_t<type, parent_tag>) {
+        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
+          // do nothing, we have deserialized it in parent.
+        }
+        else {
+          code = detail::deserialize_varint<NotSkip>(reader_, item);
+        }
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                          id == type_id::int128_t || id == type_id::uint128_t) {
@@ -788,14 +804,6 @@ class unpacker {
         else {
           item = std::make_unique<typename type::element_type>();
           deserialize_one<size_type, version, NotSkip>(*item);
-        }
-      }
-      else if constexpr (detail::varint_t<type>) {
-        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
-          // do nothing, we have deserialized it in parent.
-        }
-        else {
-          code = detail::deserialize_varint<NotSkip>(reader_, item);
         }
       }
       else if constexpr (id == type_id::array_t) {
@@ -1083,7 +1091,7 @@ class unpacker {
           constexpr uint64_t tag = get_parent_tag<type>();
           if constexpr (is_enable_fast_varint_coding(tag)) {
             visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-              code = deserialize_fast_varint<NotSkip>(items...);
+              code = deserialize_fast_varint<tag, NotSkip>(items...);
             });
             if SP_UNLIKELY (code != errc::ok) {
               return code;

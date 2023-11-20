@@ -896,7 +896,7 @@ TEST_CASE("fast varmixedint1 test 14") {
 }
 TEST_CASE("fast varmixedint1 test 15") {
   fast_varmixedint_example_1 o{INT32_MIN, UINT32_MAX, UINT32_MAX,
-                               INT32_MIN - 1ull};
+                               INT32_MIN - 1ll};
   auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(o);
   auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                          fast_varmixedint_example_1>(buffer);
@@ -910,6 +910,161 @@ TEST_CASE("fast varmixedint1 test 16") {
   auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(o);
   auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                          fast_varmixedint_example_1>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 25);
+  return;
+}
+
+struct varmixedint2 {
+  int32_t a;
+  uint64_t b;
+  uint32_t c;
+  int64_t d;
+  bool operator==(const varmixedint2& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d;
+  }
+  static constexpr auto struct_pack_config = struct_pack::ENCODING_WITH_VARINT |
+                                             struct_pack::USE_FAST_VARINT |
+                                             struct_pack::DISABLE_ALL_META_INFO;
+};
+
+TEST_CASE("fast varmixedint2 test 1") {
+  varmixedint2 o{0, 0, 0, 0};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 1);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 2") {
+  varmixedint2 o{INT8_MIN, UINT8_MAX, UINT8_MAX, INT8_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 5);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 3") {
+  varmixedint2 o{INT8_MIN - 1, UINT8_MAX, UINT8_MAX, INT8_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 9);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 5") {
+  varmixedint2 o{INT8_MIN, UINT8_MAX + 1, UINT8_MAX, INT8_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 9);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 6") {
+  varmixedint2 o{INT8_MIN, UINT8_MAX, UINT8_MAX + 1, INT8_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 9);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 7") {
+  varmixedint2 o{INT8_MIN, UINT8_MAX, UINT8_MAX, INT8_MIN - 1};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 9);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 8") {
+  varmixedint2 o{INT16_MIN, UINT16_MAX, UINT16_MAX, INT16_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 9);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 9") {
+  varmixedint2 o{INT16_MIN - 1, UINT16_MAX, UINT16_MAX, INT16_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 17);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 10") {
+  varmixedint2 o{INT16_MIN, UINT16_MAX + 1, UINT16_MAX, INT16_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 17);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 11") {
+  varmixedint2 o{INT16_MIN, UINT16_MAX, UINT16_MAX + 1, INT16_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 17);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 12") {
+  varmixedint2 o{INT16_MIN, UINT16_MAX, UINT16_MAX, INT16_MIN - 1};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 17);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 13") {
+  varmixedint2 o{INT32_MIN, UINT32_MAX, UINT32_MAX, INT32_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 17);
+  return;
+}
+
+TEST_CASE("fast varmixedint2 test 14") {
+  varmixedint2 o{INT32_MIN, UINT32_MAX + 1ull, UINT32_MAX, INT32_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 25);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 15") {
+  varmixedint2 o{INT32_MIN, UINT32_MAX, UINT32_MAX, INT32_MIN - 1ll};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 25);
+  return;
+}
+TEST_CASE("fast varmixedint2 test 16") {
+  varmixedint2 o{INT32_MIN, UINT64_MAX, UINT32_MAX, INT64_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<varmixedint2>(buffer);
   REQUIRE(result.has_value());
   CHECK(result == o);
   CHECK(buffer.size() == 25);

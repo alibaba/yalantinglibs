@@ -755,19 +755,22 @@ template <typename T, typename = void>
   constexpr bool sintable_t =
       std::is_same_v<T, sint<int32_t>> || std::is_same_v<T, sint<int64_t>>;
 
-  template <typename T>
-  constexpr bool varint_t = varintable_t<T> || sintable_t<T>;
+  template <typename T, uint64_t parent_tag = 0 >
+  constexpr bool varint_t = varintable_t<T> || sintable_t<T> || ((parent_tag&struct_pack::ENCODING_WITH_VARINT) && (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> || std::is_same_v<T,int64_t> || std::is_same_v<T,uint64_t>));
 
   template <typename Type>
   constexpr inline bool is_trivial_view_v = false;
 
-  template <typename T, bool ignore_compatible_field = false>
+  template <typename... Args>
+  constexpr uint64_t get_parent_tag();
+
+  template <typename T, bool ignore_compatible_field = false, uint64_t parent_tag = 0>
   struct is_trivial_serializable {
     private:
-      template<typename U, std::size_t... I>
+      template<typename U,uint64_t parent_tag_=0, std::size_t... I>
       static constexpr bool class_visit_helper(std::index_sequence<I...>) {
         return (is_trivial_serializable<std::tuple_element_t<I, U>,
-                                            ignore_compatible_field>::value &&
+                                            ignore_compatible_field,parent_tag_>::value &&
                     ...);
       }
       static constexpr bool solve() {
@@ -775,6 +778,9 @@ template <typename T, typename = void>
           return true;
         }
         else if constexpr (std::is_abstract_v<T>) {
+          return false;
+        }
+        else if constexpr (varint_t<T,parent_tag>) {
           return false;
         }
         else if constexpr (is_compatible_v<T> || is_trivial_view_v<T>) {
@@ -802,8 +808,7 @@ template <typename T, typename = void>
           return false;
         }
         else if constexpr (container<T> || optional<T> || is_variant_v<T> ||
-                          unique_ptr<T> || expected<T> || container_adapter<T> ||
-                          varint_t<T>) {
+                          unique_ptr<T> || expected<T> || container_adapter<T>) {
           return false;
         }
         else if constexpr (pair<T>) {
@@ -816,8 +821,9 @@ template <typename T, typename = void>
           return class_visit_helper<T>(std::make_index_sequence<std::tuple_size_v<T>>{});
         }
         else if constexpr (std::is_class_v<T>) {
+          constexpr auto tag = get_parent_tag<T>();
           using U = decltype(get_types<T>());
-          return class_visit_helper<U>(std::make_index_sequence<std::tuple_size_v<U>>{});
+          return class_visit_helper<U , tag>(std::make_index_sequence<std::tuple_size_v<U>>{});
         }
         else
           return false;
