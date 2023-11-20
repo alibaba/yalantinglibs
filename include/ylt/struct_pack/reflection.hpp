@@ -38,11 +38,13 @@
 
 namespace struct_pack {
 
-enum sp_config {
+enum sp_config : uint64_t {
   DEFAULT = 0,
   DISABLE_TYPE_INFO = 0b1,
   ENABLE_TYPE_INFO = 0b10,
-  DISABLE_ALL_META_INFO = 0b11
+  DISABLE_ALL_META_INFO = 0b11,
+  ENCODING_WITH_VARINT = 0b100,
+  USE_FAST_VARINT = 0b1000
 };
 
 namespace detail {
@@ -544,14 +546,32 @@ template <typename T, typename = void>
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
-  concept user_defined_config = std::is_same_v<decltype(set_sp_config(std::declval<Type*>())),struct_pack::sp_config>;
+  concept user_defined_config_by_ADL = std::is_same_v<decltype(set_sp_config(std::declval<Type*>())),struct_pack::sp_config>;
+#else
+  template <typename T, typename = void>
+  struct user_defined_config_by_ADL_impl : std::false_type {};
+
+  template <typename T>
+  struct user_defined_config_by_ADL_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(set_sp_config(std::declval<T*>())),struct_pack::sp_config>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool user_defined_config_by_ADL = user_defined_config_by_ADL_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
+  template <typename Type>
+  concept user_defined_config = requires {
+    std::is_same_v<decltype(Type::struct_pack_config), sp_config>;
+  };
 #else
   template <typename T, typename = void>
   struct user_defined_config_impl : std::false_type {};
 
   template <typename T>
   struct user_defined_config_impl<T, std::void_t<
-    std::enable_if_t<std::is_same_v<decltype(set_sp_config(std::declval<T*>())),struct_pack::sp_config>>>>
+    std::enable_if_t<std::is_same_v<decltype(T::struct_pack_config),struct_pack::sp_config>>>>
       : std::true_type {};
 
   template <typename T>

@@ -9,6 +9,7 @@ add_executable(struct_pack_test
         test_pragma_pack.cpp
         test_pragma_pack_and_alignas_mix.cpp
         test_varint.cpp
+        test_fast_varint.cpp
         test_stream.cpp
         test_compatible.cpp
         test_non_aggregated_type.cpp

@@ -25,6 +25,33 @@ namespace struct_pack {
 
 namespace detail {
 
+constexpr inline bool is_enable_fast_varint_coding(uint64_t tag) {
+  return tag & struct_pack::USE_FAST_VARINT;
+}
+
+template <std::size_t bytes_width>
+struct int_t;
+
+template <>
+struct int_t<1> {
+  using type = int8_t;
+};
+
+template <>
+struct int_t<2> {
+  using type = int16_t;
+};
+
+template <>
+struct int_t<4> {
+  using type = int32_t;
+};
+
+template <>
+struct int_t<8> {
+  using type = int64_t;
+};
+
 template <typename T>
 class varint {
  public:

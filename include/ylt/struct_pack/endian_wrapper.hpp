@@ -19,6 +19,7 @@
 #include <type_traits>
 
 #include "reflection.hpp"
+#include "ylt/struct_pack/marco.h"
 #include "ylt/struct_pack/util.h"
 
 namespace struct_pack::detail {
@@ -131,7 +132,7 @@ inline uint64_t bswap64(uint64_t raw) {
 };
 
 template <std::size_t block_size, typename writer_t>
-void write_wrapper(writer_t& writer, const char* data) {
+void write_wrapper(writer_t& writer, const char* SP_RESTRICT data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     writer.write(data, block_size);
   }
@@ -163,6 +164,33 @@ void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
     unreachable();
   else
     writer.write(data, length);
+}
+template <std::size_t block_size, typename writer_t, typename T>
+void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
+  static_assert(sizeof(T) >= block_size);
+  if constexpr (is_system_little_endian || block_size == sizeof(T)) {
+    const char* SP_RESTRICT data = (const char*)&elem;
+    writer.write(data, block_size);
+  }
+  else {
+    const char* SP_RESTRICT data = sizeof(T) - block_size + (const char*)&elem;
+    if constexpr (block_size == 2) {
+      auto tmp = bswap16(*(uint16_t*)data);
+      writer.write((char*)&tmp, block_size);
+    }
+    else if constexpr (block_size == 4) {
+      auto tmp = bswap32(*(uint32_t*)data);
+      writer.write((char*)&tmp, block_size);
+    }
+    else if constexpr (block_size == 8) {
+      auto tmp = bswap64(*(uint64_t*)data);
+      writer.write((char*)&tmp, block_size);
+    }
+    else {
+      static_assert(!sizeof(writer),
+                    "illegal block size(should be 1,2,4,8,16)");
+    }
+  }
 }
 template <std::size_t block_size, typename reader_t>
 bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
@@ -202,5 +230,39 @@ bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
     unreachable();
   else
     return static_cast<bool>(reader.read(data, length));
+}
+template <std::size_t block_size, typename reader_t, typename T>
+bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
+  static_assert(sizeof(T) >= block_size);
+  if constexpr (is_system_little_endian || block_size == sizeof(T)) {
+    char* SP_RESTRICT data = (char* )&elem;
+    return static_cast<bool>(reader.read(data, block_size));
+  }
+  else {
+    char tmp[block_size];
+    char* SP_RESTRICT data = (char* )&elem + sizeof(T) - block_size;
+    bool res = static_cast<bool>(reader.read(tmp, block_size));
+    if SP_UNLIKELY (!res) {
+      return res;
+    }
+    if constexpr (block_size == 2) {
+      *(uint16_t*)data = bswap16(*(uint16_t*)tmp);
+    }
+    else if constexpr (block_size == 4) {
+      *(uint32_t*)data = bswap32(*(uint32_t*)tmp);
+    }
+    else if constexpr (block_size == 8) {
+      *(uint64_t*)data = bswap64(*(uint64_t*)tmp);
+    }
+    else if constexpr (block_size == 16) {
+      *(uint64_t*)(data + 8) = bswap64(*(uint64_t*)tmp);
+      *(uint64_t*)data = bswap64(*(uint64_t*)(tmp + 8));
+    }
+    else {
+      static_assert(!sizeof(reader),
+                    "illegal block size(should be 1,2,4,8,16)");
+    }
+    return true;
+  }
 }
 };  // namespace struct_pack::detail

@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 #include "ylt/struct_pack/type_calculate.hpp"
 #if __cplusplus >= 202002L
 #include <ylt/struct_pack/tuple.hpp>
@@ -474,4 +475,36 @@ TEST_CASE("test has container") {
                 test_has_container<std::map<int, int>>>());
   static_assert(struct_pack::detail::check_if_has_container<
                 test_has_container<std::set<int>>>());
+}
+
+struct fast_varint_example_1 {
+  var_int32_t a;
+  var_int32_t b;
+  var_int32_t c;
+  var_int32_t d;
+  bool operator==(const fast_varint_example_1& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d;
+  }
+  static constexpr struct_pack::sp_config struct_pack_config = USE_FAST_VARINT;
+};
+
+struct fast_varint_example_2 {
+  var_int32_t a;
+  var_int32_t b;
+  var_int32_t c;
+  var_int32_t d;
+  bool operator==(const fast_varint_example_1& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d;
+  }
+};
+
+constexpr auto set_sp_config(fast_varint_example_2*) {
+  return struct_pack::sp_config::USE_FAST_VARINT;
+}
+
+TEST_CASE("test fast varint tag") {
+  static_assert(
+      struct_pack::detail::user_defined_config<fast_varint_example_1>);
+  static_assert(
+      struct_pack::detail::user_defined_config_by_ADL<fast_varint_example_2>);
 }

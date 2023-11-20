@@ -111,6 +111,11 @@ class unpacker {
       data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
+    if constexpr (sizeof(std::size_t) < 8) {
+      if (size_type_ > sizeof(std::size_t)) {
+        return errc::too_width_size;
+      }
+    }
     if SP_UNLIKELY (err_code != struct_pack::errc{}) {
       return err_code;
     }
@@ -129,7 +134,12 @@ class unpacker {
         err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        }
+        else {
+          static_assert(!sizeof(T), "illegal size width");
+        }
         break;
 #else
       case 1:
@@ -447,24 +457,27 @@ class unpacker {
   deserialize_compatible(unsigned compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
-    uint64_t data_len64;
-    uint32_t data_len32;
-    uint16_t data_len16;
+    uint64_t data_len = 0;
     bool result;
     switch (compatible_sz_len) {
       case 1:
-        if SP_LIKELY (read_wrapper<2>(reader_, (char *)&data_len16)) {
-          return {errc{}, data_len16};
+        if SP_LIKELY (low_bytes_read_wrapper<2>(reader_, data_len)) {
+          return {errc{}, data_len};
         }
         break;
       case 2:
-        if SP_LIKELY (read_wrapper<4>(reader_, (char *)&data_len32)) {
-          return {errc{}, data_len32};
+        if SP_LIKELY (low_bytes_read_wrapper<4>(reader_, data_len)) {
+          return {errc{}, data_len};
         }
         break;
       case 3:
-        if SP_LIKELY (read_wrapper<8>(reader_, (char *)&data_len64)) {
-          return {errc{}, data_len64};
+        if constexpr (sizeof(std::size_t) >= 8) {
+          if SP_LIKELY (low_bytes_read_wrapper<8>(reader_, data_len)) {
+            return {errc{}, data_len};
+          }
+        }
+        else {
+          return {errc::too_width_size, data_len};
         }
         break;
       default:
@@ -575,15 +588,22 @@ class unpacker {
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_many() {
     return {};
   }
-  template <size_t size_type, uint64_t version, bool NotSkip, typename First,
-            typename... Args>
+  template <size_t size_type, uint64_t version, bool NotSkip,
+            uint64_t parent_tag = 0, typename First, typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE
   deserialize_many(First &&first_item, Args &&...items) {
-    auto code = deserialize_one<size_type, version, NotSkip>(first_item);
+    auto code =
+        deserialize_one<size_type, version, NotSkip, parent_tag>(first_item);
     if SP_UNLIKELY (code != struct_pack::errc{}) {
       return code;
     }
-    return deserialize_many<size_type, version, NotSkip>(items...);
+    if constexpr (sizeof...(items)) {
+      return deserialize_many<size_type, version, NotSkip, parent_tag>(
+          items...);
+    }
+    else {
+      return code;
+    }
   }
 
   constexpr struct_pack::errc STRUCT_PACK_INLINE
@@ -596,12 +616,103 @@ class unpacker {
     }
   }
 
-  template <size_t size_type, uint64_t version, bool NotSkip, typename T>
+  template <uint64_t parent_tag, std::size_t width, std::size_t bitset_width,
+            typename Arg>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
+      std::bitset<bitset_width> &vec, int &i, Arg &item) {
+    if constexpr (varint_t<Arg>) {
+      constexpr auto real_width =
+          std::min(width, sizeof(typename Arg::value_type));
+      if (!vec[i++])
+        return {};
+      else {
+        bool ec;
+        if constexpr (std::is_unsigned_v<
+                          std::remove_reference_t<decltype(item.get())>>) {
+          item.get() = 0;
+          bool ec = low_bytes_read_wrapper<real_width>(reader_, item.get());
+          if SP_UNLIKELY (!ec) {
+            return errc::no_buffer_space;
+          }
+        }
+        else {
+          typename int_t<real_width>::type target;
+          ec = read_wrapper<real_width>(reader_, (char *)&target);
+          if SP_UNLIKELY (!ec) {
+            return errc::no_buffer_space;
+          }
+          item = target;
+        }
+        return {};
+      }
+    }
+    else {
+      return {};
+    }
+  }
+  template <uint64_t parent_tag, std::size_t width, std::size_t bitset_width,
+            typename Arg, typename... Args>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_fast_varint_helper(
+      std::bitset<bitset_width> &vec, int &i, Arg &item, Args &...items) {
+    auto ec = deserialize_one_fast_varint<parent_tag, width>(vec, i, item);
+    if constexpr (sizeof...(items)) {
+      if SP_UNLIKELY (ec != errc{}) {
+        return ec;
+      }
+      else {
+        return deserialize_fast_varint_helper<parent_tag, width>(vec, i,
+                                                                 items...);
+      }
+    }
+    else {
+      return ec;
+    }
+  }
+
+  template <uint64_t parent_tag, typename... Args>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  deserialize_fast_varint(Args &...items) {
+    constexpr auto cnt = calculate_fast_varint_count<parent_tag, Args...>();
+    constexpr auto bitset_size = ((cnt + 2) + 7) / 8;
+    if constexpr (cnt == 0) {
+      static_assert(cnt != 0, "ilegal branch");
+      return {};
+    }
+    else {
+      std::bitset<cnt + 2> vec;
+      if (auto ec = read_bytes_array(reader_, (char *)&vec, bitset_size); !ec) {
+        return errc::no_buffer_space;
+      }
+      std::size_t width = vec[cnt] + vec[cnt + 1] * 2;
+      int i = 0;
+      struct_pack::errc ec;
+      switch (width) {
+        case 0:
+          ec = deserialize_fast_varint_helper<parent_tag, 1>(vec, i, items...);
+          break;
+        case 1:
+          ec = deserialize_fast_varint_helper<parent_tag, 2>(vec, i, items...);
+          break;
+        case 2:
+          ec = deserialize_fast_varint_helper<parent_tag, 4>(vec, i, items...);
+          break;
+        case 3:
+          ec = deserialize_fast_varint_helper<parent_tag, 8>(vec, i, items...);
+          break;
+        default:
+          unreachable();
+      }
+      return ec;
+    }
+  }
+
+  template <size_t size_type, uint64_t version, bool NotSkip,
+            uint64_t parent_tag = 0, typename T>
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
     using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
-    constexpr auto id = get_type_id<type>();
+    constexpr auto id = get_type_id<type, parent_tag>();
     if constexpr (is_trivial_view_v<type>) {
       static_assert(view_reader_t<Reader>,
                     "The Reader isn't a view_reader, can't deserialize "
@@ -680,7 +791,12 @@ class unpacker {
         }
       }
       else if constexpr (detail::varint_t<type>) {
-        code = detail::deserialize_varint<NotSkip>(reader_, item);
+        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
+          // do nothing, we have deserialized it in parent.
+        }
+        else {
+          code = detail::deserialize_varint<NotSkip>(reader_, item);
+        }
       }
       else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value &&
@@ -706,32 +822,26 @@ class unpacker {
         }
       }
       else if constexpr (container<type>) {
-        uint16_t size16;
-        uint32_t size32;
-        uint64_t size64;
+        uint64_t size64 = 0;
         bool result;
         if constexpr (size_type == 1) {
-          uint8_t size8;
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size8)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size8;
         }
 #ifdef STRUCT_PACK_OPTIMIZE
         else if constexpr (size_type == 2) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size16)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size16;
         }
         else if constexpr (size_type == 4) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size32)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size32;
         }
         else if constexpr (size_type == 8) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size64)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
         }
@@ -742,19 +852,17 @@ class unpacker {
         else {
           switch (size_type_) {
             case 1:
-              if SP_UNLIKELY (!read_wrapper<2>(reader_, (char *)&size16)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size64)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              size64 = size16;
               break;
             case 2:
-              if SP_UNLIKELY (!read_wrapper<4>(reader_, (char *)&size32)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size64)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              size64 = size32;
               break;
             case 3:
-              if SP_UNLIKELY (!read_wrapper<8>(reader_, (char *)&size64)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
@@ -763,7 +871,7 @@ class unpacker {
           }
         }
 #endif
-        if SP_UNLIKELY (size64 == 0) {
+        if (size64 == 0) {
           return {};
         }
         if constexpr (map_container<type>) {
@@ -972,8 +1080,17 @@ class unpacker {
           });
         }
         else {
+          constexpr uint64_t tag = get_parent_tag<type>();
+          if constexpr (is_enable_fast_varint_coding(tag)) {
+            visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+              code = deserialize_fast_varint<NotSkip>(items...);
+            });
+            if SP_UNLIKELY (code != errc::ok) {
+              return code;
+            }
+          }
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-            code = deserialize_many<size_type, version, NotSkip>(items...);
+            code = deserialize_many<size_type, version, NotSkip, tag>(items...);
           });
         }
       }
