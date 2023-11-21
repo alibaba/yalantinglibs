@@ -659,7 +659,7 @@ class unpacker {
       std::bitset<bitset_width> &vec, int &i, Arg &item, Args &...items) {
     auto ec =
         deserialize_one_fast_varint<parent_tag, no_skip, width>(vec, i, item);
-    if constexpr (sizeof...(items)) {
+    if constexpr (sizeof...(items) > 0) {
       if SP_UNLIKELY (ec != errc{}) {
         return ec;
       }

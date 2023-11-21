@@ -444,7 +444,7 @@ class packer {
       else if constexpr (unique_ptr<type>) {
         if (item != nullptr) {
           if constexpr (is_base_class<typename type::element_type>) {
-            bool is_ok;
+            bool is_ok{};
             auto index = search_type_by_md5<typename type::element_type>(
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
