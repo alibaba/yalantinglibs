@@ -306,7 +306,7 @@ get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
   }
   if constexpr (has_signed_varint<parent_tag, Args...>() &&
                 has_unsigned_varint<parent_tag, Args...>()) {
-    return std::max(width_unsigned, width_signed);
+    return (std::max)(width_unsigned, width_signed);
   }
   else if constexpr (has_signed_varint<parent_tag, Args...>()) {
     return width_signed;

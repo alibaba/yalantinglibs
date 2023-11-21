@@ -191,7 +191,7 @@ class packer {
   constexpr void STRUCT_PACK_INLINE serialize_one_fast_varint(const Arg &item) {
     if constexpr (varint_t<Arg, parent_tag>) {
       if (get_varint_value(item))
-        low_bytes_write_wrapper<std::min(sz, sizeof(Arg))>(
+        low_bytes_write_wrapper<(std::min)(sz, sizeof(Arg))>(
             writer_, get_varint_value(item));
     }
   }
