@@ -54,8 +54,8 @@ inline std::optional<std::string> execute(
     std::string_view data, rpc_context<rpc_protocol> &context_info,
     Self *self = nullptr) {
   using T = decltype(func);
-  using param_type = function_parameters_t<T>;
-  using return_type = function_return_type_t<T>;
+  using param_type = util::function_parameters_t<T>;
+  using return_type = util::function_return_type_t<T>;
 
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
@@ -69,7 +69,7 @@ inline std::optional<std::string> execute(
     constexpr bool has_coro_conn_v =
         std::is_convertible_v<context_base<conn_return_type, rpc_protocol>,
                               First>;
-    auto args = get_args<has_coro_conn_v, param_type>();
+    auto args = util::get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;
@@ -155,9 +155,9 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
     std::string_view data, rpc_context<rpc_protocol> &context_info,
     Self *self = nullptr) {
   using T = decltype(func);
-  using param_type = function_parameters_t<T>;
-  using return_type =
-      typename get_type_t<typename function_return_type_t<T>::ValueType>::type;
+  using param_type = util::function_parameters_t<T>;
+  using return_type = typename get_type_t<
+      typename util::function_return_type_t<T>::ValueType>::type;
 
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
@@ -170,7 +170,7 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
     using conn_return_type = decltype(get_return_type<is_conn, First>());
     constexpr bool has_coro_conn_v =
         std::is_same_v<context_base<conn_return_type, rpc_protocol>, First>;
-    auto args = get_args<has_coro_conn_v, param_type>();
+    auto args = util::get_args<has_coro_conn_v, param_type>();
 
     bool is_ok = true;
     constexpr size_t size = std::tuple_size_v<decltype(args)>;

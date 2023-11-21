@@ -135,7 +135,7 @@ class coro_rpc_server {
    * @param self 成员函数对应的对象指针
    */
   template <auto first, auto... func>
-  void register_handler(class_type_t<decltype(first)> *self);
+  void register_handler(util::class_type_t<decltype(first)> *self);
 };
 
 /*!
@@ -229,7 +229,8 @@ class coro_rpc_client {
    * @return rpc调用结果
    */
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<rpc_result<function_return_type_t<decltype(func)>>>
+  async_simple::coro::Lazy<
+      rpc_result<util::function_return_type_t<decltype(func)>>>
   call(Args &&...args);
 
   /*!
@@ -241,7 +242,8 @@ class coro_rpc_client {
    * @return rpc调用结果
    */
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<rpc_result<function_return_type_t<decltype(func)>>>
+  async_simple::coro::Lazy<
+      rpc_result<util::function_return_type_t<decltype(func)>>>
   call_for(const auto &duration, Args &&...args);
 
   /*!

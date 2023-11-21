@@ -486,41 +486,42 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   void static_check() {
     using Function = decltype(func);
-    using param_type = function_parameters_t<Function>;
+    using param_type = util::function_parameters_t<Function>;
     if constexpr (!std::is_void_v<param_type>) {
       using First = std::tuple_element_t<0, param_type>;
       constexpr bool is_conn = requires { typename First::return_type; };
 
       if constexpr (std::is_member_function_pointer_v<Function>) {
-        using Self = class_type_t<Function>;
+        using Self = util::class_type_t<Function>;
         if constexpr (is_conn) {
-          static_assert(is_invocable<Function, Self, First, Args...>::value,
-                        "called rpc function and arguments are not match");
+          static_assert(
+              util::is_invocable<Function, Self, First, Args...>::value,
+              "called rpc function and arguments are not match");
         }
         else {
-          static_assert(is_invocable<Function, Self, Args...>::value,
+          static_assert(util::is_invocable<Function, Self, Args...>::value,
                         "called rpc function and arguments are not match");
         }
       }
       else {
         if constexpr (is_conn) {
-          static_assert(is_invocable<Function, First, Args...>::value,
+          static_assert(util::is_invocable<Function, First, Args...>::value,
                         "called rpc function and arguments are not match");
         }
         else {
-          static_assert(is_invocable<Function, Args...>::value,
+          static_assert(util::is_invocable<Function, Args...>::value,
                         "called rpc function and arguments are not match");
         }
       }
     }
     else {
       if constexpr (std::is_member_function_pointer_v<Function>) {
-        using Self = class_type_t<Function>;
-        static_assert(is_invocable<Function, Self, Args...>::value,
+        using Self = util::class_type_t<Function>;
+        static_assert(util::is_invocable<Function, Self, Args...>::value,
                       "called rpc function and arguments are not match");
       }
       else {
-        static_assert(is_invocable<Function, Args...>::value,
+        static_assert(util::is_invocable<Function, Args...>::value,
                       "called rpc function and arguments are not match");
       }
     }
@@ -661,7 +662,7 @@ class coro_rpc_client {
     std::vector<std::byte> buffer;
     std::size_t offset = coro_rpc_protocol::REQ_HEAD_LEN;
     if constexpr (sizeof...(Args) > 0) {
-      using arg_types = function_parameters_t<decltype(func)>;
+      using arg_types = util::function_parameters_t<decltype(func)>;
       pack_to<arg_types>(buffer, offset, std::forward<Args>(args)...);
     }
     else {
@@ -723,7 +724,7 @@ class coro_rpc_client {
   auto get_func_args() {
     using First = std::tuple_element_t<0, FuncArgs>;
     constexpr bool has_conn_v = requires { typename First::return_type; };
-    return get_args<has_conn_v, FuncArgs>();
+    return util::get_args<has_conn_v, FuncArgs>();
   }
 
   template <typename... FuncArgs, typename Buffer, typename... Args>

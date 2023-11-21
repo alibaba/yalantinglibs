@@ -25,6 +25,7 @@
 #endif
 
 #include <asio/connect.hpp>
+#include <asio/dispatch.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
 #include <asio/read_until.hpp>
@@ -282,20 +283,42 @@ inline async_simple::coro::Lazy<void> sleep_for(Duration d) {
   }
 }
 
-template <typename Func>
-inline async_simple::coro::Lazy<void> post(
-    Func func,
-    coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
-  callback_awaitor<void> awaitor;
-
-  co_return co_await awaitor.await_resume(
-      [e, func = std::move(func)](auto handler) {
-        auto executor = e->get_asio_executor();
-        asio::post(executor, [=, func = std::move(func)]() {
+template <typename R, typename Func>
+struct post_helper {
+  void operator()(auto handler) const {
+    asio::dispatch(e->get_asio_executor(), [this, handler]() {
+      try {
+        if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
           func();
           handler.resume();
-        });
-      });
+        }
+        else {
+          auto r = func();
+          handler.set_value_then_resume(std::move(r));
+        }
+      } catch (const std::exception &e) {
+        R er;
+        er.setException(std::current_exception());
+        handler.set_value_then_resume(std::move(er));
+      }
+    });
+  }
+  coro_io::ExecutorWrapper<> *e;
+  Func func;
+};
+
+template <typename Func>
+inline async_simple::coro::Lazy<
+    async_simple::Try<typename util::function_traits<Func>::return_type>>
+post(Func func,
+     coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
+  using R =
+      async_simple::Try<typename util::function_traits<Func>::return_type>;
+
+  callback_awaitor<R> awaitor;
+
+  post_helper<R, Func> helper{e, std::move(func)};
+  co_return co_await awaitor.await_resume(helper);
 }
 
 template <typename Socket, typename AsioBuffer>
