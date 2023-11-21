@@ -49,8 +49,9 @@ void test_read_file() {
     ioc.run();
   });
 
-  coro_io::coro_file file(filename, coro_io::open_mode::read,
-                          ioc.get_executor());
+  coro_io::coro_file file{};
+  async_simple::coro::syncAwait(
+      file.async_open(filename, coro_io::flags::read_only));
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -84,8 +85,10 @@ void test_write_and_read_file() {
     ioc.run();
   });
 
-  coro_io::coro_file file(filename, coro_io::open_mode::write,
-                          ioc.get_executor());
+  coro_io::coro_file file{ioc.get_executor()};
+  async_simple::coro::syncAwait(
+      file.async_open(filename, coro_io::flags::create_write));
+
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -106,8 +109,10 @@ void test_write_and_read_file() {
     std::cout << ec.message() << "\n";
   }
 
-  coro_io::coro_file file1(filename, coro_io::open_mode::read,
-                           ioc.get_executor());
+  coro_io::coro_file file1{ioc.get_executor()};
+  async_simple::coro::syncAwait(
+      file1.async_open(filename, coro_io::flags::read_only));
+
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -134,7 +139,9 @@ void test_read_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 1024);
 
-  coro_io::coro_file file(filename);
+  coro_io::coro_file file{};
+  async_simple::coro::syncAwait(file.async_open(filename));
+
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -155,7 +162,10 @@ void test_read_with_pool() {
   }
 
   std::string str = "test async write";
-  coro_io::coro_file file1(filename, coro_io::open_mode::write);
+  coro_io::coro_file file1{};
+  async_simple::coro::syncAwait(
+      file1.async_open(filename, coro_io::flags::create_write));
+
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
@@ -171,7 +181,10 @@ void test_write_with_pool() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 10);
 
-  coro_io::coro_file file(filename, coro_io::open_mode::write);
+  coro_io::coro_file file{};
+  async_simple::coro::syncAwait(
+      file.async_open(filename, coro_io::flags::create_write));
+
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
