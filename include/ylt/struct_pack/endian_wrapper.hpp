@@ -263,7 +263,8 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
       return true;
     }
     else {
-      return reader.read(data, block_size);
+      bool result = reader.read(data, block_size);
+      return result;
     }
   }
 }
