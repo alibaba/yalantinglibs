@@ -190,8 +190,7 @@ void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
       writer.write((char*)&tmp, block_size);
     }
     else {
-      static_assert(!sizeof(writer),
-                    "illegal block size(should be 1,2,4,8)");
+      static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8)");
     }
   }
 }
@@ -264,7 +263,7 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
       return true;
     }
     else {
-      reader.read(data, block_size);
+      return reader.read(data, block_size);
     }
   }
 }
