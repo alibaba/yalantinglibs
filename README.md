@@ -185,7 +185,7 @@ std::vector<char> buffer = struct_pack::serialize(person1);
 auto person2 = deserialize<person>(buffer);
 ```
 
-struct_pack is very faster. 
+struct_pack is very fast. 
 
 ![](https://alibaba.github.io/yalantinglibs/assets/struct_pack_bench_serialize.4ffb0ce6.png)
 

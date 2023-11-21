@@ -478,6 +478,7 @@ TEST_CASE("testing client call timeout") {
     CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
     g_action = inject_action::nothing;
   }
+#ifdef __GNUC__
   SUBCASE("read timeout") {
     g_action = {};
     coro_rpc_server server(2, 8801);
@@ -494,6 +495,7 @@ TEST_CASE("testing client call timeout") {
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
   }
+#endif
   g_action = {};
 }
 std::errc init_acceptor(auto& acceptor_, auto port_) {

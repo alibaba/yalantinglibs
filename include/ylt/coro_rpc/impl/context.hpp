@@ -159,8 +159,9 @@ struct get_type_t<async_simple::coro::Lazy<T>> {
 template <auto func>
 inline auto get_return_type() {
   using T = decltype(func);
-  using param_type = function_parameters_t<T>;
-  using return_type = typename get_type_t<function_return_type_t<T>>::type;
+  using param_type = util::function_parameters_t<T>;
+  using return_type =
+      typename get_type_t<util::function_return_type_t<T>>::type;
   if constexpr (std::is_void_v<param_type>) {
     if constexpr (std::is_void_v<return_type>) {
       return;
@@ -171,7 +172,8 @@ inline auto get_return_type() {
   }
   else {
     using First = std::tuple_element_t<0, param_type>;
-    constexpr bool is_conn = is_specialization<First, context_base>::value;
+    constexpr bool is_conn =
+        util::is_specialization<First, context_base>::value;
 
     if constexpr (is_conn) {
       using U = typename First::return_type;
