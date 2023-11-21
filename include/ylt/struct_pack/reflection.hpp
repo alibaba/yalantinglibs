@@ -563,15 +563,14 @@ template <typename T, typename = void>
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept user_defined_config = requires {
-    std::is_same_v<decltype(Type::struct_pack_config), sp_config>;
+    Type::struct_pack_config;
   };
 #else
   template <typename T, typename = void>
   struct user_defined_config_impl : std::false_type {};
 
   template <typename T>
-  struct user_defined_config_impl<T, std::void_t<
-    std::enable_if_t<std::is_same_v<decltype(T::struct_pack_config),struct_pack::sp_config>>>>
+  struct user_defined_config_impl<T, std::void_t<decltype(T::struct_pack_config)>>
       : std::true_type {};
 
   template <typename T>

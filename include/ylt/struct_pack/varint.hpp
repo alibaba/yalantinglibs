@@ -325,8 +325,6 @@ auto& get_varint_value(T& v) {
   }
 }
 
-
-
 }  // namespace detail
 using var_int32_t = detail::sint<int32_t>;
 using var_int64_t = detail::sint<int64_t>;

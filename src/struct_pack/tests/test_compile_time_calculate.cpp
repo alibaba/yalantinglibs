@@ -532,8 +532,8 @@ TEST_CASE("test fast varint tag") {
       {(char)type_id::struct_t, (char)type_id::vint32_t,
        (char)type_id::vint64_t, (char)type_id::vuint32_t,
        (char)type_id::vuint64_t, (char)type_id::type_end_flag}};
-  CHECK(type_info1 == type_info2);
-  CHECK(type_info1 == type_info3);
-  CHECK(type_info3 != type_info4);
-  CHECK(type_info1 == fast_varint_info);
+  static_assert(type_info1 == type_info2);
+  static_assert(type_info1 == type_info3);
+  static_assert(type_info3 != type_info4);
+  static_assert(type_info1 == fast_varint_info);
 }

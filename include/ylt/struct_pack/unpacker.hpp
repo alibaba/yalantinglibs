@@ -597,7 +597,7 @@ class unpacker {
     if SP_UNLIKELY (code != struct_pack::errc{}) {
       return code;
     }
-    if constexpr (sizeof...(items)) {
+    if constexpr (sizeof...(items) > 0) {
       return deserialize_many<size_type, version, NotSkip, parent_tag>(
           items...);
     }
@@ -628,7 +628,7 @@ class unpacker {
         reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
       }
       else {
-        bool ec;
+        bool ec{};
         if constexpr (std::is_unsigned_v<std::remove_reference_t<
                           decltype(get_varint_value(item))>>) {
           get_varint_value(item) = 0;
@@ -689,7 +689,7 @@ class unpacker {
       }
       std::size_t width = vec[cnt] + vec[cnt + 1] * 2;
       int i = 0;
-      struct_pack::errc ec;
+      struct_pack::errc ec{};
       switch (width) {
         case 0:
           ec = deserialize_fast_varint_helper<parent_tag, no_skip, 1>(vec, i,
@@ -785,9 +785,9 @@ class unpacker {
           return {};
         }
         if constexpr (is_base_class<typename type::element_type>) {
-          uint32_t id;
+          uint32_t id{};
           read_wrapper<sizeof(id)>(reader_, (char *)&id);
-          bool ok;
+          bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           if SP_UNLIKELY (!ok) {
             return errc::invalid_buffer;
@@ -831,7 +831,7 @@ class unpacker {
       }
       else if constexpr (container<type>) {
         uint64_t size64 = 0;
-        bool result;
+        bool result{};
         if constexpr (size_type == 1) {
           if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
@@ -1137,7 +1137,7 @@ class unpacker {
         }
         if constexpr (is_base_class<typename type::element_type>) {
           uint32_t id = item->get_struct_pack_id();
-          bool ok;
+          bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           assert(ok);
           return template_switch<deserialize_one_derived_class_helper<

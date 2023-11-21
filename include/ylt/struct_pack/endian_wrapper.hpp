@@ -235,12 +235,12 @@ template <std::size_t block_size, typename reader_t, typename T>
 bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   static_assert(sizeof(T) >= block_size);
   if constexpr (is_system_little_endian || block_size == sizeof(T)) {
-    char* SP_RESTRICT data = (char* )&elem;
+    char* SP_RESTRICT data = (char*)&elem;
     return static_cast<bool>(reader.read(data, block_size));
   }
   else {
     char tmp[block_size];
-    char* SP_RESTRICT data = (char* )&elem + sizeof(T) - block_size;
+    char* SP_RESTRICT data = (char*)&elem + sizeof(T) - block_size;
     bool res = static_cast<bool>(reader.read(tmp, block_size));
     if SP_UNLIKELY (!res) {
       return res;

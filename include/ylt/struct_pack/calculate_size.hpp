@@ -201,7 +201,8 @@ template <uint64_t parent_tag, typename Arg, typename... Args>
 constexpr bool STRUCT_PACK_INLINE has_signed_varint() {
   if constexpr (sizeof...(Args) == 0) {
     if constexpr (varint_t<Arg, parent_tag>) {
-      return std::is_signed_v<remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
+      return std::is_signed_v<
+          remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
     }
     else {
       return false;
@@ -209,7 +210,8 @@ constexpr bool STRUCT_PACK_INLINE has_signed_varint() {
   }
   else {
     if constexpr (varint_t<Arg, parent_tag>) {
-      return std::is_signed_v<remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
+      return std::is_signed_v<
+                 remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
              has_signed_varint<parent_tag, Args...>();
     }
     else {
@@ -222,7 +224,8 @@ template <uint64_t parent_tag, typename Arg, typename... Args>
 constexpr bool STRUCT_PACK_INLINE has_unsigned_varint() {
   if constexpr (sizeof...(Args) == 0) {
     if constexpr (varint_t<Arg, parent_tag>) {
-      return std::is_unsigned_v<remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
+      return std::is_unsigned_v<
+          remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
     }
     else {
       return false;
@@ -230,7 +233,8 @@ constexpr bool STRUCT_PACK_INLINE has_unsigned_varint() {
   }
   else {
     if constexpr (varint_t<Arg, parent_tag>) {
-      return std::is_unsigned_v<remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
+      return std::is_unsigned_v<
+                 remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
              has_unsigned_varint<parent_tag, Args...>();
     }
     else {
@@ -254,13 +258,15 @@ constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
       static_assert(!sizeof(Arg), "illegal branch");
     }
     if constexpr (varint_t<Arg, parent_tag>) {
-      if constexpr (std::is_unsigned_v<
-                        std::remove_reference_t<decltype(get_varint_value(item))>>) {
+      if constexpr (std::is_unsigned_v<std::remove_reference_t<
+                        decltype(get_varint_value(item))>>) {
         unsigned_max = std::max<uint64_t>(unsigned_max, get_varint_value(item));
       }
       else {
-        signed_max = std::max<int64_t>(
-            signed_max, get_varint_value(item) > 0 ? get_varint_value(item) : -(get_varint_value(item) + 1));
+        signed_max =
+            std::max<int64_t>(signed_max, get_varint_value(item) > 0
+                                              ? get_varint_value(item)
+                                              : -(get_varint_value(item) + 1));
       }
     }
   }
@@ -269,7 +275,7 @@ constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
 template <uint64_t parent_tag, typename... Args>
 constexpr int STRUCT_PACK_INLINE
 get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
-  int width_unsigned, width_signed;
+  int width_unsigned = 0, width_signed = 0;
   if constexpr (has_unsigned_varint<parent_tag, Args...>()) {
     if SP_LIKELY (unsigned_max <= UINT8_MAX) {
       width_unsigned = 0;
@@ -298,7 +304,7 @@ get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
       width_signed = 3;
     }
   }
-  if constexpr (has_signed_varint<parent_tag, Args...>()&&
+  if constexpr (has_signed_varint<parent_tag, Args...>() &&
                 has_unsigned_varint<parent_tag, Args...>()) {
     return std::max(width_unsigned, width_signed);
   }

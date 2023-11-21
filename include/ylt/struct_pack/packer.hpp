@@ -265,7 +265,7 @@ class packer {
         write_wrapper<sizeof(char)>(writer_, (char *)&has_value);
         if (has_value) {
           if constexpr (is_base_class<typename type::element_type>) {
-            bool is_ok;
+            bool is_ok{};
             uint32_t id = item->get_struct_pack_id();
             auto index = search_type_by_md5<typename type::element_type>(
                 item->get_struct_pack_id(), is_ok);
