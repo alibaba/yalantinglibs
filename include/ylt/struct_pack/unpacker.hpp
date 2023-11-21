@@ -111,11 +111,6 @@ class unpacker {
       data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    if constexpr (sizeof(std::size_t) < 8) {
-      if (size_type_ > sizeof(std::size_t)) {
-        return errc::too_width_size;
-      }
-    }
     if SP_UNLIKELY (err_code != struct_pack::errc{}) {
       return err_code;
     }
@@ -142,9 +137,13 @@ class unpacker {
         }
         break;
 #else
-      case 1:
-      case 2:
+
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
@@ -191,12 +190,20 @@ class unpacker {
         err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
@@ -245,12 +252,20 @@ class unpacker {
         err_code = get_field_impl<4, UINT64_MAX, U, I>(field);
         break;
       case 3:
-        err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
         break;
 #endif
@@ -304,18 +319,27 @@ class unpacker {
          ...);
         break;
       case 3:
-        ([&] {
-          err_code =
-              deserialize_many<8, compatible_version_number<Type>[I], true>(
-                  t, args...);
-          return err_code == errc::ok;
-        }() &&
-         ...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          ([&] {
+            err_code =
+                deserialize_many<8, compatible_version_number<Type>[I], true>(
+                    t, args...);
+            return err_code == errc::ok;
+          }() &&
+           ...);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
+
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         ([&] {
           err_code =
               deserialize_many<2, compatible_version_number<Type>[I], true>(
@@ -373,18 +397,26 @@ class unpacker {
          ...);
         break;
       case 3:
-        ([&] {
-          err_code =
-              get_field_impl<8, compatible_version_number<Type>[Is], U, I>(
-                  field);
-          return err_code == errc::ok;
-        }() &&
-         ...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          ([&] {
+            err_code =
+                get_field_impl<8, compatible_version_number<Type>[Is], U, I>(
+                    field);
+            return err_code == errc::ok;
+          }() &&
+           ...);
+        }
+        else {
+          return errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return errc::too_width_size;
+        }
+      case 2:
+      case 1:
         ([&] {
           err_code =
               get_field_impl<2, compatible_version_number<Type>[Is], U, I>(
@@ -399,7 +431,7 @@ class unpacker {
     }
     if (size_type_ ==
         UCHAR_MAX) {  // reuse size_type_ as a tag that the buffer miss some
-                      // compatible field, whic is legal.
+                      // compatible field, which is legal.
       err_code = {};
     }
     return err_code;
@@ -849,8 +881,14 @@ class unpacker {
           }
         }
         else if constexpr (size_type == 8) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
-            return struct_pack::errc::no_buffer_space;
+          if constexpr (sizeof(std::size_t) < 8) {
+            if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                               size64)) {
+              return struct_pack::errc::no_buffer_space;
+            }
+          }
+          else {
+            static_assert("illegal branch");
           }
         }
         else {
@@ -870,8 +908,13 @@ class unpacker {
               }
               break;
             case 3:
-              if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
-                return struct_pack::errc::no_buffer_space;
+              if constexpr (sizeof(std::size_t) < 8) {
+                if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+              }
+              else {
+                unreachable();
               }
               break;
             default:
