@@ -621,7 +621,7 @@ class unpacker {
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
       std::bitset<bitset_width> &vec, int &i, Arg &item) {
     if constexpr (varint_t<Arg, parent_tag>) {
-      constexpr auto real_width = std::min(width, sizeof(Arg));
+      constexpr auto real_width = (std::min)(width, sizeof(Arg));
       if (!vec[i++])
         return {};
       else if constexpr (!no_skip) {
