@@ -37,8 +37,9 @@ using rpc_context = std::shared_ptr<context_info_t<rpc_protocol>>;
 
 namespace protocol {
 template <typename T, auto func>
-concept has_gen_register_key =
-    requires() { T::template gen_register_key<func>(); };
+concept has_gen_register_key = requires() {
+  T::template gen_register_key<func>();
+};
 
 template <typename rpc_protocol,
           template <typename...> typename map_t = std::unordered_map>

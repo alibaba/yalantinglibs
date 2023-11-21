@@ -131,7 +131,7 @@ class coro_rpc_server_base {
       }
       ec = listen();
       if (ec == std::errc{}) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t & pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
