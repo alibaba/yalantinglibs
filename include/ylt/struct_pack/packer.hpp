@@ -540,7 +540,12 @@ STRUCT_PACK_MAY_INLINE void serialize_to(Writer &writer,
       o.template serialize<conf, 4>(args...);
       break;
     case 3:
-      o.template serialize<conf, 8>(args...);
+      if constexpr (sizeof(std::size_t) >= 8) {
+        o.template serialize<conf, 8>(args...);
+      }
+      else {
+        unreachable();
+      }
       break;
 #else
     case 1:
