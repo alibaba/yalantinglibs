@@ -32,9 +32,9 @@ TEST_CASE("test width too big") {
   SUBCASE("3") {
     std::string buffer;
     buffer.push_back(0b11000);
-    auto result = struct_pack::get_field<
-        std::pair<std::string, std::string>, 0, struct_pack::DISABLE_ALL_META_INFO>(
-        buffer);
+    auto result =
+        struct_pack::get_field<std::pair<std::string, std::string>, 0,
+                               struct_pack::DISABLE_ALL_META_INFO>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
