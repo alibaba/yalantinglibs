@@ -1284,7 +1284,7 @@ TEST_CASE("test dynamic span") {
 #endif
 
 TEST_CASE("test width too big") {
-  SUBCASE("1") {
+  SUBCASE("12") {
     std::string buffer;
     buffer.push_back(0b11000);
     auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
