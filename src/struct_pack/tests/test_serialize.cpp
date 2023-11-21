@@ -1315,7 +1315,8 @@ TEST_CASE("test width too big") {
     std::string buffer;
     buffer.push_back(0b11000);
     auto result =
-        struct_pack::get_field<std::pair<std::string, std::string>, 0>(buffer);
+        struct_pack::get_field<std::pair<std::string, std::string>, 0,
+                               struct_pack::DISABLE_ALL_META_INFO>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
@@ -1328,6 +1329,7 @@ TEST_CASE("test width too big") {
     std::string buffer;
     buffer.push_back(0b11);
     auto result = struct_pack::deserialize<
+        struct_pack::DISABLE_ALL_META_INFO,
         std::pair<std::string, struct_pack::compatible<int>>>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
