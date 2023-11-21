@@ -234,7 +234,8 @@ bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
 template <std::size_t block_size, typename reader_t, typename T>
 bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   static_assert(sizeof(T) >= block_size);
-  if constexpr (is_system_little_endian || block_size == sizeof(T)) {
+  if constexpr (is_system_little_endian || block_size == sizeof(T) ||
+                block_size == 1) {
     char* SP_RESTRICT data = (char*)&elem;
     return static_cast<bool>(reader.read(data, block_size));
   }
@@ -254,13 +255,8 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
     else if constexpr (block_size == 8) {
       *(uint64_t*)data = bswap64(*(uint64_t*)tmp);
     }
-    else if constexpr (block_size == 16) {
-      *(uint64_t*)(data + 8) = bswap64(*(uint64_t*)tmp);
-      *(uint64_t*)data = bswap64(*(uint64_t*)(tmp + 8));
-    }
     else {
-      static_assert(!sizeof(reader),
-                    "illegal block size(should be 1,2,4,8,16)");
+      static_assert(!sizeof(reader), "illegal block size(should be 1,2,4,8)");
     }
     return true;
   }
