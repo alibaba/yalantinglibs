@@ -138,7 +138,7 @@ class unpacker {
           err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
         }
         else {
-          static_assert(!sizeof(T), "illegal size width");
+          return struct_pack::errc::too_width_size;
         }
         break;
 #else
