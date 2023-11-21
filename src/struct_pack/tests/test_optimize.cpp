@@ -8,7 +8,7 @@ TEST_CASE("test width too big") {
     auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                            std::string>(buffer);
     REQUIRE(result.has_value() == false);
-    if constexpr (SIZE_WIDTH < 8) {
+    if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
     }
     else {
@@ -22,7 +22,7 @@ TEST_CASE("test width too big") {
     auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                            std::string>(buffer, len);
     REQUIRE(result.has_value() == false);
-    if constexpr (SIZE_WIDTH < 8) {
+    if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
     }
     else {
@@ -35,7 +35,7 @@ TEST_CASE("test width too big") {
     auto result =
         struct_pack::get_field<std::pair<std::string, std::string>, 0>(buffer);
     REQUIRE(result.has_value() == false);
-    if constexpr (SIZE_WIDTH < 8) {
+    if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
     }
     else {
@@ -48,7 +48,7 @@ TEST_CASE("test width too big") {
     auto result = struct_pack::deserialize<
         std::pair<std::string, struct_pack::compatible<int>>>(buffer);
     REQUIRE(result.has_value() == false);
-    if constexpr (SIZE_WIDTH < 8) {
+    if constexpr (sizeof(std::size_t) < 8) {
       CHECK(result.error() == struct_pack::errc::too_width_size);
     }
     else {
