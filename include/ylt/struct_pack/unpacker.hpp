@@ -881,7 +881,7 @@ class unpacker {
           }
         }
         else if constexpr (size_type == 8) {
-          if constexpr (sizeof(std::size_t) < 8) {
+          if constexpr (sizeof(std::size_t) >= 8) {
             if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
                                                                size64)) {
               return struct_pack::errc::no_buffer_space;
@@ -908,7 +908,7 @@ class unpacker {
               }
               break;
             case 3:
-              if constexpr (sizeof(std::size_t) < 8) {
+              if constexpr (sizeof(std::size_t) >= 8) {
                 if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
                   return struct_pack::errc::no_buffer_space;
                 }
