@@ -616,7 +616,7 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const View &v) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  auto ec = get_field_to<T, I>(ret.value(), v);
+  auto ec = get_field_to<T, I, conf>(ret.value(), v);
   if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }
@@ -627,7 +627,7 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT>
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(const char *data, size_t size) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  auto ec = get_field_to<T, I>(ret.value(), data, size);
+  auto ec = get_field_to<T, I, conf>(ret.value(), data, size);
   if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }
@@ -644,7 +644,7 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
 [[nodiscard]] STRUCT_PACK_INLINE auto get_field(Reader &reader) {
   using T_Field = std::tuple_element_t<I, decltype(detail::get_types<T>())>;
   expected<T_Field, struct_pack::errc> ret;
-  auto ec = get_field_to<T, I>(ret.value(), reader);
+  auto ec = get_field_to<T, I, conf>(ret.value(), reader);
   if SP_UNLIKELY (ec != struct_pack::errc{}) {
     ret = unexpected<struct_pack::errc>{ec};
   }

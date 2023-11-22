@@ -34,3 +34,4 @@ jobs:
             cmake --build ${{github.workspace}}/build -j
             cd ${{github.workspace}}/build/output/tests
             ./struct_pack_test
+            ./struct_pack_test_with_optimize
