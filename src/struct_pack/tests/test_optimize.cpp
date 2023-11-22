@@ -1,3 +1,4 @@
+#include "ylt/struct_pack/derived_helper.hpp"
 #define STRUCT_PACK_OPTIMIZE
 #include "doctest.h"
 #include "ylt/struct_pack.hpp"
@@ -45,9 +46,12 @@ TEST_CASE("test width too big") {
   }
   SUBCASE("4") {
     std::string buffer;
+    using T = std::pair<std::string, struct_pack::compatible<int>>;
+    auto code = struct_pack::get_type_code<T>() + 1;
+    buffer.resize(4);
+    memcpy(buffer.data(), &code, sizeof(code));
     buffer.push_back(0b11);
     auto result = struct_pack::deserialize<
-        struct_pack::DISABLE_ALL_META_INFO,
         std::pair<std::string, struct_pack::compatible<int>>>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
