@@ -185,12 +185,8 @@ void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
       auto tmp = bswap32(*(uint32_t*)data);
       writer.write((char*)&tmp, block_size);
     }
-    else if constexpr (block_size == 8) {
-      auto tmp = bswap64(*(uint64_t*)data);
-      writer.write((char*)&tmp, block_size);
-    }
     else {
-      static_assert(!sizeof(writer), "illegal block size(should be 1,2,4,8)");
+      static_assert(!sizeof(writer), "illegal block size(should be 1,2,4)");
     }
   }
 }
@@ -254,11 +250,8 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
       else if constexpr (block_size == 4) {
         *(uint32_t*)data = bswap32(*(uint32_t*)tmp);
       }
-      else if constexpr (block_size == 8) {
-        *(uint64_t*)data = bswap64(*(uint64_t*)tmp);
-      }
       else {
-        static_assert(!sizeof(reader), "illegal block size(should be 1,2,4,8)");
+        static_assert(!sizeof(reader), "illegal block size(should be 1,2,4)");
       }
       return true;
     }
