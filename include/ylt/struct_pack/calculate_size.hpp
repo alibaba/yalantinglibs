@@ -163,12 +163,17 @@ constexpr size_info inline calculate_one_size(const T &item) {
     else {
       constexpr uint64_t tag = get_parent_tag<type>();
       if constexpr (is_enable_fast_varint_coding(tag)) {
-        visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-          ret.total += calculate_fast_varint_size<tag>(items...);
-        });
+        ret.total +=
+            visit_members(item, [](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+              constexpr uint64_t tag =
+                  get_parent_tag<type>();  // to pass msvc with c++17
+              return calculate_fast_varint_size<tag>(items...);
+            });
       }
-      visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-        ret += calculate_payload_size<tag>(items...);
+      ret += visit_members(item, [](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+        constexpr uint64_t tag =
+            get_parent_tag<type>();  // to pass msvc with c++17
+        return calculate_payload_size<tag>(items...);
       });
     }
   }

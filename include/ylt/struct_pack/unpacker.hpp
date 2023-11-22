@@ -1133,16 +1133,23 @@ class unpacker {
         else {
           constexpr uint64_t tag = get_parent_tag<type>();
           if constexpr (is_enable_fast_varint_coding(tag)) {
-            visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-              code = deserialize_fast_varint<tag, NotSkip>(items...);
-            });
+            code = visit_members(
+                item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                  constexpr uint64_t tag =
+                      get_parent_tag<type>();  // to pass msvc with c++17
+                  return deserialize_fast_varint<tag, NotSkip>(items...);
+                });
             if SP_UNLIKELY (code != errc::ok) {
               return code;
             }
           }
-          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-            code = deserialize_many<size_type, version, NotSkip, tag>(items...);
-          });
+          code = visit_members(
+              item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                constexpr uint64_t tag =
+                    get_parent_tag<type>();  // to pass msvc with c++17
+                return deserialize_many<size_type, version, NotSkip, tag>(
+                    items...);
+              });
         }
       }
       else {

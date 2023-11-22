@@ -408,7 +408,7 @@ class packer {
         else if constexpr ((is_trivial_serializable<type>::value &&
                             !is_little_endian_copyable<sizeof(type)>) ||
                            is_trivial_serializable<type, true>::value) {
-          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+          visit_members(item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
             ((serialize_one<size_type, version>(items),
               write_padding(align::padding_size<type>[i++])),
@@ -418,11 +418,16 @@ class packer {
         else {
           constexpr uint64_t tag = get_parent_tag<type>();
           if constexpr (is_enable_fast_varint_coding(tag)) {
-            visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-              serialize_fast_varint<tag>(items...);
-            });
+            visit_members(
+                item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                  constexpr uint64_t tag =
+                      get_parent_tag<type>();  // to pass msvc with c++17
+                  serialize_fast_varint<tag>(items...);
+                });
           }
-          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+          visit_members(item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+            constexpr uint64_t tag =
+                get_parent_tag<type>();  // to pass msvc with c++17
             serialize_many<size_type, version, tag>(items...);
           });
         }
