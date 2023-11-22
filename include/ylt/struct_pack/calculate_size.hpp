@@ -15,10 +15,6 @@
  */
 #pragma once
 
-#include <bit>
-#include <cstdint>
-#include <type_traits>
-
 #include "alignment.hpp"
 #include "marco.h"
 #include "reflection.hpp"
@@ -27,7 +23,6 @@
 #include "type_trait.hpp"
 #include "util.h"
 #include "varint.hpp"
-#include "ylt/struct_pack/type_calculate.hpp"
 
 namespace struct_pack {
 
@@ -248,21 +243,41 @@ constexpr bool STRUCT_PACK_INLINE has_unsigned_varint() {
   }
 }
 
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr bool STRUCT_PACK_INLINE has_64bits_varint() {
+  if constexpr (sizeof...(Args) == 0) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return sizeof(Arg) == 8;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return sizeof(Arg) == 8 || has_64bits_varint<parent_tag, Args...>();
+    }
+    else {
+      return has_64bits_varint<parent_tag, Args...>();
+    }
+  }
+}
+
 template <uint64_t parent_tag, typename Arg>
 constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
     const Arg &item, int &non_zero_cnt32, int &non_zero_cnt64,
     uint64_t &unsigned_max, int64_t &signed_max) {
-  if (get_varint_value(item)) {
-    if constexpr (sizeof(Arg) == 4) {
-      ++non_zero_cnt32;
-    }
-    else if constexpr (sizeof(Arg) == 8) {
-      ++non_zero_cnt64;
-    }
-    else {
-      static_assert(!sizeof(Arg), "illegal branch");
-    }
-    if constexpr (varint_t<Arg, parent_tag>) {
+  if constexpr (varint_t<Arg, parent_tag>) {
+    if (get_varint_value(item)) {
+      if constexpr (sizeof(Arg) == 4) {
+        ++non_zero_cnt32;
+      }
+      else if constexpr (sizeof(Arg) == 8) {
+        ++non_zero_cnt64;
+      }
+      else {
+        static_assert(!sizeof(Arg), "illegal branch");
+      }
       if constexpr (std::is_unsigned_v<std::remove_reference_t<
                         decltype(get_varint_value(item))>>) {
         unsigned_max = std::max<uint64_t>(unsigned_max, get_varint_value(item));

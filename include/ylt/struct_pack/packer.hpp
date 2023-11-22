@@ -221,7 +221,12 @@ class packer {
           (serialize_one_fast_varint<parent_tag, 4>(items), ...);
           break;
         case 3:
-          (serialize_one_fast_varint<parent_tag, 8>(items), ...);
+          if constexpr (has_64bits_varint<parent_tag, Args...>()) {
+            (serialize_one_fast_varint<parent_tag, 8>(items), ...);
+          }
+          else {
+            unreachable();
+          }
           break;
         default:
           unreachable();

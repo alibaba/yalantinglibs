@@ -656,7 +656,7 @@ class unpacker {
       constexpr auto real_width = (std::min)(width, sizeof(Arg));
       if (!vec[i++])
         return {};
-      else if constexpr (!no_skip) {
+      if constexpr (!no_skip) {
         reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
       }
       else {
@@ -736,8 +736,13 @@ class unpacker {
                                                                       items...);
           break;
         case 3:
-          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 8>(vec, i,
-                                                                      items...);
+          if constexpr (has_64bits_varint<parent_tag, Args...>()) {
+            ec = deserialize_fast_varint_helper<parent_tag, no_skip, 8>(
+                vec, i, items...);
+          }
+          else {
+            return struct_pack::errc::invalid_buffer;
+          }
           break;
         default:
           unreachable();
