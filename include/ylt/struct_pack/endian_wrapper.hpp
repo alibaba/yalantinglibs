@@ -224,10 +224,7 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
 template <typename reader_t>
 bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
                       std::size_t length) {
-  if SP_UNLIKELY (length >= PTRDIFF_MAX)
-    unreachable();
-  else
-    return static_cast<bool>(reader.read(data, length));
+  return static_cast<bool>(reader.read(data, length));
 }
 template <std::size_t block_size, typename reader_t, typename T>
 bool low_bytes_read_wrapper(reader_t& reader, T& elem) {

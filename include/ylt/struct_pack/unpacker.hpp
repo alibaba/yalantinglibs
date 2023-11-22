@@ -993,15 +993,12 @@ class unpacker {
               }
               else if constexpr (is_little_endian_copyable<sizeof(
                                      value_type)>) {
-                if SP_UNLIKELY (mem_sz >= PTRDIFF_MAX)
-                  unreachable();
-                else {
-                  item.resize(size64);
-                  if SP_UNLIKELY (!read_bytes_array(
-                                      reader_, (char *)item.data(),
-                                      size64 * sizeof(value_type))) {
-                    return struct_pack::errc::no_buffer_space;
-                  }
+                
+                item.resize(size64);
+                if SP_UNLIKELY (!read_bytes_array(
+                                    reader_, (char *)item.data(),
+                                    size64 * sizeof(value_type))) {
+                  return struct_pack::errc::no_buffer_space;
                 }
               }
               else {
