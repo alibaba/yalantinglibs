@@ -1124,11 +1124,67 @@ struct eight_int {
       struct_pack::sp_config::ENCODING_WITH_VARINT;
 };
 
-TEST_CASE("seven int test") {
+TEST_CASE("eight int test") {
   eight_int o{INT32_MIN, 521, INT32_MAX, 0, 0, INT32_MIN, 0, 2123};
   auto buffer = struct_pack::serialize(o);
   auto result = struct_pack::deserialize<eight_int>(buffer);
   REQUIRE(result.has_value());
   CHECK(result == o);
+  return;
+}
+
+TEST_CASE("vector<eight int> test") {
+  eight_int o{INT32_MIN, 521, INT32_MAX, 0, 0, INT32_MIN, 0, 2123};
+  std::vector<eight_int> vec;
+  vec.resize(100, o);
+  auto buffer = struct_pack::serialize(vec);
+  auto result = struct_pack::deserialize<std::vector<eight_int>>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == vec);
+  return;
+}
+
+struct mixed_fast_varint {
+  int a, b, c;
+  std::string d;
+  int e, f, g, h;
+  bool operator==(const mixed_fast_varint& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e &&
+           f == o.f && g == o.g && h == o.h;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::USE_FAST_VARINT |
+      struct_pack::sp_config::ENCODING_WITH_VARINT;
+};
+
+TEST_CASE("test mixed 1") {
+  mixed_fast_varint o{INT32_MIN, 521, INT32_MAX, "Hello", 0, 0, INT32_MIN, 0};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<mixed_fast_varint>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  return;
+}
+
+struct mixed_fast_varint2 {
+  struct_pack::var_int64_t a, b, c;
+  std::string d;
+  int e, f, g, h;
+  bool operator==(const mixed_fast_varint2& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e &&
+           f == o.f && g == o.g && h == o.h;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::USE_FAST_VARINT |
+      struct_pack::sp_config::DISABLE_ALL_META_INFO;
+};
+
+TEST_CASE("test mixed 2") {
+  mixed_fast_varint2 o{0, 0, 0, "Hello", 0, 0, 0, 0};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<mixed_fast_varint2>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  CHECK(buffer.size() == 24);
   return;
 }
