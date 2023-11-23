@@ -509,7 +509,7 @@ class unpacker {
           }
         }
         else {
-          return {errc::too_width_size, data_len};
+          return {errc::too_width_size, 0};
         }
         break;
       default:
@@ -993,7 +993,6 @@ class unpacker {
               }
               else if constexpr (is_little_endian_copyable<sizeof(
                                      value_type)>) {
-                
                 item.resize(size64);
                 if SP_UNLIKELY (!read_bytes_array(
                                     reader_, (char *)item.data(),

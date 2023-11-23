@@ -169,13 +169,13 @@ template <std::size_t block_size, typename writer_t, typename T>
 void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
   static_assert(sizeof(T) >= block_size);
   if constexpr (is_system_little_endian || block_size == sizeof(T)) {
-    const char* SP_RESTRICT data = (const char*)&elem;
+    const char* data = (const char*)&elem;
     writer.write(data, block_size);
   }
   else {
-    const char* SP_RESTRICT data = sizeof(T) - block_size + (const char*)&elem;
+    const char* data = sizeof(T) - block_size + (const char*)&elem;
     if constexpr (block_size == 1) {
-      writer.write((char*)&data, block_size);
+      writer.write(data, block_size);
     }
     else if constexpr (block_size == 2) {
       auto tmp = bswap16(*(uint16_t*)data);
@@ -230,11 +230,11 @@ template <std::size_t block_size, typename reader_t, typename T>
 bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   static_assert(sizeof(T) >= block_size);
   if constexpr (is_system_little_endian || block_size == sizeof(T)) {
-    char* SP_RESTRICT data = (char*)&elem;
+    char* data = (char*)&elem;
     return static_cast<bool>(reader.read(data, block_size));
   }
   else {
-    char* SP_RESTRICT data = (char*)&elem + sizeof(T) - block_size;
+    char* data = (char*)&elem + sizeof(T) - block_size;
     if constexpr (block_size > 1) {
       char tmp[block_size];
       bool res = static_cast<bool>(reader.read(tmp, block_size));
