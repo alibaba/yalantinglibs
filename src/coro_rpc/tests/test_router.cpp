@@ -66,12 +66,12 @@ struct RPC_trait<void> {
 };
 using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 template <auto func>
-rpc_result<function_return_type_t<decltype(func)>, coro_rpc_protocol>
+rpc_result<util::function_return_type_t<decltype(func)>, coro_rpc_protocol>
 get_result(const auto &pair) {
   auto &&[rpc_errc, buffer] = pair;
-  using T = function_return_type_t<decltype(func)>;
-  using return_type =
-      rpc_result<function_return_type_t<decltype(func)>, coro_rpc_protocol>;
+  using T = util::function_return_type_t<decltype(func)>;
+  using return_type = rpc_result<util::function_return_type_t<decltype(func)>,
+                                 coro_rpc_protocol>;
   rpc_return_type_t<T> ret;
   struct_pack::errc ec;
   coro_rpc_protocol::rpc_error err;
@@ -144,7 +144,7 @@ auto test_route(auto ctx, Args &&...args) {
 template <auto func, typename... Args>
 void test_route_and_check(auto conn, Args &&...args) {
   auto pair = test_route<func>(conn, std::forward<Args>(args)...);
-  using R = function_return_type_t<decltype(func)>;
+  using R = util::function_return_type_t<decltype(func)>;
   check_result<R>(pair, coro_rpc_protocol::RESP_HEAD_LEN);
 }
 }  // namespace test_util

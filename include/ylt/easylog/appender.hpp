@@ -176,28 +176,20 @@ class appender {
     memcpy(buf + 24, severity_str(record.get_severity()).data(), 8);
     buf[32] = ' ';
 
-    if constexpr (enable_console) {
-      add_color(record.get_severity());
-    }
-
-    std::string_view str(buf, 33);
-
-    write_file(str);
-
-    if constexpr (enable_console) {
-      std::cout << str;
-      clean_color(record.get_severity());
-    }
-
+    auto time_str = std::string_view(buf, 33);
     auto tid_str = get_tid_buf(record.get_tid());
     auto file_str = record.get_file_str();
     auto msg = record.get_message();
 
+    write_file(time_str);
     write_file(tid_str);
     write_file(file_str);
     write_file(msg);
 
     if constexpr (enable_console) {
+      add_color(record.get_severity());
+      std::cout << time_str;
+      clean_color(record.get_severity());
       std::cout << tid_str;
       std::cout << file_str;
       std::cout << msg;

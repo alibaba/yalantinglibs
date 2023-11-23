@@ -167,7 +167,7 @@ struct Plus {
 };
 
 constexpr void function_traits_test_return_type() {
-  using namespace coro_rpc;
+  using namespace util;
   static_assert(std::is_same_v<function_return_type_t<int(int)>, int>);
   auto f1 = []() {
   };
@@ -208,7 +208,7 @@ constexpr void function_traits_test_return_type() {
 }
 
 constexpr void function_traits_test_last_parameters_type() {
-  using namespace coro_rpc;
+  using namespace util;
   static_assert(std::is_same_v<last_parameters_type_t<int(int&&)>, int>);
   auto f1 = [](int&) {
   };

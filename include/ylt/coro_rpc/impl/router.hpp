@@ -127,8 +127,9 @@ class router {
       AS_UNLIKELY { ELOGV(CRITICAL, "null connection!"); }
 
     constexpr auto name = get_func_name<func>();
-    using return_type = function_return_type_t<decltype(func)>;
-    if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
+    using return_type = util::function_return_type_t<decltype(func)>;
+    if constexpr (util::is_specialization_v<return_type,
+                                            async_simple::coro::Lazy>) {
       auto it = coro_handlers_.emplace(
           key,
           [self](
@@ -179,10 +180,11 @@ class router {
   void regist_one_handler_impl(const route_key &key) {
     static_assert(!std::is_member_function_pointer_v<decltype(func)>,
                   "register member function but lack of the parent object");
-    using return_type = function_return_type_t<decltype(func)>;
+    using return_type = util::function_return_type_t<decltype(func)>;
 
     constexpr auto name = get_func_name<func>();
-    if constexpr (is_specialization_v<return_type, async_simple::coro::Lazy>) {
+    if constexpr (util::is_specialization_v<return_type,
+                                            async_simple::coro::Lazy>) {
       auto it = coro_handlers_.emplace(
           key,
           [](std::string_view data, rpc_context<rpc_protocol> &context_info,
@@ -350,13 +352,13 @@ class router {
    */
 
   template <auto first, auto... func>
-  void register_handler(class_type_t<decltype(first)> *self) {
+  void register_handler(util::class_type_t<decltype(first)> *self) {
     regist_one_handler<first>(self);
     (regist_one_handler<func>(self), ...);
   }
 
   template <auto func>
-  void register_handler(class_type_t<decltype(func)> *self,
+  void register_handler(util::class_type_t<decltype(func)> *self,
                         const route_key &key) {
     regist_one_handler_impl<func>(self, key);
   }
