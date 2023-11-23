@@ -1332,7 +1332,7 @@ TEST_CASE("test width too big") {
     auto code = struct_pack::get_type_code<T>() + 1;
     buffer.resize(4);
     if constexpr (!struct_pack::detail::is_system_little_endian) {
-      code = struct_pack::detail::bswap64(code);
+      code = struct_pack::detail::bswap32(code);
     }
     memcpy(buffer.data(), &code, sizeof(code));
     buffer.push_back(0b11);
