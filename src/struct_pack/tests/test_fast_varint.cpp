@@ -155,16 +155,8 @@ TEST_CASE("fast varint test 1") {
   auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                          fast_varint_example_1>(buffer);
   REQUIRE(result.has_value());
+  CHECK(result == o);
   CHECK(buffer.size() == 4);
-  CHECK(buffer[0] != '\0');
-  CHECK(buffer[1] != '\0');
-  CHECK(buffer[2] != '\0');
-  CHECK(buffer[3] != '\0');
-  printf("bin: %d,%d,%d,%d\n", buffer[0], buffer[1], buffer[2], buffer[3]);
-  CHECK(result->a.get() == o.a.get());
-  CHECK(result->b.get() == o.b.get());
-  CHECK(result->c.get() == o.c.get());
-  CHECK(result->d.get() == o.d.get());
   return;
 }
 
@@ -1076,5 +1068,64 @@ TEST_CASE("fast varmixedint2 test 16") {
   REQUIRE(result.has_value());
   CHECK(result == o);
   CHECK(buffer.size() == 25);
+  return;
+}
+
+struct six_int {
+  int a, b, c, d, e, f;
+  bool operator==(const six_int& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e && f == o.f;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::USE_FAST_VARINT |
+      struct_pack::sp_config::ENCODING_WITH_VARINT;
+};
+
+TEST_CASE("six int test") {
+  six_int o{INT32_MIN, 2435, INT32_MAX, 0, 0, INT32_MIN};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<six_int>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  return;
+}
+
+struct seven_int {
+  int a, b, c, d, e, f, g;
+  bool operator==(const seven_int& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e &&
+           f == o.f && g == o.g;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::USE_FAST_VARINT |
+      struct_pack::sp_config::ENCODING_WITH_VARINT;
+};
+
+TEST_CASE("seven int test") {
+  seven_int o{INT32_MIN, 21314, INT32_MAX, 0, 0, INT32_MIN, 0};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<seven_int>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
+  return;
+}
+
+struct eight_int {
+  int a, b, c, d, e, f, g, h;
+  bool operator==(const eight_int& o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d && e == o.e &&
+           f == o.f && g == o.g && h == o.h;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::USE_FAST_VARINT |
+      struct_pack::sp_config::ENCODING_WITH_VARINT;
+};
+
+TEST_CASE("seven int test") {
+  eight_int o{INT32_MIN, 521, INT32_MAX, 0, 0, INT32_MIN, 0, 2123};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<eight_int>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == o);
   return;
 }

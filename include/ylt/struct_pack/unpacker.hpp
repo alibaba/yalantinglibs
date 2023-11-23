@@ -651,10 +651,11 @@ class unpacker {
   template <uint64_t parent_tag, bool no_skip, std::size_t width,
             std::size_t bitset_width, typename Arg>
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
-      std::bitset<bitset_width> &vec, int &i, Arg &item) {
+      char (&vec)[bitset_width], unsigned int &i, Arg &item) {
     if constexpr (varint_t<Arg, parent_tag>) {
       constexpr auto real_width = (std::min)(width, sizeof(Arg));
-      if (!vec[i++])
+      auto index = i++;
+      if (!(vec[index / 8] & (0b1 << (index % 8))))
         return {};
       if constexpr (!no_skip) {
         reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
@@ -688,7 +689,7 @@ class unpacker {
   template <uint64_t parent_tag, bool no_skip, std::size_t width,
             std::size_t bitset_width, typename Arg, typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_fast_varint_helper(
-      std::bitset<bitset_width> &vec, int &i, Arg &item, Args &...items) {
+      char (&vec)[bitset_width], unsigned int &i, Arg &item, Args &...items) {
     auto ec =
         deserialize_one_fast_varint<parent_tag, no_skip, width>(vec, i, item);
     if constexpr (sizeof...(items) > 0) {
@@ -715,12 +716,13 @@ class unpacker {
       return {};
     }
     else {
-      std::bitset<cnt + 2> vec;
-      if (auto ec = read_bytes_array(reader_, (char *)&vec, bitset_size); !ec) {
+      char vec[bitset_size];
+      if (auto ec = read_bytes_array(reader_, vec, bitset_size); !ec) {
         return errc::no_buffer_space;
       }
-      std::size_t width = vec[cnt] + vec[cnt + 1] * 2;
-      int i = 0;
+      int width = !!(vec[cnt / 8] & (0b1 << (cnt % 8))) +
+                  !!(vec[(cnt + 1) / 8] & (0b1 << ((cnt + 1) % 8))) * 2;
+      unsigned int i = 0;
       struct_pack::errc ec{};
       switch (width) {
         case 0:

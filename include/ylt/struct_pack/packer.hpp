@@ -150,11 +150,11 @@ class packer {
 
   template <uint64_t parent_tag, std::size_t sz, typename Arg>
   static constexpr void STRUCT_PACK_INLINE
-  get_fast_varint_width_impl(std::bitset<sz> &vec, int &i, const Arg &item,
+  get_fast_varint_width_impl(char (&vec)[sz], unsigned int &i, const Arg &item,
                              uint64_t &unsigned_max, int64_t &signed_max) {
     if constexpr (varint_t<Arg, parent_tag>) {
       if (get_varint_value(item) != 0) {
-        vec[i] = 1;
+        vec[i / 8] |= (0b1 << (i % 8));
         if constexpr (std::is_unsigned_v<std::remove_reference_t<
                           decltype(get_varint_value(item))>>) {
           unsigned_max =
@@ -167,19 +167,16 @@ class packer {
                                              : -(get_varint_value(item) + 1));
         }
       }
-      else {
-        vec[i] = 0;
-      }
       ++i;
     }
   }
 
   template <uint64_t parent_tag, std::size_t sz, typename... Args>
   static constexpr int STRUCT_PACK_INLINE
-  get_fast_varint_width(std::bitset<sz> &vec, const Args &...items) {
+  get_fast_varint_width(char (&vec)[sz], const Args &...items) {
     uint64_t unsigned_max = 0;
     int64_t signed_max = 0;
-    int i = 0;
+    unsigned int i = 0;
     (get_fast_varint_width_impl<parent_tag>(vec, i, items, unsigned_max,
                                             signed_max),
      ...);
@@ -205,11 +202,11 @@ class packer {
       return;
     }
     else {
-      std::bitset<cnt + 2> vec;
+      char vec[bitset_size]{};
       auto width = get_fast_varint_width<parent_tag>(vec, items...);
-      vec[cnt] = width & 0b1;
-      vec[cnt + 1] = width & 0b10;
-      write_bytes_array(writer_, (char *)&vec, bitset_size);
+      vec[cnt / 8] |= (width & 0b1) << (cnt % 8);
+      vec[(cnt + 1) / 8] |= (!!(width & 0b10)) << ((cnt + 1) % 8);
+      write_bytes_array(writer_, vec, bitset_size);
       switch (width) {
         case 0:
           (serialize_one_fast_varint<parent_tag, 1>(items), ...);
