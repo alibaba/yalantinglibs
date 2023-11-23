@@ -156,9 +156,11 @@ TEST_CASE("fast varint test 1") {
                                          fast_varint_example_1>(buffer);
   REQUIRE(result.has_value());
   CHECK(buffer.size() == 4);
+  CHECK(buffer[0] != '\0');
   CHECK(buffer[1] != '\0');
   CHECK(buffer[2] != '\0');
   CHECK(buffer[3] != '\0');
+  printf("bin: %d,%d,%d,%d\n", buffer[0], buffer[1], buffer[2], buffer[3]);
   CHECK(result->a.get() == o.a.get());
   CHECK(result->b.get() == o.b.get());
   CHECK(result->c.get() == o.c.get());
