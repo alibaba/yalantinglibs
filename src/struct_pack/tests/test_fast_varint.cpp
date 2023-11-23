@@ -254,7 +254,10 @@ TEST_CASE("fast varint test 9") {
   auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                          fast_varint_example_1>(buffer);
   REQUIRE(result.has_value());
-  CHECK(result == o);
+  CHECK(result->a == o.a);
+  CHECK(result->b == o.b);
+  CHECK(result->c == o.c);
+  CHECK(result->d == o.d);
   CHECK(buffer.size() == 13);
   return;
 }
