@@ -24,6 +24,7 @@ enum class errc {
   invalid_buffer,
   hash_conflict,
   seek_failed,
+  too_width_size
 };
 
 namespace detail {

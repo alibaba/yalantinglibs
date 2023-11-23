@@ -28,18 +28,30 @@ namespace struct_pack {
 
 struct serialize_buffer_size;
 namespace detail {
-template <typename... Args>
+template <uint64_t parent_tag = 0, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const Args &...items);
 
-template <typename T>
+template <uint64_t parent_tag, typename... Args>
+constexpr std::size_t STRUCT_PACK_INLINE
+calculate_fast_varint_size(const Args &...items);
+
+template <typename T, uint64_t parent_tag>
 constexpr size_info inline calculate_one_size(const T &item) {
-  constexpr auto id = get_type_id<remove_cvref_t<T>>();
+  constexpr auto id = get_type_id<remove_cvref_t<T>, parent_tag>();
   static_assert(id != detail::type_id::type_end_flag);
   using type = remove_cvref_t<decltype(item)>;
   static_assert(!std::is_pointer_v<type>);
   size_info ret{};
   if constexpr (id == type_id::monostate_t) {
+  }
+  else if constexpr (detail::varint_t<type, parent_tag>) {
+    if constexpr (is_enable_fast_varint_coding(parent_tag)) {
+      // skip it. It has been calculated in parent.
+    }
+    else {
+      ret.total = detail::calculate_varint_size(item);
+    }
   }
   else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                      id == type_id::int128_t || id == type_id::uint128_t ||
@@ -48,9 +60,6 @@ constexpr size_info inline calculate_one_size(const T &item) {
   }
   else if constexpr (is_trivial_view_v<type>) {
     return calculate_one_size(item.get());
-  }
-  else if constexpr (detail::varint_t<type>) {
-    ret.total = detail::calculate_varint_size(item);
   }
   else if constexpr (id == type_id::array_t) {
     if constexpr (is_trivial_serializable<type>::value) {
@@ -147,8 +156,19 @@ constexpr size_info inline calculate_one_size(const T &item) {
       });
     }
     else {
-      visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-        ret += calculate_payload_size(items...);
+      constexpr uint64_t tag = get_parent_tag<type>();
+      if constexpr (is_enable_fast_varint_coding(tag)) {
+        ret.total +=
+            visit_members(item, [](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+              constexpr uint64_t tag =
+                  get_parent_tag<type>();  // to pass msvc with c++17
+              return calculate_fast_varint_size<tag>(items...);
+            });
+      }
+      ret += visit_members(item, [](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+        constexpr uint64_t tag =
+            get_parent_tag<type>();  // to pass msvc with c++17
+        return calculate_payload_size<tag>(items...);
       });
     }
   }
@@ -158,11 +178,195 @@ constexpr size_info inline calculate_one_size(const T &item) {
   return ret;
 }
 
-template <typename... Args>
+template <uint64_t tag, typename... Args>
 constexpr size_info STRUCT_PACK_INLINE
 calculate_payload_size(const Args &...items) {
-  return (calculate_one_size(items) + ...);
+  return (calculate_one_size<Args, tag>(items) + ...);
 }
+
+struct fast_varint_result {};
+
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr std::size_t STRUCT_PACK_INLINE calculate_fast_varint_count() {
+  if constexpr (sizeof...(Args) == 0) {
+    return varint_t<Arg, parent_tag> ? 1 : 0;
+  }
+  else {
+    return calculate_fast_varint_count<parent_tag, Args...>() +
+           (varint_t<Arg, parent_tag> ? 1 : 0);
+  }
+}
+
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr bool STRUCT_PACK_INLINE has_signed_varint() {
+  if constexpr (sizeof...(Args) == 0) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return std::is_signed_v<
+          remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return std::is_signed_v<
+                 remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
+             has_signed_varint<parent_tag, Args...>();
+    }
+    else {
+      return has_signed_varint<parent_tag, Args...>();
+    }
+  }
+}
+
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr bool STRUCT_PACK_INLINE has_unsigned_varint() {
+  if constexpr (sizeof...(Args) == 0) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return std::is_unsigned_v<
+          remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>>;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return std::is_unsigned_v<
+                 remove_cvref_t<decltype(get_varint_value(declval<Arg>()))>> ||
+             has_unsigned_varint<parent_tag, Args...>();
+    }
+    else {
+      return has_unsigned_varint<parent_tag, Args...>();
+    }
+  }
+}
+
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr bool STRUCT_PACK_INLINE has_64bits_varint() {
+  if constexpr (sizeof...(Args) == 0) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return sizeof(Arg) == 8;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      return sizeof(Arg) == 8 || has_64bits_varint<parent_tag, Args...>();
+    }
+    else {
+      return has_64bits_varint<parent_tag, Args...>();
+    }
+  }
+}
+
+template <uint64_t parent_tag, typename Arg>
+constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
+    const Arg &item, int &non_zero_cnt32, int &non_zero_cnt64,
+    uint64_t &unsigned_max, int64_t &signed_max) {
+  if constexpr (varint_t<Arg, parent_tag>) {
+    if (get_varint_value(item)) {
+      if constexpr (sizeof(Arg) == 4) {
+        ++non_zero_cnt32;
+      }
+      else if constexpr (sizeof(Arg) == 8) {
+        ++non_zero_cnt64;
+      }
+      else {
+        static_assert(!sizeof(Arg), "illegal branch");
+      }
+      if constexpr (std::is_unsigned_v<std::remove_reference_t<
+                        decltype(get_varint_value(item))>>) {
+        unsigned_max = std::max<uint64_t>(unsigned_max, get_varint_value(item));
+      }
+      else {
+        signed_max =
+            std::max<int64_t>(signed_max, get_varint_value(item) > 0
+                                              ? get_varint_value(item)
+                                              : -(get_varint_value(item) + 1));
+      }
+    }
+  }
+}
+
+template <uint64_t parent_tag, typename... Args>
+constexpr int STRUCT_PACK_INLINE
+get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
+  int width_unsigned = 0, width_signed = 0;
+  if constexpr (has_unsigned_varint<parent_tag, Args...>()) {
+    if SP_LIKELY (unsigned_max <= UINT8_MAX) {
+      width_unsigned = 0;
+    }
+    else if (unsigned_max <= UINT16_MAX) {
+      width_unsigned = 1;
+    }
+    else if (unsigned_max <= UINT32_MAX) {
+      width_unsigned = 2;
+    }
+    else {
+      width_unsigned = 3;
+    }
+  }
+  if constexpr (has_signed_varint<parent_tag, Args...>()) {
+    if SP_LIKELY (signed_max <= INT8_MAX) {
+      width_signed = 0;
+    }
+    else if (signed_max <= INT16_MAX) {
+      width_signed = 1;
+    }
+    else if (signed_max <= INT32_MAX) {
+      width_signed = 2;
+    }
+    else {
+      width_signed = 3;
+    }
+  }
+  if constexpr (has_signed_varint<parent_tag, Args...>() &&
+                has_unsigned_varint<parent_tag, Args...>()) {
+    return (std::max)(width_unsigned, width_signed);
+  }
+  else if constexpr (has_signed_varint<parent_tag, Args...>()) {
+    return width_signed;
+  }
+  else if constexpr (has_unsigned_varint<parent_tag, Args...>()) {
+    return width_unsigned;
+  }
+  else {
+    static_assert(sizeof...(Args), "there should has a varint");
+    return 0;
+  }
+}
+
+template <uint64_t parent_tag, typename... Args>
+constexpr int STRUCT_PACK_INLINE get_fast_varint_width(const Args &...items) {
+  uint64_t unsigned_max = 0;
+  int64_t signed_max = 0;
+  int non_zero_cnt32 = 0, non_zero_cnt64 = 0;
+  (get_fast_varint_width_impl<parent_tag>(items, non_zero_cnt32, non_zero_cnt64,
+                                          unsigned_max, signed_max),
+   ...);
+  auto width = (1 << struct_pack::detail::get_fast_varint_width_from_max<
+                    parent_tag, Args...>(unsigned_max, signed_max));
+  return width * non_zero_cnt64 + (width > 4 ? 4 : width) * non_zero_cnt32;
+}
+
+template <uint64_t parent_tag, typename... Args>
+constexpr std::size_t STRUCT_PACK_INLINE
+calculate_fast_varint_size(const Args &...items) {
+  constexpr auto cnt = calculate_fast_varint_count<parent_tag, Args...>();
+  constexpr auto bitset_size = ((cnt + 2) + 7) / 8;
+  if constexpr (cnt == 0) {
+    return 0;
+  }
+  else {
+    auto width = get_fast_varint_width<parent_tag>(items...);
+    return width + bitset_size;
+  }
+}
+
 template <uint64_t conf, typename... Args>
 STRUCT_PACK_INLINE constexpr serialize_buffer_size get_serialize_runtime_info(
     const Args &...args);

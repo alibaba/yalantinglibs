@@ -3,6 +3,7 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 
 using namespace struct_pack;
 TEST_CASE("test uint32") {
@@ -842,4 +843,26 @@ TEST_CASE("test varint zip size") {
     CHECK(detail::calculate_payload_size(vec).total == 100);
     CHECK(detail::calculate_payload_size(vec).size_cnt == 1);
   }
+}
+
+struct var_int_struct {
+  int32_t a;
+  uint32_t b;
+  int64_t c;
+  uint64_t d;
+  bool operator==(const var_int_struct &o) const {
+    return a == o.a && b == o.b && c == o.c && d == o.d;
+  }
+  static constexpr auto struct_pack_config =
+      struct_pack::sp_config::ENCODING_WITH_VARINT;
+};
+
+TEST_CASE("test varint by normal int") {
+  var_int_struct v{0, 1, 2, 3};
+  auto buffer = struct_pack::serialize<sp_config::DISABLE_ALL_META_INFO>(v);
+  auto result = struct_pack::deserialize<sp_config::DISABLE_ALL_META_INFO,
+                                         var_int_struct>(buffer);
+  REQUIRE(result.has_value());
+  CHECK(result == v);
+  CHECK(buffer.size() == 4);
 }

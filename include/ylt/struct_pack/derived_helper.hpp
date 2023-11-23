@@ -112,7 +112,7 @@ struct deserialize_derived_class_helper {
   }
 };
 
-template <typename T>
+template <typename T, uint64_t parent_tag = 0>
 constexpr size_info inline calculate_one_size(const T &item);
 
 template <typename DerivedClasses>

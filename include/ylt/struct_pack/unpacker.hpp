@@ -129,12 +129,21 @@ class unpacker {
         err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
+
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
@@ -181,12 +190,20 @@ class unpacker {
         err_code = deserialize_many<4, UINT64_MAX, true>(t, args...);
         break;
       case 3:
-        err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = deserialize_many<2, UINT64_MAX, true>(t, args...);
         break;
 #endif
@@ -235,12 +252,20 @@ class unpacker {
         err_code = get_field_impl<4, UINT64_MAX, U, I>(field);
         break;
       case 3:
-        err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         err_code = get_field_impl<2, UINT64_MAX, U, I>(field);
         break;
 #endif
@@ -294,18 +319,27 @@ class unpacker {
          ...);
         break;
       case 3:
-        ([&] {
-          err_code =
-              deserialize_many<8, compatible_version_number<Type>[I], true>(
-                  t, args...);
-          return err_code == errc::ok;
-        }() &&
-         ...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          ([&] {
+            err_code =
+                deserialize_many<8, compatible_version_number<Type>[I], true>(
+                    t, args...);
+            return err_code == errc::ok;
+          }() &&
+           ...);
+        }
+        else {
+          return struct_pack::errc::too_width_size;
+        }
+
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return struct_pack::errc::too_width_size;
+        }
+      case 2:
+      case 1:
         ([&] {
           err_code =
               deserialize_many<2, compatible_version_number<Type>[I], true>(
@@ -363,18 +397,26 @@ class unpacker {
          ...);
         break;
       case 3:
-        ([&] {
-          err_code =
-              get_field_impl<8, compatible_version_number<Type>[Is], U, I>(
-                  field);
-          return err_code == errc::ok;
-        }() &&
-         ...);
+        if constexpr (sizeof(std::size_t) >= 8) {
+          ([&] {
+            err_code =
+                get_field_impl<8, compatible_version_number<Type>[Is], U, I>(
+                    field);
+            return err_code == errc::ok;
+          }() &&
+           ...);
+        }
+        else {
+          return errc::too_width_size;
+        }
         break;
 #else
-      case 1:
-      case 2:
       case 3:
+        if constexpr (sizeof(std::size_t) < 8) {
+          return errc::too_width_size;
+        }
+      case 2:
+      case 1:
         ([&] {
           err_code =
               get_field_impl<2, compatible_version_number<Type>[Is], U, I>(
@@ -389,7 +431,7 @@ class unpacker {
     }
     if (size_type_ ==
         UCHAR_MAX) {  // reuse size_type_ as a tag that the buffer miss some
-                      // compatible field, whic is legal.
+                      // compatible field, which is legal.
       err_code = {};
     }
     return err_code;
@@ -447,24 +489,27 @@ class unpacker {
   deserialize_compatible(unsigned compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
-    uint64_t data_len64;
-    uint32_t data_len32;
-    uint16_t data_len16;
+    std::size_t data_len = 0;
     bool result;
     switch (compatible_sz_len) {
       case 1:
-        if SP_LIKELY (read_wrapper<2>(reader_, (char *)&data_len16)) {
-          return {errc{}, data_len16};
+        if SP_LIKELY (low_bytes_read_wrapper<2>(reader_, data_len)) {
+          return {errc{}, data_len};
         }
         break;
       case 2:
-        if SP_LIKELY (read_wrapper<4>(reader_, (char *)&data_len32)) {
-          return {errc{}, data_len32};
+        if SP_LIKELY (low_bytes_read_wrapper<4>(reader_, data_len)) {
+          return {errc{}, data_len};
         }
         break;
       case 3:
-        if SP_LIKELY (read_wrapper<8>(reader_, (char *)&data_len64)) {
-          return {errc{}, data_len64};
+        if constexpr (sizeof(std::size_t) >= 8) {
+          if SP_LIKELY (low_bytes_read_wrapper<8>(reader_, data_len)) {
+            return {errc{}, data_len};
+          }
+        }
+        else {
+          return {errc::too_width_size, 0};
         }
         break;
       default:
@@ -575,15 +620,22 @@ class unpacker {
   constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_many() {
     return {};
   }
-  template <size_t size_type, uint64_t version, bool NotSkip, typename First,
-            typename... Args>
+  template <size_t size_type, uint64_t version, bool NotSkip,
+            uint64_t parent_tag = 0, typename First, typename... Args>
   constexpr struct_pack::errc STRUCT_PACK_INLINE
   deserialize_many(First &&first_item, Args &&...items) {
-    auto code = deserialize_one<size_type, version, NotSkip>(first_item);
+    auto code =
+        deserialize_one<size_type, version, NotSkip, parent_tag>(first_item);
     if SP_UNLIKELY (code != struct_pack::errc{}) {
       return code;
     }
-    return deserialize_many<size_type, version, NotSkip>(items...);
+    if constexpr (sizeof...(items) > 0) {
+      return deserialize_many<size_type, version, NotSkip, parent_tag>(
+          items...);
+    }
+    else {
+      return code;
+    }
   }
 
   constexpr struct_pack::errc STRUCT_PACK_INLINE
@@ -596,12 +648,118 @@ class unpacker {
     }
   }
 
-  template <size_t size_type, uint64_t version, bool NotSkip, typename T>
+  template <uint64_t parent_tag, bool no_skip, std::size_t width,
+            std::size_t bitset_width, typename Arg>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
+      char (&vec)[bitset_width], unsigned int &i, Arg &item) {
+    if constexpr (varint_t<Arg, parent_tag>) {
+      constexpr auto real_width = (std::min)(width, sizeof(Arg));
+      auto index = i++;
+      if (!(vec[index / 8] & (0b1 << (index % 8))))
+        return {};
+      if constexpr (!no_skip) {
+        reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
+      }
+      else {
+        bool ec{};
+        if constexpr (std::is_unsigned_v<std::remove_reference_t<
+                          decltype(get_varint_value(item))>>) {
+          get_varint_value(item) = 0;
+          bool ec = low_bytes_read_wrapper<real_width>(reader_,
+                                                       get_varint_value(item));
+          if SP_UNLIKELY (!ec) {
+            return errc::no_buffer_space;
+          }
+        }
+        else {
+          typename int_t<real_width>::type target;
+          ec = read_wrapper<real_width>(reader_, (char *)&target);
+          if SP_UNLIKELY (!ec) {
+            return errc::no_buffer_space;
+          }
+          item = target;
+        }
+        return {};
+      }
+    }
+    else {
+      return {};
+    }
+  }
+  template <uint64_t parent_tag, bool no_skip, std::size_t width,
+            std::size_t bitset_width, typename Arg, typename... Args>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_fast_varint_helper(
+      char (&vec)[bitset_width], unsigned int &i, Arg &item, Args &...items) {
+    auto ec =
+        deserialize_one_fast_varint<parent_tag, no_skip, width>(vec, i, item);
+    if constexpr (sizeof...(items) > 0) {
+      if SP_UNLIKELY (ec != errc{}) {
+        return ec;
+      }
+      else {
+        return deserialize_fast_varint_helper<parent_tag, no_skip, width>(
+            vec, i, items...);
+      }
+    }
+    else {
+      return ec;
+    }
+  }
+
+  template <uint64_t parent_tag, bool no_skip, typename... Args>
+  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  deserialize_fast_varint(Args &...items) {
+    constexpr auto cnt = calculate_fast_varint_count<parent_tag, Args...>();
+    constexpr auto bitset_size = ((cnt + 2) + 7) / 8;
+    if constexpr (cnt == 0) {
+      static_assert(cnt != 0, "ilegal branch");
+      return {};
+    }
+    else {
+      char vec[bitset_size];
+      if (auto ec = read_bytes_array(reader_, vec, bitset_size); !ec) {
+        return errc::no_buffer_space;
+      }
+      int width = !!(vec[cnt / 8] & (0b1 << (cnt % 8))) +
+                  !!(vec[(cnt + 1) / 8] & (0b1 << ((cnt + 1) % 8))) * 2;
+      unsigned int i = 0;
+      struct_pack::errc ec{};
+      switch (width) {
+        case 0:
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 1>(vec, i,
+                                                                      items...);
+          break;
+        case 1:
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 2>(vec, i,
+                                                                      items...);
+          break;
+        case 2:
+          ec = deserialize_fast_varint_helper<parent_tag, no_skip, 4>(vec, i,
+                                                                      items...);
+          break;
+        case 3:
+          if constexpr (has_64bits_varint<parent_tag, Args...>()) {
+            ec = deserialize_fast_varint_helper<parent_tag, no_skip, 8>(
+                vec, i, items...);
+          }
+          else {
+            return struct_pack::errc::invalid_buffer;
+          }
+          break;
+        default:
+          unreachable();
+      }
+      return ec;
+    }
+  }
+
+  template <size_t size_type, uint64_t version, bool NotSkip,
+            uint64_t parent_tag = 0, typename T>
   constexpr struct_pack::errc inline deserialize_one(T &item) {
     struct_pack::errc code{};
     using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
-    constexpr auto id = get_type_id<type>();
+    constexpr auto id = get_type_id<type, parent_tag>();
     if constexpr (is_trivial_view_v<type>) {
       static_assert(view_reader_t<Reader>,
                     "The Reader isn't a view_reader, can't deserialize "
@@ -625,6 +783,14 @@ class unpacker {
       }
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
+      }
+      else if constexpr (detail::varint_t<type, parent_tag>) {
+        if constexpr (is_enable_fast_varint_coding(parent_tag)) {
+          // do nothing, we have deserialized it in parent.
+        }
+        else {
+          code = detail::deserialize_varint<NotSkip>(reader_, item);
+        }
       }
       else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> ||
                          id == type_id::int128_t || id == type_id::uint128_t) {
@@ -658,9 +824,9 @@ class unpacker {
           return {};
         }
         if constexpr (is_base_class<typename type::element_type>) {
-          uint32_t id;
+          uint32_t id{};
           read_wrapper<sizeof(id)>(reader_, (char *)&id);
-          bool ok;
+          bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           if SP_UNLIKELY (!ok) {
             return errc::invalid_buffer;
@@ -678,9 +844,6 @@ class unpacker {
           item = std::make_unique<typename type::element_type>();
           deserialize_one<size_type, version, NotSkip>(*item);
         }
-      }
-      else if constexpr (detail::varint_t<type>) {
-        code = detail::deserialize_varint<NotSkip>(reader_, item);
       }
       else if constexpr (id == type_id::array_t) {
         if constexpr (is_trivial_serializable<type>::value &&
@@ -706,33 +869,33 @@ class unpacker {
         }
       }
       else if constexpr (container<type>) {
-        uint16_t size16;
-        uint32_t size32;
-        uint64_t size64;
-        bool result;
+        std::size_t size64 = 0;
+        bool result{};
         if constexpr (size_type == 1) {
-          uint8_t size8;
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size8)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size8;
         }
 #ifdef STRUCT_PACK_OPTIMIZE
         else if constexpr (size_type == 2) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size16)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size16;
         }
         else if constexpr (size_type == 4) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size32)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
             return struct_pack::errc::no_buffer_space;
           }
-          size64 = size32;
         }
         else if constexpr (size_type == 8) {
-          if SP_UNLIKELY (!read_wrapper<size_type>(reader_, (char *)&size64)) {
-            return struct_pack::errc::no_buffer_space;
+          if constexpr (sizeof(std::size_t) >= 8) {
+            if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                               size64)) {
+              return struct_pack::errc::no_buffer_space;
+            }
+          }
+          else {
+            static_assert("illegal branch");
           }
         }
         else {
@@ -742,20 +905,23 @@ class unpacker {
         else {
           switch (size_type_) {
             case 1:
-              if SP_UNLIKELY (!read_wrapper<2>(reader_, (char *)&size16)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size64)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              size64 = size16;
               break;
             case 2:
-              if SP_UNLIKELY (!read_wrapper<4>(reader_, (char *)&size32)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size64)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              size64 = size32;
               break;
             case 3:
-              if SP_UNLIKELY (!read_wrapper<8>(reader_, (char *)&size64)) {
-                return struct_pack::errc::no_buffer_space;
+              if constexpr (sizeof(std::size_t) >= 8) {
+                if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+              }
+              else {
+                unreachable();
               }
               break;
             default:
@@ -763,7 +929,7 @@ class unpacker {
           }
         }
 #endif
-        if SP_UNLIKELY (size64 == 0) {
+        if (size64 == 0) {
           return {};
         }
         if constexpr (map_container<type>) {
@@ -829,15 +995,11 @@ class unpacker {
               }
               else if constexpr (is_little_endian_copyable<sizeof(
                                      value_type)>) {
-                if SP_UNLIKELY (mem_sz >= PTRDIFF_MAX)
-                  unreachable();
-                else {
-                  item.resize(size64);
-                  if SP_UNLIKELY (!read_bytes_array(
-                                      reader_, (char *)item.data(),
-                                      size64 * sizeof(value_type))) {
-                    return struct_pack::errc::no_buffer_space;
-                  }
+                item.resize(size64);
+                if SP_UNLIKELY (!read_bytes_array(
+                                    reader_, (char *)item.data(),
+                                    size64 * sizeof(value_type))) {
+                  return struct_pack::errc::no_buffer_space;
                 }
               }
               else {
@@ -972,9 +1134,25 @@ class unpacker {
           });
         }
         else {
-          visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
-            code = deserialize_many<size_type, version, NotSkip>(items...);
-          });
+          constexpr uint64_t tag = get_parent_tag<type>();
+          if constexpr (is_enable_fast_varint_coding(tag)) {
+            code = visit_members(
+                item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                  constexpr uint64_t tag =
+                      get_parent_tag<type>();  // to pass msvc with c++17
+                  return deserialize_fast_varint<tag, NotSkip>(items...);
+                });
+            if SP_UNLIKELY (code != errc::ok) {
+              return code;
+            }
+          }
+          code = visit_members(
+              item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
+                constexpr uint64_t tag =
+                    get_parent_tag<type>();  // to pass msvc with c++17
+                return deserialize_many<size_type, version, NotSkip, tag>(
+                    items...);
+              });
         }
       }
       else {
@@ -1012,7 +1190,7 @@ class unpacker {
         }
         if constexpr (is_base_class<typename type::element_type>) {
           uint32_t id = item->get_struct_pack_id();
-          bool ok;
+          bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           assert(ok);
           return template_switch<deserialize_one_derived_class_helper<
