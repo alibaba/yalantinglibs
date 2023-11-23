@@ -173,7 +173,7 @@ void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
     writer.write(data, block_size);
   }
   else if constexpr (block_size == sizeof(T)) {
-    write_wrapper<block_size>(writer, &elem);
+    write_wrapper<block_size>(writer, (const char*)&elem);
   }
   else {
     const char* data = sizeof(T) - block_size + (const char*)&elem;
@@ -237,7 +237,7 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
     return static_cast<bool>(reader.read(data, block_size));
   }
   else if constexpr (block_size == sizeof(T)) {
-    return read_wrapper<block_size>(reader, &elem);
+    return read_wrapper<block_size>(reader, (char*)&elem);
   }
   else {
     char* data = (char*)&elem + sizeof(T) - block_size;
