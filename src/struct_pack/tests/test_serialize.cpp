@@ -1331,7 +1331,7 @@ TEST_CASE("test width too big") {
     auto code = struct_pack::get_type_code<T>() + 1;
     buffer.resize(4);
 #ifndef TEST_IN_LITTLE_ENDIAN
-    code = bswap64(code);
+    code = struct_pack::detail::bswap64(code);
 #endif
     memcpy(buffer.data(), &code, sizeof(code));
     buffer.push_back(0b11);
