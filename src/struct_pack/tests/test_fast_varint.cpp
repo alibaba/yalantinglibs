@@ -155,11 +155,14 @@ TEST_CASE("fast varint test 1") {
   auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
                                          fast_varint_example_1>(buffer);
   REQUIRE(result.has_value());
+  CHECK(buffer.size() == 4);
+  CHECK(buffer[1] != '\0');
+  CHECK(buffer[2] != '\0');
+  CHECK(buffer[3] != '\0');
   CHECK(result->a.get() == o.a.get());
   CHECK(result->b.get() == o.b.get());
   CHECK(result->c.get() == o.c.get());
   CHECK(result->d.get() == o.d.get());
-  CHECK(buffer.size() == 4);
   return;
 }
 
