@@ -172,6 +172,9 @@ void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
     const char* data = (const char*)&elem;
     writer.write(data, block_size);
   }
+  else if constexpr (block_size == sizeof(T)) {
+    write_wrapper<block_size>(writer, &elem);
+  }
   else {
     const char* data = sizeof(T) - block_size + (const char*)&elem;
     if constexpr (block_size == 1) {
@@ -232,6 +235,9 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   if constexpr (is_system_little_endian) {
     char* data = (char*)&elem;
     return static_cast<bool>(reader.read(data, block_size));
+  }
+  else if constexpr (block_size == sizeof(T)) {
+    return read_wrapper<block_size>(reader, &elem);
   }
   else {
     char* data = (char*)&elem + sizeof(T) - block_size;
