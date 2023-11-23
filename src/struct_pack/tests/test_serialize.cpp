@@ -27,6 +27,7 @@
 #include <variant>
 
 #include "ylt/struct_pack/compatible.hpp"
+#include "ylt/struct_pack/endian_wrapper.hpp"
 
 #define private public
 #include <ylt/struct_pack.hpp>
@@ -1330,9 +1331,9 @@ TEST_CASE("test width too big") {
     using T = std::pair<std::string, struct_pack::compatible<int>>;
     auto code = struct_pack::get_type_code<T>() + 1;
     buffer.resize(4);
-#ifndef TEST_IN_LITTLE_ENDIAN
-    code = struct_pack::detail::bswap64(code);
-#endif
+    if constexpr (!struct_pack::detail::is_system_little_endian) {
+      code = struct_pack::detail::bswap64(code);
+    }
     memcpy(buffer.data(), &code, sizeof(code));
     buffer.push_back(0b11);
     auto result = struct_pack::deserialize<
