@@ -489,7 +489,7 @@ class unpacker {
   deserialize_compatible(unsigned compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
-    uint64_t data_len = 0;
+    std::size_t data_len = 0;
     bool result;
     switch (compatible_sz_len) {
       case 1:
@@ -869,7 +869,7 @@ class unpacker {
         }
       }
       else if constexpr (container<type>) {
-        uint64_t size64 = 0;
+        std::size_t size64 = 0;
         bool result{};
         if constexpr (size_type == 1) {
           if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {

@@ -168,7 +168,7 @@ void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
 template <std::size_t block_size, typename writer_t, typename T>
 void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
   static_assert(sizeof(T) >= block_size);
-  if constexpr (is_system_little_endian || block_size == sizeof(T)) {
+  if constexpr (is_system_little_endian) {
     const char* data = (const char*)&elem;
     writer.write(data, block_size);
   }
@@ -229,7 +229,7 @@ bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
 template <std::size_t block_size, typename reader_t, typename T>
 bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   static_assert(sizeof(T) >= block_size);
-  if constexpr (is_system_little_endian || block_size == sizeof(T)) {
+  if constexpr (is_system_little_endian) {
     char* data = (char*)&elem;
     return static_cast<bool>(reader.read(data, block_size));
   }

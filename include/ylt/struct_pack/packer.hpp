@@ -100,7 +100,7 @@ class packer {
     }
     if constexpr (hash_head % 2) {  // has more metainfo
       auto metainfo = info.metainfo();
-      auto sz = info.size();
+      std::size_t sz = info.size();
       write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
       if constexpr (serialize_static_config<serialize_type>::has_compatible) {
         switch (metainfo & 0b11) {
