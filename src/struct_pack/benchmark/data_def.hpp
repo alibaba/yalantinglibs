@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "ylt/struct_pack.hpp"
 #include "ylt/struct_pack/reflection.hpp"
 #if __has_include(<msgpack.hpp>)
 #define HAVE_MSGPACK 1
@@ -58,6 +59,28 @@ inline constexpr struct_pack::sp_config set_sp_config(rect<int> *) {
 inline constexpr struct_pack::sp_config set_sp_config(
     std::vector<rect<int>> *) {
   return struct_pack::DISABLE_ALL_META_INFO;
+}
+
+template <typename T>
+struct rect2 {
+  T x;
+  T y;
+  T width;
+  T height;
+#ifdef HAVE_MSGPACK
+  MSGPACK_DEFINE(x, y, width, height);
+#endif
+};
+
+inline constexpr struct_pack::sp_config set_sp_config(rect2<int32_t> *) {
+  return struct_pack::sp_config{struct_pack::sp_config::DISABLE_ALL_META_INFO |
+                                struct_pack::sp_config::USE_FAST_VARINT |
+                                struct_pack::sp_config::ENCODING_WITH_VARINT};
+}
+
+inline constexpr struct_pack::sp_config set_sp_config(
+    std::vector<rect2<int32_t>> *) {
+  return struct_pack::sp_config{struct_pack::DISABLE_ALL_META_INFO};
 }
 
 enum Color : uint8_t { Red, Green, Blue };

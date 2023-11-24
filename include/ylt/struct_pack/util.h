@@ -137,7 +137,9 @@ void string_set_length_hacker(std::string &, std::size_t);
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
-#if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
+#if defined(__SANITIZE_ADDRESS__)
+  raw_str.resize(sz);
+#elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)
   if (sz > str.capacity()) {
     str.reserve(sz);
@@ -193,7 +195,9 @@ template class vector_thief<decltype(&std::vector<char>::_Mypair),
 
 template <typename ch>
 inline void resize(std::vector<ch> &raw_vec, std::size_t sz) {
-#if defined(__GLIBCXX__) ||                                       \
+#if defined(__SANITIZE_ADDRESS__)
+  raw_vec.resize(sz);
+#elif defined(__GLIBCXX__) ||                                     \
     (defined(_LIBCPP_VERSION) && defined(_LIBCPP_HAS_NO_ASAN)) || \
     defined(_MSVC_STL_VERSION)
   std::vector<char> &vec = *reinterpret_cast<std::vector<char> *>(&raw_vec);

@@ -17,7 +17,7 @@ namespace struct_pb_sample {
 inline auto create_rects(std::size_t object_count) {
   rect32s rcs;
   for (int i = 0; i < object_count; ++i) {
-    rect32 rc{.x = 1, .y = 11, .width = 1111, .height = 111111};
+    rect32 rc{1, 0, 11, 1};
     rcs.rect32_list.emplace_back(rc);
   }
   return rcs;

@@ -27,9 +27,9 @@ inline auto create_rects(size_t object_count) {
   for (int i = 0; i < object_count; i++) {
     mygame::rect32 *rc = rcs.add_rect32_list();
     rc->set_x(1);
-    rc->set_y(11);
-    rc->set_width(1111);
-    rc->set_height(111111);
+    rc->set_y(0);
+    rc->set_width(11);
+    rc->set_height(1);
   }
   return rcs;
 }

@@ -35,7 +35,7 @@ inline void create<fb::rect32s>(flatbuffers::FlatBufferBuilder &builder,
                                 size_t object_count) {
   static std::vector<fb::rect32> rects_vector;
   rects_vector.clear();
-  rects_vector.assign(object_count, fb::rect32{1, 11, 1111, 1111111});
+  rects_vector.assign(object_count, fb::rect32{1, 0, 11, 1});
   auto rects = builder.CreateVectorOfStructs(rects_vector);
   auto orc = fb::Createrect32s(builder, rects);
   builder.Finish(orc);
@@ -44,7 +44,7 @@ inline void create<fb::rect32s>(flatbuffers::FlatBufferBuilder &builder,
 template <>
 inline void create<fb::rect32>(flatbuffers::FlatBufferBuilder &builder,
                                size_t object_count) {
-  const auto orc = fb::rect32{1, 11, 1111, 1111111};
+  const auto orc = fb::rect32{1, 0, 11, 1};
   auto offset = builder.CreateStruct(orc);
   builder.Finish(offset);
 }

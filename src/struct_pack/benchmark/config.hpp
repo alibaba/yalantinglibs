@@ -15,11 +15,23 @@ enum class LibType {
   PROTOBUF,
   FLATBUFFER,
 };
-enum class SampleType { RECT, RECTS, PERSON, PERSONS, MONSTER, MONSTERS };
+enum class SampleType {
+  RECT,
+  RECTS,
+  VAR_RECT,
+  VAR_RECTS,
+  PERSON,
+  PERSONS,
+  MONSTER,
+  MONSTERS
+};
 
 inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
     {SampleType::RECT, "1 rect"},
     {SampleType::RECTS, std::to_string(OBJECT_COUNT) + " rects"},
+    {SampleType::VAR_RECT, "1 rect(with fast varint edcode)"},
+    {SampleType::VAR_RECTS,
+     std::to_string(OBJECT_COUNT) + " rects(with fast varint edcode)"},
     {SampleType::PERSON, "1 person"},
     {SampleType::PERSONS, std::to_string(OBJECT_COUNT) + " persons"},
     {SampleType::MONSTER, "1 monster"},
