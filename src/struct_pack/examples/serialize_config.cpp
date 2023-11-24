@@ -16,6 +16,8 @@
 
 #include <cassert>
 
+#include "ylt/struct_pack/reflection.hpp"
+
 #define STRUCT_PACK_OPTIMIZE  // add this macro to speed up
                               // serialize/deserialize but it will cost more
                               // time to compile
@@ -26,14 +28,24 @@
 // add this macro to enable support of int128/uint128
 
 #include <ylt/struct_pack.hpp>
-using var_int = struct_pack::var_int32_t;
 
 struct rect {
-  var_int a, b, c, d;
+  int a, b, c, d;
   bool operator==(const rect& o) const {
     return a == o.a && b == o.b && c == o.c && d == o.d;
   }
+  constexpr static auto struct_pack_config =
+      struct_pack::DISABLE_ALL_META_INFO | struct_pack::ENCODING_WITH_VARINT |
+      struct_pack::USE_FAST_VARINT;
 };
+
+// Or,you can also use ADL helper function to config it. this function should
+// in the same namespace of type
+inline constexpr struct_pack::sp_config set_sp_config(rect*) {
+  return struct_pack::sp_config{struct_pack::DISABLE_ALL_META_INFO |
+                                struct_pack::ENCODING_WITH_VARINT |
+                                struct_pack::USE_FAST_VARINT};
+}
 
 //clang-format off
 void serialize_config() {
@@ -47,12 +59,6 @@ void serialize_config() {
       struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO, rect>(
           buffer);
   assert(result.value() == r);
-}
-
-// or, you can also use ADL helper function to config it. this function should
-// in the same namespace of type
-inline constexpr struct_pack::sp_config set_sp_config(rect*) {
-  return struct_pack::DISABLE_ALL_META_INFO;
 }
 
 void serialize_config_by_ADL() {

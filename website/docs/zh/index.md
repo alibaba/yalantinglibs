@@ -17,7 +17,7 @@ hero:
 
 features:
   - title: struct_pack
-    details: 只需要一行代码完成序列化和反序列化, 比 protobuf 快 2-50 倍.
+    details: 只需要一行代码完成序列化和反序列化, 比 protobuf 快 2-20 倍.
   - title: coro_rpc
     details: Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene.
   - title: struct_json\struct_xml\struct_yaml

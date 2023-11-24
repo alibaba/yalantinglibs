@@ -166,6 +166,16 @@ assert(nested2)
 assert(nested2==nested1);
 ```
 
+## 对整数启用变长压缩编码
+
+```cpp
+struct rect {
+  int a,b,c,d;
+  constexpr static auto struct_pack_config = struct_pack::ENCODING_WITH_VARINT| struct_pack::USE_FAST_VARINT;
+};
+
+```
+
 ## 自定义功能支持
 
 ### 用户自定义反射

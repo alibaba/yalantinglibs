@@ -40,8 +40,12 @@ struct_pack allows user to configure the content of the metadata via `struct_pac
 | DISABLE_TYPE_INFO  | Prohibit storing full type information in serialized data, even in DEBUG mode|
 | ENABLE_TYPE_INFO | Prohibit storing full type information in serialized data, even in DEBUG mode|
 | DISABLE_META_INFO| Force full type information to be stored in serialized data, even if not in DEBUG mode|
+| ENCODING_WITH_VARINT| encode integer(int32_t,int64_t,uint32_t,uint64_t) as variable length coding|
+| USE_FAST_VARINT| encode integer(int32_t,int64_t,uint32_t,uint64_t) as fast variable length coding|
 
 Note that when serialization is configured with the DISABLE_META_INFO option, it must be ensured that deserialization also uses this option, otherwise the behavior is undefined and the probability is that deserialization will fail.
+
+Also, note that if structure A nests structure B, the configuration for A will not take effect for B.
 
 For example：
 ```cpp
@@ -50,7 +54,20 @@ struct rect {
 };
 ```
 
-### Using ADL as a Serialization Configuration
+### config by class static member
+
+Just add a constexpr static member named `struct_pack_config` to the class
+
+```cpp
+struct rect {
+  int a, b, c, d;
+  constexpr static auto struct_pack_config = struct_pack::DISABLE_ALL_META_INFO;
+};
+```
+
+### config by ADL
+
+ADL configuration takes precedence over class static member.
 
 we can declare a function `set_sp_config` in the same namespace of type `rect`: 
 
@@ -60,16 +77,16 @@ inline constexpr struct_pack::sp_config set_sp_config(rect*) {
 }
 ```
 
-### Configuration using template parameters
+### config by template parameters
 
-For example
+This method has the highest priority and requires the configuration to be passed in as a template parameter each time it is serialised.
+
+Note that the `USE_FAST_VARINT` and `ENCODING_WITH_VARINT` configurations are ineffective here.
 
 ```cpp
 auto buffer = struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO>(rect{});
 auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,rect>(buffer);
 ```
-
-When both are configured, the template parameter takes precedence over the ADL.
 
 Currently we do not allow the `DISABLE_ALL_META_INFO` configuration to be enabled with a compatible field.
 
