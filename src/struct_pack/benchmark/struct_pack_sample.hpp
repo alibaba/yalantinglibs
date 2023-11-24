@@ -11,8 +11,17 @@
 #include "sample.hpp"
 
 inline auto create_rects(size_t object_count) {
-  rect<int32_t> rc{1, 11, 1111, 111111};
+  rect<int32_t> rc{1, 0, 11, 1};
   std::vector<rect<int32_t>> v{};
+  for (std::size_t i = 0; i < object_count; i++) {
+    v.push_back(rc);
+  }
+  return v;
+}
+
+inline auto create_rect2s(size_t object_count) {
+  rect2<int32_t> rc{1, 0, 11, 1};
+  std::vector<rect2<int32_t>> v{};
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(rc);
   }
@@ -74,11 +83,14 @@ struct struct_pack_sample : public base_sample {
     rects_ = create_rects(OBJECT_COUNT);
     persons_ = create_persons(OBJECT_COUNT);
     monsters_ = create_monsters(OBJECT_COUNT);
+    rect2s_ = create_rect2s(OBJECT_COUNT);
   }
 
   void do_serialization() override {
     serialize(SampleType::RECT, rects_[0]);
     serialize(SampleType::RECTS, rects_);
+    serialize(SampleType::VAR_RECT, rect2s_[0]);
+    serialize(SampleType::VAR_RECTS, rect2s_);
     serialize(SampleType::PERSON, persons_[0]);
     serialize(SampleType::PERSONS, persons_);
     serialize(SampleType::MONSTER, monsters_[0]);
@@ -88,6 +100,8 @@ struct struct_pack_sample : public base_sample {
   void do_deserialization() override {
     deserialize(SampleType::RECT, rects_[0]);
     deserialize(SampleType::RECTS, rects_);
+    deserialize(SampleType::VAR_RECT, rect2s_[0]);
+    deserialize(SampleType::VAR_RECTS, rect2s_);
     deserialize(SampleType::PERSON, persons_[0]);
     deserialize(SampleType::PERSONS, persons_);
     deserialize(SampleType::MONSTER, monsters_[0]);
@@ -140,6 +154,7 @@ struct struct_pack_sample : public base_sample {
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }
 
+  std::vector<rect2<int32_t>> rect2s_;
   std::vector<rect<int32_t>> rects_;
   std::vector<person> persons_;
   std::vector<Monster> monsters_;

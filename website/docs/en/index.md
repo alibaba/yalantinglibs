@@ -17,7 +17,7 @@ hero:
 
 features:
   - title: struct_pack
-    details: Only one line code to finish serialization and deserialization, 2-50x faster than protobuf.
+    details: Only one line code to finish serialization and deserialization, 2-20x faster than protobuf.
   - title: coro_rpc
     details: Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene.
   - title: struct_json\struct_xml\struct_yaml
