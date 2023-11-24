@@ -100,9 +100,9 @@ class packer {
     }
     if constexpr (hash_head % 2) {  // has more metainfo
       auto metainfo = info.metainfo();
-      std::size_t sz = info.size();
       write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
       if constexpr (serialize_static_config<serialize_type>::has_compatible) {
+        std::size_t sz = info.size();
         switch (metainfo & 0b11) {
           case 1:
             low_bytes_write_wrapper<2>(writer_, sz);
@@ -148,23 +148,24 @@ class packer {
     }
   }
 
-  template <uint64_t parent_tag, std::size_t sz, typename Arg>
+  template <uint64_t parent_tag, std::size_t sz, typename Arg,
+            typename unsigned_t, typename signed_t>
   static constexpr void STRUCT_PACK_INLINE
   get_fast_varint_width_impl(char (&vec)[sz], unsigned int &i, const Arg &item,
-                             uint64_t &unsigned_max, int64_t &signed_max) {
+                             unsigned_t &unsigned_max, signed_t &signed_max) {
     if constexpr (varint_t<Arg, parent_tag>) {
       if (get_varint_value(item) != 0) {
         vec[i / 8] |= (0b1 << (i % 8));
         if constexpr (std::is_unsigned_v<std::remove_reference_t<
                           decltype(get_varint_value(item))>>) {
           unsigned_max =
-              std::max<uint64_t>(unsigned_max, get_varint_value(item));
+              std::max<unsigned_t>(unsigned_max, get_varint_value(item));
         }
         else {
-          signed_max = std::max<int64_t>(signed_max,
-                                         get_varint_value(item) > 0
-                                             ? get_varint_value(item)
-                                             : -(get_varint_value(item) + 1));
+          signed_max = std::max<signed_t>(signed_max,
+                                          get_varint_value(item) > 0
+                                              ? get_varint_value(item)
+                                              : -(get_varint_value(item) + 1));
         }
       }
       ++i;
@@ -174,8 +175,8 @@ class packer {
   template <uint64_t parent_tag, std::size_t sz, typename... Args>
   static constexpr int STRUCT_PACK_INLINE
   get_fast_varint_width(char (&vec)[sz], const Args &...items) {
-    uint64_t unsigned_max = 0;
-    int64_t signed_max = 0;
+    typename uint_t<get_int_len<parent_tag, Args...>()>::type unsigned_max = 0;
+    typename int_t<get_int_len<parent_tag, Args...>()>::type signed_max = 0;
     unsigned int i = 0;
     (get_fast_varint_width_impl<parent_tag>(vec, i, items, unsigned_max,
                                             signed_max),
@@ -535,35 +536,40 @@ STRUCT_PACK_MAY_INLINE void serialize_to(Writer &writer,
 #endif
   static_assert(sizeof...(args) > 0);
   detail::packer<Writer, detail::get_args_type<Args...>> o(writer, info);
-  switch ((info.metainfo() & 0b11000) >> 3) {
-    case 0:
-      o.template serialize<conf, 1>(args...);
-      break;
+  if constexpr (!check_if_has_container<detail::get_args_type<Args...>>()) {
+    o.template serialize<conf, 1>(args...);
+  }
+  else {
+    switch ((info.metainfo() & 0b11000) >> 3) {
+      case 0:
+        o.template serialize<conf, 1>(args...);
+        break;
 #ifdef STRUCT_PACK_OPTIMIZE
-    case 1:
-      o.template serialize<conf, 2>(args...);
-      break;
-    case 2:
-      o.template serialize<conf, 4>(args...);
-      break;
-    case 3:
-      if constexpr (sizeof(std::size_t) >= 8) {
-        o.template serialize<conf, 8>(args...);
-      }
-      else {
-        unreachable();
-      }
-      break;
+      case 1:
+        o.template serialize<conf, 2>(args...);
+        break;
+      case 2:
+        o.template serialize<conf, 4>(args...);
+        break;
+      case 3:
+        if constexpr (sizeof(std::size_t) >= 8) {
+          o.template serialize<conf, 8>(args...);
+        }
+        else {
+          unreachable();
+        }
+        break;
 #else
-    case 1:
-    case 2:
-    case 3:
-      o.template serialize<conf, 2>(args...);
-      break;
+      case 1:
+      case 2:
+      case 3:
+        o.template serialize<conf, 2>(args...);
+        break;
 #endif
-    default:
-      detail::unreachable();
-      break;
-  };
+      default:
+        detail::unreachable();
+        break;
+    };
+  }
 }
 }  // namespace struct_pack::detail

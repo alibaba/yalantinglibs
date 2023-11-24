@@ -52,6 +52,29 @@ struct int_t<8> {
   using type = int64_t;
 };
 
+template <std::size_t bytes_width>
+struct uint_t;
+
+template <>
+struct uint_t<1> {
+  using type = uint8_t;
+};
+
+template <>
+struct uint_t<2> {
+  using type = uint16_t;
+};
+
+template <>
+struct uint_t<4> {
+  using type = uint32_t;
+};
+
+template <>
+struct uint_t<8> {
+  using type = uint64_t;
+};
+
 template <typename T>
 class varint {
  public:

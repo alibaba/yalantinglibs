@@ -263,10 +263,21 @@ constexpr bool STRUCT_PACK_INLINE has_64bits_varint() {
   }
 }
 
-template <uint64_t parent_tag, typename Arg>
+template <uint64_t parent_tag, typename Arg, typename... Args>
+constexpr std::size_t STRUCT_PACK_INLINE get_int_len() {
+  if (has_64bits_varint<parent_tag, Arg, Args...>()) {
+    return 8;
+  }
+  else {
+    return 4;
+  }
+}
+
+template <uint64_t parent_tag, typename Arg, typename unsigned_t,
+          typename signed_t>
 constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
     const Arg &item, int &non_zero_cnt32, int &non_zero_cnt64,
-    uint64_t &unsigned_max, int64_t &signed_max) {
+    unsigned_t &unsigned_max, signed_t &signed_max) {
   if constexpr (varint_t<Arg, parent_tag>) {
     if (get_varint_value(item)) {
       if constexpr (sizeof(Arg) == 4) {
@@ -280,27 +291,29 @@ constexpr void STRUCT_PACK_INLINE get_fast_varint_width_impl(
       }
       if constexpr (std::is_unsigned_v<std::remove_reference_t<
                         decltype(get_varint_value(item))>>) {
-        unsigned_max = std::max<uint64_t>(unsigned_max, get_varint_value(item));
+        unsigned_max =
+            std::max<unsigned_t>(unsigned_max, get_varint_value(item));
       }
       else {
         signed_max =
-            std::max<int64_t>(signed_max, get_varint_value(item) > 0
-                                              ? get_varint_value(item)
-                                              : -(get_varint_value(item) + 1));
+            std::max<signed_t>(signed_max, get_varint_value(item) > 0
+                                               ? get_varint_value(item)
+                                               : -(get_varint_value(item) + 1));
       }
     }
   }
 }
 
-template <uint64_t parent_tag, typename... Args>
+template <uint64_t parent_tag, typename... Args, typename unsigned_t,
+          typename signed_t>
 constexpr int STRUCT_PACK_INLINE
-get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
+get_fast_varint_width_from_max(unsigned_t unsigned_max, signed_t signed_max) {
   int width_unsigned = 0, width_signed = 0;
   if constexpr (has_unsigned_varint<parent_tag, Args...>()) {
     if SP_LIKELY (unsigned_max <= UINT8_MAX) {
       width_unsigned = 0;
     }
-    else if (unsigned_max <= UINT16_MAX) {
+    else if SP_LIKELY (unsigned_max <= UINT16_MAX) {
       width_unsigned = 1;
     }
     else if (unsigned_max <= UINT32_MAX) {
@@ -314,7 +327,7 @@ get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
     if SP_LIKELY (signed_max <= INT8_MAX) {
       width_signed = 0;
     }
-    else if (signed_max <= INT16_MAX) {
+    else if SP_LIKELY (signed_max <= INT16_MAX) {
       width_signed = 1;
     }
     else if (signed_max <= INT32_MAX) {
@@ -342,8 +355,8 @@ get_fast_varint_width_from_max(uint64_t unsigned_max, int64_t signed_max) {
 
 template <uint64_t parent_tag, typename... Args>
 constexpr int STRUCT_PACK_INLINE get_fast_varint_width(const Args &...items) {
-  uint64_t unsigned_max = 0;
-  int64_t signed_max = 0;
+  typename uint_t<get_int_len<parent_tag, Args...>()>::type unsigned_max = 0;
+  typename int_t<get_int_len<parent_tag, Args...>()>::type signed_max = 0;
   int non_zero_cnt32 = 0, non_zero_cnt64 = 0;
   (get_fast_varint_width_impl<parent_tag>(items, non_zero_cnt32, non_zero_cnt64,
                                           unsigned_max, signed_max),
