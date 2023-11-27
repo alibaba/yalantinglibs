@@ -181,6 +181,35 @@ void test_coro_http_server() {
         });
       });
 
+  server.set_http_handler<cinatra::GET>(
+      "/ws_source",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::websocket);
+        std::string out_str;
+        websocket_result result{};
+        while (!result.eof) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            break;
+          }
+
+          out_str.append(result.data);
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            continue;
+          }
+        }
+
+        std::cout << out_str << "\n";
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 

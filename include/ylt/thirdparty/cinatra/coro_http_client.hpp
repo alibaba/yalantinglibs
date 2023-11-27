@@ -66,6 +66,17 @@ template <class T>
 constexpr bool is_stream_v = is_stream<T>::value;
 
 template <class, class = void>
+struct is_span : std::false_type {};
+
+template <class T>
+struct is_span<T, std::void_t<decltype(std::declval<T>().data(),
+                                       std::declval<T>().size())>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool is_span_v = is_span<T>::value;
+
+template <class, class = void>
 struct is_smart_ptr : std::false_type {};
 
 template <class T>
@@ -105,7 +116,7 @@ struct multipart_t {
 };
 
 struct read_result {
-  std::string_view buf;
+  std::span<char> buf;
   bool eof;
   std::error_code err;
 };
@@ -330,25 +341,69 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return !data.net_err;
   }
 
-  async_simple::coro::Lazy<resp_data> async_send_ws(std::string msg,
+  async_simple::coro::Lazy<resp_data> async_send_ws(const char *data,
+                                                    bool need_mask = true,
+                                                    opcode op = opcode::text) {
+    std::string str(data);
+    co_return co_await async_send_ws(std::span<char>(str), need_mask, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> async_send_ws(std::string data,
+                                                    bool need_mask = true,
+                                                    opcode op = opcode::text) {
+    co_return co_await async_send_ws(std::span<char>(data), need_mask, op);
+  }
+
+  template <typename Source>
+  async_simple::coro::Lazy<resp_data> async_send_ws(Source source,
                                                     bool need_mask = true,
                                                     opcode op = opcode::text) {
     resp_data data{};
 
     websocket ws{};
+    std::string close_str;
     if (op == opcode::close) {
-      msg = ws.format_close_payload(close_code::normal, msg.data(), msg.size());
+      if constexpr (is_span_v<Source>) {
+        close_str = ws.format_close_payload(close_code::normal, source.data(),
+                                            source.size());
+        source = {close_str.data(), close_str.size()};
+      }
     }
 
-    std::string encode_header = ws.encode_frame(msg, op, need_mask);
-    std::vector<asio::const_buffer> buffers{
-        asio::buffer(encode_header.data(), encode_header.size()),
-        asio::buffer(msg.data(), msg.size())};
+    if constexpr (is_span_v<Source>) {
+      std::string encode_header = ws.encode_frame(source, op, need_mask);
+      std::vector<asio::const_buffer> buffers{
+          asio::buffer(encode_header.data(), encode_header.size()),
+          asio::buffer(source.data(), source.size())};
 
-    auto [ec, _] = co_await async_write(buffers);
-    if (ec) {
-      data.net_err = ec;
-      data.status = 404;
+      auto [ec, _] = co_await async_write(buffers);
+      if (ec) {
+        data.net_err = ec;
+        data.status = 404;
+      }
+    }
+    else {
+      while (true) {
+        auto result = co_await source();
+
+        std::span<char> msg(result.buf.data(), result.buf.size());
+        std::string encode_header =
+            ws.encode_frame(msg, op, need_mask, result.eof);
+        std::vector<asio::const_buffer> buffers{
+            asio::buffer(encode_header.data(), encode_header.size()),
+            asio::buffer(msg.data(), msg.size())};
+
+        auto [ec, _] = co_await async_write(buffers);
+        if (ec) {
+          data.net_err = ec;
+          data.status = 404;
+          break;
+        }
+
+        if (result.eof) {
+          break;
+        }
+      }
     }
 
     co_return data;
@@ -356,7 +411,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> async_send_ws_close(
       std::string msg = "") {
-    return async_send_ws(std::move(msg), false, opcode::close);
+    co_return co_await async_send_ws(std::move(msg), false, opcode::close);
   }
 
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
@@ -1654,7 +1709,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
-        payload_len -= 4;
+        payload_len -= 2;
         data_ptr += sizeof(uint16_t);
       }
 

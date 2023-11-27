@@ -211,6 +211,6 @@ struct frame_header {
 inline constexpr const size_t MAX_CLOSE_PAYLOAD = 123;
 
 inline constexpr const std::string_view WEBSOCKET = "websocket"sv;
-inline constexpr const std::string_view UPGRADE = "upgrade"sv;
+inline constexpr const std::string_view UPGRADE = "Upgrade"sv;
 inline constexpr const char ws_guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 }  // namespace cinatra
