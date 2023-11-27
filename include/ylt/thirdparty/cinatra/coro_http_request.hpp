@@ -2,6 +2,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
+#include "ws_define.h"
 
 namespace cinatra {
 class coro_http_connection;
@@ -81,14 +82,42 @@ class coro_http_request {
       }
     }
 
+    if (is_websocket_) {
+      return content_type::websocket;
+    }
+
     return content_type::unknown;
   }
 
   coro_http_connection* get_conn() { return conn_; }
 
+  bool is_upgrade() {
+    auto h = get_header_value("Connection");
+    if (h.empty())
+      return false;
+
+    auto u = get_header_value("Upgrade");
+    if (u.empty())
+      return false;
+
+    if (h != UPGRADE)
+      return false;
+
+    if (u != WEBSOCKET)
+      return false;
+
+    auto sec_ws_key = get_header_value("sec-websocket-key");
+    if (sec_ws_key.empty() || sec_ws_key.size() != 24)
+      return false;
+
+    is_websocket_ = true;
+    return true;
+  }
+
  private:
   http_parser& parser_;
   std::string_view body_;
   coro_http_connection* conn_;
+  bool is_websocket_;
 };
 }  // namespace cinatra

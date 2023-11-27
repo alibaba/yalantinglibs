@@ -15,7 +15,9 @@
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
+#include "sha1.hpp"
 #include "string_resize.hpp"
+#include "websocket.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
@@ -23,6 +25,13 @@ struct chunked_result {
   std::error_code ec;
   bool eof = false;
   std::string_view data;
+};
+
+struct websocket_result {
+  std::error_code ec;
+  ws_frame_type type;
+  std::string_view data;
+  bool eof;
 };
 
 class coro_http_connection
@@ -96,7 +105,9 @@ class coro_http_connection
 #endif
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
       if (ec) {
-        CINATRA_LOG_ERROR << "read http header error: " << ec.message();
+        if (ec != asio::error::eof) {
+          CINATRA_LOG_ERROR << "read http header error: " << ec.message();
+        }
         close();
         break;
       }
@@ -116,7 +127,21 @@ class coro_http_connection
 
       if (!is_chunked) {
         size_t body_len = parser_.body_len();
-        if (body_len <= head_buf_.size()) {
+        if (body_len == 0) {
+          if (parser_.method() == "GET"sv) {
+            if (request_.is_upgrade()) {
+              // websocket
+              build_ws_handshake_head();
+              bool ok = co_await reply(true);  // response ws handshake
+              if (!ok) {
+                close();
+                break;
+              }
+              response_.set_delay(true);
+            }
+          }
+        }
+        else if (body_len <= head_buf_.size()) {
           if (body_len > 0) {
             detail::resize(body_, body_len);
             auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
@@ -273,6 +298,123 @@ class coro_http_connection
     co_return result;
   }
 
+  async_simple::coro::Lazy<std::error_code> write_websocket(
+      std::string_view msg, opcode op = opcode::text) {
+    auto header = ws_.format_header(msg.length(), op);
+    std::vector<asio::const_buffer> buffers;
+    buffers.push_back(asio::buffer(header));
+    buffers.push_back(asio::buffer(msg));
+
+    auto [ec, sz] = co_await async_write(buffers);
+    co_return ec;
+  }
+
+  async_simple::coro::Lazy<websocket_result> read_websocket() {
+    auto [ec, ws_hd_size] = co_await async_read(head_buf_, SHORT_HEADER);
+    websocket_result result{ec};
+    if (ec) {
+      close();
+      co_return result;
+    }
+
+    while (true) {
+      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
+      if (status == ws_header_status::complete) {
+        ws_.reset_len_bytes();
+        head_buf_.consume(head_buf_.size());
+        std::span<char> payload{};
+        auto payload_length = ws_.payload_length();
+        if (payload_length > 0) {
+          detail::resize(body_, payload_length);
+          auto [ec, read_sz] =
+              co_await async_read(asio::buffer(body_), payload_length);
+          if (ec) {
+            close();
+            result.ec = ec;
+            break;
+          }
+          payload = body_;
+        }
+
+        if (max_part_size_ != 0 && payload_length > max_part_size_) {
+          std::string close_reason = "message_too_big";
+          std::string close_msg = ws_.format_close_payload(
+              close_code::too_big, close_reason.data(), close_reason.size());
+          co_await write_websocket(close_msg, opcode::close);
+          close();
+          break;
+        }
+
+        ws_frame_type type = ws_.parse_payload(payload);
+
+        switch (type) {
+          case cinatra::ws_frame_type::WS_ERROR_FRAME:
+            result.ec = std::make_error_code(std::errc::protocol_error);
+            break;
+          case cinatra::ws_frame_type::WS_OPENING_FRAME:
+            continue;
+          case ws_frame_type::WS_INCOMPLETE_TEXT_FRAME:
+          case ws_frame_type::WS_INCOMPLETE_BINARY_FRAME:
+            result.eof = false;
+            result.data = {payload.data(), payload.size()};
+            break;
+          case cinatra::ws_frame_type::WS_TEXT_FRAME:
+          case cinatra::ws_frame_type::WS_BINARY_FRAME: {
+            result.eof = true;
+            result.data = {payload.data(), payload.size()};
+          } break;
+          case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
+            close_frame close_frame =
+                ws_.parse_close_payload(payload.data(), payload.size());
+            result.data = {close_frame.message, close_frame.length};
+
+            std::string close_msg = ws_.format_close_payload(
+                close_code::normal, close_frame.message, close_frame.length);
+            auto header = ws_.format_header(close_msg.length(), opcode::close);
+
+            co_await write_websocket(close_msg, opcode::close);
+            close();
+          } break;
+          case cinatra::ws_frame_type::WS_PING_FRAME: {
+            auto ec = co_await write_websocket({payload.data(), payload.size()},
+                                               opcode::pong);
+            if (ec) {
+              close();
+              result.ec = ec;
+            }
+          } break;
+          case cinatra::ws_frame_type::WS_PONG_FRAME: {
+            auto ec = co_await write_websocket("ping", opcode::ping);
+            close();
+            result.ec = ec;
+          } break;
+          default:
+            break;
+        }
+
+        result.type = type;
+        co_return result;
+      }
+      else if (status == ws_header_status::incomplete) {
+        auto [ec, sz] = co_await async_read(head_buf_, ws_.left_header_len());
+        if (ec) {
+          close();
+          result.ec = ec;
+          break;
+        }
+        continue;
+      }
+      else {
+        close();
+        result.ec = std::make_error_code(std::errc::protocol_error);
+        co_return result;
+      }
+    }
+
+    co_return result;
+  }
+
   auto &tcp_socket() { return socket_; }
 
   void set_quit_callback(std::function<void(const uint64_t &conn_id)> callback,
@@ -281,9 +423,12 @@ class coro_http_connection
     conn_id_ = conn_id;
   }
 
+  void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
@@ -299,6 +444,7 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_write(*ssl_stream_, buffer);
@@ -314,6 +460,7 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read_until(*ssl_stream_, buffer, delim);
@@ -326,23 +473,36 @@ class coro_http_connection
 #endif
   }
 
+  void set_last_time() {
+    if (checkout_timeout_) {
+      last_rwtime_ = std::chrono::system_clock::now();
+    }
+  }
+
+  std::chrono::system_clock::time_point get_last_rwtime() {
+    return last_rwtime_;
+  }
+
   auto &get_executor() { return *executor_; }
 
-  void close() {
+  void close(bool need_cb = true) {
     if (has_closed_) {
       return;
     }
 
-    asio::dispatch(socket_.get_executor(), [this, self = shared_from_this()] {
-      std::error_code ec;
-      socket_.shutdown(asio::socket_base::shutdown_both, ec);
-      socket_.close(ec);
-      if (quit_cb_) {
-        quit_cb_(conn_id_);
-      }
-      has_closed_ = true;
-    });
+    asio::dispatch(socket_.get_executor(),
+                   [this, need_cb, self = shared_from_this()] {
+                     std::error_code ec;
+                     socket_.shutdown(asio::socket_base::shutdown_both, ec);
+                     socket_.close(ec);
+                     if (need_cb && quit_cb_) {
+                       quit_cb_(conn_id_);
+                     }
+                     has_closed_ = true;
+                   });
   }
+
+  void set_check_timeout(bool r) { checkout_timeout_ = r; }
 
  private:
   bool check_keep_alive() {
@@ -353,6 +513,31 @@ class coro_http_connection
     }
 
     return keep_alive;
+  }
+
+  void build_ws_handshake_head() {
+    uint8_t sha1buf[20], key_src[60];
+    char accept_key[29];
+
+    std::memcpy(key_src, request_.get_header_value("sec-websocket-key").data(),
+                24);
+    std::memcpy(key_src + 24, ws_guid, 36);
+    sha1_context ctx;
+    init(ctx);
+    update(ctx, key_src, sizeof(key_src));
+    finish(ctx, sha1buf);
+
+    code_utils::base64_encode(accept_key, sha1buf, sizeof(sha1buf), 0);
+
+    response_.set_status(status_type::switching_protocols);
+
+    response_.add_header("Upgrade", "WebSocket");
+    response_.add_header("Connection", "Upgrade");
+    response_.add_header("Sec-WebSocket-Accept", std::string(accept_key, 28));
+    auto protocal_str = request_.get_header_value("sec-websocket-protocol");
+    if (!protocal_str.empty()) {
+      response_.add_header("Sec-WebSocket-Protocol", std::string(protocal_str));
+    }
   }
 
  private:
@@ -369,7 +554,11 @@ class coro_http_connection
   std::atomic<bool> has_closed_{false};
   uint64_t conn_id_{0};
   std::function<void(const uint64_t &conn_id)> quit_cb_ = nullptr;
+  bool checkout_timeout_ = false;
+  std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
+  uint64_t max_part_size_ = 8 * 1024 * 1024;
 
+  websocket ws_;
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;

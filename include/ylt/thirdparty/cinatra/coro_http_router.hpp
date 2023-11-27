@@ -10,9 +10,9 @@
 
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/coro_http_request.hpp"
-#include "cinatra/function_traits.hpp"
 #include "cinatra/response_cv.hpp"
 #include "coro_http_response.hpp"
+#include "ylt/util/type_traits.h"
 
 namespace cinatra {
 template <template <typename...> class U, typename T>
@@ -42,7 +42,7 @@ class coro_http_router {
 
     // hold keys to make sure map_handles_ key is
     // std::string_view, avoid memcpy when route
-    using return_type = typename timax::function_traits<Func>::result_type;
+    using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
       auto [it, ok] = coro_keys_.emplace(std::move(whole_str));
       if (!ok) {
