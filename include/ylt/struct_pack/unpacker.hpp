@@ -995,15 +995,15 @@ class unpacker {
               }
               else if constexpr (is_little_endian_copyable<sizeof(
                                      value_type)>) {
-                item.resize(size64);
-                if SP_UNLIKELY (!read_bytes_array(
-                                    reader_, (char *)item.data(),
-                                    size64 * sizeof(value_type))) {
+                resize(item, size64);
+                // item.resize(size64);
+                if SP_UNLIKELY (!read_bytes_array(reader_, (char *)item.data(),
+                                                  mem_sz)) {
                   return struct_pack::errc::no_buffer_space;
                 }
               }
               else {
-                item.resize(size64);
+                resize(item, size64);
                 for (auto &i : item) {
                   code = deserialize_one<size_type, version, NotSkip>(i);
                   if SP_UNLIKELY (code != struct_pack::errc{}) {

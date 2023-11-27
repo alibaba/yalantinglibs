@@ -21,7 +21,14 @@
 #include <vector>
 
 #include "marco.h"
+
 namespace struct_pack::detail {
+
+#if __cpp_concepts >= 201907L
+constexpr bool is_string_reserve_shrink = requires { std::string{}.reserve(); };
+#else
+constexpr bool is_string_reserve_shrink = true;
+#endif
 
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
@@ -134,18 +141,27 @@ template class string_thief<decltype(&std::string::_Mypair),
 
 void string_set_length_hacker(std::string &, std::size_t);
 
+#ifndef __clang__
+#define __has_feature(X) false
+#endif
+
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
   raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)
-  if (sz > str.capacity()) {
-    str.reserve(sz);
+  if constexpr (is_string_reserve_shrink) {
+    if (sz > raw_str.capacity()) {
+      str.reserve(sz * sizeof(ch));
+    }
+  }
+  else {
+    str.reserve(sz * sizeof(ch));
   }
   string_set_length_hacker(str, sz);
-  str[sz] = '\0';
+  for (auto i = sz; i < sz + sizeof(ch); ++i) str[i] = '\0';
 #else
   raw_str.resize(sz);
 #endif
@@ -195,18 +211,22 @@ template class vector_thief<decltype(&std::vector<char>::_Mypair),
 
 template <typename ch>
 inline void resize(std::vector<ch> &raw_vec, std::size_t sz) {
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
   raw_vec.resize(sz);
 #elif defined(__GLIBCXX__) ||                                     \
     (defined(_LIBCPP_VERSION) && defined(_LIBCPP_HAS_NO_ASAN)) || \
     defined(_MSVC_STL_VERSION)
   std::vector<char> &vec = *reinterpret_cast<std::vector<char> *>(&raw_vec);
-  vec.reserve(sz);
-  vector_set_length_hacker(vec, sz);
+  vec.reserve(sz * sizeof(ch));
+  vector_set_length_hacker(vec, sz * sizeof(ch));
 #else
   raw_vec.resize(sz);
 #endif
 }
+#endif
+
+#ifndef __clang__
+#undef __has_feature
 #endif
 
 template <typename T>
