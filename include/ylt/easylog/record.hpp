@@ -182,8 +182,7 @@ class record_t {
     }
     else if constexpr (std::is_same_v<std::chrono::system_clock::time_point,
                                       U>) {
-      ss_.append(
-          ylt::get_local_time_str(std::chrono::system_clock::to_time_t(data)));
+      ss_.append(ylt::time_util::get_local_time_str(data));
     }
     else {
       std::stringstream ss;
