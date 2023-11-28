@@ -551,6 +551,10 @@ inline std::string_view get_gmt_time_str(
   return str;
 }
 
+inline std::string_view get_gmt_time_str(std::time_t t) {
+  return get_gmt_time_str(std::chrono::system_clock::from_time_t(t));
+}
+
 inline std::string_view get_gmt_time_str() {
   return get_gmt_time_str(std::chrono::system_clock::now());
 }
