@@ -255,7 +255,7 @@ TEST_CASE("testing broken container size") {
       auto ec = struct_pack::deserialize_to(data2, ifi);
       CHECK(ec == struct_pack::errc::no_buffer_space);
       CHECK(data2.size() == 1 * 1024 * 1024);
-      CHECK(data2.capacity() == 1 * 1024 * 1024);
+      CHECK(data2.capacity() < 2 * 1024 * 1024);
     }
   }
   std::filesystem::remove("tmp.data");

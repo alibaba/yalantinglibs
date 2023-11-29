@@ -1066,7 +1066,7 @@ class unpacker {
             else if constexpr (NotSkip) {
               item.clear();
               if constexpr (can_reserve<type>) {
-                item.reserve(std::min(size, block_lim_cnt));
+                item.reserve((std::min)(size, block_lim_cnt));
               }
               for (size_t i = 0; i < size; ++i) {
                 item.emplace_back();
