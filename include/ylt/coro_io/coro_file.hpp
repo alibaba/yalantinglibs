@@ -18,6 +18,7 @@
 #include <async_simple/Traits.h>
 #include <async_simple/coro/FutureAwaiter.h>
 
+#include <cassert>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -91,6 +92,16 @@ enum flags {
 #endif  // defined(ASIO_WINDOWS)
 };
 
+enum class read_type {
+  fread,
+#if defined(__GNUC__)
+  pread,
+#if defined(YLT_ENABLE_FILE_IO_URING)
+  uring,
+#endif
+#endif
+};
+
 class coro_file {
  public:
 #if defined(YLT_ENABLE_FILE_IO_URING)
@@ -110,27 +121,33 @@ class coro_file {
       : executor_wrapper_(executor) {}
 #endif
 
-  bool is_open() { return stream_file_ != nullptr; }
+  bool is_open() { return stream_file_ != nullptr || fd_file_ != nullptr; }
 
   void flush() {
 #if defined(YLT_ENABLE_FILE_IO_URING)
 
 #else
-    if (stream_file_) {
-      auto fptr = stream_file_.get();
-#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
-      int fd = *stream_file_;
-      fsync(fd);
-#else
-      fflush(fptr);
+    if (fd_file_) {
+#if defined(__GNUC__)
+      fsync(*fd_file_);
 #endif
+    }
+    else if (stream_file_) {
+      fflush(stream_file_.get());
     }
 #endif
   }
 
   bool eof() { return eof_; }
 
-  void close() { stream_file_.reset(); }
+  void close() {
+    if (stream_file_) {
+      stream_file_.reset();
+    }
+    else if (fd_file_) {
+      fd_file_.reset();
+    }
+  }
 
   static size_t file_size(std::string_view filepath) {
     std::error_code ec;
@@ -140,7 +157,9 @@ class coro_file {
 
 #if defined(YLT_ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
-                                            int open_mode = flags::read_write) {
+                                            int open_mode = flags::read_write,
+                                            read_type type = read_type::uring) {
+    assert(type == read_type::uring);
     try {
       stream_file_ = std::make_unique<asio::stream_file>(
           executor_wrapper_.get_asio_executor());
@@ -259,30 +278,11 @@ class coro_file {
     }
   }
 
-#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
-  async_simple::coro::Lazy<bool> async_open(std::string filepath,
-                                            int open_mode = flags::read_write) {
-    if (stream_file_) {
-      co_return true;
-    }
-
-    int fd = open(filepath.data(), open_mode);
-    if (fd < 0) {
-      co_return false;
-    }
-
-    stream_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
-      ::close(*ptr);
-      delete ptr;
-    });
-
-    co_return true;
-  }
-
+#if defined(__GNUC__)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
       auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
     std::function<int()> func = [=, this] {
-      int fd = *stream_file_;
+      int fd = *fd_file_;
       return io_func(fd, buf, size, offset);
     };
 
@@ -317,13 +317,36 @@ class coro_file {
     auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
     co_return result.first;
   }
-#else
+#endif
+
   bool seek(long offset, int whence) {
+    assert(fd_file_ == nullptr);
+
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
 
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
-                                            int open_mode = flags::read_write) {
+                                            int open_mode = flags::read_write,
+                                            read_type type = read_type::fread) {
+#if defined(__GNUC__)
+    if (type == read_type::pread) {
+      if (fd_file_) {
+        co_return true;
+      }
+
+      int fd = open(filepath.data(), open_mode);
+      if (fd < 0) {
+        co_return false;
+      }
+
+      fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+        ::close(*ptr);
+        delete ptr;
+      });
+      co_return true;
+    }
+#endif
+
     if (stream_file_ != nullptr) {
       co_return true;
     }
@@ -381,19 +404,13 @@ class coro_file {
   }
 #endif
 
-#endif
-
  private:
 #if defined(YLT_ENABLE_FILE_IO_URING)
   std::unique_ptr<asio::stream_file> stream_file_;
   std::atomic<size_t> seek_offset_ = 0;
 #else
-
-#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
-  std::shared_ptr<int> stream_file_;
-#else
+  std::shared_ptr<int> fd_file_;
   std::shared_ptr<FILE> stream_file_;
-#endif
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
 

@@ -69,14 +69,14 @@ void create_files(const std::vector<std::string>& files, size_t file_size) {
   }
 }
 
-#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+#if defined(__GNUC__)
 TEST_CASE("coro_file pread and pwrite basic test") {
   std::string filename = "test.tmp";
   create_files({filename}, 190);
   {
     coro_io::coro_file file{};
-    async_simple::coro::syncAwait(
-        file.async_open(filename.data(), coro_io::flags::read_only));
+    async_simple::coro::syncAwait(file.async_open(
+        filename.data(), coro_io::flags::read_only, coro_io::read_type::pread));
     CHECK(file.is_open());
 
     char buf[100];
@@ -100,8 +100,9 @@ TEST_CASE("coro_file pread and pwrite basic test") {
 
   {
     coro_io::coro_file file{};
-    async_simple::coro::syncAwait(
-        file.async_open(filename.data(), coro_io::flags::read_write));
+    async_simple::coro::syncAwait(file.async_open(filename.data(),
+                                                  coro_io::flags::read_write,
+                                                  coro_io::read_type::pread));
     CHECK(file.is_open());
 
     std::string buf = "cccccccccc";
@@ -124,7 +125,7 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
   }
 }
-#else
+#endif
 async_simple::coro::Lazy<void> test_basic_read(std::string filename) {
   coro_io::coro_file file{};
   co_await file.async_open(filename.data(), coro_io::flags::read_only);
@@ -815,4 +816,3 @@ TEST_CASE("large_file_write_with_pool_test") {
   file.close();
   fs::remove(fs::path(filename));
 }
-#endif
