@@ -1,7 +1,6 @@
+#include <map>
 #include <memory>
 #include <stdexcept>
-#include <unordered_map>
-#include <vector>
 
 #include "struct_pack_sample.hpp"
 
