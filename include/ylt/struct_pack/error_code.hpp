@@ -23,8 +23,7 @@ enum class errc {
   no_buffer_space,
   invalid_buffer,
   hash_conflict,
-  seek_failed,
-  too_width_size
+  invalid_width_of_container_length,
 };
 
 namespace detail {
