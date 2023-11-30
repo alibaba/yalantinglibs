@@ -409,11 +409,10 @@ class coro_file {
   std::unique_ptr<asio::stream_file> stream_file_;
   std::atomic<size_t> seek_offset_ = 0;
 #else
-  std::shared_ptr<int> fd_file_;
   std::shared_ptr<FILE> stream_file_;
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
-
+  std::shared_ptr<int> fd_file_;
   std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io
