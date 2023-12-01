@@ -69,7 +69,7 @@ void create_files(const std::vector<std::string>& files, size_t file_size) {
   }
 }
 
-#ifndef YLT_ENABLE_FILE_IO_URINGs
+#if not defined(YLT_ENABLE_FILE_IO_URING)
 #if defined(__GNUC__)
 TEST_CASE("coro_file pread and pwrite basic test") {
   std::string filename = "test.tmp";
