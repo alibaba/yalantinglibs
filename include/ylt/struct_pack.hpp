@@ -309,26 +309,16 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
   auto old_pos = reader.tellg();
   auto ret = in.deserialize_with_len(consume_len, t, args...);
   std::size_t delta = reader.tellg() - old_pos;
-  if SP_LIKELY (ret == errc{}) {
-    if SP_LIKELY (consume_len > 0) {
-      if SP_UNLIKELY (delta > consume_len) {
-        ret = struct_pack::errc::invalid_buffer;
-        if constexpr (struct_pack::seek_reader_t<Reader>)
-          if SP_UNLIKELY (!reader.seekg(old_pos)) {
-            return struct_pack::errc::seek_failed;
-          }
-      }
-      else {
-        reader.ignore(consume_len - delta);
-      }
+  if SP_LIKELY (consume_len > 0) {
+    if SP_UNLIKELY (delta > consume_len) {
+      // TODO test this branch
+      ret = struct_pack::errc::invalid_buffer;
+    }
+    else {
+      reader.ignore(consume_len - delta);
     }
   }
-  else {
-    if constexpr (struct_pack::seek_reader_t<Reader>)
-      if SP_UNLIKELY (!reader.seekg(old_pos)) {
-        return struct_pack::errc::seek_failed;
-      }
-  }
+
   return ret;
 }
 #if __cpp_concepts >= 201907L
