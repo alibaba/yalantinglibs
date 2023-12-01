@@ -306,14 +306,14 @@ class coro_file {
     co_return std::make_pair(ec, op_size);
   }
 
-  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
       size_t offset, char* data, size_t size) {
     co_return co_await async_prw(pread, true, offset, data, size);
   }
 
-  async_simple::coro::Lazy<std::error_code> async_write(size_t offset,
-                                                        const char* data,
-                                                        size_t size) {
+  async_simple::coro::Lazy<std::error_code> async_pwrite(size_t offset,
+                                                         const char* data,
+                                                         size_t size) {
     auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
     co_return result.first;
   }

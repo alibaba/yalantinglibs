@@ -80,20 +80,20 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(file.is_open());
 
     char buf[100];
-    auto pair = async_simple::coro::syncAwait(file.async_read(0, buf, 10));
+    auto pair = async_simple::coro::syncAwait(file.async_pread(0, buf, 10));
     CHECK(std::string_view(buf, pair.second) == "AAAAAAAAAA");
     CHECK(!file.eof());
 
-    pair = async_simple::coro::syncAwait(file.async_read(10, buf, 100));
+    pair = async_simple::coro::syncAwait(file.async_pread(10, buf, 100));
     CHECK(!file.eof());
     CHECK(pair.second == 100);
 
-    pair = async_simple::coro::syncAwait(file.async_read(110, buf, 100));
+    pair = async_simple::coro::syncAwait(file.async_pread(110, buf, 100));
     CHECK(!file.eof());
     CHECK(pair.second == 80);
 
     // only read size equal 0 is eof.
-    pair = async_simple::coro::syncAwait(file.async_read(200, buf, 100));
+    pair = async_simple::coro::syncAwait(file.async_pread(200, buf, 100));
     CHECK(file.eof());
     CHECK(pair.second == 0);
   }
@@ -107,20 +107,20 @@ TEST_CASE("coro_file pread and pwrite basic test") {
 
     std::string buf = "cccccccccc";
     auto ec = async_simple::coro::syncAwait(
-        file.async_write(0, buf.data(), buf.size()));
+        file.async_pwrite(0, buf.data(), buf.size()));
     CHECK(!ec);
 
     std::string buf1 = "dddddddddd";
     ec = async_simple::coro::syncAwait(
-        file.async_write(10, buf1.data(), buf1.size()));
+        file.async_pwrite(10, buf1.data(), buf1.size()));
     CHECK(!ec);
 
     char buf2[100];
-    auto pair = async_simple::coro::syncAwait(file.async_read(0, buf2, 10));
+    auto pair = async_simple::coro::syncAwait(file.async_pread(0, buf2, 10));
     CHECK(!file.eof());
     CHECK(std::string_view(buf2, pair.second) == "cccccccccc");
 
-    pair = async_simple::coro::syncAwait(file.async_read(10, buf2, 10));
+    pair = async_simple::coro::syncAwait(file.async_pread(10, buf2, 10));
     CHECK(!file.eof());
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
   }
