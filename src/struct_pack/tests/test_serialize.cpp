@@ -28,6 +28,8 @@
 
 #include "ylt/struct_pack/compatible.hpp"
 #include "ylt/struct_pack/endian_wrapper.hpp"
+#include "ylt/struct_pack/error_code.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 
 #define private public
 #include <ylt/struct_pack.hpp>
@@ -1292,7 +1294,8 @@ TEST_CASE("test width too big") {
                                            std::string>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
-      CHECK(result.error() == struct_pack::errc::too_width_size);
+      CHECK(result.error() ==
+            struct_pack::errc::invalid_width_of_container_length);
     }
     else {
       CHECK(result.error() == struct_pack::errc::no_buffer_space);
@@ -1306,7 +1309,8 @@ TEST_CASE("test width too big") {
                                            std::string>(buffer, len);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
-      CHECK(result.error() == struct_pack::errc::too_width_size);
+      CHECK(result.error() ==
+            struct_pack::errc::invalid_width_of_container_length);
     }
     else {
       CHECK(result.error() == struct_pack::errc::no_buffer_space);
@@ -1320,7 +1324,8 @@ TEST_CASE("test width too big") {
                                struct_pack::DISABLE_ALL_META_INFO>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
-      CHECK(result.error() == struct_pack::errc::too_width_size);
+      CHECK(result.error() ==
+            struct_pack::errc::invalid_width_of_container_length);
     }
     else {
       CHECK(result.error() == struct_pack::errc::no_buffer_space);
@@ -1340,10 +1345,52 @@ TEST_CASE("test width too big") {
         std::pair<std::string, struct_pack::compatible<int>>>(buffer);
     REQUIRE(result.has_value() == false);
     if constexpr (sizeof(std::size_t) < 8) {
-      CHECK(result.error() == struct_pack::errc::too_width_size);
+      CHECK(result.error() ==
+            struct_pack::errc::invalid_width_of_container_length);
     }
     else {
       CHECK(result.error() == struct_pack::errc::no_buffer_space);
     }
   }
+}
+
+TEST_CASE("test broken length") {
+  auto buffer =
+      struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO, std::string>(
+          std::string{"ABCDEFGHIJKL"});
+  if (sizeof(std::size_t) == 8) {
+    buffer[0] = 0b11000;
+    std::size_t i = UINT64_MAX;
+    memcpy(buffer.data() + 1, &i, sizeof(i));
+  }
+  else {
+    buffer[0] = 0b10000;
+    std::size_t i = UINT32_MAX;
+    memcpy(buffer.data() + 1, &i, sizeof(i));
+  }
+  auto result =
+      struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO, std::string>(
+          buffer);
+  REQUIRE(result.has_value() == false);
+  CHECK(result.error() == struct_pack::errc::no_buffer_space);
+}
+
+TEST_CASE("test broken length with overflow") {
+  auto buffer =
+      struct_pack::serialize<struct_pack::DISABLE_ALL_META_INFO, std::string>(
+          std::u16string{u"ABCDEFGHIJKL"});
+  if (sizeof(std::size_t) == 8) {
+    buffer[0] = 0b11000;
+    std::size_t i = UINT64_MAX;
+    memcpy(buffer.data() + 1, &i, sizeof(i));
+  }
+  else {
+    buffer[0] = 0b10000;
+    std::size_t i = UINT32_MAX;
+    memcpy(buffer.data() + 1, &i, sizeof(i));
+  }
+  auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,
+                                         std::u16string>(buffer);
+  REQUIRE(result.has_value() == false);
+  CHECK(result.error() == struct_pack::errc::no_buffer_space);
 }

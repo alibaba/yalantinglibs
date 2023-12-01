@@ -106,11 +106,6 @@ concept view_reader_t = reader_t<T> && requires(T t) {
   { t.read_view(std::size_t{}) } -> std::convertible_to<const char *>;
 };
 
-template <typename T>
-concept seek_reader_t = reader_t<T> && requires(T t) {
-  t.seekg(std::size_t{});
-};
-
 #else
 
 template <typename T, typename = void>
@@ -147,17 +142,59 @@ struct view_reader_t_impl<
 
 template <typename T>
 constexpr bool view_reader_t = reader_t<T> &&view_reader_t_impl<T>::value;
+#endif
 
-template <typename T, typename = void>
-struct seek_reader_t_impl : std::false_type {};
+#if __cpp_concepts >= 201907L
 
 template <typename T>
-struct seek_reader_t_impl<
-    T, std::void_t<decltype(std::declval<T>().seekg(std::size_t{}))>>
+concept check_reader_t = reader_t<T> && requires(T t) {
+  t.check(std::size_t{});
+};
+
+template <typename T>
+concept can_reserve = requires(T t) {
+  t.reserve(std::size_t{});
+};
+
+template <typename T>
+concept can_shrink_to_fit = requires(T t) {
+  t.shrink_to_fit();
+};
+
+#else
+
+template <typename T, typename = void>
+struct check_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct check_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().check(std::size_t{}))>>
     : std::true_type {};
 
 template <typename T>
-constexpr bool seek_reader_t = reader_t<T> &&seek_reader_t_impl<T>::value;
+constexpr bool check_reader_t = reader_t<T> &&check_reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct can_reserve_impl : std::false_type {};
+
+template <typename T>
+struct can_reserve_impl<
+    T, std::void_t<decltype(std::declval<T>().reserve(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool can_reserve = can_reserve_impl<T>::value;
+
+template <typename T, typename = void>
+struct can_shrink_to_fit_impl : std::false_type {};
+
+template <typename T>
+struct can_shrink_to_fit_impl<
+    T, std::void_t<decltype(std::declval<T>().shrink_to_fit())>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool can_shrink_to_fit = can_shrink_to_fit_impl<T>::value;
 
 #endif
 
