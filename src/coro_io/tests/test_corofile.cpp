@@ -69,7 +69,8 @@ void create_files(const std::vector<std::string>& files, size_t file_size) {
   }
 }
 
-#if defined(__GNUC__) and not defined(YLT_ENABLE_FILE_IO_URINGs)
+#ifndef YLT_ENABLE_FILE_IO_URINGs
+#if defined(__GNUC__)
 TEST_CASE("coro_file pread and pwrite basic test") {
   std::string filename = "test.tmp";
   create_files({filename}, 190);
@@ -125,6 +126,7 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
   }
 }
+#endif
 #endif
 async_simple::coro::Lazy<void> test_basic_read(std::string filename) {
   coro_io::coro_file file{};
