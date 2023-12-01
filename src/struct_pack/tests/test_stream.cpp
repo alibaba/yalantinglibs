@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -200,4 +201,62 @@ TEST_CASE("test compatible obj") {
       CHECK(*res == std::nullopt);
     }
   }
+}
+
+TEST_CASE("testing file size no enough") {
+  std::vector<std::string> data = {"Hello", "Hi", "Hey", "Hoo"};
+  {
+    std::ofstream of("tmp.data", std::ofstream::binary | std::ofstream::out);
+    auto buffer = struct_pack::serialize(data);
+    for (int i = 0; i < 5; ++i) buffer.pop_back();
+    of.write(buffer.data(), buffer.size());
+  }
+  {
+    std::ifstream ifi("tmp.data", std::ios::in | std::ios::binary);
+    std::vector<std::string> data2;
+    std::vector<std::string> data3 = {"Hello", "Hi", ""};
+    auto ec = struct_pack::deserialize_to(data2, ifi);
+    CHECK(ec == struct_pack::errc::no_buffer_space);
+    CHECK(data3 == data2);
+    CHECK(data2.capacity() == 3);
+  }
+  std::filesystem::remove("tmp.data");
+}
+
+TEST_CASE("testing broken container size") {
+  SUBCASE("hacker 1") {
+    std::string data(2 * 1024 * 1024, 'A');
+    {
+      std::ofstream of("tmp.data", std::ofstream::binary | std::ofstream::out);
+      auto buffer = struct_pack::serialize<std::string>(data);
+      buffer = buffer.substr(0, 16);
+      of.write(buffer.data(), buffer.size());
+    }
+    {
+      std::ifstream ifi("tmp.data", std::ios::in | std::ios::binary);
+      std::string data2;
+      auto ec = struct_pack::deserialize_to(data2, ifi);
+      CHECK(ec == struct_pack::errc::no_buffer_space);
+      CHECK(data2.size() == 0);
+      CHECK(data2.capacity() < 100);  // SSO
+    }
+  }
+  SUBCASE("hacker 2") {
+    std::string data(2 * 1024 * 1024, 'A');
+    {
+      std::ofstream of("tmp.data", std::ofstream::binary | std::ofstream::out);
+      auto buffer = struct_pack::serialize<std::string>(data);
+      buffer = buffer.substr(0, 2 * 1024 * 1024 - 10000);
+      of.write(buffer.data(), buffer.size());
+    }
+    {
+      std::ifstream ifi("tmp.data", std::ios::in | std::ios::binary);
+      std::string data2;
+      auto ec = struct_pack::deserialize_to(data2, ifi);
+      CHECK(ec == struct_pack::errc::no_buffer_space);
+      CHECK(data2.size() == 1 * 1024 * 1024);
+      CHECK(data2.capacity() < 2 * 1024 * 1024);
+    }
+  }
+  std::filesystem::remove("tmp.data");
 }

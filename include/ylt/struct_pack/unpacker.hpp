@@ -19,13 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <limits>
-#include <map>
 #include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -36,14 +30,13 @@
 #include "derived_helper.hpp"
 #include "endian_wrapper.hpp"
 #include "error_code.hpp"
-#include "md5_constexpr.hpp"
-#include "packer.hpp"
 #include "reflection.hpp"
-#include "trivial_view.hpp"
 #include "type_calculate.hpp"
 #include "type_id.hpp"
 #include "type_trait.hpp"
 #include "varint.hpp"
+
+#define STRUCT_PACK_MAX_UNCONFIRM_PREREAD_SIZE 1 * 1024 * 1024  // 1MB
 
 namespace struct_pack {
 
@@ -55,15 +48,16 @@ struct memory_reader {
   constexpr memory_reader(const char *beg, const char *end) noexcept
       : now(beg), end(end) {}
   bool read(char *target, size_t len) {
-    if SP_UNLIKELY (now + len > end) {
+    if SP_UNLIKELY (end - now < len) {
       return false;
     }
     memcpy(target, now, len);
     now += len;
     return true;
   }
+  bool check(size_t len) { return end - now >= len; }
   const char *read_view(size_t len) {
-    if SP_UNLIKELY (now + len > end) {
+    if SP_UNLIKELY (end - now < len) {
       return nullptr;
     }
     auto ret = now;
@@ -71,7 +65,7 @@ struct memory_reader {
     return ret;
   }
   bool ignore(size_t len) {
-    if SP_UNLIKELY (now + len > end) {
+    if SP_UNLIKELY (end - now < len) {
       return false;
     }
     now += len;
@@ -133,14 +127,14 @@ class unpacker {
           err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
         }
         else {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
         break;
 #else
 
       case 3:
         if constexpr (sizeof(std::size_t) < 8) {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
       case 2:
       case 1:
@@ -194,13 +188,13 @@ class unpacker {
           err_code = deserialize_many<8, UINT64_MAX, true>(t, args...);
         }
         else {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
         break;
 #else
       case 3:
         if constexpr (sizeof(std::size_t) < 8) {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
       case 2:
       case 1:
@@ -256,13 +250,13 @@ class unpacker {
           err_code = get_field_impl<8, UINT64_MAX, U, I>(field);
         }
         else {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
         break;
 #else
       case 3:
         if constexpr (sizeof(std::size_t) < 8) {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
       case 2:
       case 1:
@@ -329,14 +323,14 @@ class unpacker {
            ...);
         }
         else {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
 
         break;
 #else
       case 3:
         if constexpr (sizeof(std::size_t) < 8) {
-          return struct_pack::errc::too_width_size;
+          return struct_pack::errc::invalid_width_of_container_length;
         }
       case 2:
       case 1:
@@ -407,13 +401,13 @@ class unpacker {
            ...);
         }
         else {
-          return errc::too_width_size;
+          return errc::invalid_width_of_container_length;
         }
         break;
 #else
       case 3:
         if constexpr (sizeof(std::size_t) < 8) {
-          return errc::too_width_size;
+          return errc::invalid_width_of_container_length;
         }
       case 2:
       case 1:
@@ -509,7 +503,7 @@ class unpacker {
           }
         }
         else {
-          return {errc::too_width_size, 0};
+          return {errc::invalid_width_of_container_length, 0};
         }
         break;
       default:
@@ -869,28 +863,27 @@ class unpacker {
         }
       }
       else if constexpr (container<type>) {
-        std::size_t size64 = 0;
+        std::size_t size = 0;
         bool result{};
         if constexpr (size_type == 1) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
             return struct_pack::errc::no_buffer_space;
           }
         }
 #ifdef STRUCT_PACK_OPTIMIZE
         else if constexpr (size_type == 2) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
             return struct_pack::errc::no_buffer_space;
           }
         }
         else if constexpr (size_type == 4) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size64)) {
+          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
             return struct_pack::errc::no_buffer_space;
           }
         }
         else if constexpr (size_type == 8) {
           if constexpr (sizeof(std::size_t) >= 8) {
-            if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
-                                                               size64)) {
+            if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
               return struct_pack::errc::no_buffer_space;
             }
           }
@@ -905,18 +898,18 @@ class unpacker {
         else {
           switch (size_type_) {
             case 1:
-              if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size64)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
             case 2:
-              if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size64)) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size)) {
                 return struct_pack::errc::no_buffer_space;
               }
               break;
             case 3:
               if constexpr (sizeof(std::size_t) >= 8) {
-                if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size64)) {
+                if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size)) {
                   return struct_pack::errc::no_buffer_space;
                 }
               }
@@ -929,7 +922,7 @@ class unpacker {
           }
         }
 #endif
-        if (size64 == 0) {
+        if (size == 0) {
           return {};
         }
         if constexpr (map_container<type>) {
@@ -937,12 +930,17 @@ class unpacker {
               value{};
           if constexpr (is_trivial_serializable<decltype(value)>::value &&
                         !NotSkip) {
-            return reader_.ignore(size64 * sizeof(value))
-                       ? errc{}
-                       : errc::no_buffer_space;
+            if constexpr (sizeof(value) > 1) {
+              if SP_UNLIKELY (size > SIZE_MAX / sizeof(value)) {
+                return errc::no_buffer_space;
+              }
+            }
+            return reader_.ignore(size * sizeof(value)) ? errc{}
+                                                        : errc::no_buffer_space;
           }
           else {
-            for (uint64_t i = 0; i < size64; ++i) {
+            item.clear();
+            for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
               if SP_UNLIKELY (code != struct_pack::errc{}) {
                 return code;
@@ -958,12 +956,17 @@ class unpacker {
           typename type::value_type value{};
           if constexpr (is_trivial_serializable<decltype(value)>::value &&
                         !NotSkip) {
-            return reader_.ignore(size64 * sizeof(value))
-                       ? errc{}
-                       : errc::no_buffer_space;
+            if constexpr (sizeof(value) > 1) {
+              if SP_UNLIKELY (size > SIZE_MAX / sizeof(value)) {
+                return errc::no_buffer_space;
+              }
+            }
+            return reader_.ignore(size * sizeof(value)) ? errc{}
+                                                        : errc::no_buffer_space;
           }
           else {
-            for (uint64_t i = 0; i < size64; ++i) {
+            item.clear();
+            for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
               if SP_UNLIKELY (code != struct_pack::errc{}) {
                 return code;
@@ -977,37 +980,75 @@ class unpacker {
         }
         else {
           using value_type = typename type::value_type;
+          constexpr std::size_t block_lim_cnt =
+              STRUCT_PACK_MAX_UNCONFIRM_PREREAD_SIZE / sizeof(value_type);
           if constexpr (trivially_copyable_container<type>) {
-            uint64_t mem_sz = size64 * sizeof(value_type);
+            if constexpr (sizeof(value_type) > 1) {
+              if SP_UNLIKELY (size > SIZE_MAX / sizeof(value_type)) {
+                return errc::no_buffer_space;
+              }
+            }
+            std::size_t mem_sz = size * sizeof(value_type);
             if constexpr (NotSkip) {
               if constexpr (string_view<type> || dynamic_span<type>) {
                 static_assert(
                     view_reader_t<Reader>,
                     "The Reader isn't a view_reader, can't deserialize "
                     "a string_view/span");
-                static_assert(is_little_endian_copyable<sizeof(value_type)>,
-                              "zero-copy in big endian is limit.");
                 const char *view = reader_.read_view(mem_sz);
                 if SP_UNLIKELY (view == nullptr) {
                   return struct_pack::errc::no_buffer_space;
                 }
-                item = {(value_type *)(view), (std::size_t)size64};
-              }
-              else if constexpr (is_little_endian_copyable<sizeof(
-                                     value_type)>) {
-                resize(item, size64);
-                // item.resize(size64);
-                if SP_UNLIKELY (!read_bytes_array(reader_, (char *)item.data(),
-                                                  mem_sz)) {
-                  return struct_pack::errc::no_buffer_space;
-                }
+                item = {(value_type *)(view), (std::size_t)size};
               }
               else {
-                resize(item, size64);
-                for (auto &i : item) {
-                  code = deserialize_one<size_type, version, NotSkip>(i);
-                  if SP_UNLIKELY (code != struct_pack::errc{}) {
-                    return code;
+                if constexpr (check_reader_t<Reader>) {
+                  if SP_UNLIKELY (!reader_.check(mem_sz)) {
+                    return struct_pack::errc::no_buffer_space;
+                  }
+                  resize(item, size);
+                  if constexpr (is_little_endian_copyable<sizeof(value_type)>) {
+                    auto ec =
+                        read_bytes_array(reader_, (char *)item.data(), mem_sz);
+                    assert(ec == true);
+                  }
+                  else {
+                    for (auto &i : item) {
+                      code = deserialize_one<size_type, version, NotSkip>(i);
+                      if SP_UNLIKELY (code != struct_pack::errc{}) {
+                        return code;
+                      }
+                    }
+                  }
+                }
+                else {
+                  for (size_t i = 0, len = block_lim_cnt; i < size;
+                       i += block_lim_cnt) {
+                    if (i + block_lim_cnt >= size) {
+                      len = size - i;
+                    }
+                    resize(item, i + len);
+                    if constexpr (is_little_endian_copyable<sizeof(
+                                      value_type)>) {
+                      if SP_UNLIKELY (!read_bytes_array(
+                                          reader_, (char *)(item.data() + i),
+                                          len * sizeof(value_type))) {
+                        item.resize(i);
+                        if constexpr (can_shrink_to_fit<type>) {
+                          item.shrink_to_fit();
+                        }
+                        return struct_pack::errc::no_buffer_space;
+                      }
+                    }
+                    else {
+                      for (size_t j = i; j < i + len; ++j) {
+                        code = deserialize_one<size_type, version, NotSkip>(
+                            item[j]);
+                        if SP_UNLIKELY (code != struct_pack::errc{}) {
+                          return code;
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1017,25 +1058,33 @@ class unpacker {
             }
           }
           else {
-            if constexpr (NotSkip) {
-              if constexpr (dynamic_span<type>) {
-                static_assert(!dynamic_span<type>,
-                              "It's illegal to deserialize a span<T> which T "
-                              "is a non-trival-serializable type.");
+            if constexpr (dynamic_span<type>) {
+              static_assert(!dynamic_span<type>,
+                            "It's illegal to deserialize a span<T> which T "
+                            "is a non-trival-serializable type.");
+            }
+            else if constexpr (NotSkip) {
+              item.clear();
+              if constexpr (can_reserve<type>) {
+                item.reserve((std::min)(size, block_lim_cnt));
               }
-              else {
-                item.resize(size64);
-                for (auto &i : item) {
-                  code = deserialize_one<size_type, version, NotSkip>(i);
-                  if SP_UNLIKELY (code != struct_pack::errc{}) {
-                    return code;
+              for (size_t i = 0; i < size; ++i) {
+                item.emplace_back();
+                code =
+                    deserialize_one<size_type, version, NotSkip>(item.back());
+                if SP_UNLIKELY (code != struct_pack::errc{}) {
+                  if constexpr (can_reserve<type>) {
+                    if constexpr (can_shrink_to_fit<type>) {
+                      item.shrink_to_fit();  // release reserve memory
+                    }
                   }
+                  return code;
                 }
               }
             }
             else {
               value_type useless;
-              for (size_t i = 0; i < size64; ++i) {
+              for (size_t i = 0; i < size; ++i) {
                 code = deserialize_one<size_type, version, NotSkip>(useless);
                 if SP_UNLIKELY (code != struct_pack::errc{}) {
                   return code;
@@ -1393,3 +1442,5 @@ template <typename BaseClass, typename... DerivedClasses, typename Reader>
 }  // namespace detail
 
 }  // namespace struct_pack
+
+#undef STRUCT_PACK_MAX_UNCONFIRM_PREREAD_SIZE
