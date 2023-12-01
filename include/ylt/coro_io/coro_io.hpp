@@ -136,6 +136,19 @@ async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
 }
 
 template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_read_some_at(uint64_t offset, Socket &socket,
+                   AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    socket.async_read_some_at(offset, buffer,
+                              [&, handler](const auto &ec, auto size) {
+                                handler.set_value_then_resume(ec, size);
+                              });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
@@ -190,6 +203,19 @@ async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
     socket.async_write_some(buffer, [&, handler](const auto &ec, auto size) {
       handler.set_value_then_resume(ec, size);
     });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_write_some_at(uint64_t offset, Socket &socket,
+                    AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    socket.async_write_some_at(offset, buffer,
+                               [&, handler](const auto &ec, auto size) {
+                                 handler.set_value_then_resume(ec, size);
+                               });
   });
 }
 

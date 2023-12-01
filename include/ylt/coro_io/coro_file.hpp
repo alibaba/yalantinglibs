@@ -19,6 +19,7 @@
 #include <async_simple/coro/FutureAwaiter.h>
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -93,12 +94,14 @@ enum flags {
 };
 
 enum class read_type {
-  fread,
-#if defined(__GNUC__)
-  pread,
 #if defined(YLT_ENABLE_FILE_IO_URING)
   uring,
+  uring_random,
+#else
+  fread,
 #endif
+#if defined(__GNUC__)
+  pread,
 #endif
 };
 
@@ -155,130 +158,24 @@ class coro_file {
     return size;
   }
 
-#if defined(YLT_ENABLE_FILE_IO_URING)
-  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
-                                            int open_mode = flags::read_write,
-                                            read_type type = read_type::uring) {
-    assert(type == read_type::uring);
-    try {
-      stream_file_ = std::make_unique<asio::stream_file>(
-          executor_wrapper_.get_asio_executor());
-    } catch (std::exception& ex) {
-      std::cout << ex.what() << "\n";
-      co_return false;
+#if defined(__GNUC__)
+  bool open_fd(std::string_view filepath, int open_mode = flags::read_write) {
+    if (fd_file_) {
+      return true;
     }
 
-    std::error_code ec;
-    stream_file_->open(filepath.data(),
-                       static_cast<asio::file_base::flags>(open_mode), ec);
-    if (ec) {
-      std::cout << ec.message() << "\n";
-      co_return false;
-    }
-
-    co_return true;
-  }
-
-  bool seek(long offset, int whence) {
-    std::error_code seek_ec;
-    stream_file_->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
-                       seek_ec);
-    if (seek_ec) {
+    int fd = open(filepath.data(), open_mode);
+    if (fd < 0) {
       return false;
     }
+
+    fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+      ::close(*ptr);
+      delete ptr;
+    });
     return true;
   }
 
-  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      char* data, size_t size) {
-    size_t left_size = size;
-    size_t offset = 0;
-    size_t read_total = 0;
-    while (left_size) {
-      auto [ec, read_size] = co_await coro_io::async_read_some(
-          *stream_file_, asio::buffer(data + offset, size - offset));
-      if (ec) {
-        if (ec == asio::error::eof) {
-          eof_ = true;
-          co_return std::make_pair(std::error_code{}, read_total);
-        }
-
-        co_return std::make_pair(ec, 0);
-      }
-
-      if (read_size > size) {
-        // if read_size is very large, it means the size if negative, and there
-        // is an error occurred.
-        co_return std::make_pair(
-            std::make_error_code(std::errc::invalid_argument), 0);
-      }
-
-      read_total += read_size;
-
-      left_size -= read_size;
-      offset += read_size;
-      seek_offset_ += read_size;
-      std::error_code seek_ec;
-      stream_file_->seek(seek_offset_, asio::file_base::seek_basis::seek_set,
-                         seek_ec);
-      if (seek_ec) {
-        co_return std::make_pair(std::make_error_code(std::errc::invalid_seek),
-                                 0);
-      }
-    }
-
-    co_return std::make_pair(std::error_code{}, read_total);
-  }
-
-  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
-                                                        size_t size) {
-    size_t left_size = size;
-    size_t offset = 0;
-    while (left_size) {
-      auto [ec, write_size] = co_await coro_io::async_write_some(
-          *stream_file_, asio::buffer(data, size));
-
-      if (ec) {
-        co_return ec;
-      }
-
-      left_size -= write_size;
-      if (left_size == 0) {
-        co_return ec;
-      }
-      offset += write_size;
-      std::error_code seek_ec;
-      stream_file_->seek(offset, asio::file_base::seek_basis::seek_set,
-                         seek_ec);
-      if (seek_ec) {
-        co_return seek_ec;
-      }
-    }
-
-    co_return std::error_code{};
-  }
-#else
-  std::string str_mode(int open_mode) {
-    switch (open_mode) {
-      case flags::read_only:
-        return "r";
-      case flags::create_write:
-      case flags::write_only:
-        return "w";
-      case flags::read_write:
-        return "r+";
-      case flags::append:
-        return "a";
-      case flags::create_read_write_append:
-        return "a+";
-      case flags::truncate:
-        return "w+";
-      default:
-        return "r+";
-    }
-  }
-
-#if defined(__GNUC__)
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
       auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
     std::function<int()> func = [=, this] {
@@ -319,6 +216,131 @@ class coro_file {
   }
 #endif
 
+#if defined(YLT_ENABLE_FILE_IO_URING)
+  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
+                                            int open_mode = flags::read_write,
+                                            read_type type = read_type::uring) {
+    type_ = type;
+    if (type == read_type::pread) {
+      co_return open_fd(filepath, open_mode);
+    }
+
+    try {
+      if (type == read_type::uring) {
+        stream_file_ = std::make_shared<asio::stream_file>(
+            executor_wrapper_.get_asio_executor());
+      }
+      else {
+        stream_file_ = std::make_shared<asio::random_access_file>(
+            executor_wrapper_.get_asio_executor());
+      }
+    } catch (std::exception& ex) {
+      std::cout << ex.what() << "\n";
+      co_return false;
+    }
+
+    std::error_code ec;
+    stream_file_->open(filepath.data(),
+                       static_cast<asio::file_base::flags>(open_mode), ec);
+
+    if (ec) {
+      std::cout << ec.message() << "\n";
+      co_return false;
+    }
+
+    co_return true;
+  }
+
+  bool seek(long offset, int whence) {
+    if (type_ != read_type::uring) {
+      return false;
+    }
+
+    assert(stream_file_);
+    std::error_code seek_ec;
+    reinterpret_cast<asio::stream_file*>(stream_file_.get())
+        ->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
+               seek_ec);
+    if (seek_ec) {
+      return false;
+    }
+    return true;
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_read_some_at(uint64_t offset, char* data, size_t size) {
+    assert(stream_file_);
+
+    auto [ec, read_size] = co_await coro_io::async_read_some_at(
+        offset,
+        *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
+        asio::buffer(data, size));
+
+    if (ec == asio::error::eof) {
+      eof_ = true;
+      co_return std::make_pair(std::error_code{}, read_size);
+    }
+
+    co_return std::make_pair(std::error_code{}, read_size);
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write_some_at(
+      uint64_t offset, const char* data, size_t size) {
+    assert(stream_file_);
+
+    auto [ec, write_size] = co_await coro_io::async_write_some_at(
+        offset,
+        *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
+        asio::buffer(data, size));
+    co_return ec;
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+      char* data, size_t size) {
+    assert(stream_file_);
+
+    auto [ec, read_size] = co_await coro_io::async_read_some(
+        *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
+        asio::buffer(data, size));
+    if (ec == asio::error::eof) {
+      eof_ = true;
+      co_return std::make_pair(std::error_code{}, read_size);
+    }
+
+    co_return std::make_pair(std::error_code{}, read_size);
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
+                                                        size_t size) {
+    assert(stream_file_);
+
+    auto [ec, write_size] = co_await coro_io::async_write_some(
+        *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
+        asio::buffer(data, size));
+
+    co_return ec;
+  }
+#else
+  std::string str_mode(int open_mode) {
+    switch (open_mode) {
+      case flags::read_only:
+        return "r";
+      case flags::create_write:
+      case flags::write_only:
+        return "w";
+      case flags::read_write:
+        return "r+";
+      case flags::append:
+        return "a";
+      case flags::create_read_write_append:
+        return "a+";
+      case flags::truncate:
+        return "w+";
+      default:
+        return "r+";
+    }
+  }
+
   bool seek(long offset, int whence) {
     assert(fd_file_ == nullptr);
 
@@ -330,20 +352,7 @@ class coro_file {
                                             read_type type = read_type::fread) {
 #if defined(__GNUC__)
     if (type == read_type::pread) {
-      if (fd_file_) {
-        co_return true;
-      }
-
-      int fd = open(filepath.data(), open_mode);
-      if (fd < 0) {
-        co_return false;
-      }
-
-      fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
-        ::close(*ptr);
-        delete ptr;
-      });
-      co_return true;
+      co_return open_fd(filepath, open_mode);
     }
 #endif
 
@@ -406,8 +415,8 @@ class coro_file {
 
  private:
 #if defined(YLT_ENABLE_FILE_IO_URING)
-  std::unique_ptr<asio::stream_file> stream_file_;
-  std::atomic<size_t> seek_offset_ = 0;
+  std::shared_ptr<asio::basic_file<>> stream_file_;
+  read_type type_ = read_type::uring;
 #else
   std::shared_ptr<FILE> stream_file_;
 #endif
