@@ -22,6 +22,7 @@
 #include "calculate_size.hpp"
 #include "endian_wrapper.hpp"
 #include "reflection.hpp"
+#include "ylt/struct_pack/type_id.hpp"
 #include "ylt/struct_pack/util.h"
 #include "ylt/struct_pack/varint.hpp"
 namespace struct_pack::detail {
@@ -247,6 +248,9 @@ class packer {
       }
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
+      }
+      else if constexpr (id == type_id::user_defined_type) {
+        sp_serialize_to(writer_, item);
       }
       else if constexpr (detail::varint_t<type, parent_tag>) {
         if constexpr (is_enable_fast_varint_coding(parent_tag)) {

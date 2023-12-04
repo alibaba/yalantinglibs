@@ -27,7 +27,12 @@ namespace struct_pack {
 template <typename CharType, std::size_t Size>
 struct string_literal {
   constexpr string_literal() = default;
-
+  constexpr string_literal(std::string_view str) : ar{} {
+    for (size_t i = 0; i < Size; ++i) {
+      ar[i] = str[i];
+    }
+    ar[Size] = '\0';
+  }
   constexpr string_literal(const CharType (&value)[Size + 1]) : ar{} {
     for (size_t i = 0; i <= Size; ++i) {
       ar[i] = value[i];

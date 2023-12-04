@@ -187,6 +187,22 @@ constexpr decltype(auto) get_type_literal() {
   if constexpr (is_trivial_view_v<Arg>) {
     return get_type_literal<typename Arg::value_type, ParentArgs...>();
   }
+  else if constexpr (user_defined_serialization<Arg>) {
+    constexpr auto begin = string_literal<char, 1>{
+        {static_cast<char>(type_id::user_defined_type)}};
+    constexpr auto end =
+        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
+    if constexpr (user_defined_type_name<Arg>) {
+      constexpr auto type_name = sp_set_type_name((Arg *)nullptr);
+      string_literal<char, type_name.size()> ret{type_name};
+      return begin + ret + end;
+    }
+    else {
+      constexpr auto type_name = type_string<Arg>();
+      string_literal<char, type_name.size()> ret{type_name};
+      return begin + ret + end;
+    }
+  }
   else {
     constexpr std::size_t has_cycle = check_circle<Arg, ParentArgs...>();
     if constexpr (has_cycle != 0) {
@@ -306,6 +322,22 @@ template <typename T, typename... Args>
 constexpr decltype(auto) get_types_literal() {
   if constexpr (is_trivial_view_v<T>) {
     return get_types_literal<T::value_type, Args...>();
+  }
+  else if constexpr (user_defined_serialization<T>) {
+    constexpr auto begin = string_literal<char, 1>{
+        {static_cast<char>(type_id::user_defined_type)}};
+    constexpr auto end =
+        string_literal<char, 1>{{static_cast<char>(type_id::type_end_flag)}};
+    if constexpr (user_defined_type_name<T>) {
+      constexpr auto type_name = sp_set_type_name((T *)nullptr);
+      string_literal<char, type_name.size()> ret{type_name};
+      return begin + ret + end;
+    }
+    else {
+      constexpr auto type_name = type_string<T>();
+      string_literal<char, type_name.size()> ret{type_name};
+      return begin + ret + end;
+    }
   }
   else {
     constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
@@ -835,13 +867,17 @@ constexpr bool check_has_metainfo() {
 template <typename U>
 constexpr auto get_types() {
   using T = remove_cvref_t<U>;
-  if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> || varint_t<T> ||
-                string<T> || container<T> || optional<T> || unique_ptr<T> ||
-                is_variant_v<T> || expected<T> || array<T> || c_array<T> ||
-                std::is_same_v<std::monostate, T> || bitset<T>
+  if constexpr (user_defined_serialization<T>) {
+    return declval<std::tuple<T>>();
+  }
+  else if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> ||
+                     varint_t<T> || string<T> || container<T> || optional<T> ||
+                     unique_ptr<T> || is_variant_v<T> || expected<T> ||
+                     array<T> || c_array<T> ||
+                     std::is_same_v<std::monostate, T> || bitset<T>
 #if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)
-                || std::is_same_v<__int128, T> ||
-                std::is_same_v<unsigned __int128, T>
+                     || std::is_same_v<__int128, T> ||
+                     std::is_same_v<unsigned __int128, T>
 #endif
   ) {
     return declval<std::tuple<T>>();

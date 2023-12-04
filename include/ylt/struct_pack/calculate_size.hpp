@@ -45,6 +45,9 @@ constexpr size_info inline calculate_one_size(const T &item) {
   size_info ret{};
   if constexpr (id == type_id::monostate_t) {
   }
+  else if constexpr (id == type_id::user_defined_type) {
+    ret.total = sp_get_needed_size(item);
+  }
   else if constexpr (detail::varint_t<type, parent_tag>) {
     if constexpr (is_enable_fast_varint_coding(parent_tag)) {
       // skip it. It has been calculated in parent.
@@ -105,7 +108,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
     if (item) {
       if constexpr (is_base_class<typename type::element_type>) {
         ret.total += sizeof(uint32_t);
-        bool is_ok;
+        bool is_ok = false;
         auto index = search_type_by_md5<typename type::element_type>(
             item->get_struct_pack_id(), is_ok);
         if SP_UNLIKELY (!is_ok) {
