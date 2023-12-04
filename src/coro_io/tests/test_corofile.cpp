@@ -107,23 +107,19 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(file.is_open());
 
     char buf[100];
-    auto pair =
-        async_simple::coro::syncAwait(file.async_read_some_at(0, buf, 10));
+    auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf, 10));
     CHECK(std::string_view(buf, pair.second) == "AAAAAAAAAA");
     CHECK(!file.eof());
 
-    pair = async_simple::coro::syncAwait(file.async_read_some_at(10, buf, 100));
+    pair = async_simple::coro::syncAwait(file.async_read_at(10, buf, 100));
     CHECK(!file.eof());
     CHECK(pair.second == 100);
 
-    pair =
-        async_simple::coro::syncAwait(file.async_read_some_at(110, buf, 100));
-    CHECK(!file.eof());
+    pair = async_simple::coro::syncAwait(file.async_read_at(110, buf, 100));
     CHECK(pair.second == 80);
 
     // only read size equal 0 is eof.
-    pair =
-        async_simple::coro::syncAwait(file.async_read_some_at(200, buf, 100));
+    pair = async_simple::coro::syncAwait(file.async_read_at(200, buf, 100));
     CHECK(file.eof());
     CHECK(pair.second == 0);
   }
@@ -137,21 +133,20 @@ TEST_CASE("coro_file pread and pwrite basic test") {
 
     std::string buf = "cccccccccc";
     auto ec = async_simple::coro::syncAwait(
-        file.async_write_some_at(0, buf.data(), buf.size()));
+        file.async_write_at(0, buf.data(), buf.size()));
     CHECK(!ec);
 
     std::string buf1 = "dddddddddd";
     ec = async_simple::coro::syncAwait(
-        file.async_write_some_at(10, buf1.data(), buf1.size()));
+        file.async_write_at(10, buf1.data(), buf1.size()));
     CHECK(!ec);
 
     char buf2[100];
-    auto pair =
-        async_simple::coro::syncAwait(file.async_read_some_at(0, buf2, 10));
+    auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf2, 10));
     CHECK(!file.eof());
     CHECK(std::string_view(buf2, pair.second) == "cccccccccc");
 
-    pair = async_simple::coro::syncAwait(file.async_read_some_at(10, buf2, 10));
+    pair = async_simple::coro::syncAwait(file.async_read_at(10, buf2, 10));
     CHECK(!file.eof());
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
   }
