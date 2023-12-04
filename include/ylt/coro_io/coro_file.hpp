@@ -300,7 +300,7 @@ class coro_file {
       char* data, size_t size) {
     assert(stream_file_);
 
-    auto [ec, read_size] = co_await coro_io::async_read_some(
+    auto [ec, read_size] = co_await coro_io::async_read(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
         asio::buffer(data, size));
     if (ec == asio::error::eof) {
@@ -315,7 +315,7 @@ class coro_file {
                                                         size_t size) {
     assert(stream_file_);
 
-    auto [ec, write_size] = co_await coro_io::async_write_some(
+    auto [ec, write_size] = co_await coro_io::async_write(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
         asio::buffer(data, size));
 
