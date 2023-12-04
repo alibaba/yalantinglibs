@@ -55,7 +55,7 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
   }
   auto length = 1ull * ar.x * ar.y * sizeof(float);
   if constexpr (struct_pack::checkable_reader_t<Reader>) {
-    if (!reader.check(length)) {  // some input(such as memory) allow as check
+    if (!reader.check(length)) {  // some input(such as memory) allow us check
                                   // length before read data.
       return struct_pack::errc::no_buffer_space;
     }
