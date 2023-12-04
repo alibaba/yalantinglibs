@@ -267,11 +267,11 @@ class coro_file {
     return true;
   }
 
-  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-  async_read_some_at(uint64_t offset, char* data, size_t size) {
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_at(
+      uint64_t offset, char* data, size_t size) {
     assert(stream_file_);
 
-    auto [ec, read_size] = co_await coro_io::async_read_some_at(
+    auto [ec, read_size] = co_await coro_io::async_read_at(
         offset,
         *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
         asio::buffer(data, size));
@@ -284,11 +284,12 @@ class coro_file {
     co_return std::make_pair(std::error_code{}, read_size);
   }
 
-  async_simple::coro::Lazy<std::error_code> async_write_some_at(
-      uint64_t offset, const char* data, size_t size) {
+  async_simple::coro::Lazy<std::error_code> async_write_at(uint64_t offset,
+                                                           const char* data,
+                                                           size_t size) {
     assert(stream_file_);
 
-    auto [ec, write_size] = co_await coro_io::async_write_some_at(
+    auto [ec, write_size] = co_await coro_io::async_write_at(
         offset,
         *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
         asio::buffer(data, size));
@@ -299,7 +300,7 @@ class coro_file {
       char* data, size_t size) {
     assert(stream_file_);
 
-    auto [ec, read_size] = co_await coro_io::async_read_some(
+    auto [ec, read_size] = co_await coro_io::async_read(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
         asio::buffer(data, size));
     if (ec == asio::error::eof) {
@@ -314,7 +315,7 @@ class coro_file {
                                                         size_t size) {
     assert(stream_file_);
 
-    auto [ec, write_size] = co_await coro_io::async_write_some(
+    auto [ec, write_size] = co_await coro_io::async_write(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
         asio::buffer(data, size));
 
