@@ -11,8 +11,14 @@ write_basic_package_version_file(
 )
 set(ConfigPackageLocation lib/cmake/yalantinglibs)
 
-
 add_library(yalantinglibs INTERFACE)
+add_library(yalantinglibs::yalantinglibs ALIAS yalantinglibs)
+
+target_include_directories(yalantinglibs INTERFACE 
+        $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include/ylt/thirdparty>
+)
 install(TARGETS yalantinglibs
        EXPORT yalantinglibsTargets
        LIBRARY DESTINATION lib

@@ -9,21 +9,24 @@ project(yaLanTingLibs
 # load pack finder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Find/)
 
-# add include path
-include_directories(include)
-include_directories(include/ylt/thirdparty)
-include_directories(src/include)
-
 find_package(Threads REQUIRED)
 link_libraries(Threads::Threads)
 
-include(cmake/utils.cmake)
-include(cmake/struct_pb.cmake)
-include(cmake/build.cmake)
-include(cmake/develop.cmake)
 include(cmake/install.cmake)
-# add project config, such as enable_ssl.
-include(cmake/config.cmake)
-# add project's source such as unit test, example & benchmark
-include(cmake/subdir.cmake)
+
+if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs") # if ylt is top-level project
+        # add include path
+        include_directories(include)
+        include_directories(include/ylt/thirdparty)
+        include_directories(src/include)
+
+        include(cmake/utils.cmake)
+        include(cmake/struct_pb.cmake)
+        include(cmake/build.cmake)
+        include(cmake/develop.cmake)
+        # add project config, such as enable_ssl.
+        include(cmake/config.cmake)
+        # add project's source such as unit test, example & benchmark
+        include(cmake/subdir.cmake)
+endif()
 
