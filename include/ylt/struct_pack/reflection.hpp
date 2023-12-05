@@ -613,7 +613,7 @@ struct memory_reader;
   };
   template <typename Type>
   concept user_defined_type_name = requires {
-    {sp_set_type_name((Type*){nullptr})}->std::same_as<std::string_view>;
+    { sp_set_type_name((Type*)nullptr) } -> std::same_as<std::string_view>;
   };
 #else
 
