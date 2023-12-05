@@ -22,6 +22,7 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "record.hpp"
 #include "ylt/util/concurrentqueue.h"
@@ -303,6 +304,17 @@ class appender {
   void open_log_file() {
     file_size_ = 0;
     std::string filename = build_filename();
+
+    if (std::filesystem::path(filename).has_parent_path()) {
+      std::error_code ec;
+      auto parant_path = std::filesystem::path(filename).parent_path();
+      std::filesystem::create_directories(parant_path, ec);
+      if (ec) {
+        std::cout << "create directories error: " << ec.message() << std::flush;
+        abort();
+      }
+    }
+
     file_.open(filename, std::ios::binary | std::ios::out | std::ios::app);
     if (file_) {
       std::error_code ec;
@@ -336,6 +348,10 @@ class appender {
 
     if (file_path.has_extension()) {
       filename.append(file_path.extension().string());
+    }
+
+    if (std::filesystem::path(file_path).has_parent_path()) {
+      return file_path.parent_path().append(filename).string();
     }
 
     return filename;
