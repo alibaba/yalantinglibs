@@ -132,6 +132,27 @@ TEST_CASE("test basic") {
         std::string::npos);
 }
 
+TEST_CASE("test roll files and automatic create directories") {
+  std::string filename = "a/b/c/test.txt";
+  std::filesystem::remove(filename);
+  CHECK(!std::filesystem::exists(filename));
+  constexpr size_t InstanceId = 888;
+  easylog::init_log<InstanceId>(Severity::DEBUG, filename, false, true, 20, 3,
+                                true);
+  CHECK(std::filesystem::exists(filename));
+  MELOG_INFO(InstanceId) << 42 << " " << 4.5 << 'a' << " it is a test";
+  MELOG_INFO(InstanceId) << 42 << " " << 4.5 << 'a' << " it is a test";
+  MELOG_INFO(InstanceId) << 42 << " " << 4.5 << 'a' << " it is a test";
+
+  CHECK(std::filesystem::exists(filename));
+  CHECK(std::filesystem::exists("a/b/c/test.1.txt"));
+  CHECK(std::filesystem::exists("a/b/c/test.2.txt"));
+
+  std::error_code ec;
+  std::filesystem::remove_all("a", ec);
+  std::cout << ec.message() << "\n";
+}
+
 TEST_CASE("test_severity") {
   // test severity
   std::string severity_filename = "test_severity.txt";
