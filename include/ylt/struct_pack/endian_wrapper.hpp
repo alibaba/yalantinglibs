@@ -19,10 +19,12 @@
 #include <type_traits>
 
 #include "reflection.hpp"
+#include "ylt/struct_pack/error_code.hpp"
 #include "ylt/struct_pack/marco.h"
 #include "ylt/struct_pack/util.h"
 
-namespace struct_pack::detail {
+namespace struct_pack {
+namespace detail {
 #if __cpp_lib_endian >= 201907L
 constexpr inline bool is_system_little_endian =
     (std::endian::little == std::endian::native);
@@ -132,7 +134,8 @@ inline uint64_t bswap64(uint64_t raw) {
 };
 
 template <std::size_t block_size, typename writer_t>
-void write_wrapper(writer_t& writer, const char* SP_RESTRICT data) {
+STRUCT_PACK_INLINE void write_wrapper(writer_t& writer,
+                                      const char* SP_RESTRICT data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     writer.write(data, block_size);
   }
@@ -159,14 +162,16 @@ void write_wrapper(writer_t& writer, const char* SP_RESTRICT data) {
   }
 }
 template <typename writer_t>
-void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
+STRUCT_PACK_INLINE void write_bytes_array(writer_t& writer, const char* data,
+                                          std::size_t length) {
   if SP_UNLIKELY (length >= PTRDIFF_MAX)
     unreachable();
   else
     writer.write(data, length);
 }
 template <std::size_t block_size, typename writer_t, typename T>
-void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
+STRUCT_PACK_INLINE void low_bytes_write_wrapper(writer_t& writer,
+                                                const T& elem) {
   static_assert(sizeof(T) >= block_size);
   if constexpr (is_system_little_endian) {
     const char* data = (const char*)&elem;
@@ -194,7 +199,7 @@ void low_bytes_write_wrapper(writer_t& writer, const T& elem) {
   }
 }
 template <std::size_t block_size, typename reader_t>
-bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
+STRUCT_PACK_INLINE bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
   if constexpr (is_system_little_endian || block_size == 1) {
     return static_cast<bool>(reader.read(data, block_size));
   }
@@ -225,12 +230,13 @@ bool read_wrapper(reader_t& reader, char* SP_RESTRICT data) {
   }
 }
 template <typename reader_t>
-bool read_bytes_array(reader_t& reader, char* SP_RESTRICT data,
-                      std::size_t length) {
+STRUCT_PACK_INLINE bool read_bytes_array(reader_t& reader,
+                                         char* SP_RESTRICT data,
+                                         std::size_t length) {
   return static_cast<bool>(reader.read(data, length));
 }
 template <std::size_t block_size, typename reader_t, typename T>
-bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
+STRUCT_PACK_INLINE bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
   static_assert(sizeof(T) >= block_size);
   if constexpr (is_system_little_endian) {
     char* data = (char*)&elem;
@@ -263,4 +269,170 @@ bool low_bytes_read_wrapper(reader_t& reader, T& elem) {
     }
   }
 }
-};  // namespace struct_pack::detail
+}  // namespace detail
+template <typename Writer, typename T>
+STRUCT_PACK_INLINE void write(Writer& writer, const T& t) {
+  if constexpr (std::is_fundamental_v<T>) {
+    detail::write_wrapper<sizeof(T)>(writer, (const char*)&t);
+  }
+  else if constexpr (detail::array<T>) {
+    if constexpr (detail::is_little_endian_copyable<sizeof(t[0])> &&
+                  std::is_fundamental_v<decltype(t[0])>) {
+      writer_bytes_array(writer, (const char*)&t.data(), sizeof(T));
+    }
+    else {
+      for (auto& e : t) write(writer, e);
+    }
+  }
+  else if constexpr (detail::string<T> || detail::container<T>) {
+    std::uint64_t len = t.size();
+    detail::write_wrapper<sizeof(std::size_t)>(writer, (char*)&len);
+    if constexpr (detail::continuous_container<T> &&
+                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+      writer_bytes_array(writer, (const char*)&t.data(), len * sizeof(t[0]));
+    }
+    else {
+      for (auto& e : t) write(writer, e);
+    }
+  }
+  else {
+    static_assert(!sizeof(T), "not support type");
+  }
+}
+template <typename Writer, typename T>
+STRUCT_PACK_INLINE void write(Writer& writer, const T* t, std::size_t length) {
+  if constexpr (std::is_fundamental_v<T>) {
+    if constexpr (detail::is_little_endian_copyable<sizeof(T)>) {
+      write_bytes_array(writer, (const char*)t, sizeof(T) * length);
+    }
+    else {
+      for (std::size_t i = 0; i < length; ++i) write(writer, t[i]);
+    }
+  }
+  else {
+    static_assert(!sizeof(T), "not support type");
+  }
+}
+template <typename T>
+STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T& t) {
+  if constexpr (std::is_fundamental_v<T>) {
+    return sizeof(T);
+  }
+  else if constexpr (detail::array<T>) {
+    if constexpr (std::is_fundamental_v<decltype(t[0])>) {
+      return sizeof(T);
+    }
+    else {
+      std::size_t ret = 0;
+      for (auto& e : t) ret += get_write_size(e);
+      return ret;
+    }
+  }
+  else if constexpr (detail::string<T> || detail::container<T>) {
+    std::size_t ret = 8;
+    if constexpr (detail::continuous_container<T> &&
+                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+      ret += t.size() * sizeof(t[0]);
+    }
+    else {
+      for (auto& e : t) ret += write(e);
+    }
+    return ret;
+  }
+  else {
+    static_assert(!sizeof(T), "not support type");
+  }
+}
+template <typename T>
+STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T* t,
+                                                        std::size_t length) {
+  return sizeof(T) * length;
+}
+template <typename Reader, typename T>
+STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
+  if constexpr (std::is_fundamental_v<T>) {
+    if (!detail::read_wrapper<sizeof(T)>(reader, (char*)&t)) {
+      return struct_pack::errc::no_buffer_space;
+    }
+    else {
+      return {};
+    }
+  }
+  else if constexpr (detail::array<T>) {
+    if constexpr (std::is_fundamental_v<decltype(t[0])> &&
+                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+      return read_bytes_array(reader, (char*)&t.data(), sizeof(T));
+    }
+    else {
+      struct_pack::errc ec;
+      for (auto& e : t) {
+        ec = read(reader, e);
+        if SP_UNLIKELY (ec != struct_pack::errc{}) {
+          return ec;
+        }
+      }
+      return struct_pack::errc{};
+    }
+  }
+  else if constexpr (detail::string<T> || detail::container<T>) {
+    std::uint64_t sz;
+    auto ec = read(reader, sz);
+    if SP_UNLIKELY (ec != struct_pack::errc{}) {
+      return ec;
+    }
+    if constexpr (detail::continuous_container<T> &&
+                  std::is_fundamental_v<decltype(t[0])> &&
+                  detail::is_little_endian_copyable<sizeof(t[0])> &&
+                  checkable_reader_t<Reader>) {
+      if SP_UNLIKELY (sz > UINT64_MAX / sizeof(t[0]) || sz > SIZE_MAX) {
+        return struct_pack::errc::invalid_buffer;
+      }
+      std::size_t mem_size = sz * sizeof(t[0]);
+      if SP_UNLIKELY (!reader.check(mem_size)) {
+        return struct_pack::errc::no_buffer_space;
+      }
+      detail::resize(t, mem_size);
+      return read_bytes_array(reader, (char*)&t.data(), mem_size);
+    }
+    else {
+      for (std::size_t i = 0; i < sz; ++i) {
+        t.emplace_back();
+        ec = read(reader, t.back());
+        if SP_UNLIKELY (ec != struct_pack::errc{}) {
+          return ec;
+        }
+      }
+      return struct_pack::errc{};
+    }
+  }
+  else {
+    static_assert(!sizeof(T), "not support type");
+  }
+}
+template <typename Reader, typename T>
+struct_pack::errc read(Reader& reader, T* t, std::size_t length) {
+  if constexpr (std::is_fundamental_v<T>) {
+    if constexpr (detail::is_little_endian_copyable<sizeof(T)>) {
+      if (!read_bytes_array(reader, (char*)t, sizeof(T) * length)) {
+        return struct_pack::errc::no_buffer_space;
+      }
+      else {
+        return {};
+      }
+    }
+    else {
+      struct_pack::errc ec{};
+      for (std::size_t i = 0; i < length; ++i) {
+        ec = read(reader, t[i]);
+        if SP_UNLIKELY (ec != struct_pack::errc{}) {
+          return ec;
+        }
+      };
+      return ec;
+    }
+  }
+  else {
+    static_assert(!sizeof(T), "not support type");
+  }
+}
+};  // namespace struct_pack

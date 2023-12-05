@@ -17,12 +17,48 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "marco.h"
 
 namespace struct_pack::detail {
+
+template <typename T>
+constexpr std::string_view get_raw_name() {
+#ifdef _MSC_VER
+  return __FUNCSIG__;
+#else
+  return __PRETTY_FUNCTION__;
+#endif
+}
+
+template <auto T>
+constexpr std::string_view get_raw_name() {
+#ifdef _MSC_VER
+  return __FUNCSIG__;
+#else
+  return __PRETTY_FUNCTION__;
+#endif
+}
+
+template <typename T>
+inline constexpr std::string_view type_string() {
+  constexpr std::string_view sample = get_raw_name<int>();
+  constexpr size_t pos = sample.find("int");
+  constexpr std::string_view str = get_raw_name<T>();
+  constexpr auto next1 = str.rfind(sample[pos + 3]);
+#if defined(_MSC_VER)
+  constexpr std::size_t npos = str.find_first_of(" ", pos);
+  if (npos != std::string_view::npos)
+    return str.substr(npos + 1, next1 - npos - 1);
+  else
+    return str.substr(pos, next1 - pos);
+#else
+  return str.substr(pos, next1 - pos);
+#endif
+}
 
 #if __cpp_concepts >= 201907L
 constexpr bool is_string_reserve_shrink = requires { std::string{}.reserve(); };

@@ -66,6 +66,8 @@ enum class type_id {
   expected_t,
   bitset_t,
   polymorphic_unique_ptr_t,
+  // flag for user-defined type
+  user_defined_type = 249,
   // monostate, or void
   monostate_t = 250,
   // circle_flag
@@ -274,7 +276,10 @@ template <typename T, std::size_t parent_tag = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8);
   // compatible member, which should be ignored in MD5 calculated.
-  if constexpr (optional<T> && is_compatible_v<T>) {
+  if constexpr (user_defined_serialization<T>) {
+    return type_id::user_defined_type;
+  }
+  else if constexpr (optional<T> && is_compatible_v<T>) {
     return type_id::compatible_t;
   }
   else if constexpr (detail::varint_t<T, parent_tag>) {
