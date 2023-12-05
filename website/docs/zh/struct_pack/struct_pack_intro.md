@@ -259,6 +259,10 @@ STRUCT_PACK_REFL(person, age(), name());
 
 struct_pack支持序列化自定义类型。
 
+#### 该类型可以被抽象为类型系统中已有的类型
+
+例如，假如我们需要序列化一个第三方库的map类型(absl , boost...)：我们只需要保证其符合struct_pack类型系统中对于map的约束即可。
+
 ```cpp
 // We should not inherit from stl container, this case just for testing.
 template <typename Key, typename Value>
@@ -278,6 +282,104 @@ auto buffer2 = serialize(map2);
 关于自定义类型的更多细节，请见：
 
 [struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
+
+#### 该类型不能被抽象为类型系统中已有的类型
+
+此时，我们也支持自定义的序列化，用户只需要自定义以下三个函数即可：
+
+1. sp_get_needed_size
+2. sp_serialize_to
+3. sp_deserialize_to
+
+例如，下面是一个支持自定义二维数组类型的序列化/反序列化的例子。
+
+```cpp
+struct array2D {
+  unsigned int x;
+  unsigned int y;
+  float* p;
+  array2D(unsigned int x, unsigned int y) : x(x), y(y) {
+    p = (float*)calloc(1ull * x * y, sizeof(float));
+  }
+  array2D(const array2D&) = delete;
+  array2D(array2D&& o) : x(o.x), y(o.y), p(o.p) { o.p = nullptr; };
+  array2D& operator=(const array2D&) = delete;
+  array2D& operator=(array2D&& o) {
+    x = o.x;
+    y = o.y;
+    p = o.p;
+    o.p = nullptr;
+    return *this;
+  }
+  float& operator()(std::size_t i, std::size_t j) { return p[i * y + j]; }
+  bool operator==(const array2D& o) const {
+    return x == o.x && y == o.y &&
+           memcmp(p, o.p, 1ull * x * y * sizeof(float)) == 0;
+  }
+  array2D() : x(0), y(0), p(nullptr) {}
+  ~array2D() { free(p); }
+};
+
+// 你需要自定义以下函数
+
+// 1. sp_get_needed_size: 预计算序列化长度
+std::size_t sp_get_needed_size(const array2D& ar) {
+  return 2 * struct_pack::get_write_size(ar.x) +
+         struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
+}
+// 2. sp_serialize_to: 将对象序列化到writer
+template </*struct_pack::writer_t*/ typename Writer>
+void sp_serialize_to(Writer& writer, const array2D& ar) {
+  struct_pack::write(writer, ar.x);
+  struct_pack::write(writer, ar.y);
+  struct_pack::write(writer, ar.p, 1ull * ar.x * ar.y);
+}
+// 3. sp_deserialize_to: 从reader反序列化对象
+template </*struct_pack::reader_t*/ typename Reader>
+struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  auto length = 1ull * ar.x * ar.y * sizeof(float);
+  if constexpr (struct_pack::checkable_reader_t<Reader>) {
+    if (!reader.check(length)) {  
+      //checkable_reader_t允许我们在读取数据前先检查是否超出长度限制
+      return struct_pack::errc::no_buffer_space;
+    }
+  }
+  ar.p = (float*)malloc(length);
+  auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
+  if (ec != struct_pack::errc{}) {
+    free(ar.p);
+  }
+  return ec;
+
+// 4. 默认用于类型检查的字符串就是该类型的名字. 你也可以通过下面的函数来配置
+
+// constexpr std::string_view sp_set_type_name(test*) { return "myarray2D"; }
+
+// 5. 如果你想使用 struct_pack::get_field/struct_pack::get_field_to, 还需要定义下面的函数以跳过自定义类型的反序列化。
+
+// template <typename Reader>
+// struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar);
+
+}
+
+void user_defined_serialization() {
+  std::vector<my_name_space::array2D> ar;
+  ar.emplace_back(11, 22);
+  ar.emplace_back(114, 514);
+  ar[0](1, 6) = 3.14;
+  ar[1](87, 111) = 2.71;
+  auto buffer = struct_pack::serialize(ar);
+  auto result = struct_pack::deserialize<decltype(ar)>(buffer);
+  assert(result.has_value());
+  assert(ar == result);
+}
+```
 
 ### 序列化到自定义的输出流
 

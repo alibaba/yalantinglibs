@@ -17,9 +17,11 @@
 void basic_usage();
 void non_aggregated_type();
 void serialize_config();
-
+void user_defined_serialization();
 int main() {
   basic_usage();
   non_aggregated_type();
+  serialize_config();
+  user_defined_serialization();
   return 0;
 }

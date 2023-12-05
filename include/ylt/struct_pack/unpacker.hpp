@@ -778,6 +778,14 @@ class unpacker {
       else if constexpr (std::is_same_v<type, std::monostate>) {
         // do nothing
       }
+      else if constexpr (id == type_id::user_defined_type) {
+        if constexpr (NotSkip) {
+          sp_deserialize_to(reader_, item);
+        }
+        else {
+          sp_deserialize_to_with_skip(reader_, item);
+        }
+      }
       else if constexpr (detail::varint_t<type, parent_tag>) {
         if constexpr (is_enable_fast_varint_coding(parent_tag)) {
           // do nothing, we have deserialized it in parent.
@@ -1002,7 +1010,7 @@ class unpacker {
                 item = {(value_type *)(view), (std::size_t)size};
               }
               else {
-                if constexpr (check_reader_t<Reader>) {
+                if constexpr (checkable_reader_t<Reader>) {
                   if SP_UNLIKELY (!reader_.check(mem_sz)) {
                     return struct_pack::errc::no_buffer_space;
                   }

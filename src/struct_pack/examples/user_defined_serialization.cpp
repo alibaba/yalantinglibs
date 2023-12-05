@@ -1,0 +1,93 @@
+#include <cstdlib>
+
+#include "ylt/struct_pack.hpp"
+namespace my_name_space {
+
+struct array2D {
+  unsigned int x;
+  unsigned int y;
+  float* p;
+  array2D(unsigned int x, unsigned int y) : x(x), y(y) {
+    p = (float*)calloc(1ull * x * y, sizeof(float));
+  }
+  array2D(const array2D&) = delete;
+  array2D(array2D&& o) : x(o.x), y(o.y), p(o.p) { o.p = nullptr; };
+  array2D& operator=(const array2D&) = delete;
+  array2D& operator=(array2D&& o) {
+    x = o.x;
+    y = o.y;
+    p = o.p;
+    o.p = nullptr;
+    return *this;
+  }
+  float& operator()(std::size_t i, std::size_t j) { return p[i * y + j]; }
+  bool operator==(const array2D& o) const {
+    return x == o.x && y == o.y &&
+           memcmp(p, o.p, 1ull * x * y * sizeof(float)) == 0;
+  }
+  array2D() : x(0), y(0), p(nullptr) {}
+  ~array2D() { free(p); }
+};
+
+// If you want to add a new type for struct_pack which is not in the struct_pack
+// type system. You need add those functions:
+
+// 1. sp_get_needed_size: calculate length of serialization
+std::size_t sp_get_needed_size(const array2D& ar) {
+  return 2 * struct_pack::get_write_size(ar.x) +
+         struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
+}
+// 2. sp_serialize_to: serilize object to writer
+template </*struct_pack::writer_t*/ typename Writer>
+void sp_serialize_to(Writer& writer, const array2D& ar) {
+  struct_pack::write(writer, ar.x);
+  struct_pack::write(writer, ar.y);
+  struct_pack::write(writer, ar.p, 1ull * ar.x * ar.y);
+}
+// 3. sp_deserialize_to: deserilize object from reader
+template </*struct_pack::reader_t*/ typename Reader>
+struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  auto length = 1ull * ar.x * ar.y * sizeof(float);
+  if constexpr (struct_pack::checkable_reader_t<Reader>) {
+    if (!reader.check(length)) {  // some input(such as memory) allow us check
+                                  // length before read data.
+      return struct_pack::errc::no_buffer_space;
+    }
+  }
+  ar.p = (float*)malloc(length);
+  auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
+  if (ec != struct_pack::errc{}) {
+    free(ar.p);
+  }
+  return ec;
+}
+
+// 4. The default name for type checking is it's literal type name. You can also
+// config it by:
+
+// constexpr std::string_view sp_set_type_name(test*) { return "myarray2D"; }
+
+// 5. If you want to use struct_pack::get_field/struct_pack::get_field_to, you
+// need also define this function to skip deserialization of your type:
+
+// template <typename Reader>
+// struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar);
+}  // namespace my_name_space
+
+void user_defined_serialization() {
+  std::vector<my_name_space::array2D> ar;
+  ar.emplace_back(11, 22);
+  ar.emplace_back(114, 514);
+  ar[0](1, 6) = 3.14;
+  ar[1](87, 111) = 2.71;
+  auto buffer = struct_pack::serialize(ar);
+  auto result = struct_pack::deserialize<decltype(ar)>(buffer);
+  assert(result.has_value());
+  assert(ar == result);
+}

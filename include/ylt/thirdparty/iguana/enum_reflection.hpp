@@ -31,11 +31,14 @@ inline constexpr std::string_view type_string() {
   constexpr std::string_view str = get_raw_name<T>();
   constexpr auto next1 = str.rfind(sample[pos + 3]);
 #if defined(_MSC_VER)
-  constexpr auto s1 = str.substr(pos + 6, next1 - pos - 6);
+  constexpr std::size_t npos = str.find_first_of(" ", pos);
+  if (npos != std::string_view::npos)
+    return str.substr(npos + 1, next1 - npos - 1);
+  else
+    return str.substr(pos, next1 - pos);
 #else
-  constexpr auto s1 = str.substr(pos, next1 - pos);
+  return str.substr(pos, next1 - pos);
 #endif
-  return s1;
 }
 
 template <auto T>
