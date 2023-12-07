@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "rpc_api.hpp"
+
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
-
-#include "rpc_api.hpp"
 
 using namespace coro_rpc;
 using namespace std::chrono_literals;
@@ -43,6 +43,12 @@ std::string large_arg_fun(std::string data) {
 int long_run_func(int val) {
   std::this_thread::sleep_for(40ms);
   return val;
+}
+
+void echo_with_attachment(coro_rpc::context<void> conn) {
+  auto str = conn.release_request_attachment();
+  conn.set_response_attachment(std::move(str));
+  conn.response_msg();
 }
 
 void coro_fun_with_user_define_connection_type(my_context conn) {

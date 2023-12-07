@@ -18,8 +18,8 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <any>
-#include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -89,7 +89,8 @@ class context_base {
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
-                serialize_proto::serialize(), self_->req_head_,
+                serialize_proto::serialize(),
+                std::move(self_->resp_attachment_), self_->req_head_,
                 self_->is_delay_);
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
@@ -116,13 +117,17 @@ class context_base {
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
-                serialize_proto::serialize(ret), self_->req_head_,
+                serialize_proto::serialize(ret),
+                std::move(self_->resp_attachment_), self_->req_head_,
                 self_->is_delay_);
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
 
       // response_handler_(std::move(conn_), std::move(ret));
     }
+    self_->resp_attachment_ = [] {
+      return std::string_view{};
+    };
   }
 
   /*!
@@ -131,6 +136,51 @@ class context_base {
    * @return true if closed, otherwise false
    */
   bool has_closed() const { return self_->conn_->has_closed(); }
+
+  /*!
+   * Close connection
+   */
+  void close() { return self_->conn_->async_close(); }
+
+  /*!
+   * Get the unique connection ID
+   * @return connection id
+   */
+  uint64_t get_connection_id() { return self_->conn_->conn_id_; }
+
+  /*!
+   * Set the response_attachment
+   * @return a ref of response_attachment
+   */
+  void set_response_attachment(std::string attachment) {
+    set_response_attachment([attachment = std::move(attachment)] {
+      return std::string_view{attachment};
+    });
+  }
+
+  /*!
+   * Set the response_attachment
+   * @return a ref of response_attachment
+   */
+  void set_response_attachment(std::function<std::string_view()> attachment) {
+    self_->resp_attachment_ = std::move(attachment);
+  }
+
+  /*!
+   * Get the request attachment
+   * @return connection id
+   */
+  std::string_view get_request_attachment() const {
+    return self_->req_attachment_;
+  }
+
+  /*!
+   * Release the attachment
+   * @return connection id
+   */
+  std::string release_request_attachment() {
+    return std::move(self_->req_attachment_);
+  }
 
   void set_delay() {
     self_->is_delay_ = true;

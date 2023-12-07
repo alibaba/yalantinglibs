@@ -32,6 +32,12 @@ int A_add_B(int a, int b) {
   return a + b;
 }
 
+void echo_with_attachment(coro_rpc::context<void> conn) {
+  std::string str = conn.release_request_attachment();
+  conn.set_response_attachment(std::move(str));
+  conn.response_msg();
+}
+
 std::string echo(std::string_view sv) { return std::string{sv}; }
 
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
