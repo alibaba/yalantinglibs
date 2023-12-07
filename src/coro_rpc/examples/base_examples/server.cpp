@@ -28,7 +28,8 @@ int main() {
 
   // regist normal function for rpc
   server.register_handler<hello_world, A_add_B, hello_with_delay, echo,
-                          nested_echo, coro_echo>();
+                          nested_echo, coro_echo, echo_with_attachment,
+                          echo_with_attachment2>();
 
   // regist member function for rpc
   HelloService hello_service;

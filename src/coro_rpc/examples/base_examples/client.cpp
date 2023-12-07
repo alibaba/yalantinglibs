@@ -43,6 +43,13 @@ Lazy<void> show_rpc_call() {
   }
   assert(client.get_resp_attachment() == "This is attachment.");
 
+  client.set_req_attachment("This is attachment2.");
+  ret_void = co_await client.call<echo_with_attachment2>();
+  if (!ret) {
+    std::cout << "hello_world err: " << ret.error().msg << std::endl;
+  }
+  assert(client.get_resp_attachment() == "This is attachment2.");
+
   auto ret_int = co_await client.call<A_add_B>(12, 30);
   if (!ret_int) {
     std::cout << "A_add_B err: " << ret_int.error().msg << std::endl;

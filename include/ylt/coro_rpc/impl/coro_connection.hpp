@@ -407,7 +407,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
       auto attachment = std::get<2>(msg)();
       if (attachment.empty()) {
-        std::array<asio::const_buffer, 3> buffers{
+        std::array<asio::const_buffer, 2> buffers{
             asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg))};
 #ifdef YLT_ENABLE_SSL
         if (use_ssl_) {

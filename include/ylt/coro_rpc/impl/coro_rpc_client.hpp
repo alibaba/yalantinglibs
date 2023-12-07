@@ -604,9 +604,10 @@ class coro_rpc_client {
     }
     else {
 #endif
-      if (req_attachment_.empty())
+      if (req_attachment_.empty()) {
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
+      }
       else {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
