@@ -15,9 +15,9 @@
  */
 #ifndef CORO_RPC_RPC_API_HPP
 #define CORO_RPC_RPC_API_HPP
-#include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <string>
 #include <thread>
+#include <ylt/coro_rpc/coro_rpc_context.hpp>
 
 void hi();
 std::string hello();
@@ -33,7 +33,7 @@ struct my_context {
   my_context(coro_rpc::context<void>&& ctx) : ctx_(std::move(ctx)) {}
   using return_type = void;
 };
-
+void echo_with_attachment(coro_rpc::context<void> conn);
 void coro_fun_with_user_define_connection_type(my_context conn);
 void coro_fun_with_delay_return_void(coro_rpc::context<void> conn);
 void coro_fun_with_delay_return_string(coro_rpc::context<std::string> conn);

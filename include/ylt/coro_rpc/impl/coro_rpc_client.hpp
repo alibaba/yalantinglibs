@@ -19,6 +19,7 @@
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <array>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <chrono>
@@ -36,7 +37,9 @@
 #include <variant>
 #include <ylt/easylog.hpp>
 
+#include "asio/buffer.hpp"
 #include "asio/dispatch.hpp"
+#include "asio/registered_buffer.hpp"
 #include "common_service.hpp"
 #include "context.hpp"
 #include "expected.hpp"
@@ -44,6 +47,7 @@
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/struct_pack.hpp"
+#include "ylt/struct_pack/util.h"
 #include "ylt/util/function_name.h"
 #include "ylt/util/type_traits.h"
 #include "ylt/util/utils.hpp"
@@ -127,7 +131,6 @@ class coro_rpc_client {
       : executor(executor),
         socket_(std::make_shared<asio::ip::tcp::socket>(executor)) {
     config_.client_id = client_id;
-    read_buf_.resize(default_read_buf_size_);
   }
 
   /*!
@@ -141,7 +144,6 @@ class coro_rpc_client {
         socket_(std::make_shared<asio::ip::tcp::socket>(
             executor.get_asio_executor())) {
     config_.client_id = client_id;
-    read_buf_.resize(default_read_buf_size_);
   }
 
   std::string_view get_host() const { return config_.host; }
@@ -347,12 +349,24 @@ class coro_rpc_client {
     if (has_closed_) {
       return;
     }
-
-    ELOGV(INFO, "client_id %d close", config_.client_id);
-
-    close_socket(socket_);
-
     has_closed_ = true;
+    ELOGV(INFO, "client_id %d close", config_.client_id);
+    close_socket(socket_);
+  }
+
+  bool set_req_attachment(std::string_view attachment) {
+    if (attachment.size() > UINT32_MAX) {
+      ELOGV(ERROR, "too large rpc attachment");
+      return false;
+    }
+    req_attachment_ = attachment;
+    return true;
+  }
+
+  std::string_view get_resp_attachment() const { return resp_attachment_buf_; }
+
+  std::string release_resp_attachment() {
+    return std::move(resp_attachment_buf_);
   }
 
   template <typename T, typename U>
@@ -534,7 +548,15 @@ class coro_rpc_client {
     using R = decltype(get_return_type<func>());
 
     auto buffer = prepare_buffer<func>(std::move(args)...);
+
     rpc_result<R, coro_rpc_protocol> r{};
+    if (buffer.empty()) {
+      r = rpc_result<R, coro_rpc_protocol>{
+          unexpect_t{},
+          coro_rpc_protocol::rpc_error{std::errc::message_size,
+                                       "rpc body serialize size too big"}};
+      co_return r;
+    }
 #ifdef GENERATE_BENCHMARK_DATA
     std::ofstream file(
         benchmark_file_path + std::string{get_func_name<func>()} + ".in",
@@ -581,12 +603,20 @@ class coro_rpc_client {
       co_return r;
     }
     else {
-      ret = co_await coro_io::async_write(
-          socket, asio::buffer(buffer.data(), buffer.size()));
+#endif
+      if (req_attachment_.empty()) {
+        ret = co_await coro_io::async_write(
+            socket, asio::buffer(buffer.data(), buffer.size()));
+      }
+      else {
+        std::array<asio::const_buffer, 2> iov{
+            asio::const_buffer{buffer.data(), buffer.size()},
+            asio::const_buffer{req_attachment_.data(), req_attachment_.size()}};
+        ret = co_await coro_io::async_write(socket, iov);
+        req_attachment_ = {};
+      }
+#ifdef UNIT_TEST_INJECT
     }
-#else
-    ret = co_await coro_io::async_write(
-        socket, asio::buffer(buffer.data(), buffer.size()));
 #endif
     if (!ret.first) {
 #ifdef UNIT_TEST_INJECT
@@ -606,11 +636,21 @@ class coro_rpc_client {
           asio::buffer((char *)&header, coro_rpc_protocol::RESP_HEAD_LEN));
       if (!ret.first) {
         uint32_t body_len = header.length;
-        if (body_len > read_buf_.size()) {
-          read_buf_.resize(body_len);
+        struct_pack::detail::resize(read_buf_, body_len);
+        if (header.attach_length == 0) {
+          ret = co_await coro_io::async_read(
+              socket, asio::buffer(read_buf_.data(), body_len));
+          resp_attachment_buf_.clear();
         }
-        ret = co_await coro_io::async_read(
-            socket, asio::buffer(read_buf_.data(), body_len));
+        else {
+          struct_pack::detail::resize(resp_attachment_buf_,
+                                      header.attach_length);
+          std::array<asio::mutable_buffer, 2> iov{
+              asio::mutable_buffer{read_buf_.data(), body_len},
+              asio::mutable_buffer{resp_attachment_buf_.data(),
+                                   resp_attachment_buf_.size()}};
+          ret = co_await coro_io::async_read(socket, iov);
+        }
         if (!ret.first) {
 #ifdef GENERATE_BENCHMARK_DATA
           std::ofstream file(
@@ -618,11 +658,11 @@ class coro_rpc_client {
               std::ofstream::binary | std::ofstream::out);
           file << std::string_view{(char *)&header,
                                    coro_rpc_protocol::RESP_HEAD_LEN};
-          file << std::string_view{(char *)read_buf_.data(), body_len};
+          file << read_buf_;
+          file << resp_attachment_buf_;
           file.close();
 #endif
-          r = handle_response_buffer<R>(read_buf_.data(), ret.second,
-                                        std::errc{header.err_code});
+          r = handle_response_buffer<R>(read_buf_, std::errc{header.err_code});
           if (!r) {
             close();
           }
@@ -673,6 +713,7 @@ class coro_rpc_client {
     header = {};
     header.magic = coro_rpc_protocol::magic_number;
     header.function_id = func_id<func>();
+    header.attach_length = req_attachment_.size();
 #ifdef UNIT_TEST_INJECT
     header.seq_num = config_.client_id;
     if (g_action == inject_action::client_send_bad_magic_num) {
@@ -683,7 +724,12 @@ class coro_rpc_client {
     }
     else {
 #endif
-      header.length = buffer.size() - coro_rpc_protocol::REQ_HEAD_LEN;
+      auto sz = buffer.size() - coro_rpc_protocol::REQ_HEAD_LEN;
+      if (sz > UINT32_MAX) {
+        ELOGV(ERROR, "too large rpc body");
+        return {};
+      }
+      header.length = sz;
 #ifdef UNIT_TEST_INJECT
     }
 #endif
@@ -691,13 +737,13 @@ class coro_rpc_client {
   }
 
   template <typename T>
-  rpc_result<T, coro_rpc_protocol> handle_response_buffer(
-      const std::byte *buffer, std::size_t len, std::errc rpc_errc) {
+  rpc_result<T, coro_rpc_protocol> handle_response_buffer(std::string &buffer,
+                                                          std::errc rpc_errc) {
     rpc_return_type_t<T> ret;
     struct_pack::errc ec;
     coro_rpc_protocol::rpc_error err;
     if (rpc_errc == std::errc{}) {
-      ec = struct_pack::deserialize_to(ret, (const char *)buffer, len);
+      ec = struct_pack::deserialize_to(ret, buffer);
       if (ec == struct_pack::errc::ok) {
         if constexpr (std::is_same_v<T, void>) {
           return {};
@@ -709,7 +755,7 @@ class coro_rpc_client {
     }
     else {
       err.code = rpc_errc;
-      ec = struct_pack::deserialize_to(err.msg, (const char *)buffer, len);
+      ec = struct_pack::deserialize_to(err.msg, buffer);
       if (ec == struct_pack::errc::ok) {
         return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
       }
@@ -773,7 +819,8 @@ class coro_rpc_client {
  private:
   coro_io::ExecutorWrapper<> executor;
   std::shared_ptr<asio::ip::tcp::socket> socket_;
-  std::vector<std::byte> read_buf_;
+  std::string read_buf_, resp_attachment_buf_;
+  std::string_view req_attachment_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
 #ifdef YLT_ENABLE_SSL

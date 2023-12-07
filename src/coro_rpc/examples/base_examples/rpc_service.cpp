@@ -32,6 +32,23 @@ int A_add_B(int a, int b) {
   return a + b;
 }
 
+void echo_with_attachment(coro_rpc::context<void> conn) {
+  ELOGV(INFO, "call echo_with_attachment");
+  std::string str = conn.release_request_attachment();
+  conn.set_response_attachment(std::move(str));
+  conn.response_msg();
+}
+
+void echo_with_attachment2(coro_rpc::context<void> conn) {
+  ELOGV(INFO, "call echo_with_attachment2");
+  std::string_view str = conn.get_request_attachment();
+  // The live time of attachment is same as coro_rpc::context
+  conn.set_response_attachment([str, conn] {
+    return str;
+  });
+  conn.response_msg();
+}
+
 std::string echo(std::string_view sv) { return std::string{sv}; }
 
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {

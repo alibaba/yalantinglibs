@@ -380,6 +380,31 @@ TEST_CASE("testing client with eof") {
   ret = client.sync_call<hello>();
   REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
 }
+TEST_CASE("testing client with attachment") {
+  g_action = {};
+  coro_rpc_server server(2, 8801);
+
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(res, "server start failed");
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  auto ec = client.sync_connect("127.0.0.1", "8801");
+  REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+
+  server.register_handler<echo_with_attachment>();
+
+  auto ret = client.sync_call<echo_with_attachment>();
+  CHECK(ret.has_value());
+  CHECK(client.get_resp_attachment() == "");
+
+  client.set_req_attachment("hellohi");
+  ret = client.sync_call<echo_with_attachment>();
+  CHECK(ret.has_value());
+  CHECK(client.get_resp_attachment() == "hellohi");
+
+  ret = client.sync_call<echo_with_attachment>();
+  CHECK(ret.has_value());
+  CHECK(client.get_resp_attachment() == "");
+}
 
 TEST_CASE("testing client with shutdown") {
   g_action = {};
