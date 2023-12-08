@@ -303,9 +303,11 @@ constexpr type_id get_type_id() {
                      std::is_same_v<T, void> || std::is_abstract_v<T>) {
     return type_id::monostate_t;
   }
+#ifdef STRUCT_PACK_ENABLE_UNPORTABLE_TYPE
   else if constexpr (bitset<T>) {
     return type_id::bitset_t;
   }
+#endif
   else if constexpr (string<T>) {
     return type_id::string_t;
   }
