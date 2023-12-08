@@ -45,6 +45,8 @@ You can also use cmake option `-DENABLE_CPP_20=ON` or `-DENABLE_CPP_20=OFF` to c
 
 Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
 
+### Install
+
 1. clone repo
 
 ```shell
@@ -93,7 +95,31 @@ cmake ..
 cmake --build .
 ```
 
-- Compile Manually:
+### Cmake FetchContent
+
+You can also import ylt by cmake FetchContent
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    yalantinglibs
+    GIT_REPOSITORY https://github.com/JYLeeLYJ/yalantinglibs.git
+    GIT_TAG feat/fetch # optional ( default master / main )
+    GIT_SHALLOW 1 # optional ( --depth=1 )
+)
+
+FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
+### Compile Manually:
 
 1. Add `include/` directory to include path(skip it if you have install ylt into system default path).
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON).
@@ -101,7 +127,7 @@ cmake --build .
 3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use g++.
 4. That's all. We could find other options in `example/cmakelist.txt`.
 
-- More Details:
+### More Details:
 For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/blob/main/CMakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
 
 # Introduction
