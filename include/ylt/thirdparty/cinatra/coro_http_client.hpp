@@ -902,12 +902,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
                        std::is_same_v<Source, std::string_view>) {
-      coro_io::coro_file coro_file(source, coro_io::flags::read_only);
-      while (!coro_file.eof()) {
+      coro_io::coro_file file{};
+      bool ok = co_await file.async_open(source, coro_io::flags::read_only);
+      if (!ok) {
+        co_return resp_data{
+            std::make_error_code(std::errc::bad_file_descriptor), 404};
+      }
+      while (!file.eof()) {
         auto [rd_ec, rd_size] =
-            co_await coro_file.async_read(file_data.data(), file_data.size());
+            co_await file.async_read(file_data.data(), file_data.size());
         auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
-            file_data.data(), rd_size, chunk_size_str, coro_file.eof());
+            file_data.data(), rd_size, chunk_size_str, file.eof());
         if (std::tie(ec, size) = co_await async_write(bufs); ec) {
           co_return resp_data{ec, 404};
         }
