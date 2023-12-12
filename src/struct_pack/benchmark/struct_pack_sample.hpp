@@ -102,16 +102,20 @@ struct struct_pack_sample : public base_sample {
     deserialize(SampleType::RECTS, rects_);
     deserialize(SampleType::VAR_RECT, rect2s_[0]);
     deserialize(SampleType::VAR_RECTS, rect2s_);
+#if __cplusplus >= 202002L
     auto sp = std::span{rects_};
     deserialize(SampleType::ZC_RECTS, sp);
+#endif
     deserialize(SampleType::PERSON, persons_[0]);
     deserialize(SampleType::PERSONS, persons_);
     deserialize<std::vector<person>, std::vector<zc_person>>(
         SampleType::ZC_PERSONS, persons_);
     deserialize(SampleType::MONSTER, monsters_[0]);
     deserialize(SampleType::MONSTERS, monsters_);
+#if __cplusplus >= 202002L
     deserialize<std::vector<Monster>, std::vector<zc_Monster>>(
         SampleType::ZC_MONSTERS, monsters_);
+#endif
   }
 
  private:

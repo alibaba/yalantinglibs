@@ -144,7 +144,7 @@ struct Monster {
                  equipped, path);
 #endif
 };
-
+#if __cplusplus >= 202002L
 struct zc_Weapon {
   std::string_view name;
   int16_t damage;
@@ -175,3 +175,4 @@ struct zc_Monster {
            equipped == rhs.equipped;
   };
 };
+#endif
