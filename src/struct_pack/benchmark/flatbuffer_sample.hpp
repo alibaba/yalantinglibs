@@ -55,7 +55,7 @@ inline void create<fb::persons>(flatbuffers::FlatBufferBuilder &builder,
   static std::vector<flatbuffers::Offset<fb::person>> persons_vector;
   persons_vector.clear();
   for (int i = 0; i < object_count; i++) {
-    auto name = builder.CreateString("Sword");
+    auto name = builder.CreateString(std::string(1024, 'A'));
     auto person = fb::Createperson(builder, 24, name, 432798, 65536.42);
     persons_vector.emplace_back(person);
   }

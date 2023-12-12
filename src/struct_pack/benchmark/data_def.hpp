@@ -41,12 +41,22 @@ struct person {
 #endif
 };
 
+struct zc_person {
+  int32_t id;
+  std::string_view name;
+  int age;
+  double salary;
+#ifdef HAVE_MSGPACK
+  MSGPACK_DEFINE(id, name, age, salary);
+#endif
+};
+
 template <typename T>
 struct rect {
-  T x;
-  T y;
-  T width;
-  T height;
+  T x = 1;
+  T y = 0;
+  T width = 11;
+  T height = 1;
 #ifdef HAVE_MSGPACK
   MSGPACK_DEFINE(x, y, width, height);
 #endif
@@ -134,3 +144,35 @@ struct Monster {
                  equipped, path);
 #endif
 };
+#if __cplusplus >= 202002L
+struct zc_Weapon {
+  std::string_view name;
+  int16_t damage;
+
+  bool operator==(const zc_Weapon &rhs) const {
+    return name == rhs.name && damage == rhs.damage;
+  };
+#ifdef HAVE_MSGPACK
+  MSGPACK_DEFINE(name, damage);
+#endif
+};
+
+struct zc_Monster {
+  Vec3 pos;
+  int16_t mana;
+  int16_t hp;
+  std::string_view name;
+  std::string_view inventory;
+  Color color;
+  std::vector<zc_Weapon> weapons;
+  zc_Weapon equipped;
+  std::span<Vec3> path;
+
+  bool operator==(const zc_Monster &rhs) const {
+    return pos == rhs.pos && mana == rhs.mana && hp == rhs.hp &&
+           name == rhs.name && inventory == rhs.inventory &&
+           color == rhs.color && weapons == rhs.weapons &&
+           equipped == rhs.equipped;
+  };
+};
+#endif

@@ -30,7 +30,7 @@ inline auto create_rect2s(size_t object_count) {
 
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
-  person p{432798, "tom", 24, 65536.42};
+  person p{432798, std::string(1024, 'A'), 24, 65536.42};
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(p);
   }
@@ -102,10 +102,20 @@ struct struct_pack_sample : public base_sample {
     deserialize(SampleType::RECTS, rects_);
     deserialize(SampleType::VAR_RECT, rect2s_[0]);
     deserialize(SampleType::VAR_RECTS, rect2s_);
+#if __cplusplus >= 202002L
+    auto sp = std::span{rects_};
+    deserialize(SampleType::ZC_RECTS, sp);
+#endif
     deserialize(SampleType::PERSON, persons_[0]);
     deserialize(SampleType::PERSONS, persons_);
+    deserialize<std::vector<person>, std::vector<zc_person>>(
+        SampleType::ZC_PERSONS, persons_);
     deserialize(SampleType::MONSTER, monsters_[0]);
     deserialize(SampleType::MONSTERS, monsters_);
+#if __cplusplus >= 202002L
+    deserialize<std::vector<Monster>, std::vector<zc_Monster>>(
+        SampleType::ZC_MONSTERS, monsters_);
+#endif
   }
 
  private:
@@ -131,13 +141,13 @@ struct struct_pack_sample : public base_sample {
     }
     buf_size_map_.emplace(sample_type, buffer_.size());
   }
-  template <typename T>
+  template <typename T, typename U = T>
   void deserialize(SampleType sample_type, T &sample) {
     // get serialized buffer of sample for deserialize
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
-    std::vector<T> vec;
+    std::vector<U> vec;
     vec.resize(ITERATIONS);
 
     uint64_t ns = 0;

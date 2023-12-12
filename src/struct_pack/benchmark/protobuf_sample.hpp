@@ -39,7 +39,7 @@ inline mygame::persons create_persons(size_t object_count) {
   for (int i = 0; i < object_count; i++) {
     auto *p = ps.add_person_list();
     p->set_id(432798);
-    p->set_name("tom");
+    p->set_name(std::string(1024, 'A'));
     p->set_age(24);
     p->set_salary(65536.42);
   }
