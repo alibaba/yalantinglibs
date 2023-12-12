@@ -126,9 +126,14 @@ class http_parser {
     return false;
   }
 
-  bool is_ranges() const {
-    auto transfer_encoding = this->get_header_value("Accept-Ranges"sv);
-    return !transfer_encoding.empty();
+  bool is_req_ranges() const {
+    auto value = this->get_header_value("Range"sv);
+    return !value.empty();
+  }
+
+  bool is_resp_ranges() const {
+    auto value = this->get_header_value("Accept-Ranges"sv);
+    return !value.empty();
   }
 
   bool is_websocket() const {
