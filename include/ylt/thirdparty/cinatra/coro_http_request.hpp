@@ -54,6 +54,10 @@ class coro_http_request {
     return is_chunk;
   }
 
+  bool is_resp_ranges() { return parser_.is_resp_ranges(); }
+
+  bool is_req_ranges() { return parser_.is_req_ranges(); }
+
   content_type get_content_type() {
     static content_type thread_local content_type = get_content_type_impl();
     return content_type;

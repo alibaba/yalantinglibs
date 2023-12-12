@@ -88,7 +88,9 @@ class coro_http_connection
 #endif
 
   async_simple::coro::Lazy<void> start() {
+#ifdef CINATRA_ENABLE_SSL
     bool has_shake = false;
+#endif
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -206,6 +208,45 @@ class coro_http_connection
       response_.to_buffers(buffers_);
     }
     auto [ec, _] = co_await async_write(buffers_);
+    if (ec) {
+      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      close();
+      co_return false;
+    }
+
+    if (!keep_alive_) {
+      // now in io thread, so can close socket immediately.
+      close();
+    }
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<bool> write_data(std::string_view message) {
+    std::vector<asio::const_buffer> buffers;
+    buffers.push_back(asio::buffer(message));
+    auto [ec, _] = co_await async_write(buffers);
+    if (ec) {
+      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      close();
+      co_return false;
+    }
+
+    if (!keep_alive_) {
+      // now in io thread, so can close socket immediately.
+      close();
+    }
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<bool> write_chunked_data(std::string_view buf,
+                                                    bool eof) {
+    std::string chunk_size_str = "";
+    std::vector<asio::const_buffer> buffers =
+        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
+                                               chunk_size_str, eof);
+    auto [ec, _] = co_await async_write(std::move(buffers));
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
