@@ -18,12 +18,15 @@ enum class LibType {
 enum class SampleType {
   RECT,
   RECTS,
+  ZC_RECTS,
   VAR_RECT,
   VAR_RECTS,
   PERSON,
   PERSONS,
+  ZC_PERSONS,
   MONSTER,
-  MONSTERS
+  MONSTERS,
+  ZC_MONSTERS,
 };
 
 inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
@@ -32,11 +35,16 @@ inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
     {SampleType::VAR_RECT, "1 rect(with fast varint edcode)"},
     {SampleType::VAR_RECTS,
      std::to_string(OBJECT_COUNT) + " rects(with fast varint edcode)"},
+    {SampleType::ZC_RECTS,
+     std::to_string(OBJECT_COUNT) + " rects(with zero-copy deserialize)"},
     {SampleType::PERSON, "1 person"},
     {SampleType::PERSONS, std::to_string(OBJECT_COUNT) + " persons"},
+    {SampleType::ZC_PERSONS,
+     std::to_string(OBJECT_COUNT) + " persons(with zero-copy deserialize)"},
     {SampleType::MONSTER, "1 monster"},
     {SampleType::MONSTERS, std::to_string(OBJECT_COUNT) + " monsters"},
-};
+    {SampleType::ZC_MONSTERS,
+     std::to_string(OBJECT_COUNT) + " monsters(with zero-copy deserialize)"}};
 
 inline const std::unordered_map<LibType, std::string> g_lib_name_map = {
     {LibType::STRUCT_PACK, "struct_pack"},

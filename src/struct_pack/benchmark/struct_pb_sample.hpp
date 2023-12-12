@@ -25,7 +25,10 @@ inline auto create_rects(std::size_t object_count) {
 inline auto create_persons(std::size_t object_count) {
   persons ps;
   for (int i = 0; i < object_count; ++i) {
-    person p{.id = 432798, .name = "tom", .age = 24, .salary = 65536.42};
+    person p{.id = 432798,
+             .name = std::string(1024, 'A'),
+             .age = 24,
+             .salary = 65536.42};
     ps.person_list.emplace_back(p);
   }
   return ps;
