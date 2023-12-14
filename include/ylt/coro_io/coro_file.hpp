@@ -270,6 +270,7 @@ class coro_file {
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_at(
       uint64_t offset, char* data, size_t size) {
     assert(stream_file_);
+    assert(type_ == read_type::uring_random);
 
     auto [ec, read_size] = co_await coro_io::async_read_at(
         offset,
@@ -288,6 +289,7 @@ class coro_file {
                                                            const char* data,
                                                            size_t size) {
     assert(stream_file_);
+    assert(type_ == read_type::uring_random);
 
     auto [ec, write_size] = co_await coro_io::async_write_at(
         offset,
@@ -299,6 +301,7 @@ class coro_file {
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
     assert(stream_file_);
+    assert(type_ == read_type::uring);
 
     auto [ec, read_size] = co_await coro_io::async_read(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
@@ -314,6 +317,7 @@ class coro_file {
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
                                                         size_t size) {
     assert(stream_file_);
+    assert(type_ == read_type::uring);
 
     auto [ec, write_size] = co_await coro_io::async_write(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
@@ -325,20 +329,20 @@ class coro_file {
   std::string str_mode(int open_mode) {
     switch (open_mode) {
       case flags::read_only:
-        return "r";
+        return "rb";
       case flags::create_write:
       case flags::write_only:
         return "w";
       case flags::read_write:
-        return "r+";
+        return "rb+";
       case flags::append:
         return "a";
       case flags::create_read_write_append:
-        return "a+";
+        return "ab+";
       case flags::truncate:
         return "w+";
       default:
-        return "r+";
+        return "rb+";
     }
   }
 
