@@ -65,6 +65,10 @@ int main() {
         while (true) {
           result = co_await req.get_conn()->read_websocket();
           if (result.ec) {
+            {
+              std::scoped_lock lock(mtx);
+              conn_map.erase((intptr_t)req.get_conn());
+            }
             break;
           }
 
