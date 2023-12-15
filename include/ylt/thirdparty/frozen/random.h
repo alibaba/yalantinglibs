@@ -66,11 +66,11 @@ class linear_congruential_engine {
     state_ = modulo(tmp, std::integral_constant<UIntType, modulus>());
     return state_;
   }
-  constexpr void discard(unsigned long long n) {
-    while (n--) operator()();
-  }
-  static constexpr result_type min() { return increment == 0u ? 1u : 0u; }
-  static constexpr result_type max() { return modulus - 1u; }
+  // constexpr void discard(unsigned long long n) {
+  //   while (n--) operator()();
+  // }
+  // static constexpr result_type min() { return increment == 0u ? 1u : 0u; }
+  // static constexpr result_type max() { return modulus - 1u; }
   friend constexpr bool operator==(linear_congruential_engine const &self,
                                    linear_congruential_engine const &other) {
     return self.state_ == other.state_;
