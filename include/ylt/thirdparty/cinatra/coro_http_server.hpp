@@ -13,6 +13,7 @@
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
+#include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 
