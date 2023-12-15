@@ -138,7 +138,7 @@ struct seed_or_index {
 
  private:
   static constexpr value_type MINUS_ONE =
-      std::numeric_limits<value_type>::max();
+      (std::numeric_limits<value_type>::max)();
   static constexpr value_type HIGH_BIT = ~(MINUS_ONE >> 1);
 
   value_type value_ = 0;
@@ -201,7 +201,7 @@ pmh_tables<M, Hash> constexpr make_pmh_tables(const carray<Item, N> &items,
   carray<seed_or_index, M> G;  // Default constructed to "index 0"
 
   // H becomes the second hash table in the resulting pmh function
-  constexpr std::size_t UNUSED = std::numeric_limits<std::size_t>::max();
+  constexpr std::size_t UNUSED = (std::numeric_limits<std::size_t>::max)();
   carray<std::size_t, M> H;
   H.fill(UNUSED);
 
