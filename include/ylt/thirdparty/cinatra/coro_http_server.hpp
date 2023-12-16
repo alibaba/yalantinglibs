@@ -227,9 +227,10 @@ class coro_http_server {
       if (size_t pos = relative_path.find('\\') != std::string::npos) {
         replace_all(relative_path, "\\", "/");
       }
-      uri = std::string("/")
+      uri = fs::path("/")
                 .append(static_dir_router_path_)
-                .append(relative_path);
+                .append(relative_path)
+                .string();
 
       set_http_handler<cinatra::GET>(
           uri,
