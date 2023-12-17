@@ -187,8 +187,8 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
-  void set_static_res_handler(std::string_view uri_suffix = "",
-                              std::string file_path = "www") {
+  void set_static_res_dir(std::string_view uri_suffix = "",
+                          std::string file_path = "www") {
     bool has_double_dot = (file_path.find("..") != std::string::npos) ||
                           (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -227,10 +227,15 @@ class coro_http_server {
       if (size_t pos = relative_path.find('\\') != std::string::npos) {
         replace_all(relative_path, "\\", "/");
       }
-      uri = fs::path("/")
-                .append(static_dir_router_path_)
-                .append(relative_path)
-                .string();
+      if (static_dir_router_path_.empty()) {
+        uri = relative_path;
+      }
+      else {
+        uri = fs::path("/")
+                  .append(static_dir_router_path_)
+                  .concat(relative_path)
+                  .string();
+      }
 
       set_http_handler<cinatra::GET>(
           uri,
