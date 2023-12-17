@@ -51,7 +51,7 @@ async_simple::coro::Lazy<void> broadcast(auto &conn_map,
 
 int main() {
   coro_http::coro_http_server server(1, 9001);
-  server.set_static_res_handler("", "");
+  server.set_static_res_dir("", "");
   std::mutex mtx;
   std::unordered_map<intptr_t, std::string> conn_map;
   server.set_http_handler<cinatra::GET>(
