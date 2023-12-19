@@ -16,8 +16,6 @@
 
 #include <cassert>
 
-#include "ylt/struct_pack/reflection.hpp"
-
 #define STRUCT_PACK_OPTIMIZE  // add this macro to speed up
                               // serialize/deserialize but it will cost more
                               // time to compile

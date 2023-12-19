@@ -202,5 +202,30 @@ constexpr auto derived_decl_impl() {
     return struct_pack::detail::declval<std::tuple<Base, Derives...>>();
   }
 }
+
+template <typename Base, typename... Derives>
+constexpr bool check_ID_collision() {
+  if constexpr (std::is_abstract_v<Base>) {
+    constexpr auto has_collision = struct_pack::detail::MD5_set<
+        std::tuple<Derives...>>::has_hash_collision;
+    if constexpr (has_collision != 0) {
+      static_assert(
+          !sizeof(std::tuple_element_t<has_collision, std::tuple<Derives...>>),
+          "ID collision happened, consider add member `static "
+          "constexpr uint64_t struct_pack_id` for collision type. ");
+    }
+  }
+  else {
+    constexpr auto has_collision = struct_pack::detail::MD5_set<
+        std::tuple<Base, Derives...>>::has_hash_collision;
+    if constexpr (has_collision != 0) {
+      static_assert(!sizeof(std::tuple_element_t<has_collision,
+                                                 std::tuple<Base, Derives...>>),
+                    "ID collision happened, consider add member `static "
+                    "constexpr uint64_t struct_pack_id` for collision type. ");
+    }
+  }
+  return true;
+}
 }  // namespace detail
 }  // namespace struct_pack

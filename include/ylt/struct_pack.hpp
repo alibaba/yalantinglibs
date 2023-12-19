@@ -661,7 +661,7 @@ template <typename BaseClass, typename... DerivedClasses, typename Reader,
   if constexpr (has_hash_collision != 0) {
     static_assert(!sizeof(std::tuple_element_t<has_hash_collision,
                                                std::tuple<DerivedClasses...>>),
-                  "hash collision happened, consider add member `static "
+                  "ID collision happened, consider add member `static "
                   "constexpr uint64_t struct_pack_id` for collision type. ");
   }
   else {
@@ -687,14 +687,26 @@ template <
     struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
     deserialize_derived_class(const View &v) {
   detail::memory_reader reader{v.data(), v.data() + v.size()};
-  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+  if constexpr (std::is_abstract_v<BaseClass>) {
+    return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+  }
+  else {
+    return deserialize_derived_class<BaseClass, BaseClass, DerivedClasses...>(
+        reader);
+  }
 }
 template <typename BaseClass, typename... DerivedClasses>
 [[nodiscard]] STRUCT_PACK_INLINE
     struct_pack::expected<std::unique_ptr<BaseClass>, struct_pack::errc>
     deserialize_derived_class(const char *data, size_t size) {
   detail::memory_reader reader{data, data + size};
-  return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+  if constexpr (std::is_abstract_v<BaseClass>) {
+    return deserialize_derived_class<BaseClass, DerivedClasses...>(reader);
+  }
+  else {
+    return deserialize_derived_class<BaseClass, BaseClass, DerivedClasses...>(
+        reader);
+  }
 }
 
 }  // namespace struct_pack

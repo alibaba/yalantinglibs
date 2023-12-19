@@ -26,7 +26,7 @@ struct foo2 : public Base {
   friend bool operator==(const foo2& a, const foo2& b) {
     return a.id == b.id && a.hello == b.hello && a.hi == b.hi;
   }
-  static constexpr uint64_t struct_pack_id = 114514;
+  static constexpr int struct_pack_id = 114514;
 };
 STRUCT_PACK_REFL(foo2, id, hello, hi);
 struct foo3 : public Base {
@@ -69,7 +69,7 @@ STRUCT_PACK_REFL(gua, id, a, b);
 
 struct_pack::expected<std::unique_ptr<Base>, struct_pack::errc>
 Base::deserialize(std::string_view sv) {
-  return struct_pack::deserialize_derived_class<Base, Base, bar, foo, gua, foo2,
+  return struct_pack::deserialize_derived_class<Base, bar, foo, gua, foo2,
                                                 foo4>(sv);
 }
 }  // namespace test1
