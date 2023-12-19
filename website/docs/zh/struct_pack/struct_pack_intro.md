@@ -457,7 +457,7 @@ auto person2 = struct_pack::deserialize<person>(ifs);
 assert(person2 == person);
 ```
 
-## 支持可变长编码：
+### 支持可变长编码：
 
 ```cpp
 
@@ -466,10 +466,100 @@ assert(person2 == person);
   auto buffer = std::serialize(vec); //zigzag+varint编码
 }
 {
-  std::vector<struct_pack::uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
+  std::vector<struct_pack::var_uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
   auto buffer = std::serialize(vec); //varint编码
 }
+struct rect {
+  int a,b,c,d;
+  constexpr static auto struct_pack_config = struct_pack::ENCODING_WITH_VARINT| struct_pack::USE_FAST_VARINT;
+  // 启用快速变长编码
+};
+
 ```
+
+### 派生类型支持
+
+struct_pack 同样支持序列化/反序列化派生自基类的子类，但需要额外的宏来标记派生关系并自动生成工厂函数。
+
+```cpp
+//    base
+//   /   |
+//  obj1 obj2
+//  |
+//  obj3
+struct base {
+  uint64_t ID;
+  virtual uint32_t get_struct_pack_id()
+      const = 0;  // 必须在基类中声明该函数。
+  virtual ~base(){};
+};
+struct obj1 : public base {
+  std::string name;
+  virtual uint32_t get_struct_pack_id()
+      const override;  // 必须在派生类中声明该函数。
+};
+STRUCT_PACK_REFL(obj1, ID, name);
+struct obj2 : public base {
+  std::array<float, 5> data;
+  virtual uint32_t get_struct_pack_id() const override;
+};
+STRUCT_PACK_REFL(obj2, ID, data);
+struct obj3 : public obj1 {
+  int age;
+  virtual uint32_t get_struct_pack_id() const override;
+};
+STRUCT_PACK_REFL(obj3, ID, name, age);
+
+STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
+// 声明基类和派生类之间的继承关系。
+STRUCT_PACK_DERIVED_IMPL(base, obj1, obj2, obj3);
+// 实现get_struct_pack_id函数。
+```
+
+然后用户就可以正常的序列化/反序列化`unique_ptr<base>`类型了。
+```cpp
+  std::vector<std::unique_ptr<base>> data;
+  data.emplace_back(std::make_unique<obj2>());
+  data.emplace_back(std::make_unique<obj1>());
+  data.emplace_back(std::make_unique<obj3>());
+  auto ret = struct_pack::serialize(data);
+  auto result =
+      struct_pack::deserialize<std::vector<std::unique_ptr<base>>>(ret);
+  assert(result.has_value());   // check deserialize ok
+  assert(result->size() == 3);  // check vector size
+```
+用户同样可以序列化任意派生类然后将其反序列化为指向基类的指针。
+```cpp
+  auto ret = struct_pack::serialize(obj3{});
+  auto result =
+      struct_pack::deserialize_derived_class<base, obj1, obj2, obj3>(buffer);
+  assert(result.has_value());   // check deserialize ok
+  std::unique_ptr<base> ptr = std::move(result.value());
+  assert(ptr != nullptr);
+```
+
+### ID冲突/哈希冲突
+
+当两个派生类型具有完全相同的字段时，会发生ID冲突，因为struct_pack通过类型哈希来生成ID。两个相同的ID将导致struct_pack无法正确反序列化出对应的派生类。struct_pack会在编译期检查出这样的错误。
+
+此外，任意两个不同的类型也有$2^-32$的概率发生哈希冲突，导致struct_pack无法利用哈希信息检查出类型错误。在Debug模式下，struct_pack默认带有完整类型字符串，以缓解哈希冲突。
+
+用户可以手动给类型打标记来修复这一问题。即给该类型添加成员`constexpr static std::size_t struct_pack_id`并赋一个唯一的初值。如果不想侵入式的修改类的定义，也可以选择在同namespace下添加函数`constexpr std::size_t struct_pack_id(Type*)`。
+
+```cpp
+struct obj1 {
+  std::string name;
+  virtual uint32_t get_struct_pack_id() const;
+};
+STRUCT_PACK_REFL(obj1, name);
+struct obj2 : public obj1 {
+  virtual uint32_t get_struct_pack_id() const override;
+  constexpr static std::size_t struct_pack_id = 114514;
+};
+STRUCT_PACK_REFL(obj2, name);
+```
+
+当添加了该字段/函数后，struct_pack会在类型字符串中加上该ID，从而保证两个类型之间具有不同的类型哈希值，从而解决ID冲突/哈希冲突。
 
 
 ## benchmark

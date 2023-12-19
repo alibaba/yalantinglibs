@@ -47,7 +47,7 @@ struct derived4 : public derived3 {
 
 STRUCT_PACK_REFL(derived4, a, d, e);
 
-STRUCT_PACK_DERIVED_DECL(base, derived1, derived2, derived3, derived4);
+STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2, derived3, derived4);
 }  // namespace test2
 namespace test3 {
 
@@ -93,6 +93,6 @@ struct derived4 : public derived3 {
 
 STRUCT_PACK_REFL(derived4, a, d, e);
 
-STRUCT_PACK_DERIVED_DECL(base, derived1, derived2, derived3, derived4);
+STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2, derived3, derived4);
 
 }  // namespace test3

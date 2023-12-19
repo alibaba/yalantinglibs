@@ -17,22 +17,19 @@
 #include "foreach_macro.h"
 
 #pragma once
-#define GET_STRUCT_PACK_ID_IMPL(type)                            \
-  inline uint32_t type::get_struct_pack_id() const {             \
-    return struct_pack::detail::get_struct_pack_id_impl<type>(); \
-  }
 
 #define GET_STRUCT_PACK_ID_IMPL_FOR_LOOP(idx, type)              \
   inline uint32_t type::get_struct_pack_id() const {             \
     return struct_pack::detail::get_struct_pack_id_impl<type>(); \
   }
 
-#define STRUCT_PACK_DERIVED_IMPL(base, ...)                                    \
+#define STRUCT_PACK_DERIVED_DECL(base, ...)                                    \
                                                                                \
   inline decltype(struct_pack::detail::derived_decl_impl<base, __VA_ARGS__>()) \
   struct_pack_derived_decl(base*);
 
-#define STRUCT_PACK_DERIVED_DECL(base, ...)                         \
+#define STRUCT_PACK_DERIVED_IMPL(base, ...)                         \
   STRUCT_PACK_EXPAND_EACH(, GET_STRUCT_PACK_ID_IMPL_FOR_LOOP, base, \
                           __VA_ARGS__)                              \
-  STRUCT_PACK_DERIVED_IMPL(base, __VA_ARGS__)
+  STRUCT_PACK_DERIVED_DECL(base, __VA_ARGS__);                      \
+  static_assert(struct_pack::detail::check_ID_collision<base, __VA_ARGS__>());\

@@ -428,7 +428,7 @@ concept view_reader_t = reader_t<T> && requires(T t) {
 };
 ```
 
-## varint support
+### varint support
 
 struct_pack also supports varint code for integer.
 
@@ -438,11 +438,104 @@ struct_pack also supports varint code for integer.
   auto buffer = std::serialize(vec); //zigzag+varint code
 }
 {
-  std::vector<struct_pack::uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
+  std::vector<struct_pack::var_uint64_t> vec={1,2,3,4,5,6,7,UINT64_MAX};
   auto buffer = std::serialize(vec); //varint code
 }
+struct rect {
+  int a,b,c,d;
+  constexpr static auto struct_pack_config = struct_pack::ENCODING_WITH_VARINT| struct_pack::USE_FAST_VARINT;
+  // enable fast varint encode.
+};
 
 ```
+
+### derived class support
+
+struct_pack supports serialize/deserialize derived class to the pointer of base class. But We need additional macro to mark the relationship to generate factory function automatically.
+
+```cpp
+//    base
+//   /   |
+//  obj1 obj2
+//  |
+//  obj3
+struct base {
+  uint64_t ID;
+  virtual uint32_t get_struct_pack_id()
+      const = 0;  // user must declare this virtual function in base
+                  // class
+  virtual ~base(){};
+};
+struct obj1 : public base {
+  std::string name;
+  virtual uint32_t get_struct_pack_id()
+      const override;  // user must declare this virtual function in derived
+                       // class
+};
+STRUCT_PACK_REFL(obj1, ID, name);
+struct obj2 : public base {
+  std::array<float, 5> data;
+  virtual uint32_t get_struct_pack_id() const override;
+};
+STRUCT_PACK_REFL(obj2, ID, data);
+struct obj3 : public obj1 {
+  int age;
+  virtual uint32_t get_struct_pack_id() const override;
+};
+STRUCT_PACK_REFL(obj3, ID, name, age);
+
+STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
+// declare the relationship bewteen base class and derived class.
+STRUCT_PACK_DERIVED_IMPL(base, obj1, obj2, obj3);
+// implement of get_struct_pack_id();
+```
+
+Then user can serialize & deserialize the type `std::unique<base>`:
+```cpp
+  std::vector<std::unique_ptr<base>> data;
+  data.emplace_back(std::make_unique<obj2>());
+  data.emplace_back(std::make_unique<obj1>());
+  data.emplace_back(std::make_unique<obj3>());
+  auto ret = struct_pack::serialize(data);
+  auto result =
+      struct_pack::deserialize<std::vector<std::unique_ptr<base>>>(ret);
+  assert(result.has_value());   // check deserialize ok
+  assert(result->size() == 3);  // check vector size
+```
+
+user can also serialize type `base` then deserialize it to the `std::unique<base>`:
+```cpp
+  auto ret = struct_pack::serialize(obj3{});
+  auto result =
+      struct_pack::deserialize_derived_class<base, obj1, obj2, obj3>(buffer);
+  assert(result.has_value());   // check deserialize ok
+  std::unique_ptr<base> ptr = std::move(result.value());
+  assert(ptr != nullptr);
+```
+
+#### ID collision
+
+If two derived class has same field, it will cause ID collision because struct_pack generate the id by type hash. Two identical IDs will cause struct_pack fail to properly deserialise the derived class. struct_pack will check for such an error at compile time.
+
+In addition, there is also a $2^-32$ probability of a hash conflict for any two different types, causing struct_pack to fail to use the hash information to check for type errors. In Debug mode, struct_pack comes with the full type string by default to mitigate hash conflicts.
+
+The user can fix this by manually tagging the type. That is, add the member `constexpr static std::size_t struct_pack_id` to the type and assign a unique initial value. If user does not want to intrusively modify the class declaration, we can also choose to add the function `constexpr std::size_t struct_pack_id(Type*)` under the same namespace.
+
+```cpp
+struct obj1 {
+  std::string name;
+  virtual uint32_t get_struct_pack_id() const;
+};
+STRUCT_PACK_REFL(obj1, name);
+struct obj2 : public obj1 {
+  virtual uint32_t get_struct_pack_id() const override;
+  constexpr static std::size_t struct_pack_id = 114514;
+};
+STRUCT_PACK_REFL(obj2, name);
+```
+
+When this field/function is added, struct_pack adds this ID to the type string, thus ensuring that the two types have different hash values, thus resolving ID conflicts/hash conflicts.
+
 
 
 ## benchmark

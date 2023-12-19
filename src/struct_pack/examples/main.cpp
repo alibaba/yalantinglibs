@@ -18,10 +18,12 @@ void basic_usage();
 void non_aggregated_type();
 void serialize_config();
 void user_defined_serialization();
+void derived_class_example();
 int main() {
   basic_usage();
   non_aggregated_type();
   serialize_config();
   user_defined_serialization();
+  derived_class_example();
   return 0;
 }
