@@ -6,7 +6,7 @@ namespace iguana {
 // return true when it==end
 template <typename It>
 IGUANA_INLINE bool skip_space_till_end(It &&it, It &&end) {
-  while (it != end && *it < 33) ++it;
+  while (it != end && (static_cast<uint8_t>(*it) < 33)) ++it;
   return it == end;
 }
 

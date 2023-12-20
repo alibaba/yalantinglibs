@@ -337,7 +337,8 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
       using value_type = std::decay_t<decltype(v)>;
       skip_space_and_lines(it, end, spaces);
       match<'-'>(it, end);
-      auto subspaces = skip_space_and_lines(it, end, spaces + 1);
+      [[maybe_unused]] auto subspaces =
+          skip_space_and_lines(it, end, spaces + 1);
       if constexpr (string_v<value_type>) {
         parse_item(v, it, end, spaces + 1);
       }
@@ -361,10 +362,10 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
   using T = std::remove_reference_t<U>;
   using key_type = typename T::key_type;
   using value_type = typename T::mapped_type;
-  auto spaces = skip_space_and_lines(it, end, min_spaces);
+  [[maybe_unused]] auto spaces = skip_space_and_lines(it, end, min_spaces);
   if (*it == '{') {
     ++it;
-    auto subspaces = skip_space_and_lines(it, end, min_spaces);
+    [[maybe_unused]] auto subspaces = skip_space_and_lines(it, end, min_spaces);
     while (it != end) {
       if (*it == '}')
         IGUANA_UNLIKELY {
@@ -470,7 +471,7 @@ IGUANA_INLINE void parse_item(U &value, It &&it, It &&end, size_t min_spaces) {
 
 template <typename It>
 IGUANA_INLINE void skip_object_value(It &&it, It &&end, size_t min_spaces) {
-  int subspace = min_spaces;
+  size_t subspace = min_spaces;
   while (it != end) {
     while (it != end && *it != '\n') {
       ++it;

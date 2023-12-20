@@ -1,9 +1,10 @@
 #pragma once
 
-#include <array>
-#if __cplusplus >= 202002L
+#if (defined(_MSC_VER) && _MSC_VER >= 1920 && _MSVC_LANG >= 202002L) || \
+    (!defined(_MSC_VER) && defined(__cplusplus) && __cplusplus >= 202002L)
 #include <bit>
 #endif
+#include <array>
 #include <string>
 #include <string_view>
 #include <type_traits>
