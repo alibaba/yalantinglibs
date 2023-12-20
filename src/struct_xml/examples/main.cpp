@@ -254,7 +254,8 @@ void test_inner_object() {
   assert(obj1.get_id() == 20);
   assert(obj1.get_name() == "tom");
 
-  std::string xml_str = R"(<some_object><id>20</id><name>小强</name></some_object>)";
+  std::string xml_str =
+      R"(<some_object><id>20</id><name>小强</name></some_object>)";
   some_object obj2;
   iguana::from_xml(obj2, xml_str);
   assert(obj2.get_id() == 20);

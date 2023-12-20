@@ -43,7 +43,7 @@ inline constexpr std::string_view type_string() {
 #else
   return str.substr(pos, next1 - pos);
 #endif
-  }
+}
 
 template <auto T>
 inline constexpr std::string_view enum_string() {

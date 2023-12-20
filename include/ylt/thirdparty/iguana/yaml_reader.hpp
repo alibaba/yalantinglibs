@@ -6,7 +6,6 @@
 #include "detail/utf.hpp"
 #include "yaml_util.hpp"
 
-
 namespace iguana {
 
 template <typename T, typename It, std::enable_if_t<refletable_v<T>, int> = 0>
