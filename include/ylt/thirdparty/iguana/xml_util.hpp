@@ -47,10 +47,6 @@ struct is_cdata_t<xml_cdata_t<T>> : std::true_type {};
 template <typename T>
 constexpr inline bool cdata_v = is_cdata_t<std::remove_cvref_t<T>>::value;
 
-inline constexpr auto has_zero = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
-  return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
-};
-
 inline constexpr auto has_greater = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
   return has_zero(
       chunk ^
@@ -82,15 +78,9 @@ inline constexpr auto has_equal = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
       0b0011110100111101001111010011110100111101001111010011110100111101);
 };
 
-inline constexpr auto has_qoute = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
-  return has_zero(
-      chunk ^
-      0b0010001000100010001000100010001000100010001000100010001000100010);
-};
-
 template <typename It>
 IGUANA_INLINE void skip_sapces_and_newline(It &&it, It &&end) {
-  while (it != end && (*it < 33)) {
+  while (it != end && (static_cast<uint8_t>(*it) < 33)) {
     ++it;
   }
 }

@@ -611,6 +611,9 @@ constexpr std::array<frozen::string, N> get_alias_arr(Args... pairs) {
       using size_type = std::integral_constant<                               \
           size_t, std::tuple_size_v<decltype(std::make_tuple(__VA_ARGS__))>>; \
       constexpr static std::string_view name() { return ALIAS; }              \
+      constexpr static std::string_view struct_name() {                       \
+        return std::string_view(#STRUCT_NAME, sizeof(#STRUCT_NAME) - 1);      \
+      }                                                                       \
       constexpr static size_t value() { return size_type::value; }            \
       constexpr static std::array<frozen::string, size_type::value> arr() {   \
         return iguana::detail::get_alias_arr<size_type::value>(__VA_ARGS__);  \

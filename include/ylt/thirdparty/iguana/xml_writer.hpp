@@ -167,7 +167,7 @@ IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name) {
              using value_type = underline_type_t<decltype(t.*v)>;
              constexpr auto Idx = decltype(i)::value;
              constexpr auto Count = M::value();
-             constexpr std::string_view tag_name =
+             [[maybe_unused]] constexpr std::string_view tag_name =
                  std::string_view(get_name<std::decay_t<T>, Idx>().data(),
                                   get_name<std::decay_t<T>, Idx>().size());
              static_assert(Idx < Count);
