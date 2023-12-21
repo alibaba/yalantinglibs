@@ -1,3 +1,5 @@
+#include <climits>
+#include <cstdint>
 #include <ylt/struct_pack.hpp>
 
 #include "doctest.h"
@@ -580,3 +582,35 @@ TEST_CASE("testing trivial_view type") {
   }
 };
 #endif
+
+struct long_test {
+  long hi = -1;
+  unsigned long hi2 = ULONG_MAX;
+};
+
+struct long_test2 {
+  int64_t hi = -1;
+  uint64_t hi2 = UINT64_MAX;
+};
+
+struct long_test3 {
+  int32_t hi = -1;
+  uint32_t hi2 = UINT32_MAX;
+};
+
+TEST_CASE("testing long type") {
+  if constexpr (sizeof(long) == 8) {
+    auto buffer = struct_pack::serialize(long_test{});
+    auto result = struct_pack::deserialize<long_test2>(buffer);
+    CHECK(result.has_value());
+    CHECK(result->hi == -1);
+    CHECK(result->hi2 == ULONG_MAX);
+  }
+  else if constexpr (sizeof(long) == 4) {
+    auto buffer = struct_pack::serialize(long_test{});
+    auto result = struct_pack::deserialize<long_test3>(buffer);
+    CHECK(result.has_value());
+    CHECK(result->hi == -1);
+    CHECK(result->hi2 == ULONG_MAX);
+  }
+}

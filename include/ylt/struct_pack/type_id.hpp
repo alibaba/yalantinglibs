@@ -196,6 +196,28 @@ constexpr type_id get_integral_type() {
     return type_id::uint128_t;
   }
 #endif
+  else if constexpr (std::is_same_v<long, T>) {
+    if constexpr (sizeof(long) == sizeof(int32_t)) {
+      return type_id::int32_t;
+    }
+    else if constexpr (sizeof(long) == sizeof(int64_t)) {
+      return type_id::int64_t;
+    }
+    else {
+      static_assert(!sizeof(T), "unsupport size of long type");
+    }
+  }
+  else if constexpr (std::is_same_v<unsigned long, T>) {
+    if constexpr (sizeof(unsigned long) == sizeof(uint32_t)) {
+      return type_id::uint32_t;
+    }
+    else if constexpr (sizeof(unsigned long) == sizeof(uint64_t)) {
+      return type_id::uint64_t;
+    }
+    else {
+      static_assert(!sizeof(T), "unsupport size of long type");
+    }
+  }
   else {
     /*
      * Due to different data model,
@@ -219,17 +241,6 @@ constexpr type_id get_integral_type() {
         !std::is_same_v<wchar_t, T>,
         "Tips: Add macro STRUCT_PACK_ENABLE_UNPORTABLE_TYPE to support "
         "wchar_t");
-    static_assert(!std::is_same_v<long, T> && !std::is_same_v<unsigned long, T>,
-                  "The long types have different width in "
-                  "different data model. "
-                  "see "
-                  "https://en.cppreference.com/w/cpp/language/"
-                  "types. "
-                  "Please use fixed width integer types. e.g. "
-                  "int32_t, int64_t. "
-                  "see "
-                  "https://en.cppreference.com/w/cpp/types/"
-                  "integer.");
     static_assert(!sizeof(T), "not supported type");
     // This branch will always compiled error.
   }
