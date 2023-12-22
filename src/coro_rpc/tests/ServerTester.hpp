@@ -29,6 +29,7 @@
 #include "inject_action.hpp"
 #include "rpc_api.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 
 #ifdef _MSC_VER
 #define CORO_RPC_FUNCTION_SIGNATURE __FUNCSIG__
@@ -128,7 +129,7 @@ struct ServerTester : TesterConfig {
     std::shared_ptr<coro_rpc_client> client;
     // sometimes, connect will take more than conn_timeout_duration(500ms), so
     // retry 3 times to make sure connect ok.
-    std::errc ec;
+    coro_rpc::errc ec;
     int retry = 4;
     for (int i = 0; i < retry; i++) {
       if (use_outer_io_context) {
@@ -154,16 +155,16 @@ struct ServerTester : TesterConfig {
         ec = syncAwait(client->connect("127.0.0.1", port_));
       }
 
-      if (ec == std::errc{}) {
+      if (!ec) {
         break;
       }
 
       ELOGV(INFO, "retry times %d", i);
     }
 
-    REQUIRE_MESSAGE(ec == std::errc{}, std::to_string(client->get_client_id())
-                                           .append(" not connected ")
-                                           .append(conf_str_));
+    REQUIRE_MESSAGE(!ec, std::to_string(client->get_client_id())
+                             .append(" not connected ")
+                             .append(conf_str_));
     return client;
   }
   template <auto func, typename... Args>
@@ -256,7 +257,7 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_send_bad_magic_num() {
@@ -265,7 +266,7 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_send_header_length_is_0() {
@@ -274,7 +275,7 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_header() {
@@ -284,7 +285,7 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_partial_header() {
@@ -294,7 +295,7 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<client_hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
   void test_client_close_socket_after_send_payload() {
@@ -304,7 +305,7 @@ struct ServerTester : TesterConfig {
     auto ret = call<client_hello>(client);
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   }
 
@@ -319,7 +320,7 @@ struct ServerTester : TesterConfig {
     ret = call<async_hi>(client);
     if (enable_heartbeat) {
       REQUIRE_MESSAGE(
-          ret.error().code == std::errc::io_error,
+          ret.error().code == coro_rpc::errc::io_error,
           std::to_string(client->get_client_id()).append(ret.error().msg));
     }
     else {
@@ -367,14 +368,14 @@ struct ServerTester : TesterConfig {
     };
     auto client = init_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    std::errc ec;
+    coro_rpc::errc ec;
     // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
-    CHECK_MESSAGE(ec != std::errc{},
-                  std::to_string(client->get_client_id())
-                      .append(make_error_code(ec).message()));
+    CHECK_MESSAGE(
+        !!ec,
+        std::to_string(client->get_client_id()).append(make_error_message(ec)));
   }
 
   template <auto func, typename... Args>
@@ -395,7 +396,7 @@ struct ServerTester : TesterConfig {
     g_action = inject_action::close_socket_after_read_header;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   };
 
@@ -408,7 +409,7 @@ struct ServerTester : TesterConfig {
     g_action = inject_action::close_socket_after_send_length;
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   };
 
@@ -424,7 +425,7 @@ struct ServerTester : TesterConfig {
     ret = this->call<func>(client, std::forward<Args>(args)...);
     REQUIRE(!ret);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
   };
   asio::io_context io_context_;

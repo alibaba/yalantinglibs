@@ -75,7 +75,7 @@ get_result(const auto &pair) {
   rpc_return_type_t<T> ret;
   struct_pack::errc ec;
   coro_rpc_protocol::rpc_error err;
-  if (rpc_errc == std::errc{}) {
+  if (!rpc_errc) {
     ec = struct_pack::deserialize_to(ret, buffer);
     if (ec == struct_pack::errc::ok) {
       if constexpr (std::is_same_v<T, void>) {
@@ -94,14 +94,15 @@ get_result(const auto &pair) {
     }
   }
   // deserialize failed.
-  err = {std::errc::invalid_argument, "failed to deserialize rpc return value"};
+  err = {coro_rpc::errc::invalid_argument,
+         "failed to deserialize rpc return value"};
   return return_type{unexpect_t{}, std::move(err)};
 }
 
 template <typename R>
 void check_result(const auto &pair, size_t offset = 0) {
   auto [err, buffer] = pair;
-  assert(err == std::errc{});
+  assert(!err);
   std::string_view data(buffer.data(), buffer.size());
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
@@ -227,7 +228,7 @@ TEST_CASE("testing coro_handler") {
 
 TEST_CASE("testing not registered func") {
   auto pair = test_route<not_register_func>(ctx, 42);
-  CHECK(pair.first == std::errc::function_not_supported);
+  CHECK(pair.first == coro_rpc::errc::function_not_registered);
 }
 
 void plus_one(int val) {}
@@ -244,32 +245,32 @@ class test_class {
 };
 
 TEST_CASE("testing invalid arguments") {
-  std::pair<std::errc, std::string> pair{};
+  std::pair<coro_rpc::errc, std::string> pair{};
 
   SUBCASE("test member functions") {
     test_class obj{};
     router.register_handler<&test_class::plus_one>(&obj, 2);
     router.register_handler<&test_class::plus_one, &test_class::get_str>(&obj);
     pair = test_route<plus_one>(ctx, 42);
-    CHECK(pair.first == std::errc::function_not_supported);
+    CHECK(pair.first == coro_rpc::errc::function_not_registered);
 
     pair = test_route<&test_class::plus_one>(ctx, 42);
-    CHECK(pair.first == std::errc{});
+    CHECK(!pair.first);
 
     pair = test_route<&test_class::plus_one>(ctx);
-    CHECK(pair.first == std::errc::invalid_argument);
+    CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
     pair = test_route<&test_class::plus_one>(ctx, 42, 42);
-    CHECK(pair.first == std::errc::invalid_argument);
+    CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
     pair = test_route<&test_class::plus_one>(ctx, "test");
-    CHECK(pair.first == std::errc::invalid_argument);
+    CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
     pair = test_route<&test_class::get_str>(ctx, "test");
-    CHECK(pair.first == std::errc::invalid_argument);
+    CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
     pair = test_route<&test_class::get_str>(ctx, std::string("test"));
-    CHECK(pair.first == std::errc{});
+    CHECK(!pair.first);
 
     auto r = get_result<&test_class::get_str>(pair);
     CHECK(r.value() == "test");
@@ -279,42 +280,42 @@ TEST_CASE("testing invalid arguments") {
   router.register_handler<get_str>();
 
   pair = test_route<get_str>(ctx, "test");
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
   pair = test_route<get_str>(ctx, std::string("test"));
-  CHECK(pair.first == std::errc{});
+  CHECK(!pair.first);
   auto r = get_result<get_str>(pair);
   CHECK(r.value() == "test");
 
   pair = test_route<plus_one>(ctx, 42, 42);
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
   pair = test_route<plus_one>(ctx);
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
   pair = test_route<plus_one>(ctx, 42);
-  CHECK(pair.first == std::errc{});
+  CHECK(!pair.first);
 
   pair = test_route<plus_one>(ctx, std::string("invalid arguments"));
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
 
   // register_handler<plus_one1>();
   // test_route<plus_one1>(ctx, 42); // will crash
 }
 
 TEST_CASE("testing invalid buffer") {
-  std::pair<std::errc, std::string> pair{};
+  std::pair<coro_rpc::errc, std::string> pair{};
   pair = test_route<plus_one>(ctx, 42);
-  CHECK(pair.first == std::errc{});
+  CHECK(!pair.first);
 
   g_head_offset = 2;
   pair = test_route<plus_one>(ctx, 42);
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
   g_head_offset = 0;
 
   g_tail_offset = 2;
   pair = test_route<plus_one>(ctx, 42);
-  CHECK(pair.first == std::errc::invalid_argument);
+  CHECK(pair.first == coro_rpc::errc::invalid_argument);
   g_tail_offset = 0;
 }
 
@@ -325,14 +326,14 @@ void throw_exception_func1() { throw 1; }
 TEST_CASE("testing exceptions") {
   router.register_handler<throw_exception_func, throw_exception_func1>();
 
-  std::pair<std::errc, std::string> pair{};
+  std::pair<coro_rpc::errc, std::string> pair{};
   pair = test_route<throw_exception_func>(ctx);
-  CHECK(pair.first == std::errc::interrupted);
+  CHECK(pair.first == coro_rpc::errc::interrupted);
   auto r = get_result<throw_exception_func>(pair);
   std::cout << r.error().msg << "\n";
 
   pair = test_route<throw_exception_func1>(ctx);
-  CHECK(pair.first == std::errc::interrupted);
+  CHECK(pair.first == coro_rpc::errc::interrupted);
   r = get_result<throw_exception_func>(pair);
   std::cout << r.error().msg << "\n";
 }

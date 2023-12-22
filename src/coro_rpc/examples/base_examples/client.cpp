@@ -28,7 +28,7 @@ Lazy<void> show_rpc_call() {
   coro_rpc_client client;
 
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
-  assert(ec == std::errc{});
+  assert(!ec);
 
   auto ret = co_await client.call<hello_world>();
   if (!ret) {

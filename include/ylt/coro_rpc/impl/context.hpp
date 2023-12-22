@@ -41,6 +41,22 @@ class context_base {
   std::shared_ptr<context_info_t<rpc_protocol>> self_;
   typename rpc_protocol::req_header &get_req_head() { return self_->req_head_; }
 
+  bool check_status() {
+    auto old_flag = self_->has_response_.exchange(true);
+    if (old_flag != false)
+      AS_UNLIKELY {
+        ELOGV(ERROR, "response message more than one time");
+        return false;
+      }
+
+    if (has_closed())
+      AS_UNLIKELY {
+        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        return false;
+      }
+    return true;
+  }
+
  public:
   /*!
    * Construct a context by a share pointer of context Concept
@@ -58,6 +74,12 @@ class context_base {
 
   using return_type = return_msg_type;
 
+  void response_error(coro_rpc::errc error_code, std::string_view error_msg) {
+    if (!check_status())
+      AS_UNLIKELY { return; };
+    self_->conn_->template response_error<rpc_protocol>(
+        error_code, error_msg, self_->req_head_, self_->is_delay_);
+  }
   /*!
    * Send response message
    *
@@ -73,19 +95,8 @@ class context_base {
   void response_msg(Args &&...args) {
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
-
-      auto old_flag = self_->has_response_.exchange(true);
-      if (old_flag != false)
-        AS_UNLIKELY {
-          ELOGV(ERROR, "response message more than one time");
-          return;
-        }
-
-      if (has_closed())
-        AS_UNLIKELY {
-          ELOGV(DEBUG, "response_msg failed: connection has been closed");
-          return;
-        }
+      if (!check_status())
+        AS_UNLIKELY { return; };
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
@@ -99,21 +110,11 @@ class context_base {
       static_assert(
           requires { return_msg_type{std::forward<Args>(args)...}; },
           "constructed return_msg_type failed by illegal args");
+
+      if (!check_status())
+        AS_UNLIKELY { return; };
+
       return_msg_type ret{std::forward<Args>(args)...};
-
-      auto old_flag = self_->has_response_.exchange(true);
-      if (old_flag != false)
-        AS_UNLIKELY {
-          ELOGV(ERROR, "response message more than one time");
-          return;
-        }
-
-      if (has_closed())
-        AS_UNLIKELY {
-          ELOGV(DEBUG, "response_msg failed: connection has been closed");
-          return;
-        }
-
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
@@ -125,9 +126,6 @@ class context_base {
 
       // response_handler_(std::move(conn_), std::move(ret));
     }
-    self_->resp_attachment_ = [] {
-      return std::string_view{};
-    };
   }
 
   /*!

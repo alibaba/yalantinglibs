@@ -45,12 +45,12 @@ std::atomic<uint64_t> working_echo = 0;
 Lazy<void> call_echo(int cnt) {
   ++working_echo;
   coro_rpc_client client;
-  std::errc ec = co_await client.connect("localhost:8801");
-  for (int i = 0; i < 3 && ec != std::errc{}; ++i) {
+  auto ec = co_await client.connect("localhost:8801");
+  for (int i = 0; i < 3 && !ec; ++i) {
     co_await coro_io::sleep_for(rand() % 10000 * 1ms);
     ec = co_await client.reconnect("localhost:8801");
   }
-  if (ec == std::errc{}) {
+  if (!ec) {
     for (int i = 0; i < cnt; ++i) {
       auto res = co_await client.call<echo>("Hello world!");
       if (!res.has_value()) {

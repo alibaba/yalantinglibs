@@ -25,6 +25,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/struct_pack.hpp"
 
 async_simple::coro::Lazy<int> get_coro_value(int val) { co_return val; }
@@ -103,13 +104,14 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = call<function_not_registered>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::function_not_supported,
+        ret.error().code == coro_rpc::errc::function_not_registered,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     REQUIRE(client->has_closed() == true);
     ret = call<function_not_registered>(client);
     CHECK(client->has_closed() == true);
     ret = call<function_not_registered>(client);
-    REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+    REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
+                    ret.error().msg);
     CHECK(client->has_closed() == true);
     server.register_handler<function_not_registered>();
   }
@@ -118,7 +120,7 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s", __func__);
 
     auto ec = server.start();
-    REQUIRE_MESSAGE(ec == std::errc::io_error, make_error_code(ec).message());
+    REQUIRE_MESSAGE(ec == coro_rpc::errc::io_error, make_error_message(ec));
   }
 
   void test_start_new_server_with_same_port() {
@@ -127,8 +129,8 @@ struct CoroServerTester : ServerTester {
       auto new_server = coro_rpc_server(2, std::stoi(this->port_));
       auto ec = new_server.async_start();
       REQUIRE(!ec);
-      REQUIRE_MESSAGE(ec.error() == std::errc::address_in_use,
-                      make_error_code(ec.error()).message());
+      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_use,
+                      make_error_message(ec.error()));
     }
     ELOGV(INFO, "OH NO");
   }
@@ -137,7 +139,7 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = this->call<hi>(client);
     CHECK_MESSAGE(
-        ret.error().code == std::errc::invalid_argument,
+        ret.error().code == coro_rpc::errc::invalid_argument,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }
@@ -147,7 +149,7 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = this->template call<hello>(client);
     REQUIRE_MESSAGE(
-        ret.error().code == std::errc::io_error,
+        ret.error().code == coro_rpc::errc::io_error,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }
@@ -249,17 +251,18 @@ TEST_CASE("test server accept error") {
   ELOGV(INFO, "run test server accept error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{},
-                  std::to_string(client.get_client_id())
-                      .append(make_error_code(ec).message()));
+  REQUIRE_MESSAGE(
+      !ec,
+      std::to_string(client.get_client_id()).append(make_error_message(ec)));
   auto ret = syncAwait(client.call<hi>());
-  REQUIRE_MESSAGE(ret.error().code == std::errc::io_error, ret.error().msg);
+  REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
+                  ret.error().msg);
   REQUIRE(client.has_closed() == true);
 
   ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc::io_error,
-                  std::to_string(client.get_client_id())
-                      .append(make_error_code(ec).message()));
+  REQUIRE_MESSAGE(
+      ec == coro_rpc::errc::io_error,
+      std::to_string(client.get_client_id()).append(make_error_message(ec)));
   ret = syncAwait(client.call<hi>());
   CHECK(!ret);
   REQUIRE(client.has_closed() == true);
@@ -342,12 +345,12 @@ TEST_CASE("testing coro rpc write error") {
   ELOGV(INFO, "run testing coro rpc write error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == std::errc{},
-                  std::to_string(client.get_client_id())
-                      .append(make_error_code(ec).message()));
+  REQUIRE_MESSAGE(
+      !ec,
+      std::to_string(client.get_client_id()).append(make_error_message(ec)));
   auto ret = syncAwait(client.call<hi>());
   REQUIRE_MESSAGE(
-      ret.error().code == std::errc::io_error,
+      ret.error().code == coro_rpc::errc::io_error,
       std::to_string(client.get_client_id()).append(ret.error().msg));
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;

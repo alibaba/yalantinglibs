@@ -32,6 +32,7 @@
 #include <vector>
 #include <ylt/easylog.hpp>
 
+#include "async_simple/Common.h"
 #include "async_simple/Promise.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
@@ -103,7 +104,7 @@ class coro_rpc_server_base {
    *
    * @return error code if start failed, otherwise block until server stop.
    */
-  [[nodiscard]] std::errc start() noexcept {
+  [[nodiscard]] coro_rpc::errc start() noexcept {
     auto ret = async_start();
     if (ret) {
       ret.value().wait();
@@ -114,9 +115,10 @@ class coro_rpc_server_base {
     }
   }
 
-  [[nodiscard]] coro_rpc::expected<async_simple::Future<std::errc>, std::errc>
+  [[nodiscard]] coro_rpc::expected<async_simple::Future<coro_rpc::errc>,
+                                   coro_rpc::errc>
   async_start() noexcept {
-    std::errc ec{};
+    coro_rpc::errc ec{};
     {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
@@ -126,11 +128,11 @@ class coro_rpc_server_base {
         else if (flag_ == stat::stop) {
           ELOGV(INFO, "has stoped");
         }
-        return coro_rpc::unexpected<std::errc>{
-            std::errc::resource_unavailable_try_again};
+        return coro_rpc::unexpected<coro_rpc::errc>{
+            coro_rpc::errc::server_has_ran};
       }
       ec = listen();
-      if (ec == std::errc{}) {
+      if (!ec) {
         if constexpr (requires(typename server_config::executor_pool_t & pool) {
                         pool.run();
                       }) {
@@ -144,12 +146,12 @@ class coro_rpc_server_base {
         flag_ = stat::stop;
       }
     }
-    if (ec == std::errc{}) {
-      async_simple::Promise<std::errc> promise;
+    if (!ec) {
+      async_simple::Promise<coro_rpc::errc> promise;
       auto future = promise.getFuture();
       accept().start([p = std::move(promise)](auto &&res) mutable {
         if (res.hasError()) {
-          p.setValue(std::errc::io_error);
+          p.setValue(coro_rpc::errc::io_error);
         }
         else {
           p.setValue(res.value());
@@ -158,7 +160,7 @@ class coro_rpc_server_base {
       return std::move(future);
     }
     else {
-      return coro_rpc::unexpected<std::errc>{ec};
+      return coro_rpc::unexpected<coro_rpc::errc>{ec};
     }
   }
 
@@ -283,7 +285,7 @@ class coro_rpc_server_base {
   auto &get_io_context_pool() noexcept { return pool_; }
 
  private:
-  std::errc listen() {
+  coro_rpc::errc listen() {
     ELOGV(INFO, "begin to listen");
     using asio::ip::tcp;
     auto endpoint = tcp::endpoint(tcp::v4(), port_);
@@ -298,7 +300,7 @@ class coro_rpc_server_base {
             ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
-      return std::errc::address_in_use;
+      return coro_rpc::errc::address_in_use;
     }
 #ifdef _MSC_VER
     acceptor_.set_option(tcp::acceptor::reuse_address(true));
@@ -309,7 +311,7 @@ class coro_rpc_server_base {
     if (ec) {
       ELOGV(ERROR, "get local endpoint port %d error : %s", port_.load(),
             ec.message().data());
-      return std::errc::address_in_use;
+      return coro_rpc::errc::address_in_use;
     }
     port_ = end_point.port();
 
@@ -317,7 +319,7 @@ class coro_rpc_server_base {
     return {};
   }
 
-  async_simple::coro::Lazy<std::errc> accept() {
+  async_simple::coro::Lazy<coro_rpc::errc> accept() {
     for (;;) {
       auto executor = pool_.get_executor();
       asio::ip::tcp::socket socket(executor->get_asio_executor());
@@ -337,7 +339,7 @@ class coro_rpc_server_base {
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
           acceptor_close_waiter_.set_value();
-          co_return std::errc::operation_canceled;
+          co_return coro_rpc::errc::operation_canceled;
         }
         continue;
       }
@@ -374,8 +376,8 @@ class coro_rpc_server_base {
   void close_acceptor() {
     asio::dispatch(acceptor_.get_executor(), [this]() {
       asio::error_code ec;
-      acceptor_.cancel(ec);
-      acceptor_.close(ec);
+      (void)acceptor_.cancel(ec);
+      (void)acceptor_.close(ec);
     });
     acceptor_close_waiter_.get_future().wait();
   }

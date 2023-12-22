@@ -12,6 +12,6 @@ int main() {
   server.register_handler<&dummy::echo>(&d);
 
   [[maybe_unused]] auto ret = server.start();
-  assert(ret == std::errc{});
+  assert(!ret);
   return 0;
 }
