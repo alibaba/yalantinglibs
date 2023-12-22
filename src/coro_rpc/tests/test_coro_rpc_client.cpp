@@ -278,10 +278,10 @@ class SSLClientTester {
     if (client_crt == ssl_type::fake || client_crt == ssl_type::no) {
       REQUIRE(ok == false);
       auto ec = syncAwait(client->connect("127.0.0.1", port_));
-      REQUIRE_MESSAGE(ec == std::errc::not_connected,
-                      make_error_code(ec).message());
+      REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
+                      make_error_message(ec));
       auto ret = syncAwait(client->template call<hi>());
-      REQUIRE_MESSAGE(ret.error().code == std::errc::not_connected,
+      REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::not_connected,
                       ret.error().msg);
     }
     else {
@@ -289,16 +289,16 @@ class SSLClientTester {
       auto f = [this, &client]() -> Lazy<void> {
         auto ec = co_await client->connect("127.0.0.1", port_);
         if (server_crt == ssl_type::_ && server_key == ssl_type::_) {
-          if (ec != std::errc{}) {
+          if (!!ec) {
             ELOGV(INFO, "%s", gen_err().data());
           }
-          REQUIRE_MESSAGE(ec == std::errc{}, make_error_code(ec).message());
+          REQUIRE_MESSAGE(!ec, make_error_message(ec));
           auto ret = co_await client->template call<hi>();
           CHECK(ret.has_value());
         }
         else {
-          REQUIRE_MESSAGE(ec == std::errc::not_connected,
-                          make_error_code(ec).message());
+          REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
+                          make_error_message(ec));
         }
       };
       syncAwait(f());
@@ -500,8 +500,8 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
     val = client2.sync_connect("127.0.0.1", "8801");
-    CHECK_MESSAGE(val == std::errc::not_connected,
-                  make_error_code(val).message());
+    CHECK_MESSAGE(val == coro_rpc::errc::not_connected,
+                  make_error_message(val));
   }
 #endif
 }

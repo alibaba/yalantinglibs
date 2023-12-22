@@ -297,7 +297,9 @@ class coro_rpc_client {
     if (!ssl_init_ret_) {
       ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{not_connected, "not connected"}};
+          coro_rpc_protocol::rpc_error{
+              errc::not_connected,
+              std::string{make_error_message(errc::not_connected)}}};
       co_return ret;
     }
 #endif
@@ -393,7 +395,7 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
       std::cout << "ssl_init_ret_: " << ssl_init_ret_ << std::endl;
-      co_return not_connected;
+      co_return errc::not_connected;
     }
 #endif
     if (!is_reconnect.value && has_closed_)
@@ -440,7 +442,7 @@ class coro_rpc_client {
       if (shake_ec) {
         ELOGV(WARN, "client_id %d handshake failed: %s", config_.client_id,
               shake_ec.message().data());
-        co_return not_connected;
+        co_return errc::not_connected;
       }
     }
 #endif
