@@ -277,8 +277,8 @@ STRUCT_PACK_INLINE void write(Writer& writer, const T& t) {
   }
   else if constexpr (detail::array<T>) {
     if constexpr (detail::is_little_endian_copyable<sizeof(t[0])> &&
-                  std::is_fundamental_v<decltype(t[0])>) {
-      writer_bytes_array(writer, (const char*)&t.data(), sizeof(T));
+                  std::is_fundamental_v<std::remove_reference_t<decltype(t[0])>>) {
+      write_bytes_array(writer, (const char*)t.data(), sizeof(T));
     }
     else {
       for (auto& e : t) write(writer, e);
@@ -289,7 +289,7 @@ STRUCT_PACK_INLINE void write(Writer& writer, const T& t) {
     detail::write_wrapper<sizeof(std::size_t)>(writer, (char*)&len);
     if constexpr (detail::continuous_container<T> &&
                   detail::is_little_endian_copyable<sizeof(t[0])>) {
-      writer_bytes_array(writer, (const char*)&t.data(), len * sizeof(t[0]));
+      write_bytes_array(writer, (const char*)t.data(), len * sizeof(t[0]));
     }
     else {
       for (auto& e : t) write(writer, e);
@@ -319,7 +319,7 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T& t) {
     return sizeof(T);
   }
   else if constexpr (detail::array<T>) {
-    if constexpr (std::is_fundamental_v<decltype(t[0])>) {
+    if constexpr (std::is_fundamental_v<std::remove_reference_t<decltype(t[0])>>) {
       return sizeof(T);
     }
     else {
@@ -359,9 +359,9 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
     }
   }
   else if constexpr (detail::array<T>) {
-    if constexpr (std::is_fundamental_v<decltype(t[0])> &&
+    if constexpr (std::is_fundamental_v<std::remove_reference_t<decltype(t[0])>> &&
                   detail::is_little_endian_copyable<sizeof(t[0])>) {
-      return read_bytes_array(reader, (char*)&t.data(), sizeof(T));
+      return read_bytes_array(reader, (char*)t.data(), sizeof(T));
     }
     else {
       struct_pack::errc ec;
@@ -381,7 +381,7 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
       return ec;
     }
     if constexpr (detail::continuous_container<T> &&
-                  std::is_fundamental_v<decltype(t[0])> &&
+                  std::is_fundamental_v<std::remove_reference_t<decltype(t[0])>> &&
                   detail::is_little_endian_copyable<sizeof(t[0])> &&
                   checkable_reader_t<Reader>) {
       if SP_UNLIKELY (sz > UINT64_MAX / sizeof(t[0]) || sz > SIZE_MAX) {
@@ -392,7 +392,10 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
         return struct_pack::errc::no_buffer_space;
       }
       detail::resize(t, mem_size);
-      return read_bytes_array(reader, (char*)&t.data(), mem_size);
+      if(!read_bytes_array(reader, (char*)t.data(), mem_size)) {
+        return struct_pack::errc::no_buffer_space;
+      }
+      return struct_pack::errc{};
     }
     else {
       for (std::size_t i = 0; i < sz; ++i) {
