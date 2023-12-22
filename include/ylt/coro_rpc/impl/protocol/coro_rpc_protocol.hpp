@@ -29,6 +29,7 @@
 #include "struct_pack_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/context.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/coro_rpc/impl/router.hpp"
 
@@ -125,13 +126,13 @@ struct coro_rpc_protocol {
   static std::string prepare_response(std::string& rpc_result,
                                       const req_header& req_header,
                                       std::size_t attachment_len,
-                                      std::errc rpc_err_code = {},
+                                      coro_rpc::errc rpc_err_code = {},
                                       std::string_view err_msg = {}) {
     std::string err_msg_buf;
     if (attachment_len > UINT32_MAX)
       AS_UNLIKELY {
         ELOGV(ERROR, "attachment larger than 4G:%d", attachment_len);
-        rpc_err_code = std::errc::message_size;
+        rpc_err_code = coro_rpc::errc::message_too_large;
         err_msg_buf =
             "attachment larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
@@ -140,7 +141,7 @@ struct coro_rpc_protocol {
       AS_UNLIKELY {
         auto sz = rpc_result.size();
         ELOGV(ERROR, "body larger than 4G:%d", sz);
-        rpc_err_code = std::errc::message_size;
+        rpc_err_code = coro_rpc::errc::message_too_large;
         err_msg_buf =
             "body larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
@@ -152,7 +153,7 @@ struct coro_rpc_protocol {
     resp_head.seq_num = req_header.seq_num;
     resp_head.err_code = static_cast<uint8_t>(rpc_err_code);
     resp_head.attach_length = attachment_len;
-    if (rpc_err_code != std::errc{})
+    if (rpc_err_code != coro_rpc::errc{})
       AS_UNLIKELY {
         rpc_result.clear();
         struct_pack::serialize_to(rpc_result, err_msg);
@@ -167,8 +168,8 @@ struct coro_rpc_protocol {
    * The `rpc_error` struct holds the error code `code` and error message `msg`.
    */
   struct rpc_error {
-    std::errc code;   //!< error code
-    std::string msg;  //!< error message
+    coro_rpc::errc code;  //!< error code
+    std::string msg;      //!< error message
   };
 
   // internal variable

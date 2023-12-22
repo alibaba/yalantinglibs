@@ -76,7 +76,7 @@ async_simple::coro::Lazy<std::string> nested_echo(std::string_view sv) {
   ELOGV(INFO, "start nested echo");
   coro_rpc::coro_rpc_client client(co_await coro_io::get_current_executor());
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8802");
-  assert(ec == std::errc{});
+  assert(!ec);
   ELOGV(INFO, "connect another server");
   auto ret = co_await client.call<echo>(sv);
   assert(ret.value() == sv);

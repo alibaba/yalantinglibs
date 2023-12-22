@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <async_simple/coro/Lazy.h>
+#include <ylt/coro_rpc/impl/errno.h>
 #include <ylt/util/function_name.h>
 #include <ylt/util/type_traits.h>
 
@@ -231,7 +232,7 @@ class router {
     return nullptr;
   }
 
-  async_simple::coro::Lazy<std::pair<std::errc, std::string>> route_coro(
+  async_simple::coro::Lazy<std::pair<coro_rpc::errc, std::string>> route_coro(
       auto handler, std::string_view data,
       rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
@@ -249,22 +250,23 @@ class router {
           // clang-format on
           if (res.has_value())
             AS_LIKELY {
-              co_return std::make_pair(std::errc{}, std::move(res.value()));
+              co_return std::make_pair(coro_rpc::errc{},
+                                       std::move(res.value()));
             }
           else {  // deserialize failed
             ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
                   get_name(route_key).data());
-            co_return std::make_pair(std::errc::invalid_argument,
+            co_return std::make_pair(coro_rpc::errc::invalid_argument,
                                      "invalid rpc function arguments"s);
           }
         } catch (const std::exception &e) {
           ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
-          co_return std::make_pair(std::errc::interrupted, e.what());
+          co_return std::make_pair(coro_rpc::errc::interrupted, e.what());
         } catch (...) {
           ELOGV(ERROR, "unknown exception in rpc function: %s",
                 get_name(route_key).data());
-          co_return std::make_pair(std::errc::interrupted,
+          co_return std::make_pair(coro_rpc::errc::interrupted,
                                    "unknown exception"s);
         }
       }
@@ -273,12 +275,12 @@ class router {
       ss << route_key;
       ELOGV(ERROR, "the rpc function not registered, function ID: %s",
             ss.str().data());
-      co_return std::make_pair(std::errc::function_not_supported,
+      co_return std::make_pair(coro_rpc::errc::function_not_registered,
                                "the rpc function not registered"s);
     }
   }
 
-  std::pair<std::errc, std::string> route(
+  std::pair<coro_rpc::errc, std::string> route(
       auto handler, std::string_view data,
       rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
@@ -293,22 +295,22 @@ class router {
           auto res = (*handler)(data, context_info, protocols);
           if (res.has_value())
             AS_LIKELY {
-              return std::make_pair(std::errc{}, std::move(res.value()));
+              return std::make_pair(coro_rpc::errc{}, std::move(res.value()));
             }
           else {  // deserialize failed
             ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
                   get_name(route_key).data());
-            return std::make_pair(std::errc::invalid_argument,
+            return std::make_pair(coro_rpc::errc::invalid_argument,
                                   "invalid rpc function arguments"s);
           }
         } catch (const std::exception &e) {
           ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
-          return std::make_pair(std::errc::interrupted, e.what());
+          return std::make_pair(coro_rpc::errc::interrupted, e.what());
         } catch (...) {
           ELOGV(ERROR, "unknown exception in rpc function: %s",
                 get_name(route_key).data());
-          return std::make_pair(std::errc::interrupted,
+          return std::make_pair(coro_rpc::errc::interrupted,
                                 "unknown rpc function exception"s);
         }
       }
@@ -317,7 +319,7 @@ class router {
       ss << route_key;
       ELOGV(ERROR, "the rpc function not registered, function ID: %s",
             ss.str().data());
-      return std::make_pair(std::errc::function_not_supported,
+      return std::make_pair(coro_rpc::errc::function_not_registered,
                             "the rpc function not registered"s);
     }
   }

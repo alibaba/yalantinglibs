@@ -43,5 +43,5 @@ int main() {
   assert(res.has_value());
 
   // sync start server & sync await server stop
-  return server.start() == std::errc{};
+  return !server.start();
 }

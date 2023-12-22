@@ -39,7 +39,7 @@ inline int start_server(coro_rpc::coro_rpc_server& server) {
       pool.run();
     }};
     [[maybe_unused]] auto ec = server.start();
-    assert(ec == std::errc{});
+    assert(!ec);
     pool.stop();
     thrd.join();
   } catch (std::exception& e) {
