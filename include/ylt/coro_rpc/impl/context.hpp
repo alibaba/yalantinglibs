@@ -27,6 +27,7 @@
 #include <ylt/easylog.hpp>
 
 #include "coro_connection.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/util/type_traits.h"
 
 namespace coro_rpc {
@@ -79,6 +80,10 @@ class context_base {
       AS_UNLIKELY { return; };
     self_->conn_->template response_error<rpc_protocol>(
         error_code, error_msg, self_->req_head_, self_->is_delay_);
+  }
+
+  void response_error(coro_rpc::errc error_code) {
+    response_error(error_code, make_error_message(error_code));
   }
   /*!
    * Send response message
