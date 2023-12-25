@@ -147,7 +147,7 @@ void use_out_buf() {
   str.resize(10);
   std::string url = "http://cn.bing.com";
 
-  str.resize(6400);
+  str.resize(16400);
   coro_http_client client;
   auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                   std::span<char>{str.data(), str.size()});
@@ -224,7 +224,7 @@ void test_coro_http_server() {
 int main() {
   test_coro_http_server();
   test_sync_client();
-  // use_out_buf();
+  use_out_buf();
 
   coro_http::coro_http_client client{};
   async_simple::coro::syncAwait(test_async_client(client));
