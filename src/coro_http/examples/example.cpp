@@ -147,7 +147,7 @@ void use_out_buf() {
   str.resize(10);
   std::string url = "http://cn.bing.com";
 
-  str.resize(6400);
+  str.resize(16400);
   coro_http_client client;
   auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                   std::span<char>{str.data(), str.size()});
