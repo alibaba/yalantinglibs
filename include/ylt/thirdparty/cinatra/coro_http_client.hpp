@@ -181,8 +181,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #ifdef CINATRA_ENABLE_SSL
     if (conf.use_ssl) {
-      return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
-                      conf.domain);
+      return init_ssl(conf.domain, conf.base_path, conf.cert_file,
+                      conf.verify_mode);
     }
     return true;
 #endif
@@ -201,9 +201,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  bool init_ssl(const std::string &base_path, const std::string &cert_file,
-                int verify_mode = asio::ssl::verify_none,
-                const std::string &domain = "localhost") {
+  bool init_ssl(const std::string &sni_hostname, const std::string &base_path,
+                const std::string &cert_file,
+                int verify_mode = asio::ssl::verify_none) {
     try {
       ssl_init_ret_ = false;
       ssl_ctx_ =
@@ -223,19 +223,22 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       ssl_ctx_->set_verify_mode(verify_mode);
 
-      // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
-      if (!domain.empty())
-        ssl_ctx_->set_verify_callback(
-            asio::ssl::host_name_verification(domain));
-
       socket_->ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, *ssl_ctx_);
-      // Set SNI Hostname (many hosts need this to handshake successfully)
-      if (!sni_hostname_.empty()) {
-        SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
-                                 sni_hostname_.c_str());
+
+      // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
+      if (!sni_hostname.empty()) {
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(sni_hostname));
+
+        if (need_set_sni_host_) {
+          // Set SNI Hostname (many hosts need this to handshake successfully)
+          SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
+                                   sni_hostname.c_str());
+        }
       }
+
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
@@ -244,9 +247,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return ssl_init_ret_;
   }
 
-  [[nodiscard]] bool init_ssl(std::string full_path = "",
-                              int verify_mode = asio::ssl::verify_none,
-                              const std::string &domain = "localhost") {
+  [[nodiscard]] bool init_ssl(const std::string &sni_hostname = "",
+                              std::string full_path = "",
+                              int verify_mode = asio::ssl::verify_none) {
     std::string base_path;
     std::string cert_file;
     if (full_path.empty()) {
@@ -257,7 +260,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       base_path = full_path.substr(0, full_path.find_last_of('/'));
       cert_file = full_path.substr(full_path.find_last_of('/') + 1);
     }
-    return init_ssl(base_path, cert_file, verify_mode, domain);
+    return init_ssl(sni_hostname, base_path, cert_file, verify_mode);
   }
 #endif
 
@@ -797,7 +800,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     socket_->has_closed_ = true;
 #ifdef CINATRA_ENABLE_SSL
-    sni_hostname_ = "";
+    need_set_sni_host_ = true;
     if (use_ssl_) {
       socket_->ssl_stream_ = nullptr;
       socket_->ssl_stream_ =
@@ -1128,7 +1131,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  void set_sni_hostname(const std::string &host) { sni_hostname_ = host; }
+  void enable_sni_hostname(bool r) { need_set_sni_host_ = r; }
 #endif
 
   template <typename T, typename U>
@@ -1869,7 +1872,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
-  std::string sni_hostname_ = "";
+  bool need_set_sni_host_ = true;
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
