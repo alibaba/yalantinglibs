@@ -48,11 +48,12 @@ struct array2D {
 };
 
 std::size_t sp_get_needed_size(const array2D& ar) {
-  return struct_pack::get_write_size(ar.name) +
+  auto sz=struct_pack::get_write_size(ar.name) +
          struct_pack::get_write_size(ar.values) +
          struct_pack::get_write_size(ar.values2) +
          2 * struct_pack::get_write_size(ar.x) +
          struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
+  return sz;
 }
 template <typename Writer>
 void sp_serialize_to(Writer& writer, const array2D& ar) {

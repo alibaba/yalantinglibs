@@ -287,7 +287,7 @@ STRUCT_PACK_INLINE void write(Writer& writer, const T& t) {
   }
   else if constexpr (detail::string<T> || detail::container<T>) {
     std::uint64_t len = t.size();
-    detail::write_wrapper<sizeof(std::size_t)>(writer, (char*)&len);
+    detail::write_wrapper<8>(writer, (char*)&len);
     if constexpr (detail::continuous_container<T> &&
                   detail::is_little_endian_copyable<sizeof(t[0])> &&
                   std::is_fundamental_v<typename T::value_type>) {
@@ -334,7 +334,8 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T& t) {
   else if constexpr (detail::string<T> || detail::container<T>) {
     std::size_t ret = 8;
     if constexpr (detail::continuous_container<T> &&
-                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+                  detail::is_little_endian_copyable<sizeof(t[0])> &&
+                  std::is_fundamental_v<typename T::value_type>) {
       ret += t.size() * sizeof(t[0]);
     }
     else {
