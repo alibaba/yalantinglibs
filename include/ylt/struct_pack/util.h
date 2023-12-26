@@ -184,7 +184,8 @@ void string_set_length_hacker(std::string &, std::size_t);
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
-#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer) || \
+    (!defined(NDEBUG) && defined(_MSVC_STL_VERSION))
   raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)

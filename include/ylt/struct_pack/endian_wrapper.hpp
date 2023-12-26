@@ -287,9 +287,10 @@ STRUCT_PACK_INLINE void write(Writer& writer, const T& t) {
   }
   else if constexpr (detail::string<T> || detail::container<T>) {
     std::uint64_t len = t.size();
-    detail::write_wrapper<sizeof(std::size_t)>(writer, (char*)&len);
+    detail::write_wrapper<8>(writer, (char*)&len);
     if constexpr (detail::continuous_container<T> &&
-                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+                  detail::is_little_endian_copyable<sizeof(t[0])> &&
+                  std::is_fundamental_v<typename T::value_type>) {
       write_bytes_array(writer, (const char*)t.data(), len * sizeof(t[0]));
     }
     else {
@@ -333,11 +334,12 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T& t) {
   else if constexpr (detail::string<T> || detail::container<T>) {
     std::size_t ret = 8;
     if constexpr (detail::continuous_container<T> &&
-                  detail::is_little_endian_copyable<sizeof(t[0])>) {
+                  detail::is_little_endian_copyable<sizeof(t[0])> &&
+                  std::is_fundamental_v<typename T::value_type>) {
       ret += t.size() * sizeof(t[0]);
     }
     else {
-      for (auto& e : t) ret += write(e);
+      for (auto& e : t) ret += get_write_size(e);
     }
     return ret;
   }
@@ -353,7 +355,7 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T* t,
 template <typename Reader, typename T>
 STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
   if constexpr (std::is_fundamental_v<T>) {
-    if (!detail::read_wrapper<sizeof(T)>(reader, (char*)&t)) {
+    if SP_UNLIKELY (!detail::read_wrapper<sizeof(T)>(reader, (char*)&t)) {
       return struct_pack::errc::no_buffer_space;
     }
     else {
@@ -364,7 +366,12 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
     if constexpr (std::is_fundamental_v<
                       std::remove_reference_t<decltype(t[0])>> &&
                   detail::is_little_endian_copyable<sizeof(t[0])>) {
-      return read_bytes_array(reader, (char*)t.data(), sizeof(T));
+      if SP_UNLIKELY (!read_bytes_array(reader, (char*)t.data(), sizeof(T))) {
+        return struct_pack::errc::no_buffer_space;
+      }
+      else {
+        return {};
+      }
     }
     else {
       struct_pack::errc ec;
@@ -395,15 +402,16 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
       if SP_UNLIKELY (!reader.check(mem_size)) {
         return struct_pack::errc::no_buffer_space;
       }
-      detail::resize(t, mem_size);
-      if (!read_bytes_array(reader, (char*)t.data(), mem_size)) {
+      detail::resize(t, sz);
+      if SP_UNLIKELY (!read_bytes_array(reader, (char*)t.data(), mem_size)) {
         return struct_pack::errc::no_buffer_space;
       }
       return struct_pack::errc{};
     }
     else {
+      t.clear();
       for (std::size_t i = 0; i < sz; ++i) {
-        t.emplace_back();
+        t.push_back(typename T::value_type{});
         ec = read(reader, t.back());
         if SP_UNLIKELY (ec != struct_pack::errc{}) {
           return ec;
@@ -420,7 +428,7 @@ template <typename Reader, typename T>
 struct_pack::errc read(Reader& reader, T* t, std::size_t length) {
   if constexpr (std::is_fundamental_v<T>) {
     if constexpr (detail::is_little_endian_copyable<sizeof(T)>) {
-      if (!read_bytes_array(reader, (char*)t, sizeof(T) * length)) {
+      if SP_UNLIKELY (!read_bytes_array(reader, (char*)t, sizeof(T) * length)) {
         return struct_pack::errc::no_buffer_space;
       }
       else {
