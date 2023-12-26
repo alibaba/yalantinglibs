@@ -151,6 +151,19 @@ TEST_CASE("test user-defined_type nested") {
   CHECK(ar == ar2);
 }
 
+TEST_CASE("test user-defined_type nested ec") {
+  std::vector<my_name_space::array2D> ar;
+  ar.emplace_back(11, 22);
+  ar.emplace_back(114, 514);
+  ar[0](1, 6) = 3.14;
+  ar[1](87, 111) = 2.71;
+  auto buffer = struct_pack::serialize(ar);
+  buffer.pop_back();
+  auto result = struct_pack::deserialize<decltype(ar)>(buffer);
+  REQUIRE(!result.has_value());
+  CHECK(result.error() == struct_pack::errc::no_buffer_space);
+}
+
 TEST_CASE("test user-defined_type get_field") {
   std::pair<my_name_space::array2D, int> o;
   o.first = {114, 514};
