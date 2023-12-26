@@ -66,11 +66,11 @@ struct coro_rpc_protocol {
   struct resp_header {
     uint8_t magic;           //!< magic number
     uint8_t version;         //!< rpc protocol version
-    uint8_t err_code;        //!< rpc error type
-    uint8_t msg_type;        //!< message type
+    uint16_t err_code;       //!< rpc error type
     uint32_t seq_num;        //!< sequence number
     uint32_t length;         //!< length of RPC body
     uint32_t attach_length;  //!< reserved field
+    uint8_t msg_type;        //!< message type
   };
 
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
@@ -151,7 +151,7 @@ struct coro_rpc_protocol {
     auto& resp_head = *(resp_header*)header_buf.data();
     resp_head.magic = magic_number;
     resp_head.seq_num = req_header.seq_num;
-    resp_head.err_code = static_cast<uint8_t>(rpc_err_code);
+    resp_head.err_code = static_cast<uint16_t>(rpc_err_code);
     resp_head.attach_length = attachment_len;
     if (rpc_err_code != coro_rpc::errc{})
       AS_UNLIKELY {
@@ -179,7 +179,7 @@ struct coro_rpc_protocol {
   static_assert(REQ_HEAD_LEN == 20);
 
   static constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
-  static_assert(RESP_HEAD_LEN == 16);
+  static_assert(RESP_HEAD_LEN == 20);
 };
 }  // namespace protocol
 template <typename return_msg_type>
