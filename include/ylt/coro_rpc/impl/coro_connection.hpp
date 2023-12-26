@@ -23,13 +23,10 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <future>
 #include <memory>
 #include <string_view>
 #include <system_error>
 #include <utility>
-#include <variant>
-#include <vector>
 #include <ylt/easylog.hpp>
 
 #include "ylt/coro_io/coro_io.hpp"
