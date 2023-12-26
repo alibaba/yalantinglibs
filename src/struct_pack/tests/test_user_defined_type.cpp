@@ -3,11 +3,15 @@
 
 #include "doctest.h"
 #include "ylt/struct_pack.hpp"
+#include "ylt/struct_pack/endian_wrapper.hpp"
 #include "ylt/struct_pack/error_code.hpp"
 #include "ylt/struct_pack/type_id.hpp"
 namespace my_name_space {
 
 struct array2D {
+  std::string name = "Hello";
+  std::vector<std::vector<int>> values = {{-1, 2, 3}};
+  std::array<float, 3> values2 = {1.1, 2.3, 4.5};
   unsigned int x;
   unsigned int y;
   float* p;
@@ -15,30 +19,47 @@ struct array2D {
     p = (float*)calloc(1ull * x * y, sizeof(float));
   }
   array2D(const array2D&) = delete;
-  array2D(array2D&& o) : x(o.x), y(o.y), p(o.p) { o.p = nullptr; };
+  array2D(array2D&& o)
+      : x(o.x),
+        y(o.y),
+        p(o.p),
+        values(std::move(o.values)),
+        values2(o.values2) {
+    o.p = nullptr;
+  };
   array2D& operator=(const array2D&) = delete;
   array2D& operator=(array2D&& o) {
     x = o.x;
     y = o.y;
     p = o.p;
+    values = o.values;
+    values2 = o.values2;
     o.p = nullptr;
     return *this;
   }
   float& operator()(std::size_t i, std::size_t j) { return p[i * y + j]; }
   bool operator==(const array2D& o) const {
     return x == o.x && y == o.y &&
-           memcmp(p, o.p, 1ull * x * y * sizeof(float)) == 0;
+           memcmp(p, o.p, 1ull * x * y * sizeof(float)) == 0 &&
+           values == o.values && values2 == o.values2;
   }
   array2D() : x(0), y(0), p(nullptr) {}
   ~array2D() { free(p); }
 };
 
 std::size_t sp_get_needed_size(const array2D& ar) {
-  return 2 * struct_pack::get_write_size(ar.x) +
-         struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
+  auto sz = struct_pack::get_write_size(ar.name) +
+            struct_pack::get_write_size(ar.values) +
+            struct_pack::get_write_size(ar.values2) +
+            2 * struct_pack::get_write_size(ar.x) +
+            struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
+  return sz;
 }
 template <typename Writer>
 void sp_serialize_to(Writer& writer, const array2D& ar) {
+  struct_pack::write(writer, ar.name);
+  struct_pack::write(writer, ar.values);
+  struct_pack::write(writer, ar.values2);
   struct_pack::write(writer, ar.x);
   struct_pack::write(writer, ar.y);
   struct_pack::write(writer, ar.p, 1ull * ar.x * ar.y);
@@ -46,6 +67,17 @@ void sp_serialize_to(Writer& writer, const array2D& ar) {
 
 template <typename Reader>
 struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.name); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.values);
+      ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.values2);
+      ec != struct_pack::errc{}) {
+    return ec;
+  }
   if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
     return ec;
   }
@@ -69,6 +101,17 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
 
 template <typename Reader>
 struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.name); ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.values);
+      ec != struct_pack::errc{}) {
+    return ec;
+  }
+  if (auto ec = struct_pack::read(reader, ar.values2);
+      ec != struct_pack::errc{}) {
+    return ec;
+  }
   if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
     return ec;
   }
@@ -92,7 +135,7 @@ TEST_CASE("test user-defined_type") {
   auto result = struct_pack::deserialize<my_name_space::array2D>(buffer);
   CHECK(result.has_value());
   auto& ar2 = result.value();
-  CHECK(ar == result.value());
+  CHECK(ar == ar2);
 }
 
 TEST_CASE("test user-defined_type nested") {
@@ -104,7 +147,21 @@ TEST_CASE("test user-defined_type nested") {
   auto buffer = struct_pack::serialize(ar);
   auto result = struct_pack::deserialize<decltype(ar)>(buffer);
   CHECK(result.has_value());
-  CHECK(ar == result);
+  auto& ar2 = result.value();
+  CHECK(ar == ar2);
+}
+
+TEST_CASE("test user-defined_type nested ec") {
+  std::vector<my_name_space::array2D> ar;
+  ar.emplace_back(11, 22);
+  ar.emplace_back(114, 514);
+  ar[0](1, 6) = 3.14;
+  ar[1](87, 111) = 2.71;
+  auto buffer = struct_pack::serialize(ar);
+  buffer.pop_back();
+  auto result = struct_pack::deserialize<decltype(ar)>(buffer);
+  REQUIRE(!result.has_value());
+  CHECK(result.error() == struct_pack::errc::no_buffer_space);
 }
 
 TEST_CASE("test user-defined_type get_field") {

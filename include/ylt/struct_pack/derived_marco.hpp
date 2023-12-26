@@ -32,4 +32,4 @@
   STRUCT_PACK_EXPAND_EACH(, GET_STRUCT_PACK_ID_IMPL_FOR_LOOP, base, \
                           __VA_ARGS__)                              \
   STRUCT_PACK_DERIVED_DECL(base, __VA_ARGS__);                      \
-  static_assert(struct_pack::detail::check_ID_collision<base, __VA_ARGS__>());\
+  static_assert(struct_pack::detail::check_ID_collision<base, __VA_ARGS__>());

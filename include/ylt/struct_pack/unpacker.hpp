@@ -780,10 +780,10 @@ class unpacker {
       }
       else if constexpr (id == type_id::user_defined_type) {
         if constexpr (NotSkip) {
-          sp_deserialize_to(reader_, item);
+          code = sp_deserialize_to(reader_, item);
         }
         else {
-          sp_deserialize_to_with_skip(reader_, item);
+          code = sp_deserialize_to_with_skip(reader_, item);
         }
       }
       else if constexpr (detail::varint_t<type, parent_tag>) {
