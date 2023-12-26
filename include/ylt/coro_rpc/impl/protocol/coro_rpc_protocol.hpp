@@ -107,20 +107,24 @@ struct coro_rpc_protocol {
   static async_simple::coro::Lazy<std::error_code> read_payload(
       Socket& socket, req_header& req_head, std::string& buffer,
       std::string& attchment) {
-    uint64_t total = req_head.length + req_head.attach_length;
     struct_pack::detail::resize(buffer, req_head.length);
     if (req_head.attach_length > 0) {
       struct_pack::detail::resize(attchment, req_head.attach_length);
-      std::array<asio::mutable_buffer, 2> iov = {
-          asio::mutable_buffer{buffer.data(), buffer.size()},
-          asio::mutable_buffer{attchment.data(), attchment.size()}};
-      auto [ec, _] = co_await coro_io::async_read(socket, iov);
+
+      if (req_head.length > 0) {
+        std::array<asio::mutable_buffer, 2> buffers{asio::buffer(buffer),
+                                                    asio::buffer(attchment)};
+        auto [ec, _] = co_await coro_io::async_read(socket, buffers);
+        co_return ec;
+      }
+
+      auto [ec, _] =
+          co_await coro_io::async_read(socket, asio::buffer(attchment));
       co_return ec;
     }
-    else {
-      auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
-      co_return ec;
-    }
+
+    auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
+    co_return ec;
   }
 
   static std::string prepare_response(std::string& rpc_result,

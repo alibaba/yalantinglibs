@@ -224,7 +224,7 @@ void test_coro_http_server() {
 int main() {
   test_coro_http_server();
   test_sync_client();
-  use_out_buf();
+  // use_out_buf();
 
   coro_http::coro_http_client client{};
   async_simple::coro::syncAwait(test_async_client(client));
