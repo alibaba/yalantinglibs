@@ -338,7 +338,7 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T& t) {
       ret += t.size() * sizeof(t[0]);
     }
     else {
-      for (auto& e : t) ret += write(e);
+      for (auto& e : t) ret += get_write_size(e);
     }
     return ret;
   }
