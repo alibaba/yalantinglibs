@@ -16,7 +16,7 @@
 #include <ylt/struct_pack/util.h>
 #pragma once
 namespace coro_rpc {
-enum class errc : uint8_t {
+enum class errc : uint16_t {
   ok,
   io_error,
   not_connected,
@@ -29,8 +29,8 @@ enum class errc : uint8_t {
   protocol_error,
   message_too_large,
   server_has_ran,
-  user_defined_err_min = 100,
-  user_defined_err_max = 255
+  user_defined_err_min = 256,
+  user_defined_err_max = 65535
 };
 inline bool operator!(errc ec) { return ec == errc::ok; }
 inline std::string_view make_error_message(errc ec) {
