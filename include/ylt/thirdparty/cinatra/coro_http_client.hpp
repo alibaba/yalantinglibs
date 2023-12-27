@@ -1630,11 +1630,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string short_name =
         std::filesystem::path(part.filename).filename().string();
     if (is_file) {
-      part_content_head.append("; filename=\"").append(short_name).append("\"");
+      part_content_head.append("; filename=\"")
+          .append(short_name)
+          .append("\"")
+          .append(CRCF);
       auto ext = std::filesystem::path(short_name).extension().string();
       if (auto it = g_content_type_map.find(ext);
           it != g_content_type_map.end()) {
-        part_content_head.append("Content-Type: ").append(it->second);
+        part_content_head.append("Content-Type: ")
+            .append(it->second)
+            .append(CRCF);
       }
 
       std::error_code ec;
@@ -1642,8 +1647,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return resp_data{
             std::make_error_code(std::errc::no_such_file_or_directory), 404};
       }
+      part_content_head.append(CRCF);
     }
-    part_content_head.append(TWO_CRCF);
+    else {
+      part_content_head.append(TWO_CRCF);
+    }
     if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));
         ec) {
       co_return resp_data{ec, 404};
@@ -1655,7 +1663,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       assert(file.is_open());
       std::string file_data;
       detail::resize(file_data, max_single_part_size_);
-      while (!file.eof()) {
+      while (true) {
         auto [rd_ec, rd_size] =
             co_await file.async_read(file_data.data(), file_data.size());
         if (auto [ec, size] =
@@ -1663,17 +1671,20 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             ec) {
           co_return resp_data{ec, 404};
         }
+        if (file.eof()) {
+          if (auto [ec, size] = co_await async_write(asio::buffer(CRCF)); ec) {
+            co_return resp_data{ec, 404};
+          }
+          break;
+        }
       }
     }
     else {
-      if (auto [ec, size] = co_await async_write(asio::buffer(part.content));
-          ec) {
+      std::array<asio::const_buffer, 2> arr{asio::buffer(part.content),
+                                            asio::buffer(CRCF)};
+      if (auto [ec, size] = co_await async_write(arr); ec) {
         co_return resp_data{ec, 404};
       }
-    }
-
-    if (auto [ec, size] = co_await async_write(asio::buffer(CRCF)); ec) {
-      co_return resp_data{ec, 404};
     }
 
     co_return resp_data{{}, 200};

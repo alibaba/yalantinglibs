@@ -49,21 +49,13 @@ class coro_http_request {
 
   std::string_view get_body() const { return body_; }
 
-  bool is_chunked() {
-    static bool thread_local is_chunk = parser_.is_chunked();
-    return is_chunk;
-  }
+  bool is_chunked() { return parser_.is_chunked(); }
 
   bool is_resp_ranges() { return parser_.is_resp_ranges(); }
 
   bool is_req_ranges() { return parser_.is_req_ranges(); }
 
   content_type get_content_type() {
-    static content_type thread_local content_type = get_content_type_impl();
-    return content_type;
-  }
-
-  content_type get_content_type_impl() {
     if (is_chunked())
       return content_type::chunked;
 
@@ -91,6 +83,14 @@ class coro_http_request {
     }
 
     return content_type::unknown;
+  }
+
+  std::string_view get_boundary() {
+    auto content_type = get_header_value("content-type");
+    if (content_type.empty()) {
+      return {};
+    }
+    return content_type.substr(content_type.rfind("=") + 1);
   }
 
   coro_http_connection* get_conn() { return conn_; }
