@@ -329,7 +329,8 @@ class packer {
                 low_bytes_write_wrapper<size_type>(writer_, size);
               }
               else {
-                static_assert(!sizeof(T), "illegal size_type");
+                std::uint64_t sz = size;
+                low_bytes_write_wrapper<size_type>(writer_, sz);
               }
             }
             else {
