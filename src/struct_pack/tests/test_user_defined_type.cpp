@@ -84,14 +84,14 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
   if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
     return ec;
   }
-  auto length = 1ull * ar.x * ar.y * sizeof(float);
   if constexpr (struct_pack::checkable_reader_t<Reader>) {
+    auto length = struct_pack::get_write_size(ar.p, 1ull * ar.x * ar.y);
     if (!reader.check(length)) {  // some input(such as memory) allow us check
                                   // length before read data.
       return struct_pack::errc::no_buffer_space;
     }
   }
-  ar.p = (float*)malloc(length);
+  ar.p = (float*)malloc(1ull * ar.x * ar.y * sizeof(float));
   auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
   if (ec != struct_pack::errc{}) {
     free(ar.p);
@@ -101,15 +101,17 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
 
 template <typename Reader>
 struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
-  if (auto ec = struct_pack::read(reader, ar.name); ec != struct_pack::errc{}) {
-    return ec;
-  }
-  if (auto ec = struct_pack::read(reader, ar.values);
+  if (auto ec = struct_pack::read<sizeof(uint64_t), true>(
+          reader, ar.name);  // skip this field
       ec != struct_pack::errc{}) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.values2);
-      ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.values);
+      ec != struct_pack::errc{}) {  // skip this field
+    return ec;
+  }
+  if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.values2);
+      ec != struct_pack::errc{}) {  // skip this field
     return ec;
   }
   if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
@@ -118,9 +120,11 @@ struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
   if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
     return ec;
   }
-  auto length = 1ull * ar.x * ar.y * sizeof(float);
-  if (!reader.ignore(length)) {
-    return struct_pack::errc::no_buffer_space;
+
+  if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.p,
+                                                          1ull * ar.x * ar.y);
+      ec != struct_pack::errc{}) {
+    return ec;
   }
   return {};
 }
