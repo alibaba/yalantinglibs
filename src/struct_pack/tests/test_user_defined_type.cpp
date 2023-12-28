@@ -154,7 +154,7 @@ TEST_CASE("test user-defined_type nested") {
   ar[0].values2 = {1.1, 4.54, 43.32443};
   ar[0](1, 6) = 3.14;
   ar[1].name = "hello2";
-  ar[1].values = {{1, -1, 44, 5,2}};
+  ar[1].values = {{1, -1, 44, 5, 2}};
   ar[1].values2 = {1.1, 4.54, -2.0};
   ar[1](87, 111) = 2.71;
   auto buffer = struct_pack::serialize(ar);
