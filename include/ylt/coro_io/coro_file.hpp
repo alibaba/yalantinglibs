@@ -332,11 +332,11 @@ class coro_file {
         return "rb";
       case flags::create_write:
       case flags::write_only:
-        return "w";
+        return "wb+";
       case flags::read_write:
         return "rb+";
       case flags::append:
-        return "a";
+        return "ab+";
       case flags::create_read_write_append:
         return "ab+";
       case flags::truncate:

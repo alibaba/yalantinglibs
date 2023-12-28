@@ -81,7 +81,7 @@ class coro_rpc_server_base {
 
   coro_rpc_server_base(const server_config &config = server_config{})
       : pool_(config.thread_num),
-        acceptor_(pool_.get_io_context()),
+        acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(config.port),
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init} {}
