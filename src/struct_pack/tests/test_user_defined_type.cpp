@@ -9,9 +9,9 @@
 namespace my_name_space {
 
 struct array2D {
-  std::string name = "Hello";
-  std::vector<std::vector<int>> values = {{-1, 2, 3}};
-  std::array<float, 3> values2 = {1.1, 2.3, 4.5};
+  std::string name;
+  std::vector<std::vector<int>> values;
+  std::array<float, 3> values2;
   unsigned int x;
   unsigned int y;
   float* p;
@@ -133,6 +133,9 @@ struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
 
 TEST_CASE("test user-defined_type") {
   my_name_space::array2D ar(114, 514);
+  ar.name = "hello";
+  ar.values = {{1, -1, 44, 5}};
+  ar.values2 = {1.1, 4.54, 43.32443};
   ar(1, 6) = 3.14;
   ar(87, 111) = 2.71;
   auto buffer = struct_pack::serialize(ar);
@@ -146,7 +149,13 @@ TEST_CASE("test user-defined_type nested") {
   std::vector<my_name_space::array2D> ar;
   ar.emplace_back(11, 22);
   ar.emplace_back(114, 514);
+  ar[0].name = "hello";
+  ar[0].values = {{1, -1, 44, 5}};
+  ar[0].values2 = {1.1, 4.54, 43.32443};
   ar[0](1, 6) = 3.14;
+  ar[1].name = "hello2";
+  ar[1].values = {{1, -1, 44, 5,2}};
+  ar[1].values2 = {1.1, 4.54, -2.0};
   ar[1](87, 111) = 2.71;
   auto buffer = struct_pack::serialize(ar);
   auto result = struct_pack::deserialize<decltype(ar)>(buffer);
@@ -159,7 +168,13 @@ TEST_CASE("test user-defined_type nested ec") {
   std::vector<my_name_space::array2D> ar;
   ar.emplace_back(11, 22);
   ar.emplace_back(114, 514);
+  ar[0].name = "hello";
+  ar[0].values = {{1, -1, 44, 5}};
+  ar[0].values2 = {1.1, 4.54, 43.32443};
   ar[0](1, 6) = 3.14;
+  ar[1].name = "hello2";
+  ar[1].values = {{1, -1, 44, 5, 2}};
+  ar[1].values2 = {1.1, 4.54, -2.0};
   ar[1](87, 111) = 2.71;
   auto buffer = struct_pack::serialize(ar);
   buffer.pop_back();
@@ -171,6 +186,9 @@ TEST_CASE("test user-defined_type nested ec") {
 TEST_CASE("test user-defined_type get_field") {
   std::pair<my_name_space::array2D, int> o;
   o.first = {114, 514};
+  o.first.name = "hello";
+  o.first.values = {{1, -1, 44, 5}};
+  o.first.values2 = {1.1, 4.54, 43.32443};
   o.first(1, 6) = 3.14;
   o.first(87, 111) = 2.71;
   o.second = 114514;

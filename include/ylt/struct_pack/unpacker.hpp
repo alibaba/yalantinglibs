@@ -905,7 +905,15 @@ class unpacker {
                 }
               }
               else {
-                static_assert("illegal branch");
+                std::uint64_t sz;
+                if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                                   sz)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+                if SP_UNLIKELY (sz > UINT32_MAX) {
+                  return struct_pack::errc::invalid_width_of_container_length;
+                }
+                size = sz;
               }
             }
             else {
