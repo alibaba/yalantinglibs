@@ -75,9 +75,11 @@ struct memory_reader {
 };
 
 #if __cpp_concepts >= 201907L
-template <reader_t Reader, uint64_t conf = sp_config::DEFAULT>
+template <reader_t Reader, uint64_t conf = sp_config::DEFAULT,
+          bool force_optimize = false>
 #else
-template <typename Reader, uint64_t conf = sp_config::DEFAULT>
+template <typename Reader, uint64_t conf = sp_config::DEFAULT,
+          bool force_optimize = false>
 #endif
 class unpacker {
  public:
@@ -85,16 +87,15 @@ class unpacker {
   unpacker(const unpacker &) = delete;
   unpacker &operator=(const unpacker &) = delete;
 
-  template <typename DerivedClasses, typename size_type, typename version,
-            typename NotSkip>
-  friend struct deserialize_one_derived_class_helper;
-
   STRUCT_PACK_INLINE unpacker(Reader &reader) : reader_(reader) {
 #if __cpp_concepts < 201907L
     static_assert(reader_t<Reader>,
                   "The writer type must satisfy requirements!");
 #endif
   }
+
+  template <std::size_t size_width, typename R, typename T>
+  friend STRUCT_PACK_INLINE struct_pack::errc read(Reader &reader, T &t);
 
   template <typename T, typename... Args>
   STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
@@ -277,7 +278,6 @@ class unpacker {
     return err_code;
   }
 
- private:
   template <typename T, typename... Args, size_t... I>
   STRUCT_PACK_INLINE struct_pack::errc deserialize_compatibles(
       T &t, std::index_sequence<I...>, Args &...args) {
@@ -878,58 +878,75 @@ class unpacker {
             return struct_pack::errc::no_buffer_space;
           }
         }
+        else {
 #ifdef STRUCT_PACK_OPTIMIZE
-        else if constexpr (size_type == 2) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
-            return struct_pack::errc::no_buffer_space;
-          }
-        }
-        else if constexpr (size_type == 4) {
-          if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
-            return struct_pack::errc::no_buffer_space;
-          }
-        }
-        else if constexpr (size_type == 8) {
-          if constexpr (sizeof(std::size_t) >= 8) {
-            if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
-              return struct_pack::errc::no_buffer_space;
-            }
-          }
-          else {
-            static_assert("illegal branch");
-          }
-        }
-        else {
-          static_assert(!sizeof(T), "illegal size_type");
-        }
+          constexpr bool struct_pack_optimize = true;
 #else
-        else {
-          switch (size_type_) {
-            case 1:
-              if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size)) {
+          constexpr bool struct_pack_optimize = false;
+#endif
+          if constexpr (force_optimize || struct_pack_optimize) {
+            if constexpr (size_type == 2) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                                 size)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              break;
-            case 2:
-              if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size)) {
+            }
+            else if constexpr (size_type == 4) {
+              if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                                 size)) {
                 return struct_pack::errc::no_buffer_space;
               }
-              break;
-            case 3:
+            }
+            else if constexpr (size_type == 8) {
               if constexpr (sizeof(std::size_t) >= 8) {
-                if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size)) {
+                if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                                   size)) {
                   return struct_pack::errc::no_buffer_space;
                 }
               }
               else {
-                unreachable();
+                std::uint64_t sz;
+                if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
+                                                                   sz)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+                if SP_UNLIKELY (sz > UINT32_MAX) {
+                  return struct_pack::errc::invalid_width_of_container_length;
+                }
+                size = sz;
               }
-              break;
-            default:
-              unreachable();
+            }
+            else {
+              static_assert(!sizeof(T), "illegal size_type");
+            }
+          }
+          else {
+            switch (size_type_) {
+              case 1:
+                if SP_UNLIKELY (!low_bytes_read_wrapper<2>(reader_, size)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+                break;
+              case 2:
+                if SP_UNLIKELY (!low_bytes_read_wrapper<4>(reader_, size)) {
+                  return struct_pack::errc::no_buffer_space;
+                }
+                break;
+              case 3:
+                if constexpr (sizeof(std::size_t) >= 8) {
+                  if SP_UNLIKELY (!low_bytes_read_wrapper<8>(reader_, size)) {
+                    return struct_pack::errc::no_buffer_space;
+                  }
+                }
+                else {
+                  unreachable();
+                }
+                break;
+              default:
+                unreachable();
+            }
           }
         }
-#endif
         if (size == 0) {
           return {};
         }

@@ -32,12 +32,19 @@ template <
 #else
     typename writer,
 #endif
-    typename serialize_type>
+    typename serialize_type, bool force_optimize = false>
 class packer {
+  constexpr inline static serialize_buffer_size useless_info{};
 
  public:
   packer(writer &writer_, const serialize_buffer_size &info)
-      : writer_(writer_), info(info) {
+      : writer_(writer_), info_(info) {
+#if __cpp_concepts < 201907L
+    static_assert(writer_t<writer>,
+                  "The writer type must satisfy requirements!");
+#endif
+  }
+  packer(writer &writer_) : writer_(writer_), info_(useless_info) {
 #if __cpp_concepts < 201907L
     static_assert(writer_t<writer>,
                   "The writer type must satisfy requirements!");
@@ -70,7 +77,6 @@ class packer {
     }
   }
 
- private:
   template <typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_raw_hash() {
     if constexpr (sizeof...(Args) == 0) {
@@ -100,10 +106,10 @@ class packer {
       write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
     }
     if constexpr (hash_head % 2) {  // has more metainfo
-      auto metainfo = info.metainfo();
+      auto metainfo = info_.metainfo();
       write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
       if constexpr (serialize_static_config<serialize_type>::has_compatible) {
-        std::size_t sz = info.size();
+        std::size_t sz = info_.size();
         switch (metainfo & 0b11) {
           case 1:
             low_bytes_write_wrapper<2>(writer_, sz);
@@ -132,7 +138,6 @@ class packer {
     }
   }
 
- private:
   template <std::size_t size_type, uint64_t version,
             std::uint64_t parent_tag = 0, typename First, typename... Args>
   constexpr void STRUCT_PACK_INLINE serialize_many(const First &first_item,
@@ -302,50 +307,57 @@ class packer {
       }
       else if constexpr (map_container<type> || container<type>) {
         auto size = item.size();
+
         if constexpr (size_type == 1) {
           low_bytes_write_wrapper<size_type>(writer_, size);
         }
+        else {
 #ifdef STRUCT_PACK_OPTIMIZE
-        else if constexpr (size_type == 2) {
-          low_bytes_write_wrapper<size_type>(writer_, size);
-        }
-        else if constexpr (size_type == 4) {
-          low_bytes_write_wrapper<size_type>(writer_, size);
-        }
-        else if constexpr (size_type == 8) {
-          if constexpr (sizeof(std::size_t) >= 8) {
-            low_bytes_write_wrapper<size_type>(writer_, size);
-          }
-          else {
-            static_assert(!sizeof(T), "illegal size_type");
-          }
-        }
-        else {
-          static_assert(!sizeof(item), "illegal size_type.");
-        }
+          constexpr bool struct_pack_optimize = true;
 #else
-        else {
-          auto size = item.size();
-          switch ((info.metainfo() & 0b11000) >> 3) {
-            case 1:
-              low_bytes_write_wrapper<2>(writer_, size);
-              break;
-            case 2:
-              low_bytes_write_wrapper<4>(writer_, size);
-              break;
-            case 3:
+          constexpr bool struct_pack_optimize = false;
+#endif
+          if constexpr (force_optimize || struct_pack_optimize) {
+            if constexpr (size_type == 2) {
+              low_bytes_write_wrapper<size_type>(writer_, size);
+            }
+            else if constexpr (size_type == 4) {
+              low_bytes_write_wrapper<size_type>(writer_, size);
+            }
+            else if constexpr (size_type == 8) {
               if constexpr (sizeof(std::size_t) >= 8) {
-                low_bytes_write_wrapper<8>(writer_, size);
+                low_bytes_write_wrapper<size_type>(writer_, size);
               }
               else {
-                unreachable();
+                std::uint64_t sz = size;
+                low_bytes_write_wrapper<size_type>(writer_, sz);
               }
-              break;
-            default:
-              unreachable();
+            }
+            else {
+              static_assert(!sizeof(item), "illegal size_type.");
+            }
+          }
+          else {
+            switch ((info_.metainfo() & 0b11000) >> 3) {
+              case 1:
+                low_bytes_write_wrapper<2>(writer_, size);
+                break;
+              case 2:
+                low_bytes_write_wrapper<4>(writer_, size);
+                break;
+              case 3:
+                if constexpr (sizeof(std::size_t) >= 8) {
+                  low_bytes_write_wrapper<8>(writer_, size);
+                }
+                else {
+                  unreachable();
+                }
+                break;
+              default:
+                unreachable();
+            }
           }
         }
-#endif
         if constexpr (trivially_copyable_container<type> &&
                       is_little_endian_copyable<sizeof(
                           typename type::value_type)>) {
@@ -522,7 +534,7 @@ class packer {
   template <typename T>
   friend constexpr serialize_buffer_size get_needed_size(const T &t);
   writer &writer_;
-  const serialize_buffer_size &info;
+  const serialize_buffer_size &info_;
 };
 
 template <uint64_t conf = sp_config::DEFAULT,
