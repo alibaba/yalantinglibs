@@ -28,11 +28,6 @@ constexpr inline bool is_lazy_v =
 
 class coro_http_router {
  public:
-  static coro_http_router& instance() {
-    static coro_http_router instance;
-    return instance;
-  }
-
   // eg: "GET hello/" as a key
   template <http_method method, typename Func>
   void set_http_handler(std::string key, Func handler) {
@@ -110,7 +105,6 @@ class coro_http_router {
   const auto& get_coro_handlers() const { return coro_handles_; }
 
  private:
-  coro_http_router() = default;
   std::set<std::string> keys_;
   std::unordered_map<
       std::string_view,
