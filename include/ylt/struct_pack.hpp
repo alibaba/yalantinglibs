@@ -34,6 +34,7 @@
 #include "struct_pack/type_id.hpp"
 #include "struct_pack/type_trait.hpp"
 #include "struct_pack/unpacker.hpp"
+#include "struct_pack/user_helper.hpp"
 #include "struct_pack/varint.hpp"
 
 #if __has_include(<expected>) && __cplusplus > 202002L
