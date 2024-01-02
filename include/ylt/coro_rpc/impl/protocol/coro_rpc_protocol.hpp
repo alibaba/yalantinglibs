@@ -26,7 +26,6 @@
 #include <ylt/struct_pack.hpp>
 
 #include "asio/buffer.hpp"
-#include "async_simple/Common.h"
 #include "struct_pack_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/context.hpp"

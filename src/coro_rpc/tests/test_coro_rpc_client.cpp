@@ -419,7 +419,7 @@ TEST_CASE("testing client with context response user-defined error") {
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE(!ec);
-  server.register_handler<error_with_context,hello>();
+  server.register_handler<error_with_context, hello>();
   auto ret = client.sync_call<error_with_context>();
   REQUIRE(!ret.has_value());
   CHECK(ret.error().code == coro_rpc::errc{104});

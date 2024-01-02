@@ -820,7 +820,7 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
  public:
   coro_rpc::err_code sync_connect(const std::string &host,
-                              const std::string &port) {
+                                  const std::string &port) {
     return async_simple::coro::syncAwait(connect(host, port));
   }
 

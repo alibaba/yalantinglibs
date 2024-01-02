@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <exception>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 
 #include "rpc_service.h"
@@ -62,7 +61,15 @@ Lazy<void> show_rpc_call() {
   assert(ret.value() == "HelloService::hello_with_delay"s);
 
   ret = co_await client.call<return_error>();
-  assert(ret.error().code == 404);
+  assert(ret.error().code = 404);
+  assert(ret.error().msg == "404 Not Found.");
+
+  ret = co_await client.call<rpc_with_state_by_tag>();
+  assert(ret.value() == "1");
+  ret = co_await client.call<rpc_with_state_by_tag>();
+  assert(ret.value() == "2");
+  ret = co_await client.call<rpc_with_state_by_tag>();
+  assert(ret.value() == "3");
 }
 
 int main() {

@@ -16,6 +16,7 @@
 #include "rpc_service.h"
 
 #include <chrono>
+#include <cstdint>
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/easylog.hpp>
@@ -103,9 +104,9 @@ void return_error(coro_rpc::context<std::string> conn) {
 }
 void rpc_with_state_by_tag(coro_rpc::context<std::string> conn) {
   if (!conn.tag().has_value()) {
-    conn.tag() = 0ull;
+    conn.tag() = uint64_t{0};
   }
-  auto &cnter = std::any_cast<int &>(conn.tag());
+  auto &cnter = std::any_cast<uint64_t&>(conn.tag());
   ELOGV(INFO, "call count: %d", ++cnter);
   conn.response_msg(std::to_string(cnter));
 }
