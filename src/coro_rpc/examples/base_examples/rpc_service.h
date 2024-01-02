@@ -26,6 +26,8 @@ void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
 std::string echo(std::string_view sv);
 void echo_with_attachment(coro_rpc::context<void> conn);
 void echo_with_attachment2(coro_rpc::context<void> conn);
+void return_error(coro_rpc::context<std::string> conn);
+void rpc_with_state_by_tag(coro_rpc::context<std::string> conn);
 async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv);
 async_simple::coro::Lazy<std::string> nested_echo(std::string_view sv);
 class HelloService {

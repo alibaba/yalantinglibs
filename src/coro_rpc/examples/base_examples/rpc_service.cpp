@@ -97,3 +97,15 @@ void HelloService::hello_with_delay(
   }).detach();
   return;
 }
+
+void return_error(coro_rpc::context<std::string> conn) {
+  conn.response_error(404, "404 Not Found.");
+}
+void rpc_with_state_by_tag(coro_rpc::context<std::string> conn) {
+  if (!conn.tag().has_value()) {
+    conn.tag() = 0ull;
+  }
+  auto &cnter = std::any_cast<int &>(conn.tag());
+  ELOGV(INFO, "call count: %d", ++cnter);
+  conn.response_msg(std::to_string(cnter));
+}
