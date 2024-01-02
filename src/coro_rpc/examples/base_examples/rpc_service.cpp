@@ -21,6 +21,8 @@
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/easylog.hpp>
 
+#include "ylt/coro_rpc/impl/errno.h"
+
 using namespace coro_rpc;
 
 std::string hello_world() {
@@ -100,13 +102,13 @@ void HelloService::hello_with_delay(
 }
 
 void return_error(coro_rpc::context<std::string> conn) {
-  conn.response_error(404, "404 Not Found.");
+  conn.response_error(coro_rpc::err_code{404}, "404 Not Found.");
 }
 void rpc_with_state_by_tag(coro_rpc::context<std::string> conn) {
   if (!conn.tag().has_value()) {
     conn.tag() = uint64_t{0};
   }
-  auto &cnter = std::any_cast<uint64_t&>(conn.tag());
+  auto &cnter = std::any_cast<uint64_t &>(conn.tag());
   ELOGV(INFO, "call count: %d", ++cnter);
   conn.response_msg(std::to_string(cnter));
 }

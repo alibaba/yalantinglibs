@@ -37,7 +37,7 @@ struct err_code {
  public:
   errc ec;
   err_code() : ec(errc::ok) {}
-  err_code(uint16_t ec) : ec{ec} {};
+  explicit err_code(uint16_t ec) : ec{ec} {};
   err_code(errc ec) : ec(ec){};
   err_code& operator=(errc ec) {
     this->ec = ec;
@@ -51,7 +51,8 @@ struct err_code {
   err_code& operator=(const err_code& o) = default;
   bool operator!() const { return ec == errc::ok; }
   operator errc() const { return ec; }
-  operator uint16_t() const { return static_cast<uint16_t>(ec); }
+  operator bool() const { return static_cast<uint16_t>(ec); }
+  explicit operator uint16_t() const { return static_cast<uint16_t>(ec); }
   uint16_t val() const { return static_cast<uint16_t>(ec); }
 };
 inline bool operator!(errc ec) { return ec == errc::ok; }
