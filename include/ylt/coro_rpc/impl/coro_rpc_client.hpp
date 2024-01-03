@@ -389,7 +389,7 @@ class coro_rpc_client {
     is_timeout_ = false;
     has_closed_ = false;
   }
-  static bool is_ok(coro_rpc::err_code ec) noexcept { return (bool)ec; }
+  static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       is_reconnect_t is_reconnect = is_reconnect_t{false}) {
 #ifdef YLT_ENABLE_SSL
