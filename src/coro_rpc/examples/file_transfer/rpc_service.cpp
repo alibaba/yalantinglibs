@@ -1,28 +1,23 @@
 #include "rpc_service.h"
 
 #include <filesystem>
+#include <memory>
 
 std::string echo(std::string str) { return str; }
 
 void upload_file(coro_rpc::context<std::errc> conn, file_part part) {
-  std::shared_ptr<std::ofstream> stream = nullptr;
-  if (!conn.get_tag().has_value()) {
-    stream = std::make_shared<std::ofstream>();
+  if (!conn.tag().has_value()) {
     auto filename = std::to_string(std::time(0)) +
                     std::filesystem::path(part.filename).extension().string();
-    stream->open(filename, std::ios::binary | std::ios::app);
-    conn.set_tag(stream);
+    conn.tag() = std::make_shared<std::ofstream>(
+        filename, std::ios::binary | std::ios::app);
   }
-  else {
-    stream = std::any_cast<std::shared_ptr<std::ofstream>>(conn.get_tag());
-  }
-
+  auto stream = std::any_cast<std::shared_ptr<std::ofstream>>(conn.tag());
   std::cout << "file part content size=" << part.content.size() << "\n";
-
   stream->write(part.content.data(), part.content.size());
   if (part.eof) {
     stream->close();
-    conn.set_tag(std::any{});
+    conn.tag().reset();
     std::cout << "file upload finished\n";
   }
 
@@ -31,8 +26,7 @@ void upload_file(coro_rpc::context<std::errc> conn, file_part part) {
 
 void download_file(coro_rpc::context<response_part> conn,
                    std::string filename) {
-  std::shared_ptr<std::ifstream> stream = nullptr;
-  if (!conn.get_tag().has_value()) {
+  if (!conn.tag().has_value()) {
     std::string actual_filename =
         std::filesystem::path(filename).filename().string();
     if (!std::filesystem::is_regular_file(actual_filename) ||
@@ -40,13 +34,10 @@ void download_file(coro_rpc::context<response_part> conn,
       conn.response_msg(response_part{std::errc::invalid_argument});
       return;
     }
-
-    stream = std::make_shared<std::ifstream>(actual_filename, std::ios::binary);
-    conn.set_tag(stream);
+    conn.tag() =
+        std::make_shared<std::ifstream>(actual_filename, std::ios::binary);
   }
-  else {
-    stream = std::any_cast<std::shared_ptr<std::ifstream>>(conn.get_tag());
-  }
+  auto stream = std::any_cast<std::shared_ptr<std::ifstream>>(conn.tag());
 
   char buf[1024];
 
@@ -56,7 +47,7 @@ void download_file(coro_rpc::context<response_part> conn,
 
   if (stream->eof()) {
     stream->close();
-    conn.set_tag(std::any{});
+    conn.tag().reset();
   }
 }
 

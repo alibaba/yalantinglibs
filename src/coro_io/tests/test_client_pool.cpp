@@ -159,7 +159,7 @@ struct mock_client : public coro_rpc::coro_rpc_client {
   async_simple::coro::Lazy<coro_rpc::errc> reconnect(
       const std::string &hostname) {
     auto ec = co_await this->coro_rpc::coro_rpc_client::reconnect(hostname);
-    if (!!ec) {
+    if (ec) {
       co_await coro_io::sleep_for(300ms);
     }
     co_return ec;

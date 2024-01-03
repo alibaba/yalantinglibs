@@ -374,7 +374,7 @@ struct ServerTester : TesterConfig {
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
     CHECK_MESSAGE(
-        !!ec,
+        ec,
         std::to_string(client->get_client_id()).append(make_error_message(ec)));
   }
 
