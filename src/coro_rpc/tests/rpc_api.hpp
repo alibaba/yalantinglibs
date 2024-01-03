@@ -19,6 +19,8 @@
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
+#include "ylt/coro_rpc/impl/errno.h"
+
 void hi();
 std::string hello();
 std::string hello_timeout();
@@ -35,7 +37,7 @@ struct my_context {
 };
 void echo_with_attachment(coro_rpc::context<void> conn);
 inline void error_with_context(coro_rpc::context<void> conn) {
-  conn.response_error(coro_rpc::errc{104}, "My Error.");
+  conn.response_error(coro_rpc::err_code{104}, "My Error.");
 }
 void coro_fun_with_user_define_connection_type(my_context conn);
 void coro_fun_with_delay_return_void(coro_rpc::context<void> conn);

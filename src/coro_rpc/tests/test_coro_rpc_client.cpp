@@ -289,7 +289,7 @@ class SSLClientTester {
       auto f = [this, &client]() -> Lazy<void> {
         auto ec = co_await client->connect("127.0.0.1", port_);
         if (server_crt == ssl_type::_ && server_key == ssl_type::_) {
-          if (!!ec) {
+          if (ec) {
             ELOGV(INFO, "%s", gen_err().data());
           }
           REQUIRE_MESSAGE(!ec, make_error_message(ec));
@@ -419,11 +419,15 @@ TEST_CASE("testing client with context response user-defined error") {
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE(!ec);
-  server.register_handler<error_with_context>();
+  server.register_handler<error_with_context, hello>();
   auto ret = client.sync_call<error_with_context>();
-  CHECK(!ret.has_value());
+  REQUIRE(!ret.has_value());
   CHECK(ret.error().code == coro_rpc::errc{104});
   CHECK(ret.error().msg == "My Error.");
+  CHECK(client.has_closed() == false);
+  auto ret2 = client.sync_call<hello>();
+  REQUIRE(ret2.has_value());
+  CHECK(ret2.value() == "hello");
 }
 
 TEST_CASE("testing client with shutdown") {

@@ -104,7 +104,7 @@ class coro_rpc_server_base {
    *
    * @return error code if start failed, otherwise block until server stop.
    */
-  [[nodiscard]] coro_rpc::errc start() noexcept {
+  [[nodiscard]] coro_rpc::err_code start() noexcept {
     auto ret = async_start();
     if (ret) {
       ret.value().wait();
@@ -115,10 +115,10 @@ class coro_rpc_server_base {
     }
   }
 
-  [[nodiscard]] coro_rpc::expected<async_simple::Future<coro_rpc::errc>,
-                                   coro_rpc::errc>
+  [[nodiscard]] coro_rpc::expected<async_simple::Future<coro_rpc::err_code>,
+                                   coro_rpc::err_code>
   async_start() noexcept {
-    coro_rpc::errc ec{};
+    coro_rpc::err_code ec{};
     {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
@@ -128,7 +128,7 @@ class coro_rpc_server_base {
         else if (flag_ == stat::stop) {
           ELOGV(INFO, "has stoped");
         }
-        return coro_rpc::unexpected<coro_rpc::errc>{
+        return coro_rpc::unexpected<coro_rpc::err_code>{
             coro_rpc::errc::server_has_ran};
       }
       ec = listen();
@@ -147,11 +147,11 @@ class coro_rpc_server_base {
       }
     }
     if (!ec) {
-      async_simple::Promise<coro_rpc::errc> promise;
+      async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
       accept().start([p = std::move(promise)](auto &&res) mutable {
         if (res.hasError()) {
-          p.setValue(coro_rpc::errc::io_error);
+          p.setValue(coro_rpc::err_code{coro_rpc::errc::io_error});
         }
         else {
           p.setValue(res.value());
@@ -160,7 +160,7 @@ class coro_rpc_server_base {
       return std::move(future);
     }
     else {
-      return coro_rpc::unexpected<coro_rpc::errc>{ec};
+      return coro_rpc::unexpected<coro_rpc::err_code>{ec};
     }
   }
 
@@ -285,7 +285,7 @@ class coro_rpc_server_base {
   auto &get_io_context_pool() noexcept { return pool_; }
 
  private:
-  coro_rpc::errc listen() {
+  coro_rpc::err_code listen() {
     ELOGV(INFO, "begin to listen");
     using asio::ip::tcp;
     auto endpoint = tcp::endpoint(tcp::v4(), port_);
@@ -319,7 +319,7 @@ class coro_rpc_server_base {
     return {};
   }
 
-  async_simple::coro::Lazy<coro_rpc::errc> accept() {
+  async_simple::coro::Lazy<coro_rpc::err_code> accept() {
     for (;;) {
       auto executor = pool_.get_executor();
       asio::ip::tcp::socket socket(executor->get_asio_executor());

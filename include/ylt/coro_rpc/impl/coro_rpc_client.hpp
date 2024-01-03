@@ -179,7 +179,7 @@ class coro_rpc_client {
    * @param timeout_duration RPC call timeout
    * @return error code
    */
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::errc> reconnect(
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> reconnect(
       std::string host, std::string port,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
@@ -191,7 +191,7 @@ class coro_rpc_client {
     return connect(is_reconnect_t{true});
   }
 
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::errc> reconnect(
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> reconnect(
       std::string endpoint,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
@@ -214,7 +214,7 @@ class coro_rpc_client {
    * @param timeout_duration RPC call timeout
    * @return error code
    */
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::errc> connect(
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
@@ -224,7 +224,7 @@ class coro_rpc_client {
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
     return connect();
   }
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::errc> connect(
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5)) {
@@ -389,8 +389,8 @@ class coro_rpc_client {
     is_timeout_ = false;
     has_closed_ = false;
   }
-  static bool is_ok(coro_rpc::errc ec) noexcept { return !ec; }
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::errc> connect(
+  static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       is_reconnect_t is_reconnect = is_reconnect_t{false}) {
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
@@ -447,7 +447,7 @@ class coro_rpc_client {
     }
 #endif
 
-    co_return coro_rpc::errc{};
+    co_return coro_rpc::err_code{};
   };
 #ifdef YLT_ENABLE_SSL
   [[nodiscard]] bool init_ssl_impl() {
@@ -664,9 +664,9 @@ class coro_rpc_client {
           file << resp_attachment_buf_;
           file.close();
 #endif
-          r = handle_response_buffer<R>(read_buf_,
-                                        coro_rpc::errc{header.err_code});
-          if (!r) {
+          bool ec = false;
+          r = handle_response_buffer<R>(read_buf_, header.err_code, ec);
+          if (ec) {
             close();
           }
           co_return r;
@@ -740,29 +740,41 @@ class coro_rpc_client {
   }
 
   template <typename T>
-  rpc_result<T, coro_rpc_protocol> handle_response_buffer(
-      std::string &buffer, coro_rpc::errc rpc_errc) {
+  rpc_result<T, coro_rpc_protocol> handle_response_buffer(std::string &buffer,
+                                                          uint8_t rpc_errc,
+                                                          bool &error_happen) {
     rpc_return_type_t<T> ret;
     struct_pack::errc ec;
     coro_rpc_protocol::rpc_error err;
-    if (rpc_errc == coro_rpc::errc{}) {
-      ec = struct_pack::deserialize_to(ret, buffer);
-      if (ec == struct_pack::errc::ok) {
-        if constexpr (std::is_same_v<T, void>) {
-          return {};
-        }
-        else {
-          return std::move(ret);
+    if (rpc_errc == 0)
+      AS_LIKELY {
+        ec = struct_pack::deserialize_to(ret, buffer);
+        if (ec == struct_pack::errc::ok) {
+          if constexpr (std::is_same_v<T, void>) {
+            return {};
+          }
+          else {
+            return std::move(ret);
+          }
         }
       }
-    }
     else {
       err.code = rpc_errc;
-      ec = struct_pack::deserialize_to(err.msg, buffer);
-      if (ec == struct_pack::errc::ok) {
-        return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+      if (rpc_errc != UINT8_MAX) {
+        ec = struct_pack::deserialize_to(err.msg, buffer);
+        if (ec == struct_pack::errc::ok) {
+          error_happen = true;
+          return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+        }
+      }
+      else {
+        ec = struct_pack::deserialize_to(err, buffer);
+        if (ec == struct_pack::errc::ok) {
+          return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+        }
       }
     }
+    error_happen = true;
     // deserialize failed.
     err = {errc::invalid_argument, "failed to deserialize rpc return value"};
     return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
@@ -807,8 +819,8 @@ class coro_rpc_client {
 
 #ifdef UNIT_TEST_INJECT
  public:
-  coro_rpc::errc sync_connect(const std::string &host,
-                              const std::string &port) {
+  coro_rpc::err_code sync_connect(const std::string &host,
+                                  const std::string &port) {
     return async_simple::coro::syncAwait(connect(host, port));
   }
 

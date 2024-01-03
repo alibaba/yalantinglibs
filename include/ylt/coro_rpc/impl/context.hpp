@@ -75,14 +75,14 @@ class context_base {
 
   using return_type = return_msg_type;
 
-  void response_error(coro_rpc::errc error_code, std::string_view error_msg) {
+  void response_error(coro_rpc::err_code error_code,
+                      std::string_view error_msg) {
     if (!check_status())
       AS_UNLIKELY { return; };
     self_->conn_->template response_error<rpc_protocol>(
         error_code, error_msg, self_->req_head_, self_->is_delay_);
   }
-
-  void response_error(coro_rpc::errc error_code) {
+  void response_error(coro_rpc::err_code error_code) {
     response_error(error_code, make_error_message(error_code));
   }
   /*!
@@ -190,13 +190,8 @@ class context_base {
     self_->conn_->set_rpc_call_type(
         coro_connection::rpc_call_type::callback_with_delay);
   }
-
-  template <typename T>
-  void set_tag(T &&tag) {
-    self_->conn_->set_tag(std::forward<T>(tag));
-  }
-
-  std::any get_tag() { return self_->conn_->get_tag(); }
+  std::any &tag() { return self_->conn_->tag(); }
+  const std::any &tag() const { return self_->conn_->tag(); }
 };
 
 template <typename T>
