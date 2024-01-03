@@ -19,6 +19,7 @@
 #include "ylt/coro_http/coro_http_server.hpp"
 
 using namespace std::chrono_literals;
+using namespace coro_http;
 
 void test_sync_client() {
   {
@@ -77,7 +78,6 @@ async_simple::coro::Lazy<void> test_async_ssl_client(
     coro_http::coro_http_client &client) {
 #ifdef CINATRA_ENABLE_SSL
   std::string uri = "https://cn.bing.com";
-  [[maybe_unused]] auto ec = client.init_ssl("cn.bing.com");
   auto data = co_await client.async_get(uri);
   std::cout << data.net_err.message() << "\n";
   std::cout << data.status << std::endl;
@@ -87,6 +87,37 @@ async_simple::coro::Lazy<void> test_async_ssl_client(
 
 async_simple::coro::Lazy<void> test_websocket(
     coro_http::coro_http_client &client) {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_echo",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        websocket_result result{};
+
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            std::cout << "err msg: " << result.ec.message() << "\n";
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close reason: " << result.data << "\n";
+            break;
+          }
+
+          std::cout << "get ws data from client, data content: " << result.data
+                    << "\n";
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            std::cout << "err msg: " << ec.message() << "\n";
+            break;
+          }
+        }
+      });
+  server.async_start();
+
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
   });
@@ -100,7 +131,7 @@ async_simple::coro::Lazy<void> test_websocket(
   });
 
   // connect to your websocket server.
-  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://127.0.0.1:8090/ws_echo");
   if (!r) {
     co_return;
   }
@@ -111,34 +142,194 @@ async_simple::coro::Lazy<void> test_websocket(
   std::cout << result.net_err << "\n";
   result = co_await client.async_send_ws_close("ws close");
   std::cout << result.net_err << "\n";
+
+  std::this_thread::sleep_for(
+      300ms);  // wait for server deal with all messages, avoid server destruct
+               // immediately.
 }
 
-async_simple::coro::Lazy<void> upload_files(
+bool create_file(std::string filename, size_t file_size) {
+  std::ofstream file(filename, std::ios::binary);
+  if (!file) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  file.write(str.data(), str.size());
+  return true;
+}
+
+async_simple::coro::Lazy<void> chunked_upload_download(
     coro_http::coro_http_client &client) {
-  client.add_str_part("hello", "world");
-  client.add_str_part("key", "value");
-  client.add_file_part("test", "test.jpg");
-  std::string uri = "http://yoururl.com";
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::chunked);
+        chunked_result result{};
+        coro_io::coro_file file{};
+        size_t total = 0;
+        co_await file.async_open("test_file", coro_io::flags::create_write);
+        while (true) {
+          result = co_await req.get_conn()->read_chunked();
+          if (result.ec) {
+            co_return;
+          }
+
+          co_await file.async_write(result.data.data(), result.data.size());
+          total += result.data.size();
+          if (result.eof) {
+            break;
+          }
+        }
+
+        file.close();
+        std::cout << "content size: " << fs::file_size("test_file") << "\n";
+        resp.set_status_and_content(status_type::ok, "chunked ok");
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/write_chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_format_type(format_type::chunked);
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " ok"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_chunked(str); !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_chunked();
+
+        // resp.set_status_and_content(status_type::ok, "chunked ok");
+        // co_await resp.get_conn()->reply();
+      });
+
+  server.async_start();
+
+  std::string filename = "chunked.txt";
+  create_file(filename, 1024);
+
+  coro_io::coro_file file{};
+  co_await file.async_open(filename, coro_io::flags::read_only);
+
+  std::string buf;
+  detail::resize(buf, 100);
+
+  auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
+    auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
+    co_return read_result{{buf.data(), size}, file.eof(), ec};
+  };
+
+  auto result = co_await client.async_upload_chunked(
+      "http://127.0.0.1:8090/chunked"sv, http_method::POST, std::move(fn));
+  assert(result.status == 200);
+
+  result = co_await client.async_get("http://127.0.0.1:8090/write_chunked");
+  assert(result.status == 200);
+  assert(result.resp_body == "hello world ok");
+}
+
+async_simple::coro::Lazy<void> multipart_upload_files(
+    coro_http::coro_http_client &client) {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/multipart_upload",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::multipart);
+        auto boundary = req.get_boundary();
+
+        while (true) {
+          auto part_head = co_await req.get_conn()->read_part_head();
+          if (part_head.ec) {
+            co_return;
+          }
+
+          std::cout << part_head.name << "\n";
+          std::cout << part_head.filename << "\n";
+
+          std::shared_ptr<coro_io::coro_file> file;
+          std::string filename;
+          if (!part_head.filename.empty()) {
+            file = std::make_shared<coro_io::coro_file>();
+            filename = std::to_string(
+                std::chrono::system_clock::now().time_since_epoch().count());
+
+            size_t pos = part_head.filename.rfind('.');
+            if (pos != std::string::npos) {
+              auto extent = part_head.filename.substr(pos);
+              filename += extent;
+            }
+
+            std::cout << filename << "\n";
+            co_await file->async_open(filename, coro_io::flags::create_write);
+            if (!file->is_open()) {
+              resp.set_status_and_content(status_type::internal_server_error,
+                                          "file open failed");
+              co_return;
+            }
+          }
+
+          auto part_body = co_await req.get_conn()->read_part_body(boundary);
+          if (part_body.ec) {
+            co_return;
+          }
+
+          if (!filename.empty()) {
+            auto ec = co_await file->async_write(part_body.data.data(),
+                                                 part_body.data.size());
+            if (ec) {
+              co_return;
+            }
+
+            file->close();
+            assert(fs::file_size(filename) == 1024);
+          }
+          else {
+            std::cout << part_body.data << "\n";
+          }
+
+          if (part_body.eof) {
+            break;
+          }
+        }
+
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.async_start();
+
+  std::string filename = "test_1024.txt";
+  create_file(filename, 1024);
+
+  client.add_str_part("test", "test value");
+  client.add_file_part("test file", filename);
+
+  std::string uri = "http://127.0.0.1:8090/multipart_upload";
   auto result = co_await client.async_upload_multipart(uri);
-  std::cout << result.net_err << "\n";
-  std::cout << result.status << "\n";
 
-  result = co_await client.async_upload_multipart(uri, "test", "test.jpg");
-  std::cout << result.status << "\n";
-}
-
-async_simple::coro::Lazy<void> download_files(
-    coro_http::coro_http_client &client) {
-  auto result = co_await client.async_download("http://example.com/test.jpg",
-                                               "myfile.jpg");
   std::cout << result.status << "\n";
 }
 
 async_simple::coro::Lazy<void> ranges_download_files(
     coro_http::coro_http_client &client) {
-  auto result = co_await client.async_download("http://example.com/test.txt",
-                                               "myfile.txt", "1-10,11-16");
+  auto result = co_await client.async_download(
+      "http://uniquegoodshiningmelody.neverssl.com/favicon.ico", "myfile",
+      "1-10,11-16");
   std::cout << result.status << "\n";
+  if (result.status == 206 && !result.resp_body.empty()) {
+    assert(fs::file_size("myfile") == 16);
+  }
 }
 
 void use_out_buf() {
@@ -224,7 +415,7 @@ void test_coro_http_server() {
 int main() {
   test_coro_http_server();
   test_sync_client();
-  // use_out_buf();
+  use_out_buf();
 
   coro_http::coro_http_client client{};
   async_simple::coro::syncAwait(test_async_client(client));
@@ -235,15 +426,14 @@ int main() {
   coro_http::coro_http_client ws_client{};
   async_simple::coro::syncAwait(test_websocket(ws_client));
 
+  coro_http_client chunked_client{};
+  async_simple::coro::syncAwait(chunked_upload_download(chunked_client));
+
   coro_http::coro_http_client upload_client{};
   upload_client.set_req_timeout(std::chrono::seconds(3));
-  async_simple::coro::syncAwait(upload_files(upload_client));
-
-  coro_http::coro_http_client download_client{};
-  download_client.set_req_timeout(std::chrono::seconds(3));
-  async_simple::coro::syncAwait(download_files(download_client));
+  async_simple::coro::syncAwait(multipart_upload_files(upload_client));
 
   coro_http::coro_http_client ranges_download_client{};
-  ranges_download_client.set_req_timeout(std::chrono::seconds(3));
+  ranges_download_client.set_req_timeout(std::chrono::seconds(10));
   async_simple::coro::syncAwait(ranges_download_files(ranges_download_client));
 }
