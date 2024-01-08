@@ -75,7 +75,7 @@ STRUCT_PACK_INLINE constexpr std::size_t get_write_size(const T* t,
     return sizeof(T) * len;
   }
   else {
-    size_info sz{};
+    detail::size_info sz{};
     for (std::size_t i = 0; i < len; ++i) {
       sz += struct_pack::detail::calculate_one_size(t[i]);
     }
