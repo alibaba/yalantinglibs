@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <algorithm>
+namespace struct_pack::detail {
 struct size_info {
   std::size_t total;
   std::size_t size_cnt;
@@ -26,7 +27,8 @@ struct size_info {
     return *this;
   }
   constexpr size_info operator+(const size_info &other) {
-    return {this->total + other.total, this->size_cnt += other.size_cnt,
+    return {this->total + other.total, this->size_cnt + other.size_cnt,
             (std::max)(this->max_size, other.max_size)};
   }
 };
+}  // namespace struct_pack::detail
