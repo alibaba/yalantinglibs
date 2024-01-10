@@ -144,7 +144,7 @@ struct Monster {
                  equipped, path);
 #endif
 };
-#if __cplusplus >= 202002L
+#if __cpp_lib_span >= 202002L
 struct zc_Weapon {
   std::string_view name;
   int16_t damage;
