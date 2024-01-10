@@ -652,7 +652,7 @@ class unpacker {
       if (!(vec[index / 8] & (0b1 << (index % 8))))
         return {};
       if constexpr (!no_skip) {
-        reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
+        return reader_.ignore(real_width) ? errc{} : errc::no_buffer_space;
       }
       else {
         bool ec{};

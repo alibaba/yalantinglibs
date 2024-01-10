@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 inline constexpr int OBJECT_COUNT = 20;
-inline constexpr int ITERATIONS = 100000;
+inline constexpr int ITERATIONS = 1000000;
 
 enum class LibType {
   STRUCT_PACK,
@@ -32,9 +32,9 @@ enum class SampleType {
 inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
     {SampleType::RECT, "1 rect"},
     {SampleType::RECTS, std::to_string(OBJECT_COUNT) + " rects"},
-    {SampleType::VAR_RECT, "1 rect(with fast varint edcode)"},
+    {SampleType::VAR_RECT, "1 rect(with fast varint encode)"},
     {SampleType::VAR_RECTS,
-     std::to_string(OBJECT_COUNT) + " rects(with fast varint edcode)"},
+     std::to_string(OBJECT_COUNT) + " rects(with fast varint encode)"},
     {SampleType::ZC_RECTS,
      std::to_string(OBJECT_COUNT) + " rects(with zero-copy deserialize)"},
     {SampleType::PERSON, "1 person"},

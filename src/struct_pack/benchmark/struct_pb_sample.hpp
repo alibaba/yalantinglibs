@@ -140,6 +140,7 @@ struct struct_pb_sample_t : public base_sample {
         struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(),
                                           sample);
         no_op(buffer_);
+        no_op((char*)&sample);
       }
     }
 
@@ -154,8 +155,8 @@ struct struct_pb_sample_t : public base_sample {
     buffer_.resize(sz);
     struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(), sample);
 
-    std::vector<T> vec;
-    vec.resize(ITERATIONS);
+    T obj;
+    // vec.resize(ITERATIONS);
 
     uint64_t ns = 0;
     std::string bench_name =
@@ -165,10 +166,11 @@ struct struct_pb_sample_t : public base_sample {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
         [[maybe_unused]] auto ok = struct_pb::internal::deserialize_to(
-            vec[i], buffer_.data(), buffer_.size());
+            obj, buffer_.data(), buffer_.size());
         assert(ok);
+        no_op((char*)&obj);
+        no_op(buffer_);
       }
-      no_op((char*)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
 

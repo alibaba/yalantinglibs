@@ -201,7 +201,6 @@ struct flatbuffer_sample_t : public base_sample {
       uint64_t ns = 0;
       std::string bench_name =
           name() + " serialize " + get_sample_name(sample_type);
-
       {
         ScopedTimer timer(bench_name.data(), ns);
         for (int i = 0; i < ITERATIONS; ++i) {
@@ -228,6 +227,7 @@ struct flatbuffer_sample_t : public base_sample {
         auto obj =
             flatbuffers::GetRoot<fb::Monsters>(builder.GetBufferPointer());
         no_op((char *)obj);
+        no_op((char *)&builder);
       }
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);

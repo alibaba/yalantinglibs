@@ -102,7 +102,7 @@ struct struct_pack_sample : public base_sample {
     deserialize(SampleType::RECTS, rects_);
     deserialize(SampleType::VAR_RECT, rect2s_[0]);
     deserialize(SampleType::VAR_RECTS, rect2s_);
-#if __cplusplus >= 202002L
+#if __cpp_lib_span >= 202002L
     auto sp = std::span{rects_};
     deserialize(SampleType::ZC_RECTS, sp);
 #endif
@@ -112,7 +112,7 @@ struct struct_pack_sample : public base_sample {
         SampleType::ZC_PERSONS, persons_);
     deserialize(SampleType::MONSTER, monsters_[0]);
     deserialize(SampleType::MONSTERS, monsters_);
-#if __cplusplus >= 202002L
+#if __cpp_lib_span >= 202002L
     deserialize<std::vector<Monster>, std::vector<zc_Monster>>(
         SampleType::ZC_MONSTERS, monsters_);
 #endif
@@ -135,6 +135,7 @@ struct struct_pack_sample : public base_sample {
           buffer_.clear();
           struct_pack::serialize_to(buffer_, sample);
           no_op(buffer_);
+          no_op((char *)&sample);
         }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
@@ -147,8 +148,7 @@ struct struct_pack_sample : public base_sample {
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
-    std::vector<U> vec;
-    vec.resize(ITERATIONS);
+    U obj;
 
     uint64_t ns = 0;
     std::string bench_name =
@@ -157,9 +157,10 @@ struct struct_pack_sample : public base_sample {
     {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
-        [[maybe_unused]] auto ec = struct_pack::deserialize_to(vec[i], buffer_);
+        [[maybe_unused]] auto ec = struct_pack::deserialize_to(obj, buffer_);
+        no_op((char *)&obj);
+        no_op(buffer_);
       }
-      no_op((char *)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }
