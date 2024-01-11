@@ -255,7 +255,7 @@ class coro_file {
     if (ec) {
       stream_file_ = nullptr;
       std::cout << "line " << __LINE__ << " coro_file open failed"
-                << ec.mesage() << "\n";
+                << ec.message() << "\n";
       co_return false;
     }
 
