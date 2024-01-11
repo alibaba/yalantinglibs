@@ -69,7 +69,85 @@ void create_files(const std::vector<std::string>& files, size_t file_size) {
   }
 }
 
-#if defined(__GNUC__)
+TEST_CASE("validate corofile") {
+  std::string filename = "validate.tmp";
+  create_files({filename}, 190);
+  {
+    coro_io::coro_file file{};
+    async_simple::coro::syncAwait(file.async_open(
+        filename.data(), coro_io::flags::read_only, coro_io::read_type::pread));
+    CHECK(file.is_open());
+
+    char buf[100];
+    std::error_code ec;
+    size_t size;
+    std::tie(ec, size) =
+        async_simple::coro::syncAwait(file.async_read(buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+    CHECK(size == 0);
+
+    auto write_ec = async_simple::coro::syncAwait(file.async_write(buf, 10));
+    CHECK(write_ec == std::make_error_code(std::errc::bad_file_descriptor));
+  }
+#if defined(YLT_ENABLE_FILE_IO_URING)
+  {
+    coro_io::coro_file file{};
+    async_simple::coro::syncAwait(
+        file.async_open(filename.data(), coro_io::flags::read_only,
+                        coro_io::read_type::uring_random));
+    CHECK(file.is_open());
+
+    char buf[100];
+    std::error_code ec;
+    size_t size;
+    std::tie(ec, size) =
+        async_simple::coro::syncAwait(file.async_read(buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+    CHECK(size == 0);
+
+    ec = async_simple::coro::syncAwait(file.async_write(buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+  }
+
+  {
+    coro_io::coro_file file{};
+    async_simple::coro::syncAwait(file.async_open(
+        filename.data(), coro_io::flags::read_only, coro_io::read_type::uring));
+    CHECK(file.is_open());
+
+    char buf[100];
+    std::error_code ec;
+    size_t size;
+    std::tie(ec, size) =
+        async_simple::coro::syncAwait(file.async_read_at(0, buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+    CHECK(size == 0);
+
+    ec = async_simple::coro::syncAwait(file.async_write_at(0, buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+  }
+#else
+  {
+    coro_io::coro_file file{};
+    async_simple::coro::syncAwait(file.async_open(
+        filename.data(), coro_io::flags::read_only, coro_io::read_type::fread));
+    CHECK(file.is_open());
+
+    char buf[100];
+    std::error_code ec;
+    size_t size;
+    std::tie(ec, size) =
+        async_simple::coro::syncAwait(file.async_pread(0, buf, 10));
+    CHECK(ec == std::make_error_code(std::errc::bad_file_descriptor));
+    CHECK(size == 0);
+
+    auto write_ec =
+        async_simple::coro::syncAwait(file.async_pwrite(0, buf, 10));
+    CHECK(write_ec == std::make_error_code(std::errc::bad_file_descriptor));
+  }
+#endif
+}
+
 TEST_CASE("coro_file pread and pwrite basic test") {
   std::string filename = "test.tmp";
   create_files({filename}, 190);
@@ -179,7 +257,6 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
   }
 }
-#endif
 
 async_simple::coro::Lazy<void> test_basic_read(std::string filename) {
   coro_io::coro_file file{};
