@@ -44,6 +44,11 @@
 
 #include "coro_io.hpp"
 
+#if defined(ASIO_WINDOWS)
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 namespace coro_io {
 
 /*
@@ -100,9 +105,7 @@ enum class read_type {
 #else
   fread,
 #endif
-#if defined(__GNUC__)
   pread,
-#endif
 };
 
 class coro_file {
@@ -158,23 +161,64 @@ class coro_file {
     return size;
   }
 
-#if defined(__GNUC__)
   bool open_fd(std::string_view filepath, int open_mode = flags::read_write) {
     if (fd_file_) {
       return true;
     }
 
+#if defined(ASIO_WINDOWS)
+    int fd = _open(filepath.data(), adjust_open_mode(open_mode));
+#else
     int fd = open(filepath.data(), open_mode);
+#endif
     if (fd < 0) {
       return false;
     }
 
     fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+#if defined(ASIO_WINDOWS)
+      _close(*ptr);
+#else
       ::close(*ptr);
+#endif
       delete ptr;
     });
     return true;
   }
+
+#if defined(ASIO_WINDOWS)
+  static int adjust_open_mode(int open_mode) {
+    switch (open_mode) {
+      case flags::read_only:
+        return _O_RDONLY;
+      case flags::write_only:
+        return _O_WRONLY;
+      case flags::read_write:
+        return _O_RDWR;
+      case flags::append:
+        return _O_APPEND;
+      case flags::create:
+        return _O_CREAT;
+      case flags::exclusive:
+        return _O_EXCL;
+      case flags::truncate:
+        return _O_TRUNC;
+      case flags::create_write:
+        return _O_CREAT | _O_WRONLY;
+      case flags::create_write_trunc:
+        return _O_CREAT | _O_WRONLY | _O_TRUNC;
+      case flags::create_read_write_trunc:
+        return _O_RDWR | _O_CREAT | _O_TRUNC;
+      case flags::create_read_write_append:
+        return _O_RDWR | _O_CREAT | _O_APPEND;
+      case flags::sync_all_on_write:
+      default:
+        return open_mode;
+        break;
+    }
+    return open_mode;
+  }
+#endif
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
       auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
@@ -205,16 +249,51 @@ class coro_file {
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
       size_t offset, char* data, size_t size) {
+#if defined(ASIO_WINDOWS)
+    auto pread = [](int fd, void* buf, uint64_t count,
+                    uint64_t offset) -> int64_t {
+      DWORD bytes_read = 0;
+      OVERLAPPED overlapped;
+      memset(&overlapped, 0, sizeof(OVERLAPPED));
+      overlapped.Offset = offset & 0xFFFFFFFF;
+      overlapped.OffsetHigh = (offset >> 32) & 0xFFFFFFFF;
+
+      BOOL ok = ReadFile(reinterpret_cast<HANDLE>(_get_osfhandle(fd)), buf,
+                         count, &bytes_read, &overlapped);
+      if (!ok && (errno = GetLastError()) != ERROR_HANDLE_EOF) {
+        return -1;
+      }
+
+      return bytes_read;
+    };
+#endif
     co_return co_await async_prw(pread, true, offset, data, size);
   }
 
   async_simple::coro::Lazy<std::error_code> async_pwrite(size_t offset,
                                                          const char* data,
                                                          size_t size) {
+#if defined(ASIO_WINDOWS)
+    auto pwrite = [](int fd, const void* buf, uint64_t count,
+                     uint64_t offset) -> int64_t {
+      DWORD bytes_write = 0;
+      OVERLAPPED overlapped;
+      memset(&overlapped, 0, sizeof(OVERLAPPED));
+      overlapped.Offset = offset & 0xFFFFFFFF;
+      overlapped.OffsetHigh = (offset >> 32) & 0xFFFFFFFF;
+
+      BOOL ok = WriteFile(reinterpret_cast<HANDLE>(_get_osfhandle(fd)), buf,
+                          count, &bytes_write, &overlapped);
+      if (!ok) {
+        return -1;
+      }
+
+      return bytes_write;
+    };
+#endif
     auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
     co_return result.first;
   }
-#endif
 
 #if defined(YLT_ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
@@ -355,11 +434,9 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
-#if defined(__GNUC__)
     if (type == read_type::pread) {
       co_return open_fd(filepath, open_mode);
     }
-#endif
 
     if (stream_file_ != nullptr) {
       co_return true;
