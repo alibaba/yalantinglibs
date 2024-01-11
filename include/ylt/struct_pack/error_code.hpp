@@ -27,7 +27,6 @@ enum class errc {
 };
 
 namespace detail {
-
 class struct_pack_category : public std::error_category {
  public:
   virtual const char *name() const noexcept override {
@@ -44,7 +43,8 @@ class struct_pack_category : public std::error_category {
         return "invalid argument";
       case errc::hash_conflict:
         return "hash conflict";
-
+      case errc::invalid_width_of_container_length:
+        return "invalid width of container length";
       default:
         return "(unrecognized error)";
     }

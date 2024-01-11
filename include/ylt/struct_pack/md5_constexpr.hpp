@@ -27,7 +27,7 @@ namespace struct_pack {
 template <typename CharType, std::size_t Size>
 struct string_literal {
   constexpr string_literal() = default;
-  constexpr string_literal(std::string_view str) : ar{} {
+  constexpr string_literal(std::basic_string_view<CharType> str) : ar{} {
     for (size_t i = 0; i < Size; ++i) {
       ar[i] = str[i];
     }
@@ -37,6 +37,40 @@ struct string_literal {
     for (size_t i = 0; i <= Size; ++i) {
       ar[i] = value[i];
     }
+  }
+
+  template <std::size_t Size2>
+  constexpr bool operator!=(
+      const string_literal<CharType, Size2> &other) const {
+    if constexpr (Size == Size2) {
+      for (int i = 0; i < Size; ++i) {
+        if ((*this)[i] != other[i])
+          return true;
+      }
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
+
+  template <std::size_t Size2>
+  constexpr bool operator==(
+      const string_literal<CharType, Size2> &other) const {
+    return !(*this != other);
+  }
+
+  template <size_t Size2>
+  string_literal<CharType, Size + Size2> constexpr operator+(
+      string_literal<CharType, Size2> other) const {
+    string_literal<CharType, Size + Size2> ret{};
+    for (size_t i = 0; i < Size; ++i) {
+      ret[i] = (*this)[i];
+    }
+    for (size_t i = 0; i < Size2; ++i) {
+      ret[i + Size] = other[i];
+    }
+    return ret;
   }
 
   constexpr std::size_t size() const { return Size; }
@@ -53,43 +87,9 @@ struct string_literal {
   CharType ar[Size + 1];
 };
 
-template <typename Char, std::size_t Size1, std::size_t Size2>
-constexpr bool operator!=(const string_literal<Char, Size1> &s1,
-                          const string_literal<Char, Size2> &s2) {
-  if constexpr (Size1 == Size2) {
-    for (int i = 0; i < Size1; ++i) {
-      if (s1[i] != s2[i])
-        return true;
-    }
-    return false;
-  }
-  else {
-    return true;
-  }
-}
-
-template <typename Char, std::size_t Size1, std::size_t Size2>
-constexpr bool operator==(const string_literal<Char, Size1> &s1,
-                          const string_literal<Char, Size2> &s2) {
-  return !(s1 != s2);
-}
-
 template <typename CharType, std::size_t Size>
 string_literal(const CharType (&value)[Size])
     -> string_literal<CharType, Size - 1>;
-
-template <typename CharType, size_t Len1, size_t Len2>
-decltype(auto) constexpr operator+(string_literal<CharType, Len1> str1,
-                                   string_literal<CharType, Len2> str2) {
-  string_literal<CharType, Len1 + Len2> ret{};
-  for (size_t i = 0; i < Len1; ++i) {
-    ret[i] = str1[i];
-  }
-  for (size_t i = 0; i < Len2; ++i) {
-    ret[i + Len1] = str2[i];
-  }
-  return ret;
-}
 
 namespace MD5 {
 // The implementation here is based on the pseudocode provided by Wikipedia:

@@ -140,8 +140,7 @@ struct compatible : public std::optional<T> {
       : std::optional<T>(other){};
   constexpr compatible &operator=(const compatible &other) = default;
   constexpr compatible &operator=(compatible &&other) = default;
-  using base = std::optional<T>;
-  using base::base;
+  using std::optional<T>::optional;
   friend bool operator==(const compatible<T, version> &self,
                          const compatible<T, version> &other) {
     return static_cast<bool>(self) == static_cast<bool>(other) &&
