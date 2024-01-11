@@ -197,6 +197,7 @@ struct protobuf_sample_t : public base_sample {
           buffer_.clear();
           sample.SerializeToString(&buffer_);
           no_op(buffer_);
+          no_op((char *)&sample);
         }
       }
       ser_time_elapsed_map_.emplace(sample_type, ns);
@@ -210,8 +211,7 @@ struct protobuf_sample_t : public base_sample {
     buffer_.clear();
     sample.SerializeToString(&buffer_);
 
-    std::vector<T> vec;
-    vec.resize(ITERATIONS);
+    T obj;
 
     uint64_t ns = 0;
     std::string bench_name =
@@ -220,9 +220,10 @@ struct protobuf_sample_t : public base_sample {
     {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
-        vec[i].ParseFromString(buffer_);
+        obj.ParseFromString(buffer_);
+        no_op((char *)&obj);
+        no_op(buffer_);
       }
-      no_op((char *)vec.data());
     }
     deser_time_elapsed_map_.emplace(sample_type, ns);
   }

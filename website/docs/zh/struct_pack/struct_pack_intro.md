@@ -532,7 +532,7 @@ STRUCT_PACK_DERIVED_IMPL(base, obj1, obj2, obj3);
 ```cpp
   auto ret = struct_pack::serialize(obj3{});
   auto result =
-      struct_pack::deserialize_derived_class<base, obj1, obj2, obj3>(buffer);
+      struct_pack::deserialize_derived_class<base, obj1, obj2, obj3>(ret);
   assert(result.has_value());   // check deserialize ok
   std::unique_ptr<base> ptr = std::move(result.value());
   assert(ptr != nullptr);

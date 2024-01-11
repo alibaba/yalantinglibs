@@ -90,7 +90,7 @@ void run_benchmark(const T& map, LibType base_line_type) {
   calculate_ser_rate(map, base_line_type, SampleType::RECTS, SampleType::RECTS);
   calculate_ser_rate(map, base_line_type, SampleType::VAR_RECTS,
                      SampleType::RECTS);
-#if __cplusplus >= 202002L
+#if __cpp_lib_span >= 202002L
   calculate_ser_rate(map, base_line_type, SampleType::ZC_RECTS,
                      SampleType::RECTS);
 #endif
@@ -104,7 +104,7 @@ void run_benchmark(const T& map, LibType base_line_type) {
                      SampleType::MONSTER);
   calculate_ser_rate(map, base_line_type, SampleType::MONSTERS,
                      SampleType::MONSTERS);
-#if __cplusplus >= 202002L
+#if __cpp_lib_span >= 202002L
   calculate_ser_rate(map, base_line_type, SampleType::ZC_MONSTERS,
                      SampleType::MONSTERS);
 #endif
