@@ -129,11 +129,11 @@ class coro_file {
 #endif
 
   bool is_open() {
-    if (type_ == read_type::fread) {
-      return stream_file_ != nullptr;
+    if (type_ == read_type::pread) {
+      return fd_file_ != nullptr;
     }
 
-    return fd_file_ != nullptr;
+    return stream_file_ != nullptr;
   }
 
   void flush() {
@@ -242,7 +242,9 @@ class coro_file {
             executor_wrapper_.get_asio_executor());
       }
     } catch (std::exception& ex) {
-      std::cout << ex.what() << "\n";
+      stream_file_ = nullptr;
+      std::cout << "line " << __LINE__ << " coro_file create failed"
+                << ex.what() << "\n";
       co_return false;
     }
 
@@ -251,7 +253,9 @@ class coro_file {
                        static_cast<asio::file_base::flags>(open_mode), ec);
 
     if (ec) {
-      std::cout << ec.message() << "\n";
+      stream_file_ = nullptr;
+      std::cout << "line " << __LINE__ << " coro_file open failed" << ex.what()
+                << "\n";
       co_return false;
     }
 
@@ -278,6 +282,10 @@ class coro_file {
       uint64_t offset, char* data, size_t size) {
     assert(stream_file_);
     assert(type_ == read_type::uring_random);
+    if (type_ != read_type::uring_random) {
+      co_return std::make_pair(
+          std::make_error_code(std::errc::bad_file_descriptor), 0);
+    }
 
     auto [ec, read_size] = co_await coro_io::async_read_at(
         offset,
@@ -297,6 +305,9 @@ class coro_file {
                                                            size_t size) {
     assert(stream_file_);
     assert(type_ == read_type::uring_random);
+    if (type_ != read_type::uring_random) {
+      co_return std::make_error_code(std::errc::bad_file_descriptor);
+    }
 
     auto [ec, write_size] = co_await coro_io::async_write_at(
         offset,
@@ -309,6 +320,10 @@ class coro_file {
       char* data, size_t size) {
     assert(stream_file_);
     assert(type_ == read_type::uring);
+    if (type_ != read_type::uring) {
+      co_return std::make_pair(
+          std::make_error_code(std::errc::bad_file_descriptor), 0);
+    }
 
     auto [ec, read_size] = co_await coro_io::async_read(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
@@ -325,6 +340,9 @@ class coro_file {
                                                         size_t size) {
     assert(stream_file_);
     assert(type_ == read_type::uring);
+    if (type_ != read_type::uring) {
+      co_return std::make_error_code(std::errc::bad_file_descriptor);
+    }
 
     auto [ec, write_size] = co_await coro_io::async_write(
         *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
@@ -378,8 +396,8 @@ class coro_file {
         [this, &filepath, open_mode] {
           auto fptr = fopen(filepath.data(), str_mode(open_mode).data());
           if (fptr == nullptr) {
-            std::cout << "open file " << filepath << " failed "
-                      << "\n";
+            std::cout << "line " << __LINE__ << " coro_file open failed "
+                      << filepath << "\n";
             return false;
           }
           stream_file_ = std::shared_ptr<FILE>(fptr, [](FILE* ptr) {
