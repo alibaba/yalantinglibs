@@ -18,7 +18,6 @@
 #include <async_simple/Traits.h>
 #include <async_simple/coro/FutureAwaiter.h>
 
-#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -267,7 +266,6 @@ class coro_file {
       return false;
     }
 
-    assert(stream_file_);
     std::error_code seek_ec;
     reinterpret_cast<asio::stream_file*>(stream_file_.get())
         ->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
@@ -280,8 +278,6 @@ class coro_file {
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_at(
       uint64_t offset, char* data, size_t size) {
-    assert(stream_file_);
-    assert(type_ == read_type::uring_random);
     if (type_ != read_type::uring_random) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
@@ -303,8 +299,6 @@ class coro_file {
   async_simple::coro::Lazy<std::error_code> async_write_at(uint64_t offset,
                                                            const char* data,
                                                            size_t size) {
-    assert(stream_file_);
-    assert(type_ == read_type::uring_random);
     if (type_ != read_type::uring_random) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
     }
@@ -318,8 +312,6 @@ class coro_file {
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
-    assert(stream_file_);
-    assert(type_ == read_type::uring);
     if (type_ != read_type::uring) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
@@ -338,8 +330,6 @@ class coro_file {
 
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
                                                         size_t size) {
-    assert(stream_file_);
-    assert(type_ == read_type::uring);
     if (type_ != read_type::uring) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
     }
@@ -372,7 +362,6 @@ class coro_file {
   }
 
   bool seek(long offset, int whence) {
-    assert(type_ == read_type::fread);
     if (stream_file_ == nullptr) {
       return false;
     }
