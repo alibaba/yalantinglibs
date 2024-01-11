@@ -178,13 +178,16 @@ template class string_thief<decltype(&std::string::_Mypair),
 void string_set_length_hacker(std::string &, std::size_t);
 
 #ifndef __clang__
-#define __has_feature(X) false
+#define struct_pack_has_feature(X) false
+#else
+#define struct_pack_has_feature __has_feature
 #endif
 
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
-#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer) || \
+#if defined(__SANITIZE_ADDRESS__) ||              \
+    struct_pack_has_feature(address_sanitizer) || \
     (!defined(NDEBUG) && defined(_MSVC_STL_VERSION))
   raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
@@ -248,7 +251,7 @@ template class vector_thief<decltype(&std::vector<char>::_Mypair),
 
 template <typename ch>
 inline void resize(std::vector<ch> &raw_vec, std::size_t sz) {
-#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+#if defined(__SANITIZE_ADDRESS__) || struct_pack_has_feature(address_sanitizer)
   raw_vec.resize(sz);
 #elif defined(__GLIBCXX__) ||                                     \
     (defined(_LIBCPP_VERSION) && defined(_LIBCPP_HAS_NO_ASAN)) || \
@@ -262,9 +265,7 @@ inline void resize(std::vector<ch> &raw_vec, std::size_t sz) {
 }
 #endif
 
-#ifndef __clang__
-#undef __has_feature
-#endif
+#undef struct_pack_has_feature
 
 template <typename T>
 inline void resize(T &str, std::size_t sz) {
