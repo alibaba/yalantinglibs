@@ -273,10 +273,10 @@ template <uint64_t conf,
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
           struct_pack::detail::deserialize_view View>
 #else
-template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
-          typename View,
-          typename = std::enable_if_t<
-              struct_pack::struct_pack::detail::deserialize_view<View>>>
+template <
+    uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
+    typename View,
+    typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] struct_pack::errc deserialize_to(T &t, const View &v,
                                                Args &...args) {
@@ -680,9 +680,9 @@ deserialize_derived_class(Reader &reader) {
 template <typename BaseClass, typename... DerivedClasses,
           struct_pack::detail::deserialize_view View>
 #else
-template <typename BaseClass, typename... DerivedClasses, typename View,
-          typename = std::enable_if_t<
-              struct_pack::struct_pack::detail::deserialize_view<View>>>
+template <
+    typename BaseClass, typename... DerivedClasses, typename View,
+    typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] struct_pack::expected<std::unique_ptr<BaseClass>,
                                     struct_pack::errc>
