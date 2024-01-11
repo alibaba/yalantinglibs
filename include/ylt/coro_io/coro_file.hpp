@@ -99,6 +99,7 @@ enum flags {
 };
 
 enum class read_type {
+  init,
 #if defined(YLT_ENABLE_FILE_IO_URING)
   uring,
   uring_random,
@@ -127,7 +128,13 @@ class coro_file {
       : executor_wrapper_(executor) {}
 #endif
 
-  bool is_open() { return stream_file_ != nullptr || fd_file_ != nullptr; }
+  bool is_open() {
+    if (type_ == read_type::fread) {
+      return stream_file_ != nullptr;
+    }
+
+    return fd_file_ != nullptr;
+  }
 
   void flush() {
 #if defined(YLT_ENABLE_FILE_IO_URING)
@@ -161,94 +168,12 @@ class coro_file {
     return size;
   }
 
-  bool open_fd(std::string_view filepath, int open_mode = flags::read_write) {
-    if (fd_file_) {
-      return true;
-    }
-
-#if defined(ASIO_WINDOWS)
-    int fd = _open(filepath.data(), adjust_open_mode(open_mode));
-#else
-    int fd = open(filepath.data(), open_mode);
-#endif
-    if (fd < 0) {
-      return false;
-    }
-
-    fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
-#if defined(ASIO_WINDOWS)
-      _close(*ptr);
-#else
-      ::close(*ptr);
-#endif
-      delete ptr;
-    });
-    return true;
-  }
-
-#if defined(ASIO_WINDOWS)
-  static int adjust_open_mode(int open_mode) {
-    switch (open_mode) {
-      case flags::read_only:
-        return _O_RDONLY;
-      case flags::write_only:
-        return _O_WRONLY;
-      case flags::read_write:
-        return _O_RDWR;
-      case flags::append:
-        return _O_APPEND;
-      case flags::create:
-        return _O_CREAT;
-      case flags::exclusive:
-        return _O_EXCL;
-      case flags::truncate:
-        return _O_TRUNC;
-      case flags::create_write:
-        return _O_CREAT | _O_WRONLY;
-      case flags::create_write_trunc:
-        return _O_CREAT | _O_WRONLY | _O_TRUNC;
-      case flags::create_read_write_trunc:
-        return _O_RDWR | _O_CREAT | _O_TRUNC;
-      case flags::create_read_write_append:
-        return _O_RDWR | _O_CREAT | _O_APPEND;
-      case flags::sync_all_on_write:
-      default:
-        return open_mode;
-        break;
-    }
-    return open_mode;
-  }
-#endif
-
-  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
-      auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
-    std::function<int()> func = [=, this] {
-      int fd = *fd_file_;
-      return io_func(fd, buf, size, offset);
-    };
-
-    std::error_code ec{};
-    size_t op_size = 0;
-
-    auto len_val = co_await coro_io::post(std::move(func), &executor_wrapper_);
-    int len = len_val.value();
-    if (len == 0) {
-      if (is_read) {
-        eof_ = true;
-      }
-    }
-    else if (len > 0) {
-      op_size = len;
-    }
-    else {
-      ec = std::make_error_code(std::errc::io_error);
-    }
-
-    co_return std::make_pair(ec, op_size);
-  }
-
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
       size_t offset, char* data, size_t size) {
+    if (type_ != read_type::pread) {
+      co_return std::make_pair(
+          std::make_error_code(std::errc::bad_file_descriptor), 0);
+    }
 #if defined(ASIO_WINDOWS)
     auto pread = [](int fd, void* buf, uint64_t count,
                     uint64_t offset) -> int64_t {
@@ -273,6 +198,9 @@ class coro_file {
   async_simple::coro::Lazy<std::error_code> async_pwrite(size_t offset,
                                                          const char* data,
                                                          size_t size) {
+    if (type_ != read_type::pread) {
+      co_return std::make_error_code(std::errc::bad_file_descriptor);
+    }
 #if defined(ASIO_WINDOWS)
     auto pwrite = [](int fd, const void* buf, uint64_t count,
                      uint64_t offset) -> int64_t {
@@ -300,12 +228,12 @@ class coro_file {
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::uring) {
     type_ = type;
-    if (type == read_type::pread) {
+    if (type_ == read_type::pread) {
       co_return open_fd(filepath, open_mode);
     }
 
     try {
-      if (type == read_type::uring) {
+      if (type_ == read_type::uring) {
         stream_file_ = std::make_shared<asio::stream_file>(
             executor_wrapper_.get_asio_executor());
       }
@@ -426,7 +354,10 @@ class coro_file {
   }
 
   bool seek(long offset, int whence) {
-    assert(fd_file_ == nullptr);
+    assert(type_ == read_type::fread);
+    if (stream_file_ == nullptr) {
+      return false;
+    }
 
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
@@ -434,7 +365,8 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
-    if (type == read_type::pread) {
+    type_ = type;
+    if (type_ == read_type::pread) {
       co_return open_fd(filepath, open_mode);
     }
 
@@ -461,6 +393,10 @@ class coro_file {
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
+    if (type_ != read_type::fread) {
+      co_return std::make_pair(
+          std::make_error_code(std::errc::bad_file_descriptor), 0);
+    }
     auto result = co_await coro_io::post(
         [this, data, size] {
           auto fptr = stream_file_.get();
@@ -480,6 +416,9 @@ class coro_file {
 
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
                                                         size_t size) {
+    if (type_ != read_type::fread) {
+      co_return std::make_error_code(std::errc::bad_file_descriptor);
+    }
     auto result = co_await coro_io::post(
         [this, data, size] {
           auto fptr = stream_file_.get();
@@ -496,9 +435,95 @@ class coro_file {
 #endif
 
  private:
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
+      auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
+    std::function<int()> func = [=, this] {
+      int fd = *fd_file_;
+      return io_func(fd, buf, size, offset);
+    };
+
+    std::error_code ec{};
+    size_t op_size = 0;
+
+    auto len_val = co_await coro_io::post(std::move(func), &executor_wrapper_);
+    int len = len_val.value();
+    if (len == 0) {
+      if (is_read) {
+        eof_ = true;
+      }
+    }
+    else if (len > 0) {
+      op_size = len;
+    }
+    else {
+      ec = std::make_error_code(std::errc::io_error);
+    }
+
+    co_return std::make_pair(ec, op_size);
+  }
+
+  bool open_fd(std::string_view filepath, int open_mode = flags::read_write) {
+    if (fd_file_) {
+      return true;
+    }
+
+#if defined(ASIO_WINDOWS)
+    int fd = _open(filepath.data(), adjust_open_mode(open_mode));
+#else
+    int fd = open(filepath.data(), open_mode);
+#endif
+    if (fd < 0) {
+      return false;
+    }
+
+    fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+#if defined(ASIO_WINDOWS)
+      _close(*ptr);
+#else
+      ::close(*ptr);
+#endif
+      delete ptr;
+    });
+    return true;
+  }
+
+#if defined(ASIO_WINDOWS)
+  static int adjust_open_mode(int open_mode) {
+    switch (open_mode) {
+      case flags::read_only:
+        return _O_RDONLY;
+      case flags::write_only:
+        return _O_WRONLY;
+      case flags::read_write:
+        return _O_RDWR;
+      case flags::append:
+        return _O_APPEND;
+      case flags::create:
+        return _O_CREAT;
+      case flags::exclusive:
+        return _O_EXCL;
+      case flags::truncate:
+        return _O_TRUNC;
+      case flags::create_write:
+        return _O_CREAT | _O_WRONLY;
+      case flags::create_write_trunc:
+        return _O_CREAT | _O_WRONLY | _O_TRUNC;
+      case flags::create_read_write_trunc:
+        return _O_RDWR | _O_CREAT | _O_TRUNC;
+      case flags::create_read_write_append:
+        return _O_RDWR | _O_CREAT | _O_APPEND;
+      case flags::sync_all_on_write:
+      default:
+        return open_mode;
+        break;
+    }
+    return open_mode;
+  }
+#endif
+ private:
+  read_type type_ = read_type::init;
 #if defined(YLT_ENABLE_FILE_IO_URING)
   std::shared_ptr<asio::basic_file<>> stream_file_;
-  read_type type_ = read_type::uring;
 #else
   std::shared_ptr<FILE> stream_file_;
 #endif
