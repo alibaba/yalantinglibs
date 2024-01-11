@@ -43,6 +43,8 @@ struct_pack允许通过`struct_pack::sp_config`来配置序列化生成的元数
 | DISABLE_META_INFO| 禁用元信息和4字节的类型校验码，从而减小二进制数据的体积|
 | ENCODING_WITH_VARINT| 当前结构体的整数(int32_t,int64_t,uint32_t,uint64_t)将启用变长编码|
 | USE_FAST_VARINT| 对整数启用快速变长编码，该编码具有更好的反序列化性能，小字段下体积也更小|
+
+
 需要注意的是，当序列化配置了DISABLE_META_INFO选项时，必须保证反序列化也使用了该选项，否则行为未定义，大概率反序列化会失败。
 
 此外，需要注意的是，如果结构体A嵌套了结构体B，则对A的配置不会对B生效。

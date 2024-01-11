@@ -19,9 +19,11 @@
 
 #include "reflection.hpp"
 
+namespace struct_pack {
 /*!
  * \ingroup struct_pack
  * \struct trivial_view
+ * \tparam T trivial_view指向的类型
  * \brief
  * trivial_view<T> is a view for trivial struct. It's equals T in type system.
  * It can decrease memory copy in proto initialization/deserialization
@@ -74,8 +76,6 @@
  * ```
  *
  */
-
-namespace struct_pack {
 template <typename T, typename>
 struct trivial_view {
  private:
@@ -85,14 +85,12 @@ struct trivial_view {
   trivial_view(const T* t) : ref(t){};
   trivial_view(const T& t) : ref(&t){};
   trivial_view(const trivial_view&) = default;
-  trivial_view(trivial_view&&) = default;
   trivial_view() : ref(nullptr){};
-
   trivial_view& operator=(const trivial_view&) = default;
-  trivial_view& operator=(trivial_view&&) = default;
 
   using value_type = T;
 
+  void set(const T& obj) { ref = &obj; }
   const T& get() const {
     assert(ref != nullptr);
     return *ref;
