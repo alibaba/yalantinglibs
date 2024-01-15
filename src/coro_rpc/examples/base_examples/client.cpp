@@ -61,7 +61,7 @@ Lazy<void> show_rpc_call() {
   assert(ret.value() == "HelloService::hello_with_delay"s);
 
   ret = co_await client.call<return_error>();
-  assert(ret.error().code = 404);
+  assert(ret.error().code == 404);
   assert(ret.error().msg == "404 Not Found.");
 
   ret = co_await client.call<rpc_with_state_by_tag>();

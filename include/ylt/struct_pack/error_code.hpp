@@ -26,7 +26,7 @@ enum class errc {
   invalid_width_of_container_length,
 };
 namespace detail {
-inline std::string_view make_error_message(errc ec) noexcept {
+inline constexpr std::string_view make_error_message(errc ec) noexcept {
   switch (ec) {
     case errc::ok:
       return "ok";
@@ -47,19 +47,23 @@ inline std::string_view make_error_message(errc ec) noexcept {
 struct err_code {
  public:
   errc ec;
-  err_code() noexcept : ec(errc::ok) {}
-  err_code(errc ec) noexcept : ec(ec){};
-  err_code& operator=(errc ec) noexcept {
+  constexpr err_code() noexcept : ec(errc::ok) {}
+  constexpr err_code(errc ec) noexcept : ec(ec){};
+  constexpr err_code& operator=(errc ec) noexcept {
     this->ec = ec;
     return *this;
   }
-  err_code(const err_code& err_code) noexcept = default;
-  err_code& operator=(const err_code& o) noexcept = default;
-  bool operator==(const err_code& o) const noexcept { return ec == o.ec; }
-  bool operator!=(const err_code& o) const noexcept { return ec != o.ec; }
-  operator bool() const noexcept { return ec != errc::ok; }
-  int val() const noexcept { return static_cast<int>(ec); }
-  std::string_view message() const noexcept {
+  constexpr err_code(const err_code& err_code) noexcept = default;
+  constexpr err_code& operator=(const err_code& o) noexcept = default;
+  constexpr bool operator==(const err_code& o) const noexcept {
+    return ec == o.ec;
+  }
+  constexpr bool operator!=(const err_code& o) const noexcept {
+    return ec != o.ec;
+  }
+  constexpr operator bool() const noexcept { return ec != errc::ok; }
+  constexpr int val() const noexcept { return static_cast<int>(ec); }
+  constexpr std::string_view message() const noexcept {
     return detail::make_error_message(ec);
   }
 };
