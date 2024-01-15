@@ -39,7 +39,7 @@ namespace struct_pack {
   int test() {
     person p{20, "tom"};
     auto buffer = struct_pack::serialize(p);
-    struct_pack::expected<person, struct_pack::errc> p2 =
+    struct_pack::expected<person, struct_pack::err_code> p2 =
         struct_pack::deserialize<person>(buffer.data(), buffer.size());
     assert(p2);
     assert(p == p2.value());
@@ -194,13 +194,13 @@ struct trivial_view {
   person_v1 p1;
   // deserialize person_v2 as person_v1
   auto ec = struct_pack::deserialize_to(p1, buf.data(), buf.size());
-  CHECK(ec == std::errc{});
+  CHECK(!ec);
 
   auto buf1 = struct_pack::serialize(p1);
   person_v2 p3;
   // deserialize person_v1 as person_v2
   auto ec = struct_pack::deserialize_to(p3, buf1.data(), buf1.size());
-  CHECK(ec == std::errc{});
+  CHECK(!ec);
  @endcode
  *
  * 升级接口时应注意保持<b>版本号递增</b> 原则：
@@ -378,11 +378,72 @@ struct string_literal {
   CharType ar[Size + 1];
 };
 
+/*!
+ * \ingroup struct_pack
+ * \struct err_code
+ * \brief
+ * struct_pack的错误码，存储了一个枚举值`struct_pack::errc`，可用于判断序列化是否成功。
+ */
+
+struct err_code {
+ public:
+  struct_pack::errc ec;
+  /**
+   * @brief err_code的默认构造函数，默认情况下无错误
+   *
+   */
+  err_code() noexcept;
+  /**
+   * @brief 通过错误值枚举`struct_pack::errc`构造错误码
+   *
+   * @param ec 错误值枚举，`struct_pack::errc`类型
+   */
+  err_code(struct_pack::errc ec) noexcept;
+  err_code &operator=(errc ec);
+  err_code(const err_code &err_code) noexcept;
+  err_code &operator=(const err_code &o) noexcept;
+  /**
+   * @brief 比较错误码是否相同
+   *
+   * @param o 另外一个错误码
+   * @return true 两个错误码相同
+   * @return false 两个错误码不同
+   */
+  bool operator==(const err_code &o) const noexcept { return ec == o.ec; }
+  /**
+   * @brief 比较错误码是否不同
+   *
+   * @param o 另外一个错误码
+   * @return true 两个错误码不同
+   * @return false 两个错误码相同
+   */
+  bool operator!=(const err_code &o);
+  /**
+   * @brief 判断是否有错误
+   *
+   * @return true 有错误
+   * @return false 无错误
+   */
+  operator bool() const noexcept { return ec != errc::ok; }
+  /**
+   * @brief 将错误码转换为整数
+   *
+   * @return int
+   */
+  int val() const noexcept;
+  /**
+   * @brief 返回错误码对应的错误消息
+   *
+   * @return std::string_view
+   */
+  std::string_view message() const noexcept;
+};
+
 /**
  * \ingroup struct_pack
- * @brief struct_pack的错误码
+ * @brief struct_pack的错误值枚举
  *
- * struct_pack的错误码枚举，各枚举值解释如下：
+ * struct_pack的错误值枚举，各枚举值解释如下：
  * 1. ok，代表无错误。
  * 2. no_buffer_space，缓冲区耗尽，未能完成所有字段的反序列化。
  * 3. invalid_buffer，读取到非法数据，无法将数据反序列化到指定类型。
@@ -701,7 +762,7 @@ template <uint64_t conf, detail::struct_pack_buffer Buffer = std::vector<char>,
  * @param t 待反序列化的对象t
  * @param v 存有struct_pack序列化数据的视图
  * @param args 待反序列化的对象args
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
@@ -711,14 +772,14 @@ template <uint64_t conf, detail::struct_pack_buffer Buffer = std::vector<char>,
   auto buffer = struct_pack::serialize(p);
   person p2;
   auto ec = struct_pack::deserialize_to(p2, buffer);
-  assert(ec == struct_pack::errc{});
+  assert(!ec);
   assert(p == p2);
  @endcode
  */
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
           struct_pack::detail::deserialize_view View>
-[[nodiscard]] struct_pack::errc deserialize_to(T &t, const View &v,
-                                               Args &...args);
+[[nodiscard]] struct_pack::err_code deserialize_to(T &t, const View &v,
+                                                   Args &...args);
 
 /**
  * \ingroup struct_pack
@@ -732,7 +793,7 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
  * @param data 起始地址
  * @param size 数据的长度
  * @param args 待反序列化的对象args
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
@@ -742,13 +803,13 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
   auto buffer = struct_pack::serialize(p);
   person p2;
   auto ec = struct_pack::deserialize_to(p2, buffer.data(), buffer.size());
-  assert(ec == struct_pack::errc{});
+  assert(!ec);
   assert(p == p2);
  @endcode
  */
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args>
-[[nodiscard]] struct_pack::errc deserialize_to(T &t, const char *data,
-                                               size_t size, Args &...args);
+[[nodiscard]] struct_pack::err_code deserialize_to(T &t, const char *data,
+                                                   size_t size, Args &...args);
 /**
  * \ingroup struct_pack
  * @brief 将输入流中的数据反序列化到目的对象
@@ -761,15 +822,15 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args>
  * @param t 待反序列化的对象t
  * @param reader 输入流
  * @param args
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败。
  *
  * 当反序列化失败时，t的值可能被部分修改。
  */
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
           struct_pack::reader_t Reader>
-[[nodiscard]] struct_pack::errc deserialize_to(T &t, Reader &reader,
-                                               Args &...args);
+[[nodiscard]] struct_pack::err_code deserialize_to(T &t, Reader &reader,
+                                                   Args &...args);
 
 /**
  * \ingroup struct_pack
@@ -784,16 +845,17 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
  * @param v 存有struct_pack序列化数据的视图
  * @param offset 跳过开头字节的长度
  * @param args 待反序列化的对象args
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
  */
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
           struct_pack::detail::deserialize_view View>
-[[nodiscard]] struct_pack::errc deserialize_to_with_offset(T &t, const View &v,
-                                                           size_t &offset,
-                                                           Args &...args);
+[[nodiscard]] struct_pack::err_code deserialize_to_with_offset(T &t,
+                                                               const View &v,
+                                                               size_t &offset,
+                                                               Args &...args);
 
 /**
  * \ingroup struct_pack
@@ -808,13 +870,13 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args,
  * @param size 数据长度
  * @param offset 跳过开头字节的长度
  * @param args 待反序列化的对象args
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
  */
 template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args>
-[[nodiscard]] struct_pack::errc deserialize_to_with_offset(
+[[nodiscard]] struct_pack::err_code deserialize_to_with_offset(
     T &t, const char *data, size_t size, size_t &offset, Args &...args);
 
 /**
@@ -825,9 +887,9 @@ template <uint64_t conf = sp_config::DEFAULT, typename T, typename... Args>
  * 反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 存有struct_pack序列化数据的视图
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -850,9 +912,9 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
  * 反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @param data 起始地址
  * @param size 数据长度
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -874,9 +936,9 @@ template <typename... Args>
  反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @tparam Reader 输入流类型Reader，该类型需要满足约束`struct_pack::reader_t`
  * @param v 输入流
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -900,9 +962,9 @@ template <typename... Args, struct_pack::reader_t Reader>
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 存有struct_pack序列化数据的视图
  * @param consume_len 出参，保存消耗的数据长度。
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 当错误发生时，consume_len会被设为0。
  */
@@ -918,9 +980,9 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
  * @param data 起始地址
  * @param size 数据长度
  * @param consume_len 出参，保存消耗的数据长度。
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 当错误发生时，consume_len会被设为0。
  */
@@ -937,9 +999,9 @@ template <typename... Args>
  * 反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 存有struct_pack序列化数据的视图
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -964,9 +1026,9 @@ template <uint64_t conf, typename... Args,
  * 反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @param data 起始地址
  * @param size 数据长度
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -989,9 +1051,9 @@ template <uint64_t conf, typename... Args>
  反序列化对象的类型，至少应填写一个，当填写多个时，按`std::tuple<Args...>`类型反序列化
  * @tparam Reader 输入流类型Reader，该类型需要满足约束`struct_pack::reader_t`
  * @param v 输入流
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  @code{.cpp}
@@ -1017,9 +1079,9 @@ template <uint64_t conf, typename... Args, struct_pack::reader_t Reader>
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 存有struct_pack序列化数据的视图
  * @param consume_len 出参，保存消耗的数据长度。
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 当错误发生时，consume_len会被设为0。
  */
@@ -1038,9 +1100,9 @@ template <uint64_t conf, typename... Args,
  * @param data 起始地址
  * @param size 数据长度
  * @param consume_len 出参，保存消耗的数据长度。
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 当错误发生时，consume_len会被设为0。
  */
@@ -1058,9 +1120,9 @@ template <uint64_t conf, typename... Args>
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 存有struct_pack序列化数据的视图
  * @param offset 反序列化起始位置的偏移量
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  */
 template <typename... Args, struct_pack::detail::deserialize_view View>
 [[nodiscard]] auto deserialize_with_offset(const View &v, size_t &offset);
@@ -1075,9 +1137,9 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
  * @param data 起始地址
  * @param size 数据长度
  * @param offset 反序列化起始位置的偏移量
- * @return struct_pack::expected<Args, struct_pack::errc>
+ * @return struct_pack::expected<Args, struct_pack::err_code>
  * 类型，当Args有多个参数时，返回值类型为`struct_pack::expected<std::tuple<Args...>,
- * struct_pack::errc>`。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * struct_pack::err_code>`。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码：
  *
@@ -1089,7 +1151,7 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
  * }
  * for (size_t i = 0, offset = 0; i < 100; ++i) {
  *   auto ret = struct_pack::deserialize_with_offset<std::string>(ho, offset);
- *   CHECK(ret.errc == std::errc{});
+ *   CHECK(ret.has_value());
  *   CHECK(ret.value == hi + std::to_string(i));
  * }
  @endcode
@@ -1111,7 +1173,7 @@ template <typename... Args>
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param dst 目的对象
  * @param v 数据视图
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
@@ -1122,14 +1184,14 @@ template <typename... Args>
   auto buffer = serialize(p);
   int age;
   auto ec = get_field_to<person, 0>(age, buffer);
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(age == 20);
  @endcode
  *
  */
 template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
           typename Field, struct_pack::detail::deserialize_view View>
-[[nodiscard]] struct_pack::errc get_field_to(Field &dst, const View &v);
+[[nodiscard]] struct_pack::err_code get_field_to(Field &dst, const View &v);
 /**
  * \ingroup struct_pack
  * @brief 从内存中反序列化一个字段并保存到目的对象
@@ -1142,7 +1204,7 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
  * @param v 数据视图
  * @param data 起始地址
  * @param size 数据长度
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
@@ -1152,14 +1214,14 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
   auto buffer = serialize(p);
   std::string name;
   auto ec = get_field_to<person, 1>(name, buffer.data(), buffer.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(name == "tom");
  @endcode
  */
 template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
           typename Field>
-[[nodiscard]] struct_pack::errc get_field_to(Field &dst, const char *data,
-                                             size_t size);
+[[nodiscard]] struct_pack::err_code get_field_to(Field &dst, const char *data,
+                                                 size_t size);
 
 /**
  * \ingroup struct_pack
@@ -1172,14 +1234,14 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
  * @tparam Reader 输入流类型，需要满足`struct_pack::reader_t`约束
  * @param dst 目的对象
  * @param reader 输入流
- * @return struct_pack::errc
+ * @return struct_pack::err_code
  * 返回错误码，如果返回值不等于`struct_pack::errc::ok`，说明反序列化失败
  *
  * 当反序列化失败时，t的值可能被部分修改。
  */
 template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
           typename Field, struct_pack::reader_t Reader>
-[[nodiscard]] struct_pack::errc get_field_to(Field &dst, Reader &reader);
+[[nodiscard]] struct_pack::err_code get_field_to(Field &dst, Reader &reader);
 
 /**
  * \ingroup struct_pack
@@ -1190,8 +1252,8 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
  * @tparam conf 序列化配置，详见`struct_pack::sp_config`
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 视图
- * @return struct_pack::expected<TI, struct_pack::errc>
- * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * @return struct_pack::expected<TI, struct_pack::err_code>
+ * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码
  @code{.cpp}
@@ -1216,8 +1278,8 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
  * @tparam conf 序列化配置，详见`struct_pack::sp_config`
  * @param data 起始地址
  * @param size 数据长度
- * @return struct_pack::expected<TI, struct_pack::errc>
- * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * @return struct_pack::expected<TI, struct_pack::err_code>
+ * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 样例代码
   @code{.cpp}
@@ -1241,8 +1303,8 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT>
  * @tparam conf 序列化配置，详见`struct_pack::sp_config`
  * @tparam Reader 输入流类型，需要满足`struct_pack::reader_t`约束
  * @param reader 输入流
- * @return struct_pack::expected<TI, struct_pack::errc>
- * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+ * @return struct_pack::expected<TI, struct_pack::err_code>
+ * 类型，其中TI代表T的第I个字段。该类型存储了反序列化结果或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  */
 template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
           struct_pack::reader_t Reader>
@@ -1257,8 +1319,8 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
  * @tparam View 视图类型，需满足`struct_pack::detail::deserialize_view`约束
  * @param v 视图
  * @return struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
- * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+                                    struct_pack::err_code>
+ * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 本函数用于在不知道派生类具体类型的情况下，将其反序列化到基类的指针。
  *
@@ -1280,7 +1342,7 @@ template <typename T, size_t I, uint64_t conf = sp_config::DEFAULT,
 template <typename BaseClass, typename... DerivedClasses,
           struct_pack::detail::deserialize_view View>
 [[nodiscard]] struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
+                                    struct_pack::err_code>
 deserialize_derived_class(const View &v);
 
 /**
@@ -1292,8 +1354,8 @@ deserialize_derived_class(const View &v);
  * @param data 起始地址
  * @param size 数据长度
  * @return struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
- * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+                                    struct_pack::err_code>
+ * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  *
  * 本函数用于在不知道派生类具体类型的情况下，将其反序列化到基类的指针。
  *
@@ -1315,7 +1377,7 @@ deserialize_derived_class(const View &v);
  */
 template <typename BaseClass, typename... DerivedClasses>
 [[nodiscard]] struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
+                                    struct_pack::err_code>
 deserialize_derived_class(const char *data, size_t size);
 
 /**
@@ -1327,13 +1389,13 @@ deserialize_derived_class(const char *data, size_t size);
  * @tparam Reader 输入流类型，需要满足`struct_pack::reader_t`约束
  * @param reader
  * @return struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
- * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::errc`类型的错误码。详见`struct_pack::expected`
+                                    struct_pack::err_code>
+ * 类型，该类型存储了反序列化结果（`std::unique_ptr<BaseClass>`）或`struct_pack::err_code`类型的错误码。详见`struct_pack::expected`
  */
 template <typename BaseClass, typename... DerivedClasses,
           struct_pack::reader_t Reader>
 [[nodiscard]] struct_pack::expected<std::unique_ptr<BaseClass>,
-                                    struct_pack::errc>
+                                    struct_pack::err_code>
 deserialize_derived_class(Reader &reader);
 
 }  // namespace struct_pack

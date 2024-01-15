@@ -29,15 +29,15 @@ STRUCT_PACK_INLINE void write(Writer& writer, const T* t, std::size_t len) {
 };
 template <std::size_t size_width = sizeof(uint64_t), bool ifSkip = false,
           typename Reader, typename T>
-STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T& t) {
+STRUCT_PACK_INLINE struct_pack::err_code read(Reader& reader, T& t) {
   struct_pack::detail::unpacker<Reader, sp_config::DEFAULT, true> unpacker{
       reader};
   return unpacker.template deserialize_one<size_width, UINT64_MAX, !ifSkip>(t);
 };
 template <std::size_t size_width = sizeof(uint64_t), bool ifSkip = false,
           typename Reader, typename T>
-STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T* t,
-                                          std::size_t len) {
+STRUCT_PACK_INLINE struct_pack::err_code read(Reader& reader, T* t,
+                                              std::size_t len) {
   if constexpr (detail::is_trivial_serializable<T>::value &&
                 detail::is_little_endian_copyable<sizeof(T)>) {
     if constexpr (!ifSkip) {
@@ -56,7 +56,7 @@ STRUCT_PACK_INLINE struct_pack::errc read(Reader& reader, T* t,
       auto code =
           unpacker.template deserialize_one<size_width, UINT64_MAX, !ifSkip>(
               t[i]);
-      if SP_UNLIKELY (code != struct_pack::errc{}) {
+      if SP_UNLIKELY (code != struct_pack::err_code{}) {
         return code;
       }
     }

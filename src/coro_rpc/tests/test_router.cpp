@@ -73,11 +73,11 @@ get_result(const auto &pair) {
   using return_type = rpc_result<util::function_return_type_t<decltype(func)>,
                                  coro_rpc_protocol>;
   rpc_return_type_t<T> ret;
-  struct_pack::errc ec;
+  struct_pack::err_code ec;
   coro_rpc_protocol::rpc_error err;
   if (!rpc_errc) {
     ec = struct_pack::deserialize_to(ret, buffer);
-    if (ec == struct_pack::errc::ok) {
+    if (!ec) {
       if constexpr (std::is_same_v<T, void>) {
         return {};
       }
@@ -89,7 +89,7 @@ get_result(const auto &pair) {
   else {
     err.code = rpc_errc;
     ec = struct_pack::deserialize_to(err.msg, buffer);
-    if (ec == struct_pack::errc::ok) {
+    if (!ec) {
       return return_type{unexpect_t{}, std::move(err)};
     }
   }
@@ -106,10 +106,10 @@ void check_result(const auto &pair, size_t offset = 0) {
   std::string_view data(buffer.data(), buffer.size());
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
-  if (res != struct_pack::errc{}) {
+  if (res) {
     coro_rpc_protocol::rpc_error r;
     auto res = struct_pack::deserialize_to(r, data);
-    CHECK(res == struct_pack::errc{});
+    CHECK(!res);
   }
 }
 
@@ -345,7 +345,7 @@ TEST_CASE("testing object arguments") {
   auto buf = struct_pack::serialize(p);
   person p1;
   auto ec = struct_pack::deserialize_to(p1, buf);
-  REQUIRE(ec == struct_pack::errc{});
+  REQUIRE(!ec);
   test_route_and_check<get_person>(ctx, p);
 
   router.register_handler<get_person1>();

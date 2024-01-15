@@ -33,30 +33,7 @@ enum class errc : uint16_t {
   message_too_large,
   server_has_ran,
 };
-struct err_code {
- public:
-  errc ec;
-  err_code() : ec(errc::ok) {}
-  explicit err_code(uint16_t ec) : ec{ec} {};
-  err_code(errc ec) : ec(ec){};
-  err_code& operator=(errc ec) {
-    this->ec = ec;
-    return *this;
-  }
-  err_code& operator=(uint16_t ec) {
-    this->ec = errc{ec};
-    return *this;
-  }
-  err_code(const err_code& err_code) = default;
-  err_code& operator=(const err_code& o) = default;
-  bool operator!() const { return ec == errc::ok; }
-  operator errc() const { return ec; }
-  operator bool() const { return static_cast<uint16_t>(ec); }
-  explicit operator uint16_t() const { return static_cast<uint16_t>(ec); }
-  uint16_t val() const { return static_cast<uint16_t>(ec); }
-};
-inline bool operator!(errc ec) { return ec == errc::ok; }
-inline std::string_view make_error_message(errc ec) {
+inline std::string_view make_error_message(errc ec) noexcept {
   switch (ec) {
     case errc::ok:
       return "ok";
@@ -86,4 +63,27 @@ inline std::string_view make_error_message(errc ec) {
       return "unknown_user-defined_error";
   }
 }
+struct err_code {
+ public:
+  errc ec;
+  err_code() noexcept : ec(errc::ok) {}
+  explicit err_code(uint16_t ec) noexcept : ec{ec} {};
+  err_code(errc ec) noexcept : ec(ec){};
+  err_code& operator=(errc ec) noexcept {
+    this->ec = ec;
+    return *this;
+  }
+  err_code(const err_code& err_code) noexcept = default;
+  err_code& operator=(const err_code& o) noexcept = default;
+  operator errc() const noexcept { return ec; }
+  operator bool() const noexcept { return static_cast<uint16_t>(ec); }
+  explicit operator uint16_t() const noexcept {
+    return static_cast<uint16_t>(ec);
+  }
+  uint16_t val() const noexcept { return static_cast<uint16_t>(ec); }
+  std::string_view message() const noexcept { return make_error_message(ec); }
+};
+
+inline bool operator!(errc ec) noexcept { return ec == errc::ok; }
+
 };  // namespace coro_rpc

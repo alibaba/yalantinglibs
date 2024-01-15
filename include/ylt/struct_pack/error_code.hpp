@@ -25,33 +25,58 @@ enum class errc {
   hash_conflict,
   invalid_width_of_container_length,
 };
+namespace detail {
+inline std::string_view make_error_message(errc ec) noexcept {
+  switch (ec) {
+    case errc::ok:
+      return "ok";
+    case errc::no_buffer_space:
+      return "no buffer space";
+    case errc::invalid_buffer:
+      return "invalid argument";
+    case errc::hash_conflict:
+      return "hash conflict";
+    case errc::invalid_width_of_container_length:
+      return "invalid width of container length";
+    default:
+      return "(unrecognized error)";
+  }
+}
+}  // namespace detail
+
+struct err_code {
+ public:
+  errc ec;
+  err_code() noexcept : ec(errc::ok) {}
+  err_code(errc ec) noexcept : ec(ec){};
+  err_code& operator=(errc ec) noexcept {
+    this->ec = ec;
+    return *this;
+  }
+  err_code(const err_code& err_code) noexcept = default;
+  err_code& operator=(const err_code& o) noexcept = default;
+  bool operator==(const err_code& o) const noexcept { return ec == o.ec; }
+  bool operator!=(const err_code& o) const noexcept { return ec != o.ec; }
+  operator bool() const noexcept { return ec != errc::ok; }
+  int val() const noexcept { return static_cast<int>(ec); }
+  std::string_view message() const noexcept {
+    return detail::make_error_message(ec);
+  }
+};
 
 namespace detail {
 class struct_pack_category : public std::error_category {
  public:
-  virtual const char *name() const noexcept override {
+  virtual const char* name() const noexcept override {
     return "struct_pack::category";
   }
 
   virtual std::string message(int err_val) const override {
-    switch (static_cast<errc>(err_val)) {
-      case errc::ok:
-        return "ok";
-      case errc::no_buffer_space:
-        return "no buffer space";
-      case errc::invalid_buffer:
-        return "invalid argument";
-      case errc::hash_conflict:
-        return "hash conflict";
-      case errc::invalid_width_of_container_length:
-        return "invalid width of container length";
-      default:
-        return "(unrecognized error)";
-    }
+    return std::string{make_error_message(static_cast<errc>(err_val))};
   }
 };
 
-inline const std::error_category &category() {
+inline const std::error_category& category() {
   static struct_pack::detail::struct_pack_category instance;
   return instance;
 }

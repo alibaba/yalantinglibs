@@ -95,10 +95,11 @@ class unpacker {
   }
 
   template <std::size_t size_width, typename R, typename T>
-  friend STRUCT_PACK_INLINE struct_pack::errc read(Reader &reader, T &t);
+  friend STRUCT_PACK_INLINE struct_pack::err_code read(Reader &reader, T &t);
 
   template <typename T, typename... Args>
-  STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize(T &t, Args &...args) {
+  STRUCT_PACK_MAY_INLINE struct_pack::err_code deserialize(T &t,
+                                                           Args &...args) {
     using Type = get_args_type<T, Args...>;
     constexpr bool has_compatible =
         check_if_compatible_element_exist<decltype(get_types<Type>())>();
@@ -106,7 +107,7 @@ class unpacker {
       data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
+    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -146,7 +147,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if SP_UNLIKELY (err_code != errc::ok) {
+      if SP_UNLIKELY (err_code) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -157,7 +158,7 @@ class unpacker {
   }
 
   template <typename T, typename... Args>
-  STRUCT_PACK_MAY_INLINE struct_pack::errc deserialize_with_len(
+  STRUCT_PACK_MAY_INLINE struct_pack::err_code deserialize_with_len(
       std::size_t &len, T &t, Args &...args) {
     using Type = get_args_type<T, Args...>;
     constexpr bool has_compatible =
@@ -167,7 +168,7 @@ class unpacker {
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
     len = buffer_len;
-    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
+    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -206,7 +207,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if SP_UNLIKELY (err_code != errc::ok) {
+      if SP_UNLIKELY (err_code) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -217,7 +218,7 @@ class unpacker {
   }
 
   template <typename U, size_t I>
-  STRUCT_PACK_MAY_INLINE struct_pack::errc get_field(
+  STRUCT_PACK_MAY_INLINE struct_pack::err_code get_field(
       std::tuple_element_t<I, decltype(get_types<U>())> &field) {
     using T = remove_cvref_t<U>;
     using Type = get_args_type<T>;
@@ -229,7 +230,7 @@ class unpacker {
     }
 
     auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
-    if SP_UNLIKELY (err_code != struct_pack::errc{}) {
+    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -268,7 +269,7 @@ class unpacker {
         unreachable();
     }
     if constexpr (has_compatible) {
-      if SP_UNLIKELY (err_code != errc::ok) {
+      if SP_UNLIKELY (err_code) {
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
@@ -279,10 +280,10 @@ class unpacker {
   }
 
   template <typename T, typename... Args, size_t... I>
-  STRUCT_PACK_INLINE struct_pack::errc deserialize_compatibles(
+  STRUCT_PACK_INLINE struct_pack::err_code deserialize_compatibles(
       T &t, std::index_sequence<I...>, Args &...args) {
     using Type = get_args_type<T, Args...>;
-    struct_pack::errc err_code;
+    struct_pack::err_code err_code;
     switch (size_type_) {
       case 0:
         ([&] {
@@ -355,12 +356,12 @@ class unpacker {
   }
 
   template <typename U, size_t I, size_t... Is>
-  STRUCT_PACK_INLINE struct_pack::errc deserialize_compatible_fields(
+  STRUCT_PACK_INLINE struct_pack::err_code deserialize_compatible_fields(
       std::tuple_element_t<I, decltype(get_types<U>())> &field,
       std::index_sequence<Is...>) {
     using T = remove_cvref_t<U>;
     using Type = get_args_type<T>;
-    struct_pack::errc err_code;
+    struct_pack::err_code err_code;
     switch (size_type_) {
       case 0:
         ([&] {
@@ -432,12 +433,12 @@ class unpacker {
   }
 
   template <std::size_t size_type, uint64_t version, typename U, size_t I>
-  STRUCT_PACK_INLINE struct_pack::errc get_field_impl(
+  STRUCT_PACK_INLINE struct_pack::err_code get_field_impl(
       std::tuple_element_t<I, decltype(get_types<U>())> &field) {
     using T = remove_cvref_t<U>;
 
     T t;
-    struct_pack::errc err_code;
+    struct_pack::err_code err_code;
     if constexpr (tuple<T>) {
       err_code = std::apply(
           [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
@@ -479,7 +480,7 @@ class unpacker {
     }
   };
 
-  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
+  STRUCT_PACK_INLINE std::pair<struct_pack::err_code, std::uint64_t>
   deserialize_compatible(unsigned compatible_sz_len) {
     constexpr std::size_t sz[] = {0, 2, 4, 8};
     auto len_sz = sz[compatible_sz_len];
@@ -513,7 +514,7 @@ class unpacker {
   }
 
   template <typename T>
-  STRUCT_PACK_INLINE struct_pack::errc deserialize_type_literal() {
+  STRUCT_PACK_INLINE struct_pack::err_code deserialize_type_literal() {
     constexpr auto literal = struct_pack::get_type_literal<T>();
     if constexpr (view_reader_t<Reader>) {
       const char *buffer = reader_.read_view(literal.size() + 1);
@@ -538,7 +539,7 @@ class unpacker {
   }
 
   template <class T>
-  STRUCT_PACK_INLINE std::pair<struct_pack::errc, std::uint64_t>
+  STRUCT_PACK_INLINE std::pair<struct_pack::err_code, std::uint64_t>
   deserialize_metainfo() {
     uint32_t current_types_code;
     if constexpr (check_if_disable_hash_head<conf, T>()) {
@@ -590,18 +591,18 @@ class unpacker {
                                                            (char *)&metainfo)) {
         return {struct_pack::errc::no_buffer_space, 0};
       }
-      std::pair<errc, std::uint64_t> ret;
+      std::pair<err_code, std::uint64_t> ret;
       auto compatible_sz_len = metainfo & 0b11;
       if (compatible_sz_len) {
         ret = deserialize_compatible(compatible_sz_len);
-        if SP_UNLIKELY (ret.first != errc{}) {
+        if SP_UNLIKELY (ret.first) {
           return ret;
         }
       }
       auto has_type_literal = metainfo & 0b100;
       if (has_type_literal) {
         auto ec = deserialize_type_literal<T>();
-        if SP_UNLIKELY (ec != errc{}) {
+        if SP_UNLIKELY (ec) {
           return {ec, 0};
         }
       }
@@ -611,16 +612,16 @@ class unpacker {
   }
 
   template <size_t size_type, uint64_t version, bool NotSkip>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_many() {
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE deserialize_many() {
     return {};
   }
   template <size_t size_type, uint64_t version, bool NotSkip,
             uint64_t parent_tag = 0, typename First, typename... Args>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE
   deserialize_many(First &&first_item, Args &&...items) {
     auto code =
         deserialize_one<size_type, version, NotSkip, parent_tag>(first_item);
-    if SP_UNLIKELY (code != struct_pack::errc{}) {
+    if SP_UNLIKELY (code != struct_pack::err_code{}) {
       return code;
     }
     if constexpr (sizeof...(items) > 0) {
@@ -632,7 +633,7 @@ class unpacker {
     }
   }
 
-  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE
   ignore_padding(std::size_t sz) {
     if (sz > 0) {
       return reader_.ignore(sz) ? errc{} : errc::no_buffer_space;
@@ -644,8 +645,9 @@ class unpacker {
 
   template <uint64_t parent_tag, bool no_skip, std::size_t width,
             std::size_t bitset_width, typename Arg>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_one_fast_varint(
-      char (&vec)[bitset_width], unsigned int &i, Arg &item) {
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE
+  deserialize_one_fast_varint(char (&vec)[bitset_width], unsigned int &i,
+                              Arg &item) {
     if constexpr (varint_t<Arg, parent_tag>) {
       constexpr auto real_width = (std::min)(width, sizeof(Arg));
       auto index = i++;
@@ -682,12 +684,13 @@ class unpacker {
   }
   template <uint64_t parent_tag, bool no_skip, std::size_t width,
             std::size_t bitset_width, typename Arg, typename... Args>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE deserialize_fast_varint_helper(
-      char (&vec)[bitset_width], unsigned int &i, Arg &item, Args &...items) {
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE
+  deserialize_fast_varint_helper(char (&vec)[bitset_width], unsigned int &i,
+                                 Arg &item, Args &...items) {
     auto ec =
         deserialize_one_fast_varint<parent_tag, no_skip, width>(vec, i, item);
     if constexpr (sizeof...(items) > 0) {
-      if SP_UNLIKELY (ec != errc{}) {
+      if SP_UNLIKELY (ec) {
         return ec;
       }
       else {
@@ -701,7 +704,7 @@ class unpacker {
   }
 
   template <uint64_t parent_tag, bool no_skip, typename... Args>
-  constexpr struct_pack::errc STRUCT_PACK_INLINE
+  constexpr struct_pack::err_code STRUCT_PACK_INLINE
   deserialize_fast_varint(Args &...items) {
     constexpr auto cnt = calculate_fast_varint_count<parent_tag, Args...>();
     constexpr auto bitset_size = ((cnt + 2) + 7) / 8;
@@ -717,7 +720,7 @@ class unpacker {
       int width = !!(vec[cnt / 8] & (0b1 << (cnt % 8))) +
                   !!(vec[(cnt + 1) / 8] & (0b1 << ((cnt + 1) % 8))) * 2;
       unsigned int i = 0;
-      struct_pack::errc ec{};
+      struct_pack::err_code ec{};
       switch (width) {
         case 0:
           ec = deserialize_fast_varint_helper<parent_tag, no_skip, 1>(vec, i,
@@ -749,8 +752,8 @@ class unpacker {
 
   template <size_t size_type, uint64_t version, bool NotSkip,
             uint64_t parent_tag = 0, typename T>
-  constexpr struct_pack::errc inline deserialize_one(T &item) {
-    struct_pack::errc code{};
+  constexpr struct_pack::err_code inline deserialize_one(T &item) {
+    struct_pack::err_code code{};
     using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer_v<type>);
     constexpr auto id = get_type_id<type, parent_tag>();
@@ -864,7 +867,7 @@ class unpacker {
         else {
           for (auto &i : item) {
             code = deserialize_one<size_type, version, NotSkip>(i);
-            if SP_UNLIKELY (code != struct_pack::errc{}) {
+            if SP_UNLIKELY (code != struct_pack::err_code{}) {
               return code;
             }
           }
@@ -967,7 +970,7 @@ class unpacker {
             item.clear();
             for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
-              if SP_UNLIKELY (code != struct_pack::errc{}) {
+              if SP_UNLIKELY (code != struct_pack::err_code{}) {
                 return code;
               }
               if constexpr (NotSkip) {
@@ -993,7 +996,7 @@ class unpacker {
             item.clear();
             for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
-              if SP_UNLIKELY (code != struct_pack::errc{}) {
+              if SP_UNLIKELY (code != struct_pack::err_code{}) {
                 return code;
               }
               if constexpr (NotSkip) {
@@ -1040,7 +1043,7 @@ class unpacker {
                   else {
                     for (auto &i : item) {
                       code = deserialize_one<size_type, version, NotSkip>(i);
-                      if SP_UNLIKELY (code != struct_pack::errc{}) {
+                      if SP_UNLIKELY (code != struct_pack::err_code{}) {
                         return code;
                       }
                     }
@@ -1069,7 +1072,7 @@ class unpacker {
                       for (size_t j = i; j < i + len; ++j) {
                         code = deserialize_one<size_type, version, NotSkip>(
                             item[j]);
-                        if SP_UNLIKELY (code != struct_pack::errc{}) {
+                        if SP_UNLIKELY (code != struct_pack::err_code{}) {
                           return code;
                         }
                       }
@@ -1097,7 +1100,7 @@ class unpacker {
                 item.emplace_back();
                 code =
                     deserialize_one<size_type, version, NotSkip>(item.back());
-                if SP_UNLIKELY (code != struct_pack::errc{}) {
+                if SP_UNLIKELY (code != struct_pack::err_code{}) {
                   if constexpr (can_reserve<type>) {
                     if constexpr (can_shrink_to_fit<type>) {
                       item.shrink_to_fit();  // release reserve memory
@@ -1111,7 +1114,7 @@ class unpacker {
               value_type useless;
               for (size_t i = 0; i < size; ++i) {
                 code = deserialize_one<size_type, version, NotSkip>(useless);
-                if SP_UNLIKELY (code != struct_pack::errc{}) {
+                if SP_UNLIKELY (code != struct_pack::err_code{}) {
                   return code;
                 }
               }
@@ -1197,12 +1200,12 @@ class unpacker {
                            is_trivial_serializable<type, true>::value) {
           visit_members(item, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             int i = 1;
-            auto f = [&](auto &&item) {
+            auto f = [&](auto &&item) -> bool {
               code = deserialize_one<size_type, version, NotSkip>(item);
-              if SP_LIKELY (code == errc::ok) {
+              if SP_LIKELY (!code) {
                 code = ignore_padding(align::padding_size<type>[i++]);
               }
-              return code == errc::ok;
+              return !code;
             };
             [[maybe_unused]] bool op = (f(items) && ...);
           });
@@ -1216,7 +1219,7 @@ class unpacker {
                       get_parent_tag<type>();  // to pass msvc with c++17
                   return deserialize_fast_varint<tag, NotSkip>(items...);
                 });
-            if SP_UNLIKELY (code != errc::ok) {
+            if SP_UNLIKELY (code) {
               return code;
             }
           }
@@ -1281,7 +1284,7 @@ class unpacker {
       else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
           code = deserialize_one<size_type, version, NotSkip>(i);
-          if SP_UNLIKELY (code != struct_pack::errc{}) {
+          if SP_UNLIKELY (code != struct_pack::err_code{}) {
             return code;
           }
         }
@@ -1299,7 +1302,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &e : item) {
               code = deserialize_one<size_type, version, NotSkip>(e.second);
-              if SP_UNLIKELY (code != struct_pack::errc{}) {
+              if SP_UNLIKELY (code != struct_pack::err_code{}) {
                 return code;
               }
             }
@@ -1316,7 +1319,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &i : item) {
               code = deserialize_one<size_type, version, NotSkip>(i);
-              if SP_UNLIKELY (code != struct_pack::errc{}) {
+              if SP_UNLIKELY (code != struct_pack::err_code{}) {
                 return code;
               }
             }
@@ -1373,7 +1376,7 @@ class unpacker {
   // partial deserialize_to
   template <size_t size_type, uint64_t version, size_t I, size_t FieldIndex,
             typename FieldType, typename T>
-  STRUCT_PACK_INLINE constexpr bool set_value(struct_pack::errc &err_code,
+  STRUCT_PACK_INLINE constexpr bool set_value(struct_pack::err_code &err_code,
                                               FieldType &field, T &&t) {
     if constexpr (FieldIndex == I) {
       static_assert(
@@ -1394,7 +1397,7 @@ class unpacker {
 
   template <size_t size_type, uint64_t version, size_t FieldIndex,
             typename FieldType, typename... Args, std::size_t... I>
-  STRUCT_PACK_INLINE constexpr void for_each_helper(struct_pack::errc &code,
+  STRUCT_PACK_INLINE constexpr void for_each_helper(struct_pack::err_code &code,
                                                     FieldType &field,
                                                     std::index_sequence<I...>,
                                                     Args &&...items) {
@@ -1406,9 +1409,9 @@ class unpacker {
 
   template <size_t size_type, uint64_t version, size_t FieldIndex,
             typename FieldType, typename... Args>
-  STRUCT_PACK_INLINE constexpr struct_pack::errc for_each(FieldType &field,
-                                                          Args &&...items) {
-    struct_pack::errc code{};
+  STRUCT_PACK_INLINE constexpr struct_pack::err_code for_each(FieldType &field,
+                                                              Args &&...items) {
+    struct_pack::err_code code{};
     for_each_helper<size_type, version, FieldIndex, FieldType>(
         code, field, std::make_index_sequence<sizeof...(Args)>(), items...);
     return code;
@@ -1445,8 +1448,8 @@ struct MD5_reader_wrapper : public Reader {
 };
 
 template <typename BaseClass, typename... DerivedClasses, typename Reader>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_derived_class(
-    std::unique_ptr<BaseClass> &base, Reader &reader) {
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::err_code
+deserialize_derived_class(std::unique_ptr<BaseClass> &base, Reader &reader) {
   MD5_reader_wrapper wrapper{std::move(reader)};
   if (wrapper.is_failed) {
     return struct_pack::errc::no_buffer_space;
