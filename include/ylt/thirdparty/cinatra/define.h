@@ -104,7 +104,20 @@ const static inline std::string CRCF = "\r\n";
 const static inline std::string TWO_CRCF = "\r\n\r\n";
 const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
 const static inline std::string MULTIPART_END =
-    CRCF + "--" + BOUNDARY + "--" + TWO_CRCF;
+    CRCF + "--" + BOUNDARY + "--" + CRCF;
+constexpr std::string_view LAST_CHUNK = "0\r\n";
+
+struct chunked_result {
+  std::error_code ec;
+  bool eof = false;
+  std::string_view data;
+};
+
+struct part_head_t {
+  std::error_code ec;
+  std::string name;
+  std::string filename;
+};
 
 inline std::unordered_map<std::string, std::string> g_content_type_map = {
     {".css", "text/css"},
