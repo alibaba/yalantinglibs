@@ -31,7 +31,7 @@ export const easylog_Links = [
 ];
 
 export const coro_http_Links = [
-    { text: 'coro_http 简介', link: '/zh/coro_http /coro_http_introduction' },
+    { text: 'coro_http 简介', link: '/zh/coro_http/coro_http_introduction' },
 ];
 
 export const struct_xxx_Links = [
