@@ -304,7 +304,6 @@ class websocket {
   std::string_view sec_ws_key_;
 
   size_t payload_length_ = 0;
-  size_t left_payload_length_ = 0;
 
   size_t left_header_len_ = 0;
   uint8_t mask_[4] = {};

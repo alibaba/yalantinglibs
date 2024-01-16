@@ -8,7 +8,9 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <asio/buffer.hpp>
 #include <cctype>
+#include <charconv>
 #include <cstddef>  //std::byte
 #include <cstdlib>
 #include <iomanip>
@@ -22,7 +24,6 @@
 
 #include "define.h"
 #include "response_cv.hpp"
-#include "sha1.hpp"
 
 namespace cinatra {
 struct ci_less {
@@ -45,158 +46,6 @@ struct ci_less {
                                         nocase_compare());     // comparison
   }
 };
-
-class noncopyable {
- public:
-  noncopyable() = default;
-  ~noncopyable() = default;
-
- private:
-  noncopyable(const noncopyable &) = delete;
-  noncopyable &operator=(const noncopyable &) = delete;
-};
-
-using namespace std::string_view_literals;
-
-template <class T>
-struct sv_char_trait : std::char_traits<T> {
-  using base_t = std::char_traits<T>;
-  using char_type = typename base_t::char_type;
-
-  static constexpr int compare(std::string_view s1,
-                               std::string_view s2) noexcept {
-    if (s1.length() != s2.length())
-      return -1;
-
-    size_t n = s1.length();
-    for (size_t i = 0; i < n; ++i) {
-      if (!base_t::eq(s1[i], s2[i])) {
-        return base_t::eq(s1[i], s2[i]) ? -1 : 1;
-      }
-    }
-
-    return 0;
-  }
-
-  static constexpr size_t find(std::string_view str,
-                               const char_type &a) noexcept {
-    auto s = str.data();
-    for (size_t i = 0; i < str.length(); ++i) {
-      if (base_t::eq(s[i], a)) {
-        return i;
-      }
-    }
-
-    return std::string_view::npos;
-  }
-};
-
-inline std::string_view trim_left(std::string_view v) {
-  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
-  return v;
-}
-
-inline std::string_view trim_right(std::string_view v) {
-  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
-  return v;
-}
-
-inline std::string_view trim(std::string_view v) {
-  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
-  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
-  return v;
-}
-
-inline std::pair<std::string_view, std::string_view> get_domain_url(
-    std::string_view path) {
-  size_t size = path.size();
-  size_t pos = std::string_view::npos;
-  for (size_t i = 0; i < size; i++) {
-    if (path[i] == '/') {
-      if (i == size - 1) {
-        pos = i;
-        break;
-      }
-
-      if (i + 1 < size - 1 && path[i + 1] == '/') {
-        i++;
-        continue;
-      }
-      else {
-        pos = i;
-        break;
-      }
-    }
-  }
-
-  if (pos == std::string_view::npos) {
-    return {path, "/"};
-  }
-
-  std::string_view host = path.substr(0, pos);
-  std::string_view url = path.substr(pos);
-  if (url.length() > 1 && url.back() == '/') {
-    url = url.substr(0, url.length() - 1);
-  }
-
-  return {host, url};
-}
-inline std::string_view remove_www(std::string_view path) {
-  if (path.back() == '/') {
-    path = std::string_view(path.data(), path.length() - 1);
-  }
-  if (path.find("www.") != std::string_view::npos)
-    return path.substr(4);
-
-  return path;
-}
-
-inline std::pair<std::string, std::string> get_host_port(std::string_view path,
-                                                         bool is_ssl) {
-  std::string_view old_path = path;
-  size_t pos = path.rfind(':');
-  if (pos == std::string_view::npos) {
-    if (path.find("https") != std::string_view::npos) {
-      return {std::string(remove_www(path)), "https"};
-    }
-
-    return {std::string(remove_www(path)), is_ssl ? "https" : "http"};
-  }
-
-  if (pos > path.length() - 1) {
-    return {};
-  }
-
-  if (path.find("http") != std::string_view::npos) {
-    size_t pos1 = path.find(':');
-    if (pos1 + 3 > path.length() - 1)
-      return {};
-
-    path = path.substr(pos1 + 3);
-    if (pos >= (pos1 + 3))
-      pos -= (pos1 + 3);
-  }
-
-  if (old_path[pos - 1] == 'p') {
-    return {std::string(remove_www(path)), "http"};
-  }
-  else if (old_path[pos - 1] == 's') {
-    return {std::string(remove_www(path)), "https"};
-  }
-
-  return {std::string(path.substr(0, pos)), std::string(path.substr(pos + 1))};
-}
-
-inline void SHA1(uint8_t *key_src, size_t size, uint8_t *sha1buf) {
-  sha1_context ctx;
-  init(ctx);
-  update(ctx, key_src, size);
-  finish(ctx, sha1buf);
-}
-
-template <typename T>
-constexpr bool is_int64_v =
-    std::is_same_v<T, std::int64_t> || std::is_same_v<T, std::uint64_t>;
 
 inline std::string get_content_type_str(req_content_type type) {
   std::string str;
@@ -233,82 +82,41 @@ inline std::string get_content_type_str(req_content_type type) {
   return str;
 }
 
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::DEL>) noexcept {
-  return "DELETE"sv;
-}
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::GET>) noexcept {
-  return "GET"sv;
-}
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::HEAD>) noexcept {
-  return "HEAD"sv;
+inline void replace_all(std::string &out, const std::string &from,
+                        const std::string &to) {
+  if (from.empty())
+    return;
+  size_t start_pos = 0;
+  while ((start_pos = out.find(from, start_pos)) != std::string::npos) {
+    out.replace(start_pos, from.length(), to);
+    start_pos += to.length();
+  }
 }
 
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::POST>) noexcept {
-  return "POST"sv;
-}
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::PUT>) noexcept {
-  return "PUT"sv;
-}
-
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::CONNECT>) noexcept {
-  return "CONNECT"sv;
-}
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::OPTIONS>) noexcept {
-  return "OPTIONS"sv;
-}
-constexpr auto type_to_name(
-    std::integral_constant<http_method, http_method::TRACE>) noexcept {
-  return "TRACE"sv;
-}
-
-inline bool iequal(const char *s, size_t l, const char *t) {
-  if (strlen(t) != l)
-    return false;
-
-  for (size_t i = 0; i < l; i++) {
-    if (std::tolower(s[i]) != std::tolower(t[i]))
-      return false;
+inline std::string_view get_extension(std::string_view name) {
+  size_t pos = name.rfind('.');
+  if (pos == std::string_view::npos) {
+    return {};
   }
 
-  return true;
+  return name.substr(pos);
 }
 
-inline bool iequal(const char *s, size_t l, const char *t, size_t size) {
-  if (size != l)
-    return false;
+inline int64_t hex_to_int(std::string_view s) {
+  if (s.empty())
+    return -1;
 
-  for (size_t i = 0; i < l; i++) {
-    if (std::tolower(s[i]) != std::tolower(t[i]))
-      return false;
+  char *p;
+  int64_t n = strtoll(s.data(), &p, 16);
+  if (n == 0 && s.front() != '0') {
+    return -1;
   }
 
-  return true;
+  return n;
 }
 
-inline bool iequal(std::string_view a, std::string_view b) {
-  return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char a, char b) {
-    return tolower(a) == tolower(b);
-  });
-}
-
-template <typename T>
-inline bool find_strIC(const T &src, const T &dest) {
-  auto it = std::search(src.begin(), src.end(), dest.begin(), dest.end(),
-                        [](char ch1, char ch2) {
-                          return std::toupper(ch1) == std::toupper(ch2);
-                        });
-  return (it != src.end());
-}
-
-inline std::vector<std::string_view> split(std::string_view s,
-                                           std::string_view delimiter) {
+inline std::vector<std::string_view> split_sv(std::string_view s,
+                                              std::string_view delimiter) {
   size_t start = 0;
   size_t end = s.find_first_of(delimiter);
 
@@ -327,165 +135,37 @@ inline std::vector<std::string_view> split(std::string_view s,
   return output;
 }
 
-inline void remove_char(std::string &str, const char ch) {
-  str.erase(std::remove(str.begin(), str.end(), ch), str.end());
+inline std::string_view trim_sv(std::string_view v) {
+  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+  return v;
 }
 
-inline void replace_all(std::string &out, const std::string &from,
-                        const std::string &to) {
-  if (from.empty())
-    return;
-  size_t start_pos = 0;
-  while ((start_pos = out.find(from, start_pos)) != std::string::npos) {
-    out.replace(start_pos, from.length(), to);
-    start_pos += to.length();
-  }
+inline std::string_view to_hex_string(size_t val) {
+  static char buf[20];
+  auto [ptr, ec] = std::to_chars(std::begin(buf), std::end(buf), val, 16);
+  return std::string_view{buf, size_t(std::distance(buf, ptr))};
 }
 
-template <typename... Args>
-inline void print(Args... args) {
-  ((std::cout << args << ' '), ...);
-  std::cout << "\n";
-}
-
-inline void print(const std::error_code &ec) {
-  print(ec.value(), ec.message());
-}
-
-// var bools = [];
-// var valid_chr =
-// 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-'; for(var
-// i = 0; i <= 127; ++ i) { 	var contain =
-// valid_chr.indexOf(String.fromCharCode(i)) == -1;
-// 	bools.push(contain?false:true);
-// }
-// console.log(JSON.stringify(bools))
-
-inline const constexpr bool valid_chr[128] = {
-    false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false,
-    false, true,  true,  false, true,  true,  true,  true,  true,  true,  true,
-    true,  true,  true,  false, false, false, false, false, false, false, true,
-    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-    true,  true,  true,  false, false, false, false, true,  false, true,  true,
-    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-    true,  true,  false, false, false, false, false};
-
-inline std::ostringstream &quote_impl(std::ostringstream &os,
-                                      std::string_view str,
-                                      std::string_view safe) {
-  os << std::setiosflags(std::ios::right) << std::setfill('0');
-  auto begin = reinterpret_cast<const std::byte *>(str.data());
-  auto end = begin + sizeof(char) * str.size();
-  std::for_each(begin, end, [&os, &safe](auto &chr) {
-    char chrval = (char)chr;
-    unsigned int intval = (unsigned int)chr;
-    if ((intval > 127 || !valid_chr[intval]) &&
-        safe.find(chrval) == std::string_view::npos)
-      os << '%' << std::setw(2) << std::hex << std::uppercase << intval;
-    else
-      os << chrval;
-  });
-  return os;
-}
-
-inline const std::string quote(std::string_view str) {
-  std::ostringstream os;
-  return quote_impl(os, str, "/").str();
-}
-
-inline const std::string quote_plus(std::string_view str) {
-  if (str.find(' ') == std::string_view::npos)
-    return quote(str);
-
-  std::ostringstream os;
-  auto strval = quote_impl(os, str, " ").str();
-  std::replace(strval.begin(), strval.end(), ' ', '+');
-  return strval;
-}
-
-inline std::string form_urldecode(const std::string &src) {
-  std::string ret;
-  char ch;
-  int i, ii;
-  for (i = 0; i < src.length(); i++) {
-    if (int(src[i]) == 37) {
-      sscanf(src.substr(i + 1, 2).c_str(), "%x", &ii);
-      ch = static_cast<char>(ii);
-      ret += ch;
-      i = i + 2;
-    }
-    else {
-      ret += src[i];
-    }
-  }
-  return ret;
-}
-
-inline bool is_form_url_encode(std::string_view str) {
-  return str.find("%") != std::string_view::npos ||
-         str.find("+") != std::string_view::npos;
-}
-
-inline std::string_view get_extension(std::string_view name) {
-  size_t pos = name.rfind('.');
-  if (pos == std::string_view::npos) {
-    return {};
-  }
-
-  return name.substr(pos);
-}
-
-inline bool is_status_ok(int status) {
-  return (status == 200) || (status >= 301 && status <= 307 && status != 306);
-}
-
-inline std::string to_hex_string(std::size_t value) {
-  std::ostringstream stream;
-  stream << std::hex << value;
-  return stream.str();
-}
-
-inline int64_t hex_to_int(std::string_view s) {
-  if (s.empty())
-    return -1;
-
-  char *p;
-  int64_t n = strtoll(s.data(), &p, 16);
-  if (n == 0 && s.front() != '0') {
-    return -1;
-  }
-
-  return n;
-}
-
-template <typename T>
-inline std::vector<T> to_chunked_buffers(const char *chunk_data, size_t length,
-                                         std::string &chunk_size, bool eof) {
-  std::vector<T> buffers;
-
+inline void to_chunked_buffers(std::vector<asio::const_buffer> &buffers,
+                               std::string_view chunk_data, bool eof) {
+  size_t length = chunk_data.size();
   if (length > 0) {
     // convert bytes transferred count to a hex string.
-    chunk_size = to_hex_string(length);
+    auto chunk_size = to_hex_string(length);
 
     // Construct chunk based on rfc2616 section 3.6.1
-    buffers.push_back(T(chunk_size.data(), chunk_size.size()));
-    buffers.push_back(T(crlf.data(), crlf.size()));
-    buffers.push_back(T(chunk_data, length));
-    buffers.push_back(T(crlf.data(), crlf.size()));
+    buffers.push_back(asio::buffer(chunk_size));
+    buffers.push_back(asio::buffer(CRCF));
+    buffers.push_back(asio::buffer(chunk_data, length));
+    buffers.push_back(asio::buffer(CRCF));
   }
 
   // append last-chunk
   if (eof) {
-    buffers.push_back(T(last_chunk.data(), last_chunk.size()));
-    buffers.push_back(T(crlf.data(), crlf.size()));
+    buffers.push_back(asio::buffer(LAST_CHUNK));
+    buffers.push_back(asio::buffer(CRCF));
   }
-
-  return buffers;
 }
 
 static const std::string base64_chars =
@@ -534,52 +214,6 @@ inline std::string base64_encode(const std::string &str) {
     for (j = 0; (j < i + 1); j++) ret += base64_chars[char_array_4[j]];
 
     while ((i++ < 3)) ret += '=';
-  }
-
-  return ret;
-}
-
-inline std::string base64_decode(std::string const &encoded_string) {
-  int in_len = static_cast<int>(encoded_string.size());
-  int i = 0;
-  int j = 0;
-  int in_ = 0;
-  unsigned char char_array_4[4], char_array_3[3];
-  std::string ret;
-
-  while (in_len-- && (encoded_string[in_] != '=') &&
-         is_base64(encoded_string[in_])) {
-    char_array_4[i++] = encoded_string[in_];
-    in_++;
-    if (i == 4) {
-      for (i = 0; i < 4; i++)
-        char_array_4[i] =
-            static_cast<unsigned char>(base64_chars.find(char_array_4[i]));
-
-      char_array_3[0] =
-          (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-      char_array_3[1] =
-          ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-      for (i = 0; (i < 3); i++) ret += char_array_3[i];
-      i = 0;
-    }
-  }
-
-  if (i) {
-    for (j = i; j < 4; j++) char_array_4[j] = 0;
-
-    for (j = 0; j < 4; j++)
-      char_array_4[j] =
-          static_cast<unsigned char>(base64_chars.find(char_array_4[j]));
-
-    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-    char_array_3[1] =
-        ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-    for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
   }
 
   return ret;
@@ -674,154 +308,6 @@ inline bool is_valid_utf8(unsigned char *s, size_t length) {
   return true;
 }
 
-template <typename T>
-inline std::string to_str(T &&value) {
-  using U = std::remove_const_t<std::remove_reference_t<T>>;
-  if constexpr (std::is_integral_v<U> && !is_int64_v<U>) {
-    std::vector<char> temp(20, '\0');
-    itoa_fwd(value, temp.data());
-    return std::string(temp.data());
-  }
-  else if constexpr (is_int64_v<U>) {
-    std::vector<char> temp(65, '\0');
-    xtoa(value, temp.data(), 10, std::is_signed_v<U>);
-    return std::string(temp.data());
-  }
-  else if constexpr (std::is_floating_point_v<U>) {
-    std::vector<char> temp(20, '\0');
-    sprintf(temp.data(), "%f", value);
-    return std::string(temp.data());
-  }
-  else if constexpr (std::is_same_v<std::string, U> ||
-                     std::is_same_v<const char *, U>) {
-    return value;
-  }
-  else {
-    std::cout << "this type has not supported yet" << std::endl;
-  }
-}
-
-// for is_detective
-namespace {
-struct nonesuch {
-  nonesuch() = delete;
-  ~nonesuch() = delete;
-  nonesuch(const nonesuch &) = delete;
-  void operator=(const nonesuch &) = delete;
-};
-
-template <class Default, class AlwaysVoid, template <class...> class Op,
-          class... Args>
-struct detector {
-  using value_t = std::false_type;
-  using type = Default;
-};
-
-template <class Default, template <class...> class Op, class... Args>
-struct detector<Default, std::void_t<Op<Args...>>, Op, Args...> {
-  using value_t = std::true_type;
-  using type = Op<Args...>;
-};
-
-template <template <class...> class Op, class... Args>
-using is_detected = typename detector<nonesuch, void, Op, Args...>::value_t;
-
-template <template <class...> class Op, class... Args>
-using detected_t = typename detector<nonesuch, void, Op, Args...>::type;
-
-template <class T, typename... Args>
-using has_before_t =
-    decltype(std::declval<T>().before(std::declval<Args>()...));
-
-template <class T, typename... Args>
-using has_after_t = decltype(std::declval<T>().after(std::declval<Args>()...));
-}  // namespace
-
-template <typename T, typename... Args>
-using has_before = is_detected<has_before_t, T, Args...>;
-
-template <typename T, typename... Args>
-using has_after = is_detected<has_after_t, T, Args...>;
-
-template <typename... Args, typename F, std::size_t... Idx>
-constexpr void for_each_l(std::tuple<Args...> &t, F &&f,
-                          std::index_sequence<Idx...>) {
-  (std::forward<F>(f)(std::get<Idx>(t)), ...);
-}
-
-template <typename... Args, typename F, std::size_t... Idx>
-constexpr void for_each_r(std::tuple<Args...> &t, F &&f,
-                          std::index_sequence<Idx...>) {
-  constexpr auto size = sizeof...(Idx);
-  (std::forward<F>(f)(std::get<size - Idx - 1>(t)), ...);
-}
-
-template <http_method N>
-constexpr void get_str(std::string &s, std::string_view name) {
-  s = type_to_name(std::integral_constant<http_method, N>{}).data();
-  s += std::string(name.data(), name.length());
-}
-
-template <http_method... Is>
-constexpr auto get_arr(std::string_view name) {
-  std::array<std::string, sizeof...(Is)> arr = {};
-  size_t index = 0;
-  (get_str<Is>(arr[index++], name), ...);
-
-  return arr;
-}
-
-template <http_method... Is>
-constexpr auto get_method_arr() {
-  std::array<char, 26> arr{0};
-  std::string_view s;
-  ((s = type_to_name(std::integral_constant<http_method, Is>{}),
-    arr[s[0] - 65] = s[0]),
-   ...);
-
-  return arr;
-}
-
-inline const std::map<std::string_view, std::string_view> get_cookies_map(
-    std::string_view cookies_str) {
-  std::map<std::string_view, std::string_view> cookies;
-  auto cookies_vec = split(cookies_str, "; ");
-  for (auto iter : cookies_vec) {
-    auto cookie_key_vlaue = split(iter, "=");
-    if (cookie_key_vlaue.size() == 2) {
-      cookies[cookie_key_vlaue[0]] = cookie_key_vlaue[1];
-    }
-  }
-  return cookies;
-};
-
-template <typename T, typename Tuple>
-struct has_type;
-
-template <typename T, typename... Us>
-struct has_type<T, std::tuple<Us...>>
-    : std::disjunction<std::is_same<T, Us>...> {};
-
-template <typename T>
-struct filter_helper {
-  static constexpr auto func() { return std::tuple<>(); }
-
-  template <class... Args>
-  static constexpr auto func(T &&, Args &&...args) {
-    return filter_helper::func(std::forward<Args>(args)...);
-  }
-
-  template <class X, class... Args>
-  static constexpr auto func(X &&x, Args &&...args) {
-    return std::tuple_cat(std::make_tuple(std::forward<X>(x)),
-                          filter_helper::func(std::forward<Args>(args)...));
-  }
-};
-
-template <typename T, typename... Args>
-inline auto filter(Args &&...args) {
-  return filter_helper<T>::func(std::forward<Args>(args)...);
-}
 }  // namespace cinatra
 
 #endif  // CINATRA_UTILS_HPP

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -50,6 +51,7 @@ async_simple::coro::Lazy<void> broadcast(auto &conn_map,
 }
 
 int main() {
+  std::cout << fs::current_path() << "\n";
   coro_http::coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
   std::mutex mtx;

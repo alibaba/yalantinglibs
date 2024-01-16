@@ -15,6 +15,7 @@
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
+#include "multipart.hpp"
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
@@ -22,18 +23,6 @@
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
-struct chunked_result {
-  std::error_code ec;
-  bool eof = false;
-  std::string_view data;
-};
-
-struct part_head_t {
-  std::error_code ec;
-  std::string name;
-  std::string filename;
-};
-
 struct websocket_result {
   std::error_code ec;
   ws_frame_type type;
@@ -183,20 +172,98 @@ class coro_http_connection
           parser_.method().data(),
           parser_.method().length() + 1 + parser_.url().length()};
 
+      std::string decode_key;
+      if (parser_.url().find('%') != std::string_view::npos) {
+        decode_key = code_utils::url_decode(key);
+        key = decode_key;
+      }
+
       if (!body_.empty()) {
         request_.set_body(body_);
       }
 
       if (auto handler = router_.get_handler(key); handler) {
-        router_.route(handler, request_, response_);
+        router_.route(handler, request_, response_, key);
       }
       else {
         if (auto coro_handler = router_.get_coro_handler(key); coro_handler) {
-          co_await router_.route_coro(coro_handler, request_, response_);
+          co_await router_.route_coro(coro_handler, request_, response_, key);
         }
         else {
-          // not found
-          response_.set_status(status_type::not_found);
+          bool is_exist = false;
+          std::function<void(coro_http_request & req,
+                             coro_http_response & resp)>
+              handler;
+          std::string method_str{parser_.method()};
+          std::string url_path = method_str;
+          url_path.append(" ").append(parser_.url());
+          std::tie(is_exist, handler, request_.params_) =
+              router_.get_router_tree()->get(url_path, method_str);
+          if (is_exist) {
+            if (handler) {
+              (handler)(request_, response_);
+            }
+            else {
+              response_.set_status(status_type::not_found);
+            }
+          }
+          else {
+            bool is_coro_exist = false;
+            std::function<async_simple::coro::Lazy<void>(
+                coro_http_request & req, coro_http_response & resp)>
+                coro_handler;
+
+            std::tie(is_coro_exist, coro_handler, request_.params_) =
+                router_.get_coro_router_tree()->get_coro(url_path, method_str);
+
+            if (is_coro_exist) {
+              if (coro_handler) {
+                co_await (coro_handler)(request_, response_);
+              }
+              else {
+                response_.set_status(status_type::not_found);
+              }
+            }
+            else {
+              bool is_matched_regex_router = false;
+              // coro regex router
+              auto coro_regex_handlers = router_.get_coro_regex_handlers();
+              if (coro_regex_handlers.size() != 0) {
+                for (auto &pair : coro_regex_handlers) {
+                  std::string coro_regex_key{key};
+
+                  if (std::regex_match(coro_regex_key, request_.matches_,
+                                       std::get<0>(pair))) {
+                    auto coro_handler = std::get<1>(pair);
+                    if (coro_handler) {
+                      co_await (coro_handler)(request_, response_);
+                      is_matched_regex_router = true;
+                    }
+                  }
+                }
+              }
+              // regex router
+              if (!is_matched_regex_router) {
+                auto regex_handlers = router_.get_regex_handlers();
+                if (regex_handlers.size() != 0) {
+                  for (auto &pair : regex_handlers) {
+                    std::string regex_key{key};
+                    if (std::regex_match(regex_key, request_.matches_,
+                                         std::get<0>(pair))) {
+                      auto handler = std::get<1>(pair);
+                      if (handler) {
+                        (handler)(request_, response_);
+                        is_matched_regex_router = true;
+                      }
+                    }
+                  }
+                }
+              }
+              // not found
+              if (!is_matched_regex_router)
+                response_.set_status(status_type::not_found);
+            }
+          }
         }
       }
 
@@ -207,6 +274,9 @@ class coro_http_connection
       response_.clear();
       buffers_.clear();
       body_.clear();
+      if (need_shrink_every_time_) {
+        body_.shrink_to_fit();
+      }
     }
   }
 
@@ -230,6 +300,36 @@ class coro_http_connection
     co_return true;
   }
 
+  std::string local_address() {
+    if (has_closed_) {
+      return "";
+    }
+
+    std::stringstream ss;
+    std::error_code ec;
+    ss << socket_.local_endpoint(ec);
+    if (ec) {
+      return "";
+    }
+    return ss.str();
+  }
+
+  std::string remote_address() {
+    static std::string remote_addr;
+    if (has_closed_) {
+      return remote_addr;
+    }
+
+    std::stringstream ss;
+    std::error_code ec;
+    ss << socket_.remote_endpoint(ec);
+    if (ec) {
+      return remote_addr;
+    }
+    remote_addr = ss.str();
+    return ss.str();
+  }
+
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
     buffers.push_back(asio::buffer(message));
@@ -250,10 +350,8 @@ class coro_http_connection
 
   async_simple::coro::Lazy<bool> write_chunked_data(std::string_view buf,
                                                     bool eof) {
-    std::string chunk_size_str = "";
-    std::vector<asio::const_buffer> buffers =
-        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
-                                               chunk_size_str, eof);
+    std::vector<asio::const_buffer> buffers;
+    to_chunked_buffers(buffers, buf, eof);
     auto [ec, _] = co_await async_write(std::move(buffers));
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
@@ -281,12 +379,58 @@ class coro_http_connection
                                                bool eof = false) {
     response_.set_delay(true);
     buffers_.clear();
-    response_.to_chunked_buffers(buffers_, chunked_data, eof);
+    to_chunked_buffers(buffers_, chunked_data, eof);
     co_return co_await reply(false);
   }
 
   async_simple::coro::Lazy<bool> end_chunked() {
     co_return co_await write_chunked("", true);
+  }
+
+  async_simple::coro::Lazy<bool> begin_multipart(
+      std::string_view boundary = "", std::string_view content_type = "") {
+    response_.set_delay(true);
+    response_.set_status(status_type::ok);
+    if (boundary.empty()) {
+      boundary = BOUNDARY;
+    }
+    if (content_type.empty()) {
+      content_type = "multipart/form-data";
+    }
+
+    std::string str{content_type};
+    str.append("; ").append("boundary=").append(boundary);
+    response_.add_header("Content-Type", str);
+    response_.set_boundary(boundary);
+    co_return co_await reply();
+  }
+
+  async_simple::coro::Lazy<bool> write_multipart(
+      std::string_view part_data, std::string_view content_type) {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string part_head = "--";
+    part_head.append(response_.get_boundary()).append(CRCF);
+    part_head.append("Content-Type: ").append(content_type).append(CRCF);
+    part_head.append("Content-Length: ")
+        .append(std::to_string(part_data.size()))
+        .append(TWO_CRCF);
+
+    buffers_.push_back(asio::buffer(part_head));
+    buffers_.push_back(asio::buffer(part_data));
+    buffers_.push_back(asio::buffer(CRCF));
+
+    auto [ec, _] = co_await async_write(buffers_);
+    co_return !ec;
+  }
+
+  async_simple::coro::Lazy<bool> end_multipart() {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string multipart_end = "--";
+    multipart_end.append(response_.get_boundary()).append("--").append(CRCF);
+    auto [ec, _] = co_await async_write(asio::buffer(multipart_end));
+    co_return !ec;
   }
 
   async_simple::coro::Lazy<chunked_result> read_chunked() {
@@ -344,99 +488,6 @@ class coro_http_connection
     result.data = std::string_view{data_ptr, (size_t)chunk_size};
     chunked_buf_.consume(chunk_size + CRCF.size());
 
-    co_return result;
-  }
-
-  async_simple::coro::Lazy<part_head_t> read_part_head() {
-    if (head_buf_.size() > 0) {
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-      chunked_buf_.sputn(data_ptr, head_buf_.size());
-      head_buf_.consume(head_buf_.size());
-    }
-
-    part_head_t result{};
-    std::error_code ec{};
-    size_t last_size = chunked_buf_.size();
-    size_t size;
-
-    auto get_part_name = [](std::string_view data, std::string_view name,
-                            size_t start) {
-      start += name.length();
-      size_t end = data.find("\"", start);
-      return data.substr(start, end - start);
-    };
-
-    constexpr std::string_view name = "name=\"";
-    constexpr std::string_view filename = "filename=\"";
-
-    while (true) {
-      if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
-          ec) {
-        result.ec = ec;
-        close();
-        co_return result;
-      }
-
-      const char *data_ptr =
-          asio::buffer_cast<const char *>(chunked_buf_.data());
-      chunked_buf_.consume(size);
-      if (*data_ptr == '-') {
-        continue;
-      }
-      std::string_view data{data_ptr, size};
-      if (size == 2) {  // got the head end: \r\n\r\n
-        break;
-      }
-
-      if (size_t pos = data.find("name"); pos != std::string_view::npos) {
-        result.name = get_part_name(data, name, pos);
-
-        if (size_t pos = data.find("filename"); pos != std::string_view::npos) {
-          result.filename = get_part_name(data, filename, pos);
-        }
-        continue;
-      }
-    }
-
-    co_return result;
-  }
-
-  async_simple::coro::Lazy<chunked_result> read_part_body(
-      std::string_view boundary) {
-    chunked_result result{};
-    std::error_code ec{};
-    size_t size = 0;
-
-    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, boundary);
-        ec) {
-      result.ec = ec;
-      close();
-      co_return result;
-    }
-
-    const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-    chunked_buf_.consume(size);
-    result.data = std::string_view{
-        data_ptr, size - boundary.size() - 4};  //-- boundary \r\n
-
-    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
-        ec) {
-      result = {};
-      result.ec = ec;
-      close();
-      co_return result;
-    }
-
-    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-    std::string data{data_ptr, size};
-    if (size > 2) {
-      constexpr std::string_view complete_flag = "--\r\n";
-      if (data == complete_flag) {
-        result.eof = true;
-      }
-    }
-
-    chunked_buf_.consume(size);
     co_return result;
   }
 
@@ -567,6 +618,8 @@ class coro_http_connection
 
   void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
 
+  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
@@ -671,7 +724,7 @@ class coro_http_connection
 
     code_utils::base64_encode(accept_key, sha1buf, sizeof(sha1buf), 0);
 
-    response_.set_status(status_type::switching_protocols);
+    response_.set_status_and_content(status_type::switching_protocols);
 
     response_.add_header("Upgrade", "WebSocket");
     response_.add_header("Connection", "Upgrade");
@@ -683,6 +736,7 @@ class coro_http_connection
   }
 
  private:
+  friend class multipart_reader_t<coro_http_connection>;
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
@@ -707,5 +761,6 @@ class coro_http_connection
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool use_ssl_ = false;
 #endif
+  bool need_shrink_every_time_ = false;
 };
 }  // namespace cinatra
