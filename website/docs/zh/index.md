@@ -22,8 +22,8 @@ features:
     details: Very easy-to-use, coroutine-based, high performance rpc framework with C++20, more than 2000w qps in echo scene.
   - title: struct_json\struct_xml\struct_yaml
     details: C++17 实现的基于反射的 json\xml\yaml 库, 结构体和 json\xml\yaml 的相互转换.
-  - title: coro_http_client
-    details: 基于C++20 协程的 http(https) client, 包括 get/post, websocket, multipart file upload, chunked and ranges download etc.
+  - title: coro_http
+    details: 基于C++20 协程的 http(https) server 和 client, 包括 get/post, websocket, multipart file upload, chunked and ranges download etc.
   - title: easylog
     details: C++17 实现的高性能易用的日志库, 支持cout 流式、sprintf 和 fmt::format/std::format 输出.
   - title: struct_xml struct_json struct_yaml
