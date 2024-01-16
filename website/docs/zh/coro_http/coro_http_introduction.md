@@ -503,21 +503,23 @@ client 不是线程安全的，要确保只有一个线程在调用client，如�
 
 方式二：
 
-通过多个协程去请求服务端
+通过多个协程去请求服务端, 每个协程都在内部线程池的某个线程中执行。去请求服务端
 
 ```c++
-  coro_http_client client;
-  std::vector<async_simple::coro::Lazy<resp_data>> futures;
-  for (int i = 0; i < 10; ++i) {
-    futures.push_back(client.async_get("http://www.baidu.com/"));
-  }
+std::vector<std::shared_ptr<coro_http_client>> clients;
+std::vector<async_simple::coro::Lazy<resp_data>> futures;
+for (int i = 0; i < 10; ++i) {
+  auto client = std::make_shared<coro_http_client>();
+  futures.push_back(client->async_get("http://www.baidu.com/"));
+  clients.push_back(client);
+}
 
-  auto out = co_await async_simple::coro::collectAll(std::move(futures));
+auto out = co_await async_simple::coro::collectAll(std::move(futures));
 
-  for (auto &item : out) {
-    auto result = item.value();
-    CHECK(result.status == 200);
-  }
+for (auto &item : out) {
+  auto result = item.value();
+  assert(result.status == 200);
+}
 ```
 
 ## 设置解析http response 的最大header 数量
