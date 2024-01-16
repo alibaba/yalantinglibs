@@ -125,32 +125,41 @@ class coro_http_server {
   uint16_t port() const { return port_; }
 
   template <http_method... method, typename Func>
-  void set_http_handler(std::string key, Func handler) {
+  void set_http_handler(
+      std::string key, Func handler,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
     if constexpr (sizeof...(method) == 1) {
-      (router_.set_http_handler<method>(std::move(key), std::move(handler)),
+      (router_.set_http_handler<method>(std::move(key), std::move(handler),
+                                        std::move(aspects)),
        ...);
     }
     else {
-      (router_.set_http_handler<method>(key, handler), ...);
+      (router_.set_http_handler<method>(key, handler, aspects), ...);
     }
   }
 
-  template <http_method... method, typename Func>
-  void set_http_handler(std::string key, Func handler, auto owner) {
+  template <http_method... method, typename Func, typename Owner>
+  void set_http_handler(
+      std::string key, Func handler, Owner &&owner,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+    static_assert(std::is_member_function_pointer_v<Func>,
+                  "must be member function");
     using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
                                                    coro_http_response & resp)>
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
-      set_http_handler<method...>(std::move(key), std::move(f));
+      set_http_handler<method...>(std::move(key), std::move(f),
+                                  std::move(aspects));
     }
     else {
       std::function<void(coro_http_request & req, coro_http_response & resp)>
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
-      set_http_handler<method...>(std::move(key), std::move(f));
+      set_http_handler<method...>(std::move(key), std::move(f),
+                                  std::move(aspects));
     }
   }
 
@@ -187,8 +196,9 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
-  void set_static_res_dir(std::string_view uri_suffix = "",
-                          std::string file_path = "www") {
+  void set_static_res_dir(
+      std::string_view uri_suffix = "", std::string file_path = "www",
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     bool has_double_dot = (file_path.find("..") != std::string::npos) ||
                           (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -245,11 +255,12 @@ class coro_http_server {
               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
+            auto range_str = req.get_header_value("Range");
 
             if (auto it = static_file_cache_.find(file_name);
                 it != static_file_cache_.end()) {
-              auto range_header =
-                  build_range_header(mime, file_name, fs::file_size(file_name));
+              auto range_header = build_range_header(
+                  mime, file_name, std::to_string(fs::file_size(file_name)));
               resp.set_delay(true);
               std::string &body = it->second;
               std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
@@ -269,7 +280,10 @@ class coro_http_server {
               co_return;
             }
 
-            if (format_type_ == file_resp_format_type::chunked) {
+            size_t file_size = fs::file_size(file_name);
+
+            if (format_type_ == file_resp_format_type::chunked &&
+                range_str.empty()) {
               resp.set_format_type(format_type::chunked);
               bool ok;
               if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -298,8 +312,84 @@ class coro_http_server {
               }
             }
             else {
-              auto range_header = build_range_header(
-                  mime, file_name, coro_io::coro_file::file_size(file_name));
+              auto pos = range_str.find('=');
+              if (pos != std::string_view::npos) {
+                range_str = range_str.substr(pos + 1);
+                bool is_valid = true;
+                auto ranges =
+                    parse_ranges(range_str, fs::file_size(file_name), is_valid);
+                if (!is_valid) {
+                  resp.set_status(status_type::range_not_satisfiable);
+                  co_return;
+                }
+
+                assert(!ranges.empty());
+
+                if (ranges.size() == 1) {
+                  // single part
+                  auto [start, end] = ranges[0];
+                  in_file.seek(start, SEEK_SET);
+                  size_t part_size = end + 1 - start;
+                  int status = (part_size == file_size) ? 200 : 206;
+                  std::string content_range = "Content-Range: bytes ";
+                  content_range.append(std::to_string(start))
+                      .append("-")
+                      .append(std::to_string(end))
+                      .append("/")
+                      .append(std::to_string(file_size))
+                      .append(CRCF);
+                  auto range_header = build_range_header(
+                      mime, file_name, std::to_string(part_size), status,
+                      content_range);
+                  resp.set_delay(true);
+                  bool r = co_await req.get_conn()->write_data(range_header);
+                  if (!r) {
+                    co_return;
+                  }
+
+                  co_await send_single_part(in_file, content, req, resp,
+                                            part_size);
+                }
+                else {
+                  // multipart ranges
+                  resp.set_delay(true);
+                  std::string file_size_str = std::to_string(file_size);
+                  size_t content_len = 0;
+                  std::vector<std::string> multi_heads = build_part_heads(
+                      ranges, mime, file_size_str, content_len);
+                  auto range_header = build_multiple_range_header(content_len);
+                  bool r = co_await req.get_conn()->write_data(range_header);
+                  if (!r) {
+                    co_return;
+                  }
+
+                  for (int i = 0; i < ranges.size(); i++) {
+                    std::string &part_header = multi_heads[i];
+                    r = co_await req.get_conn()->write_data(part_header);
+                    if (!r) {
+                      co_return;
+                    }
+
+                    auto [start, end] = ranges[i];
+                    in_file.seek(start, SEEK_SET);
+                    size_t part_size = end + 1 - start;
+
+                    std::string_view more = CRCF;
+                    if (i == ranges.size() - 1) {
+                      more = MULTIPART_END;
+                    }
+                    r = co_await send_single_part(in_file, content, req, resp,
+                                                  part_size, more);
+                    if (!r) {
+                      co_return;
+                    }
+                  }
+                }
+                co_return;
+              }
+
+              auto range_header = build_range_header(mime, file_name,
+                                                     std::to_string(file_size));
               resp.set_delay(true);
               bool r = co_await req.get_conn()->write_data(range_header);
               if (!r) {
@@ -326,7 +416,8 @@ class coro_http_server {
                 }
               }
             }
-          });
+          },
+          aspects);
     }
   }
 
@@ -340,6 +431,8 @@ class coro_http_server {
       start_check_timer();
     }
   }
+
+  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
   size_t connection_count() {
     std::scoped_lock lock(conn_mtx_);
@@ -410,6 +503,9 @@ class coro_http_server {
           executor, std::move(socket), router_);
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
+      }
+      if (need_shrink_every_time_) {
+        conn->set_shrink_to_fit(true);
       }
       if (need_check_) {
         conn->set_check_timeout(true);
@@ -485,18 +581,99 @@ class coro_http_server {
     }
   }
 
+  std::string build_multiple_range_header(size_t content_len) {
+    std::string header_str = "HTTP/1.1 206 Partial Content\r\n";
+    header_str.append("Content-Length: ");
+    header_str.append(std::to_string(content_len)).append(CRCF);
+    header_str.append("Content-Type: multipart/byteranges; boundary=");
+    header_str.append(BOUNDARY).append(TWO_CRCF);
+    return header_str;
+  }
+
+  std::vector<std::string> build_part_heads(auto &ranges, std::string_view mime,
+                                            std::string_view file_size_str,
+                                            size_t &content_len) {
+    std::vector<std::string> multi_heads;
+    for (auto [start, end] : ranges) {
+      std::string part_header = "--";
+      part_header.append(BOUNDARY).append(CRCF);
+      part_header.append("Content-Type: ").append(mime).append(CRCF);
+      part_header.append("Content-Range: ").append("bytes ");
+      part_header.append(std::to_string(start))
+          .append("-")
+          .append(std::to_string(end))
+          .append("/")
+          .append(file_size_str)
+          .append(TWO_CRCF);
+      content_len += part_header.size();
+      multi_heads.push_back(std::move(part_header));
+      size_t part_size = end + 1 - start + CRCF.size();
+      content_len += part_size;
+    }
+    content_len += (BOUNDARY.size() + 4);
+    return multi_heads;
+  }
+
   std::string build_range_header(std::string_view mime,
-                                 std::string_view filename, size_t file_size) {
-    std::string header_str =
-        "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
-        "*\r\nAccept-Ranges: bytes\r\n";
+                                 std::string_view filename,
+                                 std::string_view file_size_str,
+                                 int status = 200,
+                                 std::string_view content_range = "") {
+    std::string header_str = "HTTP/1.1 ";
+    header_str.append(std::to_string(status));
+    header_str.append(
+        " OK\r\nAccess-Control-Allow-origin: "
+        "*\r\nAccept-Ranges: bytes\r\n");
+    if (!content_range.empty()) {
+      header_str.append(content_range);
+    }
     header_str.append("Content-Disposition: attachment;filename=");
     header_str.append(filename).append("\r\n");
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
-    header_str.append(std::to_string(file_size)).append("\r\n\r\n");
+    header_str.append(file_size_str).append("\r\n\r\n");
     return header_str;
+  }
+
+  async_simple::coro::Lazy<bool> send_single_part(auto &in_file, auto &content,
+                                                  auto &req, auto &resp,
+                                                  size_t part_size,
+                                                  std::string_view more = "") {
+    while (true) {
+      size_t read_size = (std::min)(part_size, chunked_size_);
+      if (read_size == 0) {
+        break;
+      }
+      auto [ec, size] = co_await in_file.async_read(content.data(), read_size);
+      if (ec) {
+        resp.set_status(status_type::no_content);
+        co_await resp.get_conn()->reply();
+        co_return false;
+      }
+
+      part_size -= read_size;
+
+      bool r = true;
+      if (more.empty()) {
+        r = co_await req.get_conn()->write_data(
+            std::string_view(content.data(), size));
+      }
+      else {
+        std::array<asio::const_buffer, 2> arr{
+            asio::buffer(content.data(), size), asio::buffer(more)};
+        auto [ec, _] = co_await req.get_conn()->async_write(arr);
+        if (ec) {
+          r = false;
+        }
+      }
+
+      if (!r) {
+        co_return false;
+      }
+    }
+
+    co_return true;
   }
 
  private:
@@ -534,5 +711,6 @@ class coro_http_server {
   bool use_ssl_ = false;
 #endif
   coro_http_router router_;
+  bool need_shrink_every_time_ = false;
 };
 }  // namespace cinatra

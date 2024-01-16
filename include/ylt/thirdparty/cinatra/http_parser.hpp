@@ -126,6 +126,29 @@ class http_parser {
     return false;
   }
 
+  bool is_multipart() {
+    auto content_type = get_header_value("Content-Type");
+    if (content_type.empty()) {
+      return false;
+    }
+
+    if (content_type.find("multipart") == std::string_view::npos) {
+      return false;
+    }
+
+    return true;
+  }
+
+  std::string_view get_boundary() {
+    auto content_type = get_header_value("Content-Type");
+    size_t pos = content_type.find("=--");
+    if (pos == std::string_view::npos) {
+      return "";
+    }
+
+    return content_type.substr(pos + 1);
+  }
+
   bool is_req_ranges() const {
     auto value = this->get_header_value("Range"sv);
     return !value.empty();

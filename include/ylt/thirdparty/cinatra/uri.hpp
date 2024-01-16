@@ -308,7 +308,7 @@ struct context {
         port(u.get_port()),
         path(u.get_path()),
         query(u.get_query()),
-        method(mthd),
-        body(std::move(b)) {}
+        body(std::move(b)),
+        method(mthd) {}
 };
 }  // namespace cinatra

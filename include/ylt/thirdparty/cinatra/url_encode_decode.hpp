@@ -1,3 +1,7 @@
+//
+// Created by xmh on 18-3-16.
+//
+
 #ifndef CPPWEBSERVER_URL_ENCODE_DECODE_HPP
 #define CPPWEBSERVER_URL_ENCODE_DECODE_HPP
 #include <codecvt>
@@ -25,24 +29,40 @@ inline static std::string url_encode(const std::string &value) noexcept {
   return result;
 }
 
-inline static std::string url_decode(const std::string &value) noexcept {
+inline static std::string url_decode(std::string_view str) noexcept {
   std::string result;
-  result.reserve(value.size() / 3 +
-                 (value.size() % 3));  // Minimum size of result
+  result.reserve(str.size());
 
-  for (std::size_t i = 0; i < value.size(); ++i) {
-    auto &chr = value[i];
-    if (chr == '%' && i + 2 < value.size()) {
-      auto hex = value.substr(i + 1, 2);
-      auto decoded_chr =
-          static_cast<char>(std::strtol(hex.c_str(), nullptr, 16));
-      result += decoded_chr;
-      i += 2;
+  for (size_t i = 0; i < str.size(); ++i) {
+    char ch = str[i];
+    if (ch == '%') {
+      constexpr char hex[] = "0123456789ABCDEF";
+
+      if (++i == str.size()) {
+        result.push_back('?');
+        break;
+      }
+
+      int hi = (int)(std::find(hex, hex + 16, toupper(str[i])) - hex);
+
+      if (++i == str.size()) {
+        result.push_back('?');
+        break;
+      }
+
+      int lo = (int)(std::find(hex, hex + 16, toupper(str[i])) - hex);
+
+      if ((hi >= 16) || (lo >= 16)) {
+        result.push_back('?');
+        break;
+      }
+
+      result.push_back((char)((hi << 4) + lo));
     }
-    else if (chr == '+')
-      result += ' ';
+    else if (ch == '+')
+      result.push_back(' ');
     else
-      result += chr;
+      result.push_back(ch);
   }
 
   return result;
