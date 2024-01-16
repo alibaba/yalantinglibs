@@ -172,7 +172,7 @@ void transform(std::uint32_t digest[], std::uint32_t block[BLOCK_INTS]) {
   digest[4] += e;
 }
 
-} // namespace sha1
+}  // namespace sha1
 
 struct sha1_context {
   static unsigned int constexpr block_size = sha1::BLOCK_BYTES;
@@ -184,7 +184,8 @@ struct sha1_context {
   std::uint8_t buf[block_size];
 };
 
-template <class = void> inline void init(sha1_context &ctx) noexcept {
+template <class = void>
+inline void init(sha1_context &ctx) noexcept {
   ctx.buflen = 0;
   ctx.blocks = 0;
   ctx.digest[0] = 0x67452301;
@@ -223,14 +224,12 @@ inline void finish(sha1_context &ctx, void *digest) noexcept {
   // pad
   ctx.buf[ctx.buflen++] = 0x80;
   auto const buflen = ctx.buflen;
-  while (ctx.buflen < 64)
-    ctx.buf[ctx.buflen++] = 0x00;
+  while (ctx.buflen < 64) ctx.buf[ctx.buflen++] = 0x00;
   std::uint32_t block[BLOCK_INTS];
   sha1::make_block(ctx.buf, block);
   if (buflen > BLOCK_BYTES - 8) {
     sha1::transform(ctx.digest, block);
-    for (size_t i = 0; i < BLOCK_INTS - 2; i++)
-      block[i] = 0;
+    for (size_t i = 0; i < BLOCK_INTS - 2; i++) block[i] = 0;
   }
 
   /* Append total_bits, split this uint64_t into two uint32_t */
@@ -245,4 +244,4 @@ inline void finish(sha1_context &ctx, void *digest) noexcept {
     d[0] = (ctx.digest[i] >> 24) & 0xff;
   }
 }
-} // namespace cinatra
+}  // namespace cinatra
