@@ -107,7 +107,7 @@ class unpacker {
       data_len_ = reader_.tellg();
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
-    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
+    if SP_UNLIKELY (err_code) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -168,7 +168,7 @@ class unpacker {
     }
     auto &&[err_code, buffer_len] = deserialize_metainfo<Type>();
     len = buffer_len;
-    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
+    if SP_UNLIKELY (err_code) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -230,7 +230,7 @@ class unpacker {
     }
 
     auto &&[err_code, buffer_len] = deserialize_metainfo<T>();
-    if SP_UNLIKELY (err_code != struct_pack::err_code{}) {
+    if SP_UNLIKELY (err_code) {
       return err_code;
     }
     if constexpr (has_compatible) {
@@ -621,7 +621,7 @@ class unpacker {
   deserialize_many(First &&first_item, Args &&...items) {
     auto code =
         deserialize_one<size_type, version, NotSkip, parent_tag>(first_item);
-    if SP_UNLIKELY (code != struct_pack::err_code{}) {
+    if SP_UNLIKELY (code) {
       return code;
     }
     if constexpr (sizeof...(items) > 0) {
@@ -867,7 +867,7 @@ class unpacker {
         else {
           for (auto &i : item) {
             code = deserialize_one<size_type, version, NotSkip>(i);
-            if SP_UNLIKELY (code != struct_pack::err_code{}) {
+            if SP_UNLIKELY (code) {
               return code;
             }
           }
@@ -970,7 +970,7 @@ class unpacker {
             item.clear();
             for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
-              if SP_UNLIKELY (code != struct_pack::err_code{}) {
+              if SP_UNLIKELY (code) {
                 return code;
               }
               if constexpr (NotSkip) {
@@ -996,7 +996,7 @@ class unpacker {
             item.clear();
             for (uint64_t i = 0; i < size; ++i) {
               code = deserialize_one<size_type, version, NotSkip>(value);
-              if SP_UNLIKELY (code != struct_pack::err_code{}) {
+              if SP_UNLIKELY (code) {
                 return code;
               }
               if constexpr (NotSkip) {
@@ -1043,7 +1043,7 @@ class unpacker {
                   else {
                     for (auto &i : item) {
                       code = deserialize_one<size_type, version, NotSkip>(i);
-                      if SP_UNLIKELY (code != struct_pack::err_code{}) {
+                      if SP_UNLIKELY (code) {
                         return code;
                       }
                     }
@@ -1072,7 +1072,7 @@ class unpacker {
                       for (size_t j = i; j < i + len; ++j) {
                         code = deserialize_one<size_type, version, NotSkip>(
                             item[j]);
-                        if SP_UNLIKELY (code != struct_pack::err_code{}) {
+                        if SP_UNLIKELY (code) {
                           return code;
                         }
                       }
@@ -1100,7 +1100,7 @@ class unpacker {
                 item.emplace_back();
                 code =
                     deserialize_one<size_type, version, NotSkip>(item.back());
-                if SP_UNLIKELY (code != struct_pack::err_code{}) {
+                if SP_UNLIKELY (code) {
                   if constexpr (can_reserve<type>) {
                     if constexpr (can_shrink_to_fit<type>) {
                       item.shrink_to_fit();  // release reserve memory
@@ -1114,7 +1114,7 @@ class unpacker {
               value_type useless;
               for (size_t i = 0; i < size; ++i) {
                 code = deserialize_one<size_type, version, NotSkip>(useless);
-                if SP_UNLIKELY (code != struct_pack::err_code{}) {
+                if SP_UNLIKELY (code) {
                   return code;
                 }
               }
@@ -1284,7 +1284,7 @@ class unpacker {
       else if constexpr (id == type_id::array_t) {
         for (auto &i : item) {
           code = deserialize_one<size_type, version, NotSkip>(i);
-          if SP_UNLIKELY (code != struct_pack::err_code{}) {
+          if SP_UNLIKELY (code) {
             return code;
           }
         }
@@ -1302,7 +1302,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &e : item) {
               code = deserialize_one<size_type, version, NotSkip>(e.second);
-              if SP_UNLIKELY (code != struct_pack::err_code{}) {
+              if SP_UNLIKELY (code) {
                 return code;
               }
             }
@@ -1319,7 +1319,7 @@ class unpacker {
           if constexpr (NotSkip) {
             for (auto &i : item) {
               code = deserialize_one<size_type, version, NotSkip>(i);
-              if SP_UNLIKELY (code != struct_pack::err_code{}) {
+              if SP_UNLIKELY (code) {
                 return code;
               }
             }

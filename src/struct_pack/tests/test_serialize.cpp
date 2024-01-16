@@ -523,7 +523,7 @@ TEST_CASE("testing deserialization") {
   auto ret = serialize(p);
 
   person p1{};
-  CHECK(deserialize_to(p1, ret.data(), ret.size()) == struct_pack::errc{});
+  CHECK(!deserialize_to(p1, ret.data(), ret.size()));
 }
 
 TEST_CASE("testing deserialization with invalid data") {
@@ -865,8 +865,7 @@ TEST_CASE("test free functions") {
   CHECK(!buffer.empty());
 
   person p1{};
-  CHECK(deserialize_to(p1, buffer.data(), buffer.size()) ==
-        struct_pack::errc{});
+  CHECK(!deserialize_to(p1, buffer.data(), buffer.size()));
 
   std::optional<int> op1{};
   auto buf1 = serialize(op1);
@@ -962,8 +961,7 @@ TEST_CASE("test serialize offset") {
   buffer.resize(info.size() + offset);
   serialize_to(buffer.data() + offset, info, p);
   person p2;
-  CHECK(deserialize_to(p2, buffer.data() + offset, info.size()) ==
-        struct_pack::errc{});
+  CHECK(!deserialize_to(p2, buffer.data() + offset, info.size()));
   CHECK(p2 == p);
 
   std::vector<char> buffer2;
@@ -973,8 +971,7 @@ TEST_CASE("test serialize offset") {
   serialize_to_with_offset(buffer2, offset, p);
   CHECK(data_offset + info.size() == buffer2.size());
   person p3;
-  CHECK(deserialize_to(p3, buffer2.data() + data_offset, info.size()) ==
-        struct_pack::errc{});
+  CHECK(!deserialize_to(p3, buffer2.data() + data_offset, info.size()));
   CHECK(p3 == p);
 }
 

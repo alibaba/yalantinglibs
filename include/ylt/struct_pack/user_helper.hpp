@@ -56,7 +56,7 @@ STRUCT_PACK_INLINE struct_pack::err_code read(Reader& reader, T* t,
       auto code =
           unpacker.template deserialize_one<size_width, UINT64_MAX, !ifSkip>(
               t[i]);
-      if SP_UNLIKELY (code != struct_pack::err_code{}) {
+      if SP_UNLIKELY (code) {
         return code;
       }
     }

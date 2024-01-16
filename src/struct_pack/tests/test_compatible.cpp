@@ -158,8 +158,7 @@ TEST_CASE("test compatible") {
     serialize_to(buffer.data(), size2, p);
 
     person1 p2;
-    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) ==
-          struct_pack::errc{});
+    CHECK(!deserialize_to(p2, buffer.data(), buffer.size()));
     CHECK((p2.age == p.age && p2.name == p.name));
   }
   SUBCASE("serialize person 2 person1") {

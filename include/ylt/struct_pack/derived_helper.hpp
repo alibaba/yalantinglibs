@@ -102,7 +102,6 @@ struct deserialize_derived_class_helper {
       std::unique_ptr<BaseClass> &base, unpack &unpacker) {
     if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
       unreachable();
-      return struct_pack::err_code{};
     }
     else {
       using derived_class = std::tuple_element_t<index, DerivedClasses>;
