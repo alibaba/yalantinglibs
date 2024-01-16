@@ -30,8 +30,8 @@ export const easylog_Links = [
     { text: 'easylog简介', link: '/zh/easylog/easylog_introduction' },
 ];
 
-export const coro_http_client_Links = [
-    { text: 'coro_http_client简介', link: '/zh/coro_http_client/coro_http_client_introduction' },
+export const coro_http_Links = [
+    { text: 'coro_http 简介', link: '/zh/coro_http /coro_http_introduction' },
 ];
 
 export const struct_xxx_Links = [

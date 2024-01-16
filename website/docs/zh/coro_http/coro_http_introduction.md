@@ -1,6 +1,4 @@
-coro_http_client 简介
-
-# 基本用法
+# coro_http 简介
 
 ## 如何引入 coro_http_cient
 
@@ -169,7 +167,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 }  
 ```
 
-# https 请求
+## https 请求
 发起https 请求之前确保已经安装了openssl，并开启CINATRA_ENABLE_SSL 预编译宏：
 ```
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
@@ -183,40 +181,38 @@ const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 
   /// 
-  /// \param base_path ssl 证书所在路径
-  /// \param cert_file ssl 证书名称
-  /// \param verify_mode 证书校验模式，默认不校验
-  /// \param domain 校验的域名
+  /// \param verify_mode 证书校验模式，默认校验
+  /// \param full_path ssl 证书名称
+  /// \param sni_hostname sni host 名称，默认为url的host
   /// \return ssl 初始化是否成功
-  bool init_ssl(const std::string &base_path = "", const std::string &cert_file = "",
-                int verify_mode = asio::ssl::verify_none,
-                const std::string &domain = "localhost");
+  bool init_ssl(int verify_mode = asio::ssl::verify_peer,
+                              std::string full_path = "",
+                              const std::string &sni_hostname = "");
 ```
 
 ```c++
 #ifdef CINATRA_ENABLE_SSL
 void test_coro_http_client() {
   coro_http_client client{};
-  client.init_ssl("../../include/cinatra", "server.crt");
   auto data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
   data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
 
-  std::string uri2 = "https://cn.bing.com";
+  std::string uri2 = "https://www.baidu.com";
   coro_http_client client1{};
-  client1.init_ssl();
+  client1.init_ssl("../../include/cinatra", "server.crt");
   data = co_await client1.async_get(uri2);
   print(data.status);
 
-  data = co_await client1.async_get(uri3);
+  data = co_await client1.async_get(uri2);
   print(data.status);  
 }
 #endif
 ```
-如果没有ssl 证书，则init_ssl(); 参数不填。
+根据需要，一般情况下init_ssl()可以不调用。
 
-# http 先连接再请求
+## http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。
 
 如果host 已经通过请求连接成功之后，后面发请求的时候只传入path 而不用传入完整的路径，这样可以获得更好的性能，coro_http_client 对于已经连接的host，当传入path 的时候不会再重复去解析已经解析过的uri。
@@ -242,7 +238,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 }
 ```
 
-# http 重连
+## http 重连
 当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用reconnect 去重连host，这样就可以复用http client 了。
 
 ```c++
@@ -302,7 +298,7 @@ async_simple::coro::Lazy<resp_data> async_trace(std::string uri);
 ```
 注意，async_http_connect 接口不是异步连接接口，它实际上是http_method::CONNECT 对应的接口，真正的异步连接接口connect 前面已经介绍过。
 
-# 文件上传下载
+## 文件上传下载
 除了http method 对应的接口之外，coro_http_client 还提供了常用文件上传和下载接口。
 
 ## chunked 格式上传
@@ -310,9 +306,10 @@ async_simple::coro::Lazy<resp_data> async_trace(std::string uri);
 template <typename S, typename File>
 async_simple::coro::Lazy<resp_data> async_upload_chunked(
     S uri, http_method method, File file,
+    req_content_type content_type = req_content_type::text,
     std::unordered_map<std::string, std::string> headers = {});
 ```
-method 一般是POST 或者PUT，file 可以是带路径的文件名，也可以是一个iostream 流，headers 是请求头，这些参数填好之后，coro_http_client 会自动将文件分块上传到服务器，直到全部上传完成之后才co_return，中间上传出错也会返回。 
+method 一般是POST 或者PUT，file 可以是带路径的文件名，也可以是一个iostream 流，content_type 文件的类型，headers 是请求头，这些参数填好之后，coro_http_client 会自动将文件分块上传到服务器，直到全部上传完成之后才co_return，中间上传出错也会返回。 
 
 chunked 每块的大小默认为1MB，如果希望修改分块大小可以通过set_max_single_part_size 接口去设置大小，或者通过config 里面的max_single_part_size配置项去设置。
 
@@ -401,7 +398,7 @@ client 配置项：
     // 是否启用tcp_no_delay
     bool enable_tcp_no_delay;
 #ifdef CINATRA_ENABLE_SSL
-    // 是否使用ssl
+    // 当请求的url中没有schema时，use_ssl为true时添加https，为false时添加http
     bool use_ssl = false;
     // ssl 证书路径
     std::string base_path;
@@ -423,7 +420,7 @@ client.init_config(conf);
 auto r = async_simple::coro::syncAwait(
     client.async_http_connect("http://www.baidu.com"));
 ```
-# websocket
+## websocket
 websocket 的支持需要3步：
 - 设置读websocket 数据的回调函数；
 - 连接服务器；
@@ -492,7 +489,7 @@ websocket 例子:
   async_simple::coro::syncAwait(client.async_send_ws(send_str));
 ```
 
-# 线程模型
+## 线程模型
 coro_http_client 默认情况下是共享一个全局“线程池”，这个“线程池”准确来说是一个io_context pool，coro_http_client 的线程模型是一个client一个io_context，
 io_context 和 client 是一对多的关系。io_context pool 默认的线程数是机器的核数，如果希望控制pool 的线程数可以调用coro_io::get_global_executor(pool_size) 去设置
 总的线程数。
@@ -523,8 +520,264 @@ client 不是线程安全的，要确保只有一个线程在调用client，如�
   }
 ```
 
-# 设置解析http response 的最大header 数量
+## 设置解析http response 的最大header 数量
 默认情况下，最多可以解析100 个http header，如果希望解析更多http header 需要define一个宏CINATRA_MAX_HTTP_HEADER_FIELD_SIZE，通过它来设置解析的最大header 数, 在include client 头文件之前定义：
 ```c++
 #define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 200  // 将解析的最大header 数设置为200
 ```
+
+## coro_http_server 基本用法
+
+### cinatra指令集功能使用
+
+cinatra支持通过指令集优化其内部逻辑，其通过宏来控制是否使用指令集。使用之前请确保cpu支持。
+
+使用如下命令即可编译带simd优化的cinatra。注意只能开启一种simd指令集优化,开启多个会导致编译失败。
+
+```shell
+cmake -DENABLE_SIMD=SSE42 .. # 启用sse4.2指令集
+cmake -DENABLE_SIMD=AVX2 .. # 启用avx2指令集
+cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
+```
+
+### 快速示例
+
+### 示例1：一个简单的hello world
+```c++
+  #include "ylt/coro_http/coro_http_client.hpp"
+  #include "ylt/coro_http/coro_http_server.hpp"
+	using namespace coro_http;
+	
+	int main() {
+		int max_thread_num = std::thread::hardware_concurrency();
+		coro_http_server server(max_thread_num, 8080);
+		server.set_http_handler<GET, POST>("/", [](coro_http_request& req, coro_http_response& res) {
+			res.set_status_and_content(status_type::ok, "hello world");
+		});
+
+		server.sync_start();
+		return 0;
+	}
+```
+
+5行代码就可以实现一个简单http服务器了，用户不需要关注多少细节，直接写业务逻辑就行了。
+
+### 示例2：基本用法
+```c++
+#include "ylt/coro_http/coro_http_client.hpp"
+#include "ylt/coro_http/coro_http_server.hpp"
+using namespace coro_http;
+
+struct person_t {
+  void foo(coro_http_request &, coro_http_response &res) {
+    res.set_status_and_content(status_type::ok, "ok");
+  }
+};
+
+async_simple::coro::Lazy<void> basic_usage() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.set_http_handler<GET>(
+      "/in_thread_pool",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        // will respose in another thread.
+        co_await coro_io::post([&] {
+          // do your heavy work here when finished work, response.
+          resp.set_status_and_content(status_type::ok, "ok");
+        });
+      });
+
+  server.set_http_handler<POST, PUT>(
+      "/post", [](coro_http_request &req, coro_http_response &resp) {
+        auto req_body = req.get_body();
+        resp.set_status_and_content(status_type::ok, std::string{req_body});
+      });
+
+  server.set_http_handler<GET>(
+      "/headers", [](coro_http_request &req, coro_http_response &resp) {
+        auto name = req.get_header_value("name");
+        auto age = req.get_header_value("age");
+        assert(name == "tom");
+        assert(age == "20");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/query", [](coro_http_request &req, coro_http_response &resp) {
+        auto name = req.get_query_value("name");
+        auto age = req.get_query_value("age");
+        assert(name == "tom");
+        assert(age == "20");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<coro_http::GET, coro_http::POST>(
+      "/users/:userid/subscriptions/:subid",
+      [](coro_http_request &req, coro_http_response &response) {
+        assert(req.params_["userid"] == "ultramarines");
+        assert(req.params_["subid"] == "guilliman");
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  person_t person{};
+  server.set_http_handler<GET>("/person", &person_t::foo, person);
+
+  server.async_start();
+  std::this_thread::sleep_for(300ms);  // wait for server start
+
+  coro_http_client client{};
+  auto result = co_await client.async_get("http://127.0.0.1:9001/get");
+  assert(result.status == 200);
+  assert(result.resp_body == "ok");
+  for (auto [key, val] : result.resp_headers) {
+    std::cout << key << ": " << val << "\n";
+  }
+
+  result = co_await client.async_get("/coro");
+  assert(result.status == 200);
+
+  result = co_await client.async_get("/in_thread_pool");
+  assert(result.status == 200);
+
+  result = co_await client.async_post("/post", "post string",
+                                      req_content_type::string);
+  assert(result.status == 200);
+  assert(result.resp_body == "post string");
+
+  client.add_header("name", "tom");
+  client.add_header("age", "20");
+  result = co_await client.async_get("/headers");
+  assert(result.status == 200);
+
+  result = co_await client.async_get("/query?name=tom&age=20");
+  assert(result.status == 200);
+
+  result = co_await client.async_get(
+      "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
+  assert(result.status == 200);
+
+  // make sure you have installed openssl and enable CINATRA_ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_client client2{};
+  result = co_await client2.async_get("https://baidu.com");
+  assert(result.status == 200);
+#endif
+}
+
+int main() {
+  async_simple::coro::syncAwait(basic_usage());
+}
+```
+
+### 示例3：面向切面的http服务器
+```c++
+  #include "ylt/coro_http/coro_http_client.hpp"
+  #include "ylt/coro_http/coro_http_server.hpp"
+	using namespace coro_http;
+
+	//日志切面
+	struct log_t : public base_aspect
+	{
+		bool before(coro_http_request& req, coro_http_response& res) {
+			std::cout << "before log" << std::endl;
+			return true;
+		}
+	
+		bool after(coro_http_request& req, coro_http_response& res) {
+			std::cout << "after log" << std::endl;
+			return true;
+		}
+	};
+	
+	//校验的切面
+	struct check  : public base_aspect {
+		bool before(coro_http_request& req, coro_http_response& res) {
+			std::cout << "before check" << std::endl;
+			if (req.get_header_value("name").empty()) {
+				res.set_status_and_content(status_type::bad_request);
+				return false;
+			}
+			return true;
+		}
+	
+		bool after(coro_http_request& req, coro_http_response& res) {
+			std::cout << "after check" << std::endl;
+			return true;
+		}
+	};
+
+	//将信息从中间件传输到处理程序
+	struct get_data  : public base_aspect {
+		bool before(coro_http_request& req, coro_http_response& res) {
+			req.set_aspect_data("hello", std::string("hello world"));
+			return true;
+		}
+	}
+
+	int main() {
+		coro_http_server server(std::thread::hardware_concurrency(), 8080);
+		server.set_http_handler<GET, POST>("/aspect", [](coro_http_request& req, coro_http_response& res) {
+			res.set_status_and_content(status_type::ok, "hello world");
+		}, std::vector{std::make_shared<check>(), std::make_shared<log_t>()});
+
+		server.set_http_handler<GET,POST>("/aspect/data", [](coro_http_request& req, coro_http_response& res) {
+			std::string hello = req.get_aspect_data<std::string>("hello");
+			res.set_status_and_content(status_type::ok, std::move(hello));
+		}, std::vector{std::make_shared<get_data>()});
+
+		server.sync_start();
+		return 0;
+	}
+```
+本例中有两个切面，一个校验http请求的切面，一个是日志切面，这个切面用户可以根据需求任意增加。本例会先检查http请求的合法性，如果不合法就会返回bad request，合法就会进入下一个切面，即日志切面，日志切面会打印出一个before表示进入业务逻辑之前的处理，业务逻辑完成之后会打印after表示业务逻辑结束之后的处理。
+
+### 示例4：文件上传、下载、websocket
+见[example中的例子](example/main.cpp)
+
+### 示例5：RESTful服务端路径参数设置
+本代码演示如何使用RESTful路径参数。下面设置了两个RESTful API。第一个API当访问，比如访问这样的url`http://127.0.0.1:8080/numbers/1234/test/5678`时服务器可以获取到1234和5678这两个参数，第一个RESTful API的参数是`(\d+)`是一个正则表达式表明只能参数只能为数字。获取第一个参数的代码是`req.get_matches()[1]`。因为每一个req不同所以每一个匹配到的参数都放在`request`结构体中。
+
+同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/{:id}/test/{:name}"`，要获取到对应的参数使用`req.get_query_value`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_query_value("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
+
+```c++
+  #include "ylt/coro_http/coro_http_client.hpp"
+  #include "ylt/coro_http/coro_http_server.hpp"
+	using namespace coro_http;
+	
+	int main() {
+		int max_thread_num = std::thread::hardware_concurrency();
+		coro_http_server server(max_thread_num, 8080);
+
+		server.set_http_handler<GET, POST>(
+			R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+				std::cout << " matches[1] is : " << req.get_matches()[1]
+						<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+				res.set_status_and_content(status_type::ok, "hello world");
+			});
+
+		server.set_http_handler<GET, POST>(
+			"/string/{:id}/test/{:name}", [](request &req, response &res) {
+				std::string id = req.get_query_value("id");
+				std::cout << "id value is: " << id << std::endl;
+				std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
+				res.set_status_and_content(status_type::ok, std::string(req.get_query_value("name")));
+			});
+
+		server.sync_start();
+		return 0;
+	}
+  ```

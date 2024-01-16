@@ -1,7 +1,7 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests/struct_pb)
 find_package(Protobuf QUIET)
 if (NOT Protobuf_FOUND)
-    message(INFO "to build struct_pb conformance test, you must install libprotoc first!!!")
+    message(INFO "to build struct_pb conformance test, you must install libprotoc first")
     return()
 endif ()
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
