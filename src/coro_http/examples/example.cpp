@@ -184,6 +184,18 @@ async_simple::coro::Lazy<void> use_websocket() {
             std::cout << result.data << "\n";
           }
 
+          if (result.type == ws_frame_type::WS_PING_FRAME ||
+              result.type == ws_frame_type::WS_PONG_FRAME) {
+            // ping pong frame just need to continue, no need echo anything,
+            // because framework has reply ping/pong msg to client
+            // automatically.
+            continue;
+          }
+          else {
+            // error frame
+            break;
+          }
+
           auto ec = co_await req.get_conn()->write_websocket(result.data);
           if (ec) {
             break;

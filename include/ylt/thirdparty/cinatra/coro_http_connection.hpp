@@ -218,7 +218,7 @@ class coro_http_connection
 
             if (is_coro_exist) {
               if (coro_handler) {
-                co_await (coro_handler)(request_, response_);
+                co_await(coro_handler)(request_, response_);
               }
               else {
                 response_.set_status(status_type::not_found);
@@ -236,7 +236,7 @@ class coro_http_connection
                                        std::get<0>(pair))) {
                     auto coro_handler = std::get<1>(pair);
                     if (coro_handler) {
-                      co_await (coro_handler)(request_, response_);
+                      co_await(coro_handler)(request_, response_);
                       is_matched_regex_router = true;
                     }
                   }
@@ -334,25 +334,6 @@ class coro_http_connection
     std::vector<asio::const_buffer> buffers;
     buffers.push_back(asio::buffer(message));
     auto [ec, _] = co_await async_write(buffers);
-    if (ec) {
-      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
-      close();
-      co_return false;
-    }
-
-    if (!keep_alive_) {
-      // now in io thread, so can close socket immediately.
-      close();
-    }
-
-    co_return true;
-  }
-
-  async_simple::coro::Lazy<bool> write_chunked_data(std::string_view buf,
-                                                    bool eof) {
-    std::vector<asio::const_buffer> buffers;
-    to_chunked_buffers(buffers, buf, eof);
-    auto [ec, _] = co_await async_write(std::move(buffers));
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
@@ -560,6 +541,7 @@ class coro_http_connection
           case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
             close_frame close_frame =
                 ws_.parse_close_payload(payload.data(), payload.size());
+            result.eof = true;
             result.data = {close_frame.message, close_frame.length};
 
             std::string close_msg = ws_.format_close_payload(
@@ -570,16 +552,16 @@ class coro_http_connection
             close();
           } break;
           case cinatra::ws_frame_type::WS_PING_FRAME: {
-            auto ec = co_await write_websocket({payload.data(), payload.size()},
-                                               opcode::pong);
+            result.data = {payload.data(), payload.size()};
+            auto ec = co_await write_websocket("pong", opcode::pong);
             if (ec) {
               close();
               result.ec = ec;
             }
           } break;
           case cinatra::ws_frame_type::WS_PONG_FRAME: {
+            result.data = {payload.data(), payload.size()};
             auto ec = co_await write_websocket("ping", opcode::ping);
-            close();
             result.ec = ec;
           } break;
           default:
@@ -618,7 +600,10 @@ class coro_http_connection
 
   void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
 
-  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+  void set_shrink_to_fit(bool r) {
+    need_shrink_every_time_ = r;
+    response_.set_shrink_to_fit(r);
+  }
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(

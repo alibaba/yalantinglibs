@@ -35,34 +35,24 @@ inline constexpr std::string_view method_name(http_method mthd) {
   switch (mthd) {
     case cinatra::http_method::DEL:
       return "DELETE"sv;
-      break;
     case cinatra::http_method::GET:
       return "GET"sv;
-      break;
     case cinatra::http_method::HEAD:
       return "HEAD"sv;
-      break;
     case cinatra::http_method::POST:
       return "POST"sv;
-      break;
     case cinatra::http_method::PUT:
       return "PUT"sv;
-      break;
     case cinatra::http_method::PATCH:
       return "PATCH"sv;
-      break;
     case cinatra::http_method::CONNECT:
       return "CONNECT"sv;
-      break;
     case cinatra::http_method::OPTIONS:
       return "OPTIONS"sv;
-      break;
     case cinatra::http_method::TRACE:
       return "TRACE"sv;
-      break;
     default:
       return "UNKONWN"sv;
-      break;
   }
 }
 

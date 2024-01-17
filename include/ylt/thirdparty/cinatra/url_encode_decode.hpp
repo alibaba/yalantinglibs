@@ -115,23 +115,9 @@ inline size_t base64_encode(char *_dst, const void *_src, size_t len,
   return dst - _dst;
 }
 
-inline static std::string u8wstring_to_string(const std::wstring &wstr) {
-  std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-  return conv.to_bytes(wstr);
-}
-
-inline static std::wstring u8string_to_wstring(const std::string &str) {
-  std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-  return conv.from_bytes(str);
-}
-
 inline static std::string get_string_by_urldecode(std::string_view content) {
   return url_decode(std::string(content.data(), content.size()));
 }
 
-inline static bool is_url_encode(std::string_view str) {
-  return str.find("%") != std::string_view::npos ||
-         str.find("+") != std::string_view::npos;
-}
 }  // namespace code_utils
 #endif  // CPPWEBSERVER_URL_ENCODE_DECODE_HPP
