@@ -145,7 +145,7 @@ TEST_CASE("test compatible") {
 
     person p;
     auto res = deserialize_to(p, buffer.data(), buffer.size());
-    CHECK(res == struct_pack::errc{});
+    CHECK(!res);
     CHECK(p.name == p1.name);
     CHECK(p.age == p1.age);
 
@@ -158,8 +158,7 @@ TEST_CASE("test compatible") {
     serialize_to(buffer.data(), size2, p);
 
     person1 p2;
-    CHECK(deserialize_to(p2, buffer.data(), buffer.size()) ==
-          struct_pack::errc{});
+    CHECK(!deserialize_to(p2, buffer.data(), buffer.size()));
     CHECK((p2.age == p.age && p2.name == p.name));
   }
   SUBCASE("serialize person 2 person1") {
@@ -171,7 +170,7 @@ TEST_CASE("test compatible") {
 
     person1 p1, p0 = {20, "tom"};
     auto ec = struct_pack::deserialize_to(p1, buffer);
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(p1 == p0);
   }
   SUBCASE("big compatible metainfo") {

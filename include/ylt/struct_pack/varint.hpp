@@ -275,7 +275,7 @@ template <reader_t Reader>
 #else
 template <typename Reader>
 #endif
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint_impl(
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::err_code deserialize_varint_impl(
     Reader& reader, uint64_t& v) {
 #if __cpp_concepts < 201907L
   static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
@@ -300,7 +300,7 @@ template <bool NotSkip = true,
           typename Reader,
 #endif
           typename T>
-[[nodiscard]] STRUCT_PACK_INLINE struct_pack::errc deserialize_varint(
+[[nodiscard]] STRUCT_PACK_INLINE struct_pack::err_code deserialize_varint(
     Reader& reader, T& t) {
 #if __cpp_concepts < 201907L
   static_assert(reader_t<Reader>, "The writer type must satisfy requirements!");
@@ -308,7 +308,7 @@ template <bool NotSkip = true,
   uint64_t v = 0;
   auto ec = deserialize_varint_impl(reader, v);
   if constexpr (NotSkip) {
-    if SP_LIKELY (ec == struct_pack::errc{}) {
+    if SP_LIKELY (!ec) {
       if constexpr (sintable_t<T>) {
         t = decode_zigzag<int64_t>(v);
       }

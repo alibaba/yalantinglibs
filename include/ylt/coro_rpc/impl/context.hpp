@@ -83,7 +83,7 @@ class context_base {
         error_code, error_msg, self_->req_head_, self_->is_delay_);
   }
   void response_error(coro_rpc::err_code error_code) {
-    response_error(error_code, make_error_message(error_code));
+    response_error(error_code, error_code.message());
   }
   /*!
    * Send response message

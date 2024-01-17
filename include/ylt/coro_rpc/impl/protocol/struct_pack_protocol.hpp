@@ -20,15 +20,12 @@ namespace coro_rpc::protocol {
 struct struct_pack_protocol {
   template <typename T>
   static bool deserialize_to(T& t, std::string_view buffer) {
-    struct_pack::errc ok{};
     if constexpr (std::tuple_size_v<T> == 1) {
-      ok = struct_pack::deserialize_to(std::get<0>(t), buffer);
+      return !struct_pack::deserialize_to(std::get<0>(t), buffer);
     }
     else {
-      ok = struct_pack::deserialize_to(t, buffer);
+      return !struct_pack::deserialize_to(t, buffer);
     }
-
-    return ok == struct_pack::errc::ok;
   }
   template <typename T>
   static std::string serialize(const T& t) {

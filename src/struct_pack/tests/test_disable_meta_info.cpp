@@ -15,7 +15,7 @@ TEST_CASE("test serialize/deserialize rect") {
     CHECK(buffer.size() == sizeof(rect));
     auto ec = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(r2, buffer);
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {
@@ -39,7 +39,7 @@ TEST_CASE("test serialize/deserialize rect") {
     auto ec = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(r2, buffer.data(),
                                                        buffer.size());
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {
@@ -66,7 +66,7 @@ TEST_CASE("test serialize/deserialize rect by ADL") {
     auto buffer = struct_pack::serialize(r);
     CHECK(buffer.size() == sizeof(rect));
     auto ec = struct_pack::deserialize_to(r2, buffer);
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {
@@ -83,7 +83,7 @@ TEST_CASE("test serialize/deserialize rect by ADL") {
     auto buffer = struct_pack::serialize(r);
     CHECK(buffer.size() == sizeof(rect));
     auto ec = struct_pack::deserialize_to(r2, buffer.data(), buffer.size());
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {
@@ -106,7 +106,7 @@ TEST_CASE("test serialize/deserialize person") {
     CHECK(buffer.size() == 11);
     auto ec = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(r2, buffer);
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {
@@ -130,7 +130,7 @@ TEST_CASE("test serialize/deserialize person") {
     auto ec = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(r2, buffer.data(),
                                                        buffer.size());
-    CHECK(ec == struct_pack::errc::ok);
+    CHECK(!ec);
     CHECK(r == r2);
   }
   {

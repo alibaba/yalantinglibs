@@ -368,14 +368,13 @@ struct ServerTester : TesterConfig {
     };
     auto client = init_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    coro_rpc::errc ec;
+    coro_rpc::err_code ec;
     // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
     // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
-    CHECK_MESSAGE(
-        ec,
-        std::to_string(client->get_client_id()).append(make_error_message(ec)));
+    CHECK_MESSAGE(ec,
+                  std::to_string(client->get_client_id()).append(ec.message()));
   }
 
   template <auto func, typename... Args>

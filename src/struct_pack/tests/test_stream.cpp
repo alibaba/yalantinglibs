@@ -68,21 +68,21 @@ TEST_CASE("test serialize_to/deserialize file") {
     for (int i = 0; i < 100; ++i) {
       person person1;
       auto ec = struct_pack::deserialize_to(person1, ifs);
-      CHECK(ec == struct_pack::errc{});
+      CHECK(!ec);
       CHECK(person1 == p1);
       nested_object nested1;
       ec = struct_pack::deserialize_to(nested1, ifs);
-      CHECK(ec == struct_pack::errc{});
+      CHECK(!ec);
       CHECK(nested1 == nested);
     }
     for (int i = 0; i < 100; ++i) {
       person person2;
       auto ec = struct_pack::deserialize_to(person2, ifs);
-      CHECK(ec == struct_pack::errc{});
+      CHECK(!ec);
       CHECK(person2 == p2);
       nested_object nested1;
       ec = struct_pack::deserialize_to(nested1, ifs);
-      CHECK(ec == struct_pack::errc{});
+      CHECK(!ec);
       CHECK(nested1 == nested);
     }
   }
@@ -130,7 +130,7 @@ TEST_CASE("test get_field file") {
         CHECK(ifs.read((char *)&sz, 4));
         std::string name;
         auto ec = struct_pack::get_field_to<person, 1>(name, ifs);
-        CHECK(ec == struct_pack::errc{});
+        CHECK(!ec);
         CHECK(name == p1.name);
         CHECK(ifs.seekg(pos + sz));
       }

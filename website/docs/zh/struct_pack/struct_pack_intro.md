@@ -87,8 +87,8 @@ assert(person2.value()==person1);
 ```cpp
 // 将结果保存到已有的对象中
 person person2;
-std::errc ec = deserialize_to(person2, buffer);
-assert(ec==std::errc{}); // person2.has_value() == true
+auto ec = deserialize_to(person2, buffer);
+assert(!ec); // no error
 assert(person2==person1);
 ```
 
@@ -336,11 +336,11 @@ void sp_serialize_to(Writer& writer, const array2D& ar) {
 }
 // 3. sp_deserialize_to: 从reader反序列化对象
 template </*struct_pack::reader_t*/ typename Reader>
-struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
-  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+struct_pack::err_code sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.y); ec) {
     return ec;
   }
   auto length = 1ull * ar.x * ar.y * sizeof(float);
@@ -352,7 +352,7 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
   }
   ar.p = (float*)malloc(length);
   auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
-  if (ec != struct_pack::errc{}) {
+  if (ec) {
     free(ar.p);
   }
   return ec;
@@ -364,7 +364,7 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
 // 5. 如果你想使用 struct_pack::get_field/struct_pack::get_field_to, 还需要定义下面的函数以跳过自定义类型的反序列化。
 
 // template <typename Reader>
-// struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar);
+// struct_pack::err_code sp_deserialize_to_with_skip(Reader& reader, array2D& ar);
 
 }
 

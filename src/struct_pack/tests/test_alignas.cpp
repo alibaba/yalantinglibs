@@ -52,7 +52,7 @@ TEST_CASE("testing no alignas") {
   REQUIRE(literal == val);
   auto buf = struct_pack::serialize(t);
   auto ret = struct_pack::deserialize<T>(buf);
-  REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+  REQUIRE_MESSAGE(ret, ret.error().message());
   T d_t = ret.value();
   CHECK(t == d_t);
 }
@@ -81,14 +81,14 @@ TEST_CASE("testing alignas(2)") {
   SUBCASE("deserialize to dummy") {
     using DT = test_alignas::dummy;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }
   SUBCASE("deserialize to dummy_2") {
     using DT = test_alignas::dummy_2;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }
@@ -128,7 +128,7 @@ TEST_CASE("testing alignas(4)") {
   SUBCASE("deserialize to dummy_4") {
     using DT = test_alignas::dummy_4;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }
@@ -173,7 +173,7 @@ TEST_CASE("testing alignas(8)") {
   SUBCASE("deserialize to dummy_8") {
     using DT = test_alignas::dummy_8;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }

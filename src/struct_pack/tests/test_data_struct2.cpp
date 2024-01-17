@@ -16,7 +16,7 @@ TEST_CASE("test monostate") {
 #endif
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(var2 == var);
   }
 }
@@ -26,7 +26,7 @@ TEST_CASE("test expected") {
     tl::expected<int, struct_pack::errc> exp{42}, exp2;
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
+    CHECK(!res);
     CHECK(exp2 == exp);
   }
   {
@@ -35,7 +35,7 @@ TEST_CASE("test expected") {
         exp2;
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
+    CHECK(!res);
     CHECK(exp2 == exp);
   }
   {
@@ -45,7 +45,7 @@ TEST_CASE("test expected") {
 
     auto ret = serialize(exp);
     auto res = deserialize_to(exp2, ret.data(), ret.size());
-    CHECK(res == struct_pack::errc{});
+    CHECK(!res);
     CHECK(exp2 == exp);
   }
 }
@@ -56,7 +56,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
 
   complicated_object v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(v.a == v1.a);
 
   CHECK(v == v1);
@@ -67,7 +67,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
 
     nested_object nested1{};
     auto ec = deserialize_to(nested1, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(nested == nested1);
   }
 
@@ -76,7 +76,7 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
     complicated_object v1{};
     auto ec = deserialize_to(v1, ret.data(), ret.size());
     auto pair = get_field<complicated_object, 2>(ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(pair);
     CHECK(pair.value() == "hello");
     pair = get_field<complicated_object, 2>(ret);
@@ -98,17 +98,17 @@ TEST_CASE("testing object with containers, enum, tuple array, and pair") {
   SUBCASE("test get_field_to") {
     std::string res1;
     auto ec = get_field_to<complicated_object, 2>(res1, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(res1 == "hello");
     ec = get_field_to<complicated_object, 2>(res1, ret);
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(res1 == "hello");
     std::pair<std::string, person> res2;
     ec = get_field_to<complicated_object, 14>(res2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(res2 == v.o);
     ec = get_field_to<complicated_object, 14>(res2, ret);
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(res2 == v.o);
 
     auto res = get_field_to<complicated_object, 14>(res2, ret.data(), 24);
@@ -131,7 +131,7 @@ TEST_CASE("testing string_view deserialize") {
     auto ret = serialize(sv);
     std::wstring str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(str == sv);
   }
   {
@@ -167,7 +167,7 @@ TEST_CASE("test wide string") {
     auto ret = serialize(sv);
     std::wstring str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(str == sv);
   }
 #if __cpp_char8_t >= 201811L
@@ -176,7 +176,7 @@ TEST_CASE("test wide string") {
     auto ret = serialize(sv);
     std::u8string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(str == sv);
   }
 #endif
@@ -185,7 +185,7 @@ TEST_CASE("test wide string") {
     auto ret = serialize(sv);
     std::u16string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(str == sv);
   }
   {
@@ -193,7 +193,7 @@ TEST_CASE("test wide string") {
     auto ret = serialize(sv);
     std::u32string str;
     auto ec = deserialize_to(str, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(str == sv);
   }
 }
@@ -203,28 +203,28 @@ TEST_CASE("char test") {
     char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
   {
     signed char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
   {
     unsigned char ch = '1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
   {
     wchar_t ch = L'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
 #ifdef __cpp_lib_char8_t
@@ -232,7 +232,7 @@ TEST_CASE("char test") {
     char8_t ch = u8'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
 #endif
@@ -240,14 +240,14 @@ TEST_CASE("char test") {
     char16_t ch = u'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
   {
     char32_t ch = U'1', ch2;
     auto ret = serialize(ch);
     auto ec = deserialize_to(ch2, ret.data(), ret.size());
-    REQUIRE(ec == struct_pack::errc{});
+    REQUIRE(!ec);
     CHECK(ch == ch2);
   }
 }
@@ -257,7 +257,7 @@ TEST_CASE("test deque") {
   auto ret = struct_pack::serialize(raw);
   std::deque<int> res;
   auto ec = struct_pack::deserialize_to(res, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(raw == res);
 }
 

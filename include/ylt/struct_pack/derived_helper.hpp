@@ -98,11 +98,10 @@ struct public_base_class_checker {
 template <typename DerivedClasses>
 struct deserialize_derived_class_helper {
   template <size_t index, typename BaseClass, typename unpack>
-  static STRUCT_PACK_INLINE constexpr struct_pack::errc run(
+  static STRUCT_PACK_INLINE constexpr struct_pack::err_code run(
       std::unique_ptr<BaseClass> &base, unpack &unpacker) {
     if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
       unreachable();
-      return struct_pack::errc{};
     }
     else {
       using derived_class = std::tuple_element_t<index, DerivedClasses>;
@@ -154,8 +153,8 @@ template <typename DerivedClasses, typename size_type, typename version,
           typename NotSkip>
 struct deserialize_one_derived_class_helper {
   template <size_t index, typename unpacker, typename Pointer>
-  static STRUCT_PACK_INLINE constexpr struct_pack::errc run(unpacker *self,
-                                                            Pointer &base) {
+  static STRUCT_PACK_INLINE constexpr struct_pack::err_code run(unpacker *self,
+                                                                Pointer &base) {
     if constexpr (index >= std::tuple_size_v<DerivedClasses>) {
       unreachable();
     }
