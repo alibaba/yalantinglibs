@@ -66,22 +66,20 @@ void sp_serialize_to(Writer& writer, const array2D& ar) {
 }
 
 template <typename Reader>
-struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
-  if (auto ec = struct_pack::read(reader, ar.name); ec != struct_pack::errc{}) {
+struct_pack::err_code sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.name); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.values);
-      ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.values); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.values2);
-      ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.values2); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.y); ec) {
     return ec;
   }
   if constexpr (struct_pack::checkable_reader_t<Reader>) {
@@ -93,37 +91,37 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
   }
   ar.p = (float*)malloc(1ull * ar.x * ar.y * sizeof(float));
   auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
-  if (ec != struct_pack::errc{}) {
+  if (ec) {
     free(ar.p);
   }
   return ec;
 }
 
 template <typename Reader>
-struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
+struct_pack::err_code sp_deserialize_to_with_skip(Reader& reader, array2D& ar) {
   if (auto ec = struct_pack::read<sizeof(uint64_t), true>(
           reader, ar.name);  // skip this field
-      ec != struct_pack::errc{}) {
+      ec) {
     return ec;
   }
   if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.values);
-      ec != struct_pack::errc{}) {  // skip this field
+      ec) {  // skip this field
     return ec;
   }
   if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.values2);
-      ec != struct_pack::errc{}) {  // skip this field
+      ec) {  // skip this field
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.y); ec) {
     return ec;
   }
 
   if (auto ec = struct_pack::read<sizeof(uint64_t), true>(reader, ar.p,
                                                           1ull * ar.x * ar.y);
-      ec != struct_pack::errc{}) {
+      ec) {
     return ec;
   }
   return {};
@@ -233,7 +231,7 @@ void sp_serialize_to(Writer& writer, const test& t) {
 }
 
 template <typename Reader>
-struct_pack::errc sp_deserialize_to(Reader& reader, test& ar) {
+struct_pack::err_code sp_deserialize_to(Reader& reader, test& ar) {
   return struct_pack::read(reader, ar.x);
 }
 constexpr std::string_view sp_set_type_name(test*) { return "myint"; }

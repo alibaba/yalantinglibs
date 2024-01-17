@@ -169,14 +169,14 @@ TEST_CASE("type calculate") {
                   "T[sz] with different T should get different MD5");
     int ar[5] = {};
     float ar2[5] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
+    CHECK(deserialize_to(ar2, serialize(ar)));
   }
   {
     static_assert(get_type_code<int[5]>() != get_type_code<int[6]>(),
                   "T[sz] with different sz should get different MD5");
     int ar[5] = {};
     int ar2[6] = {};
-    CHECK(deserialize_to(ar2, serialize(ar)) != struct_pack::errc{});
+    CHECK(deserialize_to(ar2, serialize(ar)));
   }
   {
     static_assert(get_type_code<std::optional<int>>() !=

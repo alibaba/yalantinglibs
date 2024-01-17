@@ -16,6 +16,8 @@
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 
 #include "rpc_service.h"
+#include "ylt/coro_rpc/impl/errno.h"
+#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_literals;
@@ -61,7 +63,8 @@ Lazy<void> show_rpc_call() {
   assert(ret.value() == "HelloService::hello_with_delay"s);
 
   ret = co_await client.call<return_error>();
-  assert(ret.error().code = 404);
+
+  assert(ret.error().code == 404);
   assert(ret.error().msg == "404 Not Found.");
 
   ret = co_await client.call<rpc_with_state_by_tag>();

@@ -608,7 +608,7 @@ struct memory_reader;
   template <typename Type>
   concept user_defined_serialization = requires (Type& t) {
     sp_serialize_to(std::declval<struct_pack::detail::memory_writer&>(),(const Type&)t);
-    {sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),t)} -> std::same_as<struct_pack::errc>;
+    {sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),t)} -> std::same_as<struct_pack::err_code>;
     {sp_get_needed_size((const Type&)t)}->std::same_as<std::size_t>;
   };
   template <typename Type>
@@ -623,7 +623,7 @@ struct memory_reader;
   template <typename T>
   struct user_defined_serialization_impl<T, std::void_t<
     decltype(sp_serialize_to(std::declval<struct_pack::detail::memory_writer&>(),std::declval<const T&>())),
-    std::enable_if<std::is_same_v<decltype(sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),std::declval<T&>())), struct_pack::errc>,
+    std::enable_if<std::is_same_v<decltype(sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),std::declval<T&>())), struct_pack::err_code>,
     std::enable_if<std::is_same_v<decltype(sp_get_needed_size(std::declval<const T&>())), std::string_view>>>>>
       : std::true_type {};
 

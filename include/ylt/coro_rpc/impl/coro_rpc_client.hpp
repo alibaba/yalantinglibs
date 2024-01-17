@@ -744,12 +744,12 @@ class coro_rpc_client {
                                                           uint8_t rpc_errc,
                                                           bool &error_happen) {
     rpc_return_type_t<T> ret;
-    struct_pack::errc ec;
+    struct_pack::err_code ec;
     coro_rpc_protocol::rpc_error err;
     if (rpc_errc == 0)
       AS_LIKELY {
         ec = struct_pack::deserialize_to(ret, buffer);
-        if (ec == struct_pack::errc::ok) {
+        if SP_LIKELY (!ec) {
           if constexpr (std::is_same_v<T, void>) {
             return {};
           }
@@ -759,17 +759,17 @@ class coro_rpc_client {
         }
       }
     else {
-      err.code = rpc_errc;
+      err.val() = rpc_errc;
       if (rpc_errc != UINT8_MAX) {
         ec = struct_pack::deserialize_to(err.msg, buffer);
-        if (ec == struct_pack::errc::ok) {
+        if SP_LIKELY (!ec) {
           error_happen = true;
           return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
         }
       }
       else {
         ec = struct_pack::deserialize_to(err, buffer);
-        if (ec == struct_pack::errc::ok) {
+        if SP_LIKELY (!ec) {
           return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
         }
       }

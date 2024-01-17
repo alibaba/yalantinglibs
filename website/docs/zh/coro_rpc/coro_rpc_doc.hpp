@@ -65,13 +65,13 @@ class coro_rpc_server {
    *
    * @return 正常启动返回空，否则返回错误码
    */
-  async_simple::coro::Lazy<coro_rpc::errc> async_start() noexcept;
+  async_simple::coro::Lazy<coro_rpc::err_code> async_start() noexcept;
   /*!
    * 阻塞方式启动server, 如果端口被占用将会返回非空的错误码
    *
    * @return 正常启动返回空，否则返回错误码
    */
-  coro_rpc::errc start();
+  coro_rpc::err_code start();
   /*!
    * 停止server，阻塞等待直到server停止；
    */
@@ -159,7 +159,7 @@ class coro_rpc_server {
  *
  */
 struct rpc_error {
-  coro_rpc::errc code;
+  coro_rpc::err_code code;
   std::string msg;
 };
 
@@ -215,7 +215,7 @@ class coro_rpc_client {
    * @param timeout_duration rpc调用超时时间
    * @return 连接错误码，为空表示连接失败
    */
-  async_simple::coro::Lazy<coro_rpc::errc> connect(
+  async_simple::coro::Lazy<coro_rpc::err_code> connect(
       const std::string &host, const std::string &port,
       std::chrono::steady_clock::duration timeout_duration =
           std::chrono::seconds(5));

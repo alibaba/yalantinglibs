@@ -52,7 +52,7 @@ TEST_CASE("testing no one") {
   REQUIRE(literal == val);
   auto buf = struct_pack::serialize(t);
   auto ret = struct_pack::deserialize<T>(buf);
-  REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+  REQUIRE_MESSAGE(ret, ret.error().message());
   T d_t = ret.value();
   CHECK(t == d_t);
 }
@@ -100,7 +100,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   SUBCASE("deserialize to dummy_1_2") {
     using DT = test_pragma_pack_and_alignas_mix::dummy_1_2;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }
@@ -164,7 +164,7 @@ TEST_CASE("testing #pragam pack(1), alignas(2)") {
   SUBCASE("deserialize to dummy_1_4") {
     using DT = test_pragma_pack_and_alignas_mix::dummy_1_4;
     auto ret = struct_pack::deserialize<DT>(buf);
-    REQUIRE_MESSAGE(ret, struct_pack::error_message(ret.error()));
+    REQUIRE_MESSAGE(ret, ret.error().message());
     DT d_t = ret.value();
     CHECK(t == d_t);
   }

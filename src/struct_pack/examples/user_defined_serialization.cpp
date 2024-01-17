@@ -62,11 +62,11 @@ void sp_serialize_to(Writer& writer, const array2D& ar) {
 }
 // 3. sp_deserialize_to: deserilize object from reader
 template </*struct_pack::reader_t*/ typename Reader>
-struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
-  if (auto ec = struct_pack::read(reader, ar.x); ec != struct_pack::errc{}) {
+struct_pack::err_code sp_deserialize_to(Reader& reader, array2D& ar) {
+  if (auto ec = struct_pack::read(reader, ar.x); ec) {
     return ec;
   }
-  if (auto ec = struct_pack::read(reader, ar.y); ec != struct_pack::errc{}) {
+  if (auto ec = struct_pack::read(reader, ar.y); ec) {
     return ec;
   }
   auto length = 1ull * ar.x * ar.y * sizeof(float);
@@ -78,7 +78,7 @@ struct_pack::errc sp_deserialize_to(Reader& reader, array2D& ar) {
   }
   ar.p = (float*)malloc(length);
   auto ec = struct_pack::read(reader, ar.p, 1ull * ar.x * ar.y);
-  if (ec != struct_pack::errc{}) {
+  if (ec) {
     free(ar.p);
   }
   return ec;

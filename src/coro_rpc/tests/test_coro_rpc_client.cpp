@@ -278,8 +278,7 @@ class SSLClientTester {
     if (client_crt == ssl_type::fake || client_crt == ssl_type::no) {
       REQUIRE(ok == false);
       auto ec = syncAwait(client->connect("127.0.0.1", port_));
-      REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
-                      make_error_message(ec));
+      REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected, ec.message());
       auto ret = syncAwait(client->template call<hi>());
       REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::not_connected,
                       ret.error().msg);
@@ -292,13 +291,12 @@ class SSLClientTester {
           if (ec) {
             ELOGV(INFO, "%s", gen_err().data());
           }
-          REQUIRE_MESSAGE(!ec, make_error_message(ec));
+          REQUIRE_MESSAGE(!ec, ec.message());
           auto ret = co_await client->template call<hi>();
           CHECK(ret.has_value());
         }
         else {
-          REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
-                          make_error_message(ec));
+          REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected, ec.message());
         }
       };
       syncAwait(f());
@@ -371,7 +369,7 @@ TEST_CASE("testing client with eof") {
   REQUIRE_MESSAGE(res, "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
-  REQUIRE_MESSAGE(!ec, make_error_message(ec));
+  REQUIRE_MESSAGE(!ec, ec.message());
 
   server.register_handler<hello, client_hello>();
   auto ret = client.sync_call<hello>();
@@ -393,7 +391,7 @@ TEST_CASE("testing client with attachment") {
   REQUIRE_MESSAGE(res, "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
-  REQUIRE_MESSAGE(!ec, make_error_message(ec));
+  REQUIRE_MESSAGE(!ec, ec.message());
 
   server.register_handler<echo_with_attachment>();
 
@@ -437,7 +435,7 @@ TEST_CASE("testing client with shutdown") {
   CHECK_MESSAGE(res, "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
-  REQUIRE_MESSAGE(!ec, make_error_message(ec));
+  REQUIRE_MESSAGE(!ec, ec.message());
   server.register_handler<hello, client_hello>();
 
   g_action = inject_action::nothing;
@@ -469,7 +467,7 @@ TEST_CASE("testing client timeout") {
     coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ret = client.connect("10.255.255.1", "8801", 5ms);
     auto val = syncAwait(ret);
-    CHECK_MESSAGE(val == coro_rpc::errc::timed_out, make_error_message(val));
+    CHECK_MESSAGE(val == coro_rpc::errc::timed_out, val.message());
   }
   // SUBCASE("call, 0ms timeout") {
   //   coro_rpc_server server(2, 8801);
@@ -487,13 +485,13 @@ TEST_CASE("testing client timeout") {
 TEST_CASE("testing client connect err") {
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto val = syncAwait(client.connect("127.0.0.1", "8801"));
-  CHECK_MESSAGE(val == coro_rpc::errc::not_connected, make_error_message(val));
+  CHECK_MESSAGE(val == coro_rpc::errc::not_connected, val.message());
 }
 #ifdef UNIT_TEST_INJECT
 TEST_CASE("testing client sync connect, unit test inject only") {
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto val = client.sync_connect("127.0.0.1", "8801");
-  CHECK_MESSAGE(val == coro_rpc::errc::not_connected, make_error_message(val));
+  CHECK_MESSAGE(val == coro_rpc::errc::not_connected, val.message());
 #ifdef YLT_ENABLE_SSL
   SUBCASE("client use ssl but server don't use ssl") {
     g_action = {};
@@ -504,8 +502,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
     val = client2.sync_connect("127.0.0.1", "8801");
-    CHECK_MESSAGE(val == coro_rpc::errc::not_connected,
-                  make_error_message(val));
+    CHECK_MESSAGE(val == coro_rpc::errc::not_connected, val.message());
   }
 #endif
 }

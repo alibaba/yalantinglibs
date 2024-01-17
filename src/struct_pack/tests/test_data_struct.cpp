@@ -11,14 +11,14 @@ void test_container(T &v) {
   auto ret = serialize(v);
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(v == v1);
 
   v.clear();
   v1.clear();
   ret = serialize(v);
   ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(v1.empty());
   CHECK(v == v1);
 }
@@ -162,7 +162,7 @@ void test_tuple_like(T &v) {
 
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(v == v1);
 }
 
@@ -225,11 +225,11 @@ TEST_CASE("test_trivial_copy_tuple") {
 
   std::tuple<int, int> v{};
   auto ec = deserialize_to(v, buf);
-  CHECK(ec != struct_pack::errc{});
+  CHECK(ec);
 
   decltype(tp) tp1;
   auto ec2 = deserialize_to(tp1, buf);
-  CHECK(ec2 == struct_pack::errc{});
+  CHECK(!ec2);
   CHECK(tp == tp1);
 }
 
@@ -246,7 +246,7 @@ TEST_CASE("test_trivial_copy_tuple in an object") {
 
   test_obj obj1;
   auto ec = deserialize_to(obj1, buf);
-  CHECK(ec == struct_pack::errc{});
+  CHECK(!ec);
   CHECK(obj.tp == obj1.tp);
 }
 #endif
@@ -256,7 +256,7 @@ void test_c_array(T &v) {
 
   T v1{};
   auto ec = deserialize_to(v1, ret.data(), ret.size());
-  REQUIRE(ec == struct_pack::errc{});
+  REQUIRE(!ec);
 
   auto size = std::extent_v<T>;
   for (decltype(size) i = 0; i < size; ++i) {
@@ -286,7 +286,7 @@ TEST_CASE("testing enum") {
     auto ret = serialize(e);
     std::size_t sz;
     auto ec = deserialize_to(e2, ret.data(), ret.size(), sz);
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(sz == ret.size());
     CHECK(e == e2);
   }
@@ -347,14 +347,14 @@ TEST_CASE("test variant") {
     std::variant<int, double> var = 1.4, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(var2 == var);
   }
   {
     std::variant<int, std::monostate> var = std::monostate{}, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(var2 == var);
   }
   {
@@ -363,7 +363,7 @@ TEST_CASE("test variant") {
         var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(var2 == var);
     CHECK(var2.index() == 1);
   }
@@ -371,7 +371,7 @@ TEST_CASE("test variant") {
     std::variant<std::monostate, std::string> var{"hello"}, var2;
     auto ret = struct_pack::serialize(var);
     auto ec = struct_pack::deserialize_to(var2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(var2 == var);
   }
   {
@@ -398,7 +398,7 @@ TEST_CASE("test variant") {
         big_variant2;
     auto ret = struct_pack::serialize(big_variant);
     auto ec = struct_pack::deserialize_to(big_variant2, ret.data(), ret.size());
-    CHECK(ec == struct_pack::errc{});
+    CHECK(!ec);
     CHECK(big_variant2 == big_variant);
   }
 }

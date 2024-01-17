@@ -3,7 +3,7 @@ namespace test1 {
 struct Base {
   int id = 17;
   Base(){};
-  static struct_pack::expected<std::unique_ptr<Base>, struct_pack::errc>
+  static struct_pack::expected<std::unique_ptr<Base>, struct_pack::err_code>
   deserialize(std::string_view sv);
   virtual std::string get_name() const { return "Base"; };
   friend bool operator==(const Base& a, const Base& b) { return a.id == b.id; }
@@ -67,7 +67,7 @@ struct gua : Base {
 };
 STRUCT_PACK_REFL(gua, id, a, b);
 
-struct_pack::expected<std::unique_ptr<Base>, struct_pack::errc>
+struct_pack::expected<std::unique_ptr<Base>, struct_pack::err_code>
 Base::deserialize(std::string_view sv) {
   return struct_pack::deserialize_derived_class<Base, bar, foo, gua, foo2,
                                                 foo4>(sv);
