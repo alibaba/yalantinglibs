@@ -121,56 +121,9 @@ class websocket {
     return ws_frame_type::WS_BINARY_FRAME;
   }
 
-  ws_frame_type parse_payload(const char *buf, size_t size,
-                              std::string &outbuf) {
-    const unsigned char *inp = (const unsigned char *)(buf);
-    if (payload_length_ > size)
-      return ws_frame_type::WS_INCOMPLETE_FRAME;
-
-    if (payload_length_ > outbuf.size()) {
-      outbuf.resize((size_t)payload_length_);
-    }
-
-    if (*(uint32_t *)mask_ == 0) {
-      memcpy(&outbuf[0], (void *)(inp), payload_length_);
-    }
-    else {
-      // unmask data:
-      for (size_t i = 0; i < payload_length_; i++) {
-        outbuf[i] = inp[i] ^ mask_[i % 4];
-      }
-    }
-
-    if (msg_opcode_ == 0x0)
-      return (msg_fin_)
-                 ? ws_frame_type::WS_TEXT_FRAME
-                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;  // continuation
-                                                             // frame ?
-    if (msg_opcode_ == 0x1)
-      return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
-                        : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;
-    if (msg_opcode_ == 0x2)
-      return (msg_fin_) ? ws_frame_type::WS_BINARY_FRAME
-                        : ws_frame_type::WS_INCOMPLETE_BINARY_FRAME;
-    if (msg_opcode_ == 0x8)
-      return ws_frame_type::WS_CLOSE_FRAME;
-    if (msg_opcode_ == 0x9)
-      return ws_frame_type::WS_PING_FRAME;
-    if (msg_opcode_ == 0xA)
-      return ws_frame_type::WS_PONG_FRAME;
-    return ws_frame_type::WS_BINARY_FRAME;
-  }
-
   std::string format_header(size_t length, opcode code) {
     size_t header_length = encode_header(length, code);
     return {msg_header_, header_length};
-  }
-
-  std::vector<asio::const_buffer> format_message(const char *src, size_t length,
-                                                 opcode code) {
-    size_t header_length = encode_header(length, code);
-    return {asio::buffer(msg_header_, header_length),
-            asio::buffer(src, length)};
   }
 
   std::string encode_frame(std::span<char> &data, opcode op, bool need_mask,

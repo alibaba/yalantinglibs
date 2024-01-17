@@ -34,12 +34,6 @@ struct ci_less {
     }
   };
 
-  bool operator()(const std::string &s1, const std::string &s2) const {
-    return std::lexicographical_compare(s1.begin(), s1.end(),  // source range
-                                        s2.begin(), s2.end(),  // dest range
-                                        nocase_compare());     // comparison
-  }
-
   bool operator()(std::string_view s1, std::string_view s2) const {
     return std::lexicographical_compare(s1.begin(), s1.end(),  // source range
                                         s2.begin(), s2.end(),  // dest range
@@ -173,10 +167,6 @@ static const std::string base64_chars =
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789+/";
 
-static inline bool is_base64(char c) {
-  return (isalnum(c) || (c == '+') || (c == '/'));
-}
-
 inline std::string base64_encode(const std::string &str) {
   std::string ret;
   int i = 0;
@@ -220,51 +210,10 @@ inline std::string base64_encode(const std::string &str) {
 }
 
 // from h2o
-inline const char *MAP =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/";
-
-inline const char *MAP_URL_ENCODED =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789-_";
-inline size_t base64_encode(char *_dst, const void *_src, size_t len,
-                            int url_encoded) {
-  char *dst = _dst;
-  const uint8_t *src = reinterpret_cast<const uint8_t *>(_src);
-  const char *map = url_encoded ? MAP_URL_ENCODED : MAP;
-  uint32_t quad;
-
-  for (; len >= 3; src += 3, len -= 3) {
-    quad = ((uint32_t)src[0] << 16) | ((uint32_t)src[1] << 8) | src[2];
-    *dst++ = map[quad >> 18];
-    *dst++ = map[(quad >> 12) & 63];
-    *dst++ = map[(quad >> 6) & 63];
-    *dst++ = map[quad & 63];
-  }
-  if (len != 0) {
-    quad = (uint32_t)src[0] << 16;
-    *dst++ = map[quad >> 18];
-    if (len == 2) {
-      quad |= (uint32_t)src[1] << 8;
-      *dst++ = map[(quad >> 12) & 63];
-      *dst++ = map[(quad >> 6) & 63];
-      if (!url_encoded)
-        *dst++ = '=';
-    }
-    else {
-      *dst++ = map[(quad >> 12) & 63];
-      if (!url_encoded) {
-        *dst++ = '=';
-        *dst++ = '=';
-      }
-    }
-  }
-
-  *dst = '\0';
-  return dst - _dst;
-}
+// inline const char *MAP =
+//    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+//    "abcdefghijklmnopqrstuvwxyz"
+//    "0123456789+/";
 
 inline bool is_valid_utf8(unsigned char *s, size_t length) {
   for (unsigned char *e = s + length; s != e;) {

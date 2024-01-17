@@ -1828,8 +1828,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf.data());
       if (is_close_frame) {
-        payload_len -= 2;
-        data_ptr += sizeof(uint16_t);
+        if (payload_len >= 2) {
+          payload_len -= 2;
+          data_ptr += sizeof(uint16_t);
+        }
       }
 
       data.status = 200;
