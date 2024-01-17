@@ -55,12 +55,7 @@ struct err_code {
   }
   constexpr err_code(const err_code& err_code) noexcept = default;
   constexpr err_code& operator=(const err_code& o) noexcept = default;
-  constexpr bool operator==(const err_code& o) const noexcept {
-    return ec == o.ec;
-  }
-  constexpr bool operator!=(const err_code& o) const noexcept {
-    return ec != o.ec;
-  }
+  constexpr operator errc() const noexcept { return ec; }
   constexpr operator bool() const noexcept { return ec != errc::ok; }
   constexpr int val() const noexcept { return static_cast<int>(ec); }
   constexpr std::string_view message() const noexcept {
