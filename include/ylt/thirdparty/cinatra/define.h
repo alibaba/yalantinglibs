@@ -87,7 +87,6 @@ constexpr inline auto TEXT = req_content_type::string;
 constexpr inline auto RANGES = req_content_type::ranges;
 constexpr inline auto NONE = req_content_type::none;
 
-inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
 inline const std::string CSESSIONID = "CSESSIONID";
 
 const static inline std::string CRCF = "\r\n";
@@ -96,6 +95,15 @@ const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
 const static inline std::string MULTIPART_END =
     CRCF + "--" + BOUNDARY + "--" + CRCF;
 constexpr std::string_view LAST_CHUNK = "0\r\n";
+constexpr std::string_view CINATRA_HOST_SV = "Server: cinatra\r\n";
+constexpr std::string_view TRANSFER_ENCODING_SV =
+    "Transfer-Encoding: chunked\r\n";
+constexpr std::string_view CONTENT_LENGTH_SV = "Content-Length: ";
+constexpr std::string_view ZERO_LENGTH_SV = "Content-Length: 0\r\n";
+constexpr std::string_view DATE_SV = "Date: ";
+constexpr std::string_view CONN_KEEP_SV = "Connection: keep-alive\r\n";
+constexpr std::string_view CONN_CLOSE_SV = "Connection: close\r\n";
+constexpr std::string_view COLON_SV = ": ";
 
 struct chunked_result {
   std::error_code ec;
@@ -108,6 +116,111 @@ struct part_head_t {
   std::string name;
   std::string filename;
 };
+
+enum resp_content_type {
+  css,
+  csv,
+  htm,
+  html,
+  js,
+  mjs,
+  txt,
+  vtt,
+  apng,
+  avif,
+  bmp,
+  gif,
+  png,
+  svg,
+  webp,
+  ico,
+  tif,
+  tiff,
+  jpg,
+  jpeg,
+  mp4,
+  mpeg,
+  webm,
+  mp3,
+  mpga,
+  weba,
+  wav,
+  otf,
+  ttf,
+  woff,
+  woff2,
+  x7z,
+  atom,
+  pdf,
+  json,
+  rss,
+  tar,
+  xht,
+  xhtml,
+  xslt,
+  xml,
+  gz,
+  zip,
+  wasm,
+  unknown
+};
+
+constexpr std::array<std::string_view, 45> content_type_arr{
+    "Content-Type: text/css\r\n",
+    "Content-Type: text/csv\r\n",
+    "Content-Type: text/html\r\n",
+    "Content-Type: text/html\r\n",
+    "Content-Type: text/javascript\r\n",
+    "Content-Type: text/javascript\r\n",
+    "Content-Type: text/plain\r\n",
+    "Content-Type: text/vtt\r\n",
+    "Content-Type: image/apng\r\n",
+    "Content-Type: image/avif\r\n",
+    "Content-Type: image/bmp\r\n",
+    "Content-Type: image/gif\r\n",
+    "Content-Type: image/png\r\n",
+    "Content-Type: image/svg+xml\r\n",
+    "Content-Type: image/webp\r\n",
+    "Content-Type: image/x-icon\r\n",
+    "Content-Type: image/tiff\r\n",
+    "Content-Type: image/tiff\r\n",
+    "Content-Type: image/jpeg\r\n",
+    "Content-Type: image/jpeg\r\n",
+    "Content-Type: video/mp4\r\n",
+    "Content-Type: video/mpeg\r\n",
+    "Content-Type: video/webm\r\n",
+    "Content-Type: audio/mp3\r\n",
+    "Content-Type: audio/mpeg\r\n",
+    "Content-Type: audio/webm\r\n",
+    "Content-Type: audio/wave\r\n",
+    "Content-Type: font/otf\r\n",
+    "Content-Type: font/ttf\r\n",
+    "Content-Type: font/woff\r\n",
+    "Content-Type: font/woff2\r\n",
+    "Content-Type: application/x-7z-compressed\r\n",
+    "Content-Type: application/atom+xml\r\n",
+    "Content-Type: application/pdf\r\n",
+    "Content-Type: application/json\r\n",
+    "Content-Type: application/rss+xml\r\n",
+    "Content-Type: application/x-tar\r\n",
+    "Content-Type: application/xhtml+xml\r\n",
+    "Content-Type: application/xhtml+xml\r\n",
+    "Content-Type: application/xslt+xml\r\n",
+    "Content-Type: application/xml\r\n",
+    "Content-Type: application/gzip\r\n",
+    "Content-Type: application/zip\r\n",
+    "Content-Type: application/wasm\r\n",
+    "Content-Type: unknown\r\n"};
+
+template <size_t N>
+inline constexpr std::string_view get_content_type() {
+  if constexpr (N > 43) {
+    return content_type_arr[44];
+  }
+  else {
+    return content_type_arr[N];
+  }
+}
 
 inline std::unordered_map<std::string, std::string> g_content_type_map = {
     {".css", "text/css"},

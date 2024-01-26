@@ -11,11 +11,13 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/response_cv.hpp"
+#include "cookie.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
 #include "multipart.hpp"
+#include "session_manager.hpp"
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
@@ -218,7 +220,7 @@ class coro_http_connection
 
             if (is_coro_exist) {
               if (coro_handler) {
-                co_await (coro_handler)(request_, response_);
+                co_await(coro_handler)(request_, response_);
               }
               else {
                 response_.set_status(status_type::not_found);
@@ -236,7 +238,7 @@ class coro_http_connection
                                        std::get<0>(pair))) {
                     auto coro_handler = std::get<1>(pair);
                     if (coro_handler) {
-                      co_await (coro_handler)(request_, response_);
+                      co_await(coro_handler)(request_, response_);
                       is_matched_regex_router = true;
                     }
                   }
@@ -268,12 +270,73 @@ class coro_http_connection
       }
 
       if (!response_.get_delay()) {
-        co_await reply();
+        if (head_buf_.size()) {
+          // handle pipeling, only support GET and HEAD method now.
+          if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
+            response_.set_status_and_content(status_type::method_not_allowed,
+                                             "method not allowed");
+            co_await reply();
+          }
+          else {
+            resp_str_.reserve(512);
+            response_.build_resp_str(resp_str_);
+
+            while (true) {
+              size_t left_size = head_buf_.size();
+              auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+              std::string_view left_content{data_ptr, left_size};
+              size_t pos = left_content.find(TWO_CRCF);
+              if (pos == std::string_view::npos) {
+                break;
+              }
+              http_parser parser;
+              int head_len = parser.parse_request(data_ptr, size, 0);
+              if (head_len <= 0) {
+                CINATRA_LOG_ERROR << "parse http header error";
+                close();
+                break;
+              }
+
+              head_buf_.consume(pos + TWO_CRCF.length());
+
+              std::string_view key = {
+                  parser_.method().data(),
+                  parser_.method().length() + 1 + parser_.url().length()};
+
+              coro_http_request req(parser, this);
+              coro_http_response resp(this);
+              resp.need_date_head(response_.need_date());
+              if (auto handler = router_.get_handler(key); handler) {
+                router_.route(handler, req, resp, key);
+              }
+              else {
+                if (auto coro_handler = router_.get_coro_handler(key);
+                    coro_handler) {
+                  co_await router_.route_coro(coro_handler, req, resp, key);
+                }
+              }
+
+              resp.build_resp_str(resp_str_);
+            }
+
+            auto [write_ec, _] = co_await async_write(asio::buffer(resp_str_));
+            if (write_ec) {
+              CINATRA_LOG_ERROR << "async_write error: " << write_ec.message();
+              close();
+              co_return;
+            }
+          }
+        }
+        else {
+          handle_session_for_response();
+          co_await reply();
+        }
       }
 
       response_.clear();
       buffers_.clear();
       body_.clear();
+      resp_str_.clear();
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
       }
@@ -684,6 +747,17 @@ class coro_http_connection
 
   void set_check_timeout(bool r) { checkout_timeout_ = r; }
 
+  void handle_session_for_response() {
+    if (request_.has_session()) {
+      auto session =
+          session_manager::get().get_session(request_.get_cached_session_id());
+      if (session != nullptr && session->get_need_set_to_client()) {
+        response_.add_cookie(session->get_session_cookie());
+        session->set_need_set_to_client(false);
+      }
+    }
+  }
+
  private:
   bool check_keep_alive() {
     bool keep_alive = true;
@@ -739,6 +813,7 @@ class coro_http_connection
   bool checkout_timeout_ = false;
   std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
   uint64_t max_part_size_ = 8 * 1024 * 1024;
+  std::string resp_str_;
 
   websocket ws_;
 #ifdef CINATRA_ENABLE_SSL

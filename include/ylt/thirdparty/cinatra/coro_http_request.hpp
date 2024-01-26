@@ -8,6 +8,8 @@
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
+#include "session.hpp"
+#include "session_manager.hpp"
 #include "utils.hpp"
 #include "ws_define.h"
 
@@ -224,6 +226,40 @@ class coro_http_request {
     }
   }
 
+  std::unordered_map<std::string_view, std::string_view> get_cookies(
+      std::string_view cookie_str) const {
+    auto cookies = get_cookies_map(cookie_str);
+    return cookies;
+  }
+
+  std::shared_ptr<session> get_session(bool create = true) {
+    auto &session_manager = session_manager::get();
+
+    auto cookies = get_cookies(get_header_value("Cookie"));
+    std::string session_id;
+    auto iter = cookies.find(CSESSIONID);
+    if (iter == cookies.end() && !create) {
+      return nullptr;
+    }
+    else if (iter == cookies.end()) {
+      session_id = session_manager.generate_session_id();
+    }
+    else {
+      session_id = iter->second;
+    }
+
+    cached_session_id_ = session_id;
+    return session_manager.get_session(session_id);
+  }
+
+  std::string get_cached_session_id() {
+    std::string temp_session_id = "";
+    cached_session_id_.swap(temp_session_id);
+    return temp_session_id;
+  }
+
+  bool has_session() { return !cached_session_id_.empty(); }
+
   std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;
 
@@ -233,5 +269,6 @@ class coro_http_request {
   coro_http_connection *conn_;
   bool is_websocket_;
   std::unordered_map<std::string, std::any> aspect_data_;
+  std::string cached_session_id_;
 };
 }  // namespace cinatra

@@ -257,6 +257,39 @@ inline bool is_valid_utf8(unsigned char *s, size_t length) {
   return true;
 }
 
+inline std::vector<std::string_view> split(std::string_view s,
+                                           std::string_view delimiter) {
+  size_t start = 0;
+  size_t end = s.find_first_of(delimiter);
+
+  std::vector<std::string_view> output;
+
+  while (end <= std::string_view::npos) {
+    output.emplace_back(s.substr(start, end - start));
+
+    if (end == std::string_view::npos)
+      break;
+
+    start = end + 1;
+    end = s.find_first_of(delimiter, start);
+  }
+
+  return output;
+}
+
+inline const std::unordered_map<std::string_view, std::string_view>
+get_cookies_map(std::string_view cookies_str) {
+  std::unordered_map<std::string_view, std::string_view> cookies;
+  auto cookies_vec = split(cookies_str, "; ");
+  for (auto iter : cookies_vec) {
+    auto cookie_key_vlaue = split(iter, "=");
+    if (cookie_key_vlaue.size() == 2) {
+      cookies[cookie_key_vlaue[0]] = cookie_key_vlaue[1];
+    }
+  }
+  return cookies;
+};
+
 }  // namespace cinatra
 
 #endif  // CINATRA_UTILS_HPP
