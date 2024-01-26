@@ -713,4 +713,8 @@ class coro_http_server {
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
 };
+
+using http_server = coro_http_server;
+using request = coro_http_request;
+using response = coro_http_response;
 }  // namespace cinatra
