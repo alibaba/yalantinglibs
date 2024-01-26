@@ -174,7 +174,7 @@ struct_pack是一个基于编译期反射，易用且高性能的序列化库，
 
 [(Video)  A Faster Serialization Library Based on Compile-time Reflection and C++20](https://www.youtube.com/watch?v=myhB8ZlwOlE) CppCon2022 的演讲视频。
 
-[(Slides) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://alibaba.github.io/yalantinglibs/resource/struct_pack_introduce_CN.pdf) Purecpp的演讲稿。
+[(Slides) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://alibaba.github.io/yalantinglibs/resource/CppSummit_struct_pack.pdf) Purecpp的演讲稿。
 
 [(Video) 基于编译期反射和模板元编程的序列化库：struct_pack简介](https://live.csdn.net/room/csdnlive1/bKFbKP7T) Purecpp的演讲视频, 从 01:32:20 开始
 

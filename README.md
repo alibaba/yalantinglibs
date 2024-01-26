@@ -223,7 +223,7 @@ struct_pack is very fast.
 
 [(Video) A Faster Serialization Library Based on Compile-time Reflection and C++ 20](https://www.youtube.com/watch?v=myhB8ZlwOlE)  on cppcon2022
 
-[(Slides)(Chinese)](https://alibaba.github.io/yalantinglibs/resource/struct_pack_introduce_CN.pdf) of struct_pack on purecpp conference.
+[(Slides)(Chinese)](https://alibaba.github.io/yalantinglibs/resource/CppSummit_struct_pack.pdf) of struct_pack on purecpp conference.
 
 [(Video)(Chinese)](https://live.csdn.net/room/csdnlive1/bKFbKP7T) on purecpp conference, start from 01:32:20 of the video record.
 
