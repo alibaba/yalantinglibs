@@ -2,8 +2,9 @@ name: Ubuntu 22.04 (llvm cov)
 
 on:
   pull_request_target:
-    branches: [ doc ]
-  workflow_dispatch:
+    branches:
+      - main
+      - fix_coverage
 
 jobs:
   build:
@@ -30,7 +31,7 @@ jobs:
           export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
           ./tests/test_rpc
           llvm-profdata merge -sparse test_rpc-*.profraw -o test_rpc.profdata
-          llvm-cov show ./tests/test_rpc -instr-profile=test_rpc.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
+          llvm-cov show ./tests/test_rpc -instr-profile=test_rpc.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
@@ -45,7 +46,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report ./tests/test_rpc -instr-profile=test_rpc.profdata -ignore-filename-regex="thirdparty|tests" -show-region-summary=false >> tmp.log
+          llvm-cov report ./tests/test_rpc -instr-profile=test_rpc.profdata -ignore-filename-regex="thirdparty|asio" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
