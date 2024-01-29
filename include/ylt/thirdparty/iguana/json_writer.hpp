@@ -8,33 +8,35 @@
 
 namespace iguana {
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_json(T &&t, Stream &s);
 
-template <typename Stream, typename T>
+template <bool Is_writing_escape = true, typename Stream, typename T>
 IGUANA_INLINE void render_json_value(Stream &ss, std::optional<T> &val);
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<fixed_array_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &t);
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<sequence_container_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v);
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<smart_ptr_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v);
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<map_container_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &o);
 
-template <typename Stream, typename T, std::enable_if_t<tuple_v<T>, int> = 0>
+template <bool Is_writing_escape = true, typename Stream, typename T,
+          std::enable_if_t<tuple_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &s, T &&t);
 
-template <typename Stream, typename T, std::enable_if_t<variant_v<T>, int> = 0>
+template <bool Is_writing_escape = true, typename Stream, typename T,
+          std::enable_if_t<variant_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &s, T &&t);
 
 template <typename Stream, typename InputIt, typename T, typename F>
@@ -42,7 +44,6 @@ IGUANA_INLINE void join(Stream &ss, InputIt first, InputIt last, const T &delim,
                         const F &f) {
   if (first == last)
     return;
-
   f(*first++);
   while (first != last) {
     ss.push_back(delim);
@@ -50,75 +51,85 @@ IGUANA_INLINE void join(Stream &ss, InputIt first, InputIt last, const T &delim,
   }
 }
 
-template <typename Stream>
+template <bool Is_writing_escape, typename Stream>
 IGUANA_INLINE void render_json_value(Stream &ss, std::nullptr_t) {
   ss.append("null");
 }
 
-template <typename Stream>
+template <bool Is_writing_escape, typename Stream>
 IGUANA_INLINE void render_json_value(Stream &ss, bool b) {
   ss.append(b ? "true" : "false");
 };
 
-template <typename Stream>
+template <bool Is_writing_escape, typename Stream>
 IGUANA_INLINE void render_json_value(Stream &ss, char value) {
   ss.append("\"");
   ss.push_back(value);
   ss.append("\"");
 }
 
-template <typename Stream, typename T, std::enable_if_t<num_v<T>, int> = 0>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<num_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, T value) {
   char temp[65];
   auto p = detail::to_chars(temp, value);
   ss.append(temp, p - temp);
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<numeric_str_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, T v) {
   ss.append(v.value().data(), v.value().size());
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<string_container_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, T &&t) {
   ss.push_back('"');
-  ss.append(t.data(), t.size());
+  if constexpr (Is_writing_escape) {
+    write_string_with_escape(t.data(), t.size(), ss);
+  }
+  else {
+    ss.append(t.data(), t.size());
+  }
   ss.push_back('"');
 }
 
-template <typename Stream, typename T, std::enable_if_t<num_v<T>, int> = 0>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<num_v<T>, int> = 0>
 IGUANA_INLINE void render_key(Stream &ss, T &t) {
   ss.push_back('"');
-  render_json_value(ss, t);
+  render_json_value<Is_writing_escape>(ss, t);
   ss.push_back('"');
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<string_container_v<T>, int> = 0>
 IGUANA_INLINE void render_key(Stream &ss, T &&t) {
-  render_json_value(ss, std::forward<T>(t));
+  render_json_value<Is_writing_escape>(ss, std::forward<T>(t));
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, T &&t) {
   to_json(std::forward<T>(t), ss);
 }
 
-template <typename Stream, typename T, std::enable_if_t<enum_v<T>, int> = 0>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<enum_v<T>, int> = 0>
 IGUANA_INLINE void render_json_value(Stream &ss, T val) {
   static constexpr auto enum_to_str = get_enum_map<false, std::decay_t<T>>();
   if constexpr (bool_v<decltype(enum_to_str)>) {
-    render_json_value(ss, static_cast<std::underlying_type_t<T>>(val));
+    render_json_value<Is_writing_escape>(
+        ss, static_cast<std::underlying_type_t<T>>(val));
   }
   else {
     auto it = enum_to_str.find(val);
     if (it != enum_to_str.end())
       IGUANA_LIKELY {
         auto str = it->second;
-        render_json_value(ss, std::string_view(str.data(), str.size()));
+        render_json_value<Is_writing_escape>(
+            ss, std::string_view(str.data(), str.size()));
       }
     else {
       throw std::runtime_error(
@@ -128,27 +139,28 @@ IGUANA_INLINE void render_json_value(Stream &ss, T val) {
   }
 }
 
-template <typename Stream, typename T>
+template <bool Is_writing_escape, typename Stream, typename T>
 IGUANA_INLINE void render_json_value(Stream &ss, std::optional<T> &val) {
   if (!val) {
     ss.append("null");
   }
   else {
-    render_json_value(ss, *val);
+    render_json_value<Is_writing_escape>(ss, *val);
   }
 }
 
-template <typename Stream, typename T>
+template <bool Is_writing_escape, typename Stream, typename T>
 IGUANA_INLINE void render_array(Stream &ss, const T &v) {
   ss.push_back('[');
   join(ss, std::begin(v), std::end(v), ',',
        [&ss](const auto &jsv) IGUANA__INLINE_LAMBDA {
-         render_json_value(ss, jsv);
+         render_json_value<Is_writing_escape>(ss, jsv);
        });
   ss.push_back(']');
 }
 
-template <typename Stream, typename T, std::enable_if_t<fixed_array_v<T>, int>>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<fixed_array_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &t) {
   if constexpr (std::is_same_v<char, std::remove_reference_t<
                                          decltype(std::declval<T>()[0])>>) {
@@ -166,30 +178,30 @@ IGUANA_INLINE void render_json_value(Stream &ss, const T &t) {
     ss.push_back('"');
   }
   else {
-    render_array(ss, t);
+    render_array<Is_writing_escape>(ss, t);
   }
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<map_container_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &o) {
   ss.push_back('{');
   join(ss, o.cbegin(), o.cend(), ',',
        [&ss](const auto &jsv) IGUANA__INLINE_LAMBDA {
-         render_key(ss, jsv.first);
+         render_key<Is_writing_escape>(ss, jsv.first);
          ss.push_back(':');
-         render_json_value(ss, jsv.second);
+         render_json_value<Is_writing_escape>(ss, jsv.second);
        });
   ss.push_back('}');
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<sequence_container_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v) {
   ss.push_back('[');
   join(ss, v.cbegin(), v.cend(), ',',
        [&ss](const auto &jsv) IGUANA__INLINE_LAMBDA {
-         render_json_value(ss, jsv);
+         render_json_value<Is_writing_escape>(ss, jsv);
        });
   ss.push_back(']');
 }
@@ -203,24 +215,26 @@ constexpr auto write_json_key = [](auto &s, auto i,
   s.push_back('"');
 };
 
-template <typename Stream, typename T, std::enable_if_t<smart_ptr_v<T>, int>>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<smart_ptr_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &ss, const T &v) {
   if (v) {
-    render_json_value(ss, *v);
+    render_json_value<Is_writing_escape>(ss, *v);
   }
   else {
     ss.append("null");
   }
 }
 
-template <typename Stream, typename T, std::enable_if_t<tuple_v<T>, int>>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<tuple_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &s, T &&t) {
   using U = typename std::decay_t<T>;
   s.push_back('[');
   constexpr size_t size = std::tuple_size_v<U>;
   for_each(std::forward<T>(t),
            [&s, size](auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             render_json_value(s, v);
+             render_json_value<Is_writing_escape>(s, v);
 
              if (i != size - 1)
                IGUANA_LIKELY { s.push_back(','); }
@@ -228,16 +242,18 @@ IGUANA_INLINE void render_json_value(Stream &s, T &&t) {
   s.push_back(']');
 }
 
-template <typename Stream, typename T, std::enable_if_t<variant_v<T>, int>>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<variant_v<T>, int>>
 IGUANA_INLINE void render_json_value(Stream &s, T &&t) {
   std::visit(
       [&s](auto value) {
-        render_json_value(s, value);
+        render_json_value<Is_writing_escape>(s, value);
       },
       t);
 }
 
-template <typename Stream, typename T, std::enable_if_t<refletable_v<T>, int>>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<refletable_v<T>, int>>
 IGUANA_INLINE void to_json(T &&t, Stream &s) {
   s.push_back('{');
   for_each(std::forward<T>(t),
@@ -249,17 +265,17 @@ IGUANA_INLINE void to_json(T &&t, Stream &s) {
 
              write_json_key(s, i, t);
              s.push_back(':');
-             render_json_value(s, t.*v);
+             render_json_value<Is_writing_escape>(s, t.*v);
              if (Idx < Count - 1)
                IGUANA_LIKELY { s.push_back(','); }
            });
   s.push_back('}');
 }
 
-template <typename Stream, typename T,
+template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<non_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_json(T &&t, Stream &s) {
-  render_json_value(s, t);
+  render_json_value<Is_writing_escape>(s, t);
 }
 
 }  // namespace iguana
