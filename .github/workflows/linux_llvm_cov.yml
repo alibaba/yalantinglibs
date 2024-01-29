@@ -18,7 +18,12 @@ jobs:
         run: |
           sudo apt-get install openssl
           sudo apt-get install libssl-dev
-          sudo apt-get install llvm
+
+      - name: Install newer Clang
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
 
       - name: Run Coverage
         run: |
@@ -26,7 +31,7 @@ jobs:
           cp -r src/coro_rpc/tests/openssl_files .
           ls
           mkdir build && cd build
-          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
+          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
           make -j test_rpc
           export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
           ./tests/test_rpc
