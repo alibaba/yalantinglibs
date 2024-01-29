@@ -15,7 +15,7 @@ jobs:
     
     - name: Configure
       run: |
-        cmake -B ${{github.workspace}}/build -G Ninja \
+        cmake -B ${{github.workspace}}/build \
               -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=OFF -DENABLE_SSL=ON \
               -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
 
