@@ -26,7 +26,7 @@ jobs:
               -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
 
     - name: Build with ${{ matrix.compiler }}
-      run:  cmake --build -j ${{github.workspace}}/build --config Debug
+      run:  cmake --build ${{github.workspace}}/build --config Debug -- -j
       
     - name: Test
       working-directory: ${{github.workspace}}/build
