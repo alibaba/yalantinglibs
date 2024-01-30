@@ -811,6 +811,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     req_str_.clear();
     total_len_ = 0;
 #endif
+
+    // clear
+    head_buf_.consume(head_buf_.size());
+    chunked_buf_.consume(chunked_buf_.size());
+    resp_chunk_str_.clear();
   }
 
   async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
@@ -1774,8 +1779,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     head_buf_.consume(head_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
-    auto on_ws_msg = std::move(on_ws_msg_);
-    auto on_ws_close = std::move(on_ws_close_);
+    auto on_ws_msg = on_ws_msg_;
+    auto on_ws_close = on_ws_close_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
 #ifdef CINATRA_ENABLE_SSL
