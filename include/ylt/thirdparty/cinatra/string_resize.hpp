@@ -8,7 +8,7 @@ namespace cinatra::detail {
 #if __cpp_lib_string_resize_and_overwrite >= 202110L
 template <typename ch>
 inline void resize(std::basic_string<ch> &str, std::size_t sz) {
-  str.resize_and_overwrite(sz, [](ch *, std::size_t sz) {
+  str.resize_and_overwrite(sz, [sz](ch *, std::size_t) {
     return sz;
   });
 }
