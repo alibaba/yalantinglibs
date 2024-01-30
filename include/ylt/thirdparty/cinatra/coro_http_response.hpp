@@ -12,6 +12,9 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "cookie.hpp"
 #include "define.h"
+#ifdef CINATRA_ENABLE_GZIP
+#include "gzip.hpp"
+#endif
 #include "response_cv.hpp"
 #include "time_util.hpp"
 #include "utils.hpp"
@@ -46,9 +49,29 @@ class coro_http_response {
     content_ = std::move(content);
     has_set_content_ = true;
   }
-  void set_status_and_content(status_type status, std::string content = "") {
+  void set_status_and_content(
+      status_type status, std::string content = "",
+      content_encoding encoding = content_encoding::none) {
     status_ = status;
-    content_ = std::move(content);
+#ifdef CINATRA_ENABLE_GZIP
+    if (encoding == content_encoding::gzip) {
+      std::string encode_str;
+      bool r = gzip_codec::compress(
+          std::string_view(content.data(), content.length()), encode_str, true);
+      if (!r) {
+        set_status_and_content(status_type::internal_server_error,
+                               "gzip compress error");
+      }
+      else {
+        add_header("Content-Encoding", "gzip");
+        set_content(std::move(encode_str));
+      }
+    }
+    else
+#endif
+    {
+      content_ = std::move(content);
+    }
     has_set_content_ = true;
   }
   void set_delay(bool r) { delay_ = r; }

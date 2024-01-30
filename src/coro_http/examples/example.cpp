@@ -405,6 +405,41 @@ async_simple::coro::Lazy<void> basic_usage() {
 #endif
 }
 
+#ifdef CINATRA_ENABLE_GZIP
+std::string_view get_header_value(auto &resp_headers, std::string_view key) {
+  for (const auto &[k, v] : resp_headers) {
+    if (k == key)
+      return v;
+  }
+  return {};
+}
+
+void test_gzip() {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET, POST>(
+      "/gzip", [](coro_http_request &req, coro_http_response &res) {
+        assert(req.get_header_value("Content-Encoding") == "gzip");
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   content_encoding::gzip);
+      });
+  server.async_start();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/gzip";
+  client.add_header("Content-Encoding", "gzip");
+  auto result = async_simple::coro::syncAwait(client.async_get(uri));
+  auto content = get_header_value(result.resp_headers, "Content-Encoding");
+  assert(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
+  std::string decompress_data;
+  bool ret = gzip_codec::uncompress(result.resp_body, decompress_data);
+  assert(ret == true);
+  assert(decompress_data == "hello world");
+  server.stop();
+}
+#endif
+
 int main() {
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
@@ -412,5 +447,8 @@ int main() {
   async_simple::coro::syncAwait(use_websocket());
   async_simple::coro::syncAwait(chunked_upload_download());
   async_simple::coro::syncAwait(byte_ranges_download());
+#ifdef CINATRA_ENABLE_GZIP
+  test_gzip();
+#endif
   return 0;
 }
