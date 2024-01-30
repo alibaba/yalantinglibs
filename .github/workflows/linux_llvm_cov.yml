@@ -18,6 +18,7 @@ jobs:
         run: |
           sudo apt-get install openssl
           sudo apt-get install libssl-dev
+          sudo apt-get install llvm
 
       - name: Install newer Clang
         run: |
