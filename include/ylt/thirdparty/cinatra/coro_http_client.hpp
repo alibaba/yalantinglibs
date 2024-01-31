@@ -1045,7 +1045,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             else {
               host = std::string{u.host};
             }
-            bool r = init_ssl(asio::ssl::verify_peer, "", host);
+            bool r = init_ssl(asio::ssl::verify_none, "", host);
             if (!r) {
               data.net_err = std::make_error_code(std::errc::invalid_argument);
               co_return data;
@@ -1102,21 +1102,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<std::error_code> handle_shake() {
 #ifdef CINATRA_ENABLE_SSL
-    if (has_init_ssl_) {
-      if (socket_->ssl_stream_ == nullptr) {
-        co_return std::make_error_code(std::errc::not_a_stream);
+    if (!has_init_ssl_) {
+      bool r = init_ssl(asio::ssl::verify_none, "", host_);
+      if (!r) {
+        co_return std::make_error_code(std::errc::invalid_argument);
       }
+    }
 
-      auto ec = co_await coro_io::async_handshake(
-          socket_->ssl_stream_, asio::ssl::stream_base::client);
-      if (ec) {
-        CINATRA_LOG_ERROR << "handle failed " << ec.message();
-      }
-      co_return ec;
+    if (socket_->ssl_stream_ == nullptr) {
+      co_return std::make_error_code(std::errc::not_a_stream);
     }
-    else {
-      co_return std::error_code{};
+
+    auto ec = co_await coro_io::async_handshake(socket_->ssl_stream_,
+                                                asio::ssl::stream_base::client);
+    if (ec) {
+      CINATRA_LOG_ERROR << "handle failed " << ec.message();
     }
+    co_return ec;
 #else
     // please open CINATRA_ENABLE_SSL before request https!
     co_return std::make_error_code(std::errc::protocol_error);
