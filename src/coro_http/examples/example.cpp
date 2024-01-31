@@ -403,9 +403,9 @@ async_simple::coro::Lazy<void> basic_usage() {
   result = co_await client2.async_get("https://www.baidu.com");
   assert(result.status == 200);
 
-  coro_http_client client2{};
-  co_await client2.connect("https://www.baidu.com");
-  result = co_await client2.async_get("/");
+  coro_http_client client3{};
+  co_await client3.connect("https://www.baidu.com");
+  result = co_await client3.async_get("/");
   assert(result.status == 200);
 #endif
 }
