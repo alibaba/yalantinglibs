@@ -400,7 +400,12 @@ async_simple::coro::Lazy<void> basic_usage() {
   // make sure you have install openssl and enable CINATRA_ENABLE_SSL
 #ifdef CINATRA_ENABLE_SSL
   coro_http_client client2{};
-  result = co_await client2.async_get("https://baidu.com");
+  result = co_await client2.async_get("https://www.baidu.com");
+  assert(result.status == 200);
+
+  coro_http_client client3{};
+  co_await client3.connect("https://www.baidu.com");
+  result = co_await client3.async_get("/");
   assert(result.status == 200);
 #endif
 }
