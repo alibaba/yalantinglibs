@@ -42,7 +42,8 @@ TEST_CASE("test RR") {
 }
 
 TEST_CASE("test WRR") {
-  SUBCASE("empty hosts or empty weights test") {
+  SUBCASE(
+      "exception tests: empty hosts, empty weights test or count not equal") {
     CHECK_THROWS_AS(
         coro_io::channel<coro_rpc::coro_rpc_client>::create(
             {}, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1}),
@@ -51,6 +52,11 @@ TEST_CASE("test WRR") {
     CHECK_THROWS_AS(coro_io::channel<coro_rpc::coro_rpc_client>::create(
                         {"127.0.0.1:8801", "127.0.0.1:8802"},
                         {.lba = coro_io::load_blance_algorithm::WRR}),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(coro_io::channel<coro_rpc::coro_rpc_client>::create(
+                        {"127.0.0.1:8801", "127.0.0.1:8802"},
+                        {.lba = coro_io::load_blance_algorithm::WRR}, {1}),
                     std::invalid_argument);
   }
 
