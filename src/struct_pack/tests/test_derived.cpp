@@ -141,7 +141,7 @@ TEST_CASE("test unique_ptr<Base>") {
   }
 }
 
-TEST_CASE("test unique_ptr<Base> with virtual base") {
+TEST_CASE("test vector<unique_ptr<Base>> with virtual base") {
   using namespace test3;
   static_assert(struct_pack::detail::is_base_class<base>);
   std::vector<std::unique_ptr<base>> vec;
@@ -158,4 +158,13 @@ TEST_CASE("test unique_ptr<Base> with virtual base") {
   for (std::size_t i = 0; i < vec.size(); ++i) {
     CHECK(vec[i]->get_name() == vec2[i]->get_name());
   }
+}
+
+TEST_CASE("test unique_ptr<Base> with virtual base") {
+  using namespace test3;
+  std::unique_ptr<base> ptr = std::make_unique<derived4>();
+  auto buffer2 = struct_pack::serialize<std::string>(ptr);
+  auto res2 = struct_pack::deserialize<std::unique_ptr<base>>(buffer2);
+  CHECK(res2);
+  CHECK(res2.value()->get_name() == std::make_unique<derived4>()->get_name());
 }
