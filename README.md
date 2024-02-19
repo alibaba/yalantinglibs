@@ -73,7 +73,6 @@ You can see the test/example/benchmark executable file in `./build/output/`.
 ```shell
 # You can use those option to skip build unit-test & benchmark & example: 
 cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
-cmake --build .
 ```
 
 3. install
@@ -400,18 +399,36 @@ See [async_simple](https://github.com/alibaba/async_simple)
 
 # Details
 
-## CMAKE OPTION
+## CMAKE OPTION 
 
-These CMake options is used for yalantinglibs developing/installing itself. They are not effected for your project, because ylt is a head-only. 
+## config option
 
-### INSTALL OPTION
+These option maybe useful for your project. You can enable it in your project if you import ylt by cmake fetchContent or find_package. 
+
+|option|default value|description|
+|----------|------------|
+|YLT_ENABLE_SSL|OFF|enable optional ssl support for rpc/http|
+|YLT_ENABLE_PMR|OFF|enable pmr optimize|
+|YLT_ENABLE_IO_URING|OFF|enable io_uring in linux|
+|YLT_ENABLE_FILE_IO_URING|OFF|enable file io_uring as backend in linux|
+|YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|enable unportable type(like wstring, int128_t) for struct_pack|
+|YLT_ENABLE_STRUCT_PACK_OPTIMIZE|OFF|optimize struct_pack by radical template unwinding(will cost more compile time)|
+
+## thirdparty installation option
+
+In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
+
+If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
+If you want to install the thirdparty independently (direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
 
 |option|default value|
 |----------|------------|
 |INSTALL_THIRDPARTY|ON|
 |INSTALL_INDEPENDENT_THIRDPARTY|OFF|
 
-### ylt develop option
+## develop option
+
+These CMake options is used for yalantinglibs developing/installing itself. They are not effected for your project, because ylt is a head-only.
 
 |option|default value|
 |----------|------------|
@@ -423,25 +440,8 @@ These CMake options is used for yalantinglibs developing/installing itself. They
 |GENERATE_BENCHMARK_DATA|ON|
 |CORO_RPC_USE_OTHER_RPC|ON|
 
-### ylt config option
 
-These option maybe useful for your project. If you want to enable it in your project, see the cmake code [here](https://github.com/alibaba/yalantinglibs/tree/main/cmake/config.cmake)
-
-|option|default value|
-|----------|------------|
-|ENABLE_SSL|OFF|
-|ENABLE_PMR|OFF|
-|ENABLE_IO_URING|OFF|
-|ENABLE_FILE_IO_URING|OFF|
-|ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
-|ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
-
-## Thirdparty Dependency
-
-In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
-
-If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
-If you want to install the thirdparty independently (direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
+## Thirdparty Dependency List
 
 Here are the thirdparty libraries we used(Although async_simple is a part of ylt, it open source first, so we import it as a independence thirdparty library).
 

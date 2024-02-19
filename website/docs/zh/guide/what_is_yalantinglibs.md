@@ -364,49 +364,47 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 
 # 其他
 
-## CMAKE 选项
+## 配置选项
 
-以下这些Cmake选项只适用于yalantinglibs自身的开发和安装。他们不会对你的项目造成影响，因为yalantinglibs是head-only的。
+yalantinglibs工程自身支持如下配置项，如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。
 
-### 安装选项
-
-|选项|默认值|
+|工程选项|默认值|描述|
 |----------|------------|
-|INSTALL_THIRDPARTY|ON|
-|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
+|YLT_ENABLE_SSL|OFF|为rpc/http启用可选的ssl支持|
+|YLT_ENABLE_PMR|OFF|启用pmr优化|
+|YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
+|YLT_ENABLE_FILE_IO_URING|OFF|启用io_uring优化|
+|YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|struct_pack启用对不跨平台的特殊类型的支持（如wstring, in128_t）|
+|YLT_ENABLE_STRUCT_PACK_OPTIMIZE|OFF|struct_pack启用激进的模板展开优化（会花费更多编译时间）|
 
-### ylt 开发选项
-
-|选项|默认值|
-|----------|------------|
-|BUILD_EXAMPLES|ON|
-|BUILD_BENCHMARK|ON|
-|BUILD_UNIT_TESTS|ON|
-|BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK 等)|ON|
-|COVERAGE_TEST|OFF|
-|GENERATE_BENCHMARK_DATA|ON|
-|CORO_RPC_USE_OTHER_RPC|ON|
-
-### ylt 配置项
-
-你可能也想在你的工程里启用这些配置项。你可以参考这些[cmake 代码](https://github.com/alibaba/yalantinglibs/tree/main/cmake/config.cmake)。
-
-|选项|默认值|
-|----------|------------|
-|ENABLE_SSL|OFF|
-|ENABLE_PMR|OFF|
-|ENABLE_IO_URING|OFF|
-|ENABLE_FILE_IO_URING|OFF|
-|ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
-|ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
-
-## 第三方依赖
+## 第三方安装选项
 
 默认情况下，ylt会把第三方依赖安装到`ylt/thirdparty`目录下，你需要将它添加到头文件包含路径中。
 
 如果你不想让ylt安装第三方依赖，你可以使用选项：`-DINSTALL_THIRDPARTY=OFF`。
 
 如果你想让ylt将第三方依赖直接独立安装到系统默认的包含路径中，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=ON`。
+
+|选项|默认值|
+|----------|------------|
+|INSTALL_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
+
+## 开发选项
+
+以下这些Cmake选项只适用于yalantinglibs自身的开发。它们不会对你的项目造成影响，因为yalantinglibs是head-only的。
+
+|选项|默认值|
+|----------|------------|
+|BUILD_EXAMPLES|ON|
+|BUILD_BENCHMARK|ON|
+|BUILD_UNIT_TESTS|ON|
+|BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK等)|ON|
+|COVERAGE_TEST|OFF|
+|GENERATE_BENCHMARK_DATA|ON|
+|CORO_RPC_USE_OTHER_RPC|ON|
+
+## 第三方依赖清单
 
 以下是我们使用的第三方依赖（async_simple虽然也是ylt的一部分，但其首先开源，故计为一个独立的第三方依赖）
 

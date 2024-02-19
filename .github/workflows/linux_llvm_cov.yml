@@ -32,7 +32,7 @@ jobs:
           cp -r src/coro_rpc/tests/openssl_files .
           ls
           mkdir build && cd build
-          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
+          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DYLT_ENABLE_SSL=ON
           make -j
           export LLVM_PROFILE_FILE="test_ylt-%m.profraw"
           cd output

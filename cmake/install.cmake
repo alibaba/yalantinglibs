@@ -1,4 +1,4 @@
-message(STATUS "-------------INSTALL SETTING-------------")
+message(STATUS "-------------YLT INSTALL SETTING------------")
 option(INSTALL_THIRDPARTY "Install thirdparty" ON)
 message(STATUS "INSTALL_THIRDPARTY: " ${INSTALL_THIRDPARTY})
 option(INSTALL_INDEPENDENT_THIRDPARTY "Install independent thirdparty" ON)
@@ -25,8 +25,21 @@ install(TARGETS yalantinglibs
        ARCHIVE DESTINATION lib
        RUNTIME DESTINATION bin
        )
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/yalantinglibsConfig.cmake"
+       "include(\$\{CMAKE_CURRENT_LIST_DIR\}/yalantinglibsConfigImpl.cmake)\n"
+       "include(\$\{CMAKE_CURRENT_LIST_DIR\}/config.cmake)\n"
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/yalantinglibsConfig.cmake"
+        DESTINATION ${ConfigPackageLocation})
+
+install(FILES "${yaLanTingLibs_SOURCE_DIR}/cmake/config.cmake"
+        DESTINATION ${ConfigPackageLocation}
+        )
+
 install(EXPORT yalantinglibsTargets
-       FILE yalantinglibsConfig.cmake
+       FILE yalantinglibsConfigImpl.cmake
        NAMESPACE yalantinglibs::
        DESTINATION ${ConfigPackageLocation}
        )
@@ -44,3 +57,4 @@ if (INSTALL_THIRDPARTY)
                 )
         endif()
 endif()
+message(STATUS "--------------------------------------------")

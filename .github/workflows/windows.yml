@@ -38,7 +38,7 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-arch-${{ matrix.arch}}
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
+        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
       - name: Build
         run: cmake --build ${{github.workspace}}\build
       - name: Test
@@ -72,7 +72,7 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-arch-${{ matrix.arch}}
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON -DENABLE_CPP_20=OFF
+        run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON -DENABLE_CPP_20=OFF
       - name: Build
         run: cmake --build ${{github.workspace}}\build
       - name: Test
