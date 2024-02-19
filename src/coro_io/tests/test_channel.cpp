@@ -166,10 +166,10 @@ TEST_CASE("test single host") {
 
 TEST_CASE("test send_request config") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
-    coro_rpc::coro_rpc_server server(1, 8802);
+    coro_rpc::coro_rpc_server server(1, 9813);
     auto res = server.async_start();
     REQUIRE_MESSAGE(res, "server start failed");
-    auto hosts = std::vector<std::string_view>{"127.0.0.1:8802"};
+    auto hosts = std::vector<std::string_view>{"127.0.0.1:9813"};
     auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
       auto config = coro_rpc::coro_rpc_client::config{.client_id = 114514};
