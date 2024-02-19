@@ -794,8 +794,14 @@ constexpr bool check_if_has_container() {
         return false;
       }
       else if constexpr (unique_ptr<Arg>) {
-        return check_if_has_container<
-            remove_cvref_t<typename Arg::element_type>, Arg, ParentArgs...>();
+        if constexpr (is_base_class<typename Arg::element_type>) {
+          // We can't make sure if derived class has container or not
+          return true;
+        }
+        else {
+          return check_if_has_container<
+              remove_cvref_t<typename Arg::element_type>, Arg, ParentArgs...>();
+        }
       }
       else if constexpr (id == type_id::container_t ||
                          id == type_id::string_t ||
