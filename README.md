@@ -406,7 +406,7 @@ See [async_simple](https://github.com/alibaba/async_simple)
 These option maybe useful for your project. You can enable it in your project if you import ylt by cmake fetchContent or find_package. 
 
 |option|default value|description|
-|----------|------------|
+|----------|------------|------|
 |YLT_ENABLE_SSL|OFF|enable optional ssl support for rpc/http|
 |YLT_ENABLE_PMR|OFF|enable pmr optimize|
 |YLT_ENABLE_IO_URING|OFF|enable io_uring in linux|
