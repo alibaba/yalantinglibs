@@ -334,6 +334,7 @@ class coro_http_connection
       }
 
       response_.clear();
+      request_.clear();
       buffers_.clear();
       body_.clear();
       resp_str_.clear();

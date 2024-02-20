@@ -691,8 +691,7 @@ int main() {
 	using namespace coro_http;
 
 	//日志切面
-	struct log_t : public base_aspect
-	{
+	struct log_t {
 		bool before(coro_http_request& req, coro_http_response& res) {
 			std::cout << "before log" << std::endl;
 			return true;
@@ -705,7 +704,7 @@ int main() {
 	};
 	
 	//校验的切面
-	struct check  : public base_aspect {
+	struct check {
 		bool before(coro_http_request& req, coro_http_response& res) {
 			std::cout << "before check" << std::endl;
 			if (req.get_header_value("name").empty()) {
@@ -722,9 +721,9 @@ int main() {
 	};
 
 	//将信息从中间件传输到处理程序
-	struct get_data  : public base_aspect {
+	struct get_data {
 		bool before(coro_http_request& req, coro_http_response& res) {
-			req.set_aspect_data("hello", std::string("hello world"));
+			req.set_aspect_data("hello world");
 			return true;
 		}
 	}
@@ -733,12 +732,12 @@ int main() {
 		coro_http_server server(std::thread::hardware_concurrency(), 8080);
 		server.set_http_handler<GET, POST>("/aspect", [](coro_http_request& req, coro_http_response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
-		}, std::vector{std::make_shared<check>(), std::make_shared<log_t>()});
+		}, check{}, log_t{});
 
 		server.set_http_handler<GET,POST>("/aspect/data", [](coro_http_request& req, coro_http_response& res) {
-			std::string hello = req.get_aspect_data<std::string>("hello");
+			std::string hello = req.get_aspect_data()[0];
 			res.set_status_and_content(status_type::ok, std::move(hello));
-		}, std::vector{std::make_shared<get_data>()});
+		}, get_data{});
 
 		server.sync_start();
 		return 0;
@@ -782,4 +781,71 @@ int main() {
 		server.sync_start();
 		return 0;
 	}
+  ```
+
+  ### 反向代理
+  目前支持random, round robin 和 weight round robin三种负载均衡三种算法，设置代理服务器时指定算法类型即可。
+  假设需要代理的服务器有三个，分别是"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"，coro_http_server设置路径、代理服务器列表和算法类型即可实现反向代理。
+
+  ```c++
+  coro_http_server proxy_random(2, 8092);
+  proxy_random.set_http_proxy_handler<GET, POST>(
+      "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  coro_http_server proxy_rr(2, 8091);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::RR);
+
+  coro_http_server proxy_wrr(2, 8090);
+  proxy_wrr.set_http_proxy_handler<GET, POST>(
+      "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::WRR, {10, 5, 5});    
+
+  coro_http_server proxy_all(2, 8093);
+  proxy_all.set_http_proxy_handler(
+      "/all", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  proxy_wrr.async_start();
+  proxy_rr.async_start();
+  proxy_random.async_start();
+  proxy_all.async_start();
+
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client_rr;
+  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web1");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web3");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web1");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.post("http://127.0.0.1:8091/rr", "test content",
+                           req_content_type::text);
+  assert(resp_rr.resp_body == "web3");
+
+  coro_http_client client_wrr;
+  resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web2");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web3");
+
+  coro_http_client client_random;
+  resp_data resp_random = client_random.get("http://127.0.0.1:8092/random");
+  std::cout << resp_random.resp_body << "\n";
+  assert(!resp_random.resp_body.empty());
+
+  coro_http_client client_all;
+  resp_random = client_all.post("http://127.0.0.1:8093/all", "test content",
+                                req_content_type::text);
+  std::cout << resp_random.resp_body << "\n";
+  assert(!resp_random.resp_body.empty());
   ```

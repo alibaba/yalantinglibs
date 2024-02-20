@@ -8,16 +8,16 @@ using namespace std::string_view_literals;
 
 namespace cinatra {
 enum class http_method {
-  UNKNOW,
-  DEL,
+  NIL = 0,
   GET,
   HEAD,
   POST,
   PUT,
+  TRACE,
   PATCH,
   CONNECT,
   OPTIONS,
-  TRACE
+  DEL,
 };
 constexpr inline auto GET = http_method::GET;
 constexpr inline auto POST = http_method::POST;
@@ -52,8 +52,16 @@ inline constexpr std::string_view method_name(http_method mthd) {
     case cinatra::http_method::TRACE:
       return "TRACE"sv;
     default:
-      return "UNKONWN"sv;
+      return "NIL"sv;
   }
+}
+
+inline constexpr std::array<int, 20> method_table = {
+    3, 1, 9, 0, 0, 0, 4, 5, 0, 0, 8, 0, 0, 0, 2, 0, 0, 0, 6, 7};
+
+inline constexpr http_method method_type(std::string_view mthd) {
+  int index = ((mthd[0] & ~0x20) ^ ((mthd[1] + 1) & ~0x20)) % 20;
+  return (http_method)method_table[index];
 }
 
 enum class transfer_type { CHUNKED, ACCEPT_RANGES };

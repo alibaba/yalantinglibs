@@ -31,16 +31,16 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #ifdef CINATRA_LOG_ERROR
 #else
 #define CINATRA_LOG_ERROR \
-  cerr_logger_t {}
+  cinatra::cerr_logger_t {}
 #endif
 
 #ifdef CINATRA_LOG_WARNING
 #else
 #ifndef NDEBUG
 #define CINATRA_LOG_WARNING \
-  cerr_logger_t {}
+  cinatra::cerr_logger_t {}
 #else
-#define CINATRA_LOG_WARNING NULL_LOGGER
+#define CINATRA_LOG_WARNING cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -48,9 +48,9 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #else
 #ifndef NDEBUG
 #define CINATRA_LOG_INFO \
-  cout_logger_t {}
+  cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_INFO NULL_LOGGER
+#define CINATRA_LOG_INFO cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -58,9 +58,9 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #else
 #ifndef NDEBUG
 #define CINATRA_LOG_DEBUG \
-  cout_logger_t {}
+  cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_DEBUG NULL_LOGGER
+#define CINATRA_LOG_DEBUG cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -68,8 +68,8 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #else
 #ifndef NDEBUG
 #define CINATRA_LOG_TRACE \
-  cout_logger_t {}
+  cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_TRACE NULL_LOGGER
+#define CINATRA_LOG_TRACE cinatra::NULL_LOGGER
 #endif
 #endif

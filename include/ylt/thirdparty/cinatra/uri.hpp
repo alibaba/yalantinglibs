@@ -294,7 +294,7 @@ struct context {
   std::string path;
   std::string query;
   std::string body;
-  http_method method = http_method::UNKNOW;
+  http_method method = http_method::NIL;
 
   context() = default;
   context(const uri_t &u, http_method mthd)

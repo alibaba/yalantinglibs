@@ -8,11 +8,14 @@
 #include "asio/streambuf.hpp"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
+#include "cinatra/define.h"
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
+#include "ylt/coro_io/channel.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -124,42 +127,82 @@ class coro_http_server {
   // call it after server async_start or sync_start.
   uint16_t port() const { return port_; }
 
-  template <http_method... method, typename Func>
-  void set_http_handler(
-      std::string key, Func handler,
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <http_method... method, typename Func, typename... Aspects>
+  void set_http_handler(std::string key, Func handler, Aspects &&...asps) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
     if constexpr (sizeof...(method) == 1) {
       (router_.set_http_handler<method>(std::move(key), std::move(handler),
-                                        std::move(aspects)),
+                                        std::forward<Aspects>(asps)...),
        ...);
     }
     else {
-      (router_.set_http_handler<method>(key, handler, aspects), ...);
+      (router_.set_http_handler<method>(key, handler,
+                                        std::forward<Aspects>(asps)...),
+       ...);
     }
   }
 
-  template <http_method... method, typename Func, typename Owner>
-  void set_http_handler(
-      std::string key, Func handler, Owner &&owner,
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <http_method... method, typename Func, typename... Aspects>
+  void set_http_handler(std::string key, Func handler,
+                        util::class_type_t<Func> &owner, Aspects &&...asps) {
     static_assert(std::is_member_function_pointer_v<Func>,
                   "must be member function");
     using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
                                                    coro_http_response & resp)>
-          f = std::bind(handler, owner, std::placeholders::_1,
+          f = std::bind(handler, &owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
-                                  std::move(aspects));
+                                  std::forward<Aspects>(asps)...);
     }
     else {
       std::function<void(coro_http_request & req, coro_http_response & resp)>
-          f = std::bind(handler, owner, std::placeholders::_1,
+          f = std::bind(handler, &owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
-                                  std::move(aspects));
+                                  std::forward<Aspects>(asps)...);
+    }
+  }
+
+  template <http_method... method, typename... Aspects>
+  void set_http_proxy_handler(std::string url_path,
+                              std::vector<std::string_view> hosts,
+                              coro_io::load_blance_algorithm type =
+                                  coro_io::load_blance_algorithm::random,
+                              std::vector<int> weights = {},
+                              Aspects &&...aspects) {
+    if (hosts.empty()) {
+      throw std::invalid_argument("not config hosts yet!");
+    }
+
+    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
+        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
+                                                   weights));
+    auto handler =
+        [this, channel, type, url_path](
+            coro_http_request &req,
+            coro_http_response &response) -> async_simple::coro::Lazy<void> {
+      co_await channel->send_request(
+          [this, &req, &response](
+              coro_http_client &client,
+              std::string_view host) -> async_simple::coro::Lazy<void> {
+            uri_t uri;
+            uri.parse_from(host.data());
+            co_await reply(client, uri.get_path(), req, response);
+          });
+    };
+
+    if constexpr (sizeof...(method) == 0) {
+      set_http_handler<http_method::GET, http_method::POST, http_method::DEL,
+                       http_method::HEAD, http_method::PUT, http_method::PATCH,
+                       http_method::CONNECT, http_method::TRACE,
+                       http_method::OPTIONS>(url_path, std::move(handler),
+                                             std::forward<Aspects>(aspects)...);
+    }
+    else {
+      set_http_handler<method...>(url_path, std::move(handler),
+                                  std::forward<Aspects>(aspects)...);
     }
   }
 
@@ -196,9 +239,9 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
-  void set_static_res_dir(
-      std::string_view uri_suffix = "", std::string file_path = "www",
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <typename... Aspects>
+  void set_static_res_dir(std::string_view uri_suffix = "",
+                          std::string file_path = "www", Aspects &&...aspects) {
     bool has_double_dot = (file_path.find("..") != std::string::npos) ||
                           (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -220,8 +263,12 @@ class coro_http_server {
     }
 
     files_.clear();
+    std::error_code ec;
     for (const auto &file :
-         std::filesystem::recursive_directory_iterator(static_dir_)) {
+         std::filesystem::recursive_directory_iterator(static_dir_, ec)) {
+      if (ec) {
+        continue;
+      }
       if (!file.is_directory()) {
         files_.push_back(file.path().string());
       }
@@ -417,7 +464,7 @@ class coro_http_server {
               }
             }
           },
-          aspects);
+          std::forward<Aspects>(aspects)...);
     }
   }
 
@@ -674,6 +721,30 @@ class coro_http_server {
     }
 
     co_return true;
+  }
+
+  async_simple::coro::Lazy<void> reply(coro_http_client &client,
+                                       std::string url_path,
+                                       coro_http_request &req,
+                                       coro_http_response &response) {
+    std::unordered_map<std::string, std::string> req_headers;
+    for (auto &[k, v] : req_headers) {
+      req_headers.emplace(k, v);
+    }
+
+    auto ctx = req_context<std::string_view>{.content = req.get_body()};
+    auto result = co_await client.async_request(
+        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        std::move(req_headers));
+
+    for (auto &[k, v] : result.resp_headers) {
+      response.add_header(std::string(k), std::string(v));
+    }
+
+    response.set_status_and_content_view(
+        static_cast<status_type>(result.status), result.resp_body);
+    co_await response.get_conn()->reply();
+    response.set_delay(true);
   }
 
  private:
