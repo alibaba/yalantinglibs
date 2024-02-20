@@ -38,7 +38,7 @@ jobs:
         run: |
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
-                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DYLT_ENABLE_SSL=${{matrix.ssl}} \
                 -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
@@ -78,7 +78,7 @@ jobs:
         run: |
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
-                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DENABLE_SSL=${{matrix.ssl}} \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DYLT_ENABLE_SSL=${{matrix.ssl}} \
                 -DUSE_CCACHE=${{env.ccache}} \
                 -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
@@ -116,7 +116,7 @@ jobs:
           CXX=g++ CC=gcc 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
-                -DENABLE_IO_URING=${{matrix.io_uring}} \
+                -DYLT_ENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
                 -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 

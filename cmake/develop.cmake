@@ -1,4 +1,4 @@
-message(STATUS "-------------DEVELOP SETTING-------------")
+message(STATUS "-------------YLT DEVELOP SETTING------------")
 # extra
 option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "BUILD_EXAMPLES: ${BUILD_EXAMPLES}")
@@ -65,3 +65,4 @@ if(ENABLE_WARNING)
                             -Wfatal-errors)
     endif()
 endif()
+message(STATUS "--------------------------------------------")

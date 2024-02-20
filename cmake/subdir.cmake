@@ -1,3 +1,5 @@
+message(STATUS "-------------YLT PROJECT SETTING------------")
+
 file(GLOB children src/*)
 
 foreach(child ${children})
@@ -41,3 +43,4 @@ endforeach()
 if (BUILD_STRUCT_PB)
   add_subdirectory(src/struct_pb)
 endif()
+message(STATUS "--------------------------------------------")

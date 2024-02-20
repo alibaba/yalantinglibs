@@ -1,4 +1,4 @@
-message(STATUS "-------------COMPILE SETTING-------------")
+message(STATUS "-------------YLT COMPILE SETTING------------")
 
 # CPP Standard
 foreach(i ${CMAKE_CXX_COMPILE_FEATURES})
@@ -79,3 +79,4 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/EHa>")
 endif()
 
+message(STATUS "--------------------------------------------")
