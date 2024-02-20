@@ -277,8 +277,9 @@ static const std::map<std::string_view, std::string_view, ci_less> mime_map = {
     {".ppm", "image/x-portable-pixmap"},
     {".pps", "application/vnd.ms-powerpoint"},
     {".ppt", "application/vnd.ms-powerpoint"},
-    {".pptx", "application/"
-              "vnd.openxmlformats-officedocument.presentationml.presentation"},
+    {".pptx",
+     "application/"
+     "vnd.openxmlformats-officedocument.presentationml.presentation"},
     {".pqf", "application/x-cprplayer"},
     {".pqi", "application/cprplayer"},
     {".prc", "application/x-prc"},
@@ -508,4 +509,4 @@ inline std::string_view get_mime_type(std::string_view extension) {
 
   return it->second;
 }
-} // namespace cinatra
+}  // namespace cinatra
