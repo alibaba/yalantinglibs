@@ -369,7 +369,7 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 yalantinglibs工程自身支持如下配置项，如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。
 
 |工程选项|默认值|描述|
-|----------|------------|
+|----------|------------|------|
 |YLT_ENABLE_SSL|OFF|为rpc/http启用可选的ssl支持|
 |YLT_ENABLE_PMR|OFF|启用pmr优化|
 |YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
