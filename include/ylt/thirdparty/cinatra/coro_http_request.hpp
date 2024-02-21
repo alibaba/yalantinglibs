@@ -2,8 +2,10 @@
 
 #include <any>
 #include <charconv>
+#include <initializer_list>
 #include <optional>
 #include <regex>
+#include <string>
 
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
@@ -208,23 +210,20 @@ class coro_http_request {
     return true;
   }
 
-  void set_aspect_data(const std::string &&key, const std::any &data) {
-    aspect_data_[key] = data;
+  void set_aspect_data(std::string data) {
+    aspect_data_.push_back(std::move(data));
   }
 
-  template <typename T>
-  std::optional<T> get_aspect_data(const std::string &&key) {
-    auto it = aspect_data_.find(key);
-    if (it == aspect_data_.end()) {
-      return std::optional<T>{};
-    }
-
-    try {
-      return std::any_cast<T>(it->second);  // throws
-    } catch (const std::bad_any_cast &e) {
-      return std::optional<T>{};
-    }
+  void set_aspect_data(std::vector<std::string> data) {
+    aspect_data_ = std::move(data);
   }
+
+  template <typename... Args>
+  void set_aspect_data(Args... args) {
+    (aspect_data_.push_back(std::move(args)), ...);
+  }
+
+  std::vector<std::string> &get_aspect_data() { return aspect_data_; }
 
   std::unordered_map<std::string_view, std::string_view> get_cookies(
       std::string_view cookie_str) const {
@@ -259,6 +258,12 @@ class coro_http_request {
   }
 
   bool has_session() { return !cached_session_id_.empty(); }
+  void clear() {
+    body_ = {};
+    if (!aspect_data_.empty()) {
+      aspect_data_.clear();
+    }
+  }
 
   std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;
@@ -268,7 +273,7 @@ class coro_http_request {
   std::string_view body_;
   coro_http_connection *conn_;
   bool is_websocket_;
-  std::unordered_map<std::string, std::any> aspect_data_;
+  std::vector<std::string> aspect_data_;
   std::string cached_session_id_;
 };
 }  // namespace cinatra

@@ -253,7 +253,7 @@ async_simple::coro::Lazy<void> static_file_server() {
   assert(result.resp_body.size() == 64);
 }
 
-struct log_t : public base_aspect {
+struct log_t {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "before log" << std::endl;
     return true;
@@ -266,9 +266,9 @@ struct log_t : public base_aspect {
   }
 };
 
-struct get_data : public base_aspect {
+struct get_data {
   bool before(coro_http_request &req, coro_http_response &res) {
-    req.set_aspect_data("hello", std::string("hello world"));
+    req.set_aspect_data("hello world");
     return true;
   }
 };
@@ -278,13 +278,11 @@ async_simple::coro::Lazy<void> use_aspects() {
   server.set_http_handler<GET>(
       "/get",
       [](coro_http_request &req, coro_http_response &resp) {
-        std::optional<std::string> val =
-            req.get_aspect_data<std::string>("hello");
-        assert(*val == "hello world");
+        auto val = req.get_aspect_data();
+        assert(val[0] == "hello world");
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      std::vector<std::shared_ptr<base_aspect>>{std::make_shared<log_t>(),
-                                                std::make_shared<get_data>()});
+      log_t{}, get_data{});
 
   server.async_start();
   std::this_thread::sleep_for(300ms);  // wait for server start
@@ -445,6 +443,106 @@ void test_gzip() {
 }
 #endif
 
+void http_proxy() {
+  cinatra::coro_http_server web_one(1, 9001);
+
+  web_one.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web1");
+        });
+      });
+
+  web_one.async_start();
+
+  cinatra::coro_http_server web_two(1, 9002);
+
+  web_two.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web2");
+        });
+      });
+
+  web_two.async_start();
+
+  cinatra::coro_http_server web_three(1, 9003);
+
+  web_three.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "web3");
+      });
+
+  web_three.async_start();
+
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_server proxy_wrr(2, 8090);
+  proxy_wrr.set_http_proxy_handler<GET, POST>(
+      "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::WRR, {10, 5, 5});
+
+  coro_http_server proxy_rr(2, 8091);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::RR);
+
+  coro_http_server proxy_random(2, 8092);
+  proxy_random.set_http_proxy_handler<GET, POST>(
+      "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  coro_http_server proxy_all(2, 8093);
+  proxy_all.set_http_proxy_handler(
+      "/all", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  proxy_wrr.async_start();
+  proxy_rr.async_start();
+  proxy_random.async_start();
+  proxy_all.async_start();
+
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client_rr;
+  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web1");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web3");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web1");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  assert(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.post("http://127.0.0.1:8091/rr", "test content",
+                           req_content_type::text);
+  assert(resp_rr.resp_body == "web3");
+
+  coro_http_client client_wrr;
+  resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web2");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  assert(resp.resp_body == "web3");
+
+  coro_http_client client_random;
+  resp_data resp_random = client_random.get("http://127.0.0.1:8092/random");
+  std::cout << resp_random.resp_body << "\n";
+  assert(!resp_random.resp_body.empty());
+
+  coro_http_client client_all;
+  resp_random = client_all.post("http://127.0.0.1:8093/all", "test content",
+                                req_content_type::text);
+  std::cout << resp_random.resp_body << "\n";
+  assert(!resp_random.resp_body.empty());
+}
+
 int main() {
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
@@ -455,5 +553,6 @@ int main() {
 #ifdef CINATRA_ENABLE_GZIP
   test_gzip();
 #endif
+  http_proxy();
   return 0;
 }

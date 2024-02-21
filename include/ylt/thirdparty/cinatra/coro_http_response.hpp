@@ -52,12 +52,17 @@ class coro_http_response {
   void set_status_and_content(
       status_type status, std::string content = "",
       content_encoding encoding = content_encoding::none) {
+    set_status_and_content_view(status, content, encoding, false);
+  }
+
+  void set_status_and_content_view(
+      status_type status, std::string_view content = "",
+      content_encoding encoding = content_encoding::none, bool is_view = true) {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip) {
       std::string encode_str;
-      bool r = gzip_codec::compress(
-          std::string_view(content.data(), content.length()), encode_str, true);
+      bool r = gzip_codec::compress(content, encode_str, true);
       if (!r) {
         set_status_and_content(status_type::internal_server_error,
                                "gzip compress error");
@@ -70,7 +75,12 @@ class coro_http_response {
     else
 #endif
     {
-      content_ = std::move(content);
+      if (is_view) {
+        content_view_ = content;
+      }
+      else {
+        content_ = std::move(content);
+      }
     }
     has_set_content_ = true;
   }
@@ -102,12 +112,10 @@ class coro_http_response {
     buffers.push_back(asio::buffer(to_http_status_string(status_)));
     build_resp_head(buffers);
     if (!content_.empty()) {
-      if (fmt_type_ == format_type::chunked) {
-        to_chunked_buffers(buffers, content_, true);
-      }
-      else {
-        buffers.push_back(asio::buffer(content_));
-      }
+      handle_content(buffers, content_);
+    }
+    else if (!content_view_.empty()) {
+      handle_content(buffers, content_view_);
     }
   }
 
@@ -116,7 +124,7 @@ class coro_http_response {
     bool has_len = false;
     bool has_host = false;
     for (auto &[k, v] : resp_headers_) {
-      if (k == "Host") {
+      if (k == "Server") {
         has_host = true;
       }
       if (k == "Content-Length") {
@@ -180,11 +188,14 @@ class coro_http_response {
     bool has_len = false;
     bool has_host = false;
     for (auto &[k, v] : resp_headers_) {
-      if (k == "Host") {
+      if (k == "Server") {
         has_host = true;
       }
-      if (k == "Content-Length") {
+      else if (k == "Content-Length") {
         has_len = true;
+      }
+      else if (k == "Date") {
+        need_date_ = false;
       }
     }
 
@@ -209,11 +220,12 @@ class coro_http_response {
       }
 
       if (!content_.empty()) {
-        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
-        buffers.emplace_back(asio::buffer(CONTENT_LENGTH_SV));
-        buffers.emplace_back(
-            asio::buffer(std::string_view(buf_, std::distance(buf_, ptr))));
-        buffers.emplace_back(asio::buffer(CRCF));
+        if (!has_len)
+          handle_content_len(buffers, content_);
+      }
+      else if (!content_view_.empty()) {
+        if (!has_len)
+          handle_content_len(buffers, content_view_);
       }
       else {
         if (!has_len && boundary_.empty())
@@ -271,7 +283,33 @@ class coro_http_response {
     cookies_[cookie.get_name()] = cookie;
   }
 
+  void redirect(const std::string &url, bool is_forever = false) {
+    add_header("Location", url);
+    is_forever == false
+        ? set_status_and_content(status_type::moved_temporarily)
+        : set_status_and_content(status_type::moved_permanently);
+  }
+
  private:
+  void handle_content(std::vector<asio::const_buffer> &buffers,
+                      std::string_view content) {
+    if (fmt_type_ == format_type::chunked) {
+      to_chunked_buffers(buffers, content, true);
+    }
+    else {
+      buffers.push_back(asio::buffer(content));
+    }
+  }
+
+  void handle_content_len(std::vector<asio::const_buffer> &buffers,
+                          std::string_view content) {
+    auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content.size());
+    buffers.emplace_back(asio::buffer(CONTENT_LENGTH_SV));
+    buffers.emplace_back(
+        asio::buffer(std::string_view(buf_, std::distance(buf_, ptr))));
+    buffers.emplace_back(asio::buffer(CRCF));
+  }
+
   status_type status_;
   format_type fmt_type_;
   std::string content_;
@@ -286,5 +324,6 @@ class coro_http_response {
   bool need_date_ = true;
   std::unordered_map<std::string, cookie> cookies_;
   std::string_view content_type_;
+  std::string_view content_view_;
 };
 }  // namespace cinatra
