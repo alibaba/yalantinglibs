@@ -125,6 +125,12 @@ constexpr void STRUCT_PACK_INLINE compile_time_unique(
   }
 }
 
+#ifndef __clang__
+#define struct_pack_has_feature(X) false
+#else
+#define struct_pack_has_feature __has_feature
+#endif
+
 #if __cpp_lib_string_resize_and_overwrite >= 202110L
 template <typename ch>
 inline void resize(std::basic_string<ch> &str, std::size_t sz) {
@@ -176,12 +182,6 @@ template class string_thief<decltype(&std::string::_Mypair),
 #endif
 
 void string_set_length_hacker(std::string &, std::size_t);
-
-#ifndef __clang__
-#define struct_pack_has_feature(X) false
-#else
-#define struct_pack_has_feature __has_feature
-#endif
 
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
