@@ -31,7 +31,7 @@ std::string hello_world() {
 }
 
 bool return_bool_hello_world() { 
-    return true; 
+  return true; 
 }
 
 int A_add_B(int a, int b) {
