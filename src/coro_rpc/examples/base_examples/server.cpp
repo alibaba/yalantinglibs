@@ -26,6 +26,8 @@ int main() {
 
   coro_rpc_server server2{/*thread=*/1, /*port=*/8802};
 
+  server.register_handler<return_bool_hello_world>();
+
   // regist normal function for rpc
   server.register_handler<hello_world, A_add_B, hello_with_delay, echo,
                           nested_echo, coro_echo, echo_with_attachment,

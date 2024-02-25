@@ -21,6 +21,7 @@
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
 std::string hello_world();
+bool return_bool_hello_world();
 int A_add_B(int a, int b);
 void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
 std::string echo(std::string_view sv);
