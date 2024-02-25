@@ -30,7 +30,7 @@ std::string hello_world() {
   return "hello_world";
 }
 
-bool return_bool_hello_world() { 
+bool return_bool_hello_world() {
   return true; 
 }
 
