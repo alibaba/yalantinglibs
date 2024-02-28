@@ -429,9 +429,21 @@ class client_pool : public std::enable_shared_from_this<
     return send_request(std::move(op), pool_config_.client_config);
   }
 
+  /**
+   * @brief approx connection of client pools
+   *
+   * @return std::size_t
+   */
   std::size_t free_client_count() const noexcept {
     return free_clients_.size() + short_connect_clients_.size();
   }
+
+  /**
+   * @brief approx connection of client pools
+   *
+   * @return std::size_t
+   */
+  std::size_t size() const noexcept { return free_client_count(); }
 
   std::string_view get_host_name() const noexcept { return host_name_; }
 
