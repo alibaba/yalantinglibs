@@ -114,7 +114,7 @@ coro是一个高度易用, head-only，基于协程的C++20高性能rpc框架库
 
 [简介](https://alibaba.github.io/yalantinglibs/zh/coro_rpc/coro_rpc_introduction.html)  
 
-[API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
+[API](https://alibaba.github.io/yalantinglibs/doxygen_cn/html/group__coro__rpc.html)
 
 [Purecpp 演讲稿](https://alibaba.github.io/yalantinglibs/resource/coro_rpc_introduction_purecpp_talk.pdf).
 
