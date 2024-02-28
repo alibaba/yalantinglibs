@@ -192,6 +192,13 @@ class channel {
     return ch;
   }
 
+  /**
+   * @brief return the channel's hosts size.
+   *
+   * @return std::size_t
+   */
+  std::size_t size() const noexcept { return client_pools_.size(); }
+
  private:
   void init(const std::vector<std::string_view>& hosts,
             const channel_config& config, const std::vector<int>& weights,
