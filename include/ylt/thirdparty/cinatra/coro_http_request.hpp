@@ -188,15 +188,11 @@ class coro_http_request {
   coro_http_connection *get_conn() { return conn_; }
 
   bool is_upgrade() {
-    auto h = get_header_value("Connection");
-    if (h.empty())
+    if (!parser_.has_upgrade())
       return false;
 
     auto u = get_header_value("Upgrade");
     if (u.empty())
-      return false;
-
-    if (h != UPGRADE)
       return false;
 
     if (u != WEBSOCKET)

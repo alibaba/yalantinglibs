@@ -94,6 +94,7 @@ class coro_http_response {
 
   status_type status() { return status_; }
   std::string_view content() { return content_; }
+  size_t content_size() { return content_.size(); }
 
   void add_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});

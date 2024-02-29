@@ -88,12 +88,9 @@ class coro_http_router {
       }
 
       if (whole_str.find(":") != std::string::npos) {
-        std::vector<std::string> coro_method_names = {};
-        std::string coro_method_str;
-        coro_method_str.append(method_name);
-        coro_method_names.push_back(coro_method_str);
+        std::string method_str(method_name);
         coro_router_tree_->coro_insert(key, std::move(http_handler),
-                                       coro_method_names);
+                                       method_str);
       }
       else {
         if (whole_str.find("{") != std::string::npos ||
@@ -138,11 +135,8 @@ class coro_http_router {
       }
 
       if (whole_str.find(':') != std::string::npos) {
-        std::vector<std::string> method_names = {};
-        std::string method_str;
-        method_str.append(method_name);
-        method_names.push_back(method_str);
-        router_tree_->insert(whole_str, std::move(http_handler), method_names);
+        std::string method_str(method_name);
+        router_tree_->insert(whole_str, std::move(http_handler), method_str);
       }
       else if (whole_str.find("{") != std::string::npos ||
                whole_str.find(")") != std::string::npos) {

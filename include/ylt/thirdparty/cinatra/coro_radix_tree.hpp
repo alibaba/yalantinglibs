@@ -42,8 +42,8 @@ struct coro_handler_t {
 
 struct radix_tree_node {
   std::string path;
-  std::vector<handler_t> handlers;
-  std::vector<coro_handler_t> coro_handlers;
+  handler_t handler;
+  coro_handler_t coro_handler;
   std::string indices;
   std::vector<std::shared_ptr<radix_tree_node>> children;
   int max_params;
@@ -54,21 +54,18 @@ struct radix_tree_node {
 
   std::function<void(coro_http_request &req, coro_http_response &resp)>
   get_handler(const std::string &method) {
-    for (auto &h : this->handlers) {
-      if (h.method == method) {
-        return h.handler;
-      }
+    if (handler.method == method) {
+      return handler.handler;
     }
+
     return nullptr;
   }
 
   std::function<async_simple::coro::Lazy<void>(coro_http_request &req,
                                                coro_http_response &resp)>
   get_coro_handler(const std::string &method) {
-    for (auto &h : this->coro_handlers) {
-      if (h.method == method) {
-        return h.coro_handler;
-      }
+    if (coro_handler.method == method) {
+      return coro_handler.coro_handler;
     }
     return nullptr;
   }
@@ -76,22 +73,17 @@ struct radix_tree_node {
   int add_handler(
       std::function<void(coro_http_request &req, coro_http_response &resp)>
           handler,
-      const std::vector<std::string> &methods) {
-    for (auto &m : methods) {
-      auto old_handler = this->get_handler(m);
-      this->handlers.push_back(handler_t{m, handler});
-    }
+      const std::string &method) {
+    this->handler = handler_t{method, handler};
+
     return 0;
   }
 
   int add_coro_handler(std::function<async_simple::coro::Lazy<void>(
                            coro_http_request &req, coro_http_response &resp)>
                            coro_handler,
-                       const std::vector<std::string> &methods) {
-    for (auto &m : methods) {
-      auto old_coro_handler = this->get_coro_handler(m);
-      this->coro_handlers.push_back(coro_handler_t{m, coro_handler});
-    }
+                       const std::string &method) {
+    this->coro_handler = coro_handler_t{method, coro_handler};
     return 0;
   }
 
@@ -134,7 +126,7 @@ class radix_tree {
       const std::string &path,
       std::function<void(coro_http_request &req, coro_http_response &resp)>
           handler,
-      const std::vector<std::string> &methods) {
+      const std::string &method) {
     auto root = this->root;
     int i = 0, n = path.size(), param_count = 0, code = 0;
     while (i < n) {
@@ -166,7 +158,7 @@ class radix_tree {
             ++param_count;
           }
 
-          code = root->add_handler(handler, methods);
+          code = root->add_handler(handler, method);
           break;
         }
 
@@ -181,7 +173,7 @@ class radix_tree {
         ++param_count;
 
         if (i == n) {
-          code = root->add_handler(handler, methods);
+          code = root->add_handler(handler, method);
           break;
         }
       }
@@ -193,7 +185,7 @@ class radix_tree {
           i += root->path.size() + 1;
 
           if (i == n) {
-            code = root->add_handler(handler, methods);
+            code = root->add_handler(handler, method);
             break;
           }
         }
@@ -207,18 +199,18 @@ class radix_tree {
           if (j < m) {
             std::shared_ptr<radix_tree_node> child(
                 std::make_shared<radix_tree_node>(root->path.substr(j)));
-            child->handlers = root->handlers;
+            child->handler = root->handler;
             child->indices = root->indices;
             child->children = root->children;
 
             root->path = root->path.substr(0, j);
-            root->handlers = {};
+            root->handler = {};
             root->indices = child->path[0];
             root->children = {child};
           }
 
           if (i == n) {
-            code = root->add_handler(handler, methods);
+            code = root->add_handler(handler, method);
             break;
           }
         }
@@ -235,7 +227,7 @@ class radix_tree {
                   std::function<async_simple::coro::Lazy<void>(
                       coro_http_request &req, coro_http_response &resp)>
                       coro_handler,
-                  const std::vector<std::string> &methods) {
+                  std::string &method) {
     auto root = this->root;
     int i = 0, n = path.size(), param_count = 0, code = 0;
     while (i < n) {
@@ -267,7 +259,7 @@ class radix_tree {
             ++param_count;
           }
 
-          code = root->add_coro_handler(coro_handler, methods);
+          code = root->add_coro_handler(coro_handler, method);
           break;
         }
 
@@ -282,7 +274,7 @@ class radix_tree {
         ++param_count;
 
         if (i == n) {
-          code = root->add_coro_handler(coro_handler, methods);
+          code = root->add_coro_handler(coro_handler, method);
           break;
         }
       }
@@ -294,7 +286,7 @@ class radix_tree {
           i += root->path.size() + 1;
 
           if (i == n) {
-            code = root->add_coro_handler(coro_handler, methods);
+            code = root->add_coro_handler(coro_handler, method);
             break;
           }
         }
@@ -308,18 +300,18 @@ class radix_tree {
           if (j < m) {
             std::shared_ptr<radix_tree_node> child(
                 std::make_shared<radix_tree_node>(root->path.substr(j)));
-            child->handlers = root->handlers;
+            child->handler = root->handler;
             child->indices = root->indices;
             child->children = root->children;
 
             root->path = root->path.substr(0, j);
-            root->handlers = {};
+            root->handler = {};
             root->indices = child->path[0];
             root->children = {child};
           }
 
           if (i == n) {
-            code = root->add_coro_handler(coro_handler, methods);
+            code = root->add_coro_handler(coro_handler, method);
             break;
           }
         }
