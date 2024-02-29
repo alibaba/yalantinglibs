@@ -37,6 +37,7 @@
 #include <deque>
 
 #include "io_context_pool.hpp"
+#include "ylt/util/type_traits.h"
 
 namespace coro_io {
 

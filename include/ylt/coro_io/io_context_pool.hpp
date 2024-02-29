@@ -150,11 +150,8 @@ class io_context_pool {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
-        int rc = pthread_setaffinity_np(threads.back()->native_handle(),
-                                        sizeof(cpu_set_t), &cpuset);
-        if (rc != 0) {
-          std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-        }
+        pthread_setaffinity_np(threads.back()->native_handle(),
+                               sizeof(cpu_set_t), &cpuset);
       }
 #endif
     }
