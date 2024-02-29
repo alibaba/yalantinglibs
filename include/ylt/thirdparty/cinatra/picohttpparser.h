@@ -808,7 +808,9 @@ static const char *parse_headers(const char *buf, const char *buf_end,
 
 static const char *parse_headers(const char *buf, const char *buf_end,
                                  http_header *headers, size_t *num_headers,
-                                 size_t max_headers, int *ret) {
+                                 size_t max_headers, int *ret,
+                                 bool &has_connection, bool &has_close,
+                                 bool &has_upgrade) {
   for (;; ++*num_headers) {
     const char *name;
     size_t name_len;
@@ -877,6 +879,21 @@ static const char *parse_headers(const char *buf, const char *buf_end,
         NULL) {
       return NULL;
     }
+    if (name_len == 10) {
+      if (memcmp(name + 1, "onnection", name_len - 1) == 0) {
+        // has connection
+        has_connection = true;
+        char ch = *value;
+        if (ch == 'U') {
+          // has upgrade
+          has_upgrade = true;
+        }
+        else if (ch == 'c' || ch == 'C') {
+          // has_close
+          has_close = true;
+        }
+      }
+    }
     headers[*num_headers] = {std::string_view{name, name_len},
                              std::string_view{value, value_len}};
   }
@@ -885,12 +902,40 @@ static const char *parse_headers(const char *buf, const char *buf_end,
 
 #endif
 
-static const char *parse_request(const char *buf, const char *buf_end,
-                                 const char **method, size_t *method_len,
-                                 const char **path, size_t *path_len,
-                                 int *minor_version, http_header *headers,
-                                 size_t *num_headers, size_t max_headers,
-                                 int *ret) {
+#define ADVANCE_PATH(tok, toklen, has_query)                                  \
+  do {                                                                        \
+    const char *tok_start = buf;                                              \
+    static const char ALIGNED(16) ranges2[] = "\000\040\177\177";             \
+    int found2;                                                               \
+    buf = findchar_fast(buf, buf_end, ranges2, sizeof(ranges2) - 1, &found2); \
+    if (!found2) {                                                            \
+      CHECK_EOF();                                                            \
+    }                                                                         \
+    while (1) {                                                               \
+      if (*buf == ' ') {                                                      \
+        break;                                                                \
+      }                                                                       \
+      else if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {                         \
+        if ((unsigned char)*buf < '\040' || *buf == '\177') {                 \
+          *ret = -1;                                                          \
+          return NULL;                                                        \
+        }                                                                     \
+      }                                                                       \
+      else if (unlikely(*buf == '?')) {                                       \
+        has_query = true;                                                     \
+      }                                                                       \
+      ++buf;                                                                  \
+      CHECK_EOF();                                                            \
+    }                                                                         \
+    tok = tok_start;                                                          \
+    toklen = buf - tok_start;                                                 \
+  } while (0)
+
+static const char *parse_request(
+    const char *buf, const char *buf_end, const char **method,
+    size_t *method_len, const char **path, size_t *path_len, int *minor_version,
+    http_header *headers, size_t *num_headers, size_t max_headers, int *ret,
+    bool &has_connection, bool &has_close, bool &has_upgrade, bool &has_query) {
   /* skip first empty line (some clients add CRLF after POST content) */
   CHECK_EOF();
   if (*buf == '\015') {
@@ -904,7 +949,7 @@ static const char *parse_request(const char *buf, const char *buf_end,
   /* parse request line */
   ADVANCE_TOKEN(*method, *method_len);
   ++buf;
-  ADVANCE_TOKEN(*path, *path_len);
+  ADVANCE_PATH(*path, *path_len, has_query);
   ++buf;
   if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
     return NULL;
@@ -921,14 +966,17 @@ static const char *parse_request(const char *buf, const char *buf_end,
     return NULL;
   }
 
-  return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
+  return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret,
+                       has_connection, has_close, has_upgrade);
 }
 
 inline int phr_parse_request(const char *buf_start, size_t len,
                              const char **method, size_t *method_len,
                              const char **path, size_t *path_len,
                              int *minor_version, http_header *headers,
-                             size_t *num_headers, size_t last_len) {
+                             size_t *num_headers, size_t last_len,
+                             bool &has_connection, bool &has_close,
+                             bool &has_upgrade, bool &has_query) {
   const char *buf = buf_start, *buf_end = buf_start + len;
   size_t max_headers = *num_headers;
   int r;
@@ -948,7 +996,8 @@ inline int phr_parse_request(const char *buf_start, size_t len,
 
   if ((buf = parse_request(buf + last_len, buf_end, method, method_len, path,
                            path_len, minor_version, headers, num_headers,
-                           max_headers, &r)) == NULL) {
+                           max_headers, &r, has_connection, has_close,
+                           has_upgrade, has_query)) == NULL) {
     return r;
   }
 
@@ -987,7 +1036,10 @@ inline const char *parse_response(const char *buf, const char *buf_end,
     return NULL;
   }
 
-  return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
+  bool has_connection, has_close, has_upgrade;
+
+  return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret,
+                       has_connection, has_close, has_upgrade);
 }
 
 inline int phr_parse_response(const char *buf_start, size_t len,
@@ -1033,8 +1085,9 @@ inline int phr_parse_headers(const char *buf_start, size_t len,
     return r;
   }
 
-  if ((buf = parse_headers(buf, buf_end, headers, num_headers, max_headers,
-                           &r)) == NULL) {
+  bool has_connection, has_close, has_upgrade;
+  if ((buf = parse_headers(buf, buf_end, headers, num_headers, max_headers, &r,
+                           has_connection, has_close, has_upgrade)) == NULL) {
     return r;
   }
 

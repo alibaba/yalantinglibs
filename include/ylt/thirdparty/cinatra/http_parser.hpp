@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "cinatra_log_wrapper.hpp"
+#include "define.h"
 #include "picohttpparser.h"
 #include "url_encode_decode.hpp"
 
@@ -64,9 +65,12 @@ class http_parser {
     size_t method_len;
     const char *url;
     size_t url_len;
+
+    bool has_query{};
     header_len_ = detail::phr_parse_request(
         data, size, &method, &method_len, &url, &url_len, &minor_version,
-        headers_.data(), &num_headers_, last_len);
+        headers_.data(), &num_headers_, last_len, has_connection_, has_close_,
+        has_upgrade_, has_query);
 
     if (header_len_ < 0) [[unlikely]] {
       CINATRA_LOG_WARNING << "parse http head failed";
@@ -76,27 +80,40 @@ class http_parser {
                           << ", you can define macro "
                              "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
       }
+      return header_len_;
     }
 
     method_ = {method, method_len};
     url_ = {url, url_len};
 
-    auto content_len = this->get_header_value("content-length"sv);
-    if (content_len.empty()) {
+    auto methd_type = method_type(method_);
+    if (methd_type == http_method::GET || methd_type == http_method::HEAD) {
       body_len_ = 0;
     }
     else {
-      body_len_ = atoi(content_len.data());
+      auto content_len = this->get_header_value("content-length"sv);
+      if (content_len.empty()) {
+        body_len_ = 0;
+      }
+      else {
+        body_len_ = atoi(content_len.data());
+      }
     }
 
-    size_t pos = url_.find('?');
-    if (pos != std::string_view::npos) {
+    if (has_query) {
+      size_t pos = url_.find('?');
       parse_query(url_.substr(pos + 1, url_len - pos - 1));
       url_ = {url, pos};
     }
 
     return header_len_;
   }
+
+  bool has_connection() { return has_connection_; }
+
+  bool has_close() { return has_close_; }
+
+  bool has_upgrade() { return has_upgrade_; }
 
   std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
@@ -247,6 +264,9 @@ class http_parser {
   size_t num_headers_ = 0;
   int header_len_ = 0;
   int body_len_ = 0;
+  bool has_connection_{};
+  bool has_close_{};
+  bool has_upgrade_{};
   std::array<http_header, CINATRA_MAX_HTTP_HEADER_FIELD_SIZE> headers_;
   std::string_view method_;
   std::string_view url_;

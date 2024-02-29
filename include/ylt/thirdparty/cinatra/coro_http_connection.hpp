@@ -338,6 +338,7 @@ class coro_http_connection
       buffers_.clear();
       body_.clear();
       resp_str_.clear();
+      multi_buf_ = true;
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
       }
@@ -345,11 +346,21 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
-    // avoid duplicate reply
-    if (need_to_bufffer) {
-      response_.to_buffers(buffers_);
+    std::error_code ec;
+    size_t size;
+    if (multi_buf_) {
+      if (need_to_bufffer) {
+        response_.to_buffers(buffers_);
+      }
+      std::tie(ec, size) = co_await async_write(buffers_);
     }
-    auto [ec, _] = co_await async_write(buffers_);
+    else {
+      if (need_to_bufffer) {
+        response_.build_resp_str(resp_str_);
+      }
+      std::tie(ec, size) = co_await async_write(asio::buffer(resp_str_));
+    }
+
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
@@ -393,6 +404,8 @@ class coro_http_connection
     remote_addr = ss.str();
     return ss.str();
   }
+
+  void set_multi_buf(bool r) { multi_buf_ = r; }
 
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
@@ -761,13 +774,10 @@ class coro_http_connection
 
  private:
   bool check_keep_alive() {
-    bool keep_alive = true;
-    auto val = request_.get_header_value("connection");
-    if (!val.empty() && iequal0(val, "close")) {
-      keep_alive = false;
+    if (parser_.has_close()) {
+      return false;
     }
-
-    return keep_alive;
+    return true;
   }
 
   void build_ws_handshake_head() {
@@ -823,5 +833,6 @@ class coro_http_connection
   bool use_ssl_ = false;
 #endif
   bool need_shrink_every_time_ = false;
+  bool multi_buf_ = true;
 };
 }  // namespace cinatra

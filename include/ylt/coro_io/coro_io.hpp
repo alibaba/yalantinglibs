@@ -26,6 +26,7 @@
 
 #include <asio/connect.hpp>
 #include <asio/dispatch.hpp>
+#include <asio/experimental/channel.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
 #include <asio/read_at.hpp>
@@ -36,6 +37,7 @@
 #include <deque>
 
 #include "io_context_pool.hpp"
+#include "ylt/util/type_traits.h"
 
 namespace coro_io {
 
@@ -345,6 +347,29 @@ post(Func func,
 
   post_helper<R, Func> helper{e, std::move(func)};
   co_return co_await awaitor.await_resume(helper);
+}
+
+template <typename T>
+async_simple::coro::Lazy<std::error_code> async_send(
+    asio::experimental::channel<void(std::error_code, T)> &channel, T val) {
+  callback_awaitor<std::error_code> awaitor;
+  co_return co_await awaitor.await_resume(
+      [&, val = std::move(val)](auto handler) {
+        channel.async_send({}, std::move(val), [handler](const auto &ec) {
+          handler.set_value_then_resume(ec);
+        });
+      });
+}
+
+template <typename R>
+async_simple::coro::Lazy<std::pair<std::error_code, R>> async_receive(
+    asio::experimental::channel<void(std::error_code, R)> &channel) {
+  callback_awaitor<std::pair<std::error_code, R>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    channel.async_receive([handler](auto ec, auto val) {
+      handler.set_value_then_resume(std::make_pair(ec, std::move(val)));
+    });
+  });
 }
 
 template <typename Socket, typename AsioBuffer>

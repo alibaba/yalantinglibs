@@ -30,8 +30,10 @@ class coro_http_server {
   coro_http_server(asio::io_context &ctx, unsigned short port)
       : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {}
 
-  coro_http_server(size_t thread_num, unsigned short port)
-      : pool_(std::make_unique<coro_io::io_context_pool>(thread_num)),
+  coro_http_server(size_t thread_num, unsigned short port,
+                   bool cpu_affinity = false)
+      : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
+                                                         cpu_affinity)),
         port_(port),
         acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()) {}
