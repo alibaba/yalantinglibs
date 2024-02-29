@@ -1,13 +1,51 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "ylt",
-    hdrs = glob([
-        "include/**",
-        "src/include/**"
+    srcs = glob([
+        "include/ylt/**/*.hpp",
+        "include/ylt/**/*.h",
+        "include/ylt/**/*.ipp",
     ]),
-    includes = ["include", "include/ylt/thirdparty","src/include"],
+    includes = [
+        "include",
+        "include/ylt",
+        "include/ylt/thirdparty",
+        "src/include",
+    ],
     linkopts = ["-lpthread"],
     visibility = ["//visibility:public"],
+)
+
+# List one example for ylt tests.
+cc_test(
+    name = "easylog_test",
+    srcs = ["src/easylog/benchmark/main.cpp"],
+    includes = [
+        "include",
+        "include/ylt/thirdparty",
+        "src/include",
+    ],
+    deps = [":ylt"],
+)
+
+cc_binary(
+    name = "coro_http_example",
+    srcs = ["src/coro_http/examples/example.cpp"],
+    copts = [
+        "-fcoroutines",
+        "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
+        "-Wno-unused-but-set-variable",
+        "-Wno-unused-value",
+    ],
+    includes = [
+        "include",
+        "include/ylt",
+        "include/ylt/thirdparty",
+        "src/include",
+    ],
+    linkopts = ["-lpthread"],
+    deps = [":ylt"],
 )
