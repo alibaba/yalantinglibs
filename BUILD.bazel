@@ -2,6 +2,13 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
+YA_BIN_COPT = [
+    "-fcoroutines",
+    "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
+    "-Wno-unused-but-set-variable",
+    "-Wno-unused-value",
+]
+
 cc_library(
     name = "ylt",
     srcs = glob([
@@ -34,12 +41,35 @@ cc_test(
 cc_binary(
     name = "coro_http_example",
     srcs = ["src/coro_http/examples/example.cpp"],
-    copts = [
-        "-fcoroutines",
-        "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
-        "-Wno-unused-but-set-variable",
-        "-Wno-unused-value",
+    copts = YA_BIN_COPT,
+    includes = [
+        "include",
+        "include/ylt",
+        "include/ylt/thirdparty",
+        "src/include",
     ],
+    linkopts = ["-lpthread"],
+    deps = [":ylt"],
+)
+
+cc_binary(
+    name = "coro_http_channel",
+    srcs = ["src/coro_http/examples/channel.cpp"],
+    copts = YA_BIN_COPT,
+    includes = [
+        "include",
+        "include/ylt",
+        "include/ylt/thirdparty",
+        "src/include",
+    ],
+    linkopts = ["-lpthread"],
+    deps = [":ylt"],
+)
+
+cc_binary(
+    name = "coro_http_chat_room",
+    srcs = ["src/coro_http/examples/chat_room.cpp"],
+    copts = YA_BIN_COPT,
     includes = [
         "include",
         "include/ylt",
