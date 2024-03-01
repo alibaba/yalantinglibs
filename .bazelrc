@@ -12,6 +12,8 @@ build --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"
 build:linux --cxxopt="-std=c++20"
 build:macos --cxxopt="-std=c++20"
 build:clang-cl --cxxopt="-std=c++20"
+build:gcc-cl --cxxopt="-std=c++20"
+build:gcc-cl --cxxopt="-fcoroutines"
 build:msvc-cl --cxxopt="/std:c++20"
 build:windows --cxxopt="/std:c++20"
 # This workaround is needed to prevent Bazel from compiling the same file twice (once PIC and once not).

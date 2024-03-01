@@ -1,18 +1,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("//bazel:defs.bzl", "YA_BIN_COPT", "YA_LT_COPT")
 
 package(default_visibility = ["//visibility:public"])
-
-YA_LT_COPT = [
-    "-fcoroutines",
-    "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
-]
-
-YA_BIN_COPT = [
-    "-fcoroutines",
-    "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
-    "-Wno-unused-but-set-variable",
-    "-Wno-unused-value",
-]
 
 cc_library(
     name = "ylt",
