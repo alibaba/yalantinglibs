@@ -186,25 +186,36 @@ void string_set_length_hacker(std::string &, std::size_t);
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
+#if defined(_GLIBCXX_USE_CXX11_ABI)
+  constexpr bool is_use_cxx11_abi = _GLIBCXX_USE_CXX11_ABI;
+#else
+  constexpr bool is_use_cxx11_abi = true;
+#endif
+  if constexpr (std::is_same_v<ch, char> == false &&
+                is_use_cxx11_abi == false) {
+    raw_str.resize(sz);
+  }
+  else {
 #if defined(__SANITIZE_ADDRESS__) ||              \
     struct_pack_has_feature(address_sanitizer) || \
     (!defined(NDEBUG) && defined(_MSVC_STL_VERSION))
-  raw_str.resize(sz);
+    raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)
-  if constexpr (is_string_reserve_shrink) {
-    if (sz > raw_str.capacity()) {
+    if constexpr (is_string_reserve_shrink) {
+      if (sz > raw_str.capacity()) {
+        str.reserve(sz * sizeof(ch));
+      }
+    }
+    else {
       str.reserve(sz * sizeof(ch));
     }
-  }
-  else {
-    str.reserve(sz * sizeof(ch));
-  }
-  string_set_length_hacker(str, sz);
-  for (auto i = sz; i < sz + sizeof(ch); ++i) str[i] = '\0';
+    string_set_length_hacker(str, sz);
+    for (auto i = sz; i < sz + sizeof(ch); ++i) str[i] = '\0';
 #else
-  raw_str.resize(sz);
+    raw_str.resize(sz);
 #endif
+  }
 }
 
 #endif
