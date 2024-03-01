@@ -42,6 +42,8 @@ class rate_limiter {
     do_set_rate(permitsPerSecond, current_time_mills());
   }
 
+  virtual ~rate_limiter() {}
+
  protected:
   virtual void do_set_rate(
       double permitsPerSecond,
@@ -67,6 +69,9 @@ class rate_limiter {
 };
 
 class abstract_smooth_rate_limiter : public rate_limiter {
+ public:
+  virtual ~abstract_smooth_rate_limiter() {}
+
  protected:
   virtual void do_set_rate(double permits_per_second,
                            double stable_internal_micros) = 0;
