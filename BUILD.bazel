@@ -2,6 +2,11 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
+YA_LT_COPT = [
+    "-fcoroutines",
+    "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
+]
+
 YA_BIN_COPT = [
     "-fcoroutines",
     "-fno-tree-slp-vectorize",  # -ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
@@ -17,6 +22,7 @@ cc_library(
         "include/ylt/**/*.ipp",
         "src/include/*.h",
     ]),
+    copts = YA_LT_COPT,
     includes = [
         "include",
         "include/ylt",
@@ -34,6 +40,7 @@ cc_test(
         "src/easylog/tests/main.cpp",
         "src/easylog/tests/test_easylog.cpp",
     ],
+    copts = YA_BIN_COPT,
     includes = [
         "include",
         "include/ylt/thirdparty",
@@ -47,6 +54,7 @@ cc_binary(
     srcs = [
         "src/easylog/benchmark/main.cpp",
     ],
+    copts = YA_BIN_COPT,
     includes = [
         "include",
         "include/ylt/thirdparty",

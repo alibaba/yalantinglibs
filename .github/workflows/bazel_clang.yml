@@ -1,4 +1,4 @@
-name: Bazel
+name: Bazel-Clang
 
 on:
   push:
