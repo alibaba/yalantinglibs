@@ -11,4 +11,5 @@ YA_BIN_COPT = [
     "-Wno-reorder",
     "-Wno-unused-local-typedefs",
     "-Wno-missing-braces",
+    "-Wno-uninitialized",
 ]

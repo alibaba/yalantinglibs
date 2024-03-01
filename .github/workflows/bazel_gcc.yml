@@ -17,7 +17,7 @@ jobs:
 
       - name: Build
         working-directory: ${{github.workspace}}
-        run: bazel build ...
+        run: bazel build --config=gcc-cl ...
 
       - name: Test
         working-directory: ${{github.workspace}}
