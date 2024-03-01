@@ -32,9 +32,9 @@ build --action_env=PYENV_VERSION
 build --action_env=PYENV_SHELL
 # This is needed for some core tests to run correctly
 build:windows --enable_runfiles
-build:linux    --per_file_copt="-\\.(asm|S)$@-Werror"
-build:macos    --per_file_copt="-\\.(asm|S)$@-Werror"
-build:clang-cl --per_file_copt="-\\.(asm|S)$@-Werror"
+build:linux    --per_file_copt="-\\.(asm|S)$@-Werror -Wno-missing-braces"
+build:macos    --per_file_copt="-\\.(asm|S)$@-Werror -Wno-missing-braces"
+build:clang-cl --per_file_copt="-\\.(asm|S)$@-Werror -Wno-missing-braces"
 build:msvc-cl     --per_file_copt="-\\.(asm|S)$@-WX"
 # Ignore warnings for protobuf generated files and external projects.
 build --per_file_copt="\\.pb\\.cc$@-w"
