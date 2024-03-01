@@ -186,6 +186,11 @@ void string_set_length_hacker(std::string &, std::size_t);
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   std::string &str = *reinterpret_cast<std::string *>(&raw_str);
+#if defined(_GLIBCXX_USE_CXX11_ABI)
+  constexpr bool is_use_cxx11_abi = _GLIBCXX_USE_CXX11_ABI;
+#else
+  constexpr bool is_use_cxx11_abi = true;
+#endif
   if constexpr (std::is_same_v<ch, char> == false &&
                 _GLIBCXX_USE_CXX11_ABI == false) {
     raw_str.resize(sz);
