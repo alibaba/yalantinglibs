@@ -192,7 +192,7 @@ inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
   constexpr bool is_use_cxx11_abi = true;
 #endif
   if constexpr (std::is_same_v<ch, char> == false &&
-                _GLIBCXX_USE_CXX11_ABI == false) {
+                is_use_cxx11_abi == false) {
     raw_str.resize(sz);
   }
   else {
