@@ -22,7 +22,7 @@ jobs:
 
       - name: Build
         working-directory: ${{github.workspace}}
-        run: bazel build --action_env=CXX=clang++-17 --action_env=CC=clang-17 ...
+        run: bazel build --config=clang-cl --action_env=CXX=clang++-17 --action_env=CC=clang-17 ...
 
       - name: Test
         working-directory: ${{github.workspace}}
