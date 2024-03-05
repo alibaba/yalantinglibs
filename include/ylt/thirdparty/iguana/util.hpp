@@ -139,14 +139,11 @@ struct is_variant<std::variant<T...>> : std::true_type {};
 template <typename T>
 constexpr inline bool variant_v = is_variant<std::remove_cvref_t<T>>::value;
 
-template <class T>
-constexpr inline bool non_refletable_v =
-    container_v<T> || c_array_v<T> || tuple_v<T> || optional_v<T> ||
-    smart_ptr_v<T> || std::is_fundamental_v<std::remove_cvref_t<T>> ||
-    variant_v<T>;
-
 template <typename T>
 constexpr inline bool refletable_v = is_reflection_v<std::remove_cvref_t<T>>;
+
+template <class T>
+constexpr inline bool non_refletable_v = !refletable_v<T>;
 
 template <typename T>
 constexpr inline bool plain_v =

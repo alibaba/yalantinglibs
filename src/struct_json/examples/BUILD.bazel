@@ -1,9 +1,6 @@
 cc_binary(
     name = "struct_json_example",
-    srcs =
-        [
-            "main.cpp",
-        ],
+    srcs = glob(["*.cpp"]),
     copts = [
         "-std=c++20",
     ],

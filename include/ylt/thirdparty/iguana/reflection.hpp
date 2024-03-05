@@ -17,7 +17,6 @@
 #include <variant>
 #include <vector>
 
-#include "detail/itoa.hpp"
 #include "detail/string_stream.hpp"
 #include "detail/traits.hpp"
 #include "frozen/string.h"
