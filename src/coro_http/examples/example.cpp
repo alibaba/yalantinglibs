@@ -544,8 +544,7 @@ void http_proxy() {
 }
 
 void coro_channel() {
-  auto ctx = coro_io::get_global_block_executor()->get_asio_executor();
-  asio::experimental::channel<void(std::error_code, int)> ch(ctx, 10000);
+  auto ch = coro_io::create_channel<int>(10000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   assert(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
@@ -554,12 +553,12 @@ void coro_channel() {
   std::error_code err;
   int val;
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   assert(!err);
   assert(val == 41);
 
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   assert(!err);
   assert(val == 42);
 }
