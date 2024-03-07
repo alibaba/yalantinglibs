@@ -16,6 +16,7 @@
 #pragma once
 
 #include <async_simple/Executor.h>
+#include <async_simple/coro/Collect.h>
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
@@ -349,8 +350,24 @@ post(Func func,
   co_return co_await awaitor.await_resume(helper);
 }
 
+template <typename R>
+struct coro_channel
+    : public asio::experimental::channel<void(std::error_code, R)> {
+  using return_type = R;
+  using ValueType = std::pair<std::error_code, R>;
+  using asio::experimental::channel<void(std::error_code, R)>::channel;
+};
+
+template <typename R>
+inline coro_channel<R> create_channel(
+    size_t capacity,
+    asio::io_context::executor_type executor =
+        coro_io::get_global_block_executor()->get_asio_executor()) {
+  return coro_channel<R>(executor, capacity);
+}
+
 template <typename T>
-async_simple::coro::Lazy<std::error_code> async_send(
+inline async_simple::coro::Lazy<std::error_code> async_send(
     asio::experimental::channel<void(std::error_code, T)> &channel, T val) {
   callback_awaitor<std::error_code> awaitor;
   co_return co_await awaitor.await_resume(
@@ -361,16 +378,90 @@ async_simple::coro::Lazy<std::error_code> async_send(
       });
 }
 
-template <typename R>
-async_simple::coro::Lazy<std::pair<std::error_code, R>> async_receive(
-    asio::experimental::channel<void(std::error_code, R)> &channel) {
-  callback_awaitor<std::pair<std::error_code, R>> awaitor;
+template <typename Channel>
+async_simple::coro::Lazy<std::pair<
+    std::error_code,
+    typename Channel::return_type>> inline async_receive(Channel &channel) {
+  callback_awaitor<std::pair<std::error_code, typename Channel::return_type>>
+      awaitor;
   co_return co_await awaitor.await_resume([&](auto handler) {
     channel.async_receive([handler](auto ec, auto val) {
       handler.set_value_then_resume(std::make_pair(ec, std::move(val)));
     });
   });
 }
+
+template <typename... Channel>
+class select_t {
+ public:
+  select_t(Channel &...channels)
+      : coros_(std::make_tuple(get_lazy(channels)...)) {}
+
+  select_t(Channel &&...channels)
+      : coros_(std::make_tuple(get_lazy(channels)...)){};
+
+  template <typename... Func>
+  async_simple::coro::Lazy<size_t> on_recieve(Func... fn) {
+    std::tuple<Func...> tuple(std::move(fn)...);
+    helper<std::tuple<Func...>> helper{std::move(tuple)};
+    co_return co_await std::apply(helper, coros_);
+  }
+
+ private:
+  template <typename T>
+  auto get_lazy(T &t) {
+    using U = std::decay_t<T>;
+    if constexpr (util::is_specialization_v<U, coro_channel>) {
+      return std::move(async_receive(t));
+    }
+    else {
+      return std::move(t);
+    }
+  }
+
+  template <typename Tuple>
+  struct helper {
+    template <size_t Idx>
+    void call(auto &fn, auto &result) {
+      using ValueType = std::remove_cvref_t<decltype(std::get<Idx>(result))>;
+      using Inner =
+          std::remove_cvref_t<decltype(std::declval<ValueType>().value())>;
+      if constexpr (std::is_same_v<Inner, async_simple::Try<void>> ||
+                    std::is_void_v<Inner>) {
+        fn();
+      }
+      else {
+        fn(std::move(std::get<Idx>(result).value()));
+      }
+    }
+
+    template <class Result, std::size_t... Is>
+    void tuple_switch_impl(std::size_t i, Tuple &t, Result &result,
+                           std::index_sequence<Is...>) {
+      ((void)(i == Is && (call<Is>(std::get<Is>(t), result), false)), ...);
+    }
+
+    template <class Result>
+    void tuple_switch(std::size_t i, Tuple &t, Result &result) {
+      tuple_switch_impl(i, t, result,
+                        std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+    }
+
+    async_simple::coro::Lazy<size_t> operator()(auto &&...tests) {
+      auto result =
+          co_await async_simple::coro::collectAny(std::move(tests)...);
+
+      tuple_switch(result.index(), tuple_, result);
+      co_return result.index();
+    }
+
+    Tuple tuple_;
+  };
+
+  std::tuple<async_simple::coro::Lazy<
+      typename std::remove_reference_t<Channel>::ValueType>...>
+      coros_;
+};
 
 template <typename Socket, typename AsioBuffer>
 std::pair<asio::error_code, size_t> read_some(Socket &sock,
