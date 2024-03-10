@@ -54,3 +54,6 @@ node_modules
 bazel-*
 !BUILD.bazel
 cdb.json
+
+# Generated files
+include/ylt/ylt.hpp

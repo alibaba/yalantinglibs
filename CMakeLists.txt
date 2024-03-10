@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(yaLanTingLibs
-        VERSION 0.2.9
+        VERSION 0.3.0
         DESCRIPTION "yaLanTingLibs"
         HOMEPAGE_URL "https://github.com/alibaba/yalantinglibs"
         LANGUAGES CXX
@@ -33,3 +33,12 @@ else ()
         include(cmake/config.cmake)
 endif()
 
+set(VERSION "0.3.0")
+set(GIT_HASH "")
+get_git_hash(GIT_HASH)
+message("Git hash is ${GIT_HASH}")
+
+configure_file(
+        ${PROJECT_SOURCE_DIR}/include/ylt/ylt.hpp.in
+        ${PROJECT_SOURCE_DIR}/include/ylt/ylt.hpp
+)
