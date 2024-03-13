@@ -15,4 +15,8 @@
  */
 #pragma once
 #define YLT_VERSION "@VERSION@"
-#define YLT_FULL_BUILD_VERSION "@VERSION@-@GIT_HASH@"
+// YLT_NUM_VERSION % 100 is the sub-minor version
+// YLT_NUM_VERSION / 100 % 1000 is the minor version
+// YLT_NUM_VERSION / 100000 is the major version
+#define YLT_NUM_VERSION @NUM_VERSION @
+#define YLT_FULL_BUILD_VERSION "@VERSION@-@GIT_HASH@-@GIT_BRANCH@"

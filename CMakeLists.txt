@@ -34,11 +34,14 @@ else ()
 endif()
 
 set(VERSION "0.3.0")
+set(NUM_VERSION 300)
 set(GIT_HASH "")
 get_git_hash(GIT_HASH)
-message("Git hash is ${GIT_HASH}")
+set(GIT_BRANCH "")
+get_git_branch(GIT_BRANCH)
+message("Git hash is ${GIT_HASH}, branch is ${GIT_BRANCH}")
 
 configure_file(
-        ${PROJECT_SOURCE_DIR}/include/ylt/ylt.hpp.in
-        ${PROJECT_SOURCE_DIR}/include/ylt/ylt.hpp
+        ${PROJECT_SOURCE_DIR}/include/ylt/version.hpp.in
+        ${PROJECT_SOURCE_DIR}/include/ylt/version.hpp
 )

@@ -31,7 +31,7 @@ macro(get_git_branch _git_branch)
   find_package(Git QUIET)
   if(GIT_FOUND)
     execute_process(
-      COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+      COMMAND ${GIT_EXECUTABLE} symbolic-ref --short HEAD
       OUTPUT_VARIABLE ${_git_branch}
       OUTPUT_STRIP_TRAILING_WHITESPACE
       ERROR_QUIET

@@ -56,4 +56,4 @@ bazel-*
 cdb.json
 
 # Generated files
-include/ylt/ylt.hpp
+include/ylt/version.hpp
