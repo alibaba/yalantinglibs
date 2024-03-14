@@ -348,13 +348,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     });
   }
 
-  void close_coro() {}
-
   using QuitCallback = std::function<void(const uint64_t &conn_id)>;
   void set_quit_callback(QuitCallback callback, uint64_t conn_id) {
     quit_callback_ = std::move(callback);
     conn_id_ = conn_id;
   }
+
+  uint64_t get_connection_id() const noexcept { return conn_id_; }
 
   std::any &tag() { return tag_; }
   const std::any &tag() const { return tag_; }
