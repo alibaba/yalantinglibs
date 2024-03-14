@@ -9,5 +9,5 @@ int main() {
   assert(std::string(YLT_VERSION) == "0.3.0");
   assert(YLT_NUM_VERSION % 100 == 0);
   assert(YLT_NUM_VERSION / 100 % 1000 == 3);
-  assert(YLT_NUM_VERSION / 1e5 == 0);
+  assert(int(YLT_NUM_VERSION / 100000) == 0);
 }

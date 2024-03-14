@@ -17,6 +17,7 @@ include(cmake/install.cmake)
 if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs") # if ylt is top-level project
         # add include path
         include_directories(include)
+        include_directories(${PROJECT_BINARY_DIR}/include)
         include_directories(include/ylt/thirdparty)
         include_directories(src/include)
 
@@ -43,5 +44,5 @@ message("Git hash is ${GIT_HASH}, branch is ${GIT_BRANCH}")
 
 configure_file(
         ${PROJECT_SOURCE_DIR}/include/ylt/version.hpp.in
-        ${PROJECT_SOURCE_DIR}/include/ylt/version.hpp
+        ${PROJECT_BINARY_DIR}/include/ylt/version.hpp
 )
