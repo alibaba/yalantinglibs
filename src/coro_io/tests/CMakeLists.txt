@@ -1,8 +1,8 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
 add_executable(coro_io_test
-        # test_corofile.cpp
-        # test_channel.cpp
-        # test_client_pool.cpp
+        test_corofile.cpp
+        test_channel.cpp
+        test_client_pool.cpp
         test_rate_limiter.cpp
         main.cpp
         )
