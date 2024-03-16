@@ -1,2 +1,2 @@
 # third-party libraries
-./include/ylt/thirdparty
+include/ylt/thirdparty/*
