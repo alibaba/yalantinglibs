@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,14 @@
 #define ASYNC_SIMPLE_UTHREAD_UTHREAD_H
 
 #include <memory>
-
 #include "async_simple/uthread/internal/thread.h"
 
 namespace async_simple {
 namespace uthread {
 
 struct Attribute {
-  Executor* ex;
-  size_t stack_size = 0;
+    Executor* ex;
+    size_t stack_size = 0;
 };
 
 // A Uthread is a stackful coroutine which would checkin/checkout based on
@@ -39,57 +38,52 @@ struct Attribute {
 // The implementation for Uthread is extracted from Boost. See
 // uthread/internal/*.S for details.
 class Uthread {
- public:
-  Uthread() = default;
-  template <class Func>
-  Uthread(Attribute attr, Func&& func) : _attr(std::move(attr)) {
-    _ctx = std::make_unique<internal::thread_context>(std::move(func),
-                                                      _attr.stack_size);
-  }
-  ~Uthread() = default;
-  Uthread(Uthread&& x) noexcept = default;
-  Uthread& operator=(Uthread&& x) noexcept = default;
+public:
+    Uthread() = default;
+    template <class Func>
+    Uthread(Attribute attr, Func&& func) : _attr(std::move(attr)) {
+        _ctx = std::make_unique<internal::thread_context>(std::move(func),
+                                                          _attr.stack_size);
+    }
+    ~Uthread() = default;
+    Uthread(Uthread&& x) noexcept = default;
+    Uthread& operator=(Uthread&& x) noexcept = default;
 
- public:
-  template <class Callback>
-  bool join(Callback&& callback) {
-    if (!_ctx || _ctx->joined_) {
-      return false;
-    }
-    _ctx->joined_ = true;
-    auto f = _ctx->done_.getFuture().via(_attr.ex);
-    if (f.hasResult()) {
-      callback();
-      return true;
-    }
-    if (!_attr.ex) {
-      // we can not delay the uthread life without executor.
-      // so, if the user do not hold the uthread in outside,
-      // the user can not do switch in again.
-      std::move(f).setContinuation([callback = std::move(callback)](auto&&) {
-        callback();
-      });
-    }
-    else {
-      _ctx->done_.forceSched().checkout();
-      std::move(f).setContinuation(
-          [callback = std::move(callback),
-           // hold on the life of uthread.
-           // user never care about the uthread's destruct.
-           self = std::move(*this)](auto&&) {
+public:
+    template <class Callback>
+    bool join(Callback&& callback) {
+        if (!_ctx || _ctx->joined_) {
+            return false;
+        }
+        _ctx->joined_ = true;
+        auto f = _ctx->done_.getFuture().via(_attr.ex);
+        if (f.hasResult()) {
             callback();
-          });
+            return true;
+        }
+        if (!_attr.ex) {
+            // we can not delay the uthread life without executor.
+            // so, if the user do not hold the uthread in outside,
+            // the user can not do switch in again.
+            std::move(f).setContinuation(
+                [callback = std::move(callback)](auto&&) { callback(); });
+        } else {
+            _ctx->done_.forceSched().checkout();
+            std::move(f).setContinuation(
+                [callback = std::move(callback),
+                 // hold on the life of uthread.
+                 // user never care about the uthread's destruct.
+                 self = std::move(*this)](auto&&) { callback(); });
+        }
+        return true;
     }
-    return true;
-  }
-  void detach() {
-    join([]() {
-    });
-  }
+    void detach() {
+        join([]() {});
+    }
 
- private:
-  Attribute _attr;
-  std::unique_ptr<internal::thread_context> _ctx;
+private:
+    Attribute _attr;
+    std::unique_ptr<internal::thread_context> _ctx;
 };
 
 }  // namespace uthread

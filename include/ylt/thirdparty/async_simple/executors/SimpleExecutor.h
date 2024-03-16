@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,19 @@
 #define FUTURE_SIMPLE_EXECUTOR_H
 
 #include <functional>
-#include <thread>
 
 #include "async_simple/Executor.h"
 #include "async_simple/executors/SimpleIOExecutor.h"
 #include "async_simple/util/ThreadPool.h"
 
+#include <thread>
+
 namespace async_simple {
 
 namespace executors {
+
+// 0xBFFFFFFF == ~0x40000000
+inline constexpr int64_t kContextMask = 0x40000000;
 
 // This is a simple executor. The intention of SimpleExecutor is to make the
 // test available and show how user should implement their executors. People who
@@ -37,33 +41,50 @@ namespace executors {
 // The actual strategy that SimpleExecutor used is implemented in
 // async_simple/util/ThreadPool.h.
 class SimpleExecutor : public Executor {
- public:
-  using Func = Executor::Func;
-  using Context = Executor::Context;
+public:
+    using Func = Executor::Func;
+    using Context = Executor::Context;
 
- public:
-  explicit SimpleExecutor(size_t threadNum);
-  ~SimpleExecutor();
+public:
+    explicit SimpleExecutor(size_t threadNum) : _pool(threadNum) {
+        _ioExecutor.init();
+    }
+    ~SimpleExecutor() { _ioExecutor.destroy(); }
 
- public:
-  bool schedule(Func func) override {
-    return _pool.scheduleById(std::move(func)) == util::ThreadPool::ERROR_NONE;
-  }
-  bool currentThreadInExecutor() const override {
-    return _pool.getCurrentId() != -1;
-  }
-  ExecutorStat stat() const override { return ExecutorStat(); }
+public:
+    bool schedule(Func func) override {
+        return _pool.scheduleById(std::move(func)) ==
+               util::ThreadPool::ERROR_NONE;
+    }
+    bool currentThreadInExecutor() const override {
+        return _pool.getCurrentId() != -1;
+    }
+    ExecutorStat stat() const override { return ExecutorStat(); }
 
-  size_t currentContextId() const override { return _pool.getCurrentId(); }
+    size_t currentContextId() const override { return _pool.getCurrentId(); }
 
-  Context checkout() override;
-  bool checkin(Func func, Context ctx, ScheduleOptions opts) override;
+    Context checkout() override {
+        // avoid CurrentId equal to NULLCTX
+        return reinterpret_cast<Context>(_pool.getCurrentId() | kContextMask);
+    }
 
-  IOExecutor* getIOExecutor() override { return &_ioExecutor; }
+    bool checkin(Func func, Context ctx, ScheduleOptions opts) override {
+        int64_t id = reinterpret_cast<int64_t>(ctx);
+        auto prompt =
+            _pool.getCurrentId() == (id & (~kContextMask)) && opts.prompt;
+        if (prompt) {
+            func();
+            return true;
+        }
+        return _pool.scheduleById(std::move(func), id & (~kContextMask)) ==
+               util::ThreadPool::ERROR_NONE;
+    }
 
- private:
-  util::ThreadPool _pool;
-  SimpleIOExecutor _ioExecutor;
+    IOExecutor* getIOExecutor() override { return &_ioExecutor; }
+
+private:
+    util::ThreadPool _pool;
+    SimpleIOExecutor _ioExecutor;
 };
 
 }  // namespace executors

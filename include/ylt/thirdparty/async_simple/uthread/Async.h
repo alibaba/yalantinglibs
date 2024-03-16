@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,90 +36,87 @@
 
 #include <memory>
 #include <type_traits>
-
 #include "async_simple/uthread/Uthread.h"
 
 namespace async_simple {
 namespace uthread {
 
 enum class Launch {
-  Prompt,
-  Schedule,
-  Current,
+    Prompt,
+    Schedule,
+    Current,
 };
 
 template <Launch policy, class F>
 requires(policy == Launch::Prompt) inline Uthread async(F&& f, Executor* ex) {
-  return Uthread(Attribute{ex}, std::forward<F>(f));
+    return Uthread(Attribute{ex}, std::forward<F>(f));
 }
 
 template <Launch policy, class F>
 requires(policy == Launch::Schedule) inline void async(F&& f, Executor* ex) {
-  if (!ex)
-    AS_UNLIKELY { return; }
-  ex->schedule([f = std::move(f), ex]() {
-    Uthread uth(Attribute{ex}, std::move(f));
-    uth.detach();
-  });
+    if (!ex)
+        AS_UNLIKELY { return; }
+    ex->schedule([f = std::move(f), ex]() {
+        Uthread uth(Attribute{ex}, std::move(f));
+        uth.detach();
+    });
 }
 
 // schedule async task, set a callback
 template <Launch policy, class F, class C>
 requires(policy == Launch::Schedule) inline void async(F&& f, C&& c,
                                                        Executor* ex) {
-  if (!ex)
-    AS_UNLIKELY { return; }
-  ex->schedule([f = std::move(f), c = std::move(c), ex]() {
-    Uthread uth(Attribute{ex}, std::move(f));
-    uth.join(std::move(c));
-  });
+    if (!ex)
+        AS_UNLIKELY { return; }
+    ex->schedule([f = std::move(f), c = std::move(c), ex]() {
+        Uthread uth(Attribute{ex}, std::move(f));
+        uth.join(std::move(c));
+    });
 }
 
 template <Launch policy, class F>
 requires(policy == Launch::Current) inline void async(F&& f, Executor* ex) {
-  Uthread uth(Attribute{ex}, std::forward<F>(f));
-  uth.detach();
+    Uthread uth(Attribute{ex}, std::forward<F>(f));
+    uth.detach();
 }
 
 template <class F, class... Args,
           typename R = std::invoke_result_t<F&&, Args&&...>>
 inline Future<R> async(Launch policy, Attribute attr, F&& f, Args&&... args) {
-  if (policy == Launch::Schedule) {
-    if (!attr.ex)
-      AS_UNLIKELY {
+    if (policy == Launch::Schedule) {
+        if (!attr.ex)
+            AS_UNLIKELY {
+                // TODO log
+                assert(false);
+            }
+    }
+    Promise<R> p;
+    auto rc = p.getFuture().via(attr.ex);
+    auto proc = [p = std::move(p), ex = attr.ex, f = std::forward<F>(f),
+                 args =
+                     std::make_tuple(std::forward<Args>(args)...)]() mutable {
+        if (ex) {
+            p.forceSched().checkout();
+        }
+        if constexpr (std::is_void_v<R>) {
+            std::apply(f, std::move(args));
+            p.setValue();
+        } else {
+            p.setValue(std::apply(f, std::move(args)));
+        }
+    };
+    if (policy == Launch::Schedule) {
+        attr.ex->schedule([fn = std::move(proc), attr]() {
+            Uthread(attr, std::move(fn)).detach();
+        });
+    } else if (policy == Launch::Current) {
+        Uthread(attr, std::move(proc)).detach();
+    } else {
         // TODO log
         assert(false);
-      }
-  }
-  Promise<R> p;
-  auto rc = p.getFuture().via(attr.ex);
-  auto proc = [p = std::move(p), ex = attr.ex, f = std::forward<F>(f),
-               args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
-    if (ex) {
-      p.forceSched().checkout();
     }
-    if constexpr (std::is_void_v<R>) {
-      std::apply(f, std::move(args));
-      p.setValue();
-    }
-    else {
-      p.setValue(std::apply(f, std::move(args)));
-    }
-  };
-  if (policy == Launch::Schedule) {
-    attr.ex->schedule([fn = std::move(proc), attr]() {
-      Uthread(attr, std::move(fn)).detach();
-    });
-  }
-  else if (policy == Launch::Current) {
-    Uthread(attr, std::move(proc)).detach();
-  }
-  else {
-    // TODO log
-    assert(false);
-  }
 
-  return rc;
+    return rc;
 }
 
 }  // namespace uthread

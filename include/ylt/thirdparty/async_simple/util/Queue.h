@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,89 +32,86 @@
 namespace async_simple::util {
 
 template <typename T>
-requires std::is_move_assignable_v<T>
-class Queue {
- public:
-  void push(T &&item) {
-    {
-      std::scoped_lock guard(_mutex);
-      _queue.push(std::move(item));
-    }
-    _cond.notify_one();
-  }
-
-  bool try_push(const T &item) {
-    {
-      std::unique_lock lock(_mutex, std::try_to_lock);
-      if (!lock)
-        return false;
-      _queue.push(item);
-    }
-    _cond.notify_one();
-    return true;
-  }
-
-  bool pop(T &item) {
-    std::unique_lock lock(_mutex);
-    _cond.wait(lock, [&]() {
-      return !_queue.empty() || _stop;
-    });
-    if (_queue.empty())
-      return false;
-    item = std::move(_queue.front());
-    _queue.pop();
-    return true;
-  }
-
-  bool try_pop(T &item) {
-    std::unique_lock lock(_mutex, std::try_to_lock);
-    if (!lock || _queue.empty())
-      return false;
-
-    item = std::move(_queue.front());
-    _queue.pop();
-    return true;
-  }
-
-  // non-blocking pop an item, maybe pop failed.
-  // predict is an extension pop condition, default is null.
-  bool try_pop_if(T &item, bool (*predict)(T &) = nullptr) {
-    std::unique_lock lock(_mutex, std::try_to_lock);
-    if (!lock || _queue.empty())
-      return false;
-
-    if (predict && !predict(_queue.front())) {
-      return false;
+requires std::is_move_assignable_v<T> class Queue {
+public:
+    void push(T &&item) {
+        {
+            std::scoped_lock guard(_mutex);
+            _queue.push(std::move(item));
+        }
+        _cond.notify_one();
     }
 
-    item = std::move(_queue.front());
-    _queue.pop();
-    return true;
-  }
-
-  std::size_t size() const {
-    std::scoped_lock guard(_mutex);
-    return _queue.size();
-  }
-
-  bool empty() const {
-    std::scoped_lock guard(_mutex);
-    return _queue.empty();
-  }
-
-  void stop() {
-    {
-      std::scoped_lock guard(_mutex);
-      _stop = true;
+    bool try_push(const T &item) {
+        {
+            std::unique_lock lock(_mutex, std::try_to_lock);
+            if (!lock)
+                return false;
+            _queue.push(item);
+        }
+        _cond.notify_one();
+        return true;
     }
-    _cond.notify_all();
-  }
 
- private:
-  std::queue<T> _queue;
-  bool _stop = false;
-  mutable std::mutex _mutex;
-  std::condition_variable _cond;
+    bool pop(T &item) {
+        std::unique_lock lock(_mutex);
+        _cond.wait(lock, [&]() { return !_queue.empty() || _stop; });
+        if (_queue.empty())
+            return false;
+        item = std::move(_queue.front());
+        _queue.pop();
+        return true;
+    }
+
+    bool try_pop(T &item) {
+        std::unique_lock lock(_mutex, std::try_to_lock);
+        if (!lock || _queue.empty())
+            return false;
+
+        item = std::move(_queue.front());
+        _queue.pop();
+        return true;
+    }
+
+    // non-blocking pop an item, maybe pop failed.
+    // predict is an extension pop condition, default is null.
+    bool try_pop_if(T &item, bool (*predict)(T &) = nullptr) {
+        std::unique_lock lock(_mutex, std::try_to_lock);
+        if (!lock || _queue.empty())
+            return false;
+
+        if (predict && !predict(_queue.front())) {
+            return false;
+        }
+
+        item = std::move(_queue.front());
+        _queue.pop();
+        return true;
+    }
+
+    std::size_t size() const {
+        std::scoped_lock guard(_mutex);
+        return _queue.size();
+    }
+
+    bool empty() const {
+        std::scoped_lock guard(_mutex);
+        return _queue.empty();
+    }
+
+    void stop() {
+        {
+            std::scoped_lock guard(_mutex);
+            _stop = true;
+        }
+        _cond.notify_all();
+    }
+
+private:
+    std::queue<T> _queue;
+    bool _stop = false;
+    mutable std::mutex _mutex;
+    std::condition_variable _cond;
 };
 }  // namespace async_simple::util
 #endif  // ASYNC_SIMPLE_QUEUE_H
