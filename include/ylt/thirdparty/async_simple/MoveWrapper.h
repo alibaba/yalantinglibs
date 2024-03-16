@@ -25,7 +25,7 @@ namespace async_simple {
 // std::function requre copyConstructable, hence we provide MoveWrapper perform
 // copy as move.
 template <typename T>
-class [[deprecated]] MoveWrapper {
+class MoveWrapper {
 public:
     MoveWrapper() = default;
     MoveWrapper(T&& value) : _value(std::move(value)) {}
