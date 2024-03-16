@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,15 @@
 #define ASYNC_SIMPLE_LOCALSTATE_H
 
 #include <atomic>
+
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <utility>
-
 #include "async_simple/Common.h"
 #include "async_simple/Executor.h"
-#include "async_simple/MoveWrapper.h"
 #include "async_simple/Try.h"
 
 namespace async_simple {
@@ -39,57 +38,57 @@ namespace async_simple {
 // Users should never use LocalState directly.
 template <typename T>
 class LocalState {
- private:
-  using Continuation = std::function<void(Try<T>&& value)>;
+private:
+    using Continuation = std::function<void(Try<T>&& value)>;
 
- public:
-  LocalState() : _executor(nullptr) {}
-  LocalState(T&& v) : _try_value(std::forward<T>(v)), _executor(nullptr) {}
-  LocalState(Try<T>&& t) : _try_value(std::move(t)), _executor(nullptr) {}
+public:
+    LocalState() : _executor(nullptr) {}
+    LocalState(T&& v) : _try_value(std::forward<T>(v)), _executor(nullptr) {}
+    LocalState(Try<T>&& t) : _try_value(std::move(t)), _executor(nullptr) {}
 
-  ~LocalState() {}
+    ~LocalState() {}
 
-  LocalState(const LocalState&) = delete;
-  LocalState& operator=(const LocalState&) = delete;
+    LocalState(const LocalState&) = delete;
+    LocalState& operator=(const LocalState&) = delete;
 
-  LocalState(LocalState&& other)
-      : _try_value(std::move(other._try_value)),
-        _executor(std::exchange(other._executor, nullptr)) {}
-  LocalState& operator=(LocalState&& other) {
-    if (this != &other) {
-      std::swap(_try_value, other._try_value);
-      std::swap(_executor, other._executor);
+    LocalState(LocalState&& other)
+        : _try_value(std::move(other._try_value)),
+          _executor(std::exchange(other._executor, nullptr)) {}
+    LocalState& operator=(LocalState&& other) {
+        if (this != &other) {
+            std::swap(_try_value, other._try_value);
+            std::swap(_executor, other._executor);
+        }
+        return *this;
     }
-    return *this;
-  }
 
- public:
-  bool hasResult() const noexcept { return _try_value.available(); }
+public:
+    bool hasResult() const noexcept { return _try_value.available(); }
 
- public:
-  Try<T>& getTry() noexcept { return _try_value; }
-  const Try<T>& getTry() const noexcept { return _try_value; }
+public:
+    Try<T>& getTry() noexcept { return _try_value; }
+    const Try<T>& getTry() const noexcept { return _try_value; }
 
-  void setExecutor(Executor* ex) { _executor = ex; }
+    void setExecutor(Executor* ex) { _executor = ex; }
 
-  Executor* getExecutor() { return _executor; }
+    Executor* getExecutor() { return _executor; }
 
-  bool currentThreadInExecutor() const {
-    if (!_executor) {
-      return false;
+    bool currentThreadInExecutor() const {
+        if (!_executor) {
+            return false;
+        }
+        return _executor->currentThreadInExecutor();
     }
-    return _executor->currentThreadInExecutor();
-  }
 
-  template <typename F>
-  void setContinuation(F&& f) {
-    assert(_try_value.available());
-    std::forward<F>(f)(std::move(_try_value));
-  }
+    template <typename F>
+    void setContinuation(F&& f) {
+        assert(_try_value.available());
+        std::forward<F>(f)(std::move(_try_value));
+    }
 
- private:
-  Try<T> _try_value;
-  Executor* _executor;
+private:
+    Try<T> _try_value;
+    Executor* _executor;
 };
 }  // namespace async_simple
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,9 @@
 #define ASYNC_SIMPLE_CORO_DETACHED_COROUTINE_H
 
 #include <stdio.h>
-
 #include <atomic>
 #include <exception>
 #include <mutex>
-
 #include "async_simple/Common.h"
 #include "async_simple/experimental/coroutine.h"
 
@@ -39,27 +37,28 @@ namespace detail {
 // But the user shouldn't use this directly. It may be
 // better to use `Lazy::start()`.
 struct DetachedCoroutine {
-  struct promise_type {
-    std::suspend_never initial_suspend() noexcept { return {}; }
-    std::suspend_never final_suspend() noexcept { return {}; }
-    void return_void() noexcept {}
-    void unhandled_exception() {
-      try {
-        std::rethrow_exception(std::current_exception());
-      } catch (const std::exception& e) {
-        fprintf(stderr, "find exception %s\n", e.what());
-        fflush(stderr);
-        std::rethrow_exception(std::current_exception());
-      }
-    }
-    DetachedCoroutine get_return_object() noexcept {
-      return DetachedCoroutine();
-    }
+    struct promise_type {
+        std::suspend_never initial_suspend() noexcept { return {}; }
+        std::suspend_never final_suspend() noexcept { return {}; }
+        void return_void() noexcept {}
+        void unhandled_exception() {
+            try {
+                std::rethrow_exception(std::current_exception());
+            } catch (const std::exception& e) {
+                fprintf(stderr, "find exception %s\n", e.what());
+                fflush(stderr);
+                std::rethrow_exception(std::current_exception());
+            }
+        }
+        DetachedCoroutine get_return_object() noexcept {
+            return DetachedCoroutine();
+        }
 
-    // Hint to gdb script for that there is no continuation for
-    // DetachedCoroutine.
-    std::coroutine_handle<> _continuation = nullptr;
-  };
+        // Hint to gdb script for that there is no continuation for
+        // DetachedCoroutine.
+        std::coroutine_handle<> _continuation = nullptr;
+        void* _lazy_local = nullptr;
+    };
 };
 
 }  // namespace detail
@@ -68,13 +67,13 @@ struct DetachedCoroutine {
 // the co_await expression to return directly.
 template <typename T>
 struct ReadyAwaiter {
-  ReadyAwaiter(T value) : _value(std::move(value)) {}
+    ReadyAwaiter(T value) : _value(std::move(value)) {}
 
-  bool await_ready() const noexcept { return true; }
-  void await_suspend(CoroHandle<>) const noexcept {}
-  T await_resume() noexcept { return std::move(_value); }
+    bool await_ready() const noexcept { return true; }
+    void await_suspend(CoroHandle<>) const noexcept {}
+    T await_resume() noexcept { return std::move(_value); }
 
-  T _value;
+    T _value;
 };
 
 }  // namespace coro

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #include <chrono>
 #include <cstddef>
-
 #include "async_simple/coro/ConditionVariable.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Mutex.h"
@@ -35,49 +34,47 @@ namespace async_simple::coro {
 // There is no possibility to increase or reset the counter, which
 // makes the latch a single-use barrier.
 class Latch {
- public:
-  explicit Latch(std::size_t count) : count_(count) {}
-  ~Latch() = default;
-  Latch(const Latch&) = delete;
-  Latch& operator=(const Latch&) = delete;
+public:
+    explicit Latch(std::size_t count) : count_(count) {}
+    ~Latch() = default;
+    Latch(const Latch&) = delete;
+    Latch& operator=(const Latch&) = delete;
 
-  // decrements the counter in a non-blocking manner
-  Lazy<void> count_down(std::size_t update = 1) {
-    auto lk = co_await mutex_.coScopedLock();
-    assert(count_ >= update);
-    count_ -= update;
-    if (!count_) {
-      cv_.notify();
+    // decrements the counter in a non-blocking manner
+    Lazy<void> count_down(std::size_t update = 1) {
+        auto lk = co_await mutex_.coScopedLock();
+        assert(count_ >= update);
+        count_ -= update;
+        if (!count_) {
+            cv_.notify();
+        }
     }
-  }
 
-  // tests if the internal counter equals zero
-  Lazy<bool> try_wait() const noexcept {
-    auto lk = co_await mutex_.coScopedLock();
-    co_return !count_;
-  }
+    // tests if the internal counter equals zero
+    Lazy<bool> try_wait() const noexcept {
+        auto lk = co_await mutex_.coScopedLock();
+        co_return !count_;
+    }
 
-  // blocks until the counter reaches zero
-  // If the counter is not 0, the current coroutine will be suspended
-  Lazy<void> wait() const noexcept {
-    auto lk = co_await mutex_.coScopedLock();
-    co_await cv_.wait(mutex_, [&] {
-      return count_ == 0;
-    });
-  }
+    // blocks until the counter reaches zero
+    // If the counter is not 0, the current coroutine will be suspended
+    Lazy<void> wait() const noexcept {
+        auto lk = co_await mutex_.coScopedLock();
+        co_await cv_.wait(mutex_, [&] { return count_ == 0; });
+    }
 
-  // decrements the counter and blocks until it reaches zero
-  Lazy<void> arrive_and_wait(std::size_t update = 1) noexcept {
-    co_await count_down(update);
-    co_await wait();
-  }
+    // decrements the counter and blocks until it reaches zero
+    Lazy<void> arrive_and_wait(std::size_t update = 1) noexcept {
+        co_await count_down(update);
+        co_await wait();
+    }
 
- private:
-  using MutexType = SpinLock;
+private:
+    using MutexType = SpinLock;
 
-  mutable MutexType mutex_;
-  mutable ConditionVariable<MutexType> cv_;
-  std::size_t count_;
+    mutable MutexType mutex_;
+    mutable ConditionVariable<MutexType> cv_;
+    std::size_t count_;
 };
 
 }  // namespace async_simple::coro

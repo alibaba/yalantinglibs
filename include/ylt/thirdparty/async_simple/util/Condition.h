@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,32 +32,30 @@ namespace util {
 
 #if __has_include(<semaphore>)
 class Condition : public std::binary_semaphore {
- public:
-  explicit Condition(ptrdiff_t num = 0) : std::binary_semaphore(num) {}
+public:
+    explicit Condition(ptrdiff_t num = 0) : std::binary_semaphore(num) {}
 };
 
 #else
 
 class Condition {
- public:
-  void release() {
-    std::lock_guard lock(_mutex);
-    ++_count;
-    _condition.notify_one();
-  }
+public:
+    void release() {
+        std::lock_guard lock(_mutex);
+        ++_count;
+        _condition.notify_one();
+    }
 
-  void acquire() {
-    std::unique_lock lock(_mutex);
-    _condition.wait(lock, [this] {
-      return _count > 0;
-    });
-    --_count;
-  }
+    void acquire() {
+        std::unique_lock lock(_mutex);
+        _condition.wait(lock, [this] { return _count > 0; });
+        --_count;
+    }
 
- private:
-  std::mutex _mutex;
-  std::condition_variable _condition;
-  size_t _count = 0;
+private:
+    std::mutex _mutex;
+    std::condition_variable _condition;
+    size_t _count = 0;
 };
 
 #endif

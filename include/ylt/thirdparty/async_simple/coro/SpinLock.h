@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,67 +17,66 @@
 #define ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 
 #include <thread>
-
 #include "async_simple/coro/Lazy.h"
 
 namespace async_simple {
 namespace coro {
 
 class SpinLock {
- public:
-  explicit SpinLock(std::int32_t count = 1024) noexcept
-      : _spinCount(count), _locked(false) {}
+public:
+    explicit SpinLock(std::int32_t count = 1024) noexcept
+        : _spinCount(count), _locked(false) {}
 
-  bool tryLock() noexcept {
-    return !_locked.exchange(true, std::memory_order_acquire);
-  }
-
-  Lazy<> coLock() noexcept {
-    auto counter = _spinCount;
-    while (!tryLock()) {
-      while (_locked.load(std::memory_order_relaxed)) {
-        if (counter-- <= 0) {
-          co_await Yield{};
-          counter = _spinCount;
-        }
-      }
+    bool tryLock() noexcept {
+        return !_locked.exchange(true, std::memory_order_acquire);
     }
-    co_return;
-  }
 
-  void lock() noexcept {
-    auto counter = _spinCount;
-    while (!tryLock()) {
-      while (_locked.load(std::memory_order_relaxed)) {
-        if (counter-- <= 0) {
-          std::this_thread::yield();
-          counter = _spinCount;
+    Lazy<> coLock() noexcept {
+        auto counter = _spinCount;
+        while (!tryLock()) {
+            while (_locked.load(std::memory_order_relaxed)) {
+                if (counter-- <= 0) {
+                    co_await Yield{};
+                    counter = _spinCount;
+                }
+            }
         }
-      }
+        co_return;
     }
-  }
 
-  void unlock() noexcept { _locked.store(false, std::memory_order_release); }
+    void lock() noexcept {
+        auto counter = _spinCount;
+        while (!tryLock()) {
+            while (_locked.load(std::memory_order_relaxed)) {
+                if (counter-- <= 0) {
+                    std::this_thread::yield();
+                    counter = _spinCount;
+                }
+            }
+        }
+    }
 
-  Lazy<std::unique_lock<SpinLock>> coScopedLock() noexcept {
-    co_await coLock();
-    co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
-  }
+    void unlock() noexcept { _locked.store(false, std::memory_order_release); }
 
- private:
-  std::int32_t _spinCount;
-  std::atomic<bool> _locked;
+    Lazy<std::unique_lock<SpinLock>> coScopedLock() noexcept {
+        co_await coLock();
+        co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
+    }
+
+private:
+    std::int32_t _spinCount;
+    std::atomic<bool> _locked;
 };
 
 class ScopedSpinLock {
- public:
-  explicit ScopedSpinLock(SpinLock &lock) : _lock(lock) { _lock.lock(); }
-  ~ScopedSpinLock() { _lock.unlock(); }
+public:
+    explicit ScopedSpinLock(SpinLock &lock) : _lock(lock) { _lock.lock(); }
+    ~ScopedSpinLock() { _lock.unlock(); }
 
- private:
-  ScopedSpinLock(const ScopedSpinLock &) = delete;
-  ScopedSpinLock &operator=(const ScopedSpinLock &) = delete;
-  SpinLock &_lock;
+private:
+    ScopedSpinLock(const ScopedSpinLock &) = delete;
+    ScopedSpinLock &operator=(const ScopedSpinLock &) = delete;
+    SpinLock &_lock;
 };
 
 }  // namespace coro
