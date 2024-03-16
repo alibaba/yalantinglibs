@@ -149,7 +149,9 @@ class context_base {
    * Get the unique connection ID
    * @return connection id
    */
-  uint64_t get_connection_id() { return self_->conn_->conn_id_; }
+  uint64_t get_connection_id() const noexcept {
+    return self_->conn_->get_connection_id();
+  }
 
   /*!
    * Set the response_attachment

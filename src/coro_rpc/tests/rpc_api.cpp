@@ -46,6 +46,7 @@ int long_run_func(int val) {
 }
 
 void echo_with_attachment(coro_rpc::context<void> conn) {
+  ELOGV(INFO, "conn ID:%d", conn.get_connection_id());
   auto str = conn.release_request_attachment();
   conn.set_response_attachment(std::move(str));
   conn.response_msg();
