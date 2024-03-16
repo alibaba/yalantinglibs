@@ -18,6 +18,7 @@
 #define ASYNC_SIMPLE_MOVEWRAPPER_H
 
 #include <exception>
+
 #include "async_simple/Common.h"
 
 namespace async_simple {
@@ -26,23 +27,23 @@ namespace async_simple {
 // copy as move.
 template <typename T>
 class MoveWrapper {
-public:
-    MoveWrapper() = default;
-    MoveWrapper(T&& value) : _value(std::move(value)) {}
+ public:
+  MoveWrapper() = default;
+  MoveWrapper(T&& value) : _value(std::move(value)) {}
 
-    MoveWrapper(const MoveWrapper& other) : _value(std::move(other._value)) {}
-    MoveWrapper(MoveWrapper&& other) : _value(std::move(other._value)) {}
+  MoveWrapper(const MoveWrapper& other) : _value(std::move(other._value)) {}
+  MoveWrapper(MoveWrapper&& other) : _value(std::move(other._value)) {}
 
-    MoveWrapper& operator=(const MoveWrapper&) = delete;
-    MoveWrapper& operator=(MoveWrapper&&) = delete;
+  MoveWrapper& operator=(const MoveWrapper&) = delete;
+  MoveWrapper& operator=(MoveWrapper&&) = delete;
 
-    T& get() { return _value; }
-    const T& get() const { return _value; }
+  T& get() { return _value; }
+  const T& get() const { return _value; }
 
-    ~MoveWrapper() {}
+  ~MoveWrapper() {}
 
-private:
-    mutable T _value;
+ private:
+  mutable T _value;
 };
 
 }  // namespace async_simple

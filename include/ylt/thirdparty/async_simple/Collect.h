@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 #define ASYNC_SIMPLE_COLLECT_H
 
 #include <exception>
-#include <iostream>
 #include <iterator>
 #include <vector>
-
 #include "async_simple/Common.h"
 #include "async_simple/Future.h"
 #include "async_simple/Try.h"
+
+#include <iostream>
 
 namespace async_simple {
 
@@ -50,48 +50,47 @@ template <std::input_iterator Iterator>
 inline Future<std::vector<
     Try<typename std::iterator_traits<Iterator>::value_type::value_type>>>
 collectAll(Iterator begin, Iterator end) {
-  using T = typename std::iterator_traits<Iterator>::value_type::value_type;
-  size_t n = std::distance(begin, end);
+    using T = typename std::iterator_traits<Iterator>::value_type::value_type;
+    size_t n = std::distance(begin, end);
 
-  bool allReady = true;
-  for (auto iter = begin; iter != end; ++iter) {
-    if (!iter->hasResult()) {
-      allReady = false;
-      break;
-    }
-  }
-  if (allReady) {
-    std::vector<Try<T>> results;
-    results.reserve(n);
+    bool allReady = true;
     for (auto iter = begin; iter != end; ++iter) {
-      results.push_back(std::move(iter->result()));
+        if (!iter->hasResult()) {
+            allReady = false;
+            break;
+        }
     }
-    return Future<std::vector<Try<T>>>(std::move(results));
-  }
-
-  Promise<std::vector<Try<T>>> promise;
-  auto future = promise.getFuture();
-
-  struct Context {
-    Context(size_t n, Promise<std::vector<Try<T>>> p_)
-        : results(n), p(std::move(p_)) {}
-    ~Context() { p.setValue(std::move(results)); }
-    std::vector<Try<T>> results;
-    Promise<std::vector<Try<T>>> p;
-  };
-
-  auto ctx = std::make_shared<Context>(n, std::move(promise));
-  for (size_t i = 0; i < n; ++i, ++begin) {
-    if (begin->hasResult()) {
-      ctx->results[i] = std::move(begin->result());
+    if (allReady) {
+        std::vector<Try<T>> results;
+        results.reserve(n);
+        for (auto iter = begin; iter != end; ++iter) {
+            results.push_back(std::move(iter->result()));
+        }
+        return Future<std::vector<Try<T>>>(std::move(results));
     }
-    else {
-      begin->setContinuation([ctx, i](Try<T>&& t) mutable {
-        ctx->results[i] = std::move(t);
-      });
+
+    Promise<std::vector<Try<T>>> promise;
+    auto future = promise.getFuture();
+
+    struct Context {
+        Context(size_t n, Promise<std::vector<Try<T>>> p_)
+            : results(n), p(std::move(p_)) {}
+        ~Context() { p.setValue(std::move(results)); }
+        std::vector<Try<T>> results;
+        Promise<std::vector<Try<T>>> p;
+    };
+
+    auto ctx = std::make_shared<Context>(n, std::move(promise));
+    for (size_t i = 0; i < n; ++i, ++begin) {
+        if (begin->hasResult()) {
+            ctx->results[i] = std::move(begin->result());
+        } else {
+            begin->setContinuation([ctx, i](Try<T>&& t) mutable {
+                ctx->results[i] = std::move(t);
+            });
+        }
     }
-  }
-  return future;
+    return future;
 }
 
 }  // namespace async_simple

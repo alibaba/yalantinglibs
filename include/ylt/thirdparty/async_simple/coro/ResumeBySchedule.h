@@ -13,56 +13,70 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
-#define ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
+#ifndef ASYNC_RESUME_BY_SCHEDULE_H
+#define ASYNC_RESUME_BY_SCHEDULE_H
 
+#include "async_simple/Executor.h"
 #include "async_simple/Future.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/experimental/coroutine.h"
 
 #include <type_traits>
+#include <utility>
 
-namespace async_simple {
+namespace async_simple::coro {
 
-namespace coro::detail {
+namespace detail {
+
 template <typename T>
-struct FutureAwaiter {
-    Future<T> future_;
+class FutureResumeByScheduleAwaiter {
+public:
+    FutureResumeByScheduleAwaiter(Future<T>&& f) : _future(std::move(f)) {}
 
-    bool await_ready() { return future_.hasResult(); }
+    bool await_ready() { return _future.hasResult(); }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> continuation) {
         static_assert(std::is_base_of_v<LazyPromiseBase, PromiseType>,
-                      "FutureAwaiter is only allowed to be called by Lazy");
+                      "FutureResumeByScheduleAwaiter is only allowed to be "
+                      "called by Lazy");
         Executor* ex = continuation.promise()._executor;
-        Executor::Context ctx = Executor::NULLCTX;
-        if (ex != nullptr) {
-            ctx = ex->checkout();
-        }
-        future_.setContinuation([continuation, ex, ctx](Try<T>&& t) mutable {
+        _future.setContinuation([continuation, ex](Try<T>&& t) mutable {
             if (ex != nullptr) {
-                ex->checkin(continuation, ctx);
+                ex->schedule(continuation);
             } else {
                 continuation.resume();
             }
         });
     }
-    auto await_resume() { return std::move(future_.value()); }
+
+    auto await_resume() { return std::move(_future.value()); }
+
+private:
+    Future<T> _future;
 };
-}  // namespace coro::detail
 
 template <typename T>
-auto operator co_await(Future<T>&& future) {
-    return coro::detail::FutureAwaiter<T>{std::move(future)};
-}
+class FutureResumeByScheduleAwaitable {
+public:
+    explicit FutureResumeByScheduleAwaitable(Future<T>&& f)
+        : _future(std::move(f)) {}
+
+    auto coAwait(Executor*) {
+        return FutureResumeByScheduleAwaiter(std::move(_future));
+    }
+
+private:
+    Future<T> _future;
+};
+
+}  // namespace detail
 
 template <typename T>
-[[deprecated("Require an rvalue future.")]]
-auto operator co_await(T&& future) requires IsFuture<std::decay_t<T>>::value {
-    return std::move(operator co_await(std::move(future)));
+inline auto ResumeBySchedule(Future<T>&& future) {
+    return detail::FutureResumeByScheduleAwaitable<T>(std::move(future));
 }
 
-}  // namespace async_simple
+}  // namespace async_simple::coro
 
 #endif
