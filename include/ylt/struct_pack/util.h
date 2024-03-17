@@ -185,7 +185,6 @@ void string_set_length_hacker(std::string &, std::size_t);
 
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
-  std::string &str = *reinterpret_cast<std::string *>(&raw_str);
 #if defined(_GLIBCXX_USE_CXX11_ABI)
   constexpr bool is_use_cxx11_abi = _GLIBCXX_USE_CXX11_ABI;
 #else
@@ -204,14 +203,15 @@ inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
     defined(_MSVC_STL_VERSION)
     if constexpr (is_string_reserve_shrink) {
       if (sz > raw_str.capacity()) {
-        str.reserve(sz * sizeof(ch));
+        raw_str.reserve(sz);
       }
     }
     else {
-      str.reserve(sz * sizeof(ch));
+      raw_str.reserve(sz);
     }
+    std::string &str = *reinterpret_cast<std::string *>(&raw_str);
     string_set_length_hacker(str, sz);
-    *(str.data() + sz) = 0;
+    *(raw_str.data() + sz) = 0;
 #else
     raw_str.resize(sz);
 #endif
