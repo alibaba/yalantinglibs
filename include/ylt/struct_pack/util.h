@@ -211,7 +211,7 @@ inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
       str.reserve(sz * sizeof(ch));
     }
     string_set_length_hacker(str, sz);
-    for (auto i = sz; i < sz + sizeof(ch); ++i) str[i] = '\0';
+    *(str.data() + sz) = 0;
 #else
     raw_str.resize(sz);
 #endif
