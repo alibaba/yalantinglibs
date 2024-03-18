@@ -81,6 +81,7 @@ TEST_CASE("test basic") {
   ELOG_INFO << buf << ", " << str << ", " << sv << ", " << id;
 
 #if __has_include(<fmt/format.h>) || (__has_include(<format>) && !defined(__APPLE__))
+  ELOGFMT(INFO, "Hello");
   ELOGFMT(INFO, "{} {}", 20, 42);
   ELOGFMT(INFO, "it is a long string test {} {}", 42, "fmt");
 #endif

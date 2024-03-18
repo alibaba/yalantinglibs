@@ -231,7 +231,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 
 #if __has_include(<fmt/format.h>) || __has_include(<format>)
 
-#define ELOGFMT_IMPL0(severity, Id, prefix, format_str, ...)          \
+#define ELOGFMT_IMPL0(severity, Id, prefix, ...)                      \
   if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
     ;                                                                 \
   }                                                                   \
@@ -239,7 +239,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
     easylog::logger<Id>::instance() +=                                \
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
-            .format(prefix::format(format_str, __VA_ARGS__));         \
+            .format(prefix::format(__VA_ARGS__));                     \
     if constexpr (severity == easylog::Severity::CRITICAL) {          \
       easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
