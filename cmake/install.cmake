@@ -56,5 +56,8 @@ if (INSTALL_THIRDPARTY)
                 $<INSTALL_INTERFACE:include/ylt/thirdparty>
                 )
         endif()
+elseif(VCPKG_INSTALL_THIRDPARTY)
+        install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/cinatra" DESTINATION include/ylt/thirdparty/cinatra)
+        install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/iguana" DESTINATION include/ylt/thirdparty/iguana)
 endif()
 message(STATUS "--------------------------------------------")
