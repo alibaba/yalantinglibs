@@ -168,6 +168,9 @@ struct deserialize_one_derived_class_helper {
   }
 };
 
+template <typename T>
+void struct_pack_derived_decl(const T *) = delete;
+
 template <typename Base>
 using derived_class_set_t = decltype(struct_pack_derived_decl((Base *)nullptr));
 

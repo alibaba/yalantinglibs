@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "foreach_macro.h"
-
 #pragma once
+#include "foreach_macro.h"
 
 #define GET_STRUCT_PACK_ID_IMPL_FOR_LOOP(idx, type)              \
   inline uint32_t type::get_struct_pack_id() const {             \
@@ -26,7 +25,7 @@
 #define STRUCT_PACK_DERIVED_DECL(base, ...)                                    \
                                                                                \
   inline decltype(struct_pack::detail::derived_decl_impl<base, __VA_ARGS__>()) \
-  struct_pack_derived_decl(base*);
+  struct_pack_derived_decl(const base*);
 
 #define STRUCT_PACK_DERIVED_IMPL(base, ...)                         \
   STRUCT_PACK_EXPAND_EACH(, GET_STRUCT_PACK_ID_IMPL_FOR_LOOP, base, \
