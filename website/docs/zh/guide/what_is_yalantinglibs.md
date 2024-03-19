@@ -97,9 +97,10 @@ cmake --build .
 - 手动编译:
 
 1. 将 `include/`加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
-2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过Cmake 选项 -DINSTALL_INDEPENDENT_THIRDPARTY=ON 安装了第三方依赖，可跳过该步骤)
-3. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++`编译器时需要添加选项 `-fcoroutines`。
-4. 全部搞定. 更多细节请参考 `example/cmakelist.txt`.
+2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
+3. 将 `include/ylt/standalone` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
+4. 通过选项`-std=c++20`(g++/clang++) or `/std:c++20`(msvc)启用C++20标准。（序列化库和日志库至少需要c++17，网络库与协程至少需要C++20）
+5. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++10`编译器需要添加选项 `-fcoroutines`。
 
 - 更多细节:
 如需查看更多细节, 除了`example/cmakelist.txt`，你还可以参考 [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
@@ -377,18 +378,20 @@ yalantinglibs工程自身支持如下配置项，如果你使用cmake find_packa
 |YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|struct_pack启用对不跨平台的特殊类型的支持（如wstring, in128_t）|
 |YLT_ENABLE_STRUCT_PACK_OPTIMIZE|OFF|struct_pack启用激进的模板展开优化（会花费更多编译时间）|
 
-## 第三方安装选项
+## 安装选项
 
-默认情况下，ylt会把第三方依赖安装到`ylt/thirdparty`目录下，你需要将它添加到头文件包含路径中。
+默认情况下，ylt会把第三方依赖和子库直接安装到安装目录下。
 
 如果你不想让ylt安装第三方依赖，你可以使用选项：`-DINSTALL_THIRDPARTY=OFF`。
 
-如果你想让ylt将第三方依赖直接独立安装到系统默认的包含路径中，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=ON`。
+如果你想让ylt将第三方依赖和子库安装到`ylt/thirdparty` 和`ylt/standalone`下，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=OFF` 和`-DINSTALL_INDEPENDENT_STANDALONE=OFF`.
 
 |选项|默认值|
 |----------|------------|
 |INSTALL_THIRDPARTY|ON|
-|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
+|INSTALL_STANDALONE|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_STANDALONE|ON|
 
 ## 开发选项
 
@@ -408,47 +411,33 @@ yalantinglibs工程自身支持如下配置项，如果你使用cmake find_packa
 
 以下是我们使用的第三方依赖（async_simple虽然也是ylt的一部分，但其首先开源，故计为一个独立的第三方依赖）
 
-### coro_io
+### coro_io/coro_rpc/coro_http
+
+这些依赖会被默认安装，可以通过安装选项来控制。
 
 - [asio](https://think-async.com/Asio)
 - [async_simple](https://github.com/alibaba/async_simple)
 - [openssl](https://www.openssl.org/) (optional)
-
-### coro_rpc
-
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [openssl](https://www.openssl.org/) (optional)
-
-### coro_http
-
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [cinatra](https://github.com/qicosmos/cinatra)
 
 ### easylog
 
 无依赖。
 
-### struct_pack
+### struct_pack, struct_json, struct_xml, struct_yaml
 
 无依赖。
 
-### struct_json
+### struct_pb (可选)
 
-- [iguana](https://github.com/qicosmos/iguana)
-
-### struct_pb (optional)
+默认情况下我们不会安装struct_pb, 你需要手动安装以下依赖：
 
 - [protobuf](https://protobuf.dev/)
 
-### struct_xml
+## 独立子仓库
 
-- [iguana](https://github.com/qicosmos/iguana)
+coro_http 由独立子仓库实现： [cinatra](https://github.com/qicosmos/cinatra)
 
-### struct_yaml
-
-- [iguana](https://github.com/qicosmos/iguana)
+struct_json、struct_xml、struct_yaml 由独立子仓库实现： [iguana](https://github.com/qicosmos/iguana)
 
 ## Benchmark
 

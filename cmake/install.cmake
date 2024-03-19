@@ -1,8 +1,11 @@
 message(STATUS "-------------YLT INSTALL SETTING------------")
 option(INSTALL_THIRDPARTY "Install thirdparty" ON)
-option(INSTALL_THIRDPARTY_BY_PACKAGE_MANAGER "Install thirdparty by package manager" OFF)
+option(INSTALL_STANDALONE "Install standalone" ON)
 message(STATUS "INSTALL_THIRDPARTY: " ${INSTALL_THIRDPARTY})
+
+message(STATUS "INSTALL_STANDALONE: " ${INSTALL_STANDALONE})
 option(INSTALL_INDEPENDENT_THIRDPARTY "Install independent thirdparty" ON)
+option(INSTALL_INDEPENDENT_STANDALONE "Install independent standalone" ON)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
@@ -45,7 +48,7 @@ install(EXPORT yalantinglibsTargets
        DESTINATION ${ConfigPackageLocation}
        )
 
-install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty" EXCLUDE)
+install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty" EXCLUDE REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone" EXCLUDE)
 
 if (INSTALL_THIRDPARTY)
         message(STATUS "INSTALL_INDEPENDENT_THIRDPARTY: " ${INSTALL_INDEPENDENT_THIRDPARTY})
@@ -57,11 +60,15 @@ if (INSTALL_THIRDPARTY)
                 $<INSTALL_INTERFACE:include/ylt/thirdparty>
                 )
         endif()
-elseif(INSTALL_THIRDPARTY_BY_PACKAGE_MANAGER)
-        install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/cinatra" DESTINATION include/ylt/thirdparty/cinatra)
-        install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/iguana" DESTINATION include/ylt/thirdparty/iguana)
-        target_include_directories(yalantinglibs INTERFACE
-        $<INSTALL_INTERFACE:include/ylt/thirdparty>
-        )
+endif()
+if(INSTALL_STANDALONE)
+        message(STATUS "INSTALL_INDEPENDENT_STANDALONE: " ${INSTALL_INDEPENDENT_STANDALONE})
+        if (INSTALL_INDEPENDENT_STANDALONE)        
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone/" DESTINATION include)
+        else()
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone/" DESTINATION include/ylt/standalone)
+                target_include_directories(yalantinglibs INTERFACE
+                $<INSTALL_INTERFACE:include/ylt/standalone>)
+        endif()
 endif()
 message(STATUS "--------------------------------------------")
