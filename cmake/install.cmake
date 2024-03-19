@@ -1,5 +1,6 @@
 message(STATUS "-------------YLT INSTALL SETTING------------")
 option(INSTALL_THIRDPARTY "Install thirdparty" ON)
+option(INSTALL_THIRDPARTY_BY_PACKAGE_MANAGER "Install thirdparty by package manager" OFF)
 message(STATUS "INSTALL_THIRDPARTY: " ${INSTALL_THIRDPARTY})
 option(INSTALL_INDEPENDENT_THIRDPARTY "Install independent thirdparty" ON)
 
@@ -56,7 +57,7 @@ if (INSTALL_THIRDPARTY)
                 $<INSTALL_INTERFACE:include/ylt/thirdparty>
                 )
         endif()
-elseif(VCPKG_INSTALL_THIRDPARTY)
+elseif(INSTALL_THIRDPARTY_BY_PACKAGE_MANAGER)
         install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/cinatra" DESTINATION include/ylt/thirdparty/cinatra)
         install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty/iguana" DESTINATION include/ylt/thirdparty/iguana)
 endif()
