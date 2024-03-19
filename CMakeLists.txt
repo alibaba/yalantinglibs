@@ -18,6 +18,7 @@ if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs") # if ylt is top-level project
         # add include path
         include_directories(include)
         include_directories(include/ylt/thirdparty)
+        include_directories(include/ylt/standalone)
         include_directories(src/include)
 
         include(cmake/utils.cmake)
