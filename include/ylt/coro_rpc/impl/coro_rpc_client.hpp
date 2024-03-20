@@ -476,12 +476,6 @@ class coro_rpc_client {
   async_simple::coro::Lazy<bool> timeout(auto duration, std::string err_msg) {
     timer_.expires_after(duration);
     bool is_timeout = co_await timer_.async_await();
-#ifdef UNIT_TEST_INJECT
-    ELOGV(INFO, "client_id %d %s, is_timeout_ %d, %d , duration %d ms",
-          config_.client_id, err_msg.data(), is_timeout_, is_timeout,
-          std::chrono::duration_cast<std::chrono::milliseconds>(duration)
-              .count());
-#endif
     if (!is_timeout) {
       co_return false;
     }
