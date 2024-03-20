@@ -130,6 +130,7 @@ class coro_rpc_client {
   coro_rpc_client(asio::io_context::executor_type executor,
                   uint32_t client_id = 0)
       : executor(executor),
+        timer_(executor),
         socket_(std::make_shared<asio::ip::tcp::socket>(executor)) {
     config_.client_id = client_id;
   }
@@ -142,6 +143,7 @@ class coro_rpc_client {
       coro_io::ExecutorWrapper<> &executor = *coro_io::get_global_executor(),
       uint32_t client_id = 0)
       : executor(executor.get_asio_executor()),
+        timer_(executor.get_asio_executor()),
         socket_(std::make_shared<asio::ip::tcp::socket>(
             executor.get_asio_executor())) {
     config_.client_id = client_id;
@@ -306,11 +308,8 @@ class coro_rpc_client {
 
     static_check<func, Args...>();
 
-    async_simple::Promise<async_simple::Unit> promise;
-    coro_io::period_timer timer(&executor);
-    timeout(timer, duration, promise, "rpc call timer canceled")
-        .via(&executor)
-        .detach();
+    timeout(duration, "rpc call timer canceled").start([](auto &&) {
+    });
 
 #ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
@@ -325,7 +324,7 @@ class coro_rpc_client {
 #endif
 
     std::error_code err_code;
-    timer.cancel(err_code);
+    timer_.cancel(err_code);
 
     if (is_timeout_) {
       ret = rpc_result<R, coro_rpc_protocol>{
@@ -333,7 +332,6 @@ class coro_rpc_client {
           coro_rpc_protocol::rpc_error{errc::timed_out, "rpc call timed out"}};
     }
 
-    co_await promise.getFuture();
 #ifdef UNIT_TEST_INJECT
     ELOGV(INFO, "client_id %d call %s %s", config_.client_id,
           get_func_name<func>().data(), ret ? "ok" : "failed");
@@ -410,18 +408,15 @@ class coro_rpc_client {
 
     ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
           config_.port.data());
-    async_simple::Promise<async_simple::Unit> promise;
-    coro_io::period_timer timer(&executor);
-    timeout(timer, config_.timeout_duration, promise, "connect timer canceled")
-        .via(&executor)
-        .detach();
+    timeout(config_.timeout_duration, "connect timer canceled")
+        .start([](auto &&) {
+        });
 
     std::error_code ec = co_await coro_io::async_connect(
         &executor, *socket_, config_.host, config_.port);
     std::error_code err_code;
-    timer.cancel(err_code);
+    timer_.cancel(err_code);
 
-    co_await promise.getFuture();
     if (ec) {
       if (is_timeout_) {
         co_return errc::timed_out;
@@ -478,24 +473,15 @@ class coro_rpc_client {
     return ssl_init_ret_;
   }
 #endif
-  async_simple::coro::Lazy<bool> timeout(auto &timer, auto duration,
-                                         auto &promise, std::string err_msg) {
-    timer.expires_after(duration);
-    bool is_timeout = co_await timer.async_await();
-#ifdef UNIT_TEST_INJECT
-    ELOGV(INFO, "client_id %d %s, is_timeout_ %d, %d , duration %d ms",
-          config_.client_id, err_msg.data(), is_timeout_, is_timeout,
-          std::chrono::duration_cast<std::chrono::milliseconds>(duration)
-              .count());
-#endif
+  async_simple::coro::Lazy<bool> timeout(auto duration, std::string err_msg) {
+    timer_.expires_after(duration);
+    bool is_timeout = co_await timer_.async_await();
     if (!is_timeout) {
-      promise.setValue(async_simple::Unit());
       co_return false;
     }
 
     is_timeout_ = is_timeout;
     close_socket(socket_);
-    promise.setValue(async_simple::Unit());
     co_return true;
   }
 
@@ -833,6 +819,7 @@ class coro_rpc_client {
 #endif
  private:
   coro_io::ExecutorWrapper<> executor;
+  coro_io::period_timer timer_;
   std::shared_ptr<asio::ip::tcp::socket> socket_;
   std::string read_buf_, resp_attachment_buf_;
   std::string_view req_attachment_;
