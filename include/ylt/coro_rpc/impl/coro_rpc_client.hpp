@@ -430,9 +430,6 @@ class coro_rpc_client {
     }
 
     socket_->set_option(asio::ip::tcp::no_delay(true), ec);
-    if (ec) {
-      co_return errc::io_error;
-    }
 
 #ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
