@@ -152,7 +152,7 @@ struct CollectAnyAwaiter {
                     auto count = e->downCount();
                     if (count == size + 1) {
                         r->_idx = i;
-                        (*callback)(i, std::move(result));
+                        (void)(*callback)(i, std::move(result));
                         c.resume();
                     }
                 });
@@ -222,7 +222,7 @@ struct CollectAnyVariadicPairAwaiter {
                                 callback](auto&& res) mutable {
                         auto count = event->downCount();
                         if (count == std::tuple_size<InputType>() + 1) {
-                            callback(std::move(res));
+                            (void)callback(std::move(res));
                             *result = I;
                             continuation.resume();
                         }
