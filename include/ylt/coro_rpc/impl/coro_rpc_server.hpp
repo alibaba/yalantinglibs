@@ -346,6 +346,7 @@ class coro_rpc_server_base {
 
       int64_t conn_id = ++conn_id_;
       ELOGV(INFO, "new client conn_id %d coming", conn_id);
+      socket.set_option(asio::ip::tcp::no_delay(true), error);
       auto conn = std::make_shared<coro_connection>(executor, std::move(socket),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
