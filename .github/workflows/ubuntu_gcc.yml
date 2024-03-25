@@ -17,7 +17,7 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
@@ -53,7 +53,7 @@ jobs:
       matrix:
         mode: [ Debug ] #[Release, Debug]
         ssl: [ ON, OFF ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
@@ -94,7 +94,7 @@ jobs:
       matrix:
         mode: [Release, Debug]
         io_uring: [ ON ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
