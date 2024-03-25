@@ -111,7 +111,43 @@ async_simple::coro::Lazy<void> test_select_channel() {
   }
 }
 
+void callback_lazy() {
+  using namespace async_simple::coro;
+  auto test0 = []() mutable -> Lazy<int> {
+    co_return 41;
+  };
+
+  auto test1 = []() mutable -> Lazy<int> {
+    co_return 42;
+  };
+
+  auto collectAnyLazy = [](auto&&... args) mutable -> Lazy<size_t> {
+    co_return co_await collectAny(std::move(args)...);
+  };
+
+  syncAwait(
+      collectAnyLazy(std::pair{test1(), [&](auto&& val) mutable -> Lazy<void> {
+                                 CHECK(val.value() == 42);
+                                 int r = co_await test0();
+                                 int result = r + val.value();
+                                 CHECK(result == 83);
+                               }}));
+
+  std::vector<Lazy<int>> input;
+  input.push_back(test1());
+
+  auto index = syncAwait(collectAnyLazy(
+      std::move(input), [&test0](size_t index, auto val) mutable -> Lazy<void> {
+        CHECK(val.value() == 42);
+        int r = co_await test0();
+        int result = r + val.value();
+        CHECK(result == 83);
+      }));
+  CHECK(index == 0);
+}
+
 TEST_CASE("test channel send recieve, test select channel and coroutine") {
   async_simple::coro::syncAwait(test_coro_channel());
   async_simple::coro::syncAwait(test_select_channel());
+  callback_lazy();
 }
