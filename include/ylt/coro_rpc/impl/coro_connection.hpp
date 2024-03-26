@@ -39,6 +39,7 @@ namespace coro_rpc {
 class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 
+enum class context_status : int { init, start_response, finish_response };
 template <typename rpc_protocol>
 struct context_info_t {
   std::shared_ptr<coro_connection> conn_;
@@ -48,10 +49,14 @@ struct context_info_t {
   std::function<std::string_view()> resp_attachment_ = [] {
     return std::string_view{};
   };
-  std::atomic<bool> has_response_ = false;
-  bool is_delay_ = false;
+  std::atomic<context_status> status_ = context_status::init;
   context_info_t(std::shared_ptr<coro_connection> &&conn)
       : conn_(std::move(conn)) {}
+  context_info_t(std::shared_ptr<coro_connection> &&conn,
+                 std::string &&req_body_buf, std::string &&req_attachment_buf)
+      : conn_(std::move(conn)),
+        req_body_(std::move(req_body_buf)),
+        req_attachment_(std::move(req_attachment_buf)) {}
 };
 /*!
  * TODO: add doc
@@ -70,12 +75,6 @@ struct context_info_t {
 
 class coro_connection : public std::enable_shared_from_this<coro_connection> {
  public:
-  enum rpc_call_type {
-    non_callback,
-    callback_with_delay,
-    callback_finished,
-    callback_started
-  };
 
   /*!
    *
@@ -152,11 +151,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         std::make_shared<context_info_t<rpc_protocol>>(shared_from_this());
     std::string resp_error_msg;
     while (true) {
-      auto &req_head = context_info->req_head_;
-      auto &body = context_info->req_body_;
-      auto &req_attachment = context_info->req_attachment_;
       reset_timer();
-      auto ec = co_await rpc_protocol::read_head(socket, req_head);
+      typename rpc_protocol::req_header req_head_tmp;
+      auto ec = co_await rpc_protocol::read_head(socket, req_head_tmp);
       cancel_timer();
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
@@ -169,7 +166,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
 
 #ifdef UNIT_TEST_INJECT
-      client_id_ = req_head.seq_num;
+      client_id_ = req_head_tmp.seq_num;
       ELOGV(INFO, "conn_id %d, client_id %d", conn_id_, client_id_);
 #endif
 
@@ -183,6 +180,27 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         break;
       }
 #endif
+
+      // try to reuse context
+      if (is_rpc_return_by_callback) {
+        // cant reuse context,make shared new one
+        is_rpc_return_by_callback = false;
+        if (context_info->status_ != context_status::finish_response) {
+          // cant reuse buffer
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+              shared_from_this());
+        }
+        else {
+          // reuse string buffer
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+              shared_from_this(), std::move(context_info->req_body_),
+              std::move(context_info->req_attachment_));
+        }
+      }
+      auto &req_head = context_info->req_head_;
+      auto &body = context_info->req_body_;
+      auto &req_attachment = context_info->req_attachment_;
+      req_head = std::move(req_head_tmp);
       auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
 
       if (!serialize_proto.has_value())
@@ -215,36 +233,22 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         auto coro_handler = router.get_coro_handler(key);
         pair = co_await router.route_coro(coro_handler, payload, context_info,
                                           serialize_proto.value(), key);
+        // TODO: if coroutine resume in another thread, it's thread-unsafe. we
+        // need post it back to the same io exeuctor.
       }
       else {
         pair = router.route(handler, payload, context_info,
                             serialize_proto.value(), key);
       }
-
       auto &[resp_err, resp_buf] = pair;
-      switch (rpc_call_type_) {
-        default:
-          unreachable();
-        case rpc_call_type::non_callback:
-          break;
-        case rpc_call_type::callback_with_delay:
+      if (is_rpc_return_by_callback) {
+        if (!resp_err) {
           ++delay_resp_cnt;
-          rpc_call_type_ = rpc_call_type::non_callback;
           continue;
-        case rpc_call_type::callback_finished:
-          continue;
-        case rpc_call_type::callback_started:
-          coro_io::callback_awaitor<void> awaitor;
-          rpc_call_type_ = rpc_call_type::callback_finished;
-          co_await awaitor.await_resume([this](auto handler) {
-            this->callback_awaitor_handler_ = std::move(handler);
-          });
-          context_info->has_response_ = false;
-          context_info->resp_attachment_ = []() -> std::string_view {
-            return {};
-          };
-          rpc_call_type_ = rpc_call_type::non_callback;
-          continue;
+        }
+        else {
+          is_rpc_return_by_callback = false;
+        }
       }
       resp_error_msg.clear();
       if (!!resp_err)
@@ -297,20 +301,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol>
   void response_msg(std::string &&body_buf,
                     std::function<std::string_view()> &&resp_attachment,
-                    const typename rpc_protocol::req_header &req_head,
-                    bool is_delay) {
+                    const typename rpc_protocol::req_header &req_head) {
     std::string header_buf = rpc_protocol::prepare_response(
         body_buf, req_head, resp_attachment().size());
     response(std::move(header_buf), std::move(body_buf),
-             std::move(resp_attachment), shared_from_this(), is_delay)
+             std::move(resp_attachment), shared_from_this())
         .via(executor_)
         .detach();
   }
 
   template <typename rpc_protocol>
   void response_error(coro_rpc::errc ec, std::string_view error_msg,
-                      const typename rpc_protocol::req_header &req_head,
-                      bool is_delay) {
+                      const typename rpc_protocol::req_header &req_head) {
     std::function<std::string_view()> attach_ment = []() -> std::string_view {
       return {};
     };
@@ -318,12 +320,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     std::string header_buf = rpc_protocol::prepare_response(
         body_buf, req_head, 0, ec, error_msg, true);
     response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
-             shared_from_this(), is_delay)
+             shared_from_this())
         .via(executor_)
         .detach();
   }
 
-  void set_rpc_call_type(enum rpc_call_type r) { rpc_call_type_ = r; }
+  void set_rpc_return_by_callback() { is_rpc_return_by_callback = true; }
 
   /*!
    * Check the connection has closed or not
@@ -364,8 +366,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
  private:
   async_simple::coro::Lazy<void> response(
       std::string header_buf, std::string body_buf,
-      std::function<std::string_view()> resp_attachment, rpc_conn self,
-      bool is_delay) noexcept {
+      std::function<std::string_view()> resp_attachment,
+      rpc_conn self) noexcept {
     if (has_closed())
       AS_UNLIKELY {
         ELOGV(DEBUG, "response_msg failed: connection has been closed");
@@ -379,24 +381,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
     write_queue_.emplace_back(std::move(header_buf), std::move(body_buf),
                               std::move(resp_attachment));
-    if (is_delay) {
-      --delay_resp_cnt;
-      assert(delay_resp_cnt >= 0);
-      reset_timer();
-    }
+    --delay_resp_cnt;
+    assert(delay_resp_cnt >= 0);
+    reset_timer();
     if (write_queue_.size() == 1) {
       co_await send_data();
-    }
-    if (!is_delay) {
-      if (rpc_call_type_ == rpc_call_type::callback_finished) {
-        // the function start_impl is waiting for resume.
-        callback_awaitor_handler_.resume();
-      }
-      else {
-        assert(rpc_call_type_ == rpc_call_type::callback_started);
-        // the function start_impl is not waiting for resume.
-        rpc_call_type_ = rpc_call_type::callback_finished;
-      }
     }
   }
 
@@ -518,9 +507,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     asio::error_code ec;
     timer_.cancel(ec);
   }
-
-  coro_io::callback_awaitor<void>::awaitor_handler callback_awaitor_handler_{
-      nullptr};
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   // FIXME: queue's performance can be imporved.
@@ -528,7 +514,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       std::tuple<std::string, std::string, std::function<std::string_view()>>>
       write_queue_;
   coro_rpc::errc resp_err_;
-  rpc_call_type rpc_call_type_{non_callback};
+  bool is_rpc_return_by_callback{false};
 
   // if don't get any message in keep_alive_timeout_duration_, the connection
   // will be closed when enable_check_timeout_ is true.
