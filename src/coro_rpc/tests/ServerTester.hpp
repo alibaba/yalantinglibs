@@ -57,6 +57,7 @@ struct TesterConfig {
   bool sync_client;
   bool use_outer_io_context;
   unsigned short port;
+  std::string address = "0.0.0.0";
   std::chrono::steady_clock::duration conn_timeout_duration =
       std::chrono::seconds(0);
 
@@ -67,7 +68,8 @@ struct TesterConfig {
        << " use_ssl: " << config.use_ssl << ";"
        << " sync_client: " << config.sync_client << ";"
        << " use_outer_io_context: " << config.use_outer_io_context << ";"
-       << " port: " << config.port << ";";
+       << " port: " << config.port << ";"
+       << " address: " << config.address << ";";
     os << " conn_timeout_duration: ";
     auto val = std::chrono::duration_cast<std::chrono::milliseconds>(
                    config.conn_timeout_duration)
