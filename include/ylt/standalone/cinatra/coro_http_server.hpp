@@ -1,13 +1,5 @@
 #pragma once
 
-#include <asio/dispatch.hpp>
-#include <cstdint>
-#include <mutex>
-#include <type_traits>
-
-#include "asio/streambuf.hpp"
-#include "async_simple/Promise.h"
-#include "async_simple/coro/Lazy.h"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
@@ -518,14 +510,19 @@ class coro_http_server {
     CINATRA_LOG_INFO << "begin to listen";
     using asio::ip::tcp;
     asio::error_code ec;
-    auto addr = asio::ip::address::from_string(address_, ec);
-    if (ec) {
+
+    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
+    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
+    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
+
+    asio::ip::tcp::resolver::iterator it_end;
+    if (ec || it == it_end) {
       CINATRA_LOG_ERROR << "bad address: " << address_
                         << " error: " << ec.message();
       return std::errc::bad_address;
     }
 
-    auto endpoint = tcp::endpoint(addr, port_);
+    auto endpoint = it->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
       CINATRA_LOG_ERROR << "acceptor open failed"
@@ -805,10 +802,6 @@ class coro_http_server {
 
       port_ = port;
       address = address.substr(0, pos);
-    }
-
-    if (iequal0(address, "localhost")) {
-      address = "127.0.0.1";
     }
 
     address_ = std::move(address);

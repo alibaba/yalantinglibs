@@ -308,14 +308,18 @@ class coro_rpc_server_base {
     ELOGV(INFO, "begin to listen");
     using asio::ip::tcp;
     asio::error_code ec;
-    auto addr = asio::ip::address::from_string(address_, ec);
-    if (ec) {
+    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
+    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
+    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
+
+    asio::ip::tcp::resolver::iterator it_end;
+    if (ec || it == it_end) {
       ELOGV(ERROR, "resolve address %s error : %s", address_.data(),
             ec.message().data());
       return coro_rpc::errc::bad_address;
     }
 
-    auto endpoint = tcp::endpoint(addr, port_);
+    auto endpoint = it->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
       ELOGV(ERROR, "open failed, error : %s", ec.message().data());
@@ -420,13 +424,6 @@ class coro_rpc_server_base {
     acceptor_close_waiter_.get_future().wait();
   }
 
-  bool iequal(std::string_view a, std::string_view b) {
-    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
-                      [](char a, char b) {
-                        return tolower(a) == tolower(b);
-                      });
-  }
-
   void init_address(std::string address) {
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
@@ -441,10 +438,6 @@ class coro_rpc_server_base {
 
       port_ = port;
       address = address.substr(0, pos);
-    }
-
-    if (iequal(address, "localhost")) {
-      address = "127.0.0.1";
     }
 
     address_ = std::move(address);

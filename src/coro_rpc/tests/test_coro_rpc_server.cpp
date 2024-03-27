@@ -92,13 +92,13 @@ struct CoroServerTester : ServerTester {
     }
 
     {
-      coro_rpc_server server(1, 9001, "x.x.x");
+      coro_rpc_server server(1, 9001, "x.x.x.x");
       [[maybe_unused]] auto r = server.async_start();
       CHECK(server.get_errc() == coro_rpc::errc::bad_address);
     }
 
     {
-      coro_rpc_server server(1, "x.x.x:9001");
+      coro_rpc_server server(1, "x.x.x.x:9001");
       [[maybe_unused]] auto r = server.async_start();
       CHECK(server.get_errc() == coro_rpc::errc::bad_address);
     }
