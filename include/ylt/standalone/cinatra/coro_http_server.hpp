@@ -30,7 +30,13 @@ class coro_http_server {
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
       : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {
-    init_address(address);
+    init_address(std::move(address));
+  }
+
+  coro_http_server(asio::io_context &ctx,
+                   std::string address /* = "0.0.0.0:9001" */)
+      : out_ctx_(&ctx), acceptor_(ctx), check_timer_(ctx) {
+    init_address(std::move(address));
   }
 
   coro_http_server(size_t thread_num, unsigned short port,
@@ -40,7 +46,17 @@ class coro_http_server {
         port_(port),
         acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()) {
-    init_address(address);
+    init_address(std::move(address));
+  }
+
+  coro_http_server(size_t thread_num,
+                   std::string address /* = "0.0.0.0:9001" */,
+                   bool cpu_affinity = false)
+      : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
+                                                         cpu_affinity)),
+        acceptor_(pool_->get_executor()->get_asio_executor()),
+        check_timer_(pool_->get_executor()->get_asio_executor()) {
+    init_address(std::move(address));
   }
 
   ~coro_http_server() {
@@ -775,10 +791,26 @@ class coro_http_server {
     response.set_delay(true);
   }
 
-  void init_address(std::string &address) {
+  void init_address(std::string address) {
+    if (size_t pos = address.find(':'); pos != std::string::npos) {
+      auto port_sv = std::string_view(address).substr(pos + 1);
+
+      uint16_t port;
+      auto [ptr, ec] =
+          std::from_chars(port_sv.begin(), port_sv.end(), port, 10);
+      if (ec != std::errc{}) {
+        address_ = std::move(address);
+        return;
+      }
+
+      port_ = port;
+      address = address.substr(0, pos);
+    }
+
     if (iequal0(address, "localhost")) {
       address = "127.0.0.1";
     }
+
     address_ = std::move(address);
   }
 

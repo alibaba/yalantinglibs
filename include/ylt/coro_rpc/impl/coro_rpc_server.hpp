@@ -20,6 +20,7 @@
 #include <asio/error_code.hpp>
 #include <asio/io_context.hpp>
 #include <atomic>
+#include <charconv>
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
@@ -77,6 +78,17 @@ class coro_rpc_server_base {
       : pool_(thread_num),
         acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(port),
+        conn_timeout_duration_(conn_timeout_duration),
+        flag_{stat::init} {
+    init_address(std::move(address));
+  }
+
+  coro_rpc_server_base(size_t thread_num,
+                       std::string address /* = "0.0.0.0:9001" */,
+                       std::chrono::steady_clock::duration
+                           conn_timeout_duration = std::chrono::seconds(0))
+      : pool_(thread_num),
+        acceptor_(pool_.get_executor()->get_asio_executor()),
         conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init} {
     init_address(std::move(address));
@@ -416,9 +428,25 @@ class coro_rpc_server_base {
   }
 
   void init_address(std::string address) {
+    if (size_t pos = address.find(':'); pos != std::string::npos) {
+      auto port_sv = std::string_view(address).substr(pos + 1);
+
+      uint16_t port;
+      auto [ptr, ec] =
+          std::from_chars(port_sv.begin(), port_sv.end(), port, 10);
+      if (ec != std::errc{}) {
+        address_ = std::move(address);
+        return;
+      }
+
+      port_ = port;
+      address = address.substr(0, pos);
+    }
+
     if (iequal(address, "localhost")) {
       address = "127.0.0.1";
     }
+
     address_ = std::move(address);
   }
 

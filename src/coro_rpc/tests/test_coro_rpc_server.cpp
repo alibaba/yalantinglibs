@@ -74,7 +74,37 @@ struct CoroServerTester : ServerTester {
     }
 
     {
+      coro_rpc_server server(1, "0.0.0.0:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, "127.0.0.1:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, "localhost:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
       coro_rpc_server server(1, 9001, "x.x.x");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(server.get_errc() == coro_rpc::errc::bad_address);
+    }
+
+    {
+      coro_rpc_server server(1, "x.x.x:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(server.get_errc() == coro_rpc::errc::bad_address);
+    }
+
+    {
+      coro_rpc_server server(1, "127.0.0.1:aaa");
       [[maybe_unused]] auto r = server.async_start();
       CHECK(server.get_errc() == coro_rpc::errc::bad_address);
     }
