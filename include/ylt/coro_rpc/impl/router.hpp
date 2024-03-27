@@ -52,7 +52,7 @@ class router {
 
   using coro_router_handler_t =
       std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-          std::string_view, rpc_context<rpc_protocol> &context_info,
+          std::string_view, 
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using route_key = typename rpc_protocol::route_key_t;
@@ -75,25 +75,23 @@ class router {
   template <auto Func, typename Self>
   struct execute_visitor {
     std::string_view data;
-    rpc_context<rpc_protocol> &context_info;
     Self *self;
     template <typename serialize_protocol>
     async_simple::coro::Lazy<std::optional<std::string>> operator()(
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
-          data, context_info, self);
+          data, self);
     }
   };
 
   template <auto Func>
   struct execute_visitor<Func, void> {
     std::string_view data;
-    rpc_context<rpc_protocol> &context_info;
     template <typename serialize_protocol>
     async_simple::coro::Lazy<std::optional<std::string>> operator()(
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
-          data, context_info);
+          data);
     }
   };
 
@@ -134,9 +132,9 @@ class router {
       auto it = coro_handlers_.emplace(
           key,
           [self](
-              std::string_view data, rpc_context<rpc_protocol> &context_info,
+              std::string_view data,
               typename rpc_protocol::supported_serialize_protocols protocols) {
-            execute_visitor<func, Self> visitor{data, context_info, self};
+            execute_visitor<func, Self> visitor{data, self};
             return std::visit(visitor, protocols);
           });
       if (!it.second) {
@@ -188,9 +186,9 @@ class router {
                                             async_simple::coro::Lazy>) {
       auto it = coro_handlers_.emplace(
           key,
-          [](std::string_view data, rpc_context<rpc_protocol> &context_info,
+          [](std::string_view data,
              typename rpc_protocol::supported_serialize_protocols protocols) {
-            execute_visitor<func, void> visitor{data, context_info};
+            execute_visitor<func, void> visitor{data};
             return std::visit(visitor, protocols);
           });
       if (!it.second) {
@@ -234,7 +232,6 @@ class router {
 
   async_simple::coro::Lazy<std::pair<coro_rpc::errc, std::string>> route_coro(
       auto handler, std::string_view data,
-      rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
@@ -246,7 +243,7 @@ class router {
 
 #endif
           // clang-format off
-      auto res = co_await (*handler)(data, context_info, protocols);
+      auto res = co_await (*handler)(data, protocols);
           // clang-format on
           if (res.has_value())
             AS_LIKELY {

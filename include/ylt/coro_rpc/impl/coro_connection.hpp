@@ -231,7 +231,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         
         set_rpc_return_by_callback();
         router
-            .route_coro(coro_handler, payload, context_info,
+            .route_coro(coro_handler, payload, 
                         serialize_proto.value(), key)
             .via(executor_)
             .start([context_info](auto &&result) mutable {

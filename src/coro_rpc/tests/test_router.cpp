@@ -223,7 +223,7 @@ TEST_CASE("testing coro_handler") {
   async_simple::coro::syncAwait(router.route_coro(
       handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
-      ctx, std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id));
+      std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id));
 }
 
 TEST_CASE("testing not registered func") {

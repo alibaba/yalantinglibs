@@ -152,7 +152,7 @@ inline std::optional<std::string> execute(
 template <typename rpc_protocol, typename serialize_proto, auto func,
           typename Self = void>
 inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
-    std::string_view data, rpc_context<rpc_protocol> &context_info,
+    std::string_view data,
     Self *self = nullptr) {
   using T = decltype(func);
   using param_type = util::function_parameters_t<T>;
@@ -162,54 +162,24 @@ inline async_simple::coro::Lazy<std::optional<std::string>> execute_coro(
   if constexpr (!std::is_void_v<param_type>) {
     using First = std::tuple_element_t<0, param_type>;
     constexpr bool is_conn = requires { typename First::return_type; };
-    if constexpr (is_conn) {
-      static_assert(std::is_void_v<return_type>,
-                    "The return_type must be void");
-    }
-
-    using conn_return_type = decltype(get_return_type<is_conn, First>());
-    constexpr bool has_coro_conn_v =
-        std::is_same_v<context_base<conn_return_type, rpc_protocol>, First>;
-    auto args = util::get_args<has_coro_conn_v, param_type>();
+    static_assert(!is_conn,"context<T> is not allowed as parameter in coroutine function");
 
     bool is_ok = true;
-    constexpr size_t size = std::tuple_size_v<decltype(args)>;
+    constexpr size_t size = std::tuple_size_v<param_type>;
+    param_type args;
     if constexpr (size > 0) {
       is_ok = serialize_proto::deserialize_to(args, data);
     }
-
     if constexpr (std::is_void_v<return_type>) {
       if constexpr (std::is_void_v<Self>) {
-        if constexpr (has_coro_conn_v) {
-          // call void func(coro_conn, args...)
-          co_await std::apply(
-              func,
-              std::tuple_cat(std::forward_as_tuple(
-                                 context_base<conn_return_type, rpc_protocol>(
-                                     context_info)),
-                             std::move(args)));
-        }
-        else {
           // call void func(args...)
           co_await std::apply(func, std::move(args));
-        }
       }
       else {
         auto &o = *self;
-        if constexpr (has_coro_conn_v) {
-          // call void o.func(coro_conn, args...)
-          co_await std::apply(
-              func, std::tuple_cat(
-                        std::forward_as_tuple(
-                            o, context_base<conn_return_type, rpc_protocol>(
-                                   context_info)),
-                        std::move(args)));
-        }
-        else {
           // call void o.func(args...)
           co_await std::apply(
               func, std::tuple_cat(std::forward_as_tuple(o), std::move(args)));
-        }
       }
     }
     else {
