@@ -796,8 +796,8 @@ class coro_http_server {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
       uint16_t port;
-      auto [ptr, ec] =
-          std::from_chars(port_sv.begin(), port_sv.end(), port, 10);
+      auto [ptr, ec] = std::from_chars(
+          port_sv.data(), port_sv.data() + port_sv.size(), port, 10);
       if (ec != std::errc{}) {
         address_ = std::move(address);
         return;
