@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <variant>
 #include <ylt/easylog.hpp>
 #include <ylt/struct_pack.hpp>
@@ -61,7 +62,7 @@ struct coro_rpc_protocol {
     uint32_t seq_num;        //!< sequence number
     uint32_t function_id;    //!< rpc function ID
     uint32_t length;         //!< length of RPC body
-    uint32_t attach_length;  //!< reserved field
+    uint32_t attach_length;  //!< attachment length
   };
 
   struct resp_header {
@@ -71,7 +72,7 @@ struct coro_rpc_protocol {
     uint8_t msg_type;        //!< message type
     uint32_t seq_num;        //!< sequence number
     uint32_t length;         //!< length of RPC body
-    uint32_t attach_length;  //!< reserved field
+    uint32_t attach_length;  //!< attachment length
   };
 
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
@@ -204,9 +205,26 @@ struct coro_rpc_protocol {
 };
 
 STRUCT_PACK_REFL(coro_rpc_protocol::rpc_error, val(), msg);
+
+template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+uint64_t get_request_id(const typename rpc_protocol::req_header& header) noexcept {
+  if constexpr (std::is_same_v<rpc_protocol, coro_rpc::protocol::coro_rpc_protocol>) {
+    return header.seq_num;
+  }
+  else {
+    return 0;
+  }
+}
 }  // namespace protocol
 template <typename return_msg_type>
 using context = coro_rpc::context_base<return_msg_type,
                                        coro_rpc::protocol::coro_rpc_protocol>;
 using rpc_error = protocol::coro_rpc_protocol::rpc_error;
+
+template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context() {
+  auto *ctx=co_await async_simple::coro::LazyLocals{};
+  assert(ctx!=nullptr);
+  co_return (context_info_t<rpc_protocol>*)ctx;
+}
 }  // namespace coro_rpc

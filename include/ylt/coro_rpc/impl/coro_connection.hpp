@@ -42,6 +42,9 @@ using rpc_conn = std::shared_ptr<coro_connection>;
 enum class context_status : int { init, start_response, finish_response };
 template <typename rpc_protocol>
 struct context_info_t {
+#ifndef CORO_RPC_TEST
+private:
+#endif
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
@@ -50,6 +53,10 @@ struct context_info_t {
     return std::string_view{};
   };
   std::atomic<context_status> status_ = context_status::init;
+public:
+  template <typename, typename>
+  friend class context_base;
+  friend class coro_connection;
   context_info_t(std::shared_ptr<coro_connection> &&conn)
       : conn_(std::move(conn)) {}
   context_info_t(std::shared_ptr<coro_connection> &&conn,
@@ -57,7 +64,22 @@ struct context_info_t {
       : conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
         req_attachment_(std::move(req_attachment_buf)) {}
+  uint64_t get_connection_id() noexcept;
+  uint64_t has_closed() const noexcept;
+  void close();
+  uint64_t get_connection_id() const noexcept;
+  void set_response_attachment(std::string_view attachment);
+  void set_response_attachment(std::string attachment);
+  void set_response_attachment(std::function<std::string_view()> attachment);
+  std::string_view get_request_attachment() const;
+  std::string release_request_attachment();
+  std::any &tag() noexcept;
+  const std::any &tag() const noexcept;
+  asio::ip::tcp::endpoint get_local_endpoint() const noexcept;
+  asio::ip::tcp::endpoint get_remote_endpoint() const noexcept;
+  uint64_t get_request_id()  const noexcept;
 };
+
 /*!
  * TODO: add doc
  */
@@ -233,7 +255,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         router
             .route_coro(coro_handler, payload, 
                         serialize_proto.value(), key)
-            .via(executor_)
+            .via(executor_).setLazyLocal((void*)context_info.get())
             .start([context_info](auto &&result) mutable {
               asio::dispatch([context_info=std::move(context_info),result = std::move(result)]() mutable {
                 coro_rpc::errc resp_err;
@@ -378,6 +400,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   const std::any &tag() const { return tag_; }
 
   auto &get_executor() { return *executor_; }
+
+  asio::ip::tcp::endpoint get_remote_endpoint() {return socket_.remote_endpoint();}
+
+  asio::ip::tcp::endpoint get_local_endpoint() {return socket_.local_endpoint();}
 
  private:
   async_simple::coro::Lazy<void> response(
@@ -550,4 +576,80 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
 };
 
+template <typename rpc_protocol>
+uint64_t context_info_t<rpc_protocol>::get_connection_id() noexcept {
+  return conn_->get_connection_id();
+}
+
+template <typename rpc_protocol>
+uint64_t context_info_t<rpc_protocol>::has_closed() const  noexcept {
+  return conn_->has_closed();
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::close() {
+  return conn_->async_close();
+}
+
+template <typename rpc_protocol>
+uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {
+
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment(std::string attachment) {
+  set_response_attachment([attachment = std::move(attachment)] {
+    return std::string_view{attachment};
+  });
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment(std::string_view attachment) {
+  set_response_attachment([attachment] {
+    return attachment;
+  });
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment(std::function<std::string_view()> attachment) {
+  resp_attachment_ = std::move(attachment);
+}
+
+template <typename rpc_protocol>
+std::string_view context_info_t<rpc_protocol>::get_request_attachment() const {
+  return req_attachment_;
+}
+
+template <typename rpc_protocol>
+std::string context_info_t<rpc_protocol>::release_request_attachment() {
+  return std::move(req_attachment_);
+}
+
+template <typename rpc_protocol>
+std::any & context_info_t<rpc_protocol>::tag() noexcept {
+  return conn_->tag();
+}
+
+template <typename rpc_protocol>
+const std::any & context_info_t<rpc_protocol>::tag() const noexcept {
+  return conn_->tag();
+}
+
+template <typename rpc_protocol>
+asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_local_endpoint() const noexcept {
+  return conn_->get_local_endpoint();
+}
+
+template <typename rpc_protocol>
+asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_remote_endpoint() const noexcept {
+  return conn_->get_remote_endpoint();
+}
+namespace protocol {
+  template <typename rpc_protocol>
+  uint64_t get_request_id(const typename rpc_protocol::req_header&) noexcept;
+}
+template <typename rpc_protocol>
+uint64_t context_info_t<rpc_protocol>::get_request_id() const noexcept {
+  return coro_rpc::protocol::get_request_id<rpc_protocol>(req_head_);
+}
 }  // namespace coro_rpc

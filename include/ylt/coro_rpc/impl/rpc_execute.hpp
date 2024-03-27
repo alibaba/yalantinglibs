@@ -22,8 +22,8 @@
 #include <type_traits>
 #include <variant>
 
-#include "context.hpp"
 #include "coro_connection.hpp"
+#include "context.hpp"
 #include "ylt/util/type_traits.h"
 
 namespace coro_rpc::internal {
@@ -43,7 +43,6 @@ auto get_return_type() {
     return First{};
   }
 }
-
 template <typename rpc_protocol>
 using rpc_context = std::shared_ptr<context_info_t<rpc_protocol>>;
 

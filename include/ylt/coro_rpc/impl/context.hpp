@@ -50,7 +50,7 @@ class context_base {
         return false;
       }
 
-    if (has_closed())
+    if (self_->has_closed())
       AS_UNLIKELY {
         ELOGV(DEBUG, "response_msg failed: connection has been closed");
         return false;
@@ -125,65 +125,14 @@ class context_base {
       // response_handler_(std::move(conn_), std::move(ret));
     }
     /*finish here*/
-    self_->status_ = context_status::start_response;
+    self_->status_ = context_status::finish_response;
   }
-
-  /*!
-   * Check connection closed or not
-   *
-   * @return true if closed, otherwise false
-   */
-  bool has_closed() const { return self_->conn_->has_closed(); }
-
-  /*!
-   * Close connection
-   */
-  void close() { return self_->conn_->async_close(); }
-
-  /*!
-   * Get the unique connection ID
-   * @return connection id
-   */
-  uint64_t get_connection_id() const noexcept {
-    return self_->conn_->get_connection_id();
+  const context_info_t<rpc_protocol>* get_context() const noexcept {
+    return self_.get();
   }
-
-  /*!
-   * Set the response_attachment
-   * @return a ref of response_attachment
-   */
-  void set_response_attachment(std::string attachment) {
-    set_response_attachment([attachment = std::move(attachment)] {
-      return std::string_view{attachment};
-    });
+  context_info_t<rpc_protocol>* get_context() noexcept {
+    return self_.get();
   }
-
-  /*!
-   * Set the response_attachment
-   * @return a ref of response_attachment
-   */
-  void set_response_attachment(std::function<std::string_view()> attachment) {
-    self_->resp_attachment_ = std::move(attachment);
-  }
-
-  /*!
-   * Get the request attachment
-   * @return connection id
-   */
-  std::string_view get_request_attachment() const {
-    return self_->req_attachment_;
-  }
-
-  /*!
-   * Release the attachment
-   * @return connection id
-   */
-  std::string release_request_attachment() {
-    return std::move(self_->req_attachment_);
-  }
-
-  std::any &tag() { return self_->conn_->tag(); }
-  const std::any &tag() const { return self_->conn_->tag(); }
 };
 
 template <typename T>
