@@ -75,7 +75,6 @@ struct context_info_t {
 
 class coro_connection : public std::enable_shared_from_this<coro_connection> {
  public:
-
   /*!
    *
    * @param io_context
@@ -88,7 +87,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                       std::chrono::seconds(0))
       : executor_(executor),
         socket_(std::move(socket)),
-        resp_err_(),
         timer_(executor->get_asio_executor()) {
     if (timeout_duration == std::chrono::seconds(0)) {
       return;
@@ -149,12 +147,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       typename rpc_protocol::router &router, Socket &socket) noexcept {
     auto context_info =
         std::make_shared<context_info_t<rpc_protocol>>(shared_from_this());
-    std::string resp_error_msg;
+    reset_timer();
     while (true) {
-      reset_timer();
       typename rpc_protocol::req_header req_head_tmp;
+      // timer will be reset after rpc call response
       auto ec = co_await rpc_protocol::read_head(socket, req_head_tmp);
-      cancel_timer();
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
@@ -215,6 +212,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       ec = co_await rpc_protocol::read_payload(socket, req_head, body,
                                                req_attachment);
+      cancel_timer();
       payload = std::string_view{body};
 
       if (ec)
@@ -225,71 +223,68 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           break;
         }
 
-      std::pair<coro_rpc::errc, std::string> pair{};
-
       auto key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
+      ++delay_resp_cnt;
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
-        pair = co_await router.route_coro(coro_handler, payload, context_info,
-                                          serialize_proto.value(), key);
-        // TODO: if coroutine resume in another thread, it's thread-unsafe. we
-        // need post it back to the same io exeuctor.
+        
+        set_rpc_return_by_callback();
+        router
+            .route_coro(coro_handler, payload, context_info,
+                        serialize_proto.value(), key)
+            .via(executor_)
+            .start([context_info](auto &&result) mutable {
+              asio::dispatch([context_info=std::move(context_info),result = std::move(result)]() mutable {
+                coro_rpc::errc resp_err;
+                std::string resp_buf;
+                if (result.hasError())
+                  AS_UNLIKELY {
+                    resp_err = coro_rpc::errc::interrupted;
+                    resp_buf = "unknonw error";
+                  }
+                else {
+                  std::tie(resp_err, resp_buf) = result.value();
+                }
+                context_info->conn_->template direct_response_msg<rpc_protocol>(
+                    resp_err, resp_buf, context_info->req_head_);
+              });
+            });
       }
       else {
-        pair = router.route(handler, payload, context_info,
-                            serialize_proto.value(), key);
-      }
-      auto &[resp_err, resp_buf] = pair;
-      if (is_rpc_return_by_callback) {
-        if (!resp_err) {
-          ++delay_resp_cnt;
-          continue;
+        auto [resp_err, resp_buf] = router.route(handler, payload, context_info,
+                                                 serialize_proto.value(), key);
+        if (is_rpc_return_by_callback) {
+          if (!resp_err) {
+            continue;
+          }
+          else {
+            is_rpc_return_by_callback = false;
+          }
         }
-        else {
-          is_rpc_return_by_callback = false;
-        }
-      }
-      resp_error_msg.clear();
-      if (!!resp_err)
-        AS_UNLIKELY { std::swap(resp_buf, resp_error_msg); }
-      std::string header_buf = rpc_protocol::prepare_response(
-          resp_buf, req_head, 0, resp_err, resp_error_msg);
-
 #ifdef UNIT_TEST_INJECT
-      if (g_action == inject_action::close_socket_after_send_length) {
-        ELOGV(WARN,
-              "inject action: close_socket_after_send_length conn_id %d, "
-              "client_id %d",
-              conn_id_, client_id_);
-        co_await coro_io::async_write(socket, asio::buffer(header_buf));
-        close();
-        break;
-      }
-      if (g_action == inject_action::server_send_bad_rpc_result) {
-        ELOGV(WARN,
+        if (g_action == inject_action::close_socket_after_send_length) {
+          ELOGV(WARN, "inject action: close_socket_after_send_length", conn_id_,
+                client_id_);
+          std::string header_buf = rpc_protocol::prepare_response(
+        resp_buf, req_head, 0, resp_err, "");
+          co_await coro_io::async_write(socket, asio::buffer(header_buf));
+          close();
+          break;
+        }
+        if (g_action == inject_action::server_send_bad_rpc_result) {
+          ELOGV(
+              WARN,
               "inject action: server_send_bad_rpc_result conn_id %d, client_id "
               "%d",
               conn_id_, client_id_);
-        resp_buf[0] = resp_buf[0] + 1;
-      }
-#endif
-      if (!resp_err_)
-        AS_LIKELY {
-          if (!resp_err)
-            AS_UNLIKELY { resp_err_ = resp_err; }
-          write_queue_.emplace_back(std::move(header_buf), std::move(resp_buf),
-                                    [] {
-                                      return std::string_view{};
-                                    });
-          if (write_queue_.size() == 1) {
-            send_data().start([self = shared_from_this()](auto &&) {
-            });
-          }
-          if (!!resp_err)
-            AS_UNLIKELY { break; }
+          resp_buf[0] = resp_buf[0] + 1;
         }
+#endif
+        direct_response_msg<rpc_protocol>(resp_err, resp_buf, req_head);
+      }
     }
+    cancel_timer();
   }
   /*!
    * send `ret` to RPC client
@@ -297,6 +292,27 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @tparam R message type
    * @param ret object of message type
    */
+  template <typename rpc_protocol>
+  void direct_response_msg(coro_rpc::errc &resp_err, std::string &resp_buf,
+                           const typename rpc_protocol::req_header &req_head) {
+    std::string resp_error_msg;
+    if (!!resp_err) {
+      resp_error_msg = std::move(resp_buf);
+      resp_buf = {};
+      ELOGV(WARNING, "rpc route/execute error, error msg: %s", resp_error_msg.data());
+    }
+    std::string header_buf = rpc_protocol::prepare_response(
+        resp_buf, req_head, 0, resp_err, resp_error_msg);
+
+    response(
+        std::move(header_buf), std::move(resp_buf),
+        [] {
+          return std::string_view{};
+        },
+        nullptr)
+        .start([](auto &&) {
+        });
+  }
 
   template <typename rpc_protocol>
   void response_msg(std::string &&body_buf,
@@ -385,6 +401,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     assert(delay_resp_cnt >= 0);
     reset_timer();
     if (write_queue_.size() == 1) {
+      if (self == nullptr)
+        self = shared_from_this();
       co_await send_data();
     }
   }
@@ -445,12 +463,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         }
       write_queue_.pop_front();
     }
-    if (!!resp_err_)
-      AS_UNLIKELY {
-        ELOGV(ERROR, "%s, %s", make_error_message(resp_err_), "resp_err_");
-        close();
-        co_return;
-      }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
       ELOGV(INFO,
@@ -513,7 +525,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::deque<
       std::tuple<std::string, std::string, std::function<std::string_view()>>>
       write_queue_;
-  coro_rpc::errc resp_err_;
   bool is_rpc_return_by_callback{false};
 
   // if don't get any message in keep_alive_timeout_duration_, the connection

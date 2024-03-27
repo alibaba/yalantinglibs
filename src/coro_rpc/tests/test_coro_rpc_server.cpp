@@ -79,6 +79,7 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&ns_login::LoginService::login>(&login_service_);
     server.register_handler<&HelloService::hello>(&hello_service_);
     server.register_handler<hello>();
+    server.register_handler<hi>();
     server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
     server.register_handler<coro_fun_with_delay_return_void_twice>();
@@ -87,12 +88,8 @@ struct CoroServerTester : ServerTester {
     server.register_handler<coro_fun_with_delay_return_string_twice>();
     server.register_handler<coro_func>();
     server.register_handler<coro_func_return_void>();
-    server.register_handler<coro_func_delay_return_int>();
-    server.register_handler<coro_func_delay_return_void>();
     server.register_handler<&HelloService::coro_func,
-                            &HelloService::coro_func_return_void,
-                            &HelloService::coro_func_delay_return_void,
-                            &HelloService::coro_func_delay_return_int>(
+                            &HelloService::coro_func_return_void>(
         &hello_service_);
     server.register_handler<get_coro_value>();
     server.register_handler<&CoroServerTester::get_value>(this);
@@ -175,20 +172,6 @@ struct CoroServerTester : ServerTester {
     auto ret5 =
         this->template call<&HelloService::coro_func_return_void>(client, 42);
     CHECK(ret5.has_value());
-
-    auto ret6 = this->template call<&HelloService::coro_func_delay_return_void>(
-        client, 42);
-    CHECK(ret6.has_value());
-
-    auto ret7 = this->template call<&HelloService::coro_func_delay_return_int>(
-        client, 42);
-    CHECK(ret7.value() == 42);
-
-    auto ret8 = this->template call<coro_func_delay_return_void>(client, 42);
-    CHECK(ret8.has_value());
-
-    auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
-    CHECK(ret9.value() == 42);
   }
   coro_rpc_server server;
   std::thread thd;

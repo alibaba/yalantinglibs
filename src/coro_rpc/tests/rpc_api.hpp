@@ -51,16 +51,6 @@ inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
   co_return;
 }
 inline async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
-inline async_simple::coro::Lazy<void> coro_func_delay_return_int(
-    coro_rpc::context<int> conn, int i) {
-  conn.response_msg(i);
-  co_return;
-}
-inline async_simple::coro::Lazy<void> coro_func_delay_return_void(
-    coro_rpc::context<void> conn, int i) {
-  conn.response_msg();
-  co_return;
-}
 
 class HelloService {
  public:
@@ -68,17 +58,6 @@ class HelloService {
   static std::string static_hello();
   async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
   async_simple::coro::Lazy<void> coro_func_return_void(int i) { co_return; }
-  async_simple::coro::Lazy<void> coro_func_delay_return_int(
-      coro_rpc::context<int> conn, int i) {
-    conn.response_msg(i);
-    co_return;
-  }
-  async_simple::coro::Lazy<void> coro_func_delay_return_void(
-      coro_rpc::context<void> conn, int i) {
-    conn.response_msg();
-    co_return;
-  }
-
  private:
 };
 namespace ns_login {
