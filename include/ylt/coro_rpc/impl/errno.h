@@ -25,6 +25,9 @@ enum class errc : uint16_t {
   timed_out,
   invalid_argument,
   address_in_use,
+  bad_address,
+  open_error,
+  listen_error,
   operation_canceled,
   interrupted,
   function_not_registered,
@@ -47,6 +50,12 @@ inline constexpr std::string_view make_error_message(errc ec) noexcept {
       return "invalid_argument";
     case errc::address_in_use:
       return "address_in_use";
+    case errc::bad_address:
+      return "bad_address";
+    case errc::open_error:
+      return "open_error";
+    case errc::listen_error:
+      return "listen_error";
     case errc::operation_canceled:
       return "operation_canceled";
     case errc::interrupted:
