@@ -56,6 +56,8 @@ struct CoroServerTester : ServerTester {
     test_start_new_server_with_same_port();
     test_server_send_bad_rpc_result();
     test_server_send_no_body();
+    test_context_func();
+    test_return_err_by_throw_exception();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void>();
     this->test_call_with_delay_func<
         coro_fun_with_user_define_connection_type>();
@@ -80,6 +82,9 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&HelloService::hello>(&hello_service_);
     server.register_handler<hello>();
     server.register_handler<hi>();
+    server.register_handler<test_context, test_lazy_context>();
+    server.register_handler<test_response_error, test_response_error2,
+                            test_response_error3, test_response_error4>();
     server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
     server.register_handler<coro_fun_with_delay_return_void_twice>();
@@ -93,6 +98,35 @@ struct CoroServerTester : ServerTester {
         &hello_service_);
     server.register_handler<get_coro_value>();
     server.register_handler<&CoroServerTester::get_value>(this);
+  }
+
+  void test_context_func() {
+    auto client = create_client();
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    client->set_req_attachment("1234567890987654321234567890");
+    auto result = syncAwait(client->call<test_context>());
+    CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
+    CHECK(result);
+    client->set_req_attachment("01234567890987654321234567890");
+    result = syncAwait(client->call<test_lazy_context>());
+    CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
+    CHECK(result);
+  }
+  void test_return_err_by_throw_exception() {
+    auto client = create_client();
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    auto result = syncAwait(client->call<test_response_error>());
+    REQUIRE(!result);
+    CHECK(result.error().code == coro_rpc::errc::io_error);
+    result = syncAwait(client->call<test_response_error2>());
+    REQUIRE(!result);
+    CHECK(result.error().code == coro_rpc::errc{12244});
+    result = syncAwait(client->call<test_response_error3>());
+    REQUIRE(!result);
+    CHECK(result.error().code == coro_rpc::errc::operation_canceled);
+    result = syncAwait(client->call<test_response_error4>());
+    REQUIRE(!result);
+    CHECK(result.error().code == coro_rpc::errc{12245});
   }
 
   void test_function_not_registered() {

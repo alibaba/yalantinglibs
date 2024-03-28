@@ -52,6 +52,70 @@ void echo_with_attachment(coro_rpc::context<void> conn) {
   conn.response_msg();
 }
 
+void test_context(coro_rpc::context<void> conn) {
+  auto *ctx=conn.get_context();
+  if (ctx->has_closed()) {
+    throw std::runtime_error("connection is close!");
+  }
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d", ctx->get_connection_id(),ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()<<"local endpoint"<<ctx->get_local_endpoint();
+  std::string sv{ctx->get_request_attachment()};
+  auto str = ctx->release_request_attachment();
+  if (sv!=str) {
+    conn.response_error(coro_rpc::errc::interrupted);
+    ctx->close();
+    return;
+  }
+  ctx->set_response_attachment(std::move(str));
+  [conn=std::move(conn)]() mutable ->async_simple::coro::Lazy<void> {
+    co_await coro_io::sleep_for(514ms);
+    ELOGV(INFO, "response in another executor");
+    conn.response_msg();
+  }().via(coro_io::get_global_executor()).detach();
+}
+using namespace async_simple::coro;
+
+Lazy<void> test_lazy_context() {
+  auto *ctx = co_await coro_rpc::get_context();
+  if (ctx->has_closed()) {
+    throw std::runtime_error("connection is close!");
+  }
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d", ctx->get_connection_id(),ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()<<"local endpoint"<<ctx->get_local_endpoint();
+  std::string sv{ctx->get_request_attachment()};
+  auto str = ctx->release_request_attachment();
+  if (sv!=str) {
+    ctx->close();
+    throw coro_rpc::errc::interrupted;
+    co_return;
+  }
+  ctx->set_response_attachment(std::move(str));
+  auto ex=coro_io::get_global_executor();
+  co_await coro_io::sleep_for(514ms,coro_io::get_global_executor());
+  ELOGV(INFO, "response in another executor");
+  co_return;
+}
+
+Lazy<void> test_response_error() {
+  throw coro_rpc::errc::io_error;
+  co_return;
+}
+
+Lazy<void> test_response_error2() {
+  throw coro_rpc::err_code{uint16_t{12244}};
+  co_return;
+}
+
+void test_response_error3() {
+  throw coro_rpc::errc::operation_canceled;
+  return;
+}
+
+void test_response_error4() {
+  throw coro_rpc::err_code{uint16_t{12245}};
+  return;
+}
+
 void coro_fun_with_user_define_connection_type(my_context conn) {
   conn.ctx_.response_msg();
 }

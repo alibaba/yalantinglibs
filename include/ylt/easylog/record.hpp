@@ -174,7 +174,7 @@ class record_t {
     else if constexpr (detail::c_array_v<U>) {
       ss_.append(data);
     }
-    else if constexpr (detail::has_data_v<U>) {
+    else if constexpr (requires{ss_.append(data.data());}) /* TODO: update it by SFINAE with support c++17 */{
       ss_.append(data.data());
     }
     else if constexpr (detail::has_str_v<U>) {
@@ -187,7 +187,7 @@ class record_t {
     else {
       std::stringstream ss;
       ss << data;
-      ss_.append(ss.str());
+      ss_.append(std::move(ss).str());
     }
 
     return *this;

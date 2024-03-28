@@ -52,7 +52,7 @@ class router {
 
   using coro_router_handler_t =
       std::function<async_simple::coro::Lazy<std::optional<std::string>>(
-          std::string_view, 
+          std::string_view,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using route_key = typename rpc_protocol::route_key_t;
@@ -256,8 +256,22 @@ class router {
             co_return std::make_pair(coro_rpc::errc::invalid_argument,
                                      "invalid rpc function arguments"s);
           }
+        } catch (coro_rpc::errc ec) {
+          auto msg = coro_rpc::make_error_message(ec);
+          ELOGV(INFO,
+                "user return coro_rpc::errc, message: %s, value: %d, rpc "
+                "function name:%s ",
+                coro_rpc::make_error_message(ec), static_cast<int>(ec),
+                get_name(route_key).data());
+          co_return std::make_pair(ec, std::string{msg});
+        } catch (coro_rpc::err_code ec) {
+          ELOGV(INFO,
+                "user return coro_rpc::err_code, message: %s, value: %d, rpc "
+                "function name:%s ",
+                ec.message(), ec.val(), get_name(route_key).data());
+          co_return std::make_pair(ec.ec, std::string{ec.message()});
         } catch (const std::exception &e) {
-          ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
+          ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
           co_return std::make_pair(coro_rpc::errc::interrupted, e.what());
         } catch (...) {
@@ -300,12 +314,26 @@ class router {
             return std::make_pair(coro_rpc::errc::invalid_argument,
                                   "invalid rpc function arguments"s);
           }
+        } catch (coro_rpc::errc ec) {
+          auto msg = coro_rpc::make_error_message(ec);
+          ELOGV(INFO,
+                "user return coro_rpc::errc, message: %s, value: %d, rpc "
+                "function name:%s ",
+                coro_rpc::make_error_message(ec), static_cast<int>(ec),
+                get_name(route_key).data());
+          return std::make_pair(ec, std::string{msg});
+        } catch (coro_rpc::err_code ec) {
+          ELOGV(INFO,
+                "user return coro_rpc::err_code, message: %s, value: %d, rpc "
+                "function name:%s ",
+                ec.message(), ec.val(), get_name(route_key).data());
+          return std::make_pair(ec.ec, std::string{ec.message()});
         } catch (const std::exception &e) {
-          ELOGV(ERROR, "exception: %s in rpc function: %s", e.what(),
+          ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),
                 get_name(route_key).data());
           return std::make_pair(coro_rpc::errc::interrupted, e.what());
         } catch (...) {
-          ELOGV(ERROR, "unknown exception in rpc function: %s",
+          ELOGV(WARNING, "unknown exception in rpc function: %s",
                 get_name(route_key).data());
           return std::make_pair(coro_rpc::errc::interrupted,
                                 "unknown rpc function exception"s);
