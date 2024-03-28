@@ -37,7 +37,7 @@ struct my_context {
 };
 void echo_with_attachment(coro_rpc::context<void> conn);
 inline void error_with_context(coro_rpc::context<void> conn) {
-  conn.response_error(coro_rpc::err_code{104}, "My Error.");
+  conn.response_error(coro_rpc::err_code{1004}, "My Error.");
 }
 void test_context(coro_rpc::context<void> conn);
 async_simple::coro::Lazy<void> test_lazy_context();

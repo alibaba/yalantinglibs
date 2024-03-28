@@ -134,8 +134,7 @@ struct coro_rpc_protocol {
                                       const req_header& req_header,
                                       std::size_t attachment_len,
                                       coro_rpc::errc rpc_err_code = {},
-                                      std::string_view err_msg = {},
-                                      bool is_user_defined_error = false) {
+                                      std::string_view err_msg = {}) {
     std::string err_msg_buf;
     std::string header_buf;
     header_buf.resize(RESP_HEAD_LEN);
@@ -151,7 +150,6 @@ struct coro_rpc_protocol {
         err_msg_buf =
             "attachment larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
-        is_user_defined_error = false;
       }
     else if (rpc_result.size() > UINT32_MAX)
       AS_UNLIKELY {
@@ -161,12 +159,11 @@ struct coro_rpc_protocol {
         err_msg_buf =
             "body larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
-        is_user_defined_error = false;
       }
     if (rpc_err_code != coro_rpc::errc{})
       AS_UNLIKELY {
         rpc_result.clear();
-        if (is_user_defined_error) {
+        if (static_cast<uint16_t>(rpc_err_code)>UINT8_MAX) {
           struct_pack::serialize_to(
               rpc_result,
               std::pair{static_cast<uint16_t>(rpc_err_code), err_msg});

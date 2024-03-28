@@ -17,6 +17,7 @@
 
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
+#include "ylt/coro_rpc/impl/errno.h"
 
 using namespace coro_rpc;
 using namespace std::chrono_literals;
@@ -67,11 +68,13 @@ void test_context(coro_rpc::context<void> conn) {
     return;
   }
   ctx->set_response_attachment(std::move(str));
-  [conn=std::move(conn)]() mutable ->async_simple::coro::Lazy<void> {
+  [](coro_rpc::context<void> conn) -> async_simple::coro::Lazy<void> {
     co_await coro_io::sleep_for(514ms);
     ELOGV(INFO, "response in another executor");
     conn.response_msg();
-  }().via(coro_io::get_global_executor()).detach();
+  }(std::move(conn)).via(coro_io::get_global_executor()).detach();
+  ELOGV(INFO, "returning");
+  return;
 }
 using namespace async_simple::coro;
 
@@ -90,29 +93,28 @@ Lazy<void> test_lazy_context() {
     co_return;
   }
   ctx->set_response_attachment(std::move(str));
-  auto ex=coro_io::get_global_executor();
   co_await coro_io::sleep_for(514ms,coro_io::get_global_executor());
   ELOGV(INFO, "response in another executor");
   co_return;
 }
 
 Lazy<void> test_response_error() {
-  throw coro_rpc::errc::io_error;
+  throw coro_rpc::err_code{uint16_t{12243}};
   co_return;
 }
 
 Lazy<void> test_response_error2() {
-  throw coro_rpc::err_code{uint16_t{12244}};
+  throw coro_rpc::errc::io_error;
   co_return;
 }
 
 void test_response_error3() {
-  throw coro_rpc::errc::operation_canceled;
+  throw coro_rpc::err_code{uint16_t{12243}};
   return;
 }
 
 void test_response_error4() {
-  throw coro_rpc::err_code{uint16_t{12245}};
+  throw coro_rpc::errc::io_error;
   return;
 }
 

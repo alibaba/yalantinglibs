@@ -269,7 +269,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                   std::tie(resp_err, resp_buf) = result.value();
                 }
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
-                    resp_err, resp_buf, context_info->req_head_);
+                    resp_err, resp_buf, context_info->req_head_,std::move(context_info->resp_attachment_));
               });
             });
       }
@@ -315,8 +315,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
   template <typename rpc_protocol>
-  void direct_response_msg(coro_rpc::errc &resp_err, std::string &resp_buf,
-                           const typename rpc_protocol::req_header &req_head) {
+  void direct_response_msg(coro_rpc::errc &resp_err, std::string &resp_buf,const typename rpc_protocol::req_header &req_head, std::function<std::string_view()>&& attachment=[]{return std::string_view();}) {
     std::string resp_error_msg;
     if (!!resp_err) {
       resp_error_msg = std::move(resp_buf);
@@ -324,13 +323,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       ELOGV(WARNING, "rpc route/execute error, error msg: %s", resp_error_msg.data());
     }
     std::string header_buf = rpc_protocol::prepare_response(
-        resp_buf, req_head, 0, resp_err, resp_error_msg);
+        resp_buf, req_head, attachment().length(), resp_err, resp_error_msg);
 
     response(
         std::move(header_buf), std::move(resp_buf),
-        [] {
-          return std::string_view{};
-        },
+        std::move(attachment),
         nullptr)
         .start([](auto &&) {
         });
@@ -356,7 +353,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     };
     std::string body_buf;
     std::string header_buf = rpc_protocol::prepare_response(
-        body_buf, req_head, 0, ec, error_msg, true);
+        body_buf, req_head, 0, ec, error_msg);
     response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
              shared_from_this())
         .via(executor_)
@@ -504,6 +501,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   void close() {
+    ELOGV(TRACE,"connection closed");
     if (has_closed_) {
       return;
     }

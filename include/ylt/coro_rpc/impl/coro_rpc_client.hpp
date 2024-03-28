@@ -747,10 +747,11 @@ class coro_rpc_client {
         }
       }
     else {
-      err.val() = rpc_errc;
       if (rpc_errc != UINT8_MAX) {
+        err.val() = rpc_errc;
         ec = struct_pack::deserialize_to(err.msg, buffer);
         if SP_LIKELY (!ec) {
+          ELOGV(WARNING,"deserilaize rpc result failed");
           error_happen = true;
           return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
         }
@@ -758,6 +759,7 @@ class coro_rpc_client {
       else {
         ec = struct_pack::deserialize_to(err, buffer);
         if SP_LIKELY (!ec) {
+          ELOGV(WARNING,"deserilaize rpc result failed");
           return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
         }
       }

@@ -258,17 +258,14 @@ class router {
           }
         } catch (coro_rpc::errc ec) {
           auto msg = coro_rpc::make_error_message(ec);
-          ELOGV(INFO,
-                "user return coro_rpc::errc, message: %s, value: %d, rpc "
-                "function name:%s ",
-                coro_rpc::make_error_message(ec), static_cast<int>(ec),
-                get_name(route_key).data());
+          ELOGI<<
+                "user return coro_rpc::errc, message:"<<coro_rpc::make_error_message(ec)<<", value:"<< static_cast<int>(ec) <<", rpc "
+                "function name:"<< get_name(route_key);
           co_return std::make_pair(ec, std::string{msg});
         } catch (coro_rpc::err_code ec) {
-          ELOGV(INFO,
-                "user return coro_rpc::err_code, message: %s, value: %d, rpc "
-                "function name:%s ",
-                ec.message(), ec.val(), get_name(route_key).data());
+          ELOGI<<
+                "user return coro_rpc::err_code, message:"<<ec.message()<<", value:"<< ec.val() <<", rpc "
+                "function name:"<< get_name(route_key);
           co_return std::make_pair(ec.ec, std::string{ec.message()});
         } catch (const std::exception &e) {
           ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),
@@ -316,17 +313,14 @@ class router {
           }
         } catch (coro_rpc::errc ec) {
           auto msg = coro_rpc::make_error_message(ec);
-          ELOGV(INFO,
-                "user return coro_rpc::errc, message: %s, value: %d, rpc "
-                "function name:%s ",
-                coro_rpc::make_error_message(ec), static_cast<int>(ec),
-                get_name(route_key).data());
+          ELOGI<<
+                "user return coro_rpc::errc, message:"<<coro_rpc::make_error_message(ec)<<", value:"<< static_cast<int>(ec) <<", rpc "
+                "function name:"<< get_name(route_key);
           return std::make_pair(ec, std::string{msg});
         } catch (coro_rpc::err_code ec) {
-          ELOGV(INFO,
-                "user return coro_rpc::err_code, message: %s, value: %d, rpc "
-                "function name:%s ",
-                ec.message(), ec.val(), get_name(route_key).data());
+          ELOGI<<
+                "user return coro_rpc::err_code, message:"<<ec.message()<<", value:"<< ec.val() <<", rpc "
+                "function name:"<< get_name(route_key);
           return std::make_pair(ec.ec, std::string{ec.message()});
         } catch (const std::exception &e) {
           ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),

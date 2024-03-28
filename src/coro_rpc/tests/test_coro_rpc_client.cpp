@@ -420,7 +420,7 @@ TEST_CASE("testing client with context response user-defined error") {
   server.register_handler<error_with_context, hello>();
   auto ret = client.sync_call<error_with_context>();
   REQUIRE(!ret.has_value());
-  CHECK(ret.error().code == coro_rpc::errc{104});
+  CHECK(ret.error().code == coro_rpc::errc{1004});
   CHECK(ret.error().msg == "My Error.");
   CHECK(client.has_closed() == false);
   auto ret2 = client.sync_call<hello>();

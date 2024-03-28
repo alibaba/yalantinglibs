@@ -105,28 +105,36 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     client->set_req_attachment("1234567890987654321234567890");
     auto result = syncAwait(client->call<test_context>());
-    CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
     CHECK(result);
+    CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
     client->set_req_attachment("01234567890987654321234567890");
     result = syncAwait(client->call<test_lazy_context>());
-    CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
     CHECK(result);
+    CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
   }
   void test_return_err_by_throw_exception() {
-    auto client = create_client();
-    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-    auto result = syncAwait(client->call<test_response_error>());
-    REQUIRE(!result);
-    CHECK(result.error().code == coro_rpc::errc::io_error);
-    result = syncAwait(client->call<test_response_error2>());
-    REQUIRE(!result);
-    CHECK(result.error().code == coro_rpc::errc{12244});
-    result = syncAwait(client->call<test_response_error3>());
-    REQUIRE(!result);
-    CHECK(result.error().code == coro_rpc::errc::operation_canceled);
-    result = syncAwait(client->call<test_response_error4>());
-    REQUIRE(!result);
-    CHECK(result.error().code == coro_rpc::errc{12245});
+    {
+      auto client = create_client();
+      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+      auto result = syncAwait(client->call<test_response_error>());
+      REQUIRE(!result);
+      CHECK(result.error().code == coro_rpc::errc{12243});
+      result = syncAwait(client->call<test_response_error2>());
+      REQUIRE(!result);
+      CHECK(client->has_closed());
+      CHECK(result.error().code == coro_rpc::errc::io_error);
+    }
+    {
+      auto client = create_client();
+      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+      auto result = syncAwait(client->call<test_response_error3>());
+      REQUIRE(!result);
+      CHECK(result.error().code == coro_rpc::errc{12243});
+      result = syncAwait(client->call<test_response_error4>());
+      REQUIRE(!result);
+      CHECK(client->has_closed());      
+      CHECK(result.error().code == coro_rpc::errc::io_error);
+    }
   }
 
   void test_function_not_registered() {
