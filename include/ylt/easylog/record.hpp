@@ -63,8 +63,8 @@ template <typename Type, typename = void>
 struct has_data : std::false_type {};
 
 template <typename T>
-struct has_data<T, std::void_t<decltype(std::declval<T>().data())>>
-    : std::true_type {};
+struct has_data<T, std::void_t<decltype(std::declval<std::string>().append(
+                       std::declval<T>().data()))>> : std::true_type {};
 
 template <typename T>
 constexpr inline bool has_data_v = has_data<std::remove_cvref_t<T>>::value;
@@ -73,8 +73,8 @@ template <typename Type, typename = void>
 struct has_str : std::false_type {};
 
 template <typename T>
-struct has_str<T, std::void_t<decltype(std::declval<T>().str())>>
-    : std::true_type {};
+struct has_str<T, std::void_t<decltype(std::declval<std::string>().append(
+                      std::declval<T>().str()))>> : std::true_type {};
 
 template <typename T>
 constexpr inline bool has_str_v = has_str<std::remove_cvref_t<T>>::value;
