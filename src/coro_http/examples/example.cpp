@@ -183,9 +183,8 @@ async_simple::coro::Lazy<void> use_websocket() {
               result.type == ws_frame_type::WS_BINARY_FRAME) {
             std::cout << result.data << "\n";
           }
-
-          if (result.type == ws_frame_type::WS_PING_FRAME ||
-              result.type == ws_frame_type::WS_PONG_FRAME) {
+          else if (result.type == ws_frame_type::WS_PING_FRAME ||
+                   result.type == ws_frame_type::WS_PONG_FRAME) {
             // ping pong frame just need to continue, no need echo anything,
             // because framework has reply ping/pong msg to client
             // automatically.
