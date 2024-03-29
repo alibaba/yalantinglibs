@@ -42,6 +42,20 @@ TEST_CASE("test severity") {
         easylog::severity_str(easylog::Severity::FATAL));
 }
 
+struct dummy_t {
+  int* data() const {
+    static int val = 42;
+    return &val;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const dummy_t& t);
+};
+
+std::ostream& operator<<(std::ostream& os, const dummy_t& t) {
+  os << t.data();
+  return os;
+}
+
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
@@ -64,6 +78,8 @@ TEST_CASE("test basic") {
   easylog::set_min_severity(Severity::WARN);
   ELOG_INFO << "info log";
   easylog::set_min_severity(Severity::DEBUG);
+
+  ELOG_INFO << dummy_t{};
 
   std::unique_ptr<int> ptr(new int(42));
   ELOG_INFO << ptr.get();
