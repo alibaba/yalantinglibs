@@ -757,6 +757,7 @@ class coro_rpc_client {
         }
       }
       else {
+        
         ec = struct_pack::deserialize_to(err, buffer);
         if SP_LIKELY (!ec) {
           ELOGV(WARNING,"deserilaize rpc result failed");

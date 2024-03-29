@@ -48,7 +48,7 @@ class callback_awaitor_base {
   template <typename Op>
   class callback_awaitor_impl {
    public:
-    callback_awaitor_impl(Derived &awaitor, const Op &op) noexcept
+    callback_awaitor_impl(Derived &awaitor, Op &op) noexcept
         : awaitor(awaitor), op(op) {}
     constexpr bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> handle) noexcept {
@@ -69,7 +69,7 @@ class callback_awaitor_base {
 
    private:
     Derived &awaitor;
-    const Op &op;
+    Op &op;
   };
 
  public:
@@ -97,7 +97,7 @@ class callback_awaitor_base {
     Derived *obj;
   };
   template <typename Op>
-  callback_awaitor_impl<Op> await_resume(const Op &op) noexcept {
+  callback_awaitor_impl<Op> await_resume(Op &&op) noexcept {
     return callback_awaitor_impl<Op>{static_cast<Derived &>(*this), op};
   }
 
@@ -312,7 +312,7 @@ inline async_simple::coro::Lazy<void> sleep_for(Duration d) {
 
 template <typename R, typename Func, typename Executor>
 struct post_helper {
-  void operator()(auto handler) const {
+  void operator()(auto handler) {
     asio::dispatch(e, [this, handler]() {
       try {
         if constexpr (std::is_same_v<R, async_simple::Try<void>>) {

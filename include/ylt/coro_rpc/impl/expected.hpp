@@ -44,7 +44,11 @@ using unexpected = tl::unexpected<T>;
 using unexpect_t = tl::unexpect_t;
 #endif
 
-template <typename T, typename rpc_protocol>
+namespace protocol {
+  struct coro_rpc_protocol;
+}
+
+template <typename T, typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 using rpc_result = expected<T, typename rpc_protocol::rpc_error>;
 
 }  // namespace coro_rpc
