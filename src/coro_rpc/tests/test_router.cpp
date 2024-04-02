@@ -167,7 +167,7 @@ void bar3(int val) { std::cout << "bar3 val=" << val << "\n"; }
 using namespace test_util;
 
 auto ctx = std::make_shared<
-    coro_rpc::context_info_t<coro_rpc::protocol::coro_rpc_protocol>>(nullptr);
+    coro_rpc::context_info_t<coro_rpc::protocol::coro_rpc_protocol>>(router,nullptr);
 
 struct person {
   int id;

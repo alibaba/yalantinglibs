@@ -29,6 +29,7 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/util/type_traits.h"
+#include "ylt/util/utils.hpp"
 
 namespace coro_rpc {
 /*!
@@ -78,6 +79,7 @@ class context_base {
                       std::string_view error_msg) {
     if (!check_status())
       AS_UNLIKELY { return; };
+    ELOGI << "rpc error in function:" << self_->get_rpc_function_name() << ". error code:" << error_code.ec << ". message : "<< error_msg;
     self_->conn_->template response_error<rpc_protocol>(error_code, error_msg,
                                                         self_->req_head_);
   }

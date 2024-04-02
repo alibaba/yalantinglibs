@@ -26,11 +26,14 @@
 #include <memory>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <ylt/easylog.hpp>
 
+#include "async_simple/Common.h"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
+#include "ylt/util/utils.hpp"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
 #endif
@@ -45,6 +48,8 @@ struct context_info_t {
 #ifndef CORO_RPC_TEST
 private:
 #endif
+  typename rpc_protocol::route_key_t key;
+  typename rpc_protocol::router& router;
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
@@ -57,11 +62,11 @@ public:
   template <typename, typename>
   friend class context_base;
   friend class coro_connection;
-  context_info_t(std::shared_ptr<coro_connection> &&conn)
-      : conn_(std::move(conn)) {}
-  context_info_t(std::shared_ptr<coro_connection> &&conn,
+  context_info_t(typename rpc_protocol::router& r,std::shared_ptr<coro_connection> &&conn)
+      : router(r),conn_(std::move(conn)) {}
+  context_info_t(typename rpc_protocol::router& r,std::shared_ptr<coro_connection> &&conn,
                  std::string &&req_body_buf, std::string &&req_attachment_buf)
-      : conn_(std::move(conn)),
+      : router(r), conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
         req_attachment_(std::move(req_attachment_buf)) {}
   uint64_t get_connection_id() noexcept;
@@ -78,6 +83,9 @@ public:
   asio::ip::tcp::endpoint get_local_endpoint() const noexcept;
   asio::ip::tcp::endpoint get_remote_endpoint() const noexcept;
   uint64_t get_request_id()  const noexcept;
+  std::string_view get_rpc_function_name() const {
+    return router.get_name(key);
+  }
 };
 
 /*!
@@ -168,7 +176,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> start_impl(
       typename rpc_protocol::router &router, Socket &socket) noexcept {
     auto context_info =
-        std::make_shared<context_info_t<rpc_protocol>>(shared_from_this());
+        std::make_shared<context_info_t<rpc_protocol>>(router,shared_from_this());
     reset_timer();
     while (true) {
       typename rpc_protocol::req_header req_head_tmp;
@@ -201,17 +209,17 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
 
       // try to reuse context
-      if (is_rpc_return_by_callback) {
+      if (is_rpc_return_by_callback_) {
         // cant reuse context,make shared new one
-        is_rpc_return_by_callback = false;
+        is_rpc_return_by_callback_ = false;
         if (context_info->status_ != context_status::finish_response) {
           // cant reuse buffer
-          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(router,
               shared_from_this());
         }
         else {
           // reuse string buffer
-          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(router,
               shared_from_this(), std::move(context_info->req_body_),
               std::move(context_info->req_attachment_));
         }
@@ -219,6 +227,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       auto &req_head = context_info->req_head_;
       auto &body = context_info->req_body_;
       auto &req_attachment = context_info->req_attachment_;
+      auto &key = context_info->key;
       req_head = std::move(req_head_tmp);
       auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
 
@@ -245,37 +254,38 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           break;
         }
 
-      auto key = rpc_protocol::get_route_key(req_head);
+      key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
       ++delay_resp_cnt;
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
-        
         set_rpc_return_by_callback();
         router
             .route_coro(coro_handler, payload, 
                         serialize_proto.value(), key)    
             .via(executor_).setLazyLocal((void*)context_info.get())        
-            .start([key,&router,context_info](auto &&result) mutable {
+            .start([context_info](auto &&result) mutable {
               std::pair<coro_rpc::err_code,std::string> &ret = result.value();
               if (ret.first) AS_UNLIKELY {
-                ELOGW<<"rpc error in function:"<<router.get_name(key)<<". error msg: "<<ret.second;
+                ELOGI << "rpc error in function:" << context_info->get_rpc_function_name() <<  ". error code:" << ret.first.ec << ". message : "<< ret.second;
               }
-              context_info->conn_->get_executor()->schedule([context_info=std::move(context_info), ret = std::move(ret)]() mutable {
+              auto executor = context_info->conn_->get_executor();
+              executor->schedule([context_info=std::move(context_info), ret = std::move(ret)]() mutable {
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
-                    ret.first, ret.second, context_info->req_head_,std::move(context_info->resp_attachment_));
+                  ret.first, ret.second, context_info->req_head_,std::move(context_info->resp_attachment_));
+                  });   
               });
-            });
       }
       else {
         auto &&[resp_err, resp_buf] = router.route(handler, payload, context_info,
                                                  serialize_proto.value(), key);
-        if (is_rpc_return_by_callback) {
+        if (is_rpc_return_by_callback_) {
           if (!resp_err) {
             continue;
           }
           else {
-            is_rpc_return_by_callback = false;
+            ELOGI << "rpc error in function:" << context_info->get_rpc_function_name() <<  ". error code:" << resp_err.ec << ". message : "<< resp_buf;
+            is_rpc_return_by_callback_ = false;
           }
         }
 #ifdef UNIT_TEST_INJECT
@@ -354,7 +364,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         .detach();
   }
 
-  void set_rpc_return_by_callback() { is_rpc_return_by_callback = true; }
+  void set_rpc_return_by_callback() { is_rpc_return_by_callback_ = true; }
 
   /*!
    * Check the connection has closed or not
@@ -543,7 +553,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::deque<
       std::tuple<std::string, std::string, std::function<std::string_view()>>>
       write_queue_;
-  bool is_rpc_return_by_callback{false};
+  bool is_rpc_return_by_callback_{false};
 
   // if don't get any message in keep_alive_timeout_duration_, the connection
   // will be closed when enable_check_timeout_ is true.
@@ -551,7 +561,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   bool enable_check_timeout_{false};
   asio::steady_timer timer_;
   std::atomic<bool> has_closed_{false};
-
+  
   QuitCallback quit_callback_{nullptr};
   uint64_t conn_id_{0};
   uint64_t delay_resp_cnt{0};
