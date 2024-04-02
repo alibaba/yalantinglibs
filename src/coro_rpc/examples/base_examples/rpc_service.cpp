@@ -64,6 +64,30 @@ Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
   co_return sv;
 }
 
+Lazy<void> get_ctx_info() {
+  ELOGV(INFO, "call get_ctx_info");
+  auto *ctx = co_await coro_rpc::get_context();
+  if (ctx->has_closed()) {
+    throw std::runtime_error("connection is close!");
+  }
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
+        << ctx->get_local_endpoint();
+  std::string sv{ctx->get_request_attachment()};
+  auto str = ctx->release_request_attachment();
+  if (sv != str) {
+    ctx->close();
+    throw rpc_error{coro_rpc::errc::io_error, "attachment error!"};
+    co_return;
+  }
+  ctx->set_response_attachment(std::move(str));
+  co_await coro_io::sleep_for(514ms, coro_io::get_global_executor());
+  ELOGV(INFO, "response in another executor");
+  co_return;
+  co_return;
+}
+
 Lazy<void> echo_with_attachment() {
   ELOGV(INFO, "call echo_with_attachment");
   auto ctx = co_await coro_rpc::get_context();
@@ -93,7 +117,9 @@ void return_error_by_context(coro_rpc::context<void> conn) {
   conn.response_error(coro_rpc::err_code{404}, "404 Not Found.");
 }
 
-void return_error_by_exception() { throw coro_rpc::err_code{404}; }
+void return_error_by_exception() {
+  throw coro_rpc::rpc_error{coro_rpc::errc{404}, "rpc not found."};
+}
 
 Lazy<std::string> rpc_with_state_by_tag() {
   auto *ctx = co_await coro_rpc::get_context();

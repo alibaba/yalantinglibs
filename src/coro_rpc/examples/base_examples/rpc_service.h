@@ -32,6 +32,7 @@ async_simple::coro::Lazy<void> echo_with_attachment();
 async_simple::coro::Lazy<std::string_view> nested_echo(std::string_view sv);
 void return_error_by_context(coro_rpc::context<void> conn);
 void return_error_by_exception();
+async_simple::coro::Lazy<void> get_ctx_info();
 class HelloService {
  public:
   std::string_view hello();

@@ -36,13 +36,13 @@ Lazy<void> show_rpc_call() {
   assert(ret.value() == "hello");
 
   ret = co_await client.call<coroutine_echo>("42");
-  assert(ret.value()=="42");
-  
+  assert(ret.value() == "42");
+
   ret = co_await client.call<async_echo_by_callback>("hi");
-  assert(ret.value()=="hi");
+  assert(ret.value() == "hi");
 
   ret = co_await client.call<async_echo_by_coroutine>("hey");
-  assert(ret.value()=="hey");
+  assert(ret.value() == "hey");
 
   client.set_req_attachment("This is attachment.");
   auto ret_void = co_await client.call<echo_with_attachment>();
@@ -53,6 +53,9 @@ Lazy<void> show_rpc_call() {
 
   ret = co_await client.call<&HelloService::hello>();
   assert(ret.value() == "HelloService::hello"s);
+
+  ret_void = co_await client.call<get_ctx_info>();
+  assert(ret_void);
 
   // TODO: fix return error
   // ret_void = co_await client.call<return_error_by_context>();
