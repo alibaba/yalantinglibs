@@ -41,10 +41,6 @@ inline void error_with_context(coro_rpc::context<void> conn) {
 }
 void test_context(coro_rpc::context<void> conn);
 async_simple::coro::Lazy<void> test_lazy_context();
-async_simple::coro::Lazy<void> test_response_error();
-async_simple::coro::Lazy<void> test_response_error2();
-void test_response_error3();
-void test_response_error4();
 void test_response_error5();
 async_simple::coro::Lazy<void> test_response_error6();
 void coro_fun_with_user_define_connection_type(my_context conn);

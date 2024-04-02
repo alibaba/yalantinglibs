@@ -250,10 +250,6 @@ public:
 #endif
           // clang-format off
           co_return co_await (*handler)(data, protocols);
-        } catch (coro_rpc::errc ec) {
-          co_return std::make_pair(err_code{ec}, std::string{coro_rpc::make_error_message(ec)});
-        } catch (coro_rpc::err_code ec) {
-          co_return std::make_pair(ec, std::string{ec.message()});
         } catch (coro_rpc::rpc_error& err) {
           co_return std::make_pair(err.code, std::move(err.msg));
         } catch (const std::exception &e) {
@@ -282,11 +278,6 @@ public:
           ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 #endif
           return (*handler)(data, context_info, protocols);
-        } catch (coro_rpc::errc ec) {
-          auto msg = coro_rpc::make_error_message(ec);
-          return std::make_pair(err_code{ec}, std::string{msg});
-        } catch (coro_rpc::err_code ec) {
-          return std::make_pair(ec, std::string{ec.message()});
         } catch (coro_rpc::rpc_error& err) {
           return std::make_pair(err.code, std::move(err.msg));
         } catch (const std::exception &e) {

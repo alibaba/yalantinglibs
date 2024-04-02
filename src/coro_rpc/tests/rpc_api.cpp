@@ -94,33 +94,13 @@ Lazy<void> test_lazy_context() {
   auto str = ctx->release_request_attachment();
   if (sv!=str) {
     ctx->close();
-    throw coro_rpc::errc::rpc_throw_exception;
+    throw rpc_error{coro_rpc::errc::io_error,"attachment error!"};
     co_return;
   }
   ctx->set_response_attachment(std::move(str));
   co_await coro_io::sleep_for(514ms,coro_io::get_global_executor());
   ELOGV(INFO, "response in another executor");
   co_return;
-}
-
-Lazy<void> test_response_error() {
-  throw coro_rpc::err_code{uint16_t{12243}};
-  co_return;
-}
-
-Lazy<void> test_response_error2() {
-  throw coro_rpc::errc::io_error;
-  co_return;
-}
-
-void test_response_error3() {
-  throw coro_rpc::err_code{uint16_t{12243}};
-  return;
-}
-
-void test_response_error4() {
-  throw coro_rpc::errc::io_error;
-  return;
 }
 
 void test_response_error5() {

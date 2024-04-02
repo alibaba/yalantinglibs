@@ -83,8 +83,7 @@ struct CoroServerTester : ServerTester {
     server.register_handler<hello>();
     server.register_handler<hi>();
     server.register_handler<test_context, test_lazy_context>();
-    server.register_handler<test_response_error, test_response_error2,
-                            test_response_error3, test_response_error4,test_response_error5,test_response_error6>();
+    server.register_handler<test_response_error5,test_response_error6>();
     server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
     server.register_handler<coro_fun_with_delay_return_void_twice>();
@@ -113,28 +112,6 @@ struct CoroServerTester : ServerTester {
     CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
   }
   void test_return_err_by_throw_exception() {
-    {
-      auto client = create_client();
-      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-      auto result = syncAwait(client->call<test_response_error>());
-      REQUIRE(!result);
-      CHECK(result.error().code == coro_rpc::errc{12243});
-      result = syncAwait(client->call<test_response_error2>());
-      REQUIRE(!result);
-      CHECK(client->has_closed());
-      CHECK(result.error().code == coro_rpc::errc::io_error);
-    }
-    {
-      auto client = create_client();
-      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
-      auto result = syncAwait(client->call<test_response_error3>());
-      REQUIRE(!result);
-      CHECK(result.error().code == coro_rpc::errc{12243});
-      result = syncAwait(client->call<test_response_error4>());
-      REQUIRE(!result);
-      CHECK(client->has_closed());      
-      CHECK(result.error().code == coro_rpc::errc::io_error);
-    }
     {
       auto client = create_client();
       ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
