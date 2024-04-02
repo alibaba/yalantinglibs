@@ -25,6 +25,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "doctest.h"
 #include "rpc_api.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/struct_pack.hpp"
 
@@ -33,7 +34,7 @@ async_simple::coro::Lazy<int> get_coro_value(int val) { co_return val; }
 struct CoroServerTester : ServerTester {
   CoroServerTester(TesterConfig config)
       : ServerTester(config),
-        server(2, config.port, config.conn_timeout_duration) {
+        server(2, config.port, config.address, config.conn_timeout_duration) {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl) {
       server.init_ssl_context(
@@ -47,9 +48,72 @@ struct CoroServerTester : ServerTester {
 
   async_simple::coro::Lazy<int> get_value(int val) { co_return val; }
 
+  void test_set_server_address() {
+    {
+      coro_rpc_server server(1, 9001);
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, 9001, "0.0.0.0");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, 9001, "127.0.0.1");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, 9001, "localhost");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, "0.0.0.0:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, "127.0.0.1:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, "localhost:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(!server.get_errc());
+    }
+
+    {
+      coro_rpc_server server(1, 9001, "x.x.x.x");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(server.get_errc() == coro_rpc::errc::bad_address);
+    }
+
+    {
+      coro_rpc_server server(1, "x.x.x.x:9001");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(server.get_errc() == coro_rpc::errc::bad_address);
+    }
+
+    {
+      coro_rpc_server server(1, "127.0.0.1:aaa");
+      [[maybe_unused]] auto r = server.async_start();
+      CHECK(server.get_errc() == coro_rpc::errc::bad_address);
+    }
+  }
+
   void test_all() override {
     g_action = {};
     ELOGV(INFO, "run %s", __func__);
+    test_set_server_address();
     test_coro_handler();
     ServerTester::test_all();
     test_function_not_registered();
