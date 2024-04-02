@@ -23,44 +23,47 @@ enum class errc : uint16_t {
   io_error,
   not_connected,
   timed_out,
-  invalid_argument,
-  address_in_use,
+  invalid_rpc_arguments,
+  address_in_used,
   operation_canceled,
-  interrupted,
+  rpc_throw_exception,
   function_not_registered,
   protocol_error,
   unknown_protocol_version,
   message_too_large,
   server_has_ran,
+  invalid_rpc_result,
 };
 inline constexpr std::string_view make_error_message(errc ec) noexcept {
   switch (ec) {
     case errc::ok:
       return "ok";
     case errc::io_error:
-      return "io_error";
+      return "io error";
     case errc::not_connected:
-      return "not_connected";
+      return "not connected";
     case errc::timed_out:
-      return "timed_out";
-    case errc::invalid_argument:
-      return "invalid_argument";
-    case errc::address_in_use:
-      return "address_in_use";
+      return "time out";
+    case errc::invalid_rpc_arguments:
+      return "invalid rpc arg";
+    case errc::address_in_used:
+      return "address in used";
     case errc::operation_canceled:
-      return "operation_canceled";
-    case errc::interrupted:
-      return "interrupted";
+      return "operation canceled";
+    case errc::rpc_throw_exception:
+      return "rpc throw exception";
     case errc::function_not_registered:
-      return "function_not_registered";
+      return "function not registered";
     case errc::protocol_error:
-      return "protocol_error";
+      return "protocol error";
     case errc::message_too_large:
-      return "message_too_large";
+      return "message too large";
     case errc::server_has_ran:
-      return "server_has_ran";
+      return "server has ran";
+    case errc::invalid_rpc_result:
+      return "invalid rpc result";
     default:
-      return "unknown_user-defined_error";
+      return "unknown user-defined error";
   }
 }
 struct err_code {

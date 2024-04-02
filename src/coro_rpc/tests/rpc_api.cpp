@@ -63,7 +63,7 @@ void test_context(coro_rpc::context<void> conn) {
   std::string sv{ctx->get_request_attachment()};
   auto str = ctx->release_request_attachment();
   if (sv!=str) {
-    conn.response_error(coro_rpc::errc::interrupted);
+    conn.response_error(coro_rpc::errc::rpc_throw_exception);
     ctx->close();
     return;
   }
@@ -89,7 +89,7 @@ Lazy<void> test_lazy_context() {
   auto str = ctx->release_request_attachment();
   if (sv!=str) {
     ctx->close();
-    throw coro_rpc::errc::interrupted;
+    throw coro_rpc::errc::rpc_throw_exception;
     co_return;
   }
   ctx->set_response_attachment(std::move(str));

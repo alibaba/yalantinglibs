@@ -254,27 +254,21 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         set_rpc_return_by_callback();
         router
             .route_coro(coro_handler, payload, 
-                        serialize_proto.value(), key)            
-            .via(executor_).setLazyLocal((void*)context_info.get())
-            .start([context_info,this](auto &&result) mutable {
-              coro_rpc::errc resp_err;
-                std::string resp_buf;
-                if (result.hasError())
-                  AS_UNLIKELY {
-                    resp_err = coro_rpc::errc::interrupted;
-                    resp_buf = "unknonw error";
-                  }
-                else {
-                  std::tie(resp_err, resp_buf) = result.value();
-                }
-              executor_->schedule([context_info=std::move(context_info), resp_err = std::move(resp_err),resp_buf=std::move(resp_buf)]() mutable {
+                        serialize_proto.value(), key)    
+            .via(executor_).setLazyLocal((void*)context_info.get())        
+            .start([key,&router,context_info](auto &&result) mutable {
+              std::pair<coro_rpc::err_code,std::string> &ret = result.value();
+              if (ret.first) AS_UNLIKELY {
+                ELOGW<<"rpc error in function:"<<router.get_name(key)<<". error msg: "<<ret.second;
+              }
+              context_info->conn_->get_executor()->schedule([context_info=std::move(context_info), ret = std::move(ret)]() mutable {
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
-                    resp_err, resp_buf, context_info->req_head_,std::move(context_info->resp_attachment_));
+                    ret.first, ret.second, context_info->req_head_,std::move(context_info->resp_attachment_));
               });
             });
       }
       else {
-        auto [resp_err, resp_buf] = router.route(handler, payload, context_info,
+        auto &&[resp_err, resp_buf] = router.route(handler, payload, context_info,
                                                  serialize_proto.value(), key);
         if (is_rpc_return_by_callback) {
           if (!resp_err) {
@@ -315,9 +309,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
   template <typename rpc_protocol>
-  void direct_response_msg(coro_rpc::errc &resp_err, std::string &resp_buf,const typename rpc_protocol::req_header &req_head, std::function<std::string_view()>&& attachment=[]{return std::string_view();}) {
+  void direct_response_msg(coro_rpc::err_code &resp_err, std::string &resp_buf,const typename rpc_protocol::req_header &req_head, std::function<std::string_view()>&& attachment=[]{return std::string_view();}) {
     std::string resp_error_msg;
-    if (!!resp_err) {
+    if (resp_err) {
       resp_error_msg = std::move(resp_buf);
       resp_buf = {};
       ELOGV(WARNING, "rpc route/execute error, error msg: %s", resp_error_msg.data());
@@ -396,7 +390,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   std::any &tag() { return tag_; }
   const std::any &tag() const { return tag_; }
 
-  auto &get_executor() { return *executor_; }
+  auto get_executor() { return executor_; }
 
   asio::ip::tcp::endpoint get_remote_endpoint() {return socket_.remote_endpoint();}
 

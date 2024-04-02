@@ -30,6 +30,7 @@
 #include <ylt/struct_pack/md5_constexpr.hpp>
 
 #include "rpc_execute.hpp"
+#include "ylt/coro_rpc/impl/expected.hpp"
 
 namespace coro_rpc {
 
@@ -46,21 +47,20 @@ template <typename rpc_protocol,
           template <typename...> typename map_t = std::unordered_map>
 
 class router {
-  using router_handler_t = std::function<std::optional<std::string>(
+
+
+public:
+  using router_handler_t = std::function<std::pair<coro_rpc::err_code,std::string>(
       std::string_view, rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using coro_router_handler_t =
-      std::function<async_simple::coro::Lazy<std::optional<std::string>>(
+      std::function<async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>>(
           std::string_view,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
   using route_key = typename rpc_protocol::route_key_t;
-  std::unordered_map<route_key, router_handler_t> handlers_;
-  std::unordered_map<route_key, coro_router_handler_t> coro_handlers_;
-  std::unordered_map<route_key, std::string> id2name_;
 
- private:
   const std::string &get_name(const route_key &key) {
     static std::string empty_string;
     if (auto it = id2name_.find(key); it != id2name_.end()) {
@@ -69,6 +69,11 @@ class router {
     else
       return empty_string;
   }
+ private:
+
+  std::unordered_map<route_key, router_handler_t> handlers_;
+  std::unordered_map<route_key, coro_router_handler_t> coro_handlers_;
+  std::unordered_map<route_key, std::string> id2name_;
 
   // See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100611
   // We use this struct instead of lambda for workaround
@@ -77,7 +82,7 @@ class router {
     std::string_view data;
     Self *self;
     template <typename serialize_protocol>
-    async_simple::coro::Lazy<std::optional<std::string>> operator()(
+    async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>> operator()(
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
           data, self);
@@ -88,7 +93,7 @@ class router {
   struct execute_visitor<Func, void> {
     std::string_view data;
     template <typename serialize_protocol>
-    async_simple::coro::Lazy<std::optional<std::string>> operator()(
+    async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>> operator() (
         const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
           data);
@@ -230,7 +235,7 @@ class router {
     return nullptr;
   }
 
-  async_simple::coro::Lazy<std::pair<coro_rpc::errc, std::string>> route_coro(
+  async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>> route_coro(
       auto handler, std::string_view data,
       typename rpc_protocol::supported_serialize_protocols protocols,
       const typename rpc_protocol::route_key_t &route_key) {
@@ -243,52 +248,25 @@ class router {
 
 #endif
           // clang-format off
-      auto res = co_await (*handler)(data, protocols);
-          // clang-format on
-          if (res.has_value())
-            AS_LIKELY {
-              co_return std::make_pair(coro_rpc::errc{},
-                                       std::move(res.value()));
-            }
-          else {  // deserialize failed
-            ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
-                  get_name(route_key).data());
-            co_return std::make_pair(coro_rpc::errc::invalid_argument,
-                                     "invalid rpc function arguments"s);
-          }
+          co_return co_await (*handler)(data, protocols);
         } catch (coro_rpc::errc ec) {
-          auto msg = coro_rpc::make_error_message(ec);
-          ELOGI<<
-                "user return coro_rpc::errc, message:"<<coro_rpc::make_error_message(ec)<<", value:"<< static_cast<int>(ec) <<", rpc "
-                "function name:"<< get_name(route_key);
-          co_return std::make_pair(ec, std::string{msg});
+          co_return std::make_pair(err_code{ec}, std::string{coro_rpc::make_error_message(ec)});
         } catch (coro_rpc::err_code ec) {
-          ELOGI<<
-                "user return coro_rpc::err_code, message:"<<ec.message()<<", value:"<< ec.val() <<", rpc "
-                "function name:"<< get_name(route_key);
-          co_return std::make_pair(ec.ec, std::string{ec.message()});
+          co_return std::make_pair(ec, std::string{ec.message()});
         } catch (const std::exception &e) {
-          ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),
-                get_name(route_key).data());
-          co_return std::make_pair(coro_rpc::errc::interrupted, e.what());
+          co_return std::make_pair(coro_rpc::errc::rpc_throw_exception, e.what());
         } catch (...) {
-          ELOGV(ERROR, "unknown exception in rpc function: %s",
-                get_name(route_key).data());
-          co_return std::make_pair(coro_rpc::errc::interrupted,
-                                   "unknown exception"s);
+          co_return std::make_pair(coro_rpc::errc::rpc_throw_exception,
+                                   "unknown rpc function exception"s);
         }
       }
     else {
-      std::ostringstream ss;
-      ss << route_key;
-      ELOGV(ERROR, "the rpc function not registered, function ID: %s",
-            ss.str().data());
       co_return std::make_pair(coro_rpc::errc::function_not_registered,
                                "the rpc function not registered"s);
     }
   }
 
-  std::pair<coro_rpc::errc, std::string> route(
+  std::pair<coro_rpc::err_code, std::string> route(
       auto handler, std::string_view data,
       rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
@@ -300,46 +278,23 @@ class router {
 #ifndef NDEBUG
           ELOGV(INFO, "route function name: %s", get_name(route_key).data());
 #endif
-          auto res = (*handler)(data, context_info, protocols);
-          if (res.has_value())
-            AS_LIKELY {
-              return std::make_pair(coro_rpc::errc{}, std::move(res.value()));
-            }
-          else {  // deserialize failed
-            ELOGV(ERROR, "payload deserialize failed in rpc function: %s",
-                  get_name(route_key).data());
-            return std::make_pair(coro_rpc::errc::invalid_argument,
-                                  "invalid rpc function arguments"s);
-          }
+          return (*handler)(data, context_info, protocols);
         } catch (coro_rpc::errc ec) {
           auto msg = coro_rpc::make_error_message(ec);
-          ELOGI<<
-                "user return coro_rpc::errc, message:"<<coro_rpc::make_error_message(ec)<<", value:"<< static_cast<int>(ec) <<", rpc "
-                "function name:"<< get_name(route_key);
-          return std::make_pair(ec, std::string{msg});
+          return std::make_pair(err_code{ec}, std::string{msg});
         } catch (coro_rpc::err_code ec) {
-          ELOGI<<
-                "user return coro_rpc::err_code, message:"<<ec.message()<<", value:"<< ec.val() <<", rpc "
-                "function name:"<< get_name(route_key);
-          return std::make_pair(ec.ec, std::string{ec.message()});
+          return std::make_pair(ec, std::string{ec.message()});
         } catch (const std::exception &e) {
-          ELOGV(INFO, "exception: %s in rpc function: %s", e.what(),
-                get_name(route_key).data());
-          return std::make_pair(coro_rpc::errc::interrupted, e.what());
+          return std::make_pair(err_code{coro_rpc::errc::rpc_throw_exception}, e.what());
         } catch (...) {
-          ELOGV(WARNING, "unknown exception in rpc function: %s",
-                get_name(route_key).data());
-          return std::make_pair(coro_rpc::errc::interrupted,
+          return std::make_pair(err_code{errc::rpc_throw_exception},
                                 "unknown rpc function exception"s);
         }
       }
     else {
-      std::ostringstream ss;
-      ss << route_key;
-      ELOGV(ERROR, "the rpc function not registered, function ID: %s",
-            ss.str().data());
+      using namespace std;
       return std::make_pair(coro_rpc::errc::function_not_registered,
-                            "the rpc function not registered"s);
+                            "the rpc function not registered");
     }
   }
 

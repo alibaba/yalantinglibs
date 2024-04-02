@@ -767,7 +767,7 @@ class coro_rpc_client {
     }
     error_happen = true;
     // deserialize failed.
-    err = {errc::invalid_argument, "failed to deserialize rpc return value"};
+    err = {errc::invalid_rpc_result, "failed to deserialize rpc return value"};
     return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
   }
 

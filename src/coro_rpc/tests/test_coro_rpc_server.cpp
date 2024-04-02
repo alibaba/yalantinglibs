@@ -168,7 +168,7 @@ struct CoroServerTester : ServerTester {
       auto new_server = coro_rpc_server(2, std::stoi(this->port_));
       auto ec = new_server.async_start();
       REQUIRE(!ec);
-      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_use,
+      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_used,
                       ec.error().message());
     }
     ELOGV(INFO, "OH NO");
@@ -178,7 +178,7 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = this->call<hi>(client);
     CHECK_MESSAGE(
-        ret.error().code == coro_rpc::errc::invalid_argument,
+        ret.error().code == coro_rpc::errc::invalid_rpc_result,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }

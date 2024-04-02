@@ -300,7 +300,7 @@ class coro_rpc_server_base {
             ec.message().data());
       acceptor_.cancel(ec);
       acceptor_.close(ec);
-      return coro_rpc::errc::address_in_use;
+      return coro_rpc::errc::address_in_used;
     }
 #ifdef _MSC_VER
     acceptor_.set_option(tcp::acceptor::reuse_address(true));
@@ -311,7 +311,7 @@ class coro_rpc_server_base {
     if (ec) {
       ELOGV(ERROR, "get local endpoint port %d error : %s", port_.load(),
             ec.message().data());
-      return coro_rpc::errc::address_in_use;
+      return coro_rpc::errc::address_in_used;
     }
     port_ = end_point.port();
 
@@ -360,7 +360,7 @@ class coro_rpc_server_base {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
-      start_one(conn).via(&conn->get_executor()).detach();
+      start_one(conn).via(conn->get_executor()).detach();
     }
   }
 
