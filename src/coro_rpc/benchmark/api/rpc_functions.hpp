@@ -28,8 +28,12 @@
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 inline coro_io::io_context_pool pool(std::thread::hardware_concurrency());
-inline async_simple::coro::Lazy<std::string_view> coroutine_async_echo(std::string_view str) { co_return str;}
-inline void callback_async_echo(coro_rpc::context<std::string_view> conn,std::string_view str) { 
+inline async_simple::coro::Lazy<std::string_view> coroutine_async_echo(
+    std::string_view str) {
+  co_return str;
+}
+inline void callback_async_echo(coro_rpc::context<std::string_view> conn,
+                                std::string_view str) {
   conn.response_msg(str);
   return;
 }
@@ -43,7 +47,8 @@ inline std::string_view echo_10KB(std::string_view str) { return str; }
 
 inline std::vector<int> array_1K_int(std::vector<int> ar) { return ar; }
 
-inline std::vector<std::string_view> array_1K_str_4B(std::vector<std::string_view> ar) {
+inline std::vector<std::string_view> array_1K_str_4B(
+    std::vector<std::string_view> ar) {
   return ar;
 }
 

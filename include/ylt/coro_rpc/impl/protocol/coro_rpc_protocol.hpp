@@ -215,6 +215,6 @@ template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context() {
   auto* ctx = co_await async_simple::coro::LazyLocals{};
   assert(ctx != nullptr);
-  co_return(context_info_t<rpc_protocol>*) ctx;
+  co_return (context_info_t<rpc_protocol>*) ctx;
 }
 }  // namespace coro_rpc

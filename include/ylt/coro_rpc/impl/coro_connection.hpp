@@ -48,8 +48,8 @@ struct context_info_t {
 #ifndef CORO_RPC_TEST
  private:
 #endif
-  typename rpc_protocol::route_key_t key;
-  typename rpc_protocol::router &router;
+  typename rpc_protocol::route_key_t key_;
+  typename rpc_protocol::router &router_;
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
@@ -65,11 +65,11 @@ struct context_info_t {
   friend class coro_connection;
   context_info_t(typename rpc_protocol::router &r,
                  std::shared_ptr<coro_connection> &&conn)
-      : router(r), conn_(std::move(conn)) {}
+      : router_(r), conn_(std::move(conn)) {}
   context_info_t(typename rpc_protocol::router &r,
                  std::shared_ptr<coro_connection> &&conn,
                  std::string &&req_body_buf, std::string &&req_attachment_buf)
-      : router(r),
+      : router_(r),
         conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
         req_attachment_(std::move(req_attachment_buf)) {}
@@ -88,7 +88,7 @@ struct context_info_t {
   asio::ip::tcp::endpoint get_remote_endpoint() const noexcept;
   uint64_t get_request_id() const noexcept;
   std::string_view get_rpc_function_name() const {
-    return router.get_name(key);
+    return router_.get_name(key_);
   }
 };
 
@@ -231,7 +231,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       auto &req_head = context_info->req_head_;
       auto &body = context_info->req_body_;
       auto &req_attachment = context_info->req_attachment_;
-      auto &key = context_info->key;
+      auto &key = context_info->key_;
       req_head = std::move(req_head_tmp);
       auto serialize_proto = rpc_protocol::get_serialize_protocol(req_head);
 
@@ -260,7 +260,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
-      ++delay_resp_cnt;
+      ++rpc_processing_cnt_;
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
         set_rpc_return_by_callback();
@@ -444,8 +444,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
     write_queue_.emplace_back(std::move(header_buf), std::move(body_buf),
                               std::move(resp_attachment));
-    --delay_resp_cnt;
-    assert(delay_resp_cnt >= 0);
+    --rpc_processing_cnt_;
+    assert(rpc_processing_cnt_ >= 0);
     reset_timer();
     if (write_queue_.size() == 1) {
       if (self == nullptr)
@@ -539,7 +539,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   void reset_timer() {
-    if (!enable_check_timeout_ || delay_resp_cnt != 0) {
+    if (!enable_check_timeout_ || rpc_processing_cnt_ != 0) {
       return;
     }
 
@@ -584,7 +584,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   QuitCallback quit_callback_{nullptr};
   uint64_t conn_id_{0};
-  uint64_t delay_resp_cnt{0};
+  uint64_t rpc_processing_cnt_{0};
 
   std::any tag_;
 

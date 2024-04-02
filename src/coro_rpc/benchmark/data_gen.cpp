@@ -59,8 +59,8 @@ int main() {
   coro_rpc::benchmark_file_path = "./test_data/complex_test/";
   std::filesystem::create_directories(coro_rpc::benchmark_file_path);
   syncAwait(client.call<array_1K_int>(std::vector(1000, 42)));
-  syncAwait(
-      client.call<array_1K_str_4B>(std::vector(1000, std::string_view{"AAAA"})));
+  syncAwait(client.call<array_1K_str_4B>(
+      std::vector(1000, std::string_view{"AAAA"})));
   syncAwait(client.call<array_1K_rect>(
       std::vector(1000, rect{.p1 = {1.2, 3.4}, .p2 = {2.5, 4.6}})));
   syncAwait(

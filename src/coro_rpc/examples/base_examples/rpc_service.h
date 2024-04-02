@@ -21,9 +21,13 @@
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
 std::string_view echo(std::string_view data);
-async_simple::coro::Lazy<std::string_view> coroutine_echo(std::string_view data);
-void async_echo_by_callback(coro_rpc::context<std::string_view/*rpc response data here*/> conn, std::string_view/*rpc request data here*/ data);
-async_simple::coro::Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv);
+async_simple::coro::Lazy<std::string_view> coroutine_echo(
+    std::string_view data);
+void async_echo_by_callback(
+    coro_rpc::context<std::string_view /*rpc response data here*/> conn,
+    std::string_view /*rpc request data here*/ data);
+async_simple::coro::Lazy<std::string_view> async_echo_by_coroutine(
+    std::string_view sv);
 async_simple::coro::Lazy<void> echo_with_attachment();
 async_simple::coro::Lazy<std::string_view> nested_echo(std::string_view sv);
 void return_error_by_context(coro_rpc::context<void> conn);

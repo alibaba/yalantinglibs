@@ -174,7 +174,7 @@ class record_t {
     else if constexpr (detail::c_array_v<U>) {
       ss_.append(data);
     }
-    else if constexpr (requires{ss_.append(data.data());}) /* TODO: update it by SFINAE with support c++17 */{
+    else if constexpr (detail::has_data_v<U>) {
       ss_.append(data.data());
     }
     else if constexpr (detail::has_str_v<U>) {

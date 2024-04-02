@@ -53,7 +53,9 @@ void coro_fun_with_delay_return_void_cost_long_time(
     coro_rpc::context<void> conn);
 inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
   auto ctx = co_await coro_rpc::get_context();
-  ELOGV(INFO,"call function coro_func_return_void, connection id:%d,request id:%d",ctx->get_connection_id(),ctx->get_request_id());
+  ELOGV(INFO,
+        "call function coro_func_return_void, connection id:%d,request id:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
   co_return;
 }
 inline async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
@@ -64,6 +66,7 @@ class HelloService {
   static std::string static_hello();
   async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
   async_simple::coro::Lazy<void> coro_func_return_void(int i) { co_return; }
+
  private:
 };
 namespace ns_login {

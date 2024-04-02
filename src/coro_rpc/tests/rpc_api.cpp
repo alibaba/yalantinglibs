@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
+
 #include "ylt/coro_rpc/impl/errno.h"
 
 using namespace coro_rpc;
@@ -48,26 +49,29 @@ int long_run_func(int val) {
 }
 
 void echo_with_attachment(coro_rpc::context<void> conn) {
-  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d", conn.get_context()->get_connection_id());
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d",
+        conn.get_context()->get_connection_id());
   auto str = conn.get_context()->release_request_attachment();
   conn.get_context()->set_response_attachment(std::move(str));
   conn.response_msg();
 }
 
 void test_context(coro_rpc::context<void> conn) {
-  auto *ctx=conn.get_context();
+  auto *ctx = conn.get_context();
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
-  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d", ctx->get_connection_id(),ctx->get_request_id());
-  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()<<"local endpoint"<<ctx->get_local_endpoint();
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
+        << ctx->get_local_endpoint();
   if (ctx->get_rpc_function_name() != "test_context") {
     throw std::runtime_error("get error rpc function name!");
   }
-  ELOGI<< "rpc function name:"<<ctx->get_rpc_function_name();
+  ELOGI << "rpc function name:" << ctx->get_rpc_function_name();
   std::string sv{ctx->get_request_attachment()};
   auto str = ctx->release_request_attachment();
-  if (sv!=str) {
+  if (sv != str) {
     conn.response_error(coro_rpc::errc::rpc_throw_exception);
     ctx->close();
     return;
@@ -77,7 +81,9 @@ void test_context(coro_rpc::context<void> conn) {
     co_await coro_io::sleep_for(514ms);
     ELOGV(INFO, "response in another executor");
     conn.response_msg();
-  }(std::move(conn)).via(coro_io::get_global_executor()).detach();
+  }(std::move(conn))
+                                          .via(coro_io::get_global_executor())
+                                          .detach();
   ELOGV(INFO, "returning");
   return;
 }
@@ -88,28 +94,32 @@ Lazy<void> test_lazy_context() {
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
-  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d", ctx->get_connection_id(),ctx->get_request_id());
-  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()<<"local endpoint"<<ctx->get_local_endpoint();
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
+        << ctx->get_local_endpoint();
   std::string sv{ctx->get_request_attachment()};
   auto str = ctx->release_request_attachment();
-  if (sv!=str) {
+  if (sv != str) {
     ctx->close();
-    throw rpc_error{coro_rpc::errc::io_error,"attachment error!"};
+    throw rpc_error{coro_rpc::errc::io_error, "attachment error!"};
     co_return;
   }
   ctx->set_response_attachment(std::move(str));
-  co_await coro_io::sleep_for(514ms,coro_io::get_global_executor());
+  co_await coro_io::sleep_for(514ms, coro_io::get_global_executor());
   ELOGV(INFO, "response in another executor");
   co_return;
 }
 
 void test_response_error5() {
-  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,"error with user-defined msg"};
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,
+                            "error with user-defined msg"};
   return;
 }
 
 Lazy<void> test_response_error6() {
-  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,"error with user-defined msg"};
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,
+                            "error with user-defined msg"};
 }
 
 void coro_fun_with_user_define_connection_type(my_context conn) {
