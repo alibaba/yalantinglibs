@@ -66,7 +66,7 @@ Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
 
 Lazy<void> get_ctx_info() {
   ELOGV(INFO, "call get_ctx_info");
-  auto *ctx = co_await coro_rpc::get_context();
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
@@ -88,9 +88,9 @@ Lazy<void> get_ctx_info() {
   co_return;
 }
 
-Lazy<void> echo_with_attachment() {
+void echo_with_attachment() {
   ELOGV(INFO, "call echo_with_attachment");
-  auto ctx = co_await coro_rpc::get_context();
+  auto ctx = coro_rpc::get_context();
   ctx->set_response_attachment(
       ctx->get_request_attachment()); /*zero-copy by string_view*/
 }
@@ -122,7 +122,7 @@ void return_error_by_exception() {
 }
 
 Lazy<std::string> rpc_with_state_by_tag() {
-  auto *ctx = co_await coro_rpc::get_context();
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
   if (!ctx->tag().has_value()) {
     ctx->tag() = std::uint64_t{0};
   }

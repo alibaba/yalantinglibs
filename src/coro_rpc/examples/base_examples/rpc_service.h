@@ -28,7 +28,7 @@ void async_echo_by_callback(
     std::string_view /*rpc request data here*/ data);
 async_simple::coro::Lazy<std::string_view> async_echo_by_coroutine(
     std::string_view sv);
-async_simple::coro::Lazy<void> echo_with_attachment();
+void echo_with_attachment();
 async_simple::coro::Lazy<std::string_view> nested_echo(std::string_view sv);
 void return_error_by_context(coro_rpc::context<void> conn);
 void return_error_by_exception();

@@ -38,7 +38,6 @@
 #include "inject_action.hpp"
 #endif
 namespace coro_rpc {
-
 class coro_connection;
 using rpc_conn = std::shared_ptr<coro_connection>;
 
@@ -91,6 +90,11 @@ struct context_info_t {
     return router_.get_name(key_);
   }
 };
+
+namespace detail {
+template <typename rpc_protocol>
+context_info_t<rpc_protocol> *&set_context();
+}
 
 /*!
  * TODO: add doc
@@ -286,6 +290,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             });
       }
       else {
+        coro_rpc::detail::set_context<rpc_protocol>() = context_info.get();
         auto &&[resp_err, resp_buf] = router.route(
             handler, payload, context_info, serialize_proto.value(), key);
         if (is_rpc_return_by_callback_) {
@@ -319,7 +324,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           resp_buf[0] = resp_buf[0] + 1;
         }
 #endif
-        direct_response_msg<rpc_protocol>(resp_err, resp_buf, req_head);
+        direct_response_msg<rpc_protocol>(
+            resp_err, resp_buf, req_head,
+            std::move(context_info->resp_attachment_));
+        context_info->resp_attachment_ = [] {
+          return std::string_view{};
+        };
       }
     }
     cancel_timer();
@@ -331,12 +341,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
   template <typename rpc_protocol>
-  void direct_response_msg(
-      coro_rpc::err_code &resp_err, std::string &resp_buf,
-      const typename rpc_protocol::req_header &req_head,
-      std::function<std::string_view()> &&attachment = [] {
-        return std::string_view();
-      }) {
+  void direct_response_msg(coro_rpc::err_code &resp_err, std::string &resp_buf,
+                           const typename rpc_protocol::req_header &req_head,
+                           std::function<std::string_view()> &&attachment) {
     std::string resp_error_msg;
     if (resp_err) {
       resp_error_msg = std::move(resp_buf);

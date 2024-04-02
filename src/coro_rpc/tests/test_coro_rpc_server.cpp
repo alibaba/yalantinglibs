@@ -146,7 +146,8 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&HelloService::hello>(&hello_service_);
     server.register_handler<hello>();
     server.register_handler<hi>();
-    server.register_handler<test_context, test_lazy_context>();
+    server.register_handler<test_context, test_lazy_context,
+                            test_callback_context>();
     server.register_handler<test_response_error5, test_response_error6>();
     server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
@@ -170,6 +171,12 @@ struct CoroServerTester : ServerTester {
     auto result = syncAwait(client->call<test_context>());
     CHECK(result);
     CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
+
+    client->set_req_attachment("12345678909876543212345678901");
+    result = syncAwait(client->call<test_callback_context>());
+    CHECK(result);
+    CHECK(client->get_resp_attachment() == "12345678909876543212345678901");
+
     client->set_req_attachment("01234567890987654321234567890");
     result = syncAwait(client->call<test_lazy_context>());
     CHECK(result);

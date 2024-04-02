@@ -39,7 +39,8 @@ void echo_with_attachment(coro_rpc::context<void> conn);
 inline void error_with_context(coro_rpc::context<void> conn) {
   conn.response_error(coro_rpc::err_code{1004}, "My Error.");
 }
-void test_context(coro_rpc::context<void> conn);
+void test_context();
+void test_callback_context(coro_rpc::context<void> conn);
 async_simple::coro::Lazy<void> test_lazy_context();
 void test_response_error5();
 async_simple::coro::Lazy<void> test_response_error6();
@@ -52,7 +53,7 @@ void coro_fun_with_delay_return_string_twice(
 void coro_fun_with_delay_return_void_cost_long_time(
     coro_rpc::context<void> conn);
 inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
-  auto ctx = co_await coro_rpc::get_context();
+  auto ctx = co_await coro_rpc::get_context_in_coro();
   ELOGV(INFO,
         "call function coro_func_return_void, connection id:%d,request id:%d",
         ctx->get_connection_id(), ctx->get_request_id());

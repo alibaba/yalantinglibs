@@ -55,9 +55,8 @@ void echo_with_attachment(coro_rpc::context<void> conn) {
   conn.get_context()->set_response_attachment(std::move(str));
   conn.response_msg();
 }
-
-void test_context(coro_rpc::context<void> conn) {
-  auto *ctx = conn.get_context();
+template <typename T>
+void test_ctx_impl(T *ctx, std::string_view name) {
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
@@ -65,18 +64,25 @@ void test_context(coro_rpc::context<void> conn) {
         ctx->get_connection_id(), ctx->get_request_id());
   ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
         << ctx->get_local_endpoint();
-  if (ctx->get_rpc_function_name() != "test_context") {
+  if (ctx->get_rpc_function_name() != name) {
     throw std::runtime_error("get error rpc function name!");
   }
   ELOGI << "rpc function name:" << ctx->get_rpc_function_name();
   std::string sv{ctx->get_request_attachment()};
   auto str = ctx->release_request_attachment();
   if (sv != str) {
-    conn.response_error(coro_rpc::errc::rpc_throw_exception);
-    ctx->close();
-    return;
+    throw std::runtime_error("coro_rpc::errc::rpc_throw_exception");
   }
   ctx->set_response_attachment(std::move(str));
+}
+void test_context() {
+  auto *ctx = coro_rpc::get_context();
+  test_ctx_impl(ctx, "test_context");
+  return;
+}
+void test_callback_context(coro_rpc::context<void> conn) {
+  auto *ctx = conn.get_context();
+  test_ctx_impl(ctx, "test_callback_context");
   [](coro_rpc::context<void> conn) -> async_simple::coro::Lazy<void> {
     co_await coro_io::sleep_for(514ms);
     ELOGV(INFO, "response in another executor");
@@ -84,28 +90,13 @@ void test_context(coro_rpc::context<void> conn) {
   }(std::move(conn))
                                           .via(coro_io::get_global_executor())
                                           .detach();
-  ELOGV(INFO, "returning");
   return;
 }
 using namespace async_simple::coro;
 
 Lazy<void> test_lazy_context() {
-  auto *ctx = co_await coro_rpc::get_context();
-  if (ctx->has_closed()) {
-    throw std::runtime_error("connection is close!");
-  }
-  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
-        ctx->get_connection_id(), ctx->get_request_id());
-  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
-        << ctx->get_local_endpoint();
-  std::string sv{ctx->get_request_attachment()};
-  auto str = ctx->release_request_attachment();
-  if (sv != str) {
-    ctx->close();
-    throw rpc_error{coro_rpc::errc::io_error, "attachment error!"};
-    co_return;
-  }
-  ctx->set_response_attachment(std::move(str));
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
+  test_ctx_impl(ctx, "test_lazy_context");
   co_await coro_io::sleep_for(514ms, coro_io::get_global_executor());
   ELOGV(INFO, "response in another executor");
   co_return;
