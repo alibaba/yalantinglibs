@@ -254,11 +254,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         set_rpc_return_by_callback();
         router
             .route_coro(coro_handler, payload, 
-                        serialize_proto.value(), key)
+                        serialize_proto.value(), key)            
             .via(executor_).setLazyLocal((void*)context_info.get())
-            .start([context_info](auto &&result) mutable {
-              asio::dispatch([context_info=std::move(context_info),result = std::move(result)]() mutable {
-                coro_rpc::errc resp_err;
+            .start([context_info,this](auto &&result) mutable {
+              coro_rpc::errc resp_err;
                 std::string resp_buf;
                 if (result.hasError())
                   AS_UNLIKELY {
@@ -268,6 +267,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                 else {
                   std::tie(resp_err, resp_buf) = result.value();
                 }
+              executor_->schedule([context_info=std::move(context_info), resp_err = std::move(resp_err),resp_buf=std::move(resp_buf)]() mutable {
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
                     resp_err, resp_buf, context_info->req_head_,std::move(context_info->resp_attachment_));
               });
