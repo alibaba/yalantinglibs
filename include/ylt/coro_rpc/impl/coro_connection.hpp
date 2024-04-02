@@ -46,10 +46,10 @@ enum class context_status : int { init, start_response, finish_response };
 template <typename rpc_protocol>
 struct context_info_t {
 #ifndef CORO_RPC_TEST
-private:
+ private:
 #endif
   typename rpc_protocol::route_key_t key;
-  typename rpc_protocol::router& router;
+  typename rpc_protocol::router &router;
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
@@ -58,15 +58,19 @@ private:
     return std::string_view{};
   };
   std::atomic<context_status> status_ = context_status::init;
-public:
+
+ public:
   template <typename, typename>
   friend class context_base;
   friend class coro_connection;
-  context_info_t(typename rpc_protocol::router& r,std::shared_ptr<coro_connection> &&conn)
-      : router(r),conn_(std::move(conn)) {}
-  context_info_t(typename rpc_protocol::router& r,std::shared_ptr<coro_connection> &&conn,
+  context_info_t(typename rpc_protocol::router &r,
+                 std::shared_ptr<coro_connection> &&conn)
+      : router(r), conn_(std::move(conn)) {}
+  context_info_t(typename rpc_protocol::router &r,
+                 std::shared_ptr<coro_connection> &&conn,
                  std::string &&req_body_buf, std::string &&req_attachment_buf)
-      : router(r), conn_(std::move(conn)),
+      : router(r),
+        conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
         req_attachment_(std::move(req_attachment_buf)) {}
   uint64_t get_connection_id() noexcept;
@@ -82,7 +86,7 @@ public:
   const std::any &tag() const noexcept;
   asio::ip::tcp::endpoint get_local_endpoint() const noexcept;
   asio::ip::tcp::endpoint get_remote_endpoint() const noexcept;
-  uint64_t get_request_id()  const noexcept;
+  uint64_t get_request_id() const noexcept;
   std::string_view get_rpc_function_name() const {
     return router.get_name(key);
   }
@@ -175,8 +179,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
       typename rpc_protocol::router &router, Socket &socket) noexcept {
-    auto context_info =
-        std::make_shared<context_info_t<rpc_protocol>>(router,shared_from_this());
+    auto context_info = std::make_shared<context_info_t<rpc_protocol>>(
+        router, shared_from_this());
     reset_timer();
     while (true) {
       typename rpc_protocol::req_header req_head_tmp;
@@ -214,13 +218,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         is_rpc_return_by_callback_ = false;
         if (context_info->status_ != context_status::finish_response) {
           // cant reuse buffer
-          context_info = std::make_shared<context_info_t<rpc_protocol>>(router,
-              shared_from_this());
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+              router, shared_from_this());
         }
         else {
           // reuse string buffer
-          context_info = std::make_shared<context_info_t<rpc_protocol>>(router,
-              shared_from_this(), std::move(context_info->req_body_),
+          context_info = std::make_shared<context_info_t<rpc_protocol>>(
+              router, shared_from_this(), std::move(context_info->req_body_),
               std::move(context_info->req_attachment_));
         }
       }
@@ -260,31 +264,39 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
         set_rpc_return_by_callback();
-        router
-            .route_coro(coro_handler, payload, 
-                        serialize_proto.value(), key)    
-            .via(executor_).setLazyLocal((void*)context_info.get())        
+        router.route_coro(coro_handler, payload, serialize_proto.value(), key)
+            .via(executor_)
+            .setLazyLocal((void *)context_info.get())
             .start([context_info](auto &&result) mutable {
-              std::pair<coro_rpc::err_code,std::string> &ret = result.value();
-              if (ret.first) AS_UNLIKELY {
-                ELOGI << "rpc error in function:" << context_info->get_rpc_function_name() <<  ". error code:" << ret.first.ec << ". message : "<< ret.second;
-              }
+              std::pair<coro_rpc::err_code, std::string> &ret = result.value();
+              if (ret.first)
+                AS_UNLIKELY {
+                  ELOGI << "rpc error in function:"
+                        << context_info->get_rpc_function_name()
+                        << ". error code:" << ret.first.ec
+                        << ". message : " << ret.second;
+                }
               auto executor = context_info->conn_->get_executor();
-              executor->schedule([context_info=std::move(context_info), ret = std::move(ret)]() mutable {
+              executor->schedule([context_info = std::move(context_info),
+                                  ret = std::move(ret)]() mutable {
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
-                  ret.first, ret.second, context_info->req_head_,std::move(context_info->resp_attachment_));
-                  });   
+                    ret.first, ret.second, context_info->req_head_,
+                    std::move(context_info->resp_attachment_));
               });
+            });
       }
       else {
-        auto &&[resp_err, resp_buf] = router.route(handler, payload, context_info,
-                                                 serialize_proto.value(), key);
+        auto &&[resp_err, resp_buf] = router.route(
+            handler, payload, context_info, serialize_proto.value(), key);
         if (is_rpc_return_by_callback_) {
           if (!resp_err) {
             continue;
           }
           else {
-            ELOGI << "rpc error in function:" << context_info->get_rpc_function_name() <<  ". error code:" << resp_err.ec << ". message : "<< resp_buf;
+            ELOGI << "rpc error in function:"
+                  << context_info->get_rpc_function_name()
+                  << ". error code:" << resp_err.ec
+                  << ". message : " << resp_buf;
             is_rpc_return_by_callback_ = false;
           }
         }
@@ -293,7 +305,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           ELOGV(WARN, "inject action: close_socket_after_send_length", conn_id_,
                 client_id_);
           std::string header_buf = rpc_protocol::prepare_response(
-        resp_buf, req_head, 0, resp_err, "");
+              resp_buf, req_head, 0, resp_err, "");
           co_await coro_io::async_write(socket, asio::buffer(header_buf));
           close();
           break;
@@ -319,20 +331,24 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
   template <typename rpc_protocol>
-  void direct_response_msg(coro_rpc::err_code &resp_err, std::string &resp_buf,const typename rpc_protocol::req_header &req_head, std::function<std::string_view()>&& attachment=[]{return std::string_view();}) {
+  void direct_response_msg(
+      coro_rpc::err_code &resp_err, std::string &resp_buf,
+      const typename rpc_protocol::req_header &req_head,
+      std::function<std::string_view()> &&attachment = [] {
+        return std::string_view();
+      }) {
     std::string resp_error_msg;
     if (resp_err) {
       resp_error_msg = std::move(resp_buf);
       resp_buf = {};
-      ELOGV(WARNING, "rpc route/execute error, error msg: %s", resp_error_msg.data());
+      ELOGV(WARNING, "rpc route/execute error, error msg: %s",
+            resp_error_msg.data());
     }
     std::string header_buf = rpc_protocol::prepare_response(
         resp_buf, req_head, attachment().length(), resp_err, resp_error_msg);
 
-    response(
-        std::move(header_buf), std::move(resp_buf),
-        std::move(attachment),
-        nullptr)
+    response(std::move(header_buf), std::move(resp_buf), std::move(attachment),
+             nullptr)
         .start([](auto &&) {
         });
   }
@@ -356,8 +372,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return {};
     };
     std::string body_buf;
-    std::string header_buf = rpc_protocol::prepare_response(
-        body_buf, req_head, 0, ec, error_msg);
+    std::string header_buf =
+        rpc_protocol::prepare_response(body_buf, req_head, 0, ec, error_msg);
     response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
              shared_from_this())
         .via(executor_)
@@ -402,9 +418,13 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   auto get_executor() { return executor_; }
 
-  asio::ip::tcp::endpoint get_remote_endpoint() {return socket_.remote_endpoint();}
+  asio::ip::tcp::endpoint get_remote_endpoint() {
+    return socket_.remote_endpoint();
+  }
 
-  asio::ip::tcp::endpoint get_local_endpoint() {return socket_.local_endpoint();}
+  asio::ip::tcp::endpoint get_local_endpoint() {
+    return socket_.local_endpoint();
+  }
 
  private:
   async_simple::coro::Lazy<void> response(
@@ -505,7 +525,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   void close() {
-    ELOGV(TRACE,"connection closed");
+    ELOGV(TRACE, "connection closed");
     if (has_closed_) {
       return;
     }
@@ -561,7 +581,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   bool enable_check_timeout_{false};
   asio::steady_timer timer_;
   std::atomic<bool> has_closed_{false};
-  
+
   QuitCallback quit_callback_{nullptr};
   uint64_t conn_id_{0};
   uint64_t delay_resp_cnt{0};
@@ -584,7 +604,7 @@ uint64_t context_info_t<rpc_protocol>::get_connection_id() noexcept {
 }
 
 template <typename rpc_protocol>
-uint64_t context_info_t<rpc_protocol>::has_closed() const  noexcept {
+uint64_t context_info_t<rpc_protocol>::has_closed() const noexcept {
   return conn_->has_closed();
 }
 
@@ -594,26 +614,27 @@ void context_info_t<rpc_protocol>::close() {
 }
 
 template <typename rpc_protocol>
-uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {
-
-}
+uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {}
 
 template <typename rpc_protocol>
-void context_info_t<rpc_protocol>::set_response_attachment(std::string attachment) {
+void context_info_t<rpc_protocol>::set_response_attachment(
+    std::string attachment) {
   set_response_attachment([attachment = std::move(attachment)] {
     return std::string_view{attachment};
   });
 }
 
 template <typename rpc_protocol>
-void context_info_t<rpc_protocol>::set_response_attachment(std::string_view attachment) {
+void context_info_t<rpc_protocol>::set_response_attachment(
+    std::string_view attachment) {
   set_response_attachment([attachment] {
     return attachment;
   });
 }
 
 template <typename rpc_protocol>
-void context_info_t<rpc_protocol>::set_response_attachment(std::function<std::string_view()> attachment) {
+void context_info_t<rpc_protocol>::set_response_attachment(
+    std::function<std::string_view()> attachment) {
   resp_attachment_ = std::move(attachment);
 }
 
@@ -628,27 +649,29 @@ std::string context_info_t<rpc_protocol>::release_request_attachment() {
 }
 
 template <typename rpc_protocol>
-std::any & context_info_t<rpc_protocol>::tag() noexcept {
+std::any &context_info_t<rpc_protocol>::tag() noexcept {
   return conn_->tag();
 }
 
 template <typename rpc_protocol>
-const std::any & context_info_t<rpc_protocol>::tag() const noexcept {
+const std::any &context_info_t<rpc_protocol>::tag() const noexcept {
   return conn_->tag();
 }
 
 template <typename rpc_protocol>
-asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_local_endpoint() const noexcept {
+asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_local_endpoint()
+    const noexcept {
   return conn_->get_local_endpoint();
 }
 
 template <typename rpc_protocol>
-asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_remote_endpoint() const noexcept {
+asio::ip::tcp::endpoint context_info_t<rpc_protocol>::get_remote_endpoint()
+    const noexcept {
   return conn_->get_remote_endpoint();
 }
 namespace protocol {
-  template <typename rpc_protocol>
-  uint64_t get_request_id(const typename rpc_protocol::req_header&) noexcept;
+template <typename rpc_protocol>
+uint64_t get_request_id(const typename rpc_protocol::req_header &) noexcept;
 }
 template <typename rpc_protocol>
 uint64_t context_info_t<rpc_protocol>::get_request_id() const noexcept {

@@ -163,7 +163,7 @@ struct coro_rpc_protocol {
     if (rpc_err_code != coro_rpc::errc{})
       AS_UNLIKELY {
         rpc_result.clear();
-        if (static_cast<uint16_t>(rpc_err_code)>UINT8_MAX) {
+        if (static_cast<uint16_t>(rpc_err_code) > UINT8_MAX) {
           struct_pack::serialize_to(
               rpc_result,
               std::pair{static_cast<uint16_t>(rpc_err_code), err_msg});
@@ -185,7 +185,6 @@ struct coro_rpc_protocol {
    * `msg`.
    */
 
-
   // internal variable
   constexpr static inline int8_t magic_number = 21;
 
@@ -196,9 +195,11 @@ struct coro_rpc_protocol {
   static_assert(RESP_HEAD_LEN == 16);
 };
 
-template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
-uint64_t get_request_id(const typename rpc_protocol::req_header& header) noexcept {
-  if constexpr (std::is_same_v<rpc_protocol, coro_rpc::protocol::coro_rpc_protocol>) {
+template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+uint64_t get_request_id(
+    const typename rpc_protocol::req_header& header) noexcept {
+  if constexpr (std::is_same_v<rpc_protocol,
+                               coro_rpc::protocol::coro_rpc_protocol>) {
     return header.seq_num;
   }
   else {
@@ -210,10 +211,10 @@ template <typename return_msg_type>
 using context = coro_rpc::context_base<return_msg_type,
                                        coro_rpc::protocol::coro_rpc_protocol>;
 
-template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context() {
-  auto *ctx=co_await async_simple::coro::LazyLocals{};
-  assert(ctx!=nullptr);
-  co_return (context_info_t<rpc_protocol>*)ctx;
+  auto* ctx = co_await async_simple::coro::LazyLocals{};
+  assert(ctx != nullptr);
+  co_return(context_info_t<rpc_protocol>*) ctx;
 }
 }  // namespace coro_rpc

@@ -48,15 +48,14 @@ template <typename rpc_protocol,
           template <typename...> typename map_t = std::unordered_map>
 
 class router {
+ public:
+  using router_handler_t =
+      std::function<std::pair<coro_rpc::err_code, std::string>(
+          std::string_view, rpc_context<rpc_protocol> &context_info,
+          typename rpc_protocol::supported_serialize_protocols protocols)>;
 
-
-public:
-  using router_handler_t = std::function<std::pair<coro_rpc::err_code,std::string>(
-      std::string_view, rpc_context<rpc_protocol> &context_info,
-      typename rpc_protocol::supported_serialize_protocols protocols)>;
-
-  using coro_router_handler_t =
-      std::function<async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>>(
+  using coro_router_handler_t = std::function<
+      async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>>(
           std::string_view,
           typename rpc_protocol::supported_serialize_protocols protocols)>;
 
@@ -70,8 +69,8 @@ public:
     else
       return empty_string;
   }
- private:
 
+ private:
   std::unordered_map<route_key, router_handler_t> handlers_;
   std::unordered_map<route_key, coro_router_handler_t> coro_handlers_;
   std::unordered_map<route_key, std::string> id2name_;
@@ -83,8 +82,8 @@ public:
     std::string_view data;
     Self *self;
     template <typename serialize_protocol>
-    async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>> operator()(
-        const serialize_protocol &) {
+    async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>>
+    operator()(const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
           data, self);
     }
@@ -94,8 +93,8 @@ public:
   struct execute_visitor<Func, void> {
     std::string_view data;
     template <typename serialize_protocol>
-    async_simple::coro::Lazy<std::pair<coro_rpc::err_code,std::string>> operator() (
-        const serialize_protocol &) {
+    async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>>
+    operator()(const serialize_protocol &) {
       return internal::execute_coro<rpc_protocol, serialize_protocol, Func>(
           data);
     }
@@ -236,10 +235,10 @@ public:
     return nullptr;
   }
 
-  async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>> route_coro(
-      auto handler, std::string_view data,
-      typename rpc_protocol::supported_serialize_protocols protocols,
-      const typename rpc_protocol::route_key_t &route_key) {
+  async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>>
+  route_coro(auto handler, std::string_view data,
+             typename rpc_protocol::supported_serialize_protocols protocols,
+             const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
     if (handler)
       AS_LIKELY {

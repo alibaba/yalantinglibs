@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <ylt/struct_pack.hpp>
 #include <cstdint>
+#include <ylt/struct_pack.hpp>
 #pragma once
 namespace coro_rpc {
 enum class errc : uint16_t {

@@ -79,7 +79,8 @@ class context_base {
                       std::string_view error_msg) {
     if (!check_status())
       AS_UNLIKELY { return; };
-    ELOGI << "rpc error in function:" << self_->get_rpc_function_name() << ". error code:" << error_code.ec << ". message : "<< error_msg;
+    ELOGI << "rpc error in function:" << self_->get_rpc_function_name()
+          << ". error code:" << error_code.ec << ". message : " << error_msg;
     self_->conn_->template response_error<rpc_protocol>(error_code, error_msg,
                                                         self_->req_head_);
   }
@@ -129,12 +130,10 @@ class context_base {
     /*finish here*/
     self_->status_ = context_status::finish_response;
   }
-  const context_info_t<rpc_protocol>* get_context() const noexcept {
+  const context_info_t<rpc_protocol> *get_context() const noexcept {
     return self_.get();
   }
-  context_info_t<rpc_protocol>* get_context() noexcept {
-    return self_.get();
-  }
+  context_info_t<rpc_protocol> *get_context() noexcept { return self_.get(); }
 };
 
 template <typename T>
