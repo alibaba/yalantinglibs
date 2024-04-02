@@ -184,12 +184,7 @@ struct coro_rpc_protocol {
    * The `rpc_error` struct holds the error code `code` and error message
    * `msg`.
    */
-  struct rpc_error {
-    coro_rpc::err_code code;  //!< error code
-    std::string msg;          //!< error message
-    uint16_t& val() { return *(uint16_t*)&(code.ec); }
-    const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
-  };
+
 
   // internal variable
   constexpr static inline int8_t magic_number = 21;
@@ -200,8 +195,6 @@ struct coro_rpc_protocol {
   static constexpr auto RESP_HEAD_LEN = sizeof(resp_header{});
   static_assert(RESP_HEAD_LEN == 16);
 };
-
-STRUCT_PACK_REFL(coro_rpc_protocol::rpc_error, val(), msg);
 
 template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 uint64_t get_request_id(const typename rpc_protocol::req_header& header) noexcept {
@@ -216,7 +209,6 @@ uint64_t get_request_id(const typename rpc_protocol::req_header& header) noexcep
 template <typename return_msg_type>
 using context = coro_rpc::context_base<return_msg_type,
                                        coro_rpc::protocol::coro_rpc_protocol>;
-using rpc_error = protocol::coro_rpc_protocol::rpc_error;
 
 template<typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context() {

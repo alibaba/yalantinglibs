@@ -75,7 +75,7 @@ get_result(const auto &pair) {
                                  coro_rpc_protocol>;
   rpc_return_type_t<T> ret;
   struct_pack::err_code ec;
-  coro_rpc_protocol::rpc_error err;
+  rpc_error err;
   if (!rpc_errc) {
     ec = struct_pack::deserialize_to(ret, buffer);
     if (!ec) {
@@ -108,7 +108,7 @@ void check_result(const auto &pair, size_t offset = 0) {
   typename RPC_trait<R>::return_type r;
   auto res = struct_pack::deserialize_to(r, data);
   if (res) {
-    coro_rpc_protocol::rpc_error r;
+    rpc_error r;
     auto res = struct_pack::deserialize_to(r, data);
     CHECK(!res);
   }

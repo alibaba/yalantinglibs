@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <ylt/struct_pack/util.h>
-
+#include <ylt/struct_pack.hpp>
 #include <cstdint>
 #pragma once
 namespace coro_rpc {
@@ -91,5 +90,13 @@ struct err_code {
 
 inline bool operator!(err_code ec) noexcept { return ec == errc::ok; }
 inline bool operator!(errc ec) noexcept { return ec == errc::ok; }
+
+struct rpc_error {
+  coro_rpc::err_code code;  //!< error code
+  std::string msg;          //!< error message
+  uint16_t& val() { return *(uint16_t*)&(code.ec); }
+  const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
+};
+STRUCT_PACK_REFL(rpc_error, val(), msg);
 
 };  // namespace coro_rpc

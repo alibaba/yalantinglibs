@@ -109,7 +109,7 @@ class coro_rpc_client {
   using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 
  public:
-  const inline static coro_rpc_protocol::rpc_error connect_error = {
+  const inline static rpc_error connect_error = {
       errc::io_error, "client has been closed"};
   struct config {
     uint32_t client_id = 0;
@@ -289,7 +289,7 @@ class coro_rpc_client {
         ELOGV(ERROR, "client has been closed, please re-connect");
         auto ret = rpc_result<R, coro_rpc_protocol>{
             unexpect_t{},
-            coro_rpc_protocol::rpc_error{
+            rpc_error{
                 errc::io_error, "client has been closed, please re-connect"}};
         co_return ret;
       }
@@ -299,7 +299,7 @@ class coro_rpc_client {
     if (!ssl_init_ret_) {
       ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{
+          rpc_error{
               errc::not_connected,
               std::string{make_error_message(errc::not_connected)}}};
       co_return ret;
@@ -329,7 +329,7 @@ class coro_rpc_client {
     if (is_timeout_) {
       ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{errc::timed_out, "rpc call timed out"}};
+          rpc_error{errc::timed_out, "rpc call timed out"}};
     }
 
 #ifdef UNIT_TEST_INJECT
@@ -543,7 +543,7 @@ class coro_rpc_client {
     if (buffer.empty()) {
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{errc::message_too_large,
+          rpc_error{errc::message_too_large,
                                        "rpc body serialize size too big"}};
       co_return r;
     }
@@ -566,7 +566,7 @@ class coro_rpc_client {
       close();
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{errc::io_error, ret.first.message()}};
+          rpc_error{errc::io_error, ret.first.message()}};
       co_return r;
     }
     else if (g_action ==
@@ -578,7 +578,7 @@ class coro_rpc_client {
       close();
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{errc::io_error, ret.first.message()}};
+          rpc_error{errc::io_error, ret.first.message()}};
       co_return r;
     }
     else if (g_action ==
@@ -589,7 +589,7 @@ class coro_rpc_client {
       socket_->shutdown(asio::ip::tcp::socket::shutdown_send);
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{errc::io_error, ret.first.message()}};
+          rpc_error{errc::io_error, ret.first.message()}};
       co_return r;
     }
     else {
@@ -615,7 +615,7 @@ class coro_rpc_client {
               config_.client_id);
         r = rpc_result<R, coro_rpc_protocol>{
             unexpect_t{},
-            coro_rpc_protocol::rpc_error{errc::io_error, ret.first.message()}};
+            rpc_error{errc::io_error, ret.first.message()}};
         close();
         co_return r;
       }
@@ -669,12 +669,12 @@ class coro_rpc_client {
     if (is_timeout_) {
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{.code = errc::timed_out, .msg = {}}};
+          rpc_error{.code = errc::timed_out, .msg = {}}};
     }
     else {
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{},
-          coro_rpc_protocol::rpc_error{.code = errc::io_error,
+          rpc_error{.code = errc::io_error,
                                        .msg = ret.first.message()}};
     }
     close();
@@ -733,7 +733,7 @@ class coro_rpc_client {
                                                           bool &error_happen) {
     rpc_return_type_t<T> ret;
     struct_pack::err_code ec;
-    coro_rpc_protocol::rpc_error err;
+    rpc_error err;
     if (rpc_errc == 0)
       AS_LIKELY {
         ec = struct_pack::deserialize_to(ret, buffer);

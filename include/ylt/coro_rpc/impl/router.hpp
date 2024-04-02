@@ -31,6 +31,7 @@
 
 #include "rpc_execute.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
+#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 namespace coro_rpc {
 
@@ -253,6 +254,8 @@ public:
           co_return std::make_pair(err_code{ec}, std::string{coro_rpc::make_error_message(ec)});
         } catch (coro_rpc::err_code ec) {
           co_return std::make_pair(ec, std::string{ec.message()});
+        } catch (coro_rpc::rpc_error& err) {
+          co_return std::make_pair(err.code, std::move(err.msg));
         } catch (const std::exception &e) {
           co_return std::make_pair(coro_rpc::errc::rpc_throw_exception, e.what());
         } catch (...) {
@@ -284,6 +287,8 @@ public:
           return std::make_pair(err_code{ec}, std::string{msg});
         } catch (coro_rpc::err_code ec) {
           return std::make_pair(ec, std::string{ec.message()});
+        } catch (coro_rpc::rpc_error& err) {
+          return std::make_pair(err.code, std::move(err.msg));
         } catch (const std::exception &e) {
           return std::make_pair(err_code{coro_rpc::errc::rpc_throw_exception}, e.what());
         } catch (...) {

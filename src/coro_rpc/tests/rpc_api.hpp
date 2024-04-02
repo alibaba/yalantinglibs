@@ -45,6 +45,8 @@ async_simple::coro::Lazy<void> test_response_error();
 async_simple::coro::Lazy<void> test_response_error2();
 void test_response_error3();
 void test_response_error4();
+void test_response_error5();
+async_simple::coro::Lazy<void> test_response_error6();
 void coro_fun_with_user_define_connection_type(my_context conn);
 void coro_fun_with_delay_return_void(coro_rpc::context<void> conn);
 void coro_fun_with_delay_return_string(coro_rpc::context<std::string> conn);

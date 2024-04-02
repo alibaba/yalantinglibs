@@ -15,6 +15,7 @@
  */
 #include "rpc_api.hpp"
 
+#include <stdexcept>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
 #include "ylt/coro_rpc/impl/errno.h"
@@ -60,6 +61,10 @@ void test_context(coro_rpc::context<void> conn) {
   }
   ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d", ctx->get_connection_id(),ctx->get_request_id());
   ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()<<"local endpoint"<<ctx->get_local_endpoint();
+  if (ctx->get_rpc_function_name() != "test_context") {
+    throw std::runtime_error("get error rpc function name!");
+  }
+  ELOGI<< "rpc function name:"<<ctx->get_rpc_function_name();
   std::string sv{ctx->get_request_attachment()};
   auto str = ctx->release_request_attachment();
   if (sv!=str) {
@@ -116,6 +121,15 @@ void test_response_error3() {
 void test_response_error4() {
   throw coro_rpc::errc::io_error;
   return;
+}
+
+void test_response_error5() {
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,"error with user-defined msg"};
+  return;
+}
+
+Lazy<void> test_response_error6() {
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,"error with user-defined msg"};
 }
 
 void coro_fun_with_user_define_connection_type(my_context conn) {
