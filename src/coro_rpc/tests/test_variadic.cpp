@@ -55,6 +55,5 @@ TEST_CASE("test varadic param") {
   CHECK(ret);
   if (ret) {
     CHECK(ret == "1145142.000000Hello coro_rpc!hellohiwhat");
-    std::cout << ret.value() << std::endl;
   }
 }

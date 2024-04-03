@@ -29,6 +29,7 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/util/type_traits.h"
+#include "ylt/util/utils.hpp"
 
 namespace coro_rpc {
 /*!
@@ -43,14 +44,14 @@ class context_base {
   typename rpc_protocol::req_header &get_req_head() { return self_->req_head_; }
 
   bool check_status() {
-    auto old_flag = self_->has_response_.exchange(true);
-    if (old_flag != false)
+    auto old_flag = self_->status_.exchange(context_status::start_response);
+    if (old_flag != context_status::init)
       AS_UNLIKELY {
         ELOGV(ERROR, "response message more than one time");
         return false;
       }
 
-    if (has_closed())
+    if (self_->has_closed())
       AS_UNLIKELY {
         ELOGV(DEBUG, "response_msg failed: connection has been closed");
         return false;
@@ -67,8 +68,7 @@ class context_base {
   context_base(std::shared_ptr<context_info_t<rpc_protocol>> context_info)
       : self_(std::move(context_info)) {
     if (self_->conn_) {
-      self_->conn_->set_rpc_call_type(
-          coro_connection::rpc_call_type::callback_started);
+      self_->conn_->set_rpc_return_by_callback();
     }
   };
   context_base() = default;
@@ -79,8 +79,10 @@ class context_base {
                       std::string_view error_msg) {
     if (!check_status())
       AS_UNLIKELY { return; };
-    self_->conn_->template response_error<rpc_protocol>(
-        error_code, error_msg, self_->req_head_, self_->is_delay_);
+    ELOGI << "rpc error in function:" << self_->get_rpc_function_name()
+          << ". error code:" << error_code.ec << ". message : " << error_msg;
+    self_->conn_->template response_error<rpc_protocol>(error_code, error_msg,
+                                                        self_->req_head_);
   }
   void response_error(coro_rpc::err_code error_code) {
     response_error(error_code, error_code.message());
@@ -98,16 +100,15 @@ class context_base {
    */
   template <typename... Args>
   void response_msg(Args &&...args) {
+    if (!check_status())
+      AS_UNLIKELY { return; };
     if constexpr (std::is_same_v<return_msg_type, void>) {
       static_assert(sizeof...(args) == 0, "illegal args");
-      if (!check_status())
-        AS_UNLIKELY { return; };
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
                 serialize_proto::serialize(),
-                std::move(self_->resp_attachment_), self_->req_head_,
-                self_->is_delay_);
+                std::move(self_->resp_attachment_), self_->req_head_);
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
     }
@@ -115,85 +116,24 @@ class context_base {
       static_assert(
           requires { return_msg_type{std::forward<Args>(args)...}; },
           "constructed return_msg_type failed by illegal args");
-
-      if (!check_status())
-        AS_UNLIKELY { return; };
-
       return_msg_type ret{std::forward<Args>(args)...};
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
                 serialize_proto::serialize(ret),
-                std::move(self_->resp_attachment_), self_->req_head_,
-                self_->is_delay_);
+                std::move(self_->resp_attachment_), self_->req_head_);
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
 
       // response_handler_(std::move(conn_), std::move(ret));
     }
+    /*finish here*/
+    self_->status_ = context_status::finish_response;
   }
-
-  /*!
-   * Check connection closed or not
-   *
-   * @return true if closed, otherwise false
-   */
-  bool has_closed() const { return self_->conn_->has_closed(); }
-
-  /*!
-   * Close connection
-   */
-  void close() { return self_->conn_->async_close(); }
-
-  /*!
-   * Get the unique connection ID
-   * @return connection id
-   */
-  uint64_t get_connection_id() const noexcept {
-    return self_->conn_->get_connection_id();
+  const context_info_t<rpc_protocol> *get_context() const noexcept {
+    return self_.get();
   }
-
-  /*!
-   * Set the response_attachment
-   * @return a ref of response_attachment
-   */
-  void set_response_attachment(std::string attachment) {
-    set_response_attachment([attachment = std::move(attachment)] {
-      return std::string_view{attachment};
-    });
-  }
-
-  /*!
-   * Set the response_attachment
-   * @return a ref of response_attachment
-   */
-  void set_response_attachment(std::function<std::string_view()> attachment) {
-    self_->resp_attachment_ = std::move(attachment);
-  }
-
-  /*!
-   * Get the request attachment
-   * @return connection id
-   */
-  std::string_view get_request_attachment() const {
-    return self_->req_attachment_;
-  }
-
-  /*!
-   * Release the attachment
-   * @return connection id
-   */
-  std::string release_request_attachment() {
-    return std::move(self_->req_attachment_);
-  }
-
-  void set_delay() {
-    self_->is_delay_ = true;
-    self_->conn_->set_rpc_call_type(
-        coro_connection::rpc_call_type::callback_with_delay);
-  }
-  std::any &tag() { return self_->conn_->tag(); }
-  const std::any &tag() const { return self_->conn_->tag(); }
+  context_info_t<rpc_protocol> *get_context() noexcept { return self_.get(); }
 };
 
 template <typename T>

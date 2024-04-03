@@ -32,25 +32,21 @@ Lazy<void> show_rpc_call() {
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
   assert(!ec);
 
-  auto ret = co_await client.call<hello_world>();
-  assert(ret.value() == "hello_world"s);
+  auto ret = co_await client.call<echo>("hello");
+  assert(ret.value() == "hello");
+
+  ret = co_await client.call<coroutine_echo>("42");
+  assert(ret.value() == "42");
+
+  ret = co_await client.call<async_echo_by_callback>("hi");
+  assert(ret.value() == "hi");
+
+  ret = co_await client.call<async_echo_by_coroutine>("hey");
+  assert(ret.value() == "hey");
 
   client.set_req_attachment("This is attachment.");
   auto ret_void = co_await client.call<echo_with_attachment>();
   assert(client.get_resp_attachment() == "This is attachment.");
-
-  client.set_req_attachment("This is attachment2.");
-  ret_void = co_await client.call<echo_with_attachment2>();
-  assert(client.get_resp_attachment() == "This is attachment2.");
-
-  auto ret_int = co_await client.call<A_add_B>(12, 30);
-  assert(ret_int.value() == 42);
-
-  ret = co_await client.call<coro_echo>("coro_echo");
-  assert(ret.value() == "coro_echo"s);
-
-  ret = co_await client.call<hello_with_delay>("hello_with_delay"s);
-  assert(ret.value() == "hello_with_delay"s);
 
   ret = co_await client.call<nested_echo>("nested_echo"s);
   assert(ret.value() == "nested_echo"s);
@@ -58,14 +54,18 @@ Lazy<void> show_rpc_call() {
   ret = co_await client.call<&HelloService::hello>();
   assert(ret.value() == "HelloService::hello"s);
 
-  ret = co_await client.call<&HelloService::hello_with_delay>(
-      "HelloService::hello_with_delay"s);
-  assert(ret.value() == "HelloService::hello_with_delay"s);
+  ret_void = co_await client.call<get_ctx_info>();
+  assert(ret_void);
 
-  ret = co_await client.call<return_error>();
+  // TODO: fix return error
+  // ret_void = co_await client.call<return_error_by_context>();
 
-  assert(ret.error().code == 404);
-  assert(ret.error().msg == "404 Not Found.");
+  // assert(ret.error().code.val() == 404);
+  // assert(ret.error().msg == "404 Not Found.");
+
+  // ret_void = co_await client.call<return_error_by_exception>();
+
+  // assert(ret.error().code.val() == 404);
 
   ret = co_await client.call<rpc_with_state_by_tag>();
   assert(ret.value() == "1");

@@ -37,8 +37,13 @@ struct my_context {
 };
 void echo_with_attachment(coro_rpc::context<void> conn);
 inline void error_with_context(coro_rpc::context<void> conn) {
-  conn.response_error(coro_rpc::err_code{104}, "My Error.");
+  conn.response_error(coro_rpc::err_code{1004}, "My Error.");
 }
+void test_context();
+void test_callback_context(coro_rpc::context<void> conn);
+async_simple::coro::Lazy<void> test_lazy_context();
+void test_response_error5();
+async_simple::coro::Lazy<void> test_response_error6();
 void coro_fun_with_user_define_connection_type(my_context conn);
 void coro_fun_with_delay_return_void(coro_rpc::context<void> conn);
 void coro_fun_with_delay_return_string(coro_rpc::context<std::string> conn);
@@ -48,19 +53,13 @@ void coro_fun_with_delay_return_string_twice(
 void coro_fun_with_delay_return_void_cost_long_time(
     coro_rpc::context<void> conn);
 inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
+  auto ctx = co_await coro_rpc::get_context_in_coro();
+  ELOGV(INFO,
+        "call function coro_func_return_void, connection id:%d,request id:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
   co_return;
 }
 inline async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
-inline async_simple::coro::Lazy<void> coro_func_delay_return_int(
-    coro_rpc::context<int> conn, int i) {
-  conn.response_msg(i);
-  co_return;
-}
-inline async_simple::coro::Lazy<void> coro_func_delay_return_void(
-    coro_rpc::context<void> conn, int i) {
-  conn.response_msg();
-  co_return;
-}
 
 class HelloService {
  public:
@@ -68,16 +67,6 @@ class HelloService {
   static std::string static_hello();
   async_simple::coro::Lazy<int> coro_func(int i) { co_return i; }
   async_simple::coro::Lazy<void> coro_func_return_void(int i) { co_return; }
-  async_simple::coro::Lazy<void> coro_func_delay_return_int(
-      coro_rpc::context<int> conn, int i) {
-    conn.response_msg(i);
-    co_return;
-  }
-  async_simple::coro::Lazy<void> coro_func_delay_return_void(
-      coro_rpc::context<void> conn, int i) {
-    conn.response_msg();
-    co_return;
-  }
 
  private:
 };

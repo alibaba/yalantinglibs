@@ -120,6 +120,8 @@ struct CoroServerTester : ServerTester {
     test_start_new_server_with_same_port();
     test_server_send_bad_rpc_result();
     test_server_send_no_body();
+    test_context_func();
+    test_return_err_by_throw_exception();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void>();
     this->test_call_with_delay_func<
         coro_fun_with_user_define_connection_type>();
@@ -143,6 +145,10 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&ns_login::LoginService::login>(&login_service_);
     server.register_handler<&HelloService::hello>(&hello_service_);
     server.register_handler<hello>();
+    server.register_handler<hi>();
+    server.register_handler<test_context, test_lazy_context,
+                            test_callback_context>();
+    server.register_handler<test_response_error5, test_response_error6>();
     server.register_handler<coro_fun_with_user_define_connection_type>();
     server.register_handler<coro_fun_with_delay_return_void>();
     server.register_handler<coro_fun_with_delay_return_void_twice>();
@@ -151,15 +157,48 @@ struct CoroServerTester : ServerTester {
     server.register_handler<coro_fun_with_delay_return_string_twice>();
     server.register_handler<coro_func>();
     server.register_handler<coro_func_return_void>();
-    server.register_handler<coro_func_delay_return_int>();
-    server.register_handler<coro_func_delay_return_void>();
     server.register_handler<&HelloService::coro_func,
-                            &HelloService::coro_func_return_void,
-                            &HelloService::coro_func_delay_return_void,
-                            &HelloService::coro_func_delay_return_int>(
+                            &HelloService::coro_func_return_void>(
         &hello_service_);
     server.register_handler<get_coro_value>();
     server.register_handler<&CoroServerTester::get_value>(this);
+  }
+
+  void test_context_func() {
+    auto client = create_client();
+    ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    client->set_req_attachment("1234567890987654321234567890");
+    auto result = syncAwait(client->call<test_context>());
+    CHECK(result);
+    CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
+
+    client->set_req_attachment("12345678909876543212345678901");
+    result = syncAwait(client->call<test_callback_context>());
+    CHECK(result);
+    CHECK(client->get_resp_attachment() == "12345678909876543212345678901");
+
+    client->set_req_attachment("01234567890987654321234567890");
+    result = syncAwait(client->call<test_lazy_context>());
+    CHECK(result);
+    CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
+  }
+  void test_return_err_by_throw_exception() {
+    {
+      auto client = create_client();
+      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+      auto result = syncAwait(client->call<test_response_error5>());
+      REQUIRE(!result);
+      CHECK(result.error().code == coro_rpc::errc::address_in_used);
+      CHECK(result.error().msg == "error with user-defined msg");
+    }
+    {
+      auto client = create_client();
+      ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+      auto result = syncAwait(client->call<test_response_error6>());
+      REQUIRE(!result);
+      CHECK(result.error().code == coro_rpc::errc::address_in_used);
+      CHECK(result.error().msg == "error with user-defined msg");
+    }
   }
 
   void test_function_not_registered() {
@@ -193,7 +232,7 @@ struct CoroServerTester : ServerTester {
       auto new_server = coro_rpc_server(2, std::stoi(this->port_));
       auto ec = new_server.async_start();
       REQUIRE(!ec);
-      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_use,
+      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_used,
                       ec.error().message());
     }
     ELOGV(INFO, "OH NO");
@@ -203,7 +242,7 @@ struct CoroServerTester : ServerTester {
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     auto ret = this->call<hi>(client);
     CHECK_MESSAGE(
-        ret.error().code == coro_rpc::errc::invalid_argument,
+        ret.error().code == coro_rpc::errc::invalid_rpc_result,
         std::to_string(client->get_client_id()).append(ret.error().msg));
     g_action = {};
   }
@@ -239,20 +278,6 @@ struct CoroServerTester : ServerTester {
     auto ret5 =
         this->template call<&HelloService::coro_func_return_void>(client, 42);
     CHECK(ret5.has_value());
-
-    auto ret6 = this->template call<&HelloService::coro_func_delay_return_void>(
-        client, 42);
-    CHECK(ret6.has_value());
-
-    auto ret7 = this->template call<&HelloService::coro_func_delay_return_int>(
-        client, 42);
-    CHECK(ret7.value() == 42);
-
-    auto ret8 = this->template call<coro_func_delay_return_void>(client, 42);
-    CHECK(ret8.has_value());
-
-    auto ret9 = this->template call<coro_func_delay_return_int>(client, 42);
-    CHECK(ret9.value() == 42);
   }
   coro_rpc_server server;
   std::thread thd;

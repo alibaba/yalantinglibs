@@ -13,9 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <ylt/struct_pack/util.h>
-
 #include <cstdint>
+#include <ylt/struct_pack.hpp>
 #pragma once
 namespace coro_rpc {
 enum class errc : uint16_t {
@@ -23,33 +22,34 @@ enum class errc : uint16_t {
   io_error,
   not_connected,
   timed_out,
-  invalid_argument,
-  address_in_use,
+  invalid_rpc_arguments,
+  address_in_used,
   bad_address,
   open_error,
   listen_error,
   operation_canceled,
-  interrupted,
+  rpc_throw_exception,
   function_not_registered,
   protocol_error,
   unknown_protocol_version,
   message_too_large,
   server_has_ran,
+  invalid_rpc_result,
 };
 inline constexpr std::string_view make_error_message(errc ec) noexcept {
   switch (ec) {
     case errc::ok:
       return "ok";
     case errc::io_error:
-      return "io_error";
+      return "io error";
     case errc::not_connected:
-      return "not_connected";
+      return "not connected";
     case errc::timed_out:
-      return "timed_out";
-    case errc::invalid_argument:
-      return "invalid_argument";
-    case errc::address_in_use:
-      return "address_in_use";
+      return "time out";
+    case errc::invalid_rpc_arguments:
+      return "invalid rpc arg";
+    case errc::address_in_used:
+      return "address in used";
     case errc::bad_address:
       return "bad_address";
     case errc::open_error:
@@ -57,19 +57,21 @@ inline constexpr std::string_view make_error_message(errc ec) noexcept {
     case errc::listen_error:
       return "listen_error";
     case errc::operation_canceled:
-      return "operation_canceled";
-    case errc::interrupted:
-      return "interrupted";
+      return "operation canceled";
+    case errc::rpc_throw_exception:
+      return "rpc throw exception";
     case errc::function_not_registered:
-      return "function_not_registered";
+      return "function not registered";
     case errc::protocol_error:
-      return "protocol_error";
+      return "protocol error";
     case errc::message_too_large:
-      return "message_too_large";
+      return "message too large";
     case errc::server_has_ran:
-      return "server_has_ran";
+      return "server has ran";
+    case errc::invalid_rpc_result:
+      return "invalid rpc result";
     default:
-      return "unknown_user-defined_error";
+      return "unknown user-defined error";
   }
 }
 struct err_code {
@@ -97,5 +99,13 @@ struct err_code {
 
 inline bool operator!(err_code ec) noexcept { return ec == errc::ok; }
 inline bool operator!(errc ec) noexcept { return ec == errc::ok; }
+
+struct rpc_error {
+  coro_rpc::err_code code;  //!< error code
+  std::string msg;          //!< error message
+  uint16_t& val() { return *(uint16_t*)&(code.ec); }
+  const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
+};
+STRUCT_PACK_REFL(rpc_error, val(), msg);
 
 };  // namespace coro_rpc

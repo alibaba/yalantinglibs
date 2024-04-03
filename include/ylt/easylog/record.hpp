@@ -187,7 +187,7 @@ class record_t {
     else {
       std::stringstream ss;
       ss << data;
-      ss_.append(ss.str());
+      ss_.append(std::move(ss).str());
     }
 
     return *this;

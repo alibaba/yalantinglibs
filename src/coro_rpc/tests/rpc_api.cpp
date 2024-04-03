@@ -15,8 +15,11 @@
  */
 #include "rpc_api.hpp"
 
+#include <stdexcept>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
+
+#include "ylt/coro_rpc/impl/errno.h"
 
 using namespace coro_rpc;
 using namespace std::chrono_literals;
@@ -46,10 +49,68 @@ int long_run_func(int val) {
 }
 
 void echo_with_attachment(coro_rpc::context<void> conn) {
-  ELOGV(INFO, "conn ID:%d", conn.get_connection_id());
-  auto str = conn.release_request_attachment();
-  conn.set_response_attachment(std::move(str));
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d",
+        conn.get_context()->get_connection_id());
+  auto str = conn.get_context()->release_request_attachment();
+  conn.get_context()->set_response_attachment(std::move(str));
   conn.response_msg();
+}
+template <typename T>
+void test_ctx_impl(T *ctx, std::string_view name) {
+  if (ctx->has_closed()) {
+    throw std::runtime_error("connection is close!");
+  }
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
+        << ctx->get_local_endpoint();
+  if (ctx->get_rpc_function_name() != name) {
+    throw std::runtime_error("get error rpc function name!");
+  }
+  ELOGI << "rpc function name:" << ctx->get_rpc_function_name();
+  std::string sv{ctx->get_request_attachment()};
+  auto str = ctx->release_request_attachment();
+  if (sv != str) {
+    throw std::runtime_error("coro_rpc::errc::rpc_throw_exception");
+  }
+  ctx->set_response_attachment(std::move(str));
+}
+void test_context() {
+  auto *ctx = coro_rpc::get_context();
+  test_ctx_impl(ctx, "test_context");
+  return;
+}
+void test_callback_context(coro_rpc::context<void> conn) {
+  auto *ctx = conn.get_context();
+  test_ctx_impl(ctx, "test_callback_context");
+  [](coro_rpc::context<void> conn) -> async_simple::coro::Lazy<void> {
+    co_await coro_io::sleep_for(514ms);
+    ELOGV(INFO, "response in another executor");
+    conn.response_msg();
+  }(std::move(conn))
+                                          .via(coro_io::get_global_executor())
+                                          .detach();
+  return;
+}
+using namespace async_simple::coro;
+
+Lazy<void> test_lazy_context() {
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
+  test_ctx_impl(ctx, "test_lazy_context");
+  co_await coro_io::sleep_for(514ms, coro_io::get_global_executor());
+  ELOGV(INFO, "response in another executor");
+  co_return;
+}
+
+void test_response_error5() {
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,
+                            "error with user-defined msg"};
+  return;
+}
+
+Lazy<void> test_response_error6() {
+  throw coro_rpc::rpc_error{coro_rpc::errc::address_in_used,
+                            "error with user-defined msg"};
 }
 
 void coro_fun_with_user_define_connection_type(my_context conn) {
@@ -91,7 +152,6 @@ void coro_fun_with_delay_return_string_twice(
 }
 
 void fun_with_delay_return_void_cost_long_time(coro_rpc::context<void> conn) {
-  conn.set_delay();
   std::thread([conn = std::move(conn)]() mutable {
     std::this_thread::sleep_for(700ms);
     conn.response_msg();

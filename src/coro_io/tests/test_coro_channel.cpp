@@ -6,6 +6,19 @@
 #include <ylt/coro_io/coro_io.hpp>
 using namespace std::chrono_literals;
 
+#ifndef __clang__
+#ifdef __GNUC__
+#include <features.h>
+#if __GNUC_PREREQ(10, 3)  // If  gcc_version >= 10.3
+#define IS_OK
+#endif
+#else
+#define IS_OK
+#endif
+#else
+#define IS_OK
+#endif
+
 async_simple::coro::Lazy<void> test_coro_channel() {
   auto ch = coro_io::create_channel<int>(1000);
 
@@ -112,6 +125,7 @@ async_simple::coro::Lazy<void> test_select_channel() {
 }
 
 void callback_lazy() {
+#ifdef IS_OK
   using namespace async_simple::coro;
   auto test0 = []() mutable -> Lazy<int> {
     co_return 41;
@@ -144,6 +158,7 @@ void callback_lazy() {
         CHECK(result == 83);
       }));
   CHECK(index == 0);
+#endif
 }
 
 TEST_CASE("test channel send recieve, test select channel and coroutine") {

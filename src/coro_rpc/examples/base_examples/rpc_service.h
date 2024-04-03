@@ -20,21 +20,22 @@
 #include <string_view>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
-std::string hello_world();
-bool return_bool_hello_world();
-int A_add_B(int a, int b);
-void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
-std::string echo(std::string_view sv);
-void echo_with_attachment(coro_rpc::context<void> conn);
-void echo_with_attachment2(coro_rpc::context<void> conn);
-void return_error(coro_rpc::context<std::string> conn);
-void rpc_with_state_by_tag(coro_rpc::context<std::string> conn);
-async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv);
-async_simple::coro::Lazy<std::string> nested_echo(std::string_view sv);
+std::string_view echo(std::string_view data);
+async_simple::coro::Lazy<std::string_view> coroutine_echo(
+    std::string_view data);
+void async_echo_by_callback(
+    coro_rpc::context<std::string_view /*rpc response data here*/> conn,
+    std::string_view /*rpc request data here*/ data);
+async_simple::coro::Lazy<std::string_view> async_echo_by_coroutine(
+    std::string_view sv);
+void echo_with_attachment();
+async_simple::coro::Lazy<std::string_view> nested_echo(std::string_view sv);
+void return_error_by_context(coro_rpc::context<void> conn);
+void return_error_by_exception();
+async_simple::coro::Lazy<void> get_ctx_info();
 class HelloService {
  public:
-  std::string hello();
-  void hello_with_delay(coro_rpc::context<std::string> conn, std::string hello);
+  std::string_view hello();
 };
-
+async_simple::coro::Lazy<std::string> rpc_with_state_by_tag();
 #endif  // CORO_RPC_RPC_API_HPP
