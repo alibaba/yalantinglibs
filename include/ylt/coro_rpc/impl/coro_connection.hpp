@@ -621,7 +621,9 @@ void context_info_t<rpc_protocol>::close() {
 }
 
 template <typename rpc_protocol>
-uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {}
+uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {
+  return conn_->get_connection_id();
+}
 
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
