@@ -788,23 +788,61 @@ int main() {
   假设需要代理的服务器有三个，分别是"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"，coro_http_server设置路径、代理服务器列表和算法类型即可实现反向代理。
 
   ```c++
-  coro_http_server proxy_random(2, 8092);
-  proxy_random.set_http_proxy_handler<GET, POST>(
-      "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+void http_proxy() {
+  cinatra::coro_http_server web_one(1, 9001);
 
-  coro_http_server proxy_rr(2, 8091);
-  proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::RR);
+  web_one.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web1");
+        });
+      });
+
+  web_one.async_start();
+
+  cinatra::coro_http_server web_two(1, 9002);
+
+  web_two.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web2");
+        });
+      });
+
+  web_two.async_start();
+
+  cinatra::coro_http_server web_three(1, 9003);
+
+  web_three.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "web3");
+      });
+
+  web_three.async_start();
+
+  std::this_thread::sleep_for(200ms);
 
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
-      "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::WRR, {10, 5, 5});    
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::WRR, {10, 5, 5});
+
+  coro_http_server proxy_rr(2, 8091);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::RR);
+
+  coro_http_server proxy_random(2, 8092);
+  proxy_random.set_http_proxy_handler<GET, POST>(
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   coro_http_server proxy_all(2, 8093);
   proxy_all.set_http_proxy_handler(
-      "/all", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
@@ -814,38 +852,39 @@ int main() {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client_rr;
-  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web1");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web2");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web3");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web1");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web2");
-  resp_rr = client_rr.post("http://127.0.0.1:8091/rr", "test content",
+  resp_rr = client_rr.post("http://127.0.0.1:8091/", "test content",
                            req_content_type::text);
   assert(resp_rr.resp_body == "web3");
 
   coro_http_client client_wrr;
-  resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp_data resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web1");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web1");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web2");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web3");
 
   coro_http_client client_random;
-  resp_data resp_random = client_random.get("http://127.0.0.1:8092/random");
+  resp_data resp_random = client_random.get("http://127.0.0.1:8092/");
   std::cout << resp_random.resp_body << "\n";
   assert(!resp_random.resp_body.empty());
 
   coro_http_client client_all;
-  resp_random = client_all.post("http://127.0.0.1:8093/all", "test content",
+  resp_random = client_all.post("http://127.0.0.1:8093/", "test content",
                                 req_content_type::text);
   std::cout << resp_random.resp_body << "\n";
   assert(!resp_random.resp_body.empty());
-  ```
+}
+```
