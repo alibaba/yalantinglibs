@@ -100,6 +100,7 @@ class http_parser {
       }
     }
 
+    full_url_ = url_;
     if (has_query) {
       size_t pos = url_.find('?');
       parse_query(url_.substr(pos + 1, url_len - pos - 1));
@@ -124,6 +125,8 @@ class http_parser {
   }
 
   const auto &queries() const { return queries_; }
+
+  std::string_view full_url() { return full_url_; }
 
   std::string_view get_query_value(std::string_view key) {
     if (auto it = queries_.find(key); it != queries_.end()) {
@@ -270,6 +273,7 @@ class http_parser {
   std::array<http_header, CINATRA_MAX_HTTP_HEADER_FIELD_SIZE> headers_;
   std::string_view method_;
   std::string_view url_;
+  std::string_view full_url_;
   std::unordered_map<std::string_view, std::string_view> queries_;
 };
 }  // namespace cinatra

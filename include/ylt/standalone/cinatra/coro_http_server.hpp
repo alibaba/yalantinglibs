@@ -69,20 +69,20 @@ class coro_http_server {
 #endif
 
   // only call once, not thread safe.
-  std::errc sync_start() noexcept {
+  std::error_code sync_start() noexcept {
     auto ret = async_start();
     ret.wait();
     return ret.value();
   }
 
   // only call once, not thread safe.
-  async_simple::Future<std::errc> async_start() {
+  async_simple::Future<std::error_code> async_start() {
     errc_ = listen();
 
-    async_simple::Promise<std::errc> promise;
+    async_simple::Promise<std::error_code> promise;
     auto future = promise.getFuture();
 
-    if (errc_ == std::errc{}) {
+    if (!errc_) {
       if (out_ctx_ == nullptr) {
         thd_ = std::thread([this] {
           pool_->run();
@@ -91,7 +91,7 @@ class coro_http_server {
 
       accept().start([p = std::move(promise), this](auto &&res) mutable {
         if (res.hasError()) {
-          errc_ = std::errc::io_error;
+          errc_ = std::make_error_code(std::errc::io_error);
           p.setValue(errc_);
         }
         else {
@@ -196,16 +196,14 @@ class coro_http_server {
         coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
                                                    weights));
     auto handler =
-        [this, channel, type, url_path](
+        [this, channel, type](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
       co_await channel->send_request(
           [this, &req, &response](
               coro_http_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
-            uri_t uri;
-            uri.parse_from(host.data());
-            co_await reply(client, uri.get_path(), req, response);
+            co_await reply(client, host, req, response);
           });
     };
 
@@ -503,10 +501,10 @@ class coro_http_server {
   }
 
   std::string_view address() { return address_; }
-  std::errc get_errc() { return errc_; }
+  std::error_code get_errc() { return errc_; }
 
  private:
-  std::errc listen() {
+  std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen";
     using asio::ip::tcp;
     asio::error_code ec;
@@ -519,7 +517,10 @@ class coro_http_server {
     if (ec || it == it_end) {
       CINATRA_LOG_ERROR << "bad address: " << address_
                         << " error: " << ec.message();
-      return std::errc::bad_address;
+      if (ec) {
+        return ec;
+      }
+      return std::make_error_code(std::errc::address_not_available);
     }
 
     auto endpoint = it->endpoint();
@@ -527,7 +528,7 @@ class coro_http_server {
     if (ec) {
       CINATRA_LOG_ERROR << "acceptor open failed"
                         << " error: " << ec.message();
-      return std::errc::io_error;
+      return ec;
     }
 #ifdef __GNUC__
     acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
@@ -535,9 +536,10 @@ class coro_http_server {
     acceptor_.bind(endpoint, ec);
     if (ec) {
       CINATRA_LOG_ERROR << "bind port: " << port_ << " error: " << ec.message();
-      acceptor_.cancel(ec);
-      acceptor_.close(ec);
-      return std::errc::address_in_use;
+      std::error_code ignore_ec;
+      acceptor_.cancel(ignore_ec);
+      acceptor_.close(ignore_ec);
+      return ec;
     }
 #ifdef _MSC_VER
     acceptor_.set_option(tcp::acceptor::reuse_address(true));
@@ -546,14 +548,14 @@ class coro_http_server {
     if (ec) {
       CINATRA_LOG_ERROR << "get local endpoint port: " << port_
                         << " listen error: " << ec.message();
-      return std::errc::io_error;
+      return ec;
     }
 
     auto end_point = acceptor_.local_endpoint(ec);
     if (ec) {
       CINATRA_LOG_ERROR << "get local endpoint port: " << port_
                         << " error: " << ec.message();
-      return std::errc::address_in_use;
+      return ec;
     }
     port_ = end_point.port();
 
@@ -561,7 +563,7 @@ class coro_http_server {
     return {};
   }
 
-  async_simple::coro::Lazy<std::errc> accept() {
+  async_simple::coro::Lazy<std::error_code> accept() {
     for (;;) {
       coro_io::ExecutorWrapper<> *executor;
       if (out_ctx_ == nullptr) {
@@ -580,7 +582,7 @@ class coro_http_server {
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
           acceptor_close_waiter_.set_value();
-          co_return std::errc::operation_canceled;
+          co_return error;
         }
         continue;
       }
@@ -765,17 +767,28 @@ class coro_http_server {
   }
 
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
-                                       std::string url_path,
+                                       std::string_view host,
                                        coro_http_request &req,
                                        coro_http_response &response) {
+    uri_t uri;
+    std::string proxy_host;
+
+    if (host.find("//") == std::string_view::npos) {
+      proxy_host.append("http://").append(host);
+      uri.parse_from(proxy_host.data());
+    }
+    else {
+      uri.parse_from(host.data());
+    }
     std::unordered_map<std::string, std::string> req_headers;
-    for (auto &[k, v] : req_headers) {
+    for (auto &[k, v] : req.get_headers()) {
       req_headers.emplace(k, v);
     }
+    req_headers["Host"] = uri.host;
 
     auto ctx = req_context<std::string_view>{.content = req.get_body()};
     auto result = co_await client.async_request(
-        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
     for (auto &[k, v] : result.resp_headers) {
@@ -789,6 +802,8 @@ class coro_http_server {
   }
 
   void init_address(std::string address) {
+    CINATRA_LOG_ERROR << "init log";  // init easylog singleton to make sure
+                                      // server destruct before easylog.
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
@@ -813,7 +828,7 @@ class coro_http_server {
   std::unique_ptr<coro_io::ExecutorWrapper<>> out_executor_ = nullptr;
   uint16_t port_;
   std::string address_;
-  std::errc errc_ = {};
+  std::error_code errc_ = {};
   asio::ip::tcp::acceptor acceptor_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
