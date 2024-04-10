@@ -116,7 +116,7 @@ TEST_CASE("testing client") {
     g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
-      auto ret = co_await client->template call_for<hello_timeout>(20ms);
+      auto ret = co_await client->template call_for<hello_timeout>(10ms);
       CHECK_MESSAGE(ret.error().code == coro_rpc::errc::timed_out,
                     ret.error().msg);
       co_return;

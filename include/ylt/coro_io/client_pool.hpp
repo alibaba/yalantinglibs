@@ -208,9 +208,9 @@ class client_pool : public std::enable_shared_from_this<
             ++self->promise_cnt_;
             self->promise_queue_.enqueue(handler);
             timer->expires_after(
-                std::max(std::chrono::milliseconds{0},
-                         self->pool_config_.max_connection_time -
-                             std::chrono::milliseconds{20}));
+                (std::max)(std::chrono::milliseconds{0},
+                           self->pool_config_.max_connection_time -
+                               std::chrono::milliseconds{20}));
             timer->async_await().start([handler = std::move(handler),
                                         client_ptr = client_ptr](auto&& res) {
               auto has_response = handler->flag_.exchange(true);
