@@ -54,11 +54,11 @@ Lazy<void> call_echo(int cnt) {
     for (int i = 0; i < cnt; ++i) {
       auto res = co_await client.call<echo>("Hello world!");
       if (!res.has_value()) {
-        std::cout << "coro_rpc err: \n" << res.error().msg;
+        ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
         co_return;
       }
       if (res.value() != "Hello world!"sv) {
-        std::cout << "err echo resp: \n" << res.value();
+        ELOG_ERROR << "err echo resp: \n" << res.value();
         co_return;
       }
       ++qps;

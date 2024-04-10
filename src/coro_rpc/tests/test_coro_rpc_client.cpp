@@ -72,9 +72,9 @@ TEST_CASE("testing client") {
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
   std::promise<void> promise;
+  auto worker = std::make_unique<asio::io_context::work>(io_context);
   auto future = promise.get_future();
   std::thread thd([&io_context, &promise] {
-    asio::io_context::work work(io_context);
     promise.set_value();
     io_context.run();
   });
@@ -116,7 +116,7 @@ TEST_CASE("testing client") {
     g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
-      auto ret = co_await client->template call_for<hello_timeout>(20ms);
+      auto ret = co_await client->template call_for<hello_timeout>(10ms);
       CHECK_MESSAGE(ret.error().code == coro_rpc::errc::timed_out,
                     ret.error().msg);
       co_return;
@@ -154,7 +154,7 @@ TEST_CASE("testing client") {
   }
 
   server.stop();
-  io_context.stop();
+  worker = nullptr;
   thd.join();
 }
 
@@ -163,8 +163,8 @@ TEST_CASE("testing client with inject server") {
   std::string port = std::to_string(coro_rpc_server_port);
   ELOGV(INFO, "inject server port: %d", port.data());
   asio::io_context io_context;
+  auto worker = std::make_unique<asio::io_context::work>(io_context);
   std::thread thd([&io_context] {
-    asio::io_context::work work(io_context);
     io_context.run();
   });
   coro_rpc_server server(2, coro_rpc_server_port);
@@ -212,7 +212,7 @@ TEST_CASE("testing client with inject server") {
   }
 
   server.stop();
-  io_context.stop();
+  worker = nullptr;
   thd.join();
   g_action = inject_action::nothing;
 }
@@ -245,15 +245,15 @@ class SSLClientTester {
 
     std::promise<void> promise;
     auto future = promise.get_future();
+    worker = std::make_unique<asio::io_context::work>(io_context);
     thd = std::thread([this, &promise] {
-      asio::io_context::work work(io_context);
       promise.set_value();
       io_context.run();
     });
     future.wait();
   }
   ~SSLClientTester() {
-    io_context.stop();
+    worker = nullptr;
     thd.join();
   }
   void inject(std::string msg, std::string& path, ssl_type type) {
@@ -342,6 +342,7 @@ class SSLClientTester {
   ssl_type dh;
   asio::io_context io_context;
   std::thread thd;
+  std::unique_ptr<asio::io_context::work> worker;
 };
 
 TEST_CASE("testing client with ssl server") {
