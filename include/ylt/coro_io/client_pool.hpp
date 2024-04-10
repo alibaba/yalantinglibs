@@ -36,6 +36,7 @@
 #include <random>
 #include <shared_mutex>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
@@ -165,8 +166,8 @@ class client_pool : public std::enable_shared_from_this<
     if (client) {
       ELOG_DEBUG << "connect client{" << client.get() << "} successful!";
     }
-    auto has_response = handler->flag_.exchange(true);
-    if (!has_response) {
+    auto has_get_connect = handler->flag_.exchange(true);
+    if (!has_get_connect) {
       handler->promise_.setValue(std::move(client));
     }
     else {
@@ -203,7 +204,7 @@ class client_pool : public std::enable_shared_from_this<
       timer->expires_after(std::chrono::milliseconds{20});
       timer->async_await().start([watcher = this->weak_from_this(), handler,
                                   client_ptr, timer](auto&& res) {
-        if (/*REMOVE?*/ res.value() && !handler->flag_) {
+        if (res.value() && !handler->flag_) {
           if (auto self = watcher.lock(); self) {
             ++self->promise_cnt_;
             self->promise_queue_.enqueue(handler);
@@ -213,8 +214,8 @@ class client_pool : public std::enable_shared_from_this<
                                std::chrono::milliseconds{20}));
             timer->async_await().start([handler = std::move(handler),
                                         client_ptr = client_ptr](auto&& res) {
-              auto has_response = handler->flag_.exchange(true);
-              if (!has_response) {
+              auto has_get_connect = handler->flag_.exchange(true);
+              if (!has_get_connect) {
                 ELOG_ERROR << "Out of max limitation of connect "
                               "time, connect "
                               "failed. skip wait client{"
@@ -227,11 +228,10 @@ class client_pool : public std::enable_shared_from_this<
       });
       ELOG_DEBUG << "wait client by promise {" << &handler->promise_ << "}";
       client = co_await handler->promise_.getFuture();
-      ;
-      // REMOVE?
       if (client) {
         executor->schedule([timer] {
-          timer->cancel();
+          std::error_code ignore_ec;
+          timer->cancel(ignore_ec);
         });
       }
     }
@@ -262,14 +262,14 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
-    if (!client || !client->has_closed()) {
+    if (!client->has_closed()) {
       std::shared_ptr<promise_handler> handler;
       if (promise_cnt_) {
         int cnt = 0;
         while (promise_queue_.try_dequeue(handler)) {
           ++cnt;
-          auto is_time_out = handler->flag_.exchange(true);
-          if (!is_time_out) {
+          auto has_get_connect = handler->flag_.exchange(true);
+          if (!has_get_connect) {
             handler->promise_.setValue(std::move(client));
             promise_cnt_ -= cnt;
             ELOG_DEBUG << "collect free client{" << client.get()
@@ -518,14 +518,6 @@ class client_pools {
           if (has_inserted) {
             iter->second = pool;
           }
-        }
-        if (has_inserted) {
-          // ELOG_DEBUG << "add new client pool of {" << host_name
-          //            << "} to hash table";
-        }
-        else {
-          ELOG_DEBUG << "add new client pool of {" << host_name
-                     << "} failed, element existed.";
         }
       }
       return iter->second;
