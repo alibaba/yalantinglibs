@@ -48,18 +48,18 @@ Lazy<void> call_echo(coro_io::client_pools<coro_rpc_client> &client_pools,
         [=](coro_rpc_client &client) -> Lazy<void> {
           auto res = co_await client.call<echo>("Hello world!");
           if (!res.has_value()) {
-            std::cout << "coro_rpc err: \n" << res.error().msg;
+            ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
             co_return;
           }
           if (res.value() != "Hello world!"sv) {
-            std::cout << "err echo resp: \n" << res.value();
+            ELOG_ERROR << "err echo resp: \n" << res.value();
             co_return;
           }
           ++qps;
           co_return;
         });
     if (!res) {
-      std::cout << "client pool err: connect failed.\n";
+      ELOG_ERROR << "client pool err: connect failed.\n";
     }
   }
   --working_echo;

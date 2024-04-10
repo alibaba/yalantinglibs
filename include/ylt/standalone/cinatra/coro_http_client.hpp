@@ -197,6 +197,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     });
   }
 
+  coro_io::ExecutorWrapper<> &get_executor() { return executor_wrapper_; }
+
 #ifdef CINATRA_ENABLE_SSL
   bool init_ssl(int verify_mode, const std::string &base_path,
                 const std::string &cert_file, const std::string &sni_hostname) {

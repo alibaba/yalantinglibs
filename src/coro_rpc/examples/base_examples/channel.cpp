@@ -29,6 +29,8 @@
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
+
+#include "ylt/easylog.hpp"
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_view_literals;
@@ -51,18 +53,18 @@ Lazy<void> call_echo(std::shared_ptr<coro_io::channel<coro_rpc_client>> channel,
           [](coro_rpc_client &client, std::string_view hostname) -> Lazy<void> {
             auto res = co_await client.call<echo>("Hello world!");
             if (!res.has_value()) {
-              std::cout << "coro_rpc err: \n" << res.error().msg;
+              ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
               co_return;
             }
             if (res.value() != "Hello world!"sv) {
-              std::cout << "err echo resp: \n" << res.value();
+              ELOG_ERROR << "err echo resp: \n" << res.value();
               co_return;
             }
             ++qps;
             co_return;
           });
       if (!res) {
-        std::cout << "client pool err: connect failed.\n";
+        ELOG_ERROR << "client pool err: connect failed.\n";
       }
     }
     --working_echo;

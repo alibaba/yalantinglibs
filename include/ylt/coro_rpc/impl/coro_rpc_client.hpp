@@ -129,7 +129,7 @@ class coro_rpc_client {
    */
   coro_rpc_client(asio::io_context::executor_type executor,
                   uint32_t client_id = 0)
-      : executor(executor),
+      : executor_(executor),
         timer_(executor),
         socket_(std::make_shared<asio::ip::tcp::socket>(executor)) {
     config_.client_id = client_id;
@@ -142,7 +142,7 @@ class coro_rpc_client {
   coro_rpc_client(
       coro_io::ExecutorWrapper<> &executor = *coro_io::get_global_executor(),
       uint32_t client_id = 0)
-      : executor(executor.get_asio_executor()),
+      : executor_(executor.get_asio_executor()),
         timer_(executor.get_asio_executor()),
         socket_(std::make_shared<asio::ip::tcp::socket>(
             executor.get_asio_executor())) {
@@ -325,7 +325,7 @@ class coro_rpc_client {
     std::error_code err_code;
     timer_.cancel(err_code);
 
-    if (is_timeout_) {
+    if (*is_timeout_) {
       ret = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, rpc_error{errc::timed_out, "rpc call timed out"}};
     }
@@ -340,7 +340,7 @@ class coro_rpc_client {
   /*!
    * Get inner executor
    */
-  auto &get_executor() { return executor; }
+  auto &get_executor() { return executor_; }
 
   uint32_t get_client_id() const { return config_.client_id; }
 
@@ -381,8 +381,8 @@ class coro_rpc_client {
   void reset() {
     close_socket(socket_);
     socket_ =
-        std::make_shared<asio::ip::tcp::socket>(executor.get_asio_executor());
-    is_timeout_ = false;
+        std::make_shared<asio::ip::tcp::socket>(executor_.get_asio_executor());
+    *is_timeout_ = false;
     has_closed_ = false;
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
@@ -411,18 +411,18 @@ class coro_rpc_client {
         });
 
     std::error_code ec = co_await coro_io::async_connect(
-        &executor, *socket_, config_.host, config_.port);
+        &executor_, *socket_, config_.host, config_.port);
     std::error_code err_code;
     timer_.cancel(err_code);
 
     if (ec) {
-      if (is_timeout_) {
+      if (*is_timeout_) {
         co_return errc::timed_out;
       }
       co_return errc::not_connected;
     }
 
-    if (is_timeout_) {
+    if (*is_timeout_) {
       ELOGV(WARN, "client_id %d connect timeout", config_.client_id);
       co_return errc::timed_out;
     }
@@ -475,13 +475,14 @@ class coro_rpc_client {
 #endif
   async_simple::coro::Lazy<bool> timeout(auto duration, std::string err_msg) {
     timer_.expires_after(duration);
+    auto socker_watcher = socket_;
+    auto timeout_watcher = is_timeout_;
     bool is_timeout = co_await timer_.async_await();
     if (!is_timeout) {
       co_return false;
     }
-
-    is_timeout_ = is_timeout;
-    close_socket(socket_);
+    *timeout_watcher = is_timeout;
+    close_socket(socker_watcher);
     co_return true;
   }
 
@@ -656,10 +657,10 @@ class coro_rpc_client {
     }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::force_inject_client_write_data_timeout) {
-      is_timeout_ = true;
+      *is_timeout_ = true;
     }
 #endif
-    if (is_timeout_) {
+    if (*is_timeout_) {
       r = rpc_result<R, coro_rpc_protocol>{
           unexpect_t{}, rpc_error{.code = errc::timed_out, .msg = {}}};
     }
@@ -789,13 +790,12 @@ class coro_rpc_client {
         offset, std::forward<Args>(args)...);
   }
 
-  void close_socket(std::shared_ptr<asio::ip::tcp::socket> socket) {
-    asio::dispatch(
-        executor.get_asio_executor(), [socket = std::move(socket)]() {
-          asio::error_code ignored_ec;
-          socket->shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-          socket->close(ignored_ec);
-        });
+  static void close_socket(std::shared_ptr<asio::ip::tcp::socket> socket) {
+    asio::dispatch(socket->get_executor(), [socket = std::move(socket)]() {
+      asio::error_code ignored_ec;
+      socket->shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+      socket->close(ignored_ec);
+    });
   }
 
 #ifdef UNIT_TEST_INJECT
@@ -813,7 +813,7 @@ class coro_rpc_client {
   }
 #endif
  private:
-  coro_io::ExecutorWrapper<> executor;
+  coro_io::ExecutorWrapper<> executor_;
   coro_io::period_timer timer_;
   std::shared_ptr<asio::ip::tcp::socket> socket_;
   std::string read_buf_, resp_attachment_buf_;
@@ -825,7 +825,7 @@ class coro_rpc_client {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
 #endif
-  bool is_timeout_ = false;
+  std::shared_ptr<bool> is_timeout_ = std::make_shared<bool>(false);
   std::atomic<bool> has_closed_ = false;
 };
 }  // namespace coro_rpc
