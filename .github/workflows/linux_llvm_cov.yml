@@ -4,7 +4,7 @@ on:
   pull_request_target:
     branches:
       - main
-      - fix_coverage
+      - fix_coverage_show
 
 jobs:
   build:
