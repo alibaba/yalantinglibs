@@ -43,7 +43,7 @@ jobs:
           ./struct_pack_test 
           ./struct_pack_test_with_optimize
           llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
-          llvm-cov show coro_io_test coro_rpc_test easylog_test struct_pack_test struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio|src" -show-instantiations=false
+          llvm-cov show coro_io_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio|src" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
