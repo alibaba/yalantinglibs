@@ -80,7 +80,6 @@ TEST_CASE("test basic") {
   easylog::set_min_severity(Severity::DEBUG);
 
   ELOG_INFO << dummy_t{};
-
   std::unique_ptr<int> ptr(new int(42));
   ELOG_INFO << ptr.get();
   ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
