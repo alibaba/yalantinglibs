@@ -422,17 +422,17 @@ auto r = async_simple::coro::syncAwait(
 ```
 ## websocket
 websocket 的支持需要3步：
-- 设置读websocket 数据的回调函数；
 - 连接服务器；
 - 发送websocket 数据；
+- 读websocket 数据；
 
-设置websocket 读数据接口:
+websocket 读数据接口:
 ```c++
-void on_ws_msg(std::function<void(resp_data)> on_ws_msg);
+async_simple::coro::Lazy<resp_data> read_websocket();
 ```
 websocket 连接服务器接口:
 ```c++
-async_simple::coro::Lazy<bool> async_ws_connect(std::string uri);
+async_simple::coro::Lazy<resp_data> connect(std::string uri);
 ```
 websocket 发送数据接口：
 ```c++
@@ -457,10 +457,8 @@ enum opcode : std::uint8_t {
 
 /// 发送websocket 数据
 /// \param msg 要发送的websocket 数据
-/// \param need_mask 是否需要对数据进行mask，默认会mask
 /// \param op opcode 一般为text、binary或 close 等类型
-async_simple::coro::Lazy<resp_data> async_send_ws(std::string msg,
-                                                  bool need_mask = true,
+async_simple::coro::Lazy<resp_data> write_websocket(std::string msg,
                                                   opcode op = opcode::text);
 ```
 
@@ -470,23 +468,15 @@ websocket 例子:
   coro_http_client client;
   // 连接websocket 服务器
   async_simple::coro::syncAwait(
-      client.async_ws_connect("ws://localhost:8090"));
+      client.connect("ws://localhost:8090"));
 
   std::string send_str(len, 'a');
-  // 设置读数据回调
-  client.on_ws_msg([&, send_str](resp_data data) {
-    if (data.net_err) {
-      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      return;
-    }
-
-    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    REQUIRE(data.resp_body.size() == send_str.size());
-    CHECK(data.resp_body == send_str);
-  });
 
   // 发送websocket 数据
-  async_simple::coro::syncAwait(client.async_send_ws(send_str));
+  async_simple::coro::syncAwait(client.write_websocket(std::string(send_str)));
+  auto data = async_simple::coro::syncAwait(client.read_websocket());
+  REQUIRE(data.resp_body.size() == send_str.size());
+  CHECK(data.resp_body == send_str);
 ```
 
 ## 线程模型

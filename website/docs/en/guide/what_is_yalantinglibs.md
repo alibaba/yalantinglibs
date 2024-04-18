@@ -381,23 +381,22 @@ int main() {
 ### websocket
 ```c++
 async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << "web socket close " << reason << std::endl;
-  });
-  
-  client.on_ws_msg([](resp_data data) {
-    std::cout << data.resp_body << std::endl;
-  });
-
   // connect to your websocket server.
   bool r = co_await client.async_connect("ws://example.com/ws");
   if (!r) {
     co_return;
   }
 
-  co_await client.async_send_ws("hello websocket");
-  co_await client.async_send_ws("test again", /*need_mask = */ false);
-  co_await client.async_send_ws_close("ws close reason");
+  co_await client.write_websocket("hello websocket");
+  auto data = co_await client.read_websocket();
+  CHECK(data.resp_body == "hello websocket");
+  co_await client.write_websocket("test again");
+  data = co_await client.read_websocket();
+  CHECK(data.resp_body == "test again");
+  co_await client.write_websocket("ws close");
+  data = co_await client.read_websocket();
+  CHECK(data.net_err == asio::error::eof);
+  CHECK(data.resp_body == "ws close");
 }
 ```
 
