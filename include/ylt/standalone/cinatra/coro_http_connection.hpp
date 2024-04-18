@@ -192,78 +192,84 @@ class coro_http_connection
           co_await router_.route_coro(coro_handler, request_, response_, key);
         }
         else {
-          bool is_exist = false;
-          std::function<void(coro_http_request & req,
-                             coro_http_response & resp)>
-              handler;
-          std::string method_str{parser_.method()};
-          std::string url_path = method_str;
-          url_path.append(" ").append(parser_.url());
-          std::tie(is_exist, handler, request_.params_) =
-              router_.get_router_tree()->get(url_path, method_str);
-          if (is_exist) {
-            if (handler) {
-              (handler)(request_, response_);
-            }
-            else {
-              response_.set_status(status_type::not_found);
-            }
+          if (default_handler_) {
+            default_handler_(request_, response_);
           }
           else {
-            bool is_coro_exist = false;
-            std::function<async_simple::coro::Lazy<void>(
-                coro_http_request & req, coro_http_response & resp)>
-                coro_handler;
-
-            std::tie(is_coro_exist, coro_handler, request_.params_) =
-                router_.get_coro_router_tree()->get_coro(url_path, method_str);
-
-            if (is_coro_exist) {
-              if (coro_handler) {
-                co_await coro_handler(request_, response_);
+            bool is_exist = false;
+            std::function<void(coro_http_request & req,
+                               coro_http_response & resp)>
+                handler;
+            std::string method_str{parser_.method()};
+            std::string url_path = method_str;
+            url_path.append(" ").append(parser_.url());
+            std::tie(is_exist, handler, request_.params_) =
+                router_.get_router_tree()->get(url_path, method_str);
+            if (is_exist) {
+              if (handler) {
+                (handler)(request_, response_);
               }
               else {
                 response_.set_status(status_type::not_found);
               }
             }
             else {
-              bool is_matched_regex_router = false;
-              // coro regex router
-              auto coro_regex_handlers = router_.get_coro_regex_handlers();
-              if (coro_regex_handlers.size() != 0) {
-                for (auto &pair : coro_regex_handlers) {
-                  std::string coro_regex_key{key};
+              bool is_coro_exist = false;
+              std::function<async_simple::coro::Lazy<void>(
+                  coro_http_request & req, coro_http_response & resp)>
+                  coro_handler;
 
-                  if (std::regex_match(coro_regex_key, request_.matches_,
-                                       std::get<0>(pair))) {
-                    auto coro_handler = std::get<1>(pair);
-                    if (coro_handler) {
-                      co_await coro_handler(request_, response_);
-                      is_matched_regex_router = true;
-                    }
-                  }
+              std::tie(is_coro_exist, coro_handler, request_.params_) =
+                  router_.get_coro_router_tree()->get_coro(url_path,
+                                                           method_str);
+
+              if (is_coro_exist) {
+                if (coro_handler) {
+                  co_await coro_handler(request_, response_);
+                }
+                else {
+                  response_.set_status(status_type::not_found);
                 }
               }
-              // regex router
-              if (!is_matched_regex_router) {
-                auto regex_handlers = router_.get_regex_handlers();
-                if (regex_handlers.size() != 0) {
-                  for (auto &pair : regex_handlers) {
-                    std::string regex_key{key};
-                    if (std::regex_match(regex_key, request_.matches_,
+              else {
+                bool is_matched_regex_router = false;
+                // coro regex router
+                auto coro_regex_handlers = router_.get_coro_regex_handlers();
+                if (coro_regex_handlers.size() != 0) {
+                  for (auto &pair : coro_regex_handlers) {
+                    std::string coro_regex_key{key};
+
+                    if (std::regex_match(coro_regex_key, request_.matches_,
                                          std::get<0>(pair))) {
-                      auto handler = std::get<1>(pair);
-                      if (handler) {
-                        (handler)(request_, response_);
+                      auto coro_handler = std::get<1>(pair);
+                      if (coro_handler) {
+                        co_await coro_handler(request_, response_);
                         is_matched_regex_router = true;
                       }
                     }
                   }
                 }
+                // regex router
+                if (!is_matched_regex_router) {
+                  auto regex_handlers = router_.get_regex_handlers();
+                  if (regex_handlers.size() != 0) {
+                    for (auto &pair : regex_handlers) {
+                      std::string regex_key{key};
+                      if (std::regex_match(regex_key, request_.matches_,
+                                           std::get<0>(pair))) {
+                        auto handler = std::get<1>(pair);
+                        if (handler) {
+                          (handler)(request_, response_);
+                          is_matched_regex_router = true;
+                        }
+                      }
+                    }
+                  }
+                }
+                // not found
+                if (!is_matched_regex_router)
+                  response_.set_status(status_type::not_found);
               }
-              // not found
-              if (!is_matched_regex_router)
-                response_.set_status(status_type::not_found);
             }
           }
         }
@@ -407,6 +413,11 @@ class coro_http_connection
 
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
+  void set_default_handler(
+      std::function<void(coro_http_request &, coro_http_response &)> &handler) {
+    default_handler_ = handler;
+  }
+
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
     buffers.push_back(asio::buffer(message));
@@ -524,13 +535,6 @@ class coro_http_connection
 
     chunked_buf_.consume(size);
 
-    if (chunk_size == 0) {
-      // all finished, no more data
-      chunked_buf_.consume(CRCF.size());
-      result.eof = true;
-      co_return result;
-    }
-
     if (additional_size < size_t(chunk_size + 2)) {
       // not a complete chunk, read left chunk data.
       size_t size_to_read = chunk_size + 2 - additional_size;
@@ -540,6 +544,13 @@ class coro_http_connection
         close();
         co_return result;
       }
+    }
+
+    if (chunk_size == 0) {
+      // all finished, no more data
+      chunked_buf_.consume(chunked_buf_.size());
+      result.eof = true;
+      co_return result;
     }
 
     data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
@@ -834,5 +845,7 @@ class coro_http_connection
 #endif
   bool need_shrink_every_time_ = false;
   bool multi_buf_ = true;
+  std::function<void(coro_http_request &, coro_http_response &)>
+      default_handler_ = nullptr;
 };
 }  // namespace cinatra

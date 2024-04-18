@@ -126,8 +126,7 @@ class websocket {
     return {msg_header_, header_length};
   }
 
-  std::string encode_frame(std::span<char> &data, opcode op, bool need_mask,
-                           bool eof = true) {
+  std::string encode_frame(std::span<char> &data, opcode op, bool eof) {
     std::string header;
     /// Base header.
     frame_header hdr{};
@@ -173,11 +172,9 @@ class websocket {
 
     /// The mask is a 32-bit value.
     uint8_t mask[4] = {};
-    if (need_mask) {
-      header[1] |= 0x80;
-      uint32_t random = (uint32_t)rand();
-      memcpy(mask, &random, 4);
-    }
+    header[1] |= 0x80;
+    uint32_t random = (uint32_t)rand();
+    memcpy(mask, &random, 4);
 
     size_t size = header.size();
     header.resize(size + 4);
