@@ -208,6 +208,14 @@ class coro_http_request {
     return true;
   }
 
+  bool is_support_compressed() {
+    auto extension_str = get_header_value("Sec-WebSocket-Extensions");
+    if (extension_str.find("permessage-deflate") != std::string::npos) {
+      return true;
+    }
+    return false;
+  }
+
   void set_aspect_data(std::string data) {
     aspect_data_.push_back(std::move(data));
   }

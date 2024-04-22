@@ -109,14 +109,15 @@ class coro_http_response {
 
   std::string_view get_boundary() { return boundary_; }
 
-  void to_buffers(std::vector<asio::const_buffer> &buffers) {
+  void to_buffers(std::vector<asio::const_buffer> &buffers,
+                  std::string &size_str) {
     buffers.push_back(asio::buffer(to_http_status_string(status_)));
     build_resp_head(buffers);
     if (!content_.empty()) {
-      handle_content(buffers, content_);
+      handle_content(buffers, size_str, content_);
     }
     else if (!content_view_.empty()) {
-      handle_content(buffers, content_view_);
+      handle_content(buffers, size_str, content_view_);
     }
   }
 
@@ -293,9 +294,9 @@ class coro_http_response {
 
  private:
   void handle_content(std::vector<asio::const_buffer> &buffers,
-                      std::string_view content) {
+                      std::string &size_str, std::string_view content) {
     if (fmt_type_ == format_type::chunked) {
-      to_chunked_buffers(buffers, content, true);
+      to_chunked_buffers(buffers, size_str, content, true);
     }
     else {
       buffers.push_back(asio::buffer(content));

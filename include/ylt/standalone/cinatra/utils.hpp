@@ -135,18 +135,17 @@ inline std::string_view trim_sv(std::string_view v) {
   return v;
 }
 
-inline std::string_view to_hex_string(size_t val) {
-  static char buf[20];
-  auto [ptr, ec] = std::to_chars(std::begin(buf), std::end(buf), val, 16);
-  return std::string_view{buf, size_t(std::distance(buf, ptr))};
-}
-
 inline void to_chunked_buffers(std::vector<asio::const_buffer> &buffers,
+                               std::string &size_str,
                                std::string_view chunk_data, bool eof) {
   size_t length = chunk_data.size();
   if (length > 0) {
     // convert bytes transferred count to a hex string.
-    auto chunk_size = to_hex_string(length);
+    detail::resize(size_str, 20);
+    auto [ptr, ec] =
+        std::to_chars(size_str.data(), size_str.data() + 20, length, 16);
+    std::string_view chunk_size{size_str.data(),
+                                size_t(std::distance(size_str.data(), ptr))};
 
     // Construct chunk based on rfc2616 section 3.6.1
     buffers.push_back(asio::buffer(chunk_size));

@@ -121,18 +121,23 @@ class websocket {
     return ws_frame_type::WS_BINARY_FRAME;
   }
 
-  std::string format_header(size_t length, opcode code) {
-    size_t header_length = encode_header(length, code);
+  std::string format_header(size_t length, opcode code,
+                            bool is_compressed = false) {
+    size_t header_length = encode_header(length, code, is_compressed);
     return {msg_header_, header_length};
   }
 
-  std::string encode_frame(std::span<char> &data, opcode op, bool eof) {
+  std::string encode_frame(std::span<char> &data, opcode op, bool eof,
+                           bool need_compression = false) {
     std::string header;
     /// Base header.
     frame_header hdr{};
     hdr.fin = eof;
     hdr.rsv1 = 0;
-    hdr.rsv2 = 0;
+    if (need_compression)
+      hdr.rsv2 = 1;
+    else
+      hdr.rsv2 = 0;
     hdr.rsv3 = 0;
     hdr.opcode = static_cast<uint8_t>(op);
     hdr.mask = 1;
@@ -224,7 +229,7 @@ class websocket {
   opcode get_opcode() { return (opcode)msg_opcode_; }
 
  private:
-  size_t encode_header(size_t length, opcode code) {
+  size_t encode_header(size_t length, opcode code, bool is_compressed = false) {
     size_t header_length;
 
     if (length < 126) {
@@ -247,6 +252,9 @@ class websocket {
     if (!(flags & SND_CONTINUATION)) {
       msg_header_[0] |= code;
     }
+
+    if (is_compressed)
+      msg_header_[0] |= 0x40;
 
     return header_length;
   }
