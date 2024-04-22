@@ -24,6 +24,7 @@
 
 #include "define.h"
 #include "response_cv.hpp"
+#include "string_resize.hpp"
 
 namespace cinatra {
 struct ci_less {
