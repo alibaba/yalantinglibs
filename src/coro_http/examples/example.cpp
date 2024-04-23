@@ -317,6 +317,9 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   server.set_http_handler<POST, PUT>(
       "/post", [](coro_http_request &req, coro_http_response &resp) {
+        assert(resp.get_conn()->remote_address().find("127.0.0.1") !=
+               std::string::npos);
+        assert(resp.get_conn()->local_address() == "127.0.0.1:9001");
         auto req_body = req.get_body();
         resp.set_status_and_content(status_type::ok, std::string{req_body});
       });
