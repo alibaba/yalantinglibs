@@ -15,6 +15,7 @@
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
+#include "picohttpparser.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
 #include "utils.hpp"
@@ -52,11 +53,12 @@ class coro_http_response {
   void set_status_and_content(
       status_type status, std::string content = "",
       content_encoding encoding = content_encoding::none) {
-    set_status_and_content_view(status, content, encoding, false);
+    set_status_and_content_view(status, std::move(content), encoding, false);
   }
 
+  template <typename String>
   void set_status_and_content_view(
-      status_type status, std::string_view content = "",
+      status_type status, String content = "",
       content_encoding encoding = content_encoding::none, bool is_view = true) {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
@@ -100,6 +102,10 @@ class coro_http_response {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
 
+  void add_header_span(std::span<http_header> resp_headers) {
+    resp_header_span_ = resp_headers;
+  }
+
   void set_keepalive(bool r) { keepalive_ = r; }
 
   void need_date_head(bool r) { need_date_ = r; }
@@ -125,13 +131,9 @@ class coro_http_response {
     resp_str.append(to_http_status_string(status_));
     bool has_len = false;
     bool has_host = false;
-    for (auto &[k, v] : resp_headers_) {
-      if (k == "Server") {
-        has_host = true;
-      }
-      if (k == "Content-Length") {
-        has_len = true;
-      }
+    check_header(resp_headers_, has_len, has_host);
+    if (!resp_header_span_.empty()) {
+      check_header(resp_header_span_, has_len, has_host);
     }
 
     if (!has_host) {
@@ -175,21 +177,27 @@ class coro_http_response {
       resp_str.append(content_type_);
     }
 
-    for (auto &[k, v] : resp_headers_) {
-      resp_str.append(k);
-      resp_str.append(COLON_SV);
-      resp_str.append(v);
-      resp_str.append(CRCF);
+    append_header_str(resp_str, resp_headers_);
+
+    if (!resp_header_span_.empty()) {
+      append_header_str(resp_str, resp_header_span_);
     }
 
     resp_str.append(CRCF);
     resp_str.append(content_);
   }
 
-  void build_resp_head(std::vector<asio::const_buffer> &buffers) {
-    bool has_len = false;
-    bool has_host = false;
-    for (auto &[k, v] : resp_headers_) {
+  void append_header_str(auto &resp_str, auto &resp_headers) {
+    for (auto &[k, v] : resp_headers) {
+      resp_str.append(k);
+      resp_str.append(COLON_SV);
+      resp_str.append(v);
+      resp_str.append(CRCF);
+    }
+  }
+
+  void check_header(auto &resp_headers, bool &has_len, bool &has_host) {
+    for (auto &[k, v] : resp_headers) {
       if (k == "Server") {
         has_host = true;
       }
@@ -199,6 +207,15 @@ class coro_http_response {
       else if (k == "Date") {
         need_date_ = false;
       }
+    }
+  }
+
+  void build_resp_head(std::vector<asio::const_buffer> &buffers) {
+    bool has_len = false;
+    bool has_host = false;
+    check_header(resp_headers_, has_len, has_host);
+    if (!resp_header_span_.empty()) {
+      check_header(resp_header_span_, has_len, has_host);
     }
 
     if (!has_host) {
@@ -251,14 +268,22 @@ class coro_http_response {
       buffers.emplace_back(asio::buffer(content_type_));
     }
 
-    for (auto &[k, v] : resp_headers_) {
+    append_header(buffers, resp_headers_);
+
+    if (!resp_header_span_.empty()) {
+      append_header(buffers, resp_header_span_);
+    }
+
+    buffers.emplace_back(asio::buffer(CRCF));
+  }
+
+  void append_header(auto &buffers, auto &resp_headers) {
+    for (auto &[k, v] : resp_headers) {
       buffers.emplace_back(asio::buffer(k));
       buffers.emplace_back(asio::buffer(COLON_SV));
       buffers.emplace_back(asio::buffer(v));
       buffers.emplace_back(asio::buffer(CRCF));
     }
-
-    buffers.emplace_back(asio::buffer(CRCF));
   }
 
   coro_http_connection *get_conn() { return conn_; }
@@ -319,6 +344,7 @@ class coro_http_response {
   bool delay_;
   char buf_[32];
   std::vector<resp_header> resp_headers_;
+  std::span<http_header> resp_header_span_;
   coro_http_connection *conn_;
   std::string boundary_;
   bool has_set_content_ = false;
