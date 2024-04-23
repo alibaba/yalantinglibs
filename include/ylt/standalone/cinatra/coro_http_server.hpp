@@ -854,9 +854,7 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
-    for (auto &[k, v] : result.resp_headers) {
-      response.add_header(std::string(k), std::string(v));
-    }
+    response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
         static_cast<status_type>(result.status), result.resp_body);
