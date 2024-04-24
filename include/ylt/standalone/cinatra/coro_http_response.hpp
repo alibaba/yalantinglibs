@@ -173,8 +173,11 @@ class coro_http_response {
                 : resp_str.append(CONN_CLOSE_SV);
     }
 
-    if (!content_type_.empty()) {
-      resp_str.append(content_type_);
+    if (content_view_.empty()) {
+      resp_str.append(content_);
+    }
+    else {
+      resp_str.append(content_view_);
     }
 
     append_header_str(resp_str, resp_headers_);

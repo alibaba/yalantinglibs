@@ -392,9 +392,19 @@ class coro_http_connection
     co_return true;
   }
 
-  std::string local_address() { return get_address_impl(false); }
+  std::string local_address() {
+    std::string addr;
+    set_address_impl(addr, false);
+    return addr;
+  }
 
-  std::string remote_address() { return get_address_impl(); }
+  std::string remote_address() {
+    if (!remote_addr_.empty()) {
+      return remote_addr_;
+    }
+    set_address_impl(remote_addr_, false);
+    return remote_addr_;
+  }
 
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
@@ -843,22 +853,21 @@ class coro_http_connection
     }
   }
 
-  std::string get_address_impl(bool remote = true) {
+  void set_address_impl(std::string &address, bool remote = true) {
     if (has_closed_) {
-      return "";
+      return;
     }
 
     std::error_code ec;
     auto pt = remote ? socket_.remote_endpoint(ec) : socket_.local_endpoint(ec);
     if (ec) {
-      return "";
+      return;
     }
-    auto addr = pt.address().to_string(ec);
+    address = pt.address().to_string(ec);
     if (ec) {
-      return "";
+      return;
     }
-    addr.append(":").append(std::to_string(pt.port()));
-    return addr;
+    address.append(":").append(std::to_string(pt.port()));
   }
 
  private:
@@ -898,5 +907,6 @@ class coro_http_connection
   std::function<void(coro_http_request &, coro_http_response &)>
       default_handler_ = nullptr;
   std::string chunk_size_str_;
+  std::string remote_addr_;
 };
 }  // namespace cinatra
