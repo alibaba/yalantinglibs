@@ -2125,7 +2125,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
-  bool enable_tcp_no_delay_ = false;
+  bool enable_tcp_no_delay_ = true;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
 
