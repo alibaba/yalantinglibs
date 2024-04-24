@@ -863,8 +863,10 @@ class coro_http_server {
   }
 
   void init_address(std::string address) {
+#if __has_include(<ylt/easylog.hpp>)
     easylog::logger<>::instance();  // init easylog singleton to make sure
                                     // server destruct before easylog.
+#endif
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 

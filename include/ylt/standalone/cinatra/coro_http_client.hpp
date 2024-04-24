@@ -1722,7 +1722,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (chunk_size == 0) {
         // all finished, no more data
         chunked_buf_.consume(chunked_buf_.size());
-        data.status = 200;
         data.eof = true;
         break;
       }
