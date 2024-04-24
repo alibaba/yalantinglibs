@@ -402,7 +402,7 @@ class coro_http_connection
     if (!remote_addr_.empty()) {
       return remote_addr_;
     }
-    set_address_impl(remote_addr_, false);
+    set_address_impl(remote_addr_);
     return remote_addr_;
   }
 
