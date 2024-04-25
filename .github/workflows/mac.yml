@@ -38,7 +38,7 @@ jobs:
       - name: Configure Stack Size
         run: |
           ulimit -s
-          ulimit -s 8192
+          ulimit -s 81920
           ulimit -s
 
       - name: Configure CMake
