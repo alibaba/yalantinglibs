@@ -550,8 +550,9 @@ class coro_http_server {
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
-  void set_default_handler(
-      std::function<void(coro_http_request &, coro_http_response &)> handler) {
+  void set_default_handler(std::function<async_simple::coro::Lazy<void>(
+                               coro_http_request &, coro_http_response &)>
+                               handler) {
     default_handler_ = std::move(handler);
   }
 
@@ -923,7 +924,8 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
-  std::function<void(coro_http_request &, coro_http_response &)>
+  std::function<async_simple::coro::Lazy<void>(coro_http_request &,
+                                               coro_http_response &)>
       default_handler_ = nullptr;
 };
 

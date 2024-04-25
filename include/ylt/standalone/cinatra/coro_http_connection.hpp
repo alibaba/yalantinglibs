@@ -204,7 +204,7 @@ class coro_http_connection
         }
         else {
           if (default_handler_) {
-            default_handler_(request_, response_);
+            co_await default_handler_(request_, response_);
           }
           else {
             bool is_exist = false;
@@ -409,7 +409,8 @@ class coro_http_connection
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
   void set_default_handler(
-      std::function<void(coro_http_request &, coro_http_response &)> &handler) {
+      std::function<async_simple::coro::Lazy<void>(
+          coro_http_request &, coro_http_response &)> &handler) {
     default_handler_ = handler;
   }
 
@@ -904,7 +905,8 @@ class coro_http_connection
 #endif
   bool need_shrink_every_time_ = false;
   bool multi_buf_ = true;
-  std::function<void(coro_http_request &, coro_http_response &)>
+  std::function<async_simple::coro::Lazy<void>(coro_http_request &,
+                                               coro_http_response &)>
       default_handler_ = nullptr;
   std::string chunk_size_str_;
   std::string remote_addr_;
