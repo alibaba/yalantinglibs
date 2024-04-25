@@ -173,13 +173,6 @@ class coro_http_response {
                 : resp_str.append(CONN_CLOSE_SV);
     }
 
-    if (content_view_.empty()) {
-      resp_str.append(content_);
-    }
-    else {
-      resp_str.append(content_view_);
-    }
-
     append_header_str(resp_str, resp_headers_);
 
     if (!resp_header_span_.empty()) {
@@ -187,7 +180,12 @@ class coro_http_response {
     }
 
     resp_str.append(CRCF);
-    resp_str.append(content_);
+    if (content_view_.empty()) {
+      resp_str.append(content_);
+    }
+    else {
+      resp_str.append(content_view_);
+    }
   }
 
   void append_header_str(auto &resp_str, auto &resp_headers) {
