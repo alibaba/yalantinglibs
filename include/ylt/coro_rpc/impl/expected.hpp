@@ -50,6 +50,6 @@ struct coro_rpc_protocol;
 
 template <typename T,
           typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
-using rpc_result = expected<T, rpc_error>;
+using rpc_result = expected<T, coro_rpc::rpc_error>;
 
 }  // namespace coro_rpc
