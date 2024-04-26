@@ -35,6 +35,7 @@ enum class errc : uint16_t {
   message_too_large,
   server_has_ran,
   invalid_rpc_result,
+  serial_number_conflict,
 };
 inline constexpr std::string_view make_error_message(errc ec) noexcept {
   switch (ec) {
@@ -70,6 +71,8 @@ inline constexpr std::string_view make_error_message(errc ec) noexcept {
       return "server has ran";
     case errc::invalid_rpc_result:
       return "invalid rpc result";
+    case errc::serial_number_conflict:
+      return "serial number conflict";
     default:
       return "unknown user-defined error";
   }
@@ -103,8 +106,12 @@ inline bool operator!(errc ec) noexcept { return ec == errc::ok; }
 struct rpc_error {
   coro_rpc::err_code code;  //!< error code
   std::string msg;          //!< error message
+  rpc_error(){}
+  rpc_error(coro_rpc::err_code code, std::string_view msg):code(code),msg(std::string{msg}){}
+  rpc_error(coro_rpc::err_code code):code(code),msg(std::string{make_error_message(code)}){}
   uint16_t& val() { return *(uint16_t*)&(code.ec); }
   const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
+  constexpr operator bool() const noexcept { return code; }
 };
 STRUCT_PACK_REFL(rpc_error, val(), msg);
 

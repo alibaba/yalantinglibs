@@ -56,6 +56,10 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
   co_return client;
 }
 
+  void show(auto &s) {
+    return;
+  }
+
 TEST_CASE("testing client") {
   {
     coro_rpc::coro_rpc_client client;
@@ -146,6 +150,7 @@ TEST_CASE("testing client") {
       std::string arg;
       arg.resize(2048);
       auto ret = co_await client->template call<large_arg_fun>(arg);
+      show(ret);
       CHECK(ret.value() == arg);
       co_return;
     };
@@ -205,6 +210,7 @@ TEST_CASE("testing client with inject server") {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_send_length;
       auto ret = co_await client->template call<hello>();
+      show(ret);
       REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
                       ret.error().msg);
     };
