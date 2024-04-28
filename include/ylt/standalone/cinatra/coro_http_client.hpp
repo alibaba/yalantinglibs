@@ -769,7 +769,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     auto time_out_guard =
-        timer_guard(this, conn_timeout_duration_, "request timer");
+        timer_guard(this, req_timeout_duration_, "request timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (inject_write_failed == ClientInjectAction::write_failed) {
@@ -968,8 +968,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
 
-    auto time_guard =
-        timer_guard(this, conn_timeout_duration_, "request timer");
+    auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
       if (socket_->is_timeout_) {
