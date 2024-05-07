@@ -139,6 +139,7 @@ class coro_rpc_client {
         std::chrono::milliseconds{5000};
     std::string host;
     std::string port;
+    bool enable_tcp_no_delay_ = true;
 #ifdef YLT_ENABLE_SSL
     std::filesystem::path ssl_cert_path;
     std::string ssl_domain;
@@ -332,7 +333,7 @@ class coro_rpc_client {
   uint32_t get_client_id() const { return config_.client_id; }
 
   void close() {
-    ELOGV(INFO, "client_id %d close", config_.client_id);
+    //ELOGV(INFO, "client_id %d close", config_.client_id);
     close_socket(control_);
   }
 
@@ -409,8 +410,9 @@ class coro_rpc_client {
       ELOGV(WARN, "client_id %d connect timeout", config_.client_id);
       co_return errc::timed_out;
     }
-
-    control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
+    if (config_.enable_tcp_no_delay_==true) {
+      control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
+    }
 
 #ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
@@ -614,11 +616,20 @@ class coro_rpc_client {
     constexpr bool has_conn_v = requires { typename First::return_type; };
     return util::get_args<has_conn_v, FuncArgs>();
   }
+  template<typename T,typename U>
+  static decltype(auto) add_const(U&& u) {
+    if constexpr  (std::is_const_v<std::remove_reference_t<U>>) {
+      return struct_pack::detail::declval<const T>();
+    }
+    else {
+      return struct_pack::detail::declval<T>();
+    }
+  }
 
   template <typename... FuncArgs, typename Buffer, typename... Args>
   void pack_to_impl(Buffer &buffer, std::size_t offset, Args &&...args) {
     struct_pack::serialize_to_with_offset(
-        buffer, offset, std::forward<FuncArgs>(std::forward<Args>(args))...);
+        buffer, offset, std::forward<decltype(add_const<FuncArgs>(args))>((std::forward<Args>(args)))...);
   }
 
   template <typename Tuple, size_t... Is, typename Buffer, typename... Args>
