@@ -102,8 +102,8 @@ Lazy<std::string_view> nested_echo(std::string_view sv) {
       coro_io::g_clients_pool<coro_rpc::coro_rpc_client>().at("127.0.0.1:8802");
   assert(client != nullptr);
   ELOGV(INFO, "connect another server");
-  auto ret = co_await client->send_request([sv](coro_rpc_client &client) {
-    return client.call<echo>(sv);
+  auto ret = co_await client->send_request([sv](coro_rpc_client &client) ->Lazy<coro_rpc::rpc_result<std::string_view>> {
+    co_return co_await client.call<echo>(sv);
   });
   co_return ret.value().value();
 }
