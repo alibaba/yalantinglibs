@@ -45,6 +45,7 @@
 #include "asio/registered_buffer.hpp"
 #include "async_simple/Executor.h"
 #include "async_simple/Promise.h"
+#include "async_simple/coro/Mutex.h"
 #include "common_service.hpp"
 #include "context.hpp"
 #include "expected.hpp"
@@ -1053,6 +1054,7 @@ class coro_rpc_client {
     else {
 #endif
       if (req_attachment.empty()) {
+        auto loc = co_await write_mutex_.coScopedLock();
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
       }
@@ -1060,6 +1062,7 @@ class coro_rpc_client {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
             asio::const_buffer{req_attachment.data(), req_attachment.size()}};
+        auto loc = co_await write_mutex_.coScopedLock();
         ret = co_await coro_io::async_write(socket, iov);
       }
 #ifdef UNIT_TEST_INJECT
@@ -1091,6 +1094,7 @@ class coro_rpc_client {
   }
 
  private:
+  async_simple::coro::Mutex write_mutex_;
   std::atomic<bool> is_waiting_for_response_ = false;
   std::atomic<uint32_t> request_id_{0};
   std::unique_ptr<coro_io::period_timer> timer_;
