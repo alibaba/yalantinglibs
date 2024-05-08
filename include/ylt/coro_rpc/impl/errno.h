@@ -106,9 +106,11 @@ inline bool operator!(errc ec) noexcept { return ec == errc::ok; }
 struct rpc_error {
   coro_rpc::err_code code;  //!< error code
   std::string msg;          //!< error message
-  rpc_error(){}
-  rpc_error(coro_rpc::err_code code, std::string_view msg):code(code),msg(std::string{msg}){}
-  rpc_error(coro_rpc::err_code code):code(code),msg(std::string{make_error_message(code)}){}
+  rpc_error() {}
+  rpc_error(coro_rpc::err_code code, std::string_view msg)
+      : code(code), msg(std::string{msg}) {}
+  rpc_error(coro_rpc::err_code code)
+      : code(code), msg(std::string{make_error_message(code)}) {}
   uint16_t& val() { return *(uint16_t*)&(code.ec); }
   const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
   constexpr operator bool() const noexcept { return code; }

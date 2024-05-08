@@ -56,9 +56,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
   co_return client;
 }
 
-  void show(auto &s) {
-    return;
-  }
+void show(auto& s) { return; }
 
 TEST_CASE("testing client") {
   {

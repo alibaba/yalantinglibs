@@ -39,7 +39,7 @@
 #include "ylt/easylog.hpp"
 std::string echo(std::string_view sv);
 
-constexpr auto thread_cnt = 96*20;
+constexpr auto thread_cnt = 96 * 20;
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_view_literals;
@@ -50,27 +50,28 @@ std::atomic<uint64_t> working_echo = 0;
 std::vector<std::unique_ptr<coro_rpc_client>> clients;
 
 std::atomic<uint64_t>& get_qps(int id) {
-  static std::atomic<uint64_t> ar[thread_cnt*8];
-  return ar[id*8];
+  static std::atomic<uint64_t> ar[thread_cnt * 8];
+  return ar[id * 8];
 }
 
-Lazy<std::vector<std::chrono::microseconds>> send(int id,int cnt) {
+Lazy<std::vector<std::chrono::microseconds>> send(int id, int cnt) {
   std::vector<std::chrono::microseconds> result;
-  auto &cli=*clients[id];
-  auto& qps=get_qps(id);
+  auto& cli = *clients[id];
+  auto& qps = get_qps(id);
   result.reserve(cnt);
   ++working_echo;
   auto tp = std::chrono::steady_clock::now();
-  for (int i=0;i<cnt;++i) {
+  for (int i = 0; i < cnt; ++i) {
     auto res_ = co_await cli.call<echo>("Hello world!");
     if (!res_.has_value()) {
       ELOG_ERROR << "coro_rpc err: \n" << res_.error().msg;
       continue;
     }
     ++qps;
-    auto old_tp=tp;
+    auto old_tp = tp;
     tp = std::chrono::steady_clock::now();
-    result.push_back(std::chrono::duration_cast<std::chrono::microseconds>(tp-old_tp));
+    result.push_back(
+        std::chrono::duration_cast<std::chrono::microseconds>(tp - old_tp));
   }
   --working_echo;
   co_return std::move(result);
@@ -81,19 +82,17 @@ Lazy<void> qps_watcher() {
   do {
     co_await coro_io::sleep_for(1s);
     uint64_t cnt = 0;
-    for (int i=0;i<thread_cnt;++i)
-    {
-      auto & qps=get_qps(i);
-      uint64_t tmp=qps.exchange(0);
-      cnt+=tmp;
+    for (int i = 0; i < thread_cnt; ++i) {
+      auto& qps = get_qps(i);
+      uint64_t tmp = qps.exchange(0);
+      cnt += tmp;
     }
-    std::cout << "QPS:" << cnt
-             // << " free connection: " << clients.free_client_count()
-              << " working echo:" << working_echo 
-              << std::endl;
+    std::cout << "QPS:"
+              << cnt
+              // << " free connection: " << clients.free_client_count()
+              << " working echo:" << working_echo << std::endl;
     cnt = 0;
-  } 
-  while(working_echo>0);
+  } while (working_echo > 0);
 }
 std::vector<std::chrono::microseconds> result;
 void latency_watcher() {
@@ -108,12 +107,13 @@ void latency_watcher() {
   }
 }
 int main() {
-  for (int i=0;i<thread_cnt;++i) {
-    clients.emplace_back(std::make_unique<coro_rpc_client>(coro_io::get_global_executor()->get_asio_executor()));
+  for (int i = 0; i < thread_cnt; ++i) {
+    clients.emplace_back(std::make_unique<coro_rpc_client>(
+        coro_io::get_global_executor()->get_asio_executor()));
     syncAwait(clients.back()->connect("localhost:8801"));
   }
   for (int i = 0, lim = thread_cnt; i < lim; ++i) {
-    send(i,20000).via(&clients[i]->get_executor()).start([](auto &&res) {
+    send(i, 20000).via(&clients[i]->get_executor()).start([](auto&& res) {
       finish_executor->schedule([res = std::move(res.value())] {
         result.insert(result.end(), res.begin(), res.end());
       });
