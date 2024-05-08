@@ -738,7 +738,7 @@ class coro_rpc_client {
 
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
-      co_return rpc_error{errc::not_connected}};
+      co_return rpc_error{errc::not_connected};
     }
 #endif
 
