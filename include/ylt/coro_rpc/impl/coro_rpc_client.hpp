@@ -766,7 +766,9 @@ class coro_rpc_client {
 
 
   static void send_err_response(control_t* controller, std::error_code& errc) {
-    rpc_error ec;
+    if (controller->is_timeout_) {
+      errc = std::make_error_code(std::errc::timed_out);
+    }
     for (auto &e:controller->response_handler_table_) {
       e.second.local_error(errc);
     }
