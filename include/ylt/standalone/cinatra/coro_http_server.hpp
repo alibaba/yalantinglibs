@@ -220,6 +220,61 @@ class coro_http_server {
     }
   }
 
+  template <http_method... method, typename... Aspects>
+  void set_websocket_proxy_handler(std::string url_path,
+                                   std::vector<std::string_view> hosts,
+                                   coro_io::load_blance_algorithm type =
+                                       coro_io::load_blance_algorithm::random,
+                                   std::vector<int> weights = {},
+                                   Aspects &&...aspects) {
+    if (hosts.empty()) {
+      throw std::invalid_argument("not config hosts yet!");
+    }
+
+    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
+        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
+                                                   weights));
+
+    set_http_handler<cinatra::GET>(
+        url_path,
+        [channel](coro_http_request &req,
+                  coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          websocket_result result{};
+          while (true) {
+            result = co_await req.get_conn()->read_websocket();
+            if (result.ec) {
+              break;
+            }
+
+            if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+              CINATRA_LOG_INFO << "close frame";
+              break;
+            }
+
+            co_await channel->send_request(
+                [&req, result](
+                    coro_http_client &client,
+                    std::string_view host) -> async_simple::coro::Lazy<void> {
+                  auto r =
+                      co_await client.write_websocket(std::string(result.data));
+                  if (r.net_err) {
+                    co_return;
+                  }
+                  auto data = co_await client.read_websocket();
+                  if (data.net_err) {
+                    co_return;
+                  }
+                  auto ec = co_await req.get_conn()->write_websocket(
+                      std::string(result.data));
+                  if (ec) {
+                    co_return;
+                  }
+                });
+          }
+        },
+        std::forward<Aspects>(aspects)...);
+  }
+
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
     for (const auto &file :
@@ -495,6 +550,12 @@ class coro_http_server {
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
+  void set_default_handler(std::function<async_simple::coro::Lazy<void>(
+                               coro_http_request &, coro_http_response &)>
+                               handler) {
+    default_handler_ = std::move(handler);
+  }
+
   size_t connection_count() {
     std::scoped_lock lock(conn_mtx_);
     return connections_.size();
@@ -599,6 +660,9 @@ class coro_http_server {
       }
       if (need_check_) {
         conn->set_check_timeout(true);
+      }
+      if (default_handler_) {
+        conn->set_default_handler(default_handler_);
       }
 
 #ifdef CINATRA_ENABLE_SSL
@@ -791,9 +855,7 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
-    for (auto &[k, v] : result.resp_headers) {
-      response.add_header(std::string(k), std::string(v));
-    }
+    response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
         static_cast<status_type>(result.status), result.resp_body);
@@ -802,8 +864,10 @@ class coro_http_server {
   }
 
   void init_address(std::string address) {
-    CINATRA_LOG_ERROR << "init log";  // init easylog singleton to make sure
-                                      // server destruct before easylog.
+#if __has_include(<ylt/easylog.hpp>)
+    easylog::logger<>::instance();  // init easylog singleton to make sure
+                                    // server destruct before easylog.
+#endif
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
@@ -860,6 +924,9 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
+  std::function<async_simple::coro::Lazy<void>(coro_http_request &,
+                                               coro_http_response &)>
+      default_handler_ = nullptr;
 };
 
 using http_server = coro_http_server;

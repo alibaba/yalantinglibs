@@ -4,7 +4,7 @@ on:
   pull_request_target:
     branches:
       - main
-      - fix_coverage
+      - fix_coverage_show
 
 jobs:
   build:
@@ -22,6 +22,8 @@ jobs:
 
       - name: Install newer Clang
         run: |
+          sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
           wget https://apt.llvm.org/llvm.sh
           chmod +x ./llvm.sh
           sudo ./llvm.sh 17
@@ -43,7 +45,7 @@ jobs:
           ./struct_pack_test 
           ./struct_pack_test_with_optimize
           llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
-          llvm-cov show coro_io_test coro_rpc_test easylog_test struct_pack_test struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio|src" -show-instantiations=false
+          llvm-cov show coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio|src" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
@@ -58,7 +60,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report coro_io_test coro_rpc_test easylog_test struct_pack_test struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|asio|src" -show-region-summary=false >> tmp.log
+          llvm-cov report coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|asio|src" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment

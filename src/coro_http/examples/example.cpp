@@ -205,29 +205,19 @@ async_simple::coro::Lazy<void> use_websocket() {
   std::this_thread::sleep_for(300ms);  // wait for server start
 
   coro_http_client client{};
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << reason << "\n";
-    assert(reason == "normal close");
-  });
-  client.on_ws_msg([](resp_data data) {
-    if (data.net_err) {
-      std::cout << data.net_err.message() << "\n";
-      return;
-    }
-    assert(data.resp_body == "hello websocket" ||
-           data.resp_body == "test again");
-  });
-
-  bool r = co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
-  if (!r) {
+  auto r = co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+  if (r.net_err) {
     co_return;
   }
 
-  auto result =
-      co_await client.async_send_ws("hello websocket");  // mask as default.
+  auto result = co_await client.write_websocket("hello websocket");
   assert(!result.net_err);
-  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  auto data = co_await client.read_websocket();
+  assert(data.resp_body == "hello websocket");
+  result = co_await client.write_websocket("test again");
   assert(!result.net_err);
+  data = co_await client.read_websocket();
+  assert(data.resp_body == "test again");
 }
 
 async_simple::coro::Lazy<void> static_file_server() {
@@ -327,6 +317,11 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   server.set_http_handler<POST, PUT>(
       "/post", [](coro_http_request &req, coro_http_response &resp) {
+        assert(resp.get_conn()->remote_address().find("127.0.0.1") !=
+               std::string::npos);
+        assert(resp.get_conn()->remote_address().find("127.0.0.1") !=
+               std::string::npos);
+        assert(resp.get_conn()->local_address() == "127.0.0.1:9001");
         auto req_body = req.get_body();
         resp.set_status_and_content(status_type::ok, std::string{req_body});
       });
@@ -357,6 +352,22 @@ async_simple::coro::Lazy<void> basic_usage() {
         response.set_status_and_content(status_type::ok, "ok");
       });
 
+  server.set_http_handler<POST>(
+      "/view",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content_view(status_type::ok,
+                                         req.get_body());  // no copy
+        co_await resp.get_conn()->reply();
+      });
+  server.set_default_handler(
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "default response");
+        co_return;
+      });
+
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 
@@ -382,6 +393,11 @@ async_simple::coro::Lazy<void> basic_usage() {
   assert(result.status == 200);
   assert(result.resp_body == "post string");
 
+  result = co_await client.async_post("/view", "post string",
+                                      req_content_type::string);
+  assert(result.status == 200);
+  assert(result.resp_body == "post string");
+
   client.add_header("name", "tom");
   client.add_header("age", "20");
   result = co_await client.async_get("/headers");
@@ -393,6 +409,10 @@ async_simple::coro::Lazy<void> basic_usage() {
   result = co_await client.async_get(
       "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
   assert(result.status == 200);
+
+  result = co_await client.async_get("/not_exist");
+  assert(result.status == 200);
+  assert(result.resp_body == "default response");
 
   // make sure you have install openssl and enable CINATRA_ENABLE_SSL
 #ifdef CINATRA_ENABLE_SSL
