@@ -306,8 +306,9 @@ class coro_rpc_client {
   call_for(auto duration, Args &&...args) {
     is_waiting_for_response_ = true;
     using return_type = decltype(get_return_type<func>());
-    auto result = co_await send_request_for<func, Args...>(
-        duration, std::forward<Args>(args)...);
+    auto result = co_await send_request_for_with_attachment<func, Args...>(
+        duration, req_attachment_, std::forward<Args>(args)...);
+    req_attachment_ = {};
     if (result) {
       auto async_result = co_await result.value();
       if (async_result) {
@@ -744,7 +745,7 @@ class coro_rpc_client {
 
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(auto duration,
-                                                            uint32_t &id,coro_io::period_timer& timer,
+                                                            uint32_t &id,coro_io::period_timer& timer, std::string_view attachment,
                                                             Args &&...args) {
     using R = decltype(get_return_type<func>());
 
@@ -771,12 +772,12 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
       assert(control_->ssl_stream_);
-      co_return co_await send_impl<func>(*control_->ssl_stream_, id,
+      co_return co_await send_impl<func>(*control_->ssl_stream_, id,attachment,
                                          std::forward<Args>(args)...);
     }
     else {
 #endif
-      co_return co_await send_impl<func>(control_->socket_, id,
+      co_return co_await send_impl<func>(control_->socket_, id,attachment,
                                          std::forward<Args>(args)...);
 #ifdef YLT_ENABLE_SSL
     }
@@ -931,7 +932,7 @@ class coro_rpc_client {
           async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
       rpc_error>>
   send_request(Args &&...args) {
-    return send_request_for<func>(std::chrono::seconds{5},
+    return send_request_for_with_attachment<func>(std::chrono::seconds{5},{},
                                   std::forward<Args>(args)...);
   }
 
@@ -940,11 +941,30 @@ class coro_rpc_client {
       async_simple::coro::Lazy<coro_rpc::expected<
           async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
       rpc_error>>
-  send_request_for(auto duration, Args &&...args) {
+  send_request_with_attachment(std::string_view request_attachment,Args &&...args) {
+    return send_request_for_with_attachment<func>(std::chrono::seconds{5},request_attachment,
+                                  std::forward<Args>(args)...);
+  }
+
+  template <auto func, typename... Args>
+  async_simple::coro::Lazy<coro_rpc::expected<
+      async_simple::coro::Lazy<coro_rpc::expected<
+          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
+      rpc_error>>
+  send_request_for(Args &&...args) {
+    return send_request_for_with_attachment<func>(std::chrono::seconds{5},std::string_view{},std::forward<Args>(args)...);
+  }
+
+  template <auto func, typename... Args>
+  async_simple::coro::Lazy<coro_rpc::expected<
+      async_simple::coro::Lazy<coro_rpc::expected<
+          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
+      rpc_error>>
+  send_request_for_with_attachment(auto time_out_duration, std::string_view request_attachment, Args &&...args) {
     uint32_t id;
     auto timer = std::make_unique<coro_io::period_timer>(control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
-        duration, id, *timer, std::forward<Args>(args)...);
+        time_out_duration, id, *timer, request_attachment, std::forward<Args>(args)...);
     auto &control = *control_;
     if (!result) {
       async_simple::Promise<async_rpc_raw_result> promise;
@@ -988,7 +1008,7 @@ class coro_rpc_client {
 
  private:
   template <auto func, typename Socket, typename... Args>
-  async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
+  async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id, std::string_view req_attachment,
                                                 Args &&...args) {
     auto buffer = prepare_buffer<func>(id, std::forward<Args>(args)...);
     if (buffer.empty()) {
@@ -1032,16 +1052,15 @@ class coro_rpc_client {
     }
     else {
 #endif
-      if (req_attachment_.empty()) {
+      if (req_attachment.empty()) {
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
       }
       else {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
-            asio::const_buffer{req_attachment_.data(), req_attachment_.size()}};
+            asio::const_buffer{req_attachment.data(), req_attachment.size()}};
         ret = co_await coro_io::async_write(socket, iov);
-        req_attachment_ = {};
       }
 #ifdef UNIT_TEST_INJECT
     }
