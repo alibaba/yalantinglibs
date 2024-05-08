@@ -744,7 +744,7 @@ class coro_rpc_client {
 
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(auto duration,
-                                                            uint32_t &id,
+                                                            uint32_t &id,coro_io::period_timer& timer,
                                                             Args &&...args) {
     using R = decltype(get_return_type<func>());
 
@@ -764,10 +764,7 @@ class coro_rpc_client {
     static_check<func, Args...>();
 
     if (duration.count() > 0) {
-      if (timer_ == nullptr)
-        timer_ = std::make_unique<coro_io::period_timer>(
-            control_->executor_.get_asio_executor());
-      timeout(*timer_, duration, "rpc call timer canceled").start([](auto &&) {
+      timeout(timer, duration, "rpc call timer canceled").start([](auto &&) {
       });
     }
 
@@ -945,8 +942,9 @@ class coro_rpc_client {
       rpc_error>>
   send_request_for(auto duration, Args &&...args) {
     uint32_t id;
+    auto timer = std::make_unique<coro_io::period_timer>(control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
-        duration, id, std::forward<Args>(args)...);
+        duration, id, *timer, std::forward<Args>(args)...);
     auto &control = *control_;
     if (!result) {
       async_simple::Promise<async_rpc_raw_result> promise;
@@ -954,7 +952,7 @@ class coro_rpc_client {
       bool is_waiting_for_response = is_waiting_for_response_;
       is_waiting_for_response_ = false;
       auto &&[_, is_ok] = control.response_handler_table_.try_emplace(
-          id, std::move(timer_),
+          id, std::move(timer),
           is_waiting_for_response ? control_.get() : nullptr,
           std::move(promise));
       if (!is_ok) [[unlikely]] {
