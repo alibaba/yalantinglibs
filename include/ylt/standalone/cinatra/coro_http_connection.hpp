@@ -557,9 +557,9 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<std::error_code> write_websocket(
-      std::string_view msg, opcode op = opcode::text) {
+      std::string_view msg, opcode op = opcode::text, bool eof = true) {
     std::vector<asio::const_buffer> buffers;
-    std::string header;
+    std::string_view header;
 #ifdef CINATRA_ENABLE_GZIP
     std::string dest_buf;
     if (is_client_ws_compressed_ && msg.size() > 0) {
@@ -568,13 +568,13 @@ class coro_http_connection
         co_return std::make_error_code(std::errc::protocol_error);
       }
 
-      header = ws_.format_header(dest_buf.length(), op, true);
+      header = ws_.encode_ws_header(dest_buf.length(), op, eof, true, false);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(dest_buf));
     }
     else {
 #endif
-      header = ws_.format_header(msg.length(), op);
+      header = ws_.encode_ws_header(msg.length(), op, eof, false, false);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(msg));
 #ifdef CINATRA_ENABLE_GZIP
@@ -666,7 +666,6 @@ class coro_http_connection
 
             std::string close_msg = ws_.format_close_payload(
                 close_code::normal, close_frame.message, close_frame.length);
-            auto header = ws_.format_header(close_msg.length(), opcode::close);
 
             co_await write_websocket(close_msg, opcode::close);
             close();
