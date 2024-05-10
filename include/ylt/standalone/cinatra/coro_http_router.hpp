@@ -75,7 +75,7 @@ class coro_http_router {
 
       if (whole_str.find(":") != std::string::npos) {
         std::string method_str(method_name);
-        coro_router_tree_->coro_insert(key, std::move(http_handler),
+        coro_router_tree_->coro_insert(whole_str, std::move(http_handler),
                                        method_str);
       }
       else {

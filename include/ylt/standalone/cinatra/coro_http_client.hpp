@@ -436,7 +436,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else {
 #endif
-        std::string encode_header = ws.encode_frame(source, op, true);
+        auto encode_header = ws.encode_frame(source, op, true);
         std::vector<asio::const_buffer> buffers{
             asio::buffer(encode_header.data(), encode_header.size()),
             asio::buffer(source.data(), source.size())};
@@ -459,7 +459,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           if (cinatra::gzip_codec::deflate(
                   {result.buf.data(), result.buf.size()}, dest_buf)) {
             std::span<char> msg(dest_buf.data(), dest_buf.size());
-            std::string header = ws.encode_frame(msg, op, result.eof, true);
+            auto header = ws.encode_frame(msg, op, result.eof, true);
             std::vector<asio::const_buffer> buffers{asio::buffer(header),
                                                     asio::buffer(dest_buf)};
             auto [ec, sz] = co_await async_write(buffers);
@@ -478,7 +478,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         else {
 #endif
           std::span<char> msg(result.buf.data(), result.buf.size());
-          std::string encode_header = ws.encode_frame(msg, op, result.eof);
+          auto encode_header = ws.encode_frame(msg, op, result.eof);
           std::vector<asio::const_buffer> buffers{
               asio::buffer(encode_header.data(), encode_header.size()),
               asio::buffer(msg.data(), msg.size())};
@@ -1953,7 +1953,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         auto close_str = ws.format_close_payload(close_code::normal,
                                                  reason.data(), reason.size());
         auto span = std::span<char>(close_str);
-        std::string encode_header = ws.encode_frame(span, opcode::close, true);
+        auto encode_header = ws.encode_frame(span, opcode::close, true);
         std::vector<asio::const_buffer> buffers{asio::buffer(encode_header),
                                                 asio::buffer(reason)};
 
