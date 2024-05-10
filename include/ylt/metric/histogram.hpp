@@ -14,7 +14,7 @@ class histogram_t : public metric_t {
   histogram_t(std::string name, std::string help, std::vector<double> buckets)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
-        sum_(std::make_shared<guage_t>()) {
+        sum_(std::make_shared<gauge_t>()) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -118,6 +118,6 @@ class histogram_t : public metric_t {
   std::vector<double> bucket_boundaries_;
   std::mutex mutex_;
   std::vector<std::shared_ptr<counter_t>> bucket_counts_;
-  std::shared_ptr<guage_t> sum_;
+  std::shared_ptr<gauge_t> sum_;
 };
 }  // namespace ylt

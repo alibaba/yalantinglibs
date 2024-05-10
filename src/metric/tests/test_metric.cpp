@@ -34,7 +34,7 @@ TEST_CASE("test counter") {
     auto c = std::make_shared<counter_t>("get_count", "get counter",
                                          std::vector{"method", "code"});
     CHECK(c->name() == "get_count");
-    auto g = std::make_shared<guage_t>("get_count", "get counter",
+    auto g = std::make_shared<gauge_t>("get_count", "get counter",
                                        std::vector{"method", "code"});
     CHECK(g->name() == "get_count");
     CHECK(g->metric_name() == "guage");
@@ -67,7 +67,7 @@ TEST_CASE("test counter") {
 
 TEST_CASE("test guage") {
   {
-    guage_t g("get_count", "get counter");
+    gauge_t g("get_count", "get counter");
     CHECK(g.metric_type() == MetricType::Guage);
     CHECK(g.labels_name().empty());
     g.inc();
@@ -83,7 +83,7 @@ TEST_CASE("test guage") {
   }
 
   {
-    guage_t g("get_count", "get counter", {"method", "code", "url"});
+    gauge_t g("get_count", "get counter", {"method", "code", "url"});
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
@@ -155,7 +155,7 @@ TEST_CASE("test register metric") {
   metric_t::regiter_metric(c);
   CHECK_THROWS_AS(metric_t::regiter_metric(c), std::invalid_argument);
 
-  auto g = std::make_shared<guage_t>(std::string("get_guage_count"),
+  auto g = std::make_shared<gauge_t>(std::string("get_guage_count"),
                                      std::string("get counter"));
   metric_t::regiter_metric(g);
 

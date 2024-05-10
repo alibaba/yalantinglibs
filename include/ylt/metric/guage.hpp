@@ -4,18 +4,18 @@
 #include "counter.hpp"
 
 namespace ylt {
-class guage_t : public counter_t {
+class gauge_t : public counter_t {
  public:
-  guage_t() = default;
-  guage_t(std::string name, std::string help,
+  gauge_t() = default;
+  gauge_t(std::string name, std::string help,
           std::vector<std::string> labels_name = {})
       : counter_t(std::move(name), std::move(help), std::move(labels_name)) {
     set_metric_type(MetricType::Guage);
   }
 
-  guage_t(const char* name, const char* help,
+  gauge_t(const char* name, const char* help,
           std::vector<const char*> labels_name = {})
-      : guage_t(
+      : gauge_t(
             std::string(name), std::string(help),
             std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
 

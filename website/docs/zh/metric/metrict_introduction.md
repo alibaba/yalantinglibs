@@ -193,7 +193,7 @@ guage和counter的用法几乎一样，guage比counter多了一个dec方法用�
 
 创建一个guage:
 ```cpp
-auto g = std::make_shared<guage_t>("not_found_request_count",
+auto g = std::make_shared<gauge_t>("not_found_request_count",
                                          "not found request count",
                                          std::vector{"method", "code", "url"});
 metric_t::regiter_metric(g);
