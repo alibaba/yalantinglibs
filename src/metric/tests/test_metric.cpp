@@ -1,4 +1,4 @@
-#include "ylt/metric/guage.hpp"
+#include "ylt/metric/gauge.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <random>
 
