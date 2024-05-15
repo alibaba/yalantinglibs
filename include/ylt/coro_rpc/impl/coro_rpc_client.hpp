@@ -46,6 +46,7 @@
 #include "async_simple/Executor.h"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Mutex.h"
+#include "async_simple/coro/SpinLock.h"
 #include "common_service.hpp"
 #include "context.hpp"
 #include "expected.hpp"
@@ -707,7 +708,7 @@ class coro_rpc_client {
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     rpc_resp_buffer resp_buffer_;
     asio::ip::tcp::socket socket_;
-    std::atomic<bool> is_recving_ = false;
+    std::atomic<uint32_t> recving_cnt_ = 0;
     control_t(asio::io_context::executor_type executor, bool is_timeout)
         : socket_(executor),
           is_timeout_(is_timeout),
@@ -842,24 +843,23 @@ class coro_rpc_client {
       file << controller->resp_buffer_.resp_attachment_buf_;
       file.close();
 #endif
+      --controller->recving_cnt_;
       if (auto iter = controller->response_handler_table_.find(header.seq_num);
           iter != controller->response_handler_table_.end()) {
         ELOG_TRACE << "find request ID:" << header.seq_num
                    << ". start notify response handler";
         iter->second(std::move(controller->resp_buffer_), header.err_code);
         controller->response_handler_table_.erase(iter);
+        if (controller->response_handler_table_.empty()) {
+          co_return;
+        }
       }
       else {
         ELOG_ERROR << "unexists request ID:" << header.seq_num
                    << ". close the socket.";
         break;
       }
-      if (controller->response_handler_table_.size() == 0) {
-        controller->is_recving_ = false;
-        co_return;
-      }
     } while (true);
-    controller->is_recving_ = false;
     close_socket(controller);
     send_err_response(controller.get(), ret.first);
     co_return;
@@ -869,9 +869,7 @@ class coro_rpc_client {
   static async_simple::coro::Lazy<expected<async_rpc_result<T>, rpc_error>>
   get_deserializer(async_simple::Future<async_rpc_raw_result> future,
                    std::weak_ptr<control_t> watcher) {
-    auto executor = co_await async_simple::CurrentExecutor();
-    auto executorFuture = std::move(future).via(executor);
-    auto ret_ = co_await std::move(executorFuture);
+    auto ret_ = co_await std::move(future);
 
     if (ret_.index() == 1) [[unlikely]] {  // local error
       auto &ret = std::get<1>(ret_);
@@ -956,12 +954,31 @@ class coro_rpc_client {
     return send_request_for_with_attachment<func>(std::chrono::seconds{5},std::string_view{},std::forward<Args>(args)...);
   }
 
+  struct recving_guard {
+    recving_guard(control_t* ctrl):ctrl_(ctrl){
+      ctrl_->recving_cnt_++;
+    }
+    void release() {
+      ctrl_=nullptr;
+    }
+    ~recving_guard() {
+      if (ctrl_) {
+        --ctrl_->recving_cnt_;
+      }
+    }
+    control_t* ctrl_;
+  };
+
   template <auto func, typename... Args>
   async_simple::coro::Lazy<coro_rpc::expected<
       async_simple::coro::Lazy<coro_rpc::expected<
           async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
       rpc_error>>
   send_request_for_with_attachment(auto time_out_duration, std::string_view request_attachment, Args &&...args) {
+    recving_guard guard(control_.get());
+    // if (control_->recving_cnt_ > 1) {
+    //   ELOG_ERROR<<"SHIT2:"<<control_->recving_cnt_<<"addr:"<<(void*)this;
+    // }
     uint32_t id;
     auto timer = std::make_unique<coro_io::period_timer>(control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
@@ -972,6 +989,7 @@ class coro_rpc_client {
       auto future = promise.getFuture();
       bool is_waiting_for_response = is_waiting_for_response_;
       is_waiting_for_response_ = false;
+      bool is_empty = control.response_handler_table_.empty();
       auto &&[_, is_ok] = control.response_handler_table_.try_emplace(
           id, std::move(timer),
           is_waiting_for_response ? control_.get() : nullptr,
@@ -982,8 +1000,7 @@ class coro_rpc_client {
         co_return coro_rpc::unexpected<coro_rpc::rpc_error>{ec};
       }
       else {
-        if (!control.is_recving_) {
-          control.is_recving_ = true;
+        if (is_empty) {
 #ifdef YLT_ENABLE_SSL
           if (!config_.ssl_cert_path.empty()) {
             assert(control.ssl_stream_);
@@ -998,6 +1015,7 @@ class coro_rpc_client {
           }
 #endif
         }
+        guard.release();
         co_return get_deserializer<decltype(get_return_type<func>())>(
             std::move(future), std::weak_ptr<control_t>{control_});
       }
@@ -1005,6 +1023,10 @@ class coro_rpc_client {
     else {
       co_return coro_rpc::unexpected<rpc_error>{std::move(result)};
     }
+  }
+
+  uint32_t get_pipeline_size() {
+    return control_->recving_cnt_;
   }
 
  private:
@@ -1054,16 +1076,34 @@ class coro_rpc_client {
     else {
 #endif
       if (req_attachment.empty()) {
-        auto loc = co_await write_mutex_.coScopedLock();
+        // auto loc = co_await write_mutex_.coScopedLock();
+        while (true) {
+          bool expected = false;
+          if (write_mutex_.compare_exchange_weak(expected,true)) {
+            break;
+          }
+          //ELOG_ERROR<<"SHIT";
+          co_await coro_io::post([](){},&control_->executor_);
+        }
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
+        write_mutex_ = false;
       }
       else {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
             asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-        auto loc = co_await write_mutex_.coScopedLock();
+      //  auto loc = co_await write_mutex_.coScopedLock();
+        while (true) {
+          bool expected = false;
+          if (write_mutex_.compare_exchange_weak(expected,true)) {
+            break;
+          }
+          //ELOG_ERROR<<"SHIT";
+          co_await coro_io::post([](){},&control_->executor_);
+        }
         ret = co_await coro_io::async_write(socket, iov);
+        write_mutex_ = false;
       }
 #ifdef UNIT_TEST_INJECT
     }
@@ -1094,7 +1134,7 @@ class coro_rpc_client {
   }
 
  private:
-  async_simple::coro::Mutex write_mutex_;
+  std::atomic<bool> write_mutex_=false;
   std::atomic<bool> is_waiting_for_response_ = false;
   std::atomic<uint32_t> request_id_{0};
   std::unique_ptr<coro_io::period_timer> timer_;

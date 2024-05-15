@@ -37,10 +37,11 @@
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/easylog.hpp"
+#include "ylt/easylog/record.hpp"
 std::string echo(std::string_view sv);
 
-constexpr auto thread_cnt = 96 * 2;
-constexpr auto request_cnt = 200000;
+constexpr unsigned thread_cnt = 1920;
+constexpr auto request_cnt = 1000;
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_view_literals;
@@ -60,76 +61,74 @@ struct guard {
 
 std::vector<std::unique_ptr<coro_rpc_client>> clients;
 
-std::atomic<uint64_t>& get_qps(int id) {
-  static std::atomic<uint64_t> ar[thread_cnt * 8];
-  return ar[id * 8];
+std::atomic<uint32_t> rr=0;
+auto st=std::min(thread_cnt,std::thread::hardware_concurrency());
+std::atomic<uint64_t> tid=0;
+uint64_t& get_tid() {
+  thread_local static uint64_t mytid=tid++;
+  return mytid;
 }
 
-int& get_cnt(int id) {
-  static int ar[thread_cnt * 16];
-  return ar[id * 16];
+// coro_rpc_client& get_client() {
+//   thread_local static uint32_t rr=get_tid();
+//   coro_rpc_client* cli;
+//   cli = clients[rr%thread_cnt].get();
+//   rr+=st;
+//   if (rr>thread_cnt) {
+//     rr%=st;
+//   }
+//   return *cli;
+// }
+
+coro_rpc_client& get_client() {
+  coro_rpc_client* cli;
+  auto v=rr.fetch_add(101);
+  unsigned min_sz=UINT32_MAX;
+  v%=thread_cnt;
+  for (int i=0;min_sz>0 && i<=0;++i) {
+    auto sz=clients[v]->get_pipeline_size();
+    if (min_sz > sz) {
+      cli = clients[v].get();
+      min_sz = sz;
+    }
+    v+=1;
+    v%=thread_cnt;
+  }
+  return *cli;
 }
-int& get_flag(int id) {
-  static int ar[thread_cnt * 16];
-  return ar[id * 16];
-}
-std::vector<std::chrono::microseconds>& get_result(int id) {
-  static std::vector<std::chrono::microseconds> ar[thread_cnt * 3];
-  return ar[id * 3];
-}
-int cnt_max = 10;
-Lazy<void> send(int id) {
-  auto& cli = *clients[id];
-  auto& qps = get_qps(id);
-  auto& cnt = get_cnt(id);
-  auto& result = get_result(id);
+std::atomic<int32_t> qps=0;
+Lazy<std::vector<std::chrono::microseconds>> send() {
+  std::vector<std::chrono::microseconds> result;
+  result.reserve(request_cnt);
+  auto tp = std::chrono::steady_clock::now();
   ++working_echo;
-  for (; result.size() < request_cnt;) {
-    auto tp = std::chrono::steady_clock::now();
+  int id=0;
+  for (int i=0;i<request_cnt;++i) {
+    auto &cli=get_client();
     auto res_ = co_await cli.send_request<echo>("Hello world!");
     if (!res_.has_value()) {
       ELOG_ERROR << "coro_rpc err: \n" << res_.error().msg;
       continue;
     }
-    res_.value().start([id, &qps, &cnt, &result, old_tp = tp](auto&& res) {
-      auto& res1 = res.value();
-      if (!res1.has_value()) {
-        ELOG_ERROR << "coro_rpc err: \n" << res1.error().msg;
-      }
-      else {
-        ++qps;
-        result.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - old_tp));
-        auto tmp = cnt--;
-        if (tmp == cnt_max) {
-          get_flag(id) = true;
-        }
-        else if (tmp == cnt_max / 2 && get_flag(id)) {
-          get_flag(id) = false;
-          send(id).start([](auto&& res) {
-          });
-        }
-      }
-    });
-    auto cnt_tmp = ++cnt;
-    if (cnt_tmp == cnt_max) {
+    auto res1 = co_await res_.value();
+    if (!res1.has_value()) {
+      ELOG_ERROR << "coro_rpc err: \n" << res1.error().msg;
       break;
     }
+    qps.fetch_add(1,std::memory_order::release);
+    auto old_tp=tp;
+    tp= std::chrono::steady_clock::now();
+    result.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
+        tp - old_tp));
   }
-  --working_echo;
-  co_return;
+  co_return std::move(result);
 }
 
 Lazy<void> qps_watcher() {
   using namespace std::chrono_literals;
   do {
     co_await coro_io::sleep_for(1s);
-    uint64_t cnt = 0;
-    for (int i = 0; i < thread_cnt; ++i) {
-      auto& qps = get_qps(i);
-      uint64_t tmp = qps.exchange(0);
-      cnt += tmp;
-    }
+    uint64_t cnt = qps.exchange(0);
     std::cout << "QPS:"
               << cnt
               // << " free connection: " << clients.free_client_count()
@@ -138,11 +137,6 @@ Lazy<void> qps_watcher() {
 }
 std::vector<std::chrono::microseconds> result;
 void latency_watcher() {
-  result.reserve(request_cnt * thread_cnt);
-  for (int i = 0; i < thread_cnt; ++i) {
-    auto& res = get_result(i);
-    result.insert(result.end(), res.begin(), res.end());
-  }
   std::sort(result.begin(), result.end());
   auto arr = {0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99, 0.999, 0.9999, 0.99999, 1.0};
   for (auto e : arr) {
@@ -154,15 +148,25 @@ void latency_watcher() {
   }
 }
 int main() {
+  for (int i = 0; i < std::thread::hardware_concurrency(); ++i) {
+    coro_io::get_global_executor()->schedule([i](){
+      get_tid()=i;
+    });
+  }
   for (int i = 0; i < thread_cnt; ++i) {
     clients.emplace_back(std::make_unique<coro_rpc_client>(
         coro_io::get_global_executor()->get_asio_executor()));
     syncAwait(clients.back()->connect("localhost:8801"));
-    get_result(i).reserve(request_cnt);
   }
-  for (int i = 0, lim = thread_cnt; i < lim; ++i) {
-    send(i).via(&clients[i]->get_executor()).start([](auto&& res) {
-    });
+  auto executor = coro_io::get_global_block_executor();
+ // auto e = coro_io::get_global_executor();
+  for (int i = 0, lim = thread_cnt*10; i < lim; ++i) {
+    coro_io::get_global_executor()->schedule([=](){send().start([executor](auto&& res) {
+      executor->schedule([res = std::move(res.value())]() mutable{
+        result.insert(result.end(), res.begin(), res.end());
+        --working_echo;
+      });
+    });});
   }
   syncAwait(qps_watcher());
   latency_watcher();
