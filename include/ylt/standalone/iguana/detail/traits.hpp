@@ -67,6 +67,15 @@ template <typename T, typename... Us>
 struct has_type<T, std::tuple<Us...>>
     : std::disjunction<std::is_same<T, Us>...> {};
 
+template <class T>
+struct member_tratis {};
+
+template <class T, class Owner>
+struct member_tratis<T Owner::*> {
+  using owner_type = Owner;
+  using value_type = T;
+};
+
 template <typename T>
 inline constexpr bool is_int64_v =
     std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>;
