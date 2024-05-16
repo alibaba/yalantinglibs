@@ -25,6 +25,7 @@
 #include <climits>
 #include <cstdlib>
 #include <memory>
+#include <system_error>
 #include <thread>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
@@ -32,6 +33,7 @@
 
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/easylog.hpp"
 using namespace coro_rpc;
@@ -84,22 +86,20 @@ Lazy<std::vector<std::chrono::microseconds>> call_echo(std::shared_ptr<coro_io::
   ++working_echo;
   for (int i = 0; i < request_cnt; ++i) {
     auto res = co_await channel->send_request(
-        [](coro_rpc_client &client, std::string_view hostname) -> Lazy<coro_rpc::expected<Lazy<coro_rpc::expected<coro_rpc::async_rpc_result<std::string>, coro_rpc::rpc_error>>, coro_rpc::rpc_error>> {
-          co_return co_await client.send_request<echo>("Hello world!");
+        [](coro_rpc_client &client, std::string_view hostname) {
+          return client.send_request<echo>("Hello world!");
         });
     if (!res) {
-      ELOG_ERROR << "client pool err: connect failed.\n";
+      ELOG_ERROR << "client pool err: connect failed.\n"<<std::make_error_code(res.error());
       break;
     }
-    auto &res1=res.value();
-    if (!res1) {
-      ELOG_ERROR << "send request failed.\n";
+    auto rpc_result = co_await res.value();
+    if (!rpc_result) {
+      ELOG_ERROR << "recv response failed\n"<<rpc_result.error().msg;
       break;
     }
-    auto res2 = co_await res1.value();
-    if (!res2) {
-      ELOG_ERROR << "recv response failed\n";
-      break;
+    if (rpc_result->result()!="Hello world!") {
+      ELOG_ERROR << "error rpc reponse\n"<<rpc_result->result();
     }
     ++qps;
     auto old_tp=tp;

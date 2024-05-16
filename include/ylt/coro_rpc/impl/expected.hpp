@@ -48,8 +48,7 @@ namespace protocol {
 struct coro_rpc_protocol;
 }
 
-template <typename T,
-          typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+template <typename T>
 using rpc_result = expected<T, coro_rpc::rpc_error>;
 
 }  // namespace coro_rpc

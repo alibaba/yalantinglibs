@@ -67,12 +67,11 @@ struct RPC_trait<void> {
 };
 using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
 template <auto func>
-rpc_result<util::function_return_type_t<decltype(func)>, coro_rpc_protocol>
+rpc_result<util::function_return_type_t<decltype(func)>>
 get_result(const auto &pair) {
   auto &&[rpc_errc, buffer] = pair;
   using T = util::function_return_type_t<decltype(func)>;
-  using return_type = rpc_result<util::function_return_type_t<decltype(func)>,
-                                 coro_rpc_protocol>;
+  using return_type = rpc_result<util::function_return_type_t<decltype(func)>>;
   rpc_return_type_t<T> ret;
   struct_pack::err_code ec;
   rpc_error err;

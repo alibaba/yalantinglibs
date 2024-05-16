@@ -94,15 +94,29 @@ struct rpc_resp_buffer {
 };
 
 template <typename T>
-struct async_rpc_result {
+struct async_rpc_result_value_t {
+private:
   T result_;
   rpc_resp_buffer buffer_;
+public:
+  async_rpc_result_value_t(T&& result,rpc_resp_buffer&& buffer): result_(std::move(result)),buffer_(std::move(buffer)){}
+  async_rpc_result_value_t(T&& result): result_(std::move(result)){}
+  T& result() noexcept {return result_;}
+  const T& result() const noexcept {return result_;}
+  std::string_view attachment() const noexcept {return buffer_.resp_attachment_buf_;}
+  rpc_resp_buffer release_buffer() {return std::move(buffer_);}
 };
 
+
 template <>
-struct async_rpc_result<void> {
+struct async_rpc_result_value_t<void> {
   rpc_resp_buffer buffer_;
+  std::string_view attachment() const noexcept {return buffer_.resp_attachment_buf_;}
+  rpc_resp_buffer release_buffer() {return std::move(buffer_);}
 };
+
+template<typename T>
+using async_rpc_result = expected<async_rpc_result_value_t<T>, rpc_error>;
 
 template <typename T>
 using rpc_return_type_t = typename rpc_return_type<T>::type;
@@ -286,7 +300,7 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<
-      rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol>>
+      rpc_result<decltype(get_return_type<func>())>>
   call(Args &&...args) {
     return call_for<func>(std::chrono::seconds(5), std::forward<Args>(args)...);
   }
@@ -304,32 +318,25 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<
-      rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol>>
+      rpc_result<decltype(get_return_type<func>())>>
   call_for(auto duration, Args &&...args) {
-    is_waiting_for_response_ = true;
     using return_type = decltype(get_return_type<func>());
-    auto result = co_await send_request_for_with_attachment<func, Args...>(
+    auto async_result = co_await co_await send_request_for_with_attachment<func, Args...>(
         duration, req_attachment_, std::forward<Args>(args)...);
     req_attachment_ = {};
-    if (result) {
-      auto async_result = co_await result.value();
-      if (async_result) {
-        if constexpr (std::is_same_v<return_type, void>) {
-          co_return expected<return_type, rpc_error>{};
-        }
-        else {
-          co_return expected<return_type, rpc_error>{
-              std::move(async_result.value().result_)};
-        }
+    if (async_result) {
+      control_->resp_buffer_ = async_result->release_buffer();
+      if constexpr (std::is_same_v<return_type, void>) {
+        co_return expected<return_type, rpc_error>{};
       }
       else {
         co_return expected<return_type, rpc_error>{
-            unexpect_t{}, std::move(async_result.error())};
+            std::move(async_result->result())};
       }
     }
     else {
-      co_return expected<return_type, rpc_error>{unexpect_t{},
-                                                 std::move(result.error())};
+      co_return expected<return_type, rpc_error>{
+          unexpect_t{}, std::move(async_result.error())};
     }
   }
 
@@ -580,7 +587,7 @@ class coro_rpc_client {
   }
 
   template <typename T>
-  static rpc_result<T, coro_rpc_protocol> handle_response_buffer(
+  static rpc_result<T> handle_response_buffer(
       std::string_view buffer, uint8_t rpc_errc, bool &should_close) {
     rpc_return_type_t<T> ret;
     struct_pack::err_code ec;
@@ -603,13 +610,13 @@ class coro_rpc_client {
         ec = struct_pack::deserialize_to(err.msg, buffer);
         if SP_LIKELY (!ec) {
           should_close = true;
-          return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+          return rpc_result<T>{unexpect_t{}, std::move(err)};
         }
       }
       else {
         ec = struct_pack::deserialize_to(err, buffer);
         if SP_LIKELY (!ec) {
-          return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+          return rpc_result<T>{unexpect_t{}, std::move(err)};
         }
       }
     }
@@ -617,7 +624,7 @@ class coro_rpc_client {
     // deserialize failed.
     ELOGV(WARNING, "deserilaize rpc result failed");
     err = {errc::invalid_rpc_result, "failed to deserialize rpc return value"};
-    return rpc_result<T, coro_rpc_protocol>{unexpect_t{}, std::move(err)};
+    return rpc_result<T>{unexpect_t{}, std::move(err)};
   }
 
   template <typename FuncArgs>
@@ -660,7 +667,7 @@ class coro_rpc_client {
   }
 
   struct async_rpc_raw_result_value_type {
-    std::variant<rpc_resp_buffer, std::string_view> buffer_;
+    rpc_resp_buffer buffer_;
     uint8_t errc_;
   };
 
@@ -671,24 +678,15 @@ class coro_rpc_client {
 
   struct handler_t {
     std::unique_ptr<coro_io::period_timer> timer_;
-    control_t *control_;
     async_simple::Promise<async_rpc_raw_result> promise_;
     handler_t(std::unique_ptr<coro_io::period_timer> &&timer,
-              control_t *control,
               async_simple::Promise<async_rpc_raw_result> &&promise)
         : timer_(std::move(timer)),
-          control_(control),
           promise_(std::move(promise)) {}
     void operator()(rpc_resp_buffer &&buffer, uint8_t rpc_errc) {
       timer_->cancel();
-      if (control_) /*is waiting for response*/ {
-        promise_.setValue(async_rpc_raw_result{async_rpc_raw_result_value_type{
-            std::string_view{control_->resp_buffer_.read_buf_}, rpc_errc}});
-      }
-      else {
-        promise_.setValue(async_rpc_raw_result{
-            async_rpc_raw_result_value_type{std::move(buffer), rpc_errc}});
-      }
+      promise_.setValue(async_rpc_raw_result{
+          async_rpc_raw_result_value_type{std::move(buffer), rpc_errc}});
     }
     void local_error(std::error_code &ec) {
       timer_->cancel();
@@ -738,7 +736,7 @@ class coro_rpc_client {
   }
 
   template <auto func, typename... Args>
-  rpc_result<decltype(get_return_type<func>()), coro_rpc_protocol> sync_call(
+  rpc_result<decltype(get_return_type<func>())> sync_call(
       Args &&...args) {
     return async_simple::coro::syncAwait(
         call<func>(std::forward<Args>(args)...));
@@ -866,7 +864,7 @@ class coro_rpc_client {
   }
 
   template <typename T>
-  static async_simple::coro::Lazy<expected<async_rpc_result<T>, rpc_error>>
+  static async_simple::coro::Lazy<async_rpc_result<T>>
   get_deserializer(async_simple::Future<async_rpc_raw_result> future,
                    std::weak_ptr<control_t> watcher) {
     auto ret_ = co_await std::move(future);
@@ -885,16 +883,9 @@ class coro_rpc_client {
     }
 
     bool should_close = false;
-    std::string_view buffer_view;
     auto &ret = std::get<0>(ret_);
-    if (ret.buffer_.index() == 0) {
-      buffer_view = std::get<0>(ret.buffer_).read_buf_;
-    }
-    else {
-      buffer_view = std::get<1>(ret.buffer_);
-    }
     auto result =
-        handle_response_buffer<T>(buffer_view, ret.errc_, should_close);
+        handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_, should_close);
     if (should_close) {
       if (auto w = watcher.lock(); w) {
         close_socket(std::move(w));
@@ -902,21 +893,11 @@ class coro_rpc_client {
     }
     if (result) {
       if constexpr (std::is_same_v<T, void>) {
-        if (ret.buffer_.index() == 0) {
-          co_return async_rpc_result<T>{std::move(std::get<0>(ret.buffer_))};
-        }
-        else {
-          co_return async_rpc_result<T>{};
-        }
+          co_return async_rpc_result<T>{async_rpc_result_value_t<T>{std::move(ret.buffer_)}};
       }
       else {
-        if (ret.buffer_.index() == 0) {
-          co_return async_rpc_result<T>{result.value(),
-                                        std::move(std::get<0>(ret.buffer_))};
-        }
-        else {
-          co_return async_rpc_result<T>{result.value()};
-        }
+          co_return async_rpc_result<T>{async_rpc_result_value_t<T>{std::move(result.value()),
+                                        std::move(ret.buffer_)}};
       }
     }
     else {
@@ -926,30 +907,28 @@ class coro_rpc_client {
 
  public:
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<coro_rpc::expected<
-      async_simple::coro::Lazy<coro_rpc::expected<
-          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
-      rpc_error>>
+  async_simple::coro::Lazy<
+      async_simple::coro::Lazy<
+          async_rpc_result<decltype(get_return_type<func>())>>>
   send_request(Args &&...args) {
+                                  
     return send_request_for_with_attachment<func>(std::chrono::seconds{5},{},
                                   std::forward<Args>(args)...);
   }
 
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<coro_rpc::expected<
-      async_simple::coro::Lazy<coro_rpc::expected<
-          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
-      rpc_error>>
+  async_simple::coro::Lazy<
+      async_simple::coro::Lazy<
+          async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_with_attachment(std::string_view request_attachment,Args &&...args) {
     return send_request_for_with_attachment<func>(std::chrono::seconds{5},request_attachment,
                                   std::forward<Args>(args)...);
   }
 
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<coro_rpc::expected<
-      async_simple::coro::Lazy<coro_rpc::expected<
-          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
-      rpc_error>>
+  async_simple::coro::Lazy<
+      async_simple::coro::Lazy<
+          async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_for(Args &&...args) {
     return send_request_for_with_attachment<func>(std::chrono::seconds{5},std::string_view{},std::forward<Args>(args)...);
   }
@@ -968,17 +947,20 @@ class coro_rpc_client {
     }
     control_t* ctrl_;
   };
-
+private:
+  template <typename T>
+  static async_simple::coro::Lazy<async_rpc_result<T>>
+  build_failed_rpc_result(rpc_error err) {
+    co_return unexpected<coro_rpc::rpc_error>{err};
+  }
+public:
   template <auto func, typename... Args>
-  async_simple::coro::Lazy<coro_rpc::expected<
-      async_simple::coro::Lazy<coro_rpc::expected<
-          async_rpc_result<decltype(get_return_type<func>())>, rpc_error>>,
-      rpc_error>>
+  async_simple::coro::Lazy<
+      async_simple::coro::Lazy<
+          async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_for_with_attachment(auto time_out_duration, std::string_view request_attachment, Args &&...args) {
+    using rpc_return_t = decltype(get_return_type<func>()); 
     recving_guard guard(control_.get());
-    // if (control_->recving_cnt_ > 1) {
-    //   ELOG_ERROR<<"SHIT2:"<<control_->recving_cnt_<<"addr:"<<(void*)this;
-    // }
     uint32_t id;
     auto timer = std::make_unique<coro_io::period_timer>(control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
@@ -987,17 +969,13 @@ class coro_rpc_client {
     if (!result) {
       async_simple::Promise<async_rpc_raw_result> promise;
       auto future = promise.getFuture();
-      bool is_waiting_for_response = is_waiting_for_response_;
-      is_waiting_for_response_ = false;
       bool is_empty = control.response_handler_table_.empty();
       auto &&[_, is_ok] = control.response_handler_table_.try_emplace(
           id, std::move(timer),
-          is_waiting_for_response ? control_.get() : nullptr,
           std::move(promise));
       if (!is_ok) [[unlikely]] {
         close();
-        err_code ec = errc::serial_number_conflict;
-        co_return coro_rpc::unexpected<coro_rpc::rpc_error>{ec};
+        co_return build_failed_rpc_result<rpc_return_t>(rpc_error{coro_rpc::errc::serial_number_conflict});
       }
       else {
         if (is_empty) {
@@ -1016,12 +994,13 @@ class coro_rpc_client {
 #endif
         }
         guard.release();
-        co_return get_deserializer<decltype(get_return_type<func>())>(
+        co_return get_deserializer<rpc_return_t>(
             std::move(future), std::weak_ptr<control_t>{control_});
       }
     }
     else {
-      co_return coro_rpc::unexpected<rpc_error>{std::move(result)};
+      auto i=build_failed_rpc_result<rpc_return_t>(std::move(result));
+      co_return build_failed_rpc_result<rpc_return_t>(std::move(result));
     }
   }
 
@@ -1076,13 +1055,11 @@ class coro_rpc_client {
     else {
 #endif
       if (req_attachment.empty()) {
-        // auto loc = co_await write_mutex_.coScopedLock();
         while (true) {
           bool expected = false;
           if (write_mutex_.compare_exchange_weak(expected,true)) {
             break;
           }
-          //ELOG_ERROR<<"SHIT";
           co_await coro_io::post([](){},&control_->executor_);
         }
         ret = co_await coro_io::async_write(
@@ -1093,13 +1070,11 @@ class coro_rpc_client {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
             asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-      //  auto loc = co_await write_mutex_.coScopedLock();
         while (true) {
           bool expected = false;
           if (write_mutex_.compare_exchange_weak(expected,true)) {
             break;
           }
-          //ELOG_ERROR<<"SHIT";
           co_await coro_io::post([](){},&control_->executor_);
         }
         ret = co_await coro_io::async_write(socket, iov);
@@ -1135,7 +1110,6 @@ class coro_rpc_client {
 
  private:
   std::atomic<bool> write_mutex_=false;
-  std::atomic<bool> is_waiting_for_response_ = false;
   std::atomic<uint32_t> request_id_{0};
   std::unique_ptr<coro_io::period_timer> timer_;
   std::shared_ptr<control_t> control_;
