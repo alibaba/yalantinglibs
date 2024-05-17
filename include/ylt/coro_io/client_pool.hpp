@@ -113,7 +113,8 @@ class client_pool : public std::enable_shared_from_this<
     return std::chrono::milliseconds{static_cast<long>(e(r) * ms.count())};
   }
 
-  static async_simple::coro::Lazy<void> reconnect(std::unique_ptr<client_t>& client, std::weak_ptr<client_pool> watcher) {
+  static async_simple::coro::Lazy<void> reconnect(
+      std::unique_ptr<client_t>& client, std::weak_ptr<client_pool> watcher) {
     using namespace std::chrono_literals;
     std::shared_ptr<client_pool> self = watcher.lock();
     uint32_t i = UINT32_MAX;  // (at least connect once)
@@ -137,8 +138,7 @@ class client_pool : public std::enable_shared_from_this<
                  << "} failed. If client close:{" << client->has_closed()
                  << "}";
       auto wait_time = rand_time(
-          (self->pool_config_.reconnect_wait_time - cost_time) / 1ms *
-          1ms);
+          (self->pool_config_.reconnect_wait_time - cost_time) / 1ms * 1ms);
       self = nullptr;
       if (wait_time.count() > 0)
         co_await coro_io::sleep_for(wait_time, &client->get_executor());
@@ -159,7 +159,7 @@ class client_pool : public std::enable_shared_from_this<
   static async_simple::coro::Lazy<void> connect_client(
       std::unique_ptr<client_t> client, std::weak_ptr<client_pool> watcher,
       std::shared_ptr<promise_handler> handler) {
-    co_await reconnect(client,watcher);
+    co_await reconnect(client, watcher);
     auto has_get_connect = handler->flag_.exchange(true);
     if (!has_get_connect) {
       handler->promise_.setValue(std::move(client));
@@ -167,9 +167,11 @@ class client_pool : public std::enable_shared_from_this<
     else {
       if (client) {
         auto self = watcher.lock();
-        auto conn_lim = std::min<unsigned>(10u, self->pool_config_.max_connection);
-        if (self && self->free_clients_.size() < conn_lim ) {
-          self->enqueue(self->free_clients_, std::move(client), self->pool_config_.idle_timeout);
+        auto conn_lim =
+            std::min<unsigned>(10u, self->pool_config_.max_connection);
+        if (self && self->free_clients_.size() < conn_lim) {
+          self->enqueue(self->free_clients_, std::move(client),
+                        self->pool_config_.idle_timeout);
         }
       }
     }

@@ -880,8 +880,8 @@ class coro_rpc_client {
 
     bool has_error = false;
     auto &ret = std::get<0>(ret_);
-    auto result = handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_,
-                                            has_error);
+    auto result =
+        handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_, has_error);
     if (has_error) {
       if (auto w = watcher.lock(); w) {
         close_socket(std::move(w));

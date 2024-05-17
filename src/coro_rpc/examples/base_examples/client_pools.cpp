@@ -26,6 +26,7 @@
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
+
 #include "ylt/coro_io/io_context_pool.hpp"
 std::string echo(std::string_view sv);
 using namespace coro_rpc;
@@ -40,9 +41,10 @@ std::atomic<uint64_t> working_echo = 0;
  * \brief demo for run concurrency clients
  */
 
-int request_cnt =10000;
+int request_cnt = 10000;
 
-Lazy<std::vector<std::chrono::microseconds>> call_echo(coro_io::client_pools<coro_rpc_client> &client_pools) {
+Lazy<std::vector<std::chrono::microseconds>> call_echo(
+    coro_io::client_pools<coro_rpc_client> &client_pools) {
   ++working_echo;
   std::vector<std::chrono::microseconds> result;
   result.reserve(request_cnt);
@@ -67,10 +69,10 @@ Lazy<std::vector<std::chrono::microseconds>> call_echo(coro_io::client_pools<cor
       ELOG_ERROR << "client pool err: connect failed.\n";
       break;
     }
-    auto old_tp=tp;
-    tp= std::chrono::steady_clock::now();
-    result.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
-        tp - old_tp));
+    auto old_tp = tp;
+    tp = std::chrono::steady_clock::now();
+    result.push_back(
+        std::chrono::duration_cast<std::chrono::microseconds>(tp - old_tp));
   }
   co_return std::move(result);
 }
@@ -103,10 +105,10 @@ void latency_watcher() {
 int main() {
   auto thread_cnt = std::thread::hardware_concurrency();
   auto &clients = coro_io::g_clients_pool<coro_rpc_client>();
-  auto executor=coro_io::get_global_block_executor();
+  auto executor = coro_io::get_global_block_executor();
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
-    call_echo(clients).start([=](auto && res) {
-       executor->schedule([res = std::move(res.value())]() mutable {
+    call_echo(clients).start([=](auto &&res) {
+      executor->schedule([res = std::move(res.value())]() mutable {
         result.insert(result.end(), res.begin(), res.end());
         --working_echo;
       });
