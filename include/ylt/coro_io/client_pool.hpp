@@ -121,7 +121,7 @@ class client_pool : public std::enable_shared_from_this<
                  << "}, try count:" << i
                  << "max retry limit:" << pool_config_.connect_retry_count;
       auto pre_time_point = std::chrono::steady_clock::now();
-      bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
+      bool ok = client_t::is_ok(co_await client->connect(host_name_));
       auto post_time_point = std::chrono::steady_clock::now();
       auto cost_time = post_time_point - pre_time_point;
       ELOG_DEBUG << "reconnect client{" << client.get()

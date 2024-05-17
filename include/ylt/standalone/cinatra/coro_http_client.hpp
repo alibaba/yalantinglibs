@@ -284,6 +284,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = false;
+    }
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
@@ -894,11 +900,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     head_buf_.consume(head_buf_.size());
     chunked_buf_.consume(chunked_buf_.size());
     resp_chunk_str_.clear();
-  }
-
-  async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
-    reset();
-    co_return co_await connect(std::move(uri));
   }
 
   std::string_view get_host() { return host_; }
@@ -2119,6 +2120,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
   bool enable_timeout_ = false;
+  bool should_reset_ = false;
   std::chrono::steady_clock::duration conn_timeout_duration_ =
       std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =

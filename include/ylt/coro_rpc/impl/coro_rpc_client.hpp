@@ -178,12 +178,12 @@ class coro_rpc_client {
    * @param io_context asio io_context, async event handler
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<> &executor = *coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
       uint32_t client_id = 0)
       : control_(
-            std::make_shared<control_t>(executor.get_asio_executor(), false)),
+            std::make_shared<control_t>(executor->get_asio_executor(), false)),
         timer_(std::make_unique<coro_io::period_timer>(
-            executor.get_asio_executor())) {
+            executor->get_asio_executor())) {
     config_.client_id = client_id;
   }
 
@@ -208,41 +208,6 @@ class coro_rpc_client {
    */
   [[nodiscard]] bool has_closed() { return control_->has_closed_; }
 
-  /*!
-   * Reconnect server
-   *
-   * If connect hasn't been closed, it will be closed first then connect to
-   * server, else the client will connect to server directly
-   *
-   * @param host server address
-   * @param port server port
-   * @param timeout_duration RPC call timeout
-   * @return error code
-   */
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> reconnect(
-      std::string host, std::string port,
-      std::chrono::steady_clock::duration timeout_duration =
-          std::chrono::seconds(5)) {
-    config_.host = std::move(host);
-    config_.port = std::move(port);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
-    reset();
-    return connect(is_reconnect_t{true});
-  }
-
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> reconnect(
-      std::string endpoint,
-      std::chrono::steady_clock::duration timeout_duration =
-          std::chrono::seconds(5)) {
-    auto pos = endpoint.find(':');
-    config_.host = endpoint.substr(0, pos);
-    config_.port = endpoint.substr(pos + 1);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
-    reset();
-    return connect(is_reconnect_t{true});
-  }
   /*!
    * Connect server
    *
@@ -387,22 +352,19 @@ class coro_rpc_client {
     control_->has_closed_ = false;
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
-      is_reconnect_t is_reconnect = is_reconnect_t{false}) {
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect() {
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = true;
+    }
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
       std::cout << "ssl_init_ret_: " << ssl_init_ret_ << std::endl;
       co_return errc::not_connected;
     }
 #endif
-    if (!is_reconnect.value && control_->has_closed_)
-      AS_UNLIKELY {
-        ELOGV(ERROR,
-              "a closed client is not allowed connect again, please use "
-              "reconnect function or create a new "
-              "client");
-        co_return errc::io_error;
-      }
     control_->has_closed_ = false;
 
     ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
@@ -1109,6 +1071,7 @@ public:
   }
 
  private:
+  bool should_reset_ = false;
   std::atomic<bool> write_mutex_=false;
   std::atomic<uint32_t> request_id_{0};
   std::unique_ptr<coro_io::period_timer> timer_;
