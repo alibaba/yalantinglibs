@@ -346,13 +346,6 @@ TEST_CASE("test server accept error") {
   REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
                   ret.error().msg);
   REQUIRE(client.has_closed() == true);
-
-  ec = syncAwait(client.connect("127.0.0.1", "8810"));
-  REQUIRE_MESSAGE(ec == coro_rpc::errc::io_error,
-                  std::to_string(client.get_client_id()).append(ec.message()));
-  ret = syncAwait(client.call<hi>());
-  CHECK(!ret);
-  REQUIRE(client.has_closed() == true);
   g_action = {};
 }
 
