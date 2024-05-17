@@ -156,9 +156,9 @@ TEST_CASE("test reconnect") {
 
 struct mock_client : public coro_rpc::coro_rpc_client {
   using coro_rpc::coro_rpc_client::coro_rpc_client;
-  async_simple::coro::Lazy<coro_rpc::errc> reconnect(
+  async_simple::coro::Lazy<coro_rpc::errc> connect(
       const std::string &hostname) {
-    auto ec = co_await this->coro_rpc::coro_rpc_client::reconnect(hostname);
+    auto ec = co_await this->coro_rpc::coro_rpc_client::connect(hostname);
     if (ec) {
       co_await coro_io::sleep_for(300ms);
     }
@@ -184,7 +184,7 @@ TEST_CASE("test reconnect retry wait time exclude reconnect cost time") {
     CHECK(pool->free_client_count() == 100);
     auto dur = std::chrono::steady_clock::now() - tp;
     std::cout << dur.count() << std::endl;
-    CHECK((dur >= 400ms && dur <= 800ms));
+    CHECK((dur >= 500ms && dur <= 799ms));
     server.stop();
     co_return;
   }());
