@@ -101,6 +101,9 @@ class http_parser {
     }
 
     full_url_ = url_;
+    if (!queries_.empty()) {
+      queries_.clear();
+    }
     if (has_query) {
       size_t pos = url_.find('?');
       parse_query(url_.substr(pos + 1, url_len - pos - 1));

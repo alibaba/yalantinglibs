@@ -910,6 +910,120 @@ constexpr const std::string_view get_name() {
   return M::name();
 }
 
+namespace detail {
+template <typename T, typename U>
+constexpr bool get_index_imple(T ptr, U ele) {
+  if constexpr (std::is_same_v<decltype(ptr), decltype(ele)>) {
+    if (ele == ptr) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    return false;
+  }
+}
+
+template <typename T, typename Tuple, size_t... I>
+constexpr size_t member_index_impl(T ptr, Tuple &tp,
+                                   std::index_sequence<I...>) {
+  bool r = false;
+  size_t index = 0;
+  ((void)(!r && (r = get_index_imple(ptr, std::get<I>(tp)),
+                 !r ? index++ : index, true)),
+   ...);
+  return index;
+}
+
+template <typename T, typename Tuple>
+constexpr size_t member_index(T ptr, Tuple &tp) {
+  return member_index_impl(
+      ptr, tp,
+      std::make_index_sequence<
+          std::tuple_size_v<std::decay_t<decltype(tp)>>>{});
+}
+}  // namespace detail
+
+template <auto member>
+constexpr size_t index_of() {
+  using namespace detail;
+  using T = typename member_tratis<decltype(member)>::owner_type;
+  using M = Reflect_members<T>;
+  constexpr auto tp = M::apply_impl();
+  constexpr size_t Size = std::tuple_size_v<decltype(tp)>;
+  constexpr size_t index = member_index(member, tp);
+  static_assert(index < Size, "out of range");
+  return index;
+}
+
+template <auto... members>
+constexpr std::array<size_t, sizeof...(members)> indexs_of() {
+  return std::array<size_t, sizeof...(members)>{index_of<members>()...};
+}
+
+template <auto member>
+constexpr auto name_of() {
+  using T = typename member_tratis<decltype(member)>::owner_type;
+  using M = Reflect_members<T>;
+  constexpr auto s = M::arr()[index_of<member>()];
+  return std::string_view(s.data(), s.size());
+}
+
+template <auto... members>
+constexpr std::array<std::string_view, sizeof...(members)> names_of() {
+  return std::array<std::string_view, sizeof...(members)>{
+      name_of<members>()...};
+}
+
+template <auto member>
+constexpr auto member_count_of() {
+  using T = typename member_tratis<decltype(member)>::owner_type;
+  using M = Reflect_members<T>;
+  return M::value();
+}
+
+template <typename T, auto member>
+constexpr size_t duplicate_count();
+
+template <auto ptr, typename Member>
+constexpr void check_duplicate(Member member, size_t &index) {
+  using value_type = typename member_tratis<decltype(member)>::value_type;
+
+  if (detail::get_index_imple(ptr, member)) {
+    index++;
+  }
+
+  if constexpr (is_reflection_v<value_type>) {
+    index += iguana::duplicate_count<value_type, ptr>();
+  }
+}
+
+template <typename T, auto member>
+constexpr size_t duplicate_count() {
+  using M = Reflect_members<T>;
+  constexpr auto name = name_of<member>();
+  constexpr auto arr = M::arr();
+
+  constexpr auto tp = M::apply_impl();
+  size_t index = 0;
+  std::apply(
+      [&](auto... ele) {
+        (check_duplicate<member>(ele, index), ...);
+      },
+      tp);
+
+  for (auto &s : arr) {
+    if (s == name) {
+      index++;
+      break;
+    }
+  }
+
+  return index;
+}
+
 template <typename T>
 constexpr const std::string_view get_fields() {
   using M = Reflect_members<T>;

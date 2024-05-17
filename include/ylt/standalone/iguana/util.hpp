@@ -139,6 +139,10 @@ struct is_variant<std::variant<T...>> : std::true_type {};
 template <typename T>
 constexpr inline bool variant_v = is_variant<std::remove_cvref_t<T>>::value;
 
+template <size_t Idx, typename T>
+using variant_element_t = std::remove_reference_t<decltype(std::get<Idx>(
+    std::declval<std::remove_reference_t<T>>()))>;
+
 template <typename T>
 constexpr inline bool refletable_v = is_reflection_v<std::remove_cvref_t<T>>;
 
@@ -201,10 +205,59 @@ inline constexpr auto has_qoute = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
       0b0010001000100010001000100010001000100010001000100010001000100010);
 };
 
+template <bool is_xml_serialization = false, typename Stream, typename Ch>
+IGUANA_INLINE void write_unicode_to_string(Ch& it, Stream& ss) {
+  static const char hexDigits[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                     '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+  unsigned codepoint = 0;
+  if (!decode_utf8(it, codepoint))
+    IGUANA_UNLIKELY { throw std::runtime_error("illegal unicode character"); }
+  if constexpr (is_xml_serialization) {
+    ss.append("&#x");
+  }
+  else {
+    ss.push_back('\\');
+    ss.push_back('u');
+  }
+
+  if (codepoint <= 0xD7FF || (codepoint >= 0xE000 && codepoint <= 0xFFFF)) {
+    ss.push_back(hexDigits[(codepoint >> 12) & 15]);
+    ss.push_back(hexDigits[(codepoint >> 8) & 15]);
+    ss.push_back(hexDigits[(codepoint >> 4) & 15]);
+    ss.push_back(hexDigits[(codepoint)&15]);
+  }
+  else {
+    if (codepoint < 0x010000 || codepoint > 0x10FFFF)
+      IGUANA_UNLIKELY { throw std::runtime_error("illegal codepoint"); }
+    // Surrogate pair
+    unsigned s = codepoint - 0x010000;
+    unsigned lead = (s >> 10) + 0xD800;
+    unsigned trail = (s & 0x3FF) + 0xDC00;
+    ss.push_back(hexDigits[(lead >> 12) & 15]);
+    ss.push_back(hexDigits[(lead >> 8) & 15]);
+    ss.push_back(hexDigits[(lead >> 4) & 15]);
+    ss.push_back(hexDigits[(lead)&15]);
+    if constexpr (is_xml_serialization) {
+      ss.append(";&#x");
+    }
+    else {
+      ss.push_back('\\');
+      ss.push_back('u');
+    }
+    ss.push_back(hexDigits[(trail >> 12) & 15]);
+    ss.push_back(hexDigits[(trail >> 8) & 15]);
+    ss.push_back(hexDigits[(trail >> 4) & 15]);
+    ss.push_back(hexDigits[(trail)&15]);
+  }
+  if constexpr (is_xml_serialization) {
+    ss.push_back(';');
+  }
+}
+
 // https://github.com/Tencent/rapidjson/blob/master/include/rapidjson/writer.h
 template <typename Ch, typename SizeType, typename Stream>
-inline void write_string_with_escape(const Ch* it, SizeType length,
-                                     Stream& ss) {
+IGUANA_INLINE void write_string_with_escape(const Ch* it, SizeType length,
+                                            Stream& ss) {
   static const char hexDigits[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                                      '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
   static const char escape[256] = {
@@ -227,40 +280,7 @@ inline void write_string_with_escape(const Ch* it, SizeType length,
   std::advance(end, length);
   while (it < end) {
     if (static_cast<unsigned>(*it) >= 0x80)
-      IGUANA_UNLIKELY {
-        unsigned codepoint = 0;
-        if (!decode_utf8(it, codepoint))
-          IGUANA_UNLIKELY {
-            throw std::runtime_error("illegal unicode character");
-          }
-        ss.push_back('\\');
-        ss.push_back('u');
-        if (codepoint <= 0xD7FF ||
-            (codepoint >= 0xE000 && codepoint <= 0xFFFF)) {
-          ss.push_back(hexDigits[(codepoint >> 12) & 15]);
-          ss.push_back(hexDigits[(codepoint >> 8) & 15]);
-          ss.push_back(hexDigits[(codepoint >> 4) & 15]);
-          ss.push_back(hexDigits[(codepoint)&15]);
-        }
-        else {
-          if (codepoint < 0x010000 || codepoint > 0x10FFFF)
-            IGUANA_UNLIKELY { throw std::runtime_error("illegal codepoint"); }
-          // Surrogate pair
-          unsigned s = codepoint - 0x010000;
-          unsigned lead = (s >> 10) + 0xD800;
-          unsigned trail = (s & 0x3FF) + 0xDC00;
-          ss.push_back(hexDigits[(lead >> 12) & 15]);
-          ss.push_back(hexDigits[(lead >> 8) & 15]);
-          ss.push_back(hexDigits[(lead >> 4) & 15]);
-          ss.push_back(hexDigits[(lead)&15]);
-          ss.push_back('\\');
-          ss.push_back('u');
-          ss.push_back(hexDigits[(trail >> 12) & 15]);
-          ss.push_back(hexDigits[(trail >> 8) & 15]);
-          ss.push_back(hexDigits[(trail >> 4) & 15]);
-          ss.push_back(hexDigits[(trail)&15]);
-        }
-      }
+      IGUANA_UNLIKELY { write_unicode_to_string(it, ss); }
     else if (escape[static_cast<unsigned char>(*it)])
       IGUANA_UNLIKELY {
         ss.push_back('\\');
@@ -280,5 +300,42 @@ inline void write_string_with_escape(const Ch* it, SizeType length,
     }
   }
 }
+
+template <typename T, size_t N>
+IGUANA_INLINE constexpr bool has_duplicate(const std::array<T, N>& arr) {
+  for (int i = 0; i < arr.size(); i++) {
+    for (int j = i + 1; j < arr.size(); j++) {
+      if (arr[i] == arr[j]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+#if defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 8)
+template <typename... Types>
+IGUANA_INLINE constexpr bool has_duplicate_type() {
+  std::array<std::string_view, sizeof...(Types)> arr{
+      iguana::type_string<Types>()...};
+  return has_duplicate(arr);
+}
+
+template <typename T>
+struct has_duplicate_type_in_variant : std::false_type {};
+
+template <typename... Us>
+struct has_duplicate_type_in_variant<std::variant<Us...>> {
+  inline constexpr static bool value = has_duplicate_type<Us...>();
+};
+
+template <typename T>
+constexpr inline bool has_duplicate_type_v =
+    has_duplicate_type_in_variant<T>::value;
+#else
+template <typename T>
+constexpr inline bool has_duplicate_type_v = false;
+#endif
 
 }  // namespace iguana

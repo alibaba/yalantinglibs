@@ -300,12 +300,12 @@ class radix_tree {
           if (j < m) {
             std::shared_ptr<radix_tree_node> child(
                 std::make_shared<radix_tree_node>(root->path.substr(j)));
-            child->handler = root->handler;
+            child->coro_handler = root->coro_handler;
             child->indices = root->indices;
             child->children = root->children;
 
             root->path = root->path.substr(0, j);
-            root->handler = {};
+            root->coro_handler = {};
             root->indices = child->path[0];
             root->children = {child};
           }

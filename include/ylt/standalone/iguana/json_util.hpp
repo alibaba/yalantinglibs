@@ -18,10 +18,7 @@ class numeric_str {
     if (val_.empty())
       IGUANA_UNLIKELY { throw std::runtime_error("Failed to parse number"); }
     T res;
-    auto [_, ec] =
-        detail::from_chars(val_.data(), val_.data() + val_.size(), res);
-    if (ec != std::errc{})
-      IGUANA_UNLIKELY { throw std::runtime_error("Failed to parse number"); }
+    detail::from_chars(val_.data(), val_.data() + val_.size(), res);
     return res;
   }
 
@@ -212,6 +209,30 @@ IGUANA_INLINE bool is_numeric(char c) noexcept {
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // F
   };
   return static_cast<bool>(is_num[static_cast<unsigned int>(c)]);
+}
+
+// '\t' '\r' '\n'  '"' '}' ']' ',' ' '  '\0'
+IGUANA_INLINE bool can_follow_number(char c) noexcept {
+  static constexpr int can_follow_num[256] = {
+      //  0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+      1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0,  // 0
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 1
+      1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,  // 2
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 3
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 4
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,  // 5
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 6
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,  // 7
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 8
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 9
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // A
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // B
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // C
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // D
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // E
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // F
+  };
+  return static_cast<bool>(can_follow_num[static_cast<unsigned int>(c)]);
 }
 
 }  // namespace iguana

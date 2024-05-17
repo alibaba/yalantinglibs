@@ -884,7 +884,7 @@ static const char *parse_headers(const char *buf, const char *buf_end,
         // has connection
         has_connection = true;
         char ch = *value;
-        if (ch == 'U') {
+        if (ch == 'U' || ch == 'u') {
           // has upgrade
           has_upgrade = true;
         }
