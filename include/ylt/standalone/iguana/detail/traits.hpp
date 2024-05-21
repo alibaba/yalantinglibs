@@ -79,5 +79,39 @@ struct member_tratis<T Owner::*> {
 template <typename T>
 inline constexpr bool is_int64_v =
     std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>;
+
+template <typename T>
+struct is_variant : std::false_type {};
+
+template <typename... T>
+struct is_variant<std::variant<T...>> : std::true_type {};
+
+template <class T>
+struct member_traits {
+  using value_type = T;
+};
+
+template <class T, class Owner>
+struct member_traits<T Owner::*> {
+  using owner_type = Owner;
+  using value_type = T;
+};
+
+template <class T>
+using member_value_type_t = typename member_traits<T>::value_type;
+
+template <typename T, std::size_t I, typename = void>
+struct variant_type_at {
+  using type = T;
+};
+
+template <typename T, std::size_t I>
+struct variant_type_at<T, I, std::enable_if_t<is_variant<T>::value>> {
+  using type = std::variant_alternative_t<I, T>;
+};
+template <typename T, std::size_t I>
+using variant_type_at_t =
+    typename variant_type_at<typename member_traits<T>::value_type, I>::type;
+
 }  // namespace iguana
 #endif  // SERIALIZE_TRAITS_HPP
