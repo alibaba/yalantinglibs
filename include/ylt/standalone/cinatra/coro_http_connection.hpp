@@ -288,8 +288,19 @@ class coro_http_connection
 
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
-          // handle pipeling, only support GET and HEAD method now.
-          if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
+          if (type == content_type::multipart) {
+            response_.set_status_and_content(
+                status_type::not_implemented,
+                "mutipart handler not implemented or incorrect implemented");
+            co_await reply();
+            close();
+            CINATRA_LOG_ERROR
+                << "mutipart handler not implemented or incorrect implemented"
+                << ec.message();
+            break;
+          }
+          else if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
+            // handle pipeling, only support GET and HEAD method now.
             response_.set_status_and_content(status_type::method_not_allowed,
                                              "method not allowed");
             co_await reply();
@@ -343,6 +354,7 @@ class coro_http_connection
               co_return;
             }
           }
+          head_buf_.consume(head_buf_.size());
         }
         else {
           handle_session_for_response();

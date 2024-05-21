@@ -184,7 +184,13 @@ class coro_http_request {
     if (content_type.empty()) {
       return {};
     }
-    return content_type.substr(content_type.rfind("=") + 1);
+
+    auto pos = content_type.rfind("=");
+    if (pos == std::string_view::npos) {
+      return "";
+    }
+
+    return content_type.substr(pos + 1);
   }
 
   coro_http_connection *get_conn() { return conn_; }
@@ -278,7 +284,7 @@ class coro_http_request {
   http_parser &parser_;
   std::string_view body_;
   coro_http_connection *conn_;
-  bool is_websocket_;
+  bool is_websocket_ = false;
   std::vector<std::string> aspect_data_;
   std::string cached_session_id_;
 };
