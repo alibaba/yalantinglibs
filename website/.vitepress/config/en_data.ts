@@ -6,8 +6,7 @@ export const guidLinks = [
 
 //构建系统相关语法
 export const struct_pb_Links = [
-    { text: 'What is struct_pb?', link: '/en/struct_pb/struct_pb_intro' },
-    { text: 'Supported Features', link: '/en/struct_pb/struct_pb_supported_features' },
+    { text: 'What is struct_pb?', link: '/en/struct_pb/struct_pb_intro' }
 ];
 
 export const struct_pack_Links = [

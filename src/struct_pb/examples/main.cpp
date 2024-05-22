@@ -5,7 +5,7 @@
 struct my_struct : struct_pb::pb_base {
   int x;
   bool y;
-  iguana::fixed64_t z;
+  struct_pb::fixed64_t z;
 };
 REFLECTION(my_struct, x, y, z);
 
