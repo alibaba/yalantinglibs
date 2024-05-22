@@ -187,8 +187,6 @@ struct struct_pb_sample0 : public base_sample {
     buffer_.clear();
     struct_pb0::to_pb(sample, buffer_);
 
-    U obj;
-
     uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_sample_name(sample_type);
@@ -196,6 +194,7 @@ struct struct_pb_sample0 : public base_sample {
     {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
+        U obj;
         struct_pb0::from_pb(obj, buffer_);
         no_op((char *)&obj);
         no_op(buffer_);

@@ -155,9 +155,6 @@ struct struct_pb_sample_t : public base_sample {
     buffer_.resize(sz);
     struct_pb::internal::serialize_to(buffer_.data(), buffer_.size(), sample);
 
-    T obj;
-    // vec.resize(ITERATIONS);
-
     uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_sample_name(sample_type);
@@ -165,6 +162,7 @@ struct struct_pb_sample_t : public base_sample {
     {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
+        T obj;
         [[maybe_unused]] auto ok = struct_pb::internal::deserialize_to(
             obj, buffer_.data(), buffer_.size());
         assert(ok);
