@@ -7,11 +7,7 @@ export const guidLinks = [
 //构建系统相关语法
 export const struct_pb_Links = [
     { text: 'struct_pb简介', link: '/zh/struct_pb/struct_pb_intro' },
-    { text: '快速开始', link: '/zh/struct_pb/struct_pb_quick_start' },
     { text: '特性支持', link: '/zh/struct_pb/struct_pb_supported_features' },
-    { text: '使用proto3', link: '/zh/struct_pb/struct_pb_guide_proto3' },
-    { text: '生成结构体', link: '/zh/struct_pb/struct_pb_generating_your_struct' },
-    { text: 'struct_pb API', link: '/zh/struct_pb/struct_pb_api' },
 ];
 
 export const struct_pack_Links = [

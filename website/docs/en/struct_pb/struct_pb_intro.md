@@ -18,9 +18,6 @@ Tag = (field_number << 3) | wire_type
 ### Base 128 Varints
 Variable-width integers, or _varints_, are at the core of the wire format. They allow encoding unsigned 64-bit integers using anywhere between one and ten bytes, with small values using fewer bytes.
 
-## Design
-![](images/struct_pb_overview.jpeg)
-
 ## Type Mapping
 proto3 first,
 see also [Protocol Buffers Language Guide (proto3)](https://developers.google.com/protocol-buffers/docs/proto3#scalar)
