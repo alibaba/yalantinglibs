@@ -52,7 +52,7 @@ void async_echo_by_callback(
   /* rpc function runs in global io thread pool */
   coro_io::post([conn, data]() mutable {
     /* send work to global non-io thread pool */
-    auto *ctx = conn.get_context();
+    auto *ctx = conn.get_context_info();
     conn.response_msg(data); /*response here*/
   }).start([](auto &&) {
   });

@@ -73,6 +73,11 @@ class client_pool;
 
 namespace coro_rpc {
 
+inline uint64_t get_global_client_id() {
+  static std::atomic<uint64_t> cid = 0;
+  return cid.fetch_add(1, std::memory_order::relaxed);
+}
+
 #ifdef GENERATE_BENCHMARK_DATA
 std::string benchmark_file_path = "./";
 #endif
@@ -105,7 +110,7 @@ struct async_rpc_result_value_t {
   async_rpc_result_value_t(T &&result) : result_(std::move(result)) {}
   T &result() noexcept { return result_; }
   const T &result() const noexcept { return result_; }
-  std::string_view attachment() const noexcept {
+  std::string_view get_attachment() const noexcept {
     return buffer_.resp_attachment_buf_;
   }
   resp_body release_buffer() { return std::move(buffer_); }
@@ -155,12 +160,12 @@ class coro_rpc_client {
   const inline static rpc_error connect_error = {errc::io_error,
                                                  "client has been closed"};
   struct config {
-    uint32_t client_id = 0;
+    uint64_t client_id = get_global_client_id();
     std::chrono::milliseconds timeout_duration =
         std::chrono::milliseconds{5000};
     std::string host;
     std::string port;
-    bool enable_tcp_no_delay_ = true;
+    bool enable_tcp_no_delay = true;
 #ifdef YLT_ENABLE_SSL
     std::filesystem::path ssl_cert_path;
     std::string ssl_domain;
@@ -172,7 +177,7 @@ class coro_rpc_client {
    * @param io_context asio io_context, async event handler
    */
   coro_rpc_client(asio::io_context::executor_type executor,
-                  uint32_t client_id = 0)
+                  uint64_t client_id = get_global_client_id())
       : control_(std::make_shared<control_t>(executor, false)),
         timer_(std::make_unique<coro_io::period_timer>(executor)) {
     config_.client_id = client_id;
@@ -184,7 +189,7 @@ class coro_rpc_client {
    */
   coro_rpc_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
-      uint32_t client_id = 0)
+      uint64_t client_id = get_global_client_id())
       : control_(
             std::make_shared<control_t>(executor->get_asio_executor(), false)),
         timer_(std::make_unique<coro_io::period_timer>(
@@ -424,7 +429,7 @@ class coro_rpc_client {
       ELOGV(WARN, "client_id %d connect timeout", config_.client_id);
       co_return errc::timed_out;
     }
-    if (config_.enable_tcp_no_delay_ == true) {
+    if (config_.enable_tcp_no_delay == true) {
       control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
     }
 
@@ -738,7 +743,7 @@ class coro_rpc_client {
         call<func>(std::forward<Args>(args)...));
   }
 #endif
-
+ private:
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
       auto duration, uint32_t &id, coro_io::period_timer &timer,
