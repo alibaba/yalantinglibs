@@ -22,7 +22,6 @@ if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs") # if ylt is top-level project
         include_directories(src/include)
 
         include(cmake/utils.cmake)
-        include(cmake/struct_pb.cmake)
         include(cmake/build.cmake)
         include(cmake/develop.cmake)
         # add project config, such as enable_ssl.

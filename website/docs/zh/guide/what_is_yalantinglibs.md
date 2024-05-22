@@ -426,11 +426,9 @@ yalantinglibs工程自身支持如下配置项，如果你使用cmake find_packa
 
 无依赖。
 
-### struct_pb (可选)
+### struct_pb
 
-默认情况下我们不会安装struct_pb, 你需要手动安装以下依赖：
-
-- [protobuf](https://protobuf.dev/)
+无依赖。
 
 ## 独立子仓库
 

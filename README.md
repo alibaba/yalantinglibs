@@ -504,11 +504,9 @@ No dependency.
 
 No dependency.
 
-### struct_pb (optional)
+### struct_pb
 
-In default, struct_pb wont be installed. You need install protobuf manually.
-
-- [protobuf](https://protobuf.dev/)
+No dependency.
 
 
 ## Standalone sublibraries
