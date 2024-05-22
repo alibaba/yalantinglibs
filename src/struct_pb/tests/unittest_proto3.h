@@ -1,8 +1,10 @@
 #pragma once
 
 #include <ylt/struct_pb.hpp>
-#include "unittest_proto3.pb.h"
+#if defined(STRUCT_PB_WITH_PROTO)
 #include "data_def.pb.h"
+#include "unittest_proto3.pb.h"
+#endif
 
 #define PUBLIC : iguana::pb_base
 
@@ -270,6 +272,7 @@ inline stpb::Monster create_sp_monster() {
   return m;
 }
 
+#if defined(STRUCT_PB_WITH_PROTO)
 void SetBaseTypeMsg(const stpb::BaseTypeMsg& st, pb::BaseTypeMsg& msg) {
   msg.set_optional_int32(st.optional_int32);
   msg.set_optional_int64(st.optional_int64);
@@ -292,7 +295,7 @@ void CheckBaseTypeMsg(const stpb::BaseTypeMsg& st, const pb::BaseTypeMsg& msg) {
   CHECK(st.optional_bool == msg.optional_bool());
   CHECK(st.optional_string == msg.optional_string());
   CHECK(static_cast<int32_t>(st.optional_enum) ==
-           static_cast<int32_t>(msg.optional_enum()));
+        static_cast<int32_t>(msg.optional_enum()));
 }
 
 void SetIguanaTypeMsg(const stpb::IguanaTypeMsg& st, pb::IguanaTypeMsg& msg) {
@@ -367,7 +370,7 @@ void CheckRepeatBaseTypeMsg(const stpb::RepeatBaseTypeMsg& st,
   }
   for (size_t i = 0; i < st.repeated_enum.size(); ++i) {
     CHECK(static_cast<int>(st.repeated_enum[i]) ==
-             static_cast<int>(msg.repeated_enum(i)));
+          static_cast<int>(msg.repeated_enum(i)));
   }
 }
 
@@ -451,8 +454,7 @@ void CheckNestedMsg(const stpb::NestedMsg& st, const pb::NestedMsg& msg) {
     CheckIguanaTypeMsg(st.repeat_iguna_msg[i], msg.repeat_iguna_msg(i));
   }
 
-  CHECK(st.repeat_repeat_base_msg.size() ==
-           msg.repeat_repeat_base_msg_size());
+  CHECK(st.repeat_repeat_base_msg.size() == msg.repeat_repeat_base_msg_size());
   for (size_t i = 0; i < st.repeat_repeat_base_msg.size(); ++i) {
     CheckRepeatBaseTypeMsg(st.repeat_repeat_base_msg[i],
                            msg.repeat_repeat_base_msg(i));
@@ -484,7 +486,7 @@ void CheckMapMsg(const stpb::MapMsg& st, const pb::MapMsg& msg) {
     CHECK(it->second == pair.second);
   }
   CHECK(msg.str_iguana_type_msg_map_size() ==
-           st.str_iguana_type_msg_map.size());
+        st.str_iguana_type_msg_map.size());
   for (const auto& pair : st.str_iguana_type_msg_map) {
     auto it = msg.str_iguana_type_msg_map().find(pair.first);
     CHECK(it != msg.str_iguana_type_msg_map().end());
@@ -492,7 +494,7 @@ void CheckMapMsg(const stpb::MapMsg& st, const pb::MapMsg& msg) {
   }
 
   CHECK(msg.int_repeat_base_msg_map_size() ==
-           st.int_repeat_base_msg_map.size());
+        st.int_repeat_base_msg_map.size());
   for (const auto& pair : st.int_repeat_base_msg_map) {
     auto it = msg.int_repeat_base_msg_map().find(pair.first);
     CHECK(it != msg.int_repeat_base_msg_map().end());
@@ -571,6 +573,7 @@ void CheckNestOneofMsg(const stpb::NestOneofMsg& st,
       },
       st.nest_one_of_msg);
 }
+#endif
 
 inline void print_hex_str(const std::string& str) {
   std::ostringstream oss;
