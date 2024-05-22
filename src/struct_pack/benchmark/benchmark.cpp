@@ -14,11 +14,8 @@
 
 #ifdef HAVE_PROTOBUF
 #include "protobuf_sample.hpp"
-#ifdef HAVE_STRUCT_PB
+#endif
 #include "struct_pb_sample.hpp"
-#endif
-#endif
-#include "struct_pb_sample0.hpp"
 #ifdef HAVE_FLATBUFFER
 #include "flatbuffer_sample.hpp"
 #endif
@@ -121,12 +118,9 @@ int main(int argc, char** argv) {
   map.emplace(LibType::MSGPACK, new message_pack_sample());
 #endif
 #ifdef HAVE_PROTOBUF
-#ifdef HAVE_STRUCT_PB
-  map.emplace(LibType::STRUCT_PB, new struct_pb_sample::struct_pb_sample_t());
-#endif
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
 #endif
-  map.emplace(LibType::STRUCT_PB0, new struct_pb_sample0());
+  map.emplace(LibType::STRUCT_PB, new struct_pb_sample());
 #ifdef HAVE_FLATBUFFER
   map.emplace(LibType::FLATBUFFER, new flatbuffer_sample_t());
 #endif
@@ -145,9 +139,7 @@ int main(int argc, char** argv) {
 
   run_benchmark(map, LibType::STRUCT_PACK);
 
-#ifdef HAVE_STRUCT_PB
   run_benchmark(map, LibType::STRUCT_PB);
-#endif
 
   return 0;
 }
