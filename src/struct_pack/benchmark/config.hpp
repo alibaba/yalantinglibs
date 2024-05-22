@@ -11,6 +11,7 @@ inline constexpr int ITERATIONS = 1000000;
 enum class LibType {
   STRUCT_PACK,
   STRUCT_PB,
+  STRUCT_PB0,
   MSGPACK,
   PROTOBUF,
   FLATBUFFER,
@@ -47,11 +48,9 @@ inline const std::unordered_map<SampleType, std::string> g_sample_name_map = {
      std::to_string(OBJECT_COUNT) + " monsters(with zero-copy deserialize)"}};
 
 inline const std::unordered_map<LibType, std::string> g_lib_name_map = {
-    {LibType::STRUCT_PACK, "struct_pack"},
-    {LibType::STRUCT_PB, "struct_pb"},
-    {LibType::MSGPACK, "msgpack"},
-    {LibType::PROTOBUF, "protobuf"},
-    {LibType::FLATBUFFER, "flatbuffer"}};
+    {LibType::STRUCT_PACK, "struct_pack"}, {LibType::STRUCT_PB, "struct_pb"},
+    {LibType::STRUCT_PB0, "struct_pb0"},   {LibType::MSGPACK, "msgpack"},
+    {LibType::PROTOBUF, "protobuf"},       {LibType::FLATBUFFER, "flatbuffer"}};
 
 inline const std::vector<SampleType> g_sample_type_vec = {
     SampleType::RECT,    SampleType::RECTS,   SampleType::PERSON,

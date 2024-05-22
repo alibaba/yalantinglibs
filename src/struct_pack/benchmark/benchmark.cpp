@@ -1,7 +1,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
-
+#define SEQUENTIAL_PARSE
 #include "struct_pack_sample.hpp"
 
 #if __has_include(<msgpack.hpp>)
@@ -18,6 +18,7 @@
 #include "struct_pb_sample.hpp"
 #endif
 #endif
+#include "struct_pb_sample0.hpp"
 #ifdef HAVE_FLATBUFFER
 #include "flatbuffer_sample.hpp"
 #endif
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
 #endif
   map.emplace(LibType::PROTOBUF, new protobuf_sample_t());
 #endif
+  map.emplace(LibType::STRUCT_PB0, new struct_pb_sample0());
 #ifdef HAVE_FLATBUFFER
   map.emplace(LibType::FLATBUFFER, new flatbuffer_sample_t());
 #endif

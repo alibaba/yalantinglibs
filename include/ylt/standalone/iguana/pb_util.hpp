@@ -297,13 +297,6 @@ IGUANA_INLINE constexpr void for_each_n(F&& f, std::index_sequence<I...>) {
   (std::forward<F>(f)(std::integral_constant<size_t, I>{}), ...);
 }
 
-// cache the size of reflection type
-template <typename T>
-IGUANA_INLINE auto& get_set_size_cache(T& t) {
-  static std::map<size_t, size_t> cache;
-  return cache[reinterpret_cast<size_t>(&t)];
-}
-
 template <size_t key_size, bool omit_default_val, typename T>
 IGUANA_INLINE size_t numeric_size(T&& t) {
   using value_type = std::remove_const_t<std::remove_reference_t<T>>;
@@ -418,12 +411,10 @@ IGUANA_INLINE size_t pb_key_value_size(Type&& t) {
           }
         },
         std::make_index_sequence<SIZE>{});
-    if constexpr (inherits_from_pb_base_v<T>) {
-      t.cache_size = len;
-    }
-    else {
-      get_set_size_cache(t) = len;
-    }
+    static_assert(inherits_from_pb_base_v<T>,
+                  "must be inherited from iguana::pb_base");
+    t.cache_size = len;
+
     if constexpr (key_size == 0) {
       // for top level
       return len;
@@ -501,12 +492,9 @@ template <typename T>
 IGUANA_INLINE size_t pb_value_size(T&& t) {
   using value_type = std::remove_const_t<std::remove_reference_t<T>>;
   if constexpr (is_reflection_v<value_type>) {
-    if constexpr (inherits_from_pb_base_v<value_type>) {
-      return t.cache_size;
-    }
-    else {
-      return get_set_size_cache(t);
-    }
+    static_assert(inherits_from_pb_base_v<std::decay_t<T>>,
+                  "must be inherited from iguana::pb_base");
+    return t.cache_size;
   }
   else if constexpr (is_sequence_container<value_type>::value) {
     using item_type = typename value_type::value_type;
