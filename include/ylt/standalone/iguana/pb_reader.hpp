@@ -198,7 +198,7 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
   bool parse_done = false;
   detail::for_each_n(
       [&](auto i) IGUANA__INLINE_LAMBDA {
-        constexpr auto val = std::get<decltype(i)::value>(tp);
+        auto val = std::get<decltype(i)::value>(tp);
         using sub_type = typename std::decay_t<decltype(val)>::sub_type;
         using value_type = typename std::decay_t<decltype(val)>::value_type;
         // sub_type is the element type when value_type is the variant type;
