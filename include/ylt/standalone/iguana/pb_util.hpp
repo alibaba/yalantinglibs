@@ -253,13 +253,55 @@ IGUANA_INLINE size_t variant_uint32_size(uint32_t value) {
   return static_cast<size_t>((log2value * 9 + 73) / 64);
 }
 
+IGUANA_INLINE int Log2FloorNonZero_Portable(uint32_t n) {
+  if (n == 0)
+    return -1;
+  int log = 0;
+  uint32_t value = n;
+  for (int i = 4; i >= 0; --i) {
+    int shift = (1 << i);
+    uint32_t x = value >> shift;
+    if (x != 0) {
+      value = x;
+      log += shift;
+    }
+  }
+  assert(value == 1);
+  return log;
+}
+
+IGUANA_INLINE uint32_t Log2FloorNonZero(uint32_t n) {
+#if defined(__GNUC__)
+  return 31 ^ static_cast<uint32_t>(__builtin_clz(n));
+#elif defined(_MSC_VER)
+  unsigned long where;
+  _BitScanReverse(&where, n);
+  return where;
+#else
+  return Log2FloorNonZero_Portable(n);
+#endif
+}
+
+IGUANA_INLINE int Log2FloorNonZero64_Portable(uint64_t n) {
+  const uint32_t topbits = static_cast<uint32_t>(n >> 32);
+  if (topbits == 0) {
+    // Top bits are zero, so scan in bottom bits
+    return static_cast<int>(Log2FloorNonZero(static_cast<uint32_t>(n)));
+  }
+  else {
+    return 32 + static_cast<int>(Log2FloorNonZero(topbits));
+  }
+}
+
 IGUANA_INLINE uint32_t log2_floor_uint64(uint64_t n) {
 #if defined(__GNUC__)
   return 63 ^ static_cast<uint32_t>(__builtin_clzll(n));
-#else
+#elif defined(_MSC_VER) && defined(_M_X64)
   unsigned long where;
   _BitScanReverse64(&where, n);
   return where;
+#else
+  return Log2FloorNonZero64_Portable(n);
 #endif
 }
 
