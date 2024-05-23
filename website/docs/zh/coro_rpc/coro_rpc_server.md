@@ -1,12 +1,6 @@
 # coro_rpc服务端介绍
 
-coro_rpc支持注册并调用的rpc函数有三种：
-1. 普通函数
-2. 协程函数
-3. 回调函数
-
 ## 服务器的注册与启动
-
 
 ### 函数注册
 在启动rpc服务器之前，我们需要调用`register_handler<>`函数注册所有的rpc函数。注册不是线程安全的，不能在启动rpc服务器后再注册。
@@ -43,6 +37,11 @@ int start_server() {
   auto err = ec.get(); /*block here util server down then return err code*/
 }
 ```
+
+coro_rpc支持注册并调用的rpc函数有三种：
+1. 普通函数
+2. 协程函数
+3. 回调函数
 
 ## 普通rpc函数
 
@@ -189,7 +188,7 @@ Lazy<void> call() {
 
 ### 获取上下文信息
 
-当协程函数被coro_rpc_server调用时，可以调用`coro_io::get_context_in_coro()`来获取上下文信息。需要注意的是，此时不能使用`coro_io::get_context()`来获取上下文信息。
+当协程函数被coro_rpc_server调用时，可以调用`coro_io::get_context_in_coro()`来获取上下文信息。需要注意的是，此时调用`coro_io::get_context()`会获取到错误的上下文信息。
 
 ```cpp
 using namespace coro_rpc;
@@ -237,7 +236,7 @@ void echo(coro_rpc::context<std::string_view> ctx, std::string_view param) {
 
 ### 获取上下文信息
 
-在协程函数中，我们可以调用`coro_rpc::context<T>::get_context_info()`来获取协程的上下文信息。需要注意的是，此时不能使用`coro_io::get_context()`来获取上下文信息。
+在协程函数中，我们可以调用`coro_rpc::context<T>::get_context_info()`来获取协程的上下文信息。此外，在rpc函数返回之前也可以使用`coro_io::get_context()`获取上下文信息。
 
 ```cpp
 void echo(coro_rpc::context<void> ctx) {
@@ -391,18 +390,28 @@ coro_rpc允许用户注册并调用特化的模板函数。
 
 ```cpp
 template<typename T>
-std::string_view echo(std::string_view T) { return T; }
+T echo(T param) { return param; }
 ```
 
 则服务端可以这样注册这些函数。
 
 ```cpp
-#include "rpc_service.h"
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
+using namespace coro_rpc;
 int main() {
   coro_rpc_server server;
-  dummy d{};
-  server.register_handler<&dummy::echo,&dummy::coroutine_echo,&dummy::callback_echo>(&d); //注册成员函数
+  server.register_handler<echo<int>,echo<std::string>,echo<std::vector<int>>>(&d); //注册成员函数
   server.start();
+}
+```
+
+客户端可以这样调用：
+```cpp
+using namespace coro_rpc;
+using namespace async_simple::coro;
+Lazy<void> rpc_call(coro_rpc_client& cli) {
+  assert(co_await cli.call<echo<int>>(42).value() == 42);
+  assert(co_await cli.call<echo<int>>("Hello").value() == "Hello");
+  assert(co_await cli.call<echo<int>>(std::vector{1,2,3}).value() == std::vector{1,2,3});
 }
 ```

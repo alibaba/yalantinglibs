@@ -502,7 +502,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     g_action = {};
     coro_rpc_server server(2, 8801);
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client2(*coro_io::get_global_executor(), g_client_id++);
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);

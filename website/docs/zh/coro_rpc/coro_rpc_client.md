@@ -133,7 +133,7 @@ do_something();
 
 ## 连接池与负载均衡
 
-`coro_io`提供了连接池`client_pool`与负载均衡器`channel`。用户可以通过连接池来管理coro_rpc连接，可以使用`channel`实现多个host之间的负载均衡。具体请见`coro_io`的文档。
+`coro_io`提供了连接池`client_pool`与负载均衡器`channel`。用户可以通过连接池`client_pool`来管理coro_rpc连接，可以使用`channel`实现多个host之间的负载均衡。具体请见`coro_io`的文档。
 
 ## 连接复用
 
@@ -149,8 +149,9 @@ using namespace coro_rpc;
 using namespace async_simple::coro;
 std::string_view echo(std::string_view);
 Lazy<void> example(coro_rpc_client& client) {
-  Lazy<async_rpc_result> handler = co_await client.send_request<echo>("Hello");
   //先等待请求发送完毕
+  Lazy<async_rpc_result> handler = co_await client.send_request<echo>("Hello");
+  //然后等待服务器返回rpc请求结果
   async_rpc_result result = co_await handler;
   if (result) {
     assert(result->result() == "Hello");
@@ -159,7 +160,6 @@ Lazy<void> example(coro_rpc_client& client) {
     // error handle
     std::cout<<result.error().msg()<<std::endl;
   }
-  //然后等待服务器返回rpc请求结果
 }
 ```
 
