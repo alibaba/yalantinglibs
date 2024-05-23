@@ -17,7 +17,6 @@ if (NOT ENABLE_CPP_20)
   Set(BUILD_STRUCT_JSON ON)
   Set(BUILD_STRUCT_XML ON)
   Set(BUILD_STRUCT_YAML ON)
-  Set(BUILD_STRUCT_PB OFF)
 endif()
 
 foreach(child ${children})
