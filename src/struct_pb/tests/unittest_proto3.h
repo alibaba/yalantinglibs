@@ -205,6 +205,28 @@ REFLECTION(bench_int32, a, b, c, d);
 
 }  // namespace stpb
 
+inline auto create_person() {
+  stpb::person p{0, 432798, std::string(1024, 'A'), 24, 65536.42};
+  return p;
+}
+
+inline stpb::Monster create_sp_monster() {
+  stpb::Monster m = {
+      0,
+      {0, 1, 2, 3},
+      16,
+      24,
+      "it is a test",
+      "\1\2\3\4",
+      stpb::Color::Red,
+      {{0, "gun", 42}, {0, "shotgun", 56}},
+      {0, "air craft", 67},
+      {{0, 7, 8, 9}, {0, 71, 81, 91}},
+  };
+  return m;
+}
+
+#if defined(STRUCT_PB_WITH_PROTO)
 namespace protobuf_sample {
 inline mygame::person create_person() {
   mygame::person p;
@@ -251,28 +273,6 @@ inline mygame::Monster create_monster() {
 }
 }  // namespace protobuf_sample
 
-inline auto create_person() {
-  stpb::person p{0, 432798, std::string(1024, 'A'), 24, 65536.42};
-  return p;
-}
-
-inline stpb::Monster create_sp_monster() {
-  stpb::Monster m = {
-      0,
-      {0, 1, 2, 3},
-      16,
-      24,
-      "it is a test",
-      "\1\2\3\4",
-      stpb::Color::Red,
-      {{0, "gun", 42}, {0, "shotgun", 56}},
-      {0, "air craft", 67},
-      {{0, 7, 8, 9}, {0, 71, 81, 91}},
-  };
-  return m;
-}
-
-#if defined(STRUCT_PB_WITH_PROTO)
 void SetBaseTypeMsg(const stpb::BaseTypeMsg& st, pb::BaseTypeMsg& msg) {
   msg.set_optional_int32(st.optional_int32);
   msg.set_optional_int64(st.optional_int64);
