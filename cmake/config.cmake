@@ -1,5 +1,5 @@
 message(STATUS "-------------YLT CONFIG SETTING-------------")
-option(YLT_ENABLE_SSL "Enable ssl support" OFF)
+option(YLT_ENABLE_SSL "Enable ssl support" ON)
 message(STATUS "YLT_ENABLE_SSL: ${YLT_ENABLE_SSL}")
 if (YLT_ENABLE_SSL)
     find_package(OpenSSL REQUIRED)

@@ -109,6 +109,11 @@ class coro_rpc_server_base {
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init},
         is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay) {
+#ifdef YLT_ENABLE_SSL
+    if (config.ssl_config) {
+      init_ssl_context_helper(context_, config.ssl_config.value());
+    }
+#endif
     init_address(config.address);
   }
 
@@ -118,7 +123,7 @@ class coro_rpc_server_base {
   }
 
 #ifdef YLT_ENABLE_SSL
-  void init_ssl_context(const ssl_configure &conf) {
+  void init_ssl(const ssl_configure &conf) {
     use_ssl_ = init_ssl_context_helper(context_, conf);
   }
 #endif

@@ -1,7 +1,7 @@
 # coro_rpc简介
 
 
-coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分)
+coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在96核cpu的单机上echo测试qps达到2000万(pipeline模式)或450万(ping-pong模式，2000连接)(详情见benchmark部分)
 ，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
 
 coro_rpc的设计理念是：以易用性为核心，回归rpc本质，让用户专注于业务逻辑而不是rpc框架细节，几行代码就可以完成rpc开发。

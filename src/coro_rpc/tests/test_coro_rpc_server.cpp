@@ -37,7 +37,7 @@ struct CoroServerTester : ServerTester {
         server(2, config.port, config.address, config.conn_timeout_duration) {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl) {
-      server.init_ssl_context(
+      server.init_ssl(
           ssl_configure{"../openssl_files", "server.crt", "server.key"});
     }
 #endif

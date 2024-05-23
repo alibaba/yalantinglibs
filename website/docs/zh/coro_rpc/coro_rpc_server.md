@@ -26,7 +26,7 @@ int start_server() {
 }
 ```
 
-如果不想阻塞当前线程，我们也允许通过`async_start()`异步启动一个服务器，该函数返回后，保证服务器已经开始监听端口（或发生错误）。用户可以通过检查`Future<coro_rpc::error_code>::hasResult()`来判断服务器当前是否启动成功并正常运行。调用`Future<coro_rpc::error_code>::get()`方法则可以等待服务器停止。
+如果不想阻塞当前线程，我们也允许通过`async_start()`异步启动一个服务器，该函数返回后，保证服务器已经开始监听端口（或发生错误）。用户可以通过检查`async_simple::Future<coro_rpc::error_code>::hasResult()`来判断服务器当前是否启动成功并正常运行。调用`async_simple::Future<coro_rpc::error_code>::get()`方法则可以等待服务器停止。
 
 ```cpp
 int start_server() {
@@ -91,7 +91,7 @@ void test() {
 }
 ```
 
-attachment是rpc请求额外附带的一段数据，coro_rpc不会对其进行序列化，用户可以获取请求附带的attachment的视图，或者将其从上下文中释放单独移动走。同样用户也可以设置回复给rpc客户端的attachment。
+An attachment is an additional piece of data that comes with an RPC request. Coro_rpc does not serialize it, allowing users to obtain a view of the attachment that accompanies the request, or to release it from the context and move it separately. Similarly, users can also set the attachment to be sent back to the RPC client.
 
 ### 错误处理
 
@@ -236,7 +236,7 @@ void echo(coro_rpc::context<std::string_view> ctx, std::string_view param) {
 
 ### 获取上下文信息
 
-在协程函数中，我们可以调用`coro_rpc::context<T>::get_context_info()`来获取协程的上下文信息。此外，在rpc函数返回之前也可以使用`coro_io::get_context()`获取上下文信息。
+在回调函数中，我们可以调用`coro_rpc::context<T>::get_context_info()`来获取协程的上下文信息。此外，在rpc函数返回之前也可以使用`coro_io::get_context()`获取上下文信息。但是当rpc函数返回以后，通过`coro_io::get_context()`指向的上下文信息可能会被修改或变得无效，因此我们还是建议使用`coro_rpc::context<T>::get_context_info()`来获取上下文信息。
 
 ```cpp
 void echo(coro_rpc::context<void> ctx) {
@@ -264,17 +264,11 @@ rpc错误码是一个16位的无符号整数。其中，0-255是保留给rpc框�
 
 ## 连接与IO线程
 
-服务器会将rpc连接绑定到其内部的一个IO线程池中。每次新建连接时，通过轮转法，选择一个固定的IO线程绑定到连接上。随后的rpc函数将会在该IO线程上执行。
+服务器内部有一个IO线程池，其大小默认为cpu的逻辑线程数目。当服务器启动后，它会在某个IO线程上启动一个监听任务，接收客户端发来的连接。每次接收连接时，服务器会通过轮转法，选择一个IO线程将其绑定到连接上。随后，该连接上各请求收发数据，序列化，rpc路由等步骤都会在该IO线程上执行。rpc函数也同样会在该IO线程上执行。
 
-客户端默认会将rpc连接绑定到通过`coro_io::get_global_executor()`获取的固定IO线程上。每次调用协程函数`connect`，`call`，`send_request`，都会让出该协程，并当IO任务完成后，切换到对应的IO线程上继续执行协程。
+这意味着，如果你的rpc函数会阻塞当前线程（例如线程sleep，同步读写文件），那么最好通过异步化来避免阻塞io线程，从而避免阻塞其他请求。例如，`async_simple::coro`提供了协程锁`Mutex`和`Spinlock`，提供了将异步任务包装为协程任务的`Promise`和`Future`组件。`coro_io`提供了基于协程的异步文件读写，socket的异步读写，`sleep`和定时器`period_timer`，还可通过`coro_io::post`将重CPU任务提交给全局的阻塞任务线程池。`coro_rpc`/`coro_http`提供了基于协程的异步rpc调用和http调用。`easylog`默认会将日志内容提交给后台线程写入，从而保证前台不阻塞。
 
-你也可以手动指定绑定的IO线程。
-```cpp
-auto executor = coro_io::get_global_executor();
-coro_rpc_client cli(executor);
-co_await cli.connect("127.0.0.1:8801"); //协程会在此刻让出，当IO任务完成时，切换到executor对应的io线程上执行.
-//以下代码会在executor对应的IO线程上执行。
-```
+
 
 ## 参数与返回值类型
 
@@ -296,27 +290,46 @@ void echo(coro_rpc::context<std::string> ctx) {
 }
 ```
 
+## SSL支持
+
+coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmake find_package/fetch_content 将yalantinglibs导入到你的工程后，可以打开cmake选项`YLT_ENABLE_SSL=ON`启用ssl支持。或者，你也可以手动添加宏`YLT_ENABLE_SSL`并手动链接openssl。
+
+当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持。
+
+```cpp
+coro_rpc_server server;
+server.init_ssl({
+  .base_path = "./",           // ssl文件的基本路径
+  .cert_file = "server.crt",   // 证书相对于base_path的路径
+  .key_file = "server.key"     // 私钥相对于base_path的路径
+});
+```
+
+启用ssl支持后，服务器将拒绝一切非ssl连接。
+
 ## 高级设置
 
 我们提供了coro_rpc::config_t类，用户可以通过该类型设置server的细节：
 
 ```cpp
 struct config_base {
-  bool is_enable_tcp_no_delay = true;
-  uint16_t port = 9001;
-  unsigned thread_num = std::thread::hardware_concurrency();
-  std::chrono::steady_clock::duration conn_timeout_duration =
-      std::chrono::seconds{0};
-  std::string address="0.0.0.0";
+  bool is_enable_tcp_no_delay = true; /*tcp请求是否立即响应*/
+  uint16_t port = 9001; /*监听端口*/
+  unsigned thread_num = std::thread::hardware_concurrency(); /*rpc server内部使用的连接数，默认为逻辑核数*/
+  std::chrono::steady_clock::duration conn_timeout_duration = 
+      std::chrono::seconds{0};  /*rpc请求的超时时间，0秒代表rpc请求不会自动超时*/
+  std::string address="0.0.0.0"; /*监听地址*/
+  /*下面设置只有启用SSL才有*/
+  std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
 };
-coro_rpc::config_t config{
-  .is_enable_tcp_no_delay = true /*tcp请求是否立即响应*/
-  .port = 8801 /*监听端口*/
-  .thread_num = std::thread::hardware_concurrency()/*rpc server内部使用的连接数，默认为逻辑核数*/
-  .conn_timeout_duration = std::chrono::seconds{0} /*rpc请求的超时时间，0秒代表rpc请求不会自动超时*/
-  .address="0.0.0.0" /*监听地址*/
-};
+struct ssl_configure {
+  std::string base_path;  // ssl文件的基本路径
+  std::string cert_file;  // 证书相对于base_path的路径
+  std::string key_file;   // 私钥相对于base_path的路径
+  std::string dh_file;    // dh_file相对于base_path的路径(可选) 
+}
 int start() {
+  coro_rpc::config_t config{};
   coro_rpc_server server(config);
   /*regist rpc function here... */
   server.start();
@@ -350,9 +363,10 @@ struct dummy {
 int main() {
   coro_rpc_server server;
   dummy d{};
-  server.register_handler<&dummy::echo,&dummy::coroutine_echo,&dummy::callback_echo>(&d); //注册成员函数
+  server.register_handler<&dummy::echo,&dummy::coroutine_echo,&dummy::callback_echo>(&d); // 注册成员函数
   server.start();
 }
+```
 
 需要注意的时，必须注意被注册的dummy类型的生命周期，保证在服务器启动时dummy始终存活。否则调用行为是未定义的。
 
@@ -400,7 +414,7 @@ T echo(T param) { return param; }
 using namespace coro_rpc;
 int main() {
   coro_rpc_server server;
-  server.register_handler<echo<int>,echo<std::string>,echo<std::vector<int>>>(&d); //注册成员函数
+  server.register_handler<echo<int>,echo<std::string>,echo<std::vector<int>>>(&d); // 注册特化的模板函数
   server.start();
 }
 ```

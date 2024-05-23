@@ -2,7 +2,7 @@
 
 ## 基本使用
 
-coro_rpc_client是coro_rpc的客户端，用户可以通过它向服务器发送rpc请求。
+类`coro_rpc::coro_rpc_client`是coro_rpc的客户端，用户可以通过它向服务器发送rpc请求。
 
 下面我们展示rpc_client的基本使用方法。
 
@@ -49,7 +49,7 @@ Lazy<std::string> example(coro_rpc_client& client, std::string_view attachment) 
 ```
 
 默认情况下，rpc客户端发送请求/建立连接后会等待5秒，如果5秒后仍未收到响应，则会返回超时错误。
-用户也可以通过调用call_for函数自定义等待的时长。
+用户也可以通过调用`call_for`函数自定义等待的时长。
 
 ```cpp
 client.connect("127.0.0.1:9001", std::chrono::seconds{10});
@@ -57,20 +57,22 @@ auto result = co_await client.call_for<add>(std::chrono::seconds{10},1,2);
 assert(result.value() == 3);
 ```
 
-时长可以是任一的std::chrono::duration类型，常见的如`std::chrono::seconds`,`std::chrono::millseconds`。
+时长可以是任一的`std::chrono::duration`类型，常见的如`std::chrono::seconds`,`std::chrono::millseconds`。
 特别的，如果时长为0，代表该函数调用永远也不会超时。
 
 ## SSL支持
 
 coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmake find_package/fetch_content 将yalantinglibs导入到你的工程后，可以打开cmake选项`YLT_ENABLE_SSL=ON`启用ssl支持。或者，你也可以手动添加宏`YLT_ENABLE_SSL`并手动链接openssl。
 
-当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持。
+当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持，并且在启动服务器之前也需要调用`init_ssl`方法来启用SSL支持。
 
 ```cpp
 client.init_ssl("./","server.crt");
 ```
 
-第一个字符串代表SSL证书所在的路径，第二个字符串代表SSL证书的文件名。
+第一个字符串代表SSL证书所在的基本路径，第二个字符串代表SSL证书相对于基本路径的相对路径。
+
+当建立连接时，客户端会使用该证书校验服务端发来的证书，以避免中间人攻击。因此，客户端必须持有服务端使用的证书或其根证书。
 
 ## RPC参数的转换与编译期检查
 
@@ -80,13 +82,13 @@ coro_rpc会在调用的时候对参数的合法性做编译期检查，比如，
 inline std::string echo(std::string str) { return str; }
 ```
 
-client调用rpc
+接下来，当前client调用rpc函数时：
 
 ```cpp
-client.call<echo>(42);//参数不匹配，编译报错
-client.call<echo>();//缺少参数，编译报错
-client.call<echo>("", 0);//多了参数，编译报错
-client.call<echo>("hello, coro_rpc");//该字符串字面量可以转换到std::string，编译成功
+client.call<echo>(42);// The argument does not match, a compilation error occurs.
+client.call<echo>();// Missing argument, compilation error occurs.
+client.call<echo>("", 0);// There are too many arguments, a compilation error occurs.
+client.call<echo>("hello, coro_rpc");// The string literal can be converted to std::string, compilation succeeds.
 ```
 
 ## 连接选项
@@ -111,12 +113,12 @@ void set_config(coro_rpc_client& client) {
 
 ## 调用模型
 
-每一个coro_rpc_client都会绑定到某个IO线程上，默认通过轮转法从全局IO线程池中选择一个连接，用户也可以手动绑定到特定的IO线程上。
+每一个`coro_rpc_client`都会绑定到某个IO线程上，默认通过轮转法从全局IO线程池中选择一个连接，用户也可以手动绑定到特定的IO线程上。
 
 ```cpp
 auto executor=coro_io::get_global_executor();
 coro_rpc_client client(executor),client2(executor);
-//两个客户端都被绑定到同一个io线程上
+// 两个客户端都被绑定到同一个io线程上
 ```
 
 每次发起一个基于协程的IO任务（如`connect`,`call`,`send_request`），客户端内部会将IO事件提交给操作系统，当IO事件完成后，再将协程恢复到绑定的IO线程上继续执行。
@@ -133,11 +135,11 @@ do_something();
 
 ## 连接池与负载均衡
 
-`coro_io`提供了连接池`client_pool`与负载均衡器`channel`。用户可以通过连接池`client_pool`来管理coro_rpc连接，可以使用`channel`实现多个host之间的负载均衡。具体请见`coro_io`的文档。
+`coro_io`提供了连接池`client_pool`与负载均衡器`channel`。用户可以通过连接池`client_pool`来管理`coro_rpc`/`coro_http`连接，可以使用`channel`实现多个host之间的负载均衡。具体请见`coro_io`的文档。
 
 ## 连接复用
 
-coro_rpc_client 可以通过 `send_request`函数实现连接复用。该函数是线程安全的，允许多个线程同时调用同一个client的 `send_request`方法。该函数返回值为`Lazy<Lazy<async_rpc_result<T>`。第一次`co_await`可以等待请求发送，再次`co_await`则等待rpc返回结果。
+`coro_rpc_client` 可以通过 `send_request`函数实现连接复用。该函数是线程安全的，允许多个线程同时调用同一个client的 `send_request`方法。该函数返回值为`Lazy<Lazy<async_rpc_result<T>`。第一次`co_await`可以等待请求发送，再次`co_await`则等待rpc返回结果。
 
 
 连接复用允许我们在高并发下减少连接的个数，无需创建新的连接。同时也能提高每个连接的吞吐量。
@@ -184,9 +186,9 @@ Lazy<void> example(coro_rpc_client& client) {
 }
 ```
 
-### attachment
+### Attachment
 
-使用send_request方法时，不允许调用`set_req_attachment`方法向服务器发送attachment，同样也不允许调用`get_resp_attachment`和`release_resp_attachment`方法来获取服务器返回的attachment。
+使用`send_request`方法时，由于可能同时发送多个请求，因此我们不能调用`set_req_attachment`方法向服务器发送attachment，同样也不能调用`get_resp_attachment`和`release_resp_attachment`方法来获取服务器返回的attachment。
 
 我们可以通过调用`send_request_with_attachment`函数，在发送请求时设置attachment。我们也可以通过调用async_rpc_result的`->get_attachment()`方法和`->release_buffer()`方法来获取attachment。
 
@@ -212,7 +214,7 @@ Lazy<std::string> example(coro_rpc_client& client) {
 ```cpp
 using namespace async_simple::coro;
 Lazy<void> sleep(int seconds) {
-  co_await coro_io::sleep(1s * seconds);  //在此处让出协程
+  co_await coro_io::sleep(1s * seconds);  // 在此处让出协程
   co_return;
 }
 ```

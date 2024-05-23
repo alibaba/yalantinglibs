@@ -84,7 +84,7 @@ TEST_CASE("testing client") {
   future.wait();
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
@@ -172,7 +172,7 @@ TEST_CASE("testing client with inject server") {
   });
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
@@ -242,10 +242,10 @@ class SSLClientTester {
     inject("server key", server_key_path, server_key);
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
-    server.init_ssl_context(config);
+    server.init_ssl(config);
     server.template register_handler<hi>();
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
 
     std::promise<void> promise;
     auto future = promise.get_future();
