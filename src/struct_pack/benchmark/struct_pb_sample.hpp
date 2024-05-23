@@ -68,7 +68,7 @@ struct Monsters : public iguana::pb_base {
 REFLECTION(Monsters, list);
 
 inline auto create_rects(size_t object_count) {
-  rect rc{1, 0, 11, 1};
+  rect rc{{0}, 1, 0, 11, 1};
   std::vector<rect> v{};
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(rc);
@@ -78,7 +78,7 @@ inline auto create_rects(size_t object_count) {
 
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
-  person p{0, 432798, std::string(1024, 'A'), 24, 65536.42};
+  person p{{0}, 432798, std::string(1024, 'A'), 24, 65536.42};
 
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(p);
