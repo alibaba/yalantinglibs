@@ -89,29 +89,29 @@ inline auto create_persons(size_t object_count) {
 inline std::vector<Monster> create_monsters(size_t object_count) {
   std::vector<Monster> v{};
   Monster m = {
-      0,
-      Vec3{0, 1, 2, 3},
+      {0},
+      Vec3{{0}, 1, 2, 3},
       16,
       24,
       "it is a test",
       "\1\2\3\4",
       Color::Red,
-      {{0, "gun", 42}, {0, "shotgun", 56}},
-      {0, "air craft", 67},
-      {{0, 7, 8, 9}, {0, 71, 81, 91}},
+      {{{0}, "gun", 42}, {{0}, "shotgun", 56}},
+      {{0}, "air craft", 67},
+      {{{0}, 7, 8, 9}, {{0}, 71, 81, 91}},
   };
 
   Monster m1 = {
-      0,
-      {0, 11, 22, 33},
+      {0},
+      {{0}, 11, 22, 33},
       161,
       241,
       "it is a test, ok",
       "\24\25\26\24",
       Color::Red,
-      {{0, "gun", 421}, {0, "shotgun", 561}},
-      {0, "air craft", 671},
-      {{0, 71, 82, 93}, {0, 711, 821, 931}},
+      {{{0}, "gun", 421}, {{0}, "shotgun", 561}},
+      {{0}, "air craft", 671},
+      {{{0}, 71, 82, 93}, {{0}, 711, 821, 931}},
   };
 
   for (std::size_t i = 0; i < object_count / 2; i++) {
