@@ -900,13 +900,13 @@ TEST_CASE("test struct_pb") {
     std::string s;
     m->to_pb(s);
 
-    std::shared_ptr<iguana::pb_base> PUBLIC = m;
+    std::shared_ptr<iguana::pb_base> t = m;
     std::string str;
-    PUBLIC->to_pb(str);
+    t->to_pb(str);
 
     CHECK(s == str);
 
-    PUBLIC->from_pb(str);
+    t->from_pb(str);
   }
   {
     message_t st1{};

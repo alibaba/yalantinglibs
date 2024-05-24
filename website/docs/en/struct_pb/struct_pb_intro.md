@@ -106,10 +106,10 @@ oneof -> `std::variant <...>`
 - only support proto3, not support proto2 now;
 - don't support reflection now;
 - don't support  unkonwn fields;
-- struct must inherited from pb_base;
+- struct must inherited from pb_base_impl;
 
 ## roadmap
 - support proto2;
 - support reflection;
 - support unkonwn fields;
-- no need inheriting from pb_base;
+- no need inheriting from pb_base_impl;

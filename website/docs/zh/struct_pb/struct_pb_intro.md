@@ -96,10 +96,10 @@ oneof -> `std::variant <...>`
 - 目前还只支持proto3，不支持proto2；
 - 目前还没支持反射；
 - 还没支持unkonwn字段；
-- struct_pb 结构体必须派生于pb_base
+- struct_pb 结构体必须派生于pb_base_impl
 
 ## roadmap
 - 支持proto2；
 - 支持反射；
 - 支持unkonwn字段；
-- 去除struct_pb 结构体必须派生于pb_base的约束；
+- 去除struct_pb 结构体必须派生于pb_base_impl的约束；

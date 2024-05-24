@@ -475,7 +475,7 @@ IGUANA_INLINE size_t pb_key_value_size(Type&& t) {
         },
         std::make_index_sequence<SIZE>{});
     static_assert(inherits_from_pb_base_v<T>,
-                  "must be inherited from iguana::pb_base");
+                  "must be inherited from iguana::pb_base_impl");
     t.cache_size = len;
 
     if constexpr (key_size == 0) {
@@ -556,7 +556,7 @@ IGUANA_INLINE size_t pb_value_size(T&& t) {
   using value_type = std::remove_const_t<std::remove_reference_t<T>>;
   if constexpr (is_reflection_v<value_type>) {
     static_assert(inherits_from_pb_base_v<std::decay_t<T>>,
-                  "must be inherited from iguana::pb_base");
+                  "must be inherited from iguana::pb_base_impl");
     return t.cache_size;
   }
   else if constexpr (is_sequence_container<value_type>::value) {
