@@ -14,14 +14,14 @@ Utilize inline, zero copy, compile-time compute to optimize performance.
 ```cpp
 #include <ylt/struct_pb.hpp>
 
-struct my_struct : struct_pb::pb_base {
+struct my_struct : struct_pb::pb_base_impl<my_struct> {
   int x;
   bool y;
   struct_pb::fixed64_t z;
 };
 REFLECTION(my_struct, x, y, z);
 
-struct nest : struct_pb::pb_base {
+struct nest : struct_pb::pb_base_impl<nest> {
   std::string name;
   my_struct value;
   int var;

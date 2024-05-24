@@ -6,7 +6,10 @@
 #include "sample.hpp"
 
 namespace pb_sample {
-struct person : public iguana::pb_base {
+struct person : public iguana::pb_base_impl<person> {
+  person() = default;
+  person(int32_t a, std::string b, int c, double d)
+      : id(a), name(std::move(b)), age(c), salary(d) {}
   int32_t id;
   std::string name;
   int age;
@@ -14,12 +17,17 @@ struct person : public iguana::pb_base {
 };
 REFLECTION(person, id, name, age, salary);
 
-struct persons : public iguana::pb_base {
+struct persons : public iguana::pb_base_impl<persons> {
+  persons() = default;
+  explicit persons(std::vector<person> l) : list(std::move(l)) {}
   std::vector<person> list;
 };
 REFLECTION(persons, list);
 
-struct rect : public iguana::pb_base {
+struct rect : public iguana::pb_base_impl<rect> {
+  rect() = default;
+  rect(int32_t a, int32_t b, int32_t c, int32_t d)
+      : x(a), y(b), width(c), height(d) {}
   int32_t x = 1;
   int32_t y = 0;
   int32_t width = 11;
@@ -27,12 +35,16 @@ struct rect : public iguana::pb_base {
 };
 REFLECTION(rect, x, y, width, height);
 
-struct rects : public iguana::pb_base {
+struct rects : public iguana::pb_base_impl<rects> {
+  rects() = default;
+  explicit rects(std::vector<rect> l) : list(std::move(l)) {}
   std::vector<rect> list;
 };
 REFLECTION(rects, list);
 
-struct Vec3 : public iguana::pb_base {
+struct Vec3 : public iguana::pb_base_impl<Vec3> {
+  Vec3() = default;
+  Vec3(float a, float b, float c) : x(a), y(b), z(c) {}
   float x;
   float y;
   float z;
@@ -40,7 +52,9 @@ struct Vec3 : public iguana::pb_base {
   REFLECTION(Vec3, x, y, z);
 };
 
-struct Weapon : public iguana::pb_base {
+struct Weapon : public iguana::pb_base_impl<Weapon> {
+  Weapon() = default;
+  Weapon(std::string s, int32_t d) : name(std::move(s)), damage(d) {}
   std::string name;
   int32_t damage;
 };
@@ -48,7 +62,10 @@ REFLECTION(Weapon, name, damage);
 
 enum Color : uint8_t { Red, Green, Blue };
 
-struct Monster : public iguana::pb_base {
+struct Monster : public iguana::pb_base_impl<Monster> {
+  Monster() = default;
+  Monster(Vec3 a, int32_t b, int32_t c, std::string d, std::string e, Color f,
+          std::vector<Weapon> g, Weapon h, std::vector<Vec3> i) {}
   Vec3 pos;
   int32_t mana;
   int32_t hp;
@@ -62,13 +79,15 @@ struct Monster : public iguana::pb_base {
 REFLECTION(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
            path);
 
-struct Monsters : public iguana::pb_base {
+struct Monsters : public iguana::pb_base_impl<Monsters> {
+  Monsters() = default;
+  explicit Monsters(std::vector<Monster> l) : list(std::move(l)) {}
   std::vector<Monster> list;
 };
 REFLECTION(Monsters, list);
 
 inline auto create_rects(size_t object_count) {
-  rect rc{{0}, 1, 0, 11, 1};
+  rect rc{1, 0, 11, 1};
   std::vector<rect> v{};
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(rc);
@@ -78,7 +97,7 @@ inline auto create_rects(size_t object_count) {
 
 inline auto create_persons(size_t object_count) {
   std::vector<person> v{};
-  person p{{0}, 432798, std::string(1024, 'A'), 24, 65536.42};
+  person p{432798, std::string(1024, 'A'), 24, 65536.42};
 
   for (std::size_t i = 0; i < object_count; i++) {
     v.push_back(p);
@@ -89,29 +108,27 @@ inline auto create_persons(size_t object_count) {
 inline std::vector<Monster> create_monsters(size_t object_count) {
   std::vector<Monster> v{};
   Monster m = {
-      {0},
-      Vec3{{0}, 1, 2, 3},
+      Vec3{1, 2, 3},
       16,
       24,
       "it is a test",
       "\1\2\3\4",
       Color::Red,
-      {{{0}, "gun", 42}, {{0}, "shotgun", 56}},
-      {{0}, "air craft", 67},
-      {{{0}, 7, 8, 9}, {{0}, 71, 81, 91}},
+      {{"gun", 42}, {"shotgun", 56}},
+      {"air craft", 67},
+      {{7, 8, 9}, {71, 81, 91}},
   };
 
   Monster m1 = {
-      {0},
-      {{0}, 11, 22, 33},
+      {11, 22, 33},
       161,
       241,
       "it is a test, ok",
       "\24\25\26\24",
       Color::Red,
-      {{{0}, "gun", 421}, {{0}, "shotgun", 561}},
-      {{0}, "air craft", 671},
-      {{{0}, 71, 82, 93}, {{0}, 711, 821, 931}},
+      {{"gun", 421}, {"shotgun", 561}},
+      {"air craft", 671},
+      {{71, 82, 93}, {711, 821, 931}},
   };
 
   for (std::size_t i = 0; i < object_count / 2; i++) {

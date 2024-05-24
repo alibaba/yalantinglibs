@@ -6,7 +6,7 @@
 #include "unittest_proto3.pb.h"
 #endif
 
-#define PUBLIC : iguana::pb_base
+#define PUBLIC(T) : public iguana::pb_base_impl<T>
 
 // define the struct as msg in proto
 namespace stpb {
@@ -18,7 +18,19 @@ enum class Enum {
   NEG = -1,  // Intentionally negative.
 };
 
-struct BaseTypeMsg PUBLIC {
+struct BaseTypeMsg PUBLIC(BaseTypeMsg) {
+  BaseTypeMsg() = default;
+  BaseTypeMsg(int32_t a, int64_t b, uint32_t c, uint64_t d, float e, double f,
+              bool g, std::string h, Enum i)
+      : optional_int32(a),
+        optional_int64(b),
+        optional_uint32(c),
+        optional_uint64(d),
+        optional_float(e),
+        optional_double(f),
+        optional_bool(g),
+        optional_string(std::move(h)),
+        optional_enum(i) {}
   int32_t optional_int32;
   int64_t optional_int64;
   uint32_t optional_uint32;
@@ -44,7 +56,17 @@ REFLECTION(BaseTypeMsg, optional_int32, optional_int64, optional_uint32,
            optional_uint64, optional_float, optional_double, optional_bool,
            optional_string, optional_enum);
 
-struct IguanaTypeMsg PUBLIC {
+struct IguanaTypeMsg PUBLIC(IguanaTypeMsg) {
+  IguanaTypeMsg() = default;
+  IguanaTypeMsg(iguana::sint32_t a, iguana::sint64_t b, iguana::fixed32_t c,
+                iguana::fixed64_t d = {}, iguana::sfixed32_t e = {},
+                iguana::sfixed64_t f = {})
+      : optional_sint32(a),
+        optional_sint64(b),
+        optional_fixed32(c),
+        optional_fixed64(d),
+        optional_sfixed32(e),
+        optional_sfixed64(f) {}
   iguana::sint32_t optional_sint32;
   iguana::sint64_t optional_sint64;
   iguana::fixed32_t optional_fixed32;
@@ -64,7 +86,20 @@ struct IguanaTypeMsg PUBLIC {
 REFLECTION(IguanaTypeMsg, optional_sint32, optional_sint64, optional_fixed32,
            optional_fixed64, optional_sfixed32, optional_sfixed64);
 
-struct RepeatBaseTypeMsg PUBLIC {
+struct RepeatBaseTypeMsg PUBLIC(RepeatBaseTypeMsg) {
+  RepeatBaseTypeMsg() = default;
+  RepeatBaseTypeMsg(std::vector<uint32_t> a, std::vector<uint64_t> b,
+                    std::vector<int32_t> c, std::vector<int64_t> d,
+                    std::vector<float> e, std::vector<double> f,
+                    std::vector<std::string> g, std::vector<Enum> h)
+      : repeated_uint32(std::move(a)),
+        repeated_uint64(std::move(b)),
+        repeated_int32(std::move(c)),
+        repeated_int64(std::move(d)),
+        repeated_float(std::move(e)),
+        repeated_double(std::move(f)),
+        repeated_string(std::move(g)),
+        repeated_enum(std::move(h)) {}
   std::vector<uint32_t> repeated_uint32;
   std::vector<uint64_t> repeated_uint64;
   std::vector<int32_t> repeated_int32;
@@ -79,7 +114,20 @@ REFLECTION(RepeatBaseTypeMsg, repeated_uint32, repeated_uint64, repeated_int32,
            repeated_int64, repeated_float, repeated_double, repeated_string,
            repeated_enum);
 
-struct RepeatIguanaTypeMsg PUBLIC {
+struct RepeatIguanaTypeMsg PUBLIC(RepeatIguanaTypeMsg) {
+  RepeatIguanaTypeMsg() = default;
+  RepeatIguanaTypeMsg(std::vector<iguana::sfixed32_t> a,
+                      std::vector<iguana::sfixed64_t> b,
+                      std::vector<iguana::fixed32_t> c,
+                      std::vector<iguana::fixed64_t> d,
+                      std::vector<iguana::sfixed32_t> e,
+                      std::vector<iguana::sfixed64_t> f)
+      : repeated_sint32(std::move(a)),
+        repeated_sint64(std::move(b)),
+        repeated_fixed32(std::move(c)),
+        repeated_fixed64(std::move(d)),
+        repeated_sfixed32(std::move(e)),
+        repeated_sfixed64(std::move(f)) {}
   std::vector<iguana::sfixed32_t> repeated_sint32;
   std::vector<iguana::sfixed64_t> repeated_sint64;
   std::vector<iguana::fixed32_t> repeated_fixed32;
@@ -92,7 +140,15 @@ REFLECTION(RepeatIguanaTypeMsg, repeated_sint32, repeated_sint64,
            repeated_fixed32, repeated_fixed64, repeated_sfixed32,
            repeated_sfixed64);
 
-struct NestedMsg PUBLIC {
+struct NestedMsg PUBLIC(NestedMsg) {
+  NestedMsg() = default;
+  NestedMsg(BaseTypeMsg a, std::vector<BaseTypeMsg> b, IguanaTypeMsg c,
+            std::vector<IguanaTypeMsg> d, std::vector<RepeatBaseTypeMsg> e)
+      : base_msg(std::move(a)),
+        repeat_base_msg(std::move(b)),
+        iguana_type_msg(std::move(c)),
+        repeat_iguna_msg(std::move(d)),
+        repeat_repeat_base_msg(std::move(e)) {}
   BaseTypeMsg base_msg;
   std::vector<BaseTypeMsg> repeat_base_msg;
   IguanaTypeMsg iguana_type_msg;
@@ -102,7 +158,14 @@ struct NestedMsg PUBLIC {
 REFLECTION(NestedMsg, base_msg, repeat_base_msg, iguana_type_msg,
            repeat_iguna_msg, repeat_repeat_base_msg);
 
-struct MapMsg PUBLIC {
+struct MapMsg PUBLIC(MapMsg) {
+  MapMsg() = default;
+  MapMsg(std::unordered_map<iguana::sfixed64_t, std::string> a,
+         std::unordered_map<std::string, IguanaTypeMsg> b,
+         std::map<int, RepeatBaseTypeMsg> c)
+      : sfix64_str_map(std::move(a)),
+        str_iguana_type_msg_map(std::move(b)),
+        int_repeat_base_msg_map(std::move(c)) {}
   std::unordered_map<iguana::sfixed64_t, std::string> sfix64_str_map{};
   std::unordered_map<std::string, IguanaTypeMsg> str_iguana_type_msg_map{};
   std::map<int, RepeatBaseTypeMsg> int_repeat_base_msg_map{};
@@ -110,28 +173,41 @@ struct MapMsg PUBLIC {
 REFLECTION(MapMsg, sfix64_str_map, str_iguana_type_msg_map,
            int_repeat_base_msg_map);
 
-struct BaseOneofMsg PUBLIC {
+struct BaseOneofMsg PUBLIC(BaseOneofMsg) {
+  BaseOneofMsg() = default;
+  BaseOneofMsg(int32_t a, std::variant<double, std::string, BaseTypeMsg> b,
+               double c)
+      : optional_int32(a), one_of(std::move(b)), optional_double(c) {}
   int32_t optional_int32;
   std::variant<double, std::string, BaseTypeMsg> one_of;
   double optional_double;
 };
 REFLECTION(BaseOneofMsg, optional_int32, one_of, optional_double);
 
-struct NestOneofMsg PUBLIC {
+struct NestOneofMsg PUBLIC(NestOneofMsg) {
+  NestOneofMsg() = default;
+  NestOneofMsg(std::variant<std::string, BaseOneofMsg> a)
+      : nest_one_of_msg(std::move(a)) {}
   std::variant<std::string, BaseOneofMsg> nest_one_of_msg;
 };
 REFLECTION(NestOneofMsg, nest_one_of_msg);
 
-struct simple_t PUBLIC {
+struct simple_t PUBLIC(simple_t) {
+  simple_t() = default;
+  simple_t(int32_t x, int32_t y, int64_t z, int64_t w, std::string s)
+      : a(x), b(y), c(z), d(w), str(std::move(s)) {}
   int32_t a;
   int32_t b;
   int64_t c;
   int64_t d;
-  std::string_view str;
+  std::string str;
 };
 REFLECTION(simple_t, a, b, c, d, str);
 
-struct simple_t1 PUBLIC {
+struct simple_t1 PUBLIC(simple_t1) {
+  simple_t1() = default;
+  simple_t1(int32_t x, int32_t y, int64_t z, int64_t w, std::string_view s)
+      : a(x), b(y), c(z), d(w), str(s) {}
   int32_t a;
   int32_t b;
   int64_t c;
@@ -142,7 +218,10 @@ REFLECTION(simple_t1, a, b, c, d, str);
 
 enum Color : uint8_t { Red, Green, Blue };
 
-struct simple_t2 PUBLIC {
+struct simple_t2 PUBLIC(simple_t2) {
+  simple_t2() = default;
+  simple_t2(int16_t x, uint8_t y, Color z, int64_t w, std::string_view s = "")
+      : a(x), b(y), c(z), d(w), str(s) {}
   int16_t a;
   uint8_t b;
   Color c;
@@ -151,7 +230,10 @@ struct simple_t2 PUBLIC {
 };
 REFLECTION(simple_t2, a, b, c, d, str);
 
-struct person PUBLIC {
+struct person PUBLIC(person) {
+  person() = default;
+  person(int32_t a, std::string b, int c, double d)
+      : id(a), name(std::move(b)), age(c), salary(d) {}
   int32_t id;
   std::string name;
   int age;
@@ -159,7 +241,10 @@ struct person PUBLIC {
 };
 REFLECTION(person, id, name, age, salary);
 
-struct rect PUBLIC {
+struct rect PUBLIC(rect) {
+  rect() = default;
+  rect(int32_t a, int32_t b, int32_t c, int32_t d)
+      : x(a), y(b), width(c), height(d) {}
   int32_t x = 1;
   int32_t y = 0;
   int32_t width = 11;
@@ -167,7 +252,9 @@ struct rect PUBLIC {
 };
 REFLECTION(rect, x, y, width, height);
 
-struct Vec3 PUBLIC {
+struct Vec3 PUBLIC(Vec3) {
+  Vec3() = default;
+  Vec3(float a, float b, float c) : x(a), y(b), z(c) {}
   float x;
   float y;
   float z;
@@ -175,13 +262,27 @@ struct Vec3 PUBLIC {
   REFLECTION(Vec3, x, y, z);
 };
 
-struct Weapon PUBLIC {
+struct Weapon PUBLIC(Weapon) {
+  Weapon() = default;
+  Weapon(std::string a, int32_t b) : name(std::move(a)), damage(b) {}
   std::string name;
   int32_t damage;
 };
 REFLECTION(Weapon, name, damage);
 
-struct Monster PUBLIC {
+struct Monster PUBLIC(Monster) {
+  Monster() = default;
+  Monster(Vec3 a, int32_t b, int32_t c, std::string d, std::string e, int32_t f,
+          std::vector<Weapon> g, Weapon h, std::vector<Vec3> i)
+      : pos(a),
+        mana(b),
+        hp(c),
+        name(std::move(d)),
+        inventory(std::move(e)),
+        color(f),
+        weapons(std::move(g)),
+        equipped(std::move(h)),
+        path(std::move(i)) {}
   Vec3 pos;
   int32_t mana;
   int32_t hp;
@@ -195,7 +296,10 @@ struct Monster PUBLIC {
 REFLECTION(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
            path);
 
-struct bench_int32 PUBLIC {
+struct bench_int32 PUBLIC(bench_int32) {
+  bench_int32() = default;
+  bench_int32(int32_t x, int32_t y, int32_t z, int32_t u)
+      : a(x), b(y), c(z), d(u) {}
   int32_t a;
   int32_t b;
   int32_t c;
@@ -206,22 +310,21 @@ REFLECTION(bench_int32, a, b, c, d);
 }  // namespace stpb
 
 inline auto create_person() {
-  stpb::person p{0, 432798, std::string(1024, 'A'), 24, 65536.42};
+  stpb::person p{432798, std::string(1024, 'A'), 24, 65536.42};
   return p;
 }
 
 inline stpb::Monster create_sp_monster() {
   stpb::Monster m = {
-      0,
-      {0, 1, 2, 3},
+      {1, 2, 3},
       16,
       24,
       "it is a test",
       "\1\2\3\4",
       stpb::Color::Red,
-      {{0, "gun", 42}, {0, "shotgun", 56}},
-      {0, "air craft", 67},
-      {{0, 7, 8, 9}, {0, 71, 81, 91}},
+      {{"gun", 42}, {"shotgun", 56}},
+      {"air craft", 67},
+      {{7, 8, 9}, {71, 81, 91}},
   };
   return m;
 }

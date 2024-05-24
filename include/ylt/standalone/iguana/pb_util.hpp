@@ -28,8 +28,30 @@ enum class WireType : uint32_t {
   Unknown
 };
 
+template <typename T, typename Stream>
+IGUANA_INLINE void to_pb(T& t, Stream& out);
+
+template <typename T>
+IGUANA_INLINE void from_pb(T& t, std::string_view pb_str);
+
 struct pb_base {
-  size_t cache_size;
+  virtual void to_pb(std::string& str) {}
+  virtual void from_pb(std::string_view str) {}
+
+  size_t cache_size = 0;
+  virtual ~pb_base() {}
+};
+
+template <typename T>
+struct pb_base_impl : public pb_base {
+  void to_pb(std::string& str) override {
+    iguana::to_pb(*(static_cast<T*>(this)), str);
+  }
+
+  void from_pb(std::string_view str) override {
+    iguana::from_pb(*(static_cast<T*>(this)), str);
+  }
+  virtual ~pb_base_impl() {}
 };
 
 template <typename T>
@@ -425,11 +447,10 @@ IGUANA_INLINE size_t pb_key_value_size(Type&& t) {
   using T = std::remove_const_t<std::remove_reference_t<Type>>;
   if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
     size_t len = 0;
-    constexpr auto tuple = get_members_tuple<T>();
+    static constexpr auto tuple = get_members_tuple<T>();
     constexpr size_t SIZE = std::tuple_size_v<std::decay_t<decltype(tuple)>>;
     for_each_n(
         [&len, &t](auto i) IGUANA__INLINE_LAMBDA {
-          constexpr auto tuple = get_members_tuple<T>();
           using field_type =
               std::tuple_element_t<decltype(i)::value,
                                    std::decay_t<decltype(tuple)>>;

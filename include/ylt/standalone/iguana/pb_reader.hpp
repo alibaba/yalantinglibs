@@ -4,9 +4,6 @@
 
 namespace iguana {
 
-template <typename T>
-IGUANA_INLINE void from_pb(T& t, std::string_view pb_str);
-
 namespace detail {
 
 template <typename T>
