@@ -39,7 +39,7 @@ int main() {
   server2.register_handler<echo>();
   // async start server
   auto res = server2.async_start();
-  assert(res.has_value());
+  assert(!res.hasResult());
 
   // sync start server & sync await server stop
   return !server.start();

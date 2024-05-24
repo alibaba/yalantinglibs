@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 #include <ylt/easylog.hpp>
@@ -68,29 +69,36 @@ class coro_rpc_server_base {
    * TODO: add doc
    * @param thread_num the number of io_context.
    * @param port the server port to listen.
+   * @param listen address of server
    * @param conn_timeout_duration client connection timeout. 0 for no timeout.
    *                              default no timeout.
+   * @param is_enable_tcp_no_delay is tcp socket allow
    */
-  coro_rpc_server_base(size_t thread_num, unsigned short port,
+  coro_rpc_server_base(size_t thread_num = std::thread::hardware_concurrency(),
+                       unsigned short port = 9001,
                        std::string address = "0.0.0.0",
                        std::chrono::steady_clock::duration
-                           conn_timeout_duration = std::chrono::seconds(0))
+                           conn_timeout_duration = std::chrono::seconds(0),
+                       bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
         acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(port),
         conn_timeout_duration_(conn_timeout_duration),
-        flag_{stat::init} {
+        flag_{stat::init},
+        is_enable_tcp_no_delay_(is_enable_tcp_no_delay) {
     init_address(std::move(address));
   }
 
-  coro_rpc_server_base(size_t thread_num,
-                       std::string address /* = "0.0.0.0:9001" */,
+  coro_rpc_server_base(size_t thread_num = std::thread::hardware_concurrency(),
+                       std::string address = "0.0.0.0:9001",
                        std::chrono::steady_clock::duration
-                           conn_timeout_duration = std::chrono::seconds(0))
+                           conn_timeout_duration = std::chrono::seconds(0),
+                       bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
         acceptor_(pool_.get_executor()->get_asio_executor()),
         conn_timeout_duration_(conn_timeout_duration),
-        flag_{stat::init} {
+        flag_{stat::init},
+        is_enable_tcp_no_delay_(is_enable_tcp_no_delay) {
     init_address(std::move(address));
   }
 
@@ -99,7 +107,13 @@ class coro_rpc_server_base {
         acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(config.port),
         conn_timeout_duration_(config.conn_timeout_duration),
-        flag_{stat::init} {
+        flag_{stat::init},
+        is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay) {
+#ifdef YLT_ENABLE_SSL
+    if (config.ssl_config) {
+      init_ssl_context_helper(context_, config.ssl_config.value());
+    }
+#endif
     init_address(config.address);
   }
 
@@ -109,7 +123,7 @@ class coro_rpc_server_base {
   }
 
 #ifdef YLT_ENABLE_SSL
-  void init_ssl_context(const ssl_configure &conf) {
+  void init_ssl(const ssl_configure &conf) {
     use_ssl_ = init_ssl_context_helper(context_, conf);
   }
 #endif
@@ -122,19 +136,19 @@ class coro_rpc_server_base {
    * @return error code if start failed, otherwise block until server stop.
    */
   [[nodiscard]] coro_rpc::err_code start() noexcept {
-    auto ret = async_start();
-    if (ret) {
-      ret.value().wait();
-      return ret.value().value();
-    }
-    else {
-      return ret.error();
-    }
+    return async_start().get();
   }
 
-  [[nodiscard]] coro_rpc::expected<async_simple::Future<coro_rpc::err_code>,
-                                   coro_rpc::err_code>
-  async_start() noexcept {
+ private:
+  async_simple::Future<coro_rpc::err_code> make_error_future(
+      coro_rpc::err_code &&err) {
+    async_simple::Promise<coro_rpc::err_code> p;
+    p.setValue(std::move(err));
+    return p.getFuture();
+  }
+
+ public:
+  async_simple::Future<coro_rpc::err_code> async_start() noexcept {
     {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
@@ -144,8 +158,8 @@ class coro_rpc_server_base {
         else if (flag_ == stat::stop) {
           ELOGV(INFO, "has stoped");
         }
-        return coro_rpc::unexpected<coro_rpc::err_code>{
-            coro_rpc::errc::server_has_ran};
+        return make_error_future(
+            coro_rpc::err_code{coro_rpc::errc::server_has_ran});
       }
       errc_ = listen();
       if (!errc_) {
@@ -177,7 +191,7 @@ class coro_rpc_server_base {
       return std::move(future);
     }
     else {
-      return coro_rpc::unexpected<coro_rpc::err_code>{errc_};
+      return make_error_future(coro_rpc::err_code{errc_});
     }
   }
 
@@ -387,7 +401,9 @@ class coro_rpc_server_base {
 
       int64_t conn_id = ++conn_id_;
       ELOGV(INFO, "new client conn_id %d coming", conn_id);
-      socket.set_option(asio::ip::tcp::no_delay(true), error);
+      if (is_enable_tcp_no_delay_) {
+        socket.set_option(asio::ip::tcp::no_delay(true), error);
+      }
       auto conn = std::make_shared<coro_connection>(executor, std::move(socket),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
@@ -459,6 +475,7 @@ class coro_rpc_server_base {
 
   std::atomic<uint16_t> port_;
   std::string address_;
+  bool is_enable_tcp_no_delay_;
   coro_rpc::err_code errc_ = {};
   std::chrono::steady_clock::duration conn_timeout_duration_;
 

@@ -50,9 +50,9 @@ int long_run_func(int val) {
 
 void echo_with_attachment(coro_rpc::context<void> conn) {
   ELOGV(INFO, "call function echo_with_attachment, conn ID:%d",
-        conn.get_context()->get_connection_id());
-  auto str = conn.get_context()->release_request_attachment();
-  conn.get_context()->set_response_attachment(std::move(str));
+        conn.get_context_info()->get_connection_id());
+  auto str = conn.get_context_info()->release_request_attachment();
+  conn.get_context_info()->set_response_attachment(std::move(str));
   conn.response_msg();
 }
 template <typename T>
@@ -81,7 +81,7 @@ void test_context() {
   return;
 }
 void test_callback_context(coro_rpc::context<void> conn) {
-  auto *ctx = conn.get_context();
+  auto *ctx = conn.get_context_info();
   test_ctx_impl(ctx, "test_callback_context");
   [](coro_rpc::context<void> conn) -> async_simple::coro::Lazy<void> {
     co_await coro_io::sleep_for(514ms);

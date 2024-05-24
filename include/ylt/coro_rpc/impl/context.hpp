@@ -130,10 +130,12 @@ class context_base {
     /*finish here*/
     self_->status_ = context_status::finish_response;
   }
-  const context_info_t<rpc_protocol> *get_context() const noexcept {
+  const context_info_t<rpc_protocol> *get_context_info() const noexcept {
     return self_.get();
   }
-  context_info_t<rpc_protocol> *get_context() noexcept { return self_.get(); }
+  context_info_t<rpc_protocol> *get_context_info() noexcept {
+    return self_.get();
+  }
 };
 
 template <typename T>

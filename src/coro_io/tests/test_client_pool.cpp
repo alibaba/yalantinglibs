@@ -87,7 +87,7 @@ TEST_CASE("test client pool") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
     auto is_started = server.async_start();
-    REQUIRE(is_started);
+    REQUIRE(is_started.hasResult() == false);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100,
                            .idle_timeout = 300ms,
@@ -114,7 +114,7 @@ TEST_CASE("test idle timeout yield") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
     auto is_started = server.async_start();
-    REQUIRE(is_started);
+    REQUIRE(!is_started.hasResult());
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100,
                            .idle_queue_per_max_clear_count = 1,
@@ -142,7 +142,7 @@ TEST_CASE("test reconnect") {
     async_simple::Promise<async_simple::Unit> p;
     coro_io::sleep_for(700ms).start([&server, &p](auto &&) {
       auto server_is_started = server.async_start();
-      REQUIRE(server_is_started);
+      REQUIRE(!server_is_started.hasResult());
     });
 
     auto res = co_await event(100, *pool, cv, lock);
@@ -177,7 +177,7 @@ TEST_CASE("test reconnect retry wait time exclude reconnect cost time") {
     async_simple::Promise<async_simple::Unit> p;
     coro_io::sleep_for(350ms).start([&server, &p](auto &&) {
       auto server_is_started = server.async_start();
-      REQUIRE(server_is_started);
+      REQUIRE(!server_is_started.hasResult());
     });
     auto res = co_await event<mock_client>(100, *pool, cv, lock);
     CHECK(res);
@@ -196,7 +196,7 @@ TEST_CASE("test collect_free_client") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     coro_rpc::coro_rpc_server server(1, 8801);
     auto is_started = server.async_start();
-    REQUIRE(is_started);
+    REQUIRE(!is_started.hasResult());
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100, .idle_timeout = 300ms});
 

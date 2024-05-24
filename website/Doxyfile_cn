@@ -2,7 +2,9 @@ PROJECT_NAME=yaLanTingLibs
 GENERATE_HTML=yes
 GENERATE_LATEX=no
 INPUT=docs/zh/coro_rpc/coro_rpc_doc.hpp \
-      docs/zh/coro_rpc/coro_rpc_intro.md \
+      docs/zh/coro_rpc/coro_rpc_introduction.md \
+      docs/zh/coro_rpc/coro_rpc_server.md \
+      docs/zh/coro_rpc/coro_rpc_client.md \
       docs/zh/struct_pack/struct_pack_doc.hpp \
       docs/zh/struct_pack/struct_pack_intro.md
       

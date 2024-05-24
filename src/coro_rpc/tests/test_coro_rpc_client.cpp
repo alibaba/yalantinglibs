@@ -84,12 +84,12 @@ TEST_CASE("testing client") {
   future.wait();
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
 
-  CHECK_MESSAGE(res, "server start failed");
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   SUBCASE("call rpc, function not registered") {
     g_action = {};
@@ -172,11 +172,11 @@ TEST_CASE("testing client with inject server") {
   });
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start failed");
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   server.register_handler<hello>();
 
@@ -242,10 +242,10 @@ class SSLClientTester {
     inject("server key", server_key_path, server_key);
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
-    server.init_ssl_context(config);
+    server.init_ssl(config);
     server.template register_handler<hi>();
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
 
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -371,7 +371,7 @@ TEST_CASE("testing client with eof") {
   coro_rpc_server server(2, 8801);
 
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -393,7 +393,7 @@ TEST_CASE("testing client with attachment") {
   coro_rpc_server server(2, 8801);
 
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -418,7 +418,7 @@ TEST_CASE("testing client with context response user-defined error") {
   g_action = {};
   coro_rpc_server server(2, 8801);
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE(!ec);
@@ -437,7 +437,7 @@ TEST_CASE("testing client with shutdown") {
   g_action = {};
   coro_rpc_server server(2, 8801);
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start timeout");
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -502,7 +502,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     g_action = {};
     coro_rpc_server server(2, 8801);
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client2(*coro_io::get_global_executor(), g_client_id++);
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
@@ -537,7 +537,7 @@ TEST_CASE("testing client call timeout") {
     server.register_handler<hello_timeout>();
     server.register_handler<hi>();
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ec_lazy = client.connect("127.0.0.1", "8801");
     auto ec = syncAwait(ec_lazy);

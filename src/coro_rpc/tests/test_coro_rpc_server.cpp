@@ -37,12 +37,12 @@ struct CoroServerTester : ServerTester {
         server(2, config.port, config.address, config.conn_timeout_duration) {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl) {
-      server.init_ssl_context(
+      server.init_ssl(
           ssl_configure{"../openssl_files", "server.crt", "server.key"});
     }
 #endif
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   }
   ~CoroServerTester() { server.stop(); }
 
@@ -231,9 +231,9 @@ struct CoroServerTester : ServerTester {
     {
       auto new_server = coro_rpc_server(2, std::stoi(this->port_));
       auto ec = new_server.async_start();
-      REQUIRE(!ec);
-      REQUIRE_MESSAGE(ec.error() == coro_rpc::errc::address_in_used,
-                      ec.error().message());
+      REQUIRE(ec.hasResult());
+      REQUIRE_MESSAGE(ec.value() == coro_rpc::errc::address_in_used,
+                      ec.value().message());
     }
     ELOGV(INFO, "OH NO");
   }
@@ -312,7 +312,7 @@ TEST_CASE("testing coro rpc server stop") {
   ELOGV(INFO, "run testing coro rpc server stop");
   coro_rpc_server server(2, 8810);
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   SUBCASE("stop twice") {
     server.stop();
     server.stop();
@@ -335,7 +335,7 @@ TEST_CASE("test server accept error") {
   coro_rpc_server server(2, 8810);
   server.register_handler<hi>();
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start timeout");
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   ELOGV(INFO, "run test server accept error, client_id %d",
         client.get_client_id());
@@ -356,7 +356,7 @@ TEST_CASE("test server write queue") {
   coro_rpc_server server(2, 8810);
   server.register_handler<coro_fun_with_delay_return_void_cost_long_time>();
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start timeout");
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   std::string buffer;
   buffer.reserve(coro_rpc_protocol::REQ_HEAD_LEN +
                  struct_pack::get_needed_size(std::monostate{}));
@@ -420,7 +420,7 @@ TEST_CASE("testing coro rpc write error") {
   coro_rpc_server server(2, 8810);
   server.register_handler<hi>();
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start failed");
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   ELOGV(INFO, "run testing coro rpc write error, client_id %d",
         client.get_client_id());

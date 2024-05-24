@@ -1,6 +1,6 @@
 # Introduction
 
-coro_rpc is a high-performance Remote Procedure Call (RPC) framework in C++20, based on stackless coroutine and compile-time reflection. In an `echo` benchmark test on localhost, it reaches a peak QPS of 20 million, which exceeds other RPC libraries, such as grpc and brpc. Rather than high performance, the most key feature of coro_rpc is easy to use: as a header-only library, it does not need to be compiled or installed separately. It allows building an RPC client and server with a few lines of C++ code.
+coro_rpc is a high-performance Remote Procedure Call (RPC) framework in C++20, based on stackless coroutine and compile-time reflection. In an `echo` benchmark test on localhost with 96-cores cpu, it reaches a peak QPS of 20 million (in pipeline) or 4.5 million(2000 connection in ping-pong), which exceeds other RPC libraries, such as grpc and brpc. Rather than high performance, the most key feature of coro_rpc is easy to use: as a header-only library, it does not need to be compiled or installed separately. It allows building an RPC client and server with a few lines of C++ code.
 
 The core design goal of coro_rpc is usability. Instead of exposing too many troublesome details of the underlying RPC framework, coro_rpc provides a simplifying abstraction that allows programmers to concentrate principally on business logic and implement an RPC service without much effort. Given such simplicity, coro_rpc goes back to the essence of RPC: a remote function call similar to a normal function call except for the underlying network I/O. So coro_rpc user does not need to care about the underlying networking, data serialization, and so on but focus on up-layer implementations. And coro_rpc provides simple and straightforward APIs to users. Let's see one simple demo below
 
@@ -250,7 +250,7 @@ example::EchoService_Stub stub(&channel);
 ```cpp
 # include <coro_rpc/coro_rpc_client.hpp>
 
-Lazy<void> say_hello(){
+Lazy<void> say_hello() {
   coro_rpc_client client;
     co_await client.connect("localhost", /*port =*/"9000");
   while (true){
@@ -261,77 +261,6 @@ Lazy<void> say_hello(){
 ```
 
 One core feature of coro_rpc is stackless coroutine where users could write asynchronous code in a synchronous manner, which is more simple and easy to understand.
-
-# More features
-
-## Real-time Tasks and Non-Real-time Tasks
-
-The examples shown earlier do not demonstrate how responses are sent back to the client with the results, because by default the coro_rpc framework will help the user to serialize and send the results to client automatically. And the user is completely unaware and only needs to focus on the business logic. It should be noted that, in this scenario, the response callback is executed in the I/O thread, which is suitable for real-time critical scenarios, with the disadvantage of blocking the I/O thread. What if the user does not want to execute the business logic in the io thread, but rather in a thread or thread pool and delays sending messages?
-
-coro_rpc has taken this problem into account. coro_rpc considers that RPC tasks are divided into real-time and Non-real-time tasks. real-time tasks are executed in the I/O thread and sent to the client immediately, with better timeliness and lower latency; Non-real-time tasks can be scheduled in a separate thread, and the requests are sent to the server at some point in the future; coro_rpc supports both kinds of tasks.
-
-
-Switch to time-delayed task
-
-```cpp
-#include <ylt/coro_rpc/connection.hpp>
-#include <ylt/coro_rpc/coro_rpc_server.hpp>
-
-//Real-time tasks
-std::string echo(std::string str) { return str; }
-
-//Non-Real-time tasks, requests handled in separate thread
-void delay_echo(coro_connection<std::string> conn, std::string str) {
-  std::thread([conn, str]{
-    conn.response_msg(str); //requests handled in separate thread
-  }).detach();
-}
-```
-
-## Asynchronous mode
-
-It is recommended to use coroutine on server development. However, the asynchronous call mode is also supported if user does not prefer coroutine.
-
-- coroutine based rpc server
-```cpp
-#include <ylt/coro_rpc/coro_rpc_server.hpp>
-std::string hello() { return "hello coro_rpc"; }
-
-int main() {
-  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.register_handler<hello>();
-  server.start();
-}
-```
-
-- Asynchronous rpc server
-
-```cpp
-#include <ylt/coro_rpc/async_rpc_server.hpp>
-std::string hello() { return "hello coro_rpc"; }
-
-int main() {
-  async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.register_handler<hello, echo>();
-  server.start();
-}
-```
-
-Compile-time syntax checks
-coro_rpc does a compile-time check on the legality of the arguments when it is called, e.g.:
-
-```cpp
-inline std::string echo(std::string str) { return str; }
-```
-
-When client is called via:
-
-```cpp
-client.call<echo>(42);    //Parameter mismatch, compile error
-client.call<echo>();      //Missing parameters, compile error
-client.call<echo>("", 0); //Redundant parameters, compile error
-client.call<echo>("hello, coro_rpc");//Parameters match, OK
-```
 
 # Benchmark
 
