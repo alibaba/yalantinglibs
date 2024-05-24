@@ -15,7 +15,7 @@ easylog 是C++17 实现的高性能易用的 header only 日志库，它支持�
 
 # 基本用法
 
-```c++
+```cpp
 // 流式输出
 ELOG_INFO << "easylog " << 42;
 ELOG(INFO) << "easylog " << 42;
@@ -32,7 +32,7 @@ ELOGV(INFO, "easylog %d", 42);
 流式输出的ELOG_INFO 等价于ELOG(INFO)。 
 
 easylog 定义了如下日志级别：
-```c++
+```cpp
 enum class Severity {
   NONE,
   TRACE,
@@ -58,7 +58,7 @@ easylog 默认不会每次flush 日志，可以通过调用API ```easylog::flush
 # 输出到文件
 easylog 默认会将日志输出到控制台，如果希望easylog 将日志输出到文件则需要调用easylog::init 接口做初始化。
 
-```c++
+```cpp
 /// \param Id 日志实例的唯一id，默认为0
 /// \param min_severity 最低的日志级别
 /// \param filename 日志文件名称
@@ -76,7 +76,7 @@ void init_log(Severity min_severity, const std::string &filename = "",
 
 如果日志文件大小达到了max_file_size 旧的日志文件将会被覆盖，如果max_files 设置为1，当大小达到了max_file_size 时，日志文件会被覆盖。
 
-```c++
+```cpp
 easylog::init_log(Severity::DEBUG, filename, false, true, 5, 3);
 ELOG_INFO << "long string test, long string test";
 ELOG_INFO << "long string test, long string test";
@@ -90,7 +90,7 @@ ELOG_INFO << "long string test, long string test";
 
 默认的日志实例只有一个，如果希望创建更多日志实例，则通过唯一的日志ID 来创建新的日志实例。
 
-```c++
+```cpp
 constexpr size_t Id = 2;
 easylog::init_log<Id>(Severity::DEBUG, "testlog.txt");
 MELOG_INFO(Id) << "test";
