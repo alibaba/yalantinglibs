@@ -56,13 +56,13 @@ auto result = co_await client.call_for<add>(std::chrono::seconds{10},1,2);
 assert(result.value() == 3);
 ```
 
-The duration can be any `std::chrono::duration`` type, common examples include `std::chrono::seconds`` and `std::chrono::milliseconds``. Notably, if the duration is set to zero, it indicates that the function call will never time out.
+The duration can be any `std::chrono::duration` type, common examples include `std::chrono::seconds` and `std::chrono::milliseconds`. Notably, if the duration is set to zero, it indicates that the function call will never time out.
 
 ## SSL support
 
 coro_rpc supports using OpenSSL to encrypt connections. After installing OpenSSL and importing yalantinglibs into your project with CMake's `find_package` or `fetch_content`, you can enable SSL support by setting the CMake option YLT_ENABLE_SSL=ON. Alternatively, you might manually add the YLT_ENABLE_SSL macro and manually link to OpenSSL.
 
-Once SSL support has been enabled, users can invoke the `init_ssl`` function before establishing a connection to the server. This will create an encrypted link between the client and the server. It’s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
+Once SSL support has been enabled, users can invoke the `init_ssl` function before establishing a connection to the server. This will create an encrypted link between the client and the server. It’s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
 
 ```cpp
 client.init_ssl("./","server.crt");
@@ -90,7 +90,7 @@ client.call<echo>("hello, coro_rpc"); // The string literal can be converted to 
 
 ## Connect Option
 
-The `coro_rpc_client` provides an `init_config`` function for configuring connection options. The following code snippet lists the configurable options.
+The `coro_rpc_client` provides an `init_config` function for configuring connection options. The following code snippet lists the configurable options.
 
 ```cpp
 using namespace coro_rpc;
@@ -134,7 +134,7 @@ do_something();
 
 ## Connection Reuse
 
-The `coro_rpc_client` can achieve connection reuse through the `send_request`` function. This function is thread-safe, allowing multiple threads to call the `send_request` method on the same client concurrently. The return value of the function is `Lazy<Lazy<async_rpc_result<T>>>`. The first `co_await` waits for the request to be sent, and the second `co_await` waits for the rpc result to return.
+The `coro_rpc_client` can achieve connection reuse through the `send_request` function. This function is thread-safe, allowing multiple threads to call the `send_request` method on the same client concurrently. The return value of the function is `Lazy<Lazy<async_rpc_result<T>>>`. The first `co_await` waits for the request to be sent, and the second `co_await` waits for the rpc result to return.
 
 
 Connection reuse allows us to reduce the number of connections under high concurrency, eliminating the need to create new connections. It also improves the throughput of each connection.
