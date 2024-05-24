@@ -126,7 +126,7 @@ Lazy<int> calculate(int value) {
 }
 ```
 
-Users can also use async_simple::Promise<T> to submit tasks to a custom thread pool:
+Users can also use `async_simple::Promise<T>` to submit tasks to a custom thread pool:
 
 ```cpp
 using namespace async_simple::coro;
@@ -230,7 +230,7 @@ void echo(coro_rpc::context<std::string_view> ctx, std::string_view param) {
 }
 ```
 
-It should be noted that view types in the RPC function parameters, such as std::string_view and std::span, will have their underlying data become invalid after all copies of the coro_rpc::context<T> object for this RPC call are destructed.
+It should be noted that view types in the RPC function parameters, such as std::string_view and std::span, will have their underlying data become invalid after all copies of the `coro_rpc::context<T>` object for this RPC call are destructed.
 
 ### Calling Model
 
@@ -252,7 +252,7 @@ void echo(coro_rpc::context<void> ctx) {
 
 ### Error Handling
 
-In callback functions, one should not and cannot return RPC errors by throwing exceptions, because the error might not occur within the call stack of the RPC function. Instead, we can use the coro_rpc::context<T>::response_error() function to return RPC errors.
+In callback functions, one should not and cannot return RPC errors by throwing exceptions, because the error might not occur within the call stack of the RPC function. Instead, we can use the `coro_rpc::context<T>::response_error()` function to return RPC errors.
 
 ```cpp
 void echo(coro_rpc::context<void> ctx) {
