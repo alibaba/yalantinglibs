@@ -425,7 +425,7 @@ using namespace coro_rpc;
 using namespace async_simple::coro;
 Lazy<void> rpc_call(coro_rpc_client& cli) {
   assert(co_await cli.call<echo<int>>(42).value() == 42);
-  assert(co_await cli.call<echo<int>>("Hello").value() == "Hello");
-  assert(co_await cli.call<echo<int>>(std::vector{1,2,3}).value() == std::vector{1,2,3});
+  assert(co_await cli.call<echo<std::string>>("Hello").value() == "Hello");
+  assert(co_await cli.call<echo<std::vector<int>>>(std::vector{1,2,3}).value() == std::vector{1,2,3});
 }
 ```
