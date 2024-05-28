@@ -109,6 +109,12 @@ std::shared_ptr<base> t = iguana::create_instance("nest1");
 ```
 “根据对象实例和字段名获取或设置字段的值” 如果字段名不存在则会抛异常；如果设置的值类型和结构体字段类型不相同则会抛异常；需要类型完全一样，不允许隐式转换。比如字段类型是double，但是设置字段的值类型是int也会抛异常，必须显式传double；如果字段类型是std::string, 设置值类型是const char * 同样会报错；如果字段类型是int32_t, 设置值类型是uint_8也会抛异常，因为类型不相同。
 
+设置字段值时也可以显式指定字段类型：
+```cpp
+t->set_field_value<std::string>("name", "test");
+```
+这种方式则不要求设置值的类型和字段类型完全一样，只要能赋值成功即可。如果显式指定的字段类型不是实际的字段类型时也会抛异常。
+
 ## benchmark 
 在benchmark monster场景下，struct_pb 性能比protobuf 更好，序列化速度是protobuf的2.4倍，反序列化是protobuf的3.4倍。详情可以自行运行struct_pack 中的benchmark复现结果。
 

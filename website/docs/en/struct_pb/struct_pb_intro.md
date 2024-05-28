@@ -108,7 +108,13 @@ std::shared_ptr<base> t = struct_pb::create_instance("nest1");
   auto &r1 = t->get_field_value<my_struct>("value");
   CHECK(r1.x == 2);
 ```
-“set field value by filed name and instance” require the setting value type is same with filed type, don't allow explicit transform, otherwise thrwo std::exception.
+“set field value by filed name and instance” require the setting value type is same with filed type, don't allow explicit transform, otherwise throw exception.
+
+also support set field value with its type:
+```cpp
+t->set_field_value<std::string>("name", "test");
+```
+implicit set field type can support implicit assign field value. If the field type is not the real field type, will throw exception.  
 
 ## benchmark 
 

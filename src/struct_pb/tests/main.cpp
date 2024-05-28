@@ -782,6 +782,11 @@ TEST_CASE("test reflection") {
     CHECK(r == 41);
     auto &r1 = t->get_field_value<my_struct>("value");
     CHECK(r1.x == 2);
+
+    t->set_field_value<std::string>("name", "hello");
+    auto &s = t->get_field_value<std::string>("name");
+    CHECK(s == "hello");
+    CHECK_THROWS_AS(t->set_field_value<int>("name", 42), std::invalid_argument);
   }
   {
     auto t = iguana::create_instance("pair_t");
