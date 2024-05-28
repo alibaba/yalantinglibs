@@ -585,7 +585,7 @@ struct test_pb_st1 PUBLIC(test_pb_st1) {
 };
 REFLECTION(test_pb_st1, x, y, z);
 
-struct test_pb_st2 PUBLIC(test_pb_st2) {
+struct test_pb_st2 {
   test_pb_st2() = default;
   test_pb_st2(int a, iguana::fixed32_t b, iguana::fixed64_t c)
       : x(a), y(b), z(c) {}
@@ -763,13 +763,78 @@ struct numer_st PUBLIC(numer_st) {
 };
 REFLECTION(numer_st, a, b, c);
 
+TEST_CASE("test reflection") {
+  {
+    auto t = iguana::create_instance("nest1");
+    std::vector<std::string_view> fields_name = t->get_fields_name();
+    CHECK(fields_name == std::vector<std::string_view>{"name", "value", "var"});
+
+    my_struct mt{2, true, {42}};
+    t->set_field_value("value", mt);
+    t->set_field_value("name", std::string("test"));
+    t->set_field_value("var", 41);
+    nest1 *st = dynamic_cast<nest1 *>(t.get());
+    auto p = *st;
+    std::cout << p.name << "\n";
+    auto &r0 = t->get_field_value<std::string>("name");
+    CHECK(r0 == "test");
+    auto &r = t->get_field_value<int>("var");
+    CHECK(r == 41);
+    auto &r1 = t->get_field_value<my_struct>("value");
+    CHECK(r1.x == 2);
+  }
+  {
+    auto t = iguana::create_instance("pair_t");
+    t->set_field_value("x", 12);
+    t->set_field_value("y", 24);
+    auto &r0 = t->get_field_value<int>("x");
+    CHECK(r0 == 12);
+    auto &r = t->get_field_value<int>("y");
+    CHECK(r == 24);
+
+    std::string str;
+    t->to_pb(str);
+
+    pair_t t1;
+    t1.from_pb(str);
+
+    pair_t *st = dynamic_cast<pair_t *>(t.get());
+    CHECK(st->x == t1.x);
+    CHECK(st->y == t1.y);
+  }
+  auto t = iguana::create_instance("numer_st");
+  t->set_field_value("a", true);
+  t->set_field_value("b", double(25));
+  t->set_field_value("c", float(42));
+  auto &r0 = t->get_field_value<bool>("a");
+  CHECK(r0);
+  auto &r = t->get_field_value<double>("b");
+  CHECK(r == 25);
+  auto &r1 = t->get_field_value<float>("c");
+  CHECK(r1 == 42);
+
+  numer_st *st = dynamic_cast<numer_st *>(t.get());
+  CHECK(st->a == true);
+  CHECK(st->b == 25);
+  CHECK(st->c == 42);
+
+  std::string str;
+  t->to_pb(str);
+
+  numer_st t1;
+  t1.from_pb(str);
+
+  CHECK(st->a == t1.a);
+  CHECK(st->b == t1.b);
+  CHECK(st->c == t1.c);
+}
+
 TEST_CASE("test struct_pb") {
   {
     my_space::inner_struct inner{41, 42, 43};
 
     std::string str;
     iguana::to_pb(inner, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(inner));
 
     my_space::inner_struct inner1;
     iguana::from_pb(inner1, str);
@@ -782,7 +847,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st1 st1{41, {42}, {43}};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st1 st2;
     iguana::from_pb(st2, str);
@@ -795,7 +859,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st2 st1{41, {42}, {43}};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st2 st2;
     iguana::from_pb(st2, str);
@@ -805,7 +868,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st3 st1{41, {42}, {43}};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st3 st2;
     iguana::from_pb(st2, str);
@@ -815,7 +877,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st4 st1{41, "it is a test"};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st4 st2;
     iguana::from_pb(st2, str);
@@ -826,7 +887,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st5 st1{41, "it is a test"};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st5 st2;
     iguana::from_pb(st2, str);
@@ -837,7 +897,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st6 st1{41, "it is a test"};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st6 st2;
     iguana::from_pb(st2, str);
@@ -867,7 +926,6 @@ TEST_CASE("test struct_pb") {
     test_pb_st9 st1{1, {2, 4, 6}, "test"};
     std::string str;
     iguana::to_pb(st1, str);
-    CHECK(str.size() == iguana::detail::pb_key_value_size<0>(st1));
 
     test_pb_st9 st2;
     iguana::from_pb(st2, str);
@@ -900,7 +958,7 @@ TEST_CASE("test struct_pb") {
     std::string s;
     m->to_pb(s);
 
-    std::shared_ptr<iguana::pb_base> t = m;
+    std::shared_ptr<iguana::base> t = m;
     std::string str;
     t->to_pb(str);
 

@@ -11,14 +11,14 @@ struct_pb 是基于C++17 开发的高性能、易用、header only的protobuf格
 ```cpp
 #include <ylt/struct_pb.hpp>
 
-struct my_struct : struct_pb::pb_base_impl<my_struct> {
+struct my_struct : struct_pb::base_impl<my_struct> {
   int x;
   bool y;
   struct_pb::fixed64_t z;
 };
 REFLECTION(my_struct, x, y, z);
 
-struct nest : struct_pb::pb_base_impl<nest> {
+struct nest : struct_pb::base_impl<nest> {
   std::string name;
   my_struct value;
   int var;
@@ -29,7 +29,7 @@ REFLECTION(nest, name, value, var);
 ### 序列化
 ```cpp
 int main() {
-  nest v{0, "Hi", {0, 1, false, 3}, 5}, v2{};
+  nest v{"Hi", {1, false, {3}}, 5}, v2{};
   std::string s;
   struct_pb::to_pb(v, s);
   struct_pb::from_pb(v2, s);
@@ -52,6 +52,62 @@ message nest {
   int32 var = 3;
 }
 ```
+
+## 动态反射
+特性：
+- 根据对象名称创建实例；
+- 获取对象的所有字段名；
+- 根据对象实例和字段名获取或设置字段的值
+
+### 根据名称创建对象
+```cpp
+struct my_struct {
+  int x;
+  bool y;
+  iguana::fixed64_t z;
+};
+REFLECTION(my_struct, x, y, z);
+
+struct nest1 : public iguana::base_imple<nest1> {
+  nest1() = default;
+  nest1(std::string s, my_struct t, int d)
+      : name(std::move(s)), value(t), var(d) {}
+  std::string name;
+  my_struct value;
+  int var;
+};
+REFLECTION(nest1, name, value, var);
+```
+
+```cpp
+std::shared_ptr<base> t = iguana::create_instance("nest1");
+```
+根据对象nest1创建了实例，返回的是基类指针。
+
+“根据对象名称创建实例” 要求对象必须从iguana::base_impl 派生，如果没有派生则创建实例会抛异常。
+
+### 根据名称设置字段的值
+```cpp
+  auto t = iguana::create_instance("nest1");
+
+  std::vector<std::string_view> fields_name = t->get_fields_name();
+  CHECK(fields_name == std::vector<std::string_view>{"name", "value", "var"});
+
+  my_struct mt{2, true, {42}};
+  t->set_field_value("value", mt);
+  t->set_field_value("name", std::string("test"));
+  t->set_field_value("var", 41);
+  nest1 *st = dynamic_cast<nest1 *>(t.get());
+  auto p = *st;
+  std::cout << p.name << "\n";
+  auto &r0 = t->get_field_value<std::string>("name");
+  CHECK(r0 == "test");
+  auto &r = t->get_field_value<int>("var");
+  CHECK(r == 41);
+  auto &r1 = t->get_field_value<my_struct>("value");
+  CHECK(r1.x == 2);
+```
+“根据对象实例和字段名获取或设置字段的值” 如果字段名不存在则会抛异常；如果设置的值类型和结构体字段类型不相同则会抛异常；需要类型完全一样，不允许隐式转换。比如字段类型是double，但是设置字段的值类型是int也会抛异常，必须显式传double；如果字段类型是std::string, 设置值类型是const char * 同样会报错；如果字段类型是int32_t, 设置值类型是uint_8也会抛异常，因为类型不相同。
 
 ## benchmark 
 在benchmark monster场景下，struct_pb 性能比protobuf 更好，序列化速度是protobuf的2.4倍，反序列化是protobuf的3.4倍。详情可以自行运行struct_pack 中的benchmark复现结果。
@@ -96,10 +152,10 @@ oneof -> `std::variant <...>`
 - 目前还只支持proto3，不支持proto2；
 - 目前还没支持反射；
 - 还没支持unkonwn字段；
-- struct_pb 结构体必须派生于pb_base_impl
+- struct_pb 结构体必须派生于base_impl
 
 ## roadmap
 - 支持proto2；
 - 支持反射；
 - 支持unkonwn字段；
-- 去除struct_pb 结构体必须派生于pb_base_impl的约束；
+- 去除struct_pb 结构体必须派生于base_impl的约束；

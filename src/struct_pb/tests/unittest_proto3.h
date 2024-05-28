@@ -6,7 +6,7 @@
 #include "unittest_proto3.pb.h"
 #endif
 
-#define PUBLIC(T) : public iguana::pb_base_impl<T>
+#define PUBLIC(T) : public iguana::base_impl<T>
 
 // define the struct as msg in proto
 namespace stpb {
@@ -230,7 +230,7 @@ struct simple_t2 PUBLIC(simple_t2) {
 };
 REFLECTION(simple_t2, a, b, c, d, str);
 
-struct person PUBLIC(person) {
+struct person {
   person() = default;
   person(int32_t a, std::string b, int c, double d)
       : id(a), name(std::move(b)), age(c), salary(d) {}

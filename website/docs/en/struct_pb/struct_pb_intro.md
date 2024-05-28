@@ -14,14 +14,14 @@ Utilize inline, zero copy, compile-time compute to optimize performance.
 ```cpp
 #include <ylt/struct_pb.hpp>
 
-struct my_struct : struct_pb::pb_base_impl<my_struct> {
+struct my_struct {
   int x;
   bool y;
   struct_pb::fixed64_t z;
 };
 REFLECTION(my_struct, x, y, z);
 
-struct nest : struct_pb::pb_base_impl<nest> {
+struct nest {
   std::string name;
   my_struct value;
   int var;
@@ -32,7 +32,7 @@ REFLECTION(nest, name, value, var);
 ### serialization and deserialization
 ```cpp
 int main() {
-  nest v{0, "Hi", {0, 1, false, 3}, 5}, v2{};
+  nest v{"Hi", {1, false, {3}}, 5}, v2{};
   std::string s;
   struct_pb::to_pb(v, s);
   struct_pb::from_pb(v2, s);
@@ -55,6 +55,60 @@ message nest {
   int32 var = 3;
 }
 ```
+
+## dynamic reflection
+features：
+- create instance by object's name;
+- get all fields name from an object;
+- get/set field value by filed name and instance;
+
+### create instance by object's name
+```cpp
+struct my_struct {
+  int x;
+  bool y;
+  iguana::fixed64_t z;
+};
+REFLECTION(my_struct, x, y, z);
+
+struct nest1 : public iguana::base_imple<nest1> {
+  nest1() = default;
+  nest1(std::string s, my_struct t, int d)
+      : name(std::move(s)), value(t), var(d) {}
+  std::string name;
+  my_struct value;
+  int var;
+};
+REFLECTION(nest1, name, value, var);
+```
+
+```cpp
+std::shared_ptr<base> t = struct_pb::create_instance("nest1");
+```
+"create instance by object's name" require the struct inherited from struct_pb::base_impl. If not inherited,create_instance will throw exception.
+
+### get/set field value by filed name and instance
+```cpp
+  auto t = iguana::create_instance("nest1");
+
+  std::vector<std::string_view> fields_name = t->get_fields_name();
+  CHECK(fields_name == std::vector<std::string_view>{"name", "value", "var"});
+
+  my_struct mt{2, true, {42}};
+  t->set_field_value("value", mt);
+  t->set_field_value("name", std::string("test"));
+  t->set_field_value("var", 41);
+  nest1 *st = dynamic_cast<nest1 *>(t.get());
+  auto p = *st;
+  std::cout << p.name << "\n";
+  auto &r0 = t->get_field_value<std::string>("name");
+  CHECK(r0 == "test");
+  auto &r = t->get_field_value<int>("var");
+  CHECK(r == 41);
+  auto &r1 = t->get_field_value<my_struct>("value");
+  CHECK(r1.x == 2);
+```
+“set field value by filed name and instance” require the setting value type is same with filed type, don't allow explicit transform, otherwise thrwo std::exception.
 
 ## benchmark 
 
@@ -106,10 +160,10 @@ oneof -> `std::variant <...>`
 - only support proto3, not support proto2 now;
 - don't support reflection now;
 - don't support  unkonwn fields;
-- struct must inherited from pb_base_impl;
+- struct must inherited from base_impl;
 
 ## roadmap
 - support proto2;
 - support reflection;
 - support unkonwn fields;
-- no need inheriting from pb_base_impl;
+- no need inheriting from base_impl;

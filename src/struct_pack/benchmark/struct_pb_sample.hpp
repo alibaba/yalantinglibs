@@ -6,7 +6,7 @@
 #include "sample.hpp"
 
 namespace pb_sample {
-struct person : public iguana::pb_base_impl<person> {
+struct person : public iguana::base_impl<person> {
   person() = default;
   person(int32_t a, std::string b, int c, double d)
       : id(a), name(std::move(b)), age(c), salary(d) {}
@@ -17,14 +17,14 @@ struct person : public iguana::pb_base_impl<person> {
 };
 REFLECTION(person, id, name, age, salary);
 
-struct persons : public iguana::pb_base_impl<persons> {
+struct persons : public iguana::base_impl<persons> {
   persons() = default;
   explicit persons(std::vector<person> l) : list(std::move(l)) {}
   std::vector<person> list;
 };
 REFLECTION(persons, list);
 
-struct rect : public iguana::pb_base_impl<rect> {
+struct rect : public iguana::base_impl<rect> {
   rect() = default;
   rect(int32_t a, int32_t b, int32_t c, int32_t d)
       : x(a), y(b), width(c), height(d) {}
@@ -35,14 +35,14 @@ struct rect : public iguana::pb_base_impl<rect> {
 };
 REFLECTION(rect, x, y, width, height);
 
-struct rects : public iguana::pb_base_impl<rects> {
+struct rects : public iguana::base_impl<rects> {
   rects() = default;
   explicit rects(std::vector<rect> l) : list(std::move(l)) {}
   std::vector<rect> list;
 };
 REFLECTION(rects, list);
 
-struct Vec3 : public iguana::pb_base_impl<Vec3> {
+struct Vec3 : public iguana::base_impl<Vec3> {
   Vec3() = default;
   Vec3(float a, float b, float c) : x(a), y(b), z(c) {}
   float x;
@@ -52,7 +52,7 @@ struct Vec3 : public iguana::pb_base_impl<Vec3> {
   REFLECTION(Vec3, x, y, z);
 };
 
-struct Weapon : public iguana::pb_base_impl<Weapon> {
+struct Weapon : public iguana::base_impl<Weapon> {
   Weapon() = default;
   Weapon(std::string s, int32_t d) : name(std::move(s)), damage(d) {}
   std::string name;
@@ -62,7 +62,7 @@ REFLECTION(Weapon, name, damage);
 
 enum Color : uint8_t { Red, Green, Blue };
 
-struct Monster : public iguana::pb_base_impl<Monster> {
+struct Monster : public iguana::base_impl<Monster> {
   Monster() = default;
   Monster(Vec3 a, int32_t b, int32_t c, std::string d, std::string e, Color f,
           std::vector<Weapon> g, Weapon h, std::vector<Vec3> i) {}
@@ -79,7 +79,7 @@ struct Monster : public iguana::pb_base_impl<Monster> {
 REFLECTION(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
            path);
 
-struct Monsters : public iguana::pb_base_impl<Monsters> {
+struct Monsters : public iguana::base_impl<Monsters> {
   Monsters() = default;
   explicit Monsters(std::vector<Monster> l) : list(std::move(l)) {}
   std::vector<Monster> list;
