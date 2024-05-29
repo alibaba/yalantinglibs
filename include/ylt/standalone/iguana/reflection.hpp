@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 
 #include "detail/string_stream.hpp"
 #include "detail/traits.hpp"
+#include "enum_reflection.hpp"
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
@@ -550,9 +552,88 @@ namespace iguana::detail {
 #define MAKE_STR_LIST(...) \
   MACRO_CONCAT(CON_STR, GET_ARG_COUNT(__VA_ARGS__))(__VA_ARGS__)
 
+template <typename T>
+struct identity {};
+
+struct field_info {
+  size_t offset;
+  std::string_view type_name;
+};
+
+struct base {
+  virtual void to_pb(std::string &str) {}
+  virtual void from_pb(std::string_view str) {}
+  virtual std::vector<std::string_view> get_fields_name() { return {}; }
+  virtual iguana::detail::field_info get_field_info(std::string_view name) {
+    return {};
+  }
+
+  template <typename T>
+  T &get_field_value(std::string_view name) {
+    auto info = get_field_info(name);
+    check_field<T>(name, info);
+    auto ptr = (((char *)this) + info.offset);
+    return *((T *)ptr);
+  }
+
+  template <typename T>
+  void set_field_value(std::string_view name, T val) {
+    auto info = get_field_info(name);
+    check_field<T>(name, info);
+
+    auto ptr = (((char *)this) + info.offset);
+
+    *((T *)ptr) = std::move(val);
+  }
+  virtual ~base() {}
+
+ private:
+  template <typename T>
+  void check_field(std::string_view name, const field_info &info) {
+    if (info.offset == 0) {
+      throw std::invalid_argument(std::string(name) + " field not exist ");
+    }
+
+#if defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 8)
+    if (info.type_name != iguana::type_string<T>()) {
+      std::string str = "type is not match: can not assign ";
+      str.append(iguana::type_string<T>());
+      str.append(" to ").append(info.type_name);
+
+      throw std::invalid_argument(str);
+    }
+#endif
+  }
+};
+
+inline std::unordered_map<std::string_view,
+                          std::function<std::shared_ptr<base>()>>
+    g_pb_map;
+
+template <typename T>
+inline bool register_type() {
+#if defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 8)
+  if constexpr (std::is_base_of_v<base, T>) {
+    auto it = g_pb_map.emplace(type_string<T>(), [] {
+      return std::make_shared<T>();
+    });
+    return it.second;
+  }
+  else {
+    return true;
+  }
+#else
+  return true;
+#endif
+}
+
 #define MAKE_META_DATA_IMPL(STRUCT_NAME, ...)                                 \
+  static inline bool IGUANA_UNIQUE_VARIABLE(reg_var) =                        \
+      iguana::detail::register_type<STRUCT_NAME>();                           \
   [[maybe_unused]] inline static auto iguana_reflect_members(                 \
-      STRUCT_NAME const &) {                                                  \
+      const iguana::detail::identity<STRUCT_NAME> &) {                        \
     struct reflect_members {                                                  \
       constexpr decltype(auto) static apply_impl() {                          \
         return std::make_tuple(__VA_ARGS__);                                  \
@@ -602,7 +683,7 @@ constexpr std::array<frozen::string, N> get_alias_arr(Args... pairs) {
 
 #define MAKE_META_DATA_IMPL_ALIAS(STRUCT_NAME, ALIAS, ...)                    \
   [[maybe_unused]] inline static auto iguana_reflect_members(                 \
-      STRUCT_NAME const &) {                                                  \
+      const iguana::detail::identity<STRUCT_NAME> &) {                        \
     struct reflect_members {                                                  \
       constexpr decltype(auto) static apply_impl() {                          \
         return iguana::detail::get_mem_ptr_tp(__VA_ARGS__);                   \
@@ -622,7 +703,8 @@ constexpr std::array<frozen::string, N> get_alias_arr(Args... pairs) {
   }
 
 #define MAKE_META_DATA_IMPL_EMPTY(STRUCT_NAME)                              \
-  inline auto iguana_reflect_members(STRUCT_NAME const &) {                 \
+  inline auto iguana_reflect_members(                                       \
+      const iguana::detail::identity<STRUCT_NAME> &) {                      \
     struct reflect_members {                                                \
       constexpr decltype(auto) static apply_impl() {                        \
         return std::make_tuple();                                           \
@@ -692,6 +774,143 @@ inline constexpr auto get_iguana_struct_map() {
   }
 }
 
+template <typename T,
+          typename ElementType = typename member_traits<T>::value_type>
+struct field_t {
+  using member_type = T;
+  using owner_type = typename member_traits<T>::owner_type;
+  using value_type = typename member_traits<T>::value_type;
+  using sub_type = ElementType;
+  constexpr field_t() = default;
+  constexpr field_t(T member, uint32_t number, frozen::string name = "")
+      : member_ptr(member), field_name(name), field_no(number) {}
+
+  T member_ptr;
+  frozen::string field_name;
+  uint32_t field_no;
+
+  auto &value(owner_type &value) const { return value.*member_ptr; }
+};
+
+template <typename T>
+struct field_type_t;
+
+template <typename... Args>
+struct field_type_t<std::tuple<Args...>> {
+  using value_type = std::variant<Args...>;
+};
+
+template <typename T, typename = void>
+struct is_custom_reflection : std::false_type {};
+
+template <typename T>
+struct is_custom_reflection<
+    T, std::void_t<decltype(get_members_impl(std::declval<T *>()))>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct is_reflection : std::false_type {};
+
+template <typename T>
+inline constexpr bool is_reflection_v = is_reflection<T>::value;
+
+template <typename T>
+inline constexpr bool is_custom_reflection_v = is_custom_reflection<T>::value;
+
+template <typename T, typename S, size_t... I>
+constexpr inline auto build_variant_fields(T t, S &s, uint32_t base_idx,
+                                           std::index_sequence<I...>) {
+  using value_type = typename member_traits<T>::value_type;
+  return std::tuple(field_t<T, std::variant_alternative_t<I, value_type>>{
+      t, (base_idx + uint32_t(I)), s}...);
+}
+
+template <uint32_t I, typename T, typename S>
+constexpr inline auto build_fields(T t, S &s, uint32_t &index) {
+  using value_type = typename member_traits<T>::value_type;
+  if constexpr (is_variant<value_type>::value) {
+    constexpr uint32_t Size = std::variant_size_v<value_type>;
+    index += (Size - 1);
+    return build_variant_fields(t, s, I + 1, std::make_index_sequence<Size>{});
+  }
+  else {
+    uint32_t field_no = (I == index) ? (I + 1) : (I + index);
+    index++;
+    return std::tuple(field_t{t, field_no, s});
+  }
+}
+
+template <typename T, typename U, size_t... I>
+constexpr inline auto get_members_tuple_impl(T &&tp, U &&arr,
+                                             std::index_sequence<I...> &&) {
+  uint32_t index = 0;
+  return std::tuple_cat(build_fields<I>(std::get<I>(tp), arr[I], index)...);
+}
+
+template <typename T>
+constexpr inline auto get_members_tuple() {
+  if constexpr (is_reflection<T>::value) {
+    using reflect_members = decltype(iguana_reflect_type(std::declval<T>()));
+    using Tuple = decltype(reflect_members::apply_impl());
+    constexpr size_t Size = std::tuple_size_v<Tuple>;
+    return get_members_tuple_impl(reflect_members::apply_impl(),
+                                  reflect_members::arr(),
+                                  std::make_index_sequence<Size>{});
+  }
+  else if constexpr (is_custom_reflection_v<T>) {
+    using U = std::remove_const_t<std::remove_reference_t<T>>;
+    return get_members_impl((U *)nullptr);
+  }
+  else {
+    static_assert(!sizeof(T), "expected reflection or custom reflection");
+  }
+}
+
+template <typename T, size_t Size, typename Tuple, size_t... I>
+constexpr auto inline get_members_impl(Tuple &&tp, std::index_sequence<I...>) {
+  return frozen::unordered_map<uint32_t, T, sizeof...(I)>{
+      {std::get<I>(tp).field_no,
+       T{std::in_place_index<I>, std::move(std::get<I>(tp))}}...};
+}
+
+template <typename T>
+constexpr size_t count_variant_size() {
+  if constexpr (is_variant<T>::value) {
+    return std::variant_size_v<T>;
+  }
+  else {
+    return 1;
+  }
+}
+
+template <typename T, size_t... I>
+constexpr size_t tuple_type_count_impl(std::index_sequence<I...>) {
+  return (
+      (count_variant_size<member_value_type_t<std::tuple_element_t<I, T>>>() +
+       ...));
+}
+
+template <typename T>
+constexpr size_t tuple_type_count() {
+  return tuple_type_count_impl<T>(
+      std::make_index_sequence<std::tuple_size_v<T>>{});
+}
+
+template <typename T>
+constexpr inline auto get_members() {
+  if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
+    constexpr auto tp = get_members_tuple<T>();
+    using Tuple = std::decay_t<decltype(tp)>;
+    using value_type = typename field_type_t<Tuple>::value_type;
+    constexpr auto Size = tuple_type_count<Tuple>();
+    return get_members_impl<value_type, Size>(tp,
+                                              std::make_index_sequence<Size>{});
+  }
+  else {
+    static_assert(!sizeof(T), "expected reflection or custom reflection");
+  }
+}
+
 #define REFLECTION(STRUCT_NAME, ...)                                    \
   MAKE_META_DATA(STRUCT_NAME, #STRUCT_NAME, GET_ARG_COUNT(__VA_ARGS__), \
                  __VA_ARGS__)
@@ -703,11 +922,7 @@ inline constexpr auto get_iguana_struct_map() {
       STRUCT_NAME, ALIAS,                         \
       std::tuple_size_v<decltype(std::make_tuple(__VA_ARGS__))>, __VA_ARGS__)
 
-#ifdef _MSC_VER
 #define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __COUNTER__)
-#else
-#define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __LINE__)
-#endif
 template <typename T>
 struct iguana_required_struct;
 #define REQUIRED_IMPL(STRUCT_NAME, N, ...)                      \
@@ -762,12 +977,6 @@ inline int add_custom_fields(std::string_view key,
   return 0;
 }
 
-#ifdef _MSC_VER
-#define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __COUNTER__)
-#else
-#define IGUANA_UNIQUE_VARIABLE(str) MACRO_CONCAT(str, __LINE__)
-#endif
-
 #define CUSTOM_FIELDS_IMPL(STRUCT_NAME, N, ...)                                \
   inline auto IGUANA_UNIQUE_VARIABLE(STRUCT_NAME) = iguana::add_custom_fields( \
       #STRUCT_NAME, {MARCO_EXPAND(MACRO_CONCAT(CON_STR, N)(__VA_ARGS__))});
@@ -776,14 +985,16 @@ inline int add_custom_fields(std::string_view key,
   CUSTOM_FIELDS_IMPL(STRUCT_NAME, GET_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
 
 template <typename T>
-using Reflect_members = decltype(iguana_reflect_members(std::declval<T>()));
+using Reflect_members = decltype(iguana_reflect_members(
+    std::declval<iguana::detail::identity<T>>()));
 
 template <typename T, typename = void>
 struct is_public_reflection : std::false_type {};
 
 template <typename T>
-struct is_public_reflection<
-    T, std::void_t<decltype(iguana_reflect_members(std::declval<T>()))>>
+struct is_public_reflection<T,
+                            std::void_t<decltype(iguana_reflect_members(
+                                std::declval<iguana::detail::identity<T>>()))>>
     : std::true_type {};
 
 template <typename T>
@@ -795,13 +1006,10 @@ struct is_private_reflection : std::false_type {};
 template <typename T>
 struct is_private_reflection<
     T, std::void_t<decltype(std::declval<T>().iguana_reflect_members(
-           std::declval<T>()))>> : std::true_type {};
+           std::declval<iguana::detail::identity<T>>()))>> : std::true_type {};
 
 template <typename T>
 constexpr bool is_private_reflection_v = is_private_reflection<T>::value;
-
-template <typename T, typename = void>
-struct is_reflection : std::false_type {};
 
 template <typename T>
 struct is_reflection<T, std::enable_if_t<is_private_reflection_v<T>>>
@@ -813,16 +1021,13 @@ struct is_reflection<T, std::enable_if_t<is_public_reflection_v<T>>>
 
 template <typename T>
 inline auto iguana_reflect_type(const T &t) {
-  if constexpr (is_public_reflection_v<T>) {
-    return iguana_reflect_members(t);
+  if constexpr (is_public_reflection_v<std::decay_t<T>>) {
+    return iguana_reflect_members(iguana::detail::identity<T>{});
   }
   else {
-    return t.iguana_reflect_members(t);
+    return t.iguana_reflect_members(iguana::detail::identity<T>{});
   }
 }
-
-template <typename T>
-inline constexpr bool is_reflection_v = is_reflection<T>::value;
 
 template <std::size_t index, template <typename...> typename Condition,
           typename Tuple, typename Owner>
@@ -1112,7 +1317,8 @@ constexpr void for_each(const std::tuple<Args...> &t, F &&f,
 }
 
 template <typename T, typename F>
-constexpr std::enable_if_t<is_reflection<T>::value> for_each(T &&t, F &&f) {
+constexpr std::enable_if_t<is_reflection<std::decay_t<T>>::value> for_each(
+    T &&t, F &&f) {
   using M = decltype(iguana_reflect_type(std::forward<T>(t)));
   for_each(M::apply_impl(), std::forward<F>(f),
            std::make_index_sequence<M::value()>{});

@@ -131,12 +131,6 @@ template <typename T>
 constexpr inline bool smart_ptr_v = shared_ptr_v<T> || unique_ptr_v<T>;
 
 template <typename T>
-struct is_variant : std::false_type {};
-
-template <typename... T>
-struct is_variant<std::variant<T...>> : std::true_type {};
-
-template <typename T>
 constexpr inline bool variant_v = is_variant<std::remove_cvref_t<T>>::value;
 
 template <size_t Idx, typename T>
