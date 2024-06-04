@@ -272,7 +272,7 @@ rpc错误码是一个16位的无符号整数。其中，0-255是保留给rpc框�
 
 ## 参数与返回值类型
 
-coro_rpc允许用户注册的rpc函数具有多个参数（最多64个），参数和返回值的类型可以是用户自定义的聚合结构体，也支持了各种c++标准库提供的数据结构和许多第三方库提供的数据结构。详见：[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
+coro_rpc允许用户注册的rpc函数具有多个参数（最多255个），参数和返回值的类型可以是用户自定义的聚合结构体，也支持了各种c++标准库提供的数据结构和许多第三方库提供的数据结构。详见：[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
 
 如果你的rpc参数或返回值类型不属于struct_pack的类型系统支持的类型，我们也允许用户注册自己的结构体或者自定义序列化算法，详见：[自定义功能支持](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E8%87%AA%E5%AE%9A%E4%B9%89%E7%B1%BB%E5%9E%8B%E7%9A%84%E5%BA%8F%E5%88%97%E5%8C%96)
 
