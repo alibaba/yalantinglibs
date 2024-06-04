@@ -274,7 +274,7 @@ This means if your RPC functions will block the current thread (e.g., thread sle
 
 ## Parameter and Return Value Types
 
-coro_rpc allows users to register rpc functions with multiple parameters (up to 64), and the types of arguments and return values can be user-defined aggregate structures. They also support various data structures provided by the C++ standard library and many third-party libraries. For details, see: [struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)
+coro_rpc allows users to register rpc functions with multiple parameters (up to 255), and the types of arguments and return values can be user-defined aggregate structures. They also support various data structures provided by the C++ standard library and many third-party libraries. For details, see: [struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)
 
 If your rpc argument or return value type is not supported by the struct_pack type system, we also allow users to register their own structures or custom serialization algorithms. For more details, see: [Custom feature](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#custom-type)
 
