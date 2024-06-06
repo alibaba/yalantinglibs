@@ -4,13 +4,13 @@
 
 coro_http_cient 是yalantinglibgs 的子库，yalantinglibs 是header only的，下载yalantinglibgs 库之后，在自己的工程中包含目录：
 
-```c++
+```cpp
   include_directories(include)
   include_directories(include/ylt/thirdparty)
 ```
 
 如果是gcc 编译器还需要设置以启用C++20 协程：
-```c++
+```cpp
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
     #-ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
@@ -20,7 +20,7 @@ coro_http_cient 是yalantinglibgs 的子库，yalantinglibs 是header only的，
 
 最后在你的工程里引用coro_http_client 的头文件即可:
 
-```c++
+```cpp
 #include <iostream>
 #include "ylt/coro_http/coro_http_client.hpp"
 
@@ -41,7 +41,7 @@ int main() {
 ## http 同步请求
 
 ### http 同步请求接口
-```c++
+```cpp
 /// http header
 /// \param name header 名称
 /// \param value header 值
@@ -91,7 +91,7 @@ resp_data post(std::string uri, std::string content,
 ### http 同步请求的用法
 简单的请求一个网站一行代码即可:
 
-```c++
+```cpp
 coro_http_client client{};
 auto result = client.get("http://www.example.com");
 if(result.net_err) {
@@ -105,7 +105,7 @@ if(result.status == 200) {
 ```
 请求返回之后需要检查是否有网络错误和状态码，如果都正常则可以处理获取的响应body和响应头了。
 
-```c++
+```cpp
 void test_sync_client() {
   {
     std::string uri = "http://www.baidu.com";
@@ -133,7 +133,7 @@ void test_sync_client() {
 
 ## http 异步请求接口
 
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> async_get(std::string uri);
 
 async_simple::coro::Lazy<resp_data> async_post(
@@ -142,14 +142,14 @@ async_simple::coro::Lazy<resp_data> async_post(
 async_get和get 接口参数一样，async_post 和 post 接口参数一样，只是返回类型不同，同步接口返回的是一个普通的resp_data，而异步接口返回的是一个Lazy 协程对象。事实上，同步接口内部就是调用对应的协程接口，用法上接近，多了一个co_await 操作。
 
 事实上你可以把任意异步协程接口通过syncAwait 方法同步阻塞调用的方式转换成同步接口，以同步接口get 为例：
-```c++
+```cpp
 resp_data get(std::string uri) {
   return async_simple::coro::syncAwait(async_get(std::move(uri)));
 }
 ```
 
 同步请求例子：
-```c++
+```cpp
 async_simple::coro::Lazy<void> test_async_client() {
   std::string uri = "http://www.baidu.com";
 
@@ -174,7 +174,7 @@ option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 ```
 client 只需要调用init_ssl 方法即可，之后便可以和之前一样发起https 请求了。
 
-```c++
+```cpp
 const int verify_none = SSL_VERIFY_NONE;
 const int verify_peer = SSL_VERIFY_PEER;
 const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
@@ -190,7 +190,7 @@ const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
                               const std::string &sni_hostname = "");
 ```
 
-```c++
+```cpp
 #ifdef CINATRA_ENABLE_SSL
 void test_coro_http_client() {
   coro_http_client client{};
@@ -217,7 +217,7 @@ void test_coro_http_client() {
 
 如果host 已经通过请求连接成功之后，后面发请求的时候只传入path 而不用传入完整的路径，这样可以获得更好的性能，coro_http_client 对于已经连接的host，当传入path 的时候不会再重复去解析已经解析过的uri。
 
-```c++
+```cpp
 async_simple::coro::Lazy<void> test_async_client() {
   std::string uri = "http://www.baidu.com";
 
@@ -241,7 +241,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 ## http 重连
 当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用reconnect 去重连host，这样就可以复用http client 了。
 
-```c++
+```cpp
   coro_http_client client1{};
   // 连接了一个非法的uri 会失败
   r = async_simple::coro::syncAwait(
@@ -257,7 +257,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 
 # 其它http 接口
 http_method
-```c++
+```cpp
 enum class http_method {
   UNKNOW,
   DEL,
@@ -273,7 +273,7 @@ enum class http_method {
 ```
 
 coro_http_client 提供了这些http_method 对应的请求接口:
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> async_delete(
     std::string uri, std::string content, req_content_type content_type);
 
@@ -302,7 +302,7 @@ async_simple::coro::Lazy<resp_data> async_trace(std::string uri);
 除了http method 对应的接口之外，coro_http_client 还提供了常用文件上传和下载接口。
 
 ## chunked 格式上传
-```c++
+```cpp
 template <typename S, typename File>
 async_simple::coro::Lazy<resp_data> async_upload_chunked(
     S uri, http_method method, File file,
@@ -317,7 +317,7 @@ chunked 每块的大小默认为1MB，如果希望修改分块大小可以通过
 multipart 上传有两个接口，一个是一步实现上传，一个是分两步实现上传。
 
 一步上传接口
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> async_upload_multipart(
     std::string uri, std::string name, std::string filename);
 ```
@@ -326,7 +326,7 @@ name 是multipart 里面的name 参数，filename 需要上传的带路径的文
 一步上传接口适合纯粹上传文件用，如果要上传多个文件，或者既有字符串也有文件的场景，那就需要两步上传的接口。
 
 两步上传接口
-```c++
+```cpp
 // 设置要上传的字符串key-value
 bool add_str_part(std::string name, std::string content);
 // 设置要上传的文件
@@ -337,7 +337,7 @@ async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri);
 ```
 两步上传，第一步是准备要上传的字符串或者文件，第二步上传；
 
-```c++
+```cpp
   std::string uri = "http://127.0.0.1:8090/multipart";
 
   coro_http_client client{};
@@ -347,7 +347,7 @@ async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri);
 ```
 
 ## chunked 格式下载
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                    std::string filename,
                                                    std::string range = "");
@@ -356,7 +356,7 @@ async_simple::coro::Lazy<resp_data> async_download(std::string uri,
 
 ## ranges 格式下载
 ranges 下载接口和chunked 下载接口相同，需要填写ranges:
-```c++
+```cpp
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
 
@@ -379,7 +379,7 @@ ranges 按照"m-n,x-y,..." 的格式填写，下载的内容将会保存到文�
 
 # http client 配置项
 client 配置项：
-```c++
+```cpp
   struct config {
     // 连接超时时间，默认8 秒
     std::optional<std::chrono::steady_clock::duration> conn_timeout_duration;
@@ -413,7 +413,7 @@ client 配置项：
 ```
 
 把config项设置之后，调用init_config 设置http client 的参数。
-```c++
+```cpp
 coro_http_client client{};
 coro_http_client::config conf{.req_timeout_duration = 60s};
 client.init_config(conf);
@@ -427,15 +427,15 @@ websocket 的支持需要3步：
 - 读websocket 数据；
 
 websocket 读数据接口:
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> read_websocket();
 ```
 websocket 连接服务器接口:
-```c++
+```cpp
 async_simple::coro::Lazy<resp_data> connect(std::string uri);
 ```
 websocket 发送数据接口：
-```c++
+```cpp
 enum opcode : std::uint8_t {
   cont = 0,
   text = 1,
@@ -464,7 +464,7 @@ async_simple::coro::Lazy<resp_data> write_websocket(std::string msg,
 
 websocket 例子:
 
-```c++
+```cpp
   coro_http_client client;
   // 连接websocket 服务器
   async_simple::coro::syncAwait(
@@ -495,7 +495,7 @@ client 不是线程安全的，要确保只有一个线程在调用client，如�
 
 通过多个协程去请求服务端, 每个协程都在内部线程池的某个线程中执行。去请求服务端
 
-```c++
+```cpp
 std::vector<std::shared_ptr<coro_http_client>> clients;
 std::vector<async_simple::coro::Lazy<resp_data>> futures;
 for (int i = 0; i < 10; ++i) {
@@ -514,7 +514,7 @@ for (auto &item : out) {
 
 ## 设置解析http response 的最大header 数量
 默认情况下，最多可以解析100 个http header，如果希望解析更多http header 需要define一个宏CINATRA_MAX_HTTP_HEADER_FIELD_SIZE，通过它来设置解析的最大header 数, 在include client 头文件之前定义：
-```c++
+```cpp
 #define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 200  // 将解析的最大header 数设置为200
 ```
 
@@ -535,7 +535,7 @@ cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 ### 快速示例
 
 ### 示例1：一个简单的hello world
-```c++
+```cpp
   #include "ylt/coro_http/coro_http_client.hpp"
   #include "ylt/coro_http/coro_http_server.hpp"
 	using namespace coro_http;
@@ -555,7 +555,7 @@ cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 5行代码就可以实现一个简单http服务器了，用户不需要关注多少细节，直接写业务逻辑就行了。
 
 ### 示例2：基本用法
-```c++
+```cpp
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
 using namespace coro_http;
@@ -675,7 +675,7 @@ int main() {
 ```
 
 ### 示例3：面向切面的http服务器
-```c++
+```cpp
   #include "ylt/coro_http/coro_http_client.hpp"
   #include "ylt/coro_http/coro_http_server.hpp"
 	using namespace coro_http;
@@ -739,11 +739,11 @@ int main() {
 见[example中的例子](example/main.cpp)
 
 ### 示例5：RESTful服务端路径参数设置
-本代码演示如何使用RESTful路径参数。下面设置了两个RESTful API。第一个API当访问，比如访问这样的url`http://127.0.0.1:8080/numbers/1234/test/5678`时服务器可以获取到1234和5678这两个参数，第一个RESTful API的参数是`(\d+)`是一个正则表达式表明只能参数只能为数字。获取第一个参数的代码是`req.get_matches()[1]`。因为每一个req不同所以每一个匹配到的参数都放在`request`结构体中。
+本代码演示如何使用RESTful路径参数。下面设置了两个RESTful API。第一个API当访问，比如访问这样的url`http://127.0.0.1:8080/numbers/1234/test/5678`时服务器可以获取到1234和5678这两个参数，第一个RESTful API的参数是`(\d+)`是一个正则表达式表明只能参数只能为数字。获取第一个参数的代码是`req.matches_[1]`。因为每一个req不同所以每一个匹配到的参数都放在`request`结构体中。
 
-同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/{:id}/test/{:name}"`，要获取到对应的参数使用`req.get_query_value`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_query_value("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
+同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/:id/test/:name"`，要获取到对应的参数使用`req.get_query_value`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_query_value("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
 
-```c++
+```cpp
   #include "ylt/coro_http/coro_http_client.hpp"
   #include "ylt/coro_http/coro_http_server.hpp"
 	using namespace coro_http;
@@ -754,14 +754,14 @@ int main() {
 
 		server.set_http_handler<GET, POST>(
 			R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
-				std::cout << " matches[1] is : " << req.get_matches()[1]
-						<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+				std::cout << " matches[1] is : " << req.matches_[1]
+						<< " matches[2] is: " << req.matches_[2] << std::endl;
 
 				res.set_status_and_content(status_type::ok, "hello world");
 			});
 
 		server.set_http_handler<GET, POST>(
-			"/string/{:id}/test/{:name}", [](request &req, response &res) {
+			"/string/:id/test/:name", [](request &req, response &res) {
 				std::string id = req.get_query_value("id");
 				std::cout << "id value is: " << id << std::endl;
 				std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
@@ -777,7 +777,7 @@ int main() {
   目前支持random, round robin 和 weight round robin三种负载均衡三种算法，设置代理服务器时指定算法类型即可。
   假设需要代理的服务器有三个，分别是"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"，coro_http_server设置路径、代理服务器列表和算法类型即可实现反向代理。
 
-  ```c++
+  ```cpp
 void http_proxy() {
   cinatra::coro_http_server web_one(1, 9001);
 

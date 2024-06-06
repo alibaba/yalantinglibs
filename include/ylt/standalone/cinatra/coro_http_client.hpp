@@ -284,11 +284,22 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = true;
+    }
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
     if (no_schema) {
-      append_uri.append("http://").append(uri);
+#ifdef CINATRA_ENABLE_SSL
+      if (is_ssl_schema_)
+        append_uri.append("https://").append(uri);
+      else
+#endif
+        append_uri.append("http://").append(uri);
     }
 
     auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
@@ -509,7 +520,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef BENCHMARK_TEST
   void set_bench_stop() { stop_bench_ = true; }
-  void set_read_fix() { read_fix_ = 1; }
 #endif
 
   async_simple::coro::Lazy<resp_data> async_patch(
@@ -552,73 +562,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string uri,
       std::unordered_map<std::string, std::string> headers = {}) {
     resp_data data{};
-#ifdef BENCHMARK_TEST
-    if (!req_str_.empty()) {
-      if (has_closed()) {
-        data.net_err = std::make_error_code(std::errc::not_connected);
-        data.status = 404;
-        co_return data;
-      }
-
-      std::error_code ec{};
-      size_t size = 0;
-      if (std::tie(ec, size) = co_await async_write(asio::buffer(req_str_));
-          ec) {
-        data.net_err = ec;
-        data.status = 404;
-        close_socket(*socket_);
-        co_return data;
-      }
-
-      if (read_fix_ == 0) {
-        req_context<> ctx{};
-        bool is_keep_alive = true;
-        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
-                                    http_method::GET);
-        handle_result(data, ec, is_keep_alive);
-        if (ec) {
-          if (!stop_bench_)
-            CINATRA_LOG_ERROR << "do_bench_read error:" << ec.message();
-          data.net_err = ec;
-          data.status = 404;
-        }
-        else {
-          data.status = 200;
-          data.total = total_len_;
-        }
-
-        co_return data;
-      }
-
-      std::tie(ec, size) = co_await async_read(head_buf_, total_len_);
-
-      if (ec) {
-        if (!stop_bench_)
-          CINATRA_LOG_ERROR << "do_bench_read error:" << ec.message();
-        data.net_err = ec;
-        data.status = 404;
-        close_socket(*socket_);
-        co_return data;
-      }
-      else {
-        const char *data_ptr =
-            asio::buffer_cast<const char *>(head_buf_.data());
-        head_buf_.consume(total_len_);
-        // check status
-        if (data_ptr[9] > '3') {
-          data.status = 404;
-          co_return data;
-        }
-      }
-
-      head_buf_.consume(total_len_);
-      data.status = 200;
-      data.total = total_len_;
-
-      co_return data;
-    }
-#endif
-
     req_context<> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx), std::move(headers));
@@ -886,7 +829,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #endif
 #ifdef BENCHMARK_TEST
-    req_str_.clear();
     total_len_ = 0;
 #endif
 
@@ -894,11 +836,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     head_buf_.consume(head_buf_.size());
     chunked_buf_.consume(chunked_buf_.size());
     resp_chunk_str_.clear();
-  }
-
-  async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
-    reset();
-    co_return co_await connect(std::move(uri));
   }
 
   std::string_view get_host() { return host_; }
@@ -1159,9 +1096,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         vec.push_back(asio::buffer(ctx.content.data(), ctx.content.size()));
       }
 
-#ifdef BENCHMARK_TEST
-      req_str_ = req_head_str;
-#endif
 #ifdef CORO_HTTP_PRINT_REQ_HEAD
       CINATRA_LOG_DEBUG << req_head_str;
 #endif
@@ -1639,7 +1573,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string boundary = std::string{parser_.get_boundary()};
     multipart_reader_t multipart(this);
     while (true) {
-      auto part_head = co_await multipart.read_part_head();
+      auto part_head = co_await multipart.read_part_head(boundary);
       if (part_head.ec) {
         co_return part_head.ec;
       }
@@ -2126,6 +2060,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_tcp_no_delay_ = true;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
+  bool should_reset_ = false;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
@@ -2134,10 +2069,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
 
 #ifdef BENCHMARK_TEST
-  std::string req_str_;
   bool stop_bench_ = false;
   size_t total_len_ = 0;
-  int read_fix_ = 0;
 #endif
 };
 }  // namespace cinatra

@@ -145,6 +145,7 @@ class appender {
     auto [ptr, ec] = std::to_chars(buf + 1, buf + 21, tid);
     buf[22] = ']';
     buf[23] = ' ';
+    last_tid = tid;
     last_len = ptr - buf;
     buf[last_len++] = ']';
     buf[last_len++] = ' ';

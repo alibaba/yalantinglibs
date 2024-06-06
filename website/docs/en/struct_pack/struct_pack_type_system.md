@@ -216,7 +216,7 @@ The class needs to provide: `size()`,`flip()`,`set()`,`reset()`,`count()`,and th
 
 ## Struct 
 
-`struct_pack` supports `struct` type. Up to **64** fields are supported and nested fields are supported too. All members
+`struct_pack` supports `struct` type. Up to **255** fields are supported and nested fields are supported too. All members
 should be of valid `struct_pack` type. 
 
 struct type could be `struct/class/std::tuple/tuplet::tuple/std::pair`

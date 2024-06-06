@@ -52,7 +52,7 @@ void async_echo_by_callback(
   /* rpc function runs in global io thread pool */
   coro_io::post([conn, data]() mutable {
     /* send work to global non-io thread pool */
-    auto *ctx = conn.get_context();
+    auto *ctx = conn.get_context_info();
     conn.response_msg(data); /*response here*/
   }).start([](auto &&) {
   });
@@ -102,9 +102,11 @@ Lazy<std::string_view> nested_echo(std::string_view sv) {
       coro_io::g_clients_pool<coro_rpc::coro_rpc_client>().at("127.0.0.1:8802");
   assert(client != nullptr);
   ELOGV(INFO, "connect another server");
-  auto ret = co_await client->send_request([sv](coro_rpc_client &client) {
-    return client.call<echo>(sv);
-  });
+  auto ret = co_await client->send_request(
+      [sv](coro_rpc_client &client)
+          -> Lazy<coro_rpc::rpc_result<std::string_view>> {
+        co_return co_await client.call<echo>(sv);
+      });
   co_return ret.value().value();
 }
 

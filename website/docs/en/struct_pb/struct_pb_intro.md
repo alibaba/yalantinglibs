@@ -1,31 +1,132 @@
-# struct_pb Introduction
+# struct_pb introduction
 
-## Motivation
-Protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. So many programs use protobuf as their serialization library. It is convienient for our customers to use `struct_pack` if we (`struct_pack`) can compatible with protobuf binary format. That is why we create `struct_pb`.
+struct_pb is an easy to use, C++17, header only, high performance protobuf format serialization library.
 
-## Background
-In this section, we introduce the [protocol buffer wire format](https://developers.google.com/protocol-buffers/docs/encoding),  which defines the details of how protobuf message is sent on the wire and how much space it consumes on disk.
-### Message Structure
-A protocol buffer message is a series of key-value pairs. The binary version of a message just uses the field's number as the key -- the name and declared type for each field can only be determined on the decoding end by referencing the message type's definition.
-![](images/pb_format.jpeg)
+## motiviation
 
+Don't depend on proto files, don't depend on protoc to generate code.
+
+Utilize inline, zero copy, compile-time compute to optimize performance.
+
+## example
+
+### define struct
 ```cpp
-Tag = (field_number << 3) | wire_type
+#include <ylt/struct_pb.hpp>
+
+struct my_struct {
+  int x;
+  bool y;
+  struct_pb::fixed64_t z;
+};
+REFLECTION(my_struct, x, y, z);
+
+struct nest {
+  std::string name;
+  my_struct value;
+  int var;
+};
+REFLECTION(nest, name, value, var);
 ```
 
+### serialization and deserialization
+```cpp
+int main() {
+  nest v{"Hi", {1, false, {3}}, 5}, v2{};
+  std::string s;
+  struct_pb::to_pb(v, s);
+  struct_pb::from_pb(v2, s);
+  assert(v.var == v2.var);
+  assert(v.value.y == v2.value.y);
+  assert(v.value.z == v2.value.z);
+}
+```
+the above struct mapping to a proto file, like this:
+```
+message my_struct {
+  int32 optional_int32 = 1;
+  bool optional_int64 = 2;
+  sfixed64 z = 3;
+}
 
+message nest {
+  string name = 1;
+  my_struct value = 2;
+  int32 var = 3;
+}
+```
 
-### Base 128 Varints
-Variable-width integers, or _varints_, are at the core of the wire format. They allow encoding unsigned 64-bit integers using anywhere between one and ten bytes, with small values using fewer bytes.
+## dynamic reflection
+features：
+- create instance by object's name;
+- get all fields name from an object;
+- get/set field value by filed name and instance;
 
-## Design
-![](images/struct_pb_overview.jpeg)
+### create instance by object's name
+```cpp
+struct my_struct {
+  int x;
+  bool y;
+  iguana::fixed64_t z;
+};
+REFLECTION(my_struct, x, y, z);
 
-## Type Mapping
-proto3 first,
-see also [Protocol Buffers Language Guide (proto3)](https://developers.google.com/protocol-buffers/docs/proto3#scalar)
+struct nest1 : public iguana::base_imple<nest1> {
+  nest1() = default;
+  nest1(std::string s, my_struct t, int d)
+      : name(std::move(s)), value(t), var(d) {}
+  std::string name;
+  my_struct value;
+  int var;
+};
+REFLECTION(nest1, name, value, var);
+```
 
-### Overview
+```cpp
+std::shared_ptr<base> t = struct_pb::create_instance("nest1");
+```
+"create instance by object's name" require the struct inherited from struct_pb::base_impl. If not inherited,create_instance will throw exception.
+
+### get/set field value by filed name and instance
+```cpp
+  auto t = iguana::create_instance("nest1");
+
+  std::vector<std::string_view> fields_name = t->get_fields_name();
+  CHECK(fields_name == std::vector<std::string_view>{"name", "value", "var"});
+
+  my_struct mt{2, true, {42}};
+  t->set_field_value("value", mt);
+  t->set_field_value("name", std::string("test"));
+  t->set_field_value("var", 41);
+  nest1 *st = dynamic_cast<nest1 *>(t.get());
+  auto p = *st;
+  std::cout << p.name << "\n";
+  auto &r0 = t->get_field_value<std::string>("name");
+  CHECK(r0 == "test");
+  auto &r = t->get_field_value<int>("var");
+  CHECK(r == 41);
+  auto &r1 = t->get_field_value<my_struct>("value");
+  CHECK(r1.x == 2);
+```
+“set field value by filed name and instance” require the setting value type is same with filed type, don't allow explicit transform, otherwise throw exception.
+
+also support set field value with its type:
+```cpp
+t->set_field_value<std::string>("name", "test");
+```
+implicit set field type can support implicit assign field value. If the field type is not the real field type, will throw exception.  
+
+## benchmark 
+
+monster case: 
+
+struct_pb is 2.4 faster than protobuf when serializing a monster;
+
+struct_pb is 3.4 faster than protobuf when deserializing a monster;
+
+the code in struct_pack benchmark.
+
+## struct_pb and protobuf type mapping
 Scalar Value Types with no modifier (a.k.a **singular**) -> T
 
 Scalar Value Types with **optional** -> `std::optional <T>`
@@ -38,33 +139,9 @@ any message type -> `std::optional <T>`
 
 enum -> enum class
 
-oneof -> `std::variant <std::monostate, ...>`
+oneof -> `std::variant <...>`
 
-
-Note:
-
-- singular.
-  You cannot determine whether it was parsed from the wire. It will be serialized to the wire unless it is the default value. see also [Field Presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md).
-- optional.
-  You can check to see if the value was explicitly set.
-- repeat.
-  In proto3, repeated fields of scalar numeric types use packed encoding by default.
-- map.
-  The key of map can be any integral or string type except enum.
-  The value of map can be any type except another map.
-- enum.
-  Every enum definition must contain a constant that maps to zero as its first element.
-  Enumerator constants must be in the range of a 32-bit integer.
-  During deserialization, unrecognized enum values will be preserved in the message
-- oneof.
-  If you set an oneof field to the default value (such as setting an int32 oneof field to 0), the "case" of that oneof field will be set, and the value will be serialized on the wire.
-- default value
-    - For numeric types, the default is 0.
-    - For enums, the default is the zero-valued enumerator.
-    - For strings, bytes, and repeated fields, the default is the zero-length value.
-    - For messages, the default is the language-specific null value.
-
-### Basic
+### type mapping table
 | .proto Type | struct_pb Type                    | pb native C++ type | Notes                              |
 |-------------|-----------------------------------|--------------------|------------------------------------|
 | double      | double                            | double             | 8 bytes                            |
@@ -73,98 +150,26 @@ Note:
 | int64       | int64                             | int64              |                                    |
 | uint32      | uint32                            | uint32             |                                    |
 | uint64      | uint64                            | uint64             |                                    |
-| sint32      | int32                             | int32              | ZigZag + variable-length encoding. |
-| sint64      | int64                             | int64              |                                    |
-| fixed32     | uint32                            | uint32             | 4 bytes                            |
-| fixed64     | uint64                            | uint64             | 8 bytes                            |
-| sfixed32    | int32                             | int32              | 4 bytes,$2^{28}$                   |
-| sfixed64    | int64                             | int64              | 8 bytes,$2^{56}$                   |
+| sint32      | sint32_t                             | int32              | ZigZag + variable-length encoding. |
+| sint64      | sint6_t                             | int64              |                                    |
+| fixed32     | fixed32_t                            | uint32             | 4 bytes                            |
+| fixed64     | fixed64_t                            | uint64             | 8 bytes                            |
+| sfixed32    | sfixed32_t                             | int32              | 4 bytes,$2^{28}$                   |
+| sfixed64    | sfixed64_t                             | int64              | 8 bytes,$2^{56}$                   |
 | bool        | bool                              | bool               |                                    |
 | string      | std::string                       | string             | $len < 2^{32}$                     |
 | bytes       | std::string                       | string             |                                    |
-| enum        | enum class: int {}                | enum: int {}       |                                    |
-| oneof       | std::variant<std::monostate, ...> |                    |                                    |
+| enum        | enum class: int {}/enum                | enum: int {}       |                                    |
+| oneof       | std::variant<...> |                    |                                    |
 
-Note:
+## limitation
+- only support proto3, not support proto2 now;
+- don't support reflection now;
+- don't support  unkonwn fields;
+- struct must inherited from base_impl;
 
-- for enum, we use `enum class` instead of `enum`
-- for oneof, we use `std::variant` with first template argument `std::monostate`
-
-## File Mapping
-each `xxx.proto`file generates corresponding `xxx.struct_pb.h` and `xxx.struct_pb.cc`
-all dependencies will convert to include corresponding headers.
-```
-syntax = "proto3";
-
-import "foo.proto";
-
-message Bar {
-    Foo f = 2;
-}
-```
-mapping to cpp
-```cpp
-#include "foo.struct_pb.h"
-struct Bar {
-std::unique_ptr<Foo> f;
-};
-
-```
-## protoc Plugin
-```bash
-protoc --plugin=path/to/protoc-gen-structpb --structpb_out=$OUT_PATH xxx.proto
-```
-e.g.
-```shell
-protoc --plugin=/tmp/protoc-gen-structpb --structpb_out=. conformance.proto
-```
-## TODO
-
--[ ] using value instead of `std::unique_ptr` when no circle dependencies
-
-for example, we convert the message `SearchResponse` to c++ struct `SearchResponse_v1`
-```
-message SearchResponse {
-  Result result = 1;
-}
-
-message Result {
-  string url = 1;
-}
-```
-
-```cpp
-struct SearchResponse_v1 {
-    std::unique_ptr<Result> result;
-};
-```
-
-we can optimize the pointer overhead if we can convert the message `SearchResponse` to c++ struct `SearchResponse_v2`
-```cpp
-struct SearchResponse_v2 {
-    Result result;
-};
-```
-
-
-## Compatibility
-see also
-
-- [Language Guide (proto3) -- Updating A Message Type](https://developers.google.com/protocol-buffers/docs/proto3#updating)
-- [oneof compatibility](https://developers.google.com/protocol-buffers/docs/proto3#backwards-compatibility_issues)
-## Limitation
-
-- SGROUP(deprecated) and EGROUP(deprecated) are not support
-- Reflection not support
-- proto2 extension not support
-
-## Acknowledge
-
-- [Embedded Proto](https://embeddedproto.com/): an easy to use C++ Protocol Buffer implementation specifically suited for microcontrollers
-- [protobuf-c](https://github.com/protobuf-c/protobuf-c): Protocol Buffers implementation in C
-- [protozero](https://github.com/mapbox/protozero): Minimalist protocol buffer decoder and encoder in C++
-- [protopuf](https://github.com/PragmaTwice/protopuf): A little, highly templated, and protobuf-compatible serialization/deserialization header-only library written in C++20
-
-## Reference
-
-- [Protocol Buffers Compiler Plugins](https://developers.google.com/protocol-buffers/docs/reference/other#plugins)
+## roadmap
+- support proto2;
+- support reflection;
+- support unkonwn fields;
+- no need inheriting from base_impl;

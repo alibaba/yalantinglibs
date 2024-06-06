@@ -36,7 +36,7 @@ yarn install
 - generate website
 
 ```
-bash gen_doc.sh
+bash generate.sh
 ```
 
 the script will copy all markdown files and images to website folder

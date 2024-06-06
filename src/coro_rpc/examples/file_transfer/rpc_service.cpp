@@ -6,7 +6,7 @@
 std::string echo(std::string str) { return str; }
 
 void upload_file(coro_rpc::context<std::errc> conn, file_part part) {
-  auto &ctx = *conn.get_context();
+  auto &ctx = *conn.get_context_info();
   if (!ctx.tag().has_value()) {
     auto filename = std::to_string(std::time(0)) +
                     std::filesystem::path(part.filename).extension().string();
@@ -27,7 +27,7 @@ void upload_file(coro_rpc::context<std::errc> conn, file_part part) {
 
 void download_file(coro_rpc::context<response_part> conn,
                    std::string filename) {
-  auto &ctx = *conn.get_context();
+  auto &ctx = *conn.get_context_info();
   if (!ctx.tag().has_value()) {
     std::string actual_filename =
         std::filesystem::path(filename).filename().string();

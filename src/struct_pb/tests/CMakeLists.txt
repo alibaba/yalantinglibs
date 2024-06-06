@@ -1,55 +1,39 @@
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
 find_package(Protobuf QUIET)
+if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  # If this is a subproject in ylt
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
+else()
+  # else find installed yalantinglibs
+    cmake_minimum_required(VERSION 3.15)
+    project(struct_pb_test)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_INCLUDE_CURRENT_DIR ON)
+  # if you have install ylt  
+    find_package(yalantinglibs REQUIRED)
+    link_libraries(yalantinglibs::yalantinglibs)
+  # else 
+  # include_directories(include)
+  # include_directories(include/ylt/thirdparty)
+endif()
+
+set(TEST_PROTO main.cpp)
+
 if (Protobuf_FOUND)
-add_executable(test_struct_pb
-        test_pb.cpp
-        test_pb_oneof.cpp
-        test_pb_benchmark_struct.cpp
-        test_pb_bad_identifiers.cpp
-        )
-target_sources(test_struct_pb PRIVATE
-        main.cpp
-        )
-add_test(NAME test_struct_pb COMMAND test_struct_pb)
-target_include_directories(test_struct_pb PUBLIC ${yaLanTingLibs_SOURCE_DIR}/src/struct_pack/benchmark)
-    target_compile_definitions(test_struct_pb PRIVATE HAVE_PROTOBUF)
-    target_link_libraries(test_struct_pb PRIVATE protobuf::libprotobuf)
-    # generate .pb.cc .pb.h
-    protobuf_generate_cpp(PROTO_SRCS
-            PROTO_HDRS
-            test_pb.proto
-            data_def.proto
-            )
-    target_include_directories(test_struct_pb PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-    target_sources(test_struct_pb PRIVATE
-            ${PROTO_SRCS}
-            ${PROTO_HDRS}
-            )
-    protobuf_generate_struct_pb(STRUCT_PB_PROTO_SRCS
-            STRUCT_PB_PROTO_HDRS
-            test_pb.proto
-            OPTION "generate_eq_op=true,namespace=test_struct_pb"
-            )
-    target_sources(test_struct_pb PRIVATE
-            ${STRUCT_PB_PROTO_SRCS}
-            ${STRUCT_PB_PROTO_HDRS}
-            )
-    protobuf_generate_struct_pb(STRUCT_PB_TEST_BENCHMARK_PROTO_SRCS
-            STRUCT_PB_TEST_BENCHMARK_PROTO_HDRS
-            data_def.proto
-            OPTION "namespace=struct_pb_sample"
-            )
-    target_sources(test_struct_pb PRIVATE
-            ${STRUCT_PB_TEST_BENCHMARK_PROTO_SRCS}
-            ${STRUCT_PB_TEST_BENCHMARK_PROTO_HDRS}
-            )
-    protobuf_generate_struct_pb(STRUCT_PB_PROTO_SRCS2
-            STRUCT_PB_PROTO_HDRS2
-            test_bad_identifiers.proto
-            test_large_enum_value.proto
-            )
-    target_sources(test_struct_pb PRIVATE
-            ${STRUCT_PB_PROTO_SRCS2}
-            ${STRUCT_PB_PROTO_HDRS2}
-            )
-endif ()
+  add_definitions(-DSTRUCT_PB_WITH_PROTO)
+  message(STATUS "Found Protobuf: ${Protobuf_VERSION}")
+  include_directories(${Protobuf_INCLUDE_DIRS})
+  include_directories(${CMAKE_CURRENT_BINARY_DIR})
+  set(PROTO_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/)
+  file(GLOB PROTO_FILES ${PROTO_SRC_DIR}/*.proto)
+
+  protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+  # message(STATUS "Proto source files: ${PROTO_SRCS}")
+  # message(STATUS "Proto header files: ${PROTO_HDRS}")
+  add_executable(struct_pb_test ${PROTO_SRCS} ${TEST_PROTO})
+  target_link_libraries(struct_pb_test PRIVATE protobuf::libprotobuf)
+  add_test(NAME struct_pb_test COMMAND struct_pb_test)
+else()
+  add_executable(struct_pb_test ${TEST_PROTO})
+  add_test(NAME struct_pb_test COMMAND struct_pb_test)
+endif()

@@ -75,7 +75,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
   context_t &context() { return executor_.context(); }
 
-  auto get_asio_executor() { return executor_; }
+  auto get_asio_executor() const { return executor_; }
 
   operator ExecutorImpl() { return executor_; }
 

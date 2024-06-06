@@ -11,7 +11,12 @@ class multipart_reader_t {
         head_buf_(conn_->head_buf_),
         chunked_buf_(conn_->chunked_buf_) {}
 
-  async_simple::coro::Lazy<part_head_t> read_part_head() {
+  async_simple::coro::Lazy<part_head_t> read_part_head(
+      std::string_view boundary) {
+    if (boundary.empty()) {
+      co_return part_head_t{std::make_error_code(std::errc::protocol_error)};
+    }
+
     if (head_buf_.size() > 0) {
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       chunked_buf_.sputn(data_ptr, head_buf_.size());

@@ -317,7 +317,7 @@ inline async_simple::coro::Lazy<void> sleep_for(Duration d) {
 template <typename R, typename Func, typename Executor>
 struct post_helper {
   void operator()(auto handler) {
-    asio::dispatch(e, [this, handler]() {
+    asio::post(e, [this, handler]() {
       try {
         if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
           func();

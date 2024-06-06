@@ -332,7 +332,7 @@ void basic_usage() {
 coro_http is a C++20 coroutine http(https) library, include server and client, functions: get/post, websocket, multipart file upload, chunked and ranges download etc. [more examples](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_http/examples/example.cpp)
 
 ### get/post
-```c++
+```cpp
 #include "ylt/coro_http/coro_http_server.hpp"
 #include "ylt/coro_http/coro_http_client.hpp"
 using namespace coro_http;
@@ -379,7 +379,7 @@ int main() {
 ```
 
 ### websocket
-```c++
+```cpp
 async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
   // connect to your websocket server.
   bool r = co_await client.async_connect("ws://example.com/ws");
@@ -401,7 +401,7 @@ async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
 ```
 
 ### upload/download
-```c++
+```cpp
 async_simple::coro::Lazy<void> upload_files(coro_http_client &client) {
   std::string uri = "http://example.com";
   
@@ -504,11 +504,9 @@ No dependency.
 
 No dependency.
 
-### struct_pb (optional)
+### struct_pb
 
-In default, struct_pb wont be installed. You need install protobuf manually.
-
-- [protobuf](https://protobuf.dev/)
+No dependency.
 
 
 ## Standalone sublibraries

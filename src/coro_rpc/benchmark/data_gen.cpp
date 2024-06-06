@@ -31,7 +31,7 @@ int main() {
   coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(), 0);
   register_handlers(server);
   auto started = server.async_start();
-  if (!started) {
+  if (started.hasResult()) {
     ELOGV(ERROR, "server started failed");
     return -1;
   }
@@ -118,7 +118,7 @@ int main() {
 
   server.stop();
 
-  started->wait();
+  started.wait();
 
   pool.stop();
   thd.join();

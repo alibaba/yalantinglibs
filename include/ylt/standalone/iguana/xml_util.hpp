@@ -2,8 +2,8 @@
 #include "util.hpp"
 
 namespace iguana {
-template <typename T, typename map_type = std::unordered_map<std::string_view,
-                                                             std::string_view>>
+template <typename T,
+          typename map_type = std::unordered_map<std::string, std::string>>
 class xml_attr_t {
  public:
   T &value() { return val_; }
@@ -16,6 +16,10 @@ class xml_attr_t {
   T val_;
   map_type attr_;
 };
+
+template <typename T>
+using xml_attr_view_t =
+    xml_attr_t<T, std::map<std::string_view, std::string_view>>;
 
 template <typename T = std::string_view,
           std::enable_if_t<string_container_v<T>, int> = 0>
@@ -72,10 +76,22 @@ inline constexpr auto has_square_bracket =
           0b0101110101011101010111010101110101011101010111010101110101011101);
     };
 
+inline constexpr auto has_and = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
+  return has_zero(
+      chunk ^
+      0b0010011000100110001001100010011000100110001001100010011000100110);
+};
+
 inline constexpr auto has_equal = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
   return has_zero(
       chunk ^
       0b0011110100111101001111010011110100111101001111010011110100111101);
+};
+
+inline constexpr auto has_apos = [](uint64_t chunk) IGUANA__INLINE_LAMBDA {
+  return has_zero(
+      chunk ^
+      0b0010011100100111001001110010011100100111001001110010011100100111);
 };
 
 template <typename It>
@@ -104,6 +120,35 @@ IGUANA_INLINE void match_close_tag(It &&it, It &&end, std::string_view key) {
   // ++it;
 }
 
+// returns true if the specified character 'c' is found, false otherwise.
+template <char c, typename It>
+IGUANA_INLINE bool advance_until_character(It &&it, It &&end) {
+  static_assert(contiguous_iterator<std::decay_t<It>>);
+  if (std::distance(it, end) >= 7)
+    IGUANA_LIKELY {
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
+        const auto chunk = *reinterpret_cast<const uint64_t *>(&*it);
+        uint64_t test;
+        if constexpr (c == '&')
+          test = has_and(chunk);
+        else
+          static_assert(!c, "not support this character");
+        if (test != 0) {
+          it += (countr_zero(test) >> 3);
+          return true;
+        }
+      }
+    }
+  // Tail end of buffer. Should be rare we even get here
+  while (it < end) {
+    if (*it == c)
+      return true;
+    ++it;
+  }
+  return false;
+}
+
 template <char c, typename It>
 IGUANA_INLINE void skip_till(It &&it, It &&end) {
   static_assert(contiguous_iterator<std::decay_t<It>>);
@@ -126,6 +171,8 @@ IGUANA_INLINE void skip_till(It &&it, It &&end) {
           test = has_square_bracket(chunk);
         else if constexpr (c == '=')
           test = has_equal(chunk);
+        else if constexpr (c == '\'')
+          test = has_apos(chunk);
         else
           static_assert(!c, "not support this character");
         if (test != 0) {
@@ -184,6 +231,106 @@ IGUANA_INLINE auto skip_pass(It &&it, It &&end) {
     --res;
   }
   return res + 1;
+}
+
+template <char... C, typename It>
+IGUANA_INLINE bool is_match(It &&it, const It &end) {
+  const auto n = static_cast<size_t>(std::distance(it, end));
+  if ((n < sizeof...(C)) || (... || (*it++ != C))) {
+    return false;
+  }
+  return true;
+}
+
+template <typename U, typename It, std::enable_if_t<string_v<U>, int> = 0>
+IGUANA_INLINE void parse_escape_xml(U &value, It &&it, It &&end) {
+  static const unsigned char lookup_digits[256] = {
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   255, 255,
+      255, 255, 255, 255, 255, 10,  11,  12,  13,  14,  15,  255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 10,  11,  12,  13,  14,  15,  255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255};
+  switch (*(it + 1)) {
+    // &amp; &apos;
+    case 'a':
+      if (is_match<'m', 'p', ';'>(it + 2, end)) {
+        value.push_back('&');
+        it += 5;
+        return;
+      }
+      if (is_match<'p', 'o', 's', ';'>(it + 2, end)) {
+        value.push_back('\'');
+        it += 6;
+      }
+      break;
+    // &quot;
+    case 'q':
+      if (is_match<'u', 'o', 't', ';'>(it + 2, end)) {
+        value.push_back('\"');
+        it += 6;
+      }
+      break;
+    // &gt;
+    case 'g':
+      if (is_match<'t', ';'>(it + 2, end)) {
+        value.push_back('>');
+        it += 4;
+      }
+      break;
+    // &lt;
+    case 'l':
+      if (is_match<'t', ';'>(it + 2, end)) {
+        value.push_back('<');
+        it += 4;
+      }
+      break;
+    case '#':
+      if (*(it + 2) == 'x') {
+        // &#x
+        unsigned long codepoint = 0;
+        it += 3;
+        while (true) {
+          auto digit = lookup_digits[static_cast<unsigned char>(*it)];
+          if (digit == 0xFF)
+            break;
+          codepoint = codepoint * 16 + digit;
+          ++it;
+        }
+        encode_utf8(value, codepoint);
+      }
+      else {
+        unsigned long codepoint = 0;
+        it += 2;
+        while (true) {
+          auto digit = lookup_digits[static_cast<unsigned char>(*it)];
+          if (digit == 0xFF)
+            break;
+          codepoint = codepoint * 10 + digit;
+          ++it;
+        }
+        encode_utf8(value, codepoint);
+      }
+      match<';'>(it, end);
+      break;
+    default:
+      // skip '&'
+      // loose policy: allow '&'
+      value.push_back(*(it++));
+      break;
+  }
 }
 
 }  // namespace iguana

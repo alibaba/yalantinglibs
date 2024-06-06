@@ -245,6 +245,8 @@ IGUANA_INLINE void to_json_impl(Stream &s, T &&t) {
 template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<variant_v<T>, int>>
 IGUANA_INLINE void to_json_impl(Stream &s, T &&t) {
+  static_assert(!has_duplicate_type_v<std::remove_reference_t<T>>,
+                "don't allow same type in std::variant");
   std::visit(
       [&s](auto value) {
         to_json_impl<Is_writing_escape>(s, value);
