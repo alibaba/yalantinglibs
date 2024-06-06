@@ -207,7 +207,7 @@ TEST_CASE("test summary") {
     summary.observe(distr(gen));
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
   std::string str;
   async_simple::coro::syncAwait(summary.serialize_async(str));
   std::cout << str;
