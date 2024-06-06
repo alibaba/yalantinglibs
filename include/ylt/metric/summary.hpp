@@ -11,18 +11,27 @@ class summary_t : public metric_t {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
   summary_t(std::string name, std::string help, Quantiles quantiles,
-            coro_io::ExecutorWrapper<> *excutor =
-                coro_io::get_global_block_executor(),
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
             int age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        excutor_(excutor),
         metric_t(MetricType::Summary, std::move(name), std::move(help)) {
+    work_ = std::make_shared<asio::io_context::work>(ctx_);
+    thd_ = std::thread([this] {
+      ctx_.run();
+    });
+    excutor_ =
+        std::make_unique<coro_io::ExecutorWrapper<>>(ctx_.get_executor());
     block_ = std::make_shared<block_t>();
     block_->quantile_values_ =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
-    start_timer(block_).via(excutor_).start([](auto &&) {
+    start_timer(block_).via(excutor_.get()).start([](auto &&) {
     });
+  }
+
+  ~summary_t() {
+    block_->stop_ = true;
+    work_ = nullptr;
+    thd_.join();
   }
 
   struct block_t {
@@ -101,9 +110,9 @@ class summary_t : public metric_t {
     while (!block->stop_) {
       size_t index = 0;
       while (block->sample_queue_.try_dequeue(sample)) {
-        block_->quantile_values_->insert(sample);
-        block_->count_ += 1;
-        block_->sum_ += sample;
+        block->quantile_values_->insert(sample);
+        block->count_ += 1;
+        block->sum_ += sample;
         index++;
         if (index == count) {
           break;
@@ -122,6 +131,9 @@ class summary_t : public metric_t {
 
   Quantiles quantiles_;  // readonly
   std::shared_ptr<block_t> block_;
-  coro_io::ExecutorWrapper<> *excutor_ = nullptr;
+  std::unique_ptr<coro_io::ExecutorWrapper<>> excutor_ = nullptr;
+  std::shared_ptr<asio::io_context::work> work_;
+  asio::io_context ctx_;
+  std::thread thd_;
 };
 }  // namespace ylt
