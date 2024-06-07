@@ -312,5 +312,5 @@ struct metric_manager_t {
   static inline std::once_flag flag_;
 };
 
-using default_metric_manger = metric_manager_t<0>;
+using default_metric_manager = metric_manager_t<0>;
 }  // namespace ylt

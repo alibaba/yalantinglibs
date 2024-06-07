@@ -187,7 +187,7 @@ class coro_http_server {
     set_http_handler<http_method::GET>(
         url_path, [](coro_http_request &req, coro_http_response &res) {
           std::string str = async_simple::coro::syncAwait(
-              ylt::default_metric_manger::serialize_static());
+              ylt::default_metric_manager::serialize_static());
           res.set_status_and_content(status_type::ok, std::move(str));
         });
   }
@@ -903,20 +903,20 @@ class coro_http_server {
     using namespace ylt;
 
     cinatra_metric_conf::enable_metric = true;
-    default_metric_manger::create_metric_static<counter_t>(
+    default_metric_manager::create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_req, "");
-    default_metric_manger::create_metric_static<counter_t>(
+    default_metric_manager::create_metric_static<counter_t>(
         cinatra_metric_conf::server_failed_req, "");
-    default_metric_manger::create_metric_static<counter_t>(
+    default_metric_manager::create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_recv_bytes, "");
-    default_metric_manger::create_metric_static<counter_t>(
+    default_metric_manager::create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_send_bytes, "");
-    default_metric_manger::create_metric_static<gauge_t>(
+    default_metric_manager::create_metric_static<gauge_t>(
         cinatra_metric_conf::server_total_fd, "");
-    default_metric_manger::create_metric_static<histogram_t>(
+    default_metric_manager::create_metric_static<histogram_t>(
         cinatra_metric_conf::server_req_latency, "",
         std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-    default_metric_manger::create_metric_static<histogram_t>(
+    default_metric_manager::create_metric_static<histogram_t>(
         cinatra_metric_conf::server_read_latency, "",
         std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
   }

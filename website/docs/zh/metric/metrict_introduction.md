@@ -243,16 +243,16 @@ class metric_t {
 ```cpp
 auto c = std::make_shared<counter_t>("qps_count", "qps help");
 auto g = std::make_shared<gauge_t>("fd_count", "fd count help");
-default_metric_manger::register_metric_static(c);
-default_metric_manger::register_metric_static(g);
+default_metric_manager::register_metric_static(c);
+default_metric_manager::register_metric_static(g);
 
 c->inc();
 g->inc();
 
-auto m = default_metric_manger::get_metric_static("qps_count");
+auto m = default_metric_manager::get_metric_static("qps_count");
 CHECK(m->as<counter_t>()->value() == 1);
 
-auto m1 = default_metric_manger::get_metric_static("fd_count");
+auto m1 = default_metric_manager::get_metric_static("fd_count");
 CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 
@@ -260,19 +260,19 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```cpp
 auto c = std::make_shared<counter_t>("qps_count", "qps help");
 auto g = std::make_shared<gauge_t>("fd_count", "fd count help");
-default_metric_manger::register_metric_dynamic(c);
-default_metric_manger::register_metric_dynamic(g);
+default_metric_manager::register_metric_dynamic(c);
+default_metric_manager::register_metric_dynamic(g);
 
 c->inc();
 g->inc();
 
-auto m = default_metric_manger::get_metric_dynamic("qps_count");
+auto m = default_metric_manager::get_metric_dynamic("qps_count");
 CHECK(m->as<counter_t>()->value() == 1);
 
-auto m1 = default_metric_manger::get_metric_dynamic("fd_count");
+auto m1 = default_metric_manager::get_metric_dynamic("fd_count");
 CHECK(m1->as<gauge_t>()->value() == 1);
 ```
-注意：一旦注册时使用了static或者dynamic，那么后面调用default_metric_manger时则应该使用相同后缀的接口，比如注册时使用了get_metric_static，那么后面调用根据名称获取指标对象的方法必须是get_metric_static，否则会抛异常。同样，如果注册使用register_metric_dynamic，则后面应该get_metric_dynamic，否则会抛异常。
+注意：一旦注册时使用了static或者dynamic，那么后面调用default_metric_manager时则应该使用相同后缀的接口，比如注册时使用了get_metric_static，那么后面调用根据名称获取指标对象的方法必须是get_metric_static，否则会抛异常。同样，如果注册使用register_metric_dynamic，则后面应该get_metric_dynamic，否则会抛异常。
 
 指标管理器的api
 ```cpp
@@ -317,9 +317,9 @@ struct metric_manager_t {
   static async_simple::coro::Lazy<std::string> serialize_static();
   static async_simple::coro::Lazy<std::string> serialize_dynamic();
 };
-using default_metric_manger = metric_manager_t<0>;
+using default_metric_manager = metric_manager_t<0>;
 ```
-metric_manager_t默认为default_metric_manger，如果希望有多个metric manager，用户可以自定义新的metric manager，如：
+metric_manager_t默认为default_metric_manager，如果希望有多个metric manager，用户可以自定义新的metric manager，如：
 
 ```cpp
 constexpr size_t metric_id = 100;

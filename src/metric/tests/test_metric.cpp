@@ -222,55 +222,55 @@ TEST_CASE("test summary") {
 TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"));
-  default_metric_manger::register_metric_static(c);
-  CHECK_FALSE(default_metric_manger::register_metric_static(c));
+  default_metric_manager::register_metric_static(c);
+  CHECK_FALSE(default_metric_manager::register_metric_static(c));
 
   auto g = std::make_shared<gauge_t>(std::string("get_guage_count"),
                                      std::string("get counter"));
-  default_metric_manger::register_metric_static(g);
+  default_metric_manager::register_metric_static(g);
 
-  auto map1 = default_metric_manger::metric_map_static();
+  auto map1 = default_metric_manager::metric_map_static();
   for (auto& [k, v] : map1) {
     bool r = k == "get_count" || k == "get_guage_count";
     break;
   }
 
-  CHECK(default_metric_manger::metric_count_static() >= 2);
-  CHECK(default_metric_manger::metric_keys_static().size() >= 2);
+  CHECK(default_metric_manager::metric_count_static() >= 2);
+  CHECK(default_metric_manager::metric_keys_static().size() >= 2);
 
   c->inc();
   g->inc();
 
-  auto map = default_metric_manger::metric_map_static();
+  auto map = default_metric_manager::metric_map_static();
   CHECK(map["get_count"]->as<counter_t>()->value() == 1);
   CHECK(map["get_guage_count"]->as<gauge_t>()->value() == 1);
 
   auto s =
-      async_simple::coro::syncAwait(default_metric_manger::serialize_static());
+      async_simple::coro::syncAwait(default_metric_manager::serialize_static());
   std::cout << s << "\n";
   CHECK(s.find("get_count 1") != std::string::npos);
   CHECK(s.find("get_guage_count 1") != std::string::npos);
 
-  auto m = default_metric_manger::get_metric_static<counter_t>("get_count");
+  auto m = default_metric_manager::get_metric_static<counter_t>("get_count");
   CHECK(m->as<counter_t>()->value() == 1);
 
   auto m1 =
-      default_metric_manger::get_metric_static<gauge_t>("get_guage_count");
+      default_metric_manager::get_metric_static<gauge_t>("get_guage_count");
   CHECK(m1->as<gauge_t>()->value() == 1);
 
   {
     // because the first regiter_metric is set no lock, so visit
-    // default_metric_manger with lock will throw.
+    // default_metric_manager with lock will throw.
     auto c1 = std::make_shared<counter_t>(std::string(""), std::string(""));
-    CHECK_THROWS_AS(default_metric_manger::register_metric_dynamic(c1),
+    CHECK_THROWS_AS(default_metric_manager::register_metric_dynamic(c1),
                     std::invalid_argument);
-    CHECK_THROWS_AS(default_metric_manger::metric_count_dynamic(),
+    CHECK_THROWS_AS(default_metric_manager::metric_count_dynamic(),
                     std::invalid_argument);
-    CHECK_THROWS_AS(default_metric_manger::metric_keys_dynamic(),
+    CHECK_THROWS_AS(default_metric_manager::metric_keys_dynamic(),
                     std::invalid_argument);
-    CHECK_THROWS_AS(default_metric_manger::metric_map_dynamic(),
+    CHECK_THROWS_AS(default_metric_manager::metric_map_dynamic(),
                     std::invalid_argument);
-    CHECK_THROWS_AS(default_metric_manger::get_metric_dynamic<counter_t>(""),
+    CHECK_THROWS_AS(default_metric_manager::get_metric_dynamic<counter_t>(""),
                     std::invalid_argument);
   }
 }
