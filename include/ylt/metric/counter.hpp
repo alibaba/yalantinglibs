@@ -39,6 +39,8 @@ class counter_t : public metric_t {
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels_name)) {}
 
+  virtual ~counter_t() {}
+
   double value() { return default_lable_value_; }
 
   double value(const std::vector<std::string> &labels_value) {

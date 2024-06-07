@@ -229,6 +229,12 @@ TEST_CASE("test register metric") {
                                      std::string("get counter"));
   default_metric_manger::register_metric_static(g);
 
+  auto map1 = default_metric_manger::metric_map_static();
+  for (auto& [k, v] : map1) {
+    bool r = k == "get_count" || k == "get_guage_count";
+    CHECK(r);
+  }
+
   CHECK(default_metric_manger::metric_count_static() == 2);
   CHECK(default_metric_manger::metric_keys_static().size() == 2);
 
@@ -245,10 +251,11 @@ TEST_CASE("test register metric") {
   CHECK(s.find("get_count 1") != std::string::npos);
   CHECK(s.find("get_guage_count 1") != std::string::npos);
 
-  auto m = default_metric_manger::get_metric_static("get_count");
+  auto m = default_metric_manger::get_metric_static<counter_t>("get_count");
   CHECK(m->as<counter_t>()->value() == 1);
 
-  auto m1 = default_metric_manger::get_metric_static("get_guage_count");
+  auto m1 =
+      default_metric_manger::get_metric_static<gauge_t>("get_guage_count");
   CHECK(m1->as<gauge_t>()->value() == 1);
 
   {
@@ -263,7 +270,7 @@ TEST_CASE("test register metric") {
                     std::invalid_argument);
     CHECK_THROWS_AS(default_metric_manger::metric_map_dynamic(),
                     std::invalid_argument);
-    CHECK_THROWS_AS(default_metric_manger::get_metric_dynamic(""),
+    CHECK_THROWS_AS(default_metric_manger::get_metric_dynamic<counter_t>(""),
                     std::invalid_argument);
   }
 }

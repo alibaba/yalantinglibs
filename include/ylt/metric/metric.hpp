@@ -20,10 +20,6 @@ enum class MetricType {
   Nil,
 };
 
-struct sample_t {
-  double value;
-};
-
 class metric_t {
  public:
   metric_t() = default;
@@ -33,6 +29,8 @@ class metric_t {
         name_(std::move(name)),
         help_(std::move(help)),
         labels_name_(std::move(labels_name)) {}
+  virtual ~metric_t() {}
+
   std::string_view name() { return name_; }
 
   std::string_view help() { return help_; }
@@ -115,6 +113,25 @@ struct metric_manager_t {
     void unlock() {}
   };
 
+  // create and register metric
+  template <typename T, typename... Args>
+  static std::shared_ptr<T> create_metric_static(const std::string& name,
+                                                 const std::string& help,
+                                                 Args&&... args) {
+    auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
+    register_metric_static(m);
+    return m;
+  }
+
+  template <typename T, typename... Args>
+  static std::shared_ptr<T> create_metric_dynamic(const std::string& name,
+                                                  const std::string& help,
+                                                  Args&&... args) {
+    auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
+    register_metric_dynamic(m);
+    return m;
+  }
+
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
     return register_metric_impl<true>(metric);
   }
@@ -152,12 +169,22 @@ struct metric_manager_t {
     return metric_keys_impl<true>();
   }
 
-  static std::shared_ptr<metric_t> get_metric_static(const std::string& name) {
-    return get_metric_impl<false>(name);
+  template <typename T>
+  static T* get_metric_static(const std::string& name) {
+    auto m = get_metric_impl<false>(name);
+    if (m == nullptr) {
+      return nullptr;
+    }
+    return m->template as<T>();
   }
 
-  static std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name) {
-    return get_metric_impl<true>(name);
+  template <typename T>
+  static T* get_metric_dynamic(const std::string& name) {
+    auto m = get_metric_impl<true>(name);
+    if (m == nullptr) {
+      return nullptr;
+    }
+    return m->template as<T>();
   }
 
   static async_simple::coro::Lazy<std::string> serialize_static() {
@@ -237,7 +264,11 @@ struct metric_manager_t {
   template <bool need_lock>
   static std::shared_ptr<metric_t> get_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
-    return metric_map_.at(name);
+    auto it = metric_map_.find(name);
+    if (it == metric_map_.end()) {
+      return nullptr;
+    }
+    return it->second;
   }
 
   template <bool need_lock>

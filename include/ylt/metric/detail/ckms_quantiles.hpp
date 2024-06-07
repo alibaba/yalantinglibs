@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cmath>
 #include <vector>
 
 // https://github.com/jupp0r/prometheus-cpp/blob/master/core/include/prometheus/detail/ckms_quantiles.h

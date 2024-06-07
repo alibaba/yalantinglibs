@@ -1,5 +1,5 @@
 # metric 介绍
-metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Guage、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。
+metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。
 
 ## Counter 计数器类型
 Counter是一个累计类型的数据指标，它代表单调递增的计数器，其值只能在重新启动时增加或重置为 0。例如，您可以使用计数器来表示已响应的请求数，已完成或出错的任务数。
@@ -76,11 +76,11 @@ metric 包括4种指标类型：
 
 # label
 
-label：标签，可选，指标可以没有标签。标签是指一个键值对，键是需要在创建指标的时候设置，是静态不可变的。
+label：标签，可选，指标可以没有标签。标签是指一个键值对，标签的键需要在创建指标的时候设置，是静态不可变的。
 
-值可以在创建指标的时候设置，这样的label则被称为静态的label。
+标签的值可以在创建指标的时候设置，这样的label则被称为静态的label。
 
-值在运行期动态创建，则label被称为动态的label。
+标签的值在运行期动态创建，则label被称为动态的label。
 
 动态label的例子：
 
@@ -194,6 +194,8 @@ void dec(const std::vector<std::string>& labels_value, double value = 1);
 所有指标都派生于metric_t 基类，提供了一些公共方法，如获取指标的名称，指标的类型，标签的键名称等等。
 
 ```cpp
+class metric_t {
+ public:
   // 获取指标对象的名称
   std::string_view name();
 
@@ -230,6 +232,7 @@ void dec(const std::vector<std::string>& labels_value, double value = 1);
   // t->value();
   template <typename T>
   T* as();
+};
 ```
 
 # 指标管理器
@@ -271,8 +274,19 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 注意：一旦注册时使用了static或者dynamic，那么后面调用default_metric_manger时则应该使用相同后缀的接口，比如注册时使用了get_metric_static，那么后面调用根据名称获取指标对象的方法必须是get_metric_static，否则会抛异常。同样，如果注册使用register_metric_dynamic，则后面应该get_metric_dynamic，否则会抛异常。
 
-指标管理器的静态api
+指标管理器的api
 ```cpp
+template <size_t ID = 0>
+struct metric_manager_t {
+  // 创建并注册指标，返回注册的指标对象
+  template <typename T, typename... Args>
+  static std::shared_ptr<T> create_metric_static(const std::string& name,
+                                                 const std::string& help,
+                                                 Args&&... args);
+  template <typename T, typename... Args>
+  static std::shared_ptr<T> create_metric_dynamic(const std::string& name,
+                                                 const std::string& help,
+                                                 Args&&... args)
   // 注册metric
   static bool register_metric_static(std::shared_ptr<metric_t> metric);
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric);
@@ -289,13 +303,27 @@ CHECK(m1->as<gauge_t>()->value() == 1);
   static std::vector<std::string> metric_keys_static();
   static std::vector<std::string> metric_keys_dynamic();
 
-  // 根据名称获取指标对象
+  // 根据名称获取指标对象，T为具体指标的类型，如 get_metric_static<gauge_t>();
+  // 如果找不到则返回nullptr
+  template <typename T>
+  static T* get_metric_static(const std::string& name);
+  template <typename T>
+  static T* get_metric_static(const std::string& name);
+
   static std::shared_ptr<metric_t> get_metric_static(const std::string& name);
   static std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name);
 
   // 序列化
   static async_simple::coro::Lazy<std::string> serialize_static();
   static async_simple::coro::Lazy<std::string> serialize_dynamic();
+};
+using default_metric_manger = metric_manager_t<0>;
+```
+metric_manager_t默认为default_metric_manger，如果希望有多个metric manager，用户可以自定义新的metric manager，如：
+
+```cpp
+constexpr size_t metric_id = 100;
+using my_metric_manager = metric_manager_t<metric_id>;
 ```
 
 # histogram
