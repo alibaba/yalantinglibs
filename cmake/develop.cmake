@@ -26,7 +26,7 @@ if(COVERAGE_TEST)
 endif()
 
 # generator benchmark test data
-option(GENERATE_BENCHMARK_DATA "Generate benchmark data" ON)
+option(GENERATE_BENCHMARK_DATA "Generate benchmark data" OFF)
 message(STATUS "GENERATE_BENCHMARK_DATA: ${GENERATE_BENCHMARK_DATA}")
 
 
