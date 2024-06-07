@@ -498,7 +498,6 @@ server_total_recv_bytes：server总共收到的字节数；
 server_total_send_bytes：server总共发送的字节数；
 server_req_latency：http 请求的延迟，从收到请求到发送响应的时间间隔
 server_read_latency：http 读请求的延迟，读到完整的http数据的时间间隔
-server_total_thread_num：server内置的总线程数
 ```
 
 ```cpp

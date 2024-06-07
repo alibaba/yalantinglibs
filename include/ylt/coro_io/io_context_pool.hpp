@@ -118,7 +118,7 @@ class io_context_pool {
       pool_size = 1;  // set default value as 1
     }
 
-    // total_thread_num_ += pool_size;
+    total_thread_num_ += pool_size;
 
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context(1));
@@ -207,7 +207,7 @@ class io_context_pool {
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
-  // static size_t get_total_thread_num() { return total_thread_num_; }
+  static size_t get_total_thread_num() { return total_thread_num_; }
 
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
@@ -221,12 +221,12 @@ class io_context_pool {
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
   bool cpu_affinity_ = false;
-  inline static size_t total_thread_num_ = 0;
+  inline static std::atomic<size_t> total_thread_num_ = 0;
 };
 
-// inline size_t get_total_thread_num() {
-//   return io_context_pool::get_total_thread_num();
-// }
+inline size_t get_total_thread_num() {
+  return io_context_pool::get_total_thread_num();
+}
 
 class multithread_context_pool {
  public:
