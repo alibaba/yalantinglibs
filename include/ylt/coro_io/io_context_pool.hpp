@@ -32,6 +32,7 @@
 #include <pthread.h>
 #include <sched.h>
 #endif
+#include "ylt/metric/counter.hpp"
 
 namespace coro_io {
 
@@ -119,6 +120,12 @@ class io_context_pool {
     }
 
     total_thread_num_ += pool_size;
+
+    static auto counter =
+        ylt::default_metric_manger::create_metric_static<ylt::counter_t>(
+            "server_total_thread_num", "");
+    if (counter)
+      counter->inc(total_thread_num_);
 
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context(1));

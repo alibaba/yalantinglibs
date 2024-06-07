@@ -17,6 +17,7 @@ struct cinatra_metric_conf {
   inline static std::string server_total_send_bytes = "server_total_send_bytes";
   inline static std::string server_req_latency = "server_req_latency";
   inline static std::string server_read_latency = "server_read_latency";
+  inline static std::string server_total_thread_num = "server_total_thread_num";
   inline static bool enable_metric = false;
 
   inline static void server_total_req_inc() {

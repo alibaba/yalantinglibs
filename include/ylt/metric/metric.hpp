@@ -119,7 +119,10 @@ struct metric_manager_t {
                                                  const std::string& help,
                                                  Args&&... args) {
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
-    register_metric_static(m);
+    bool r = register_metric_static(m);
+    if (!r) {
+      return nullptr;
+    }
     return m;
   }
 
@@ -128,7 +131,10 @@ struct metric_manager_t {
                                                   const std::string& help,
                                                   Args&&... args) {
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
-    register_metric_dynamic(m);
+    bool r = register_metric_static(m);
+    if (!r) {
+      return nullptr;
+    }
     return m;
   }
 
