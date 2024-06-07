@@ -11,6 +11,7 @@
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/metric/metric.hpp"
 
 namespace cinatra {
 enum class file_resp_format_type {
@@ -179,6 +180,16 @@ class coro_http_server {
       set_http_handler<method...>(std::move(key), std::move(f),
                                   std::forward<Aspects>(asps)...);
     }
+  }
+
+  void use_metrics(std::string url_path = "/metrics") {
+    init_metrics();
+    set_http_handler<http_method::GET>(
+        url_path, [](coro_http_request &req, coro_http_response &res) {
+          std::string str = async_simple::coro::syncAwait(
+              ylt::default_metric_manger::serialize_static());
+          res.set_status_and_content(status_type::ok, std::move(str));
+        });
   }
 
   template <http_method... method, typename... Aspects>
@@ -684,7 +695,7 @@ class coro_http_server {
         connections_.emplace(conn_id, conn);
       }
 
-      start_one(conn).via(&conn->get_executor()).detach();
+      start_one(conn).via(conn->get_executor()).detach();
     }
   }
 
@@ -868,6 +879,7 @@ class coro_http_server {
     easylog::logger<>::instance();  // init easylog singleton to make sure
                                     // server destruct before easylog.
 #endif
+
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
@@ -884,6 +896,29 @@ class coro_http_server {
     }
 
     address_ = std::move(address);
+  }
+
+ private:
+  void init_metrics() {
+    using namespace ylt;
+
+    cinatra_metric_conf::enable_metric = true;
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_req, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_failed_req, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_recv_bytes, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_send_bytes, "");
+    default_metric_manger::create_metric_static<gauge_t>(
+        cinatra_metric_conf::server_total_fd, "");
+    default_metric_manger::create_metric_static<histogram_t>(
+        cinatra_metric_conf::server_req_latency, "",
+        std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
+    default_metric_manger::create_metric_static<histogram_t>(
+        cinatra_metric_conf::server_read_latency, "",
+        std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
   }
 
  private:
