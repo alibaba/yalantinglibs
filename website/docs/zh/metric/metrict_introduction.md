@@ -12,7 +12,8 @@ Gauge 是可以任意上下波动数值的指标类型。
 Gauge 通常用于测量值，例如温度或当前的内存使用量，还可用于可能上下波动的"计数"，例如请求并发数。
 
 如：
-```
+
+```cpp
 # HELP node_cpu Seconds the cpus spent in each mode.
 # TYPE node_cpu counter
 node_cpu{cpu="cpu0",mode="idle"} 362812.7890625
@@ -33,7 +34,8 @@ Histogram 对观测值(通常是请求持续时间或响应大小之类的数据
 统计到的事件计数，显示为<basename>_count(与上述<basename>_bucket{le="+Inf"}相同)
 
 如:
-```
+
+```cpp
 # A histogram, which has a pretty complex representation in the text format:
 # HELP http_request_duration_seconds A histogram of the request duration.
 # TYPE http_request_duration_seconds histogram
@@ -57,7 +59,8 @@ http_request_duration_seconds_count 144320
 观察到的事件计数，显示为<basename>_count
 
 如：
-```
+
+```cpp
 # HELP prometheus_tsdb_wal_fsync_duration_seconds Duration of WAL fsync.
 # TYPE prometheus_tsdb_wal_fsync_duration_seconds summary
 prometheus_tsdb_wal_fsync_duration_seconds{quantile="0.5"} 0.012352463
@@ -93,16 +96,19 @@ label：标签，可选，指标可以没有标签。标签是指一个键值对
 {"POST", "/test"}
 ```
 使用的时候填动态的方法名和url就行了：
+
 ```cpp
 some_counter.inc({std::string(req.method()), req.url()}, 1);
 ```
 如果传入的标签值数量和创建时的label 键的数量不匹配时则会抛异常。
 
 静态label的例子：
+
 ```cpp
 {{"method", "GET"}, {"url", "/"}}
 ```
 这个label的键值都确定了，是静态的，后面使用的时候需要显式调用静态的标签值使用:
+
 ```cpp
 some_counter.inc({"GET", "/"}, 1);
 ```
@@ -112,6 +118,7 @@ some_counter.inc({"GET", "/"}, 1);
 # counter和gauge的使用
 
 ## 创建没有标签的指标
+
 ```cpp
     gauge_t g{"test_gauge", "help"};
     g.inc();
@@ -139,6 +146,7 @@ some_counter.inc({"GET", "/"}, 1);
 ## counter/gauge指标的api
 
 构造函数:
+
 ```cpp
 // 无标签，调用inc时不带标签，如c.inc()
 // name: 指标对象的名称，注册到指标管理器时会使用这个名称
@@ -157,6 +165,7 @@ counter_t(std::string name, std::string help,
 ```
 
 基本函数：
+
 ```cpp
 // 获取无标签指标的计数，
 double value();
@@ -182,6 +191,7 @@ std::map<std::vector<std::string>, double,
 注意：如果使用动态标签的时候要注意这个动态的标签值是不是无限多的，如果是无限多的话，那么内部的map也会无限增长，应该避免这种情况，动态的标签也应该是有限的才对。
 
 gauge 派生于counter，相比counter多了一个减少计数的api
+
 ```cpp
 // 无标签指标减少计数
 void dec(double value = 1);
@@ -257,6 +267,7 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 
 如果希望动态注册的到管理器则应该调用register_metric_dynamic接口，后面根据名称获取指标对象时则调用get_metric_dynamic接口，dynamic接口内部会加锁。
+
 ```cpp
 auto c = std::make_shared<counter_t>("qps_count", "qps help");
 auto g = std::make_shared<gauge_t>("fd_count", "fd count help");
