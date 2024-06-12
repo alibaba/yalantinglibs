@@ -131,7 +131,7 @@ struct metric_manager_t {
                                                   const std::string& help,
                                                   Args&&... args) {
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
-    bool r = register_metric_static(m);
+    bool r = register_metric_dynamic(m);
     if (!r) {
       return nullptr;
     }

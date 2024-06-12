@@ -7,6 +7,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "cinatra/utils.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "define.h"
 #include "picohttpparser.h"
@@ -225,35 +226,25 @@ class http_parser {
   void parse_query(std::string_view str) {
     std::string_view key;
     std::string_view val;
-    size_t pos = 0;
-    size_t length = str.length();
-    for (size_t i = 0; i < length; i++) {
-      char c = str[i];
-      if (c == '=') {
-        key = {&str[pos], i - pos};
-        key = trim(key);
-        pos = i + 1;
+
+    auto vec = split_sv(str, "&");
+    for (auto s : vec) {
+      if (s.empty()) {
+        continue;
       }
-      else if (c == '&') {
-        val = {&str[pos], i - pos};
-        val = trim(val);
-        queries_.emplace(key, val);
-
-        pos = i + 1;
+      size_t pos = s.find('=');
+      if (s.find('=') != std::string_view::npos) {
+        key = s.substr(0, pos);
+        if (key.empty()) {
+          continue;
+        }
+        val = s.substr(pos + 1, s.length() - pos);
       }
-    }
-
-    if (pos == 0) {
-      return;
-    }
-
-    if ((length - pos) > 0) {
-      val = {&str[pos], length - pos};
-      val = trim(val);
+      else {
+        key = s;
+        val = "";
+      }
       queries_.emplace(key, val);
-    }
-    else if ((length - pos) == 0) {
-      queries_.emplace(key, "");
     }
   }
 
