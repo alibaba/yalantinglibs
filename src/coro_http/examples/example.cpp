@@ -289,10 +289,62 @@ struct person_t {
   }
 };
 
+void url_queries() {
+  {
+    http_parser parser{};
+    parser.parse_query("=");
+    parser.parse_query("&a");
+    parser.parse_query("&b=");
+    parser.parse_query("&c=&d");
+    parser.parse_query("&e=&f=1");
+    parser.parse_query("&g=1&h=1");
+    auto map = parser.queries();
+    assert(map["a"].empty());
+    assert(map["b"].empty());
+    assert(map["c"].empty());
+    assert(map["d"].empty());
+    assert(map["e"].empty());
+    assert(map["f"] == "1");
+    assert(map["g"] == "1" && map["h"] == "1");
+  }
+  {
+    http_parser parser{};
+    parser.parse_query("test");
+    parser.parse_query("test1=");
+    parser.parse_query("test2=&");
+    parser.parse_query("test3&");
+    parser.parse_query("test4&a");
+    parser.parse_query("test5&b=2");
+    parser.parse_query("test6=1&c=2");
+    parser.parse_query("test7=1&d");
+    parser.parse_query("test8=1&e=");
+    parser.parse_query("test9=1&f");
+    parser.parse_query("test10=1&g=10&h&i=3&j");
+    auto map = parser.queries();
+    assert(map["test"].empty());
+    assert(map.size() == 21);
+  }
+}
+
 async_simple::coro::Lazy<void> basic_usage() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
       "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/queries", [](coro_http_request &req, coro_http_response &resp) {
+        auto map = req.get_queries();
+        assert(map["test"] == "");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/queries2", [](coro_http_request &req, coro_http_response &resp) {
+        auto map = req.get_queries();
+        assert(map["test"] == "");
+        assert(map["a"] == "42");
         resp.set_status_and_content(status_type::ok, "ok");
       });
 
@@ -381,6 +433,9 @@ async_simple::coro::Lazy<void> basic_usage() {
   for (auto [key, val] : result.resp_headers) {
     std::cout << key << ": " << val << "\n";
   }
+
+  co_await client.async_get("/queries?test");
+  co_await client.async_get("/queries2?test&a=42");
 
   result = co_await client.async_get("/coro");
   assert(result.status == 200);
@@ -594,6 +649,7 @@ void coro_channel() {
 }
 
 int main() {
+  url_queries();
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
   async_simple::coro::syncAwait(static_file_server());
