@@ -148,18 +148,20 @@ some_counter.inc({"GET", "/"}, 1);
 构造函数:
 
 ```cpp
-// 无标签，调用inc时不带标签，如c.inc()
+// 无标签，调用inc时不带标签，如c.inc()，调用此函数则metric 为静态标签的metric
 // name: 指标对象的名称，注册到指标管理器时会使用这个名称
 // help: 指标对象的帮助信息
 counter_t(std::string name, std::string help);
 
 // labels: 静态标签，构造时需要将标签键值都填完整，如：{{"method", "GET"}, {"url", "/"}}
+// 调用此函数则metric 为静态标签的metric
 // 调用inc时必须带静态标签的值，如：c.inc({"GET", "/"}, 1);
 counter_t(std::string name, std::string help,
             std::map<std::string, std::string> labels);
 
 // labels_name: 动态标签的键名称，因为标签的值是动态的，而键的名称是固定的，所以这里只需要填键名称，如: {"method", "url"}
 // 调用时inc时必须带动态标签的值，如：c.inc({method, url}, 1);
+// 调用此函数则metric 为动态标签的metric
 counter_t(std::string name, std::string help,
             std::vector<std::string> labels_name);
 ```
@@ -230,11 +232,17 @@ class metric_t {
   // 获取标签的键，如{"method", "url"}
   const std::vector<std::string>& labels_name();
 
+  // 获取静态标签，如{{"method", "GET"}, {"code", "200"}}
+  const std::map<std::string, std::string>& get_static_labels();
+
   // 序列化，调用派生类实现序列化
   virtual void serialize(std::string& str);
 
   // 给summary专用的api，序列化，调用派生类实现序列化
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out);
+
+  // 序列化到json
+  void serialize_to_json(std::string& str);
 
   // 将基类指针向下转换到派生类指针，如:
   // std::shared_ptr<metric_t> c = std::make_shared<counter_t>("test", "test");
@@ -302,6 +310,10 @@ struct metric_manager_t {
   static bool register_metric_static(std::shared_ptr<metric_t> metric);
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric);
 
+  // 根据metric名称删除metric
+  static bool remove_metric_static(const std::string& name);  
+  static bool remove_metric_dynamic(const std::string& name);
+
   // 获取注册的所有指标对象
   static std::map<std::string, std::shared_ptr<metric_t>> metric_map_static();
   static std::map<std::string, std::shared_ptr<metric_t>> metric_map_dynamic();
@@ -324,9 +336,43 @@ struct metric_manager_t {
   static std::shared_ptr<metric_t> get_metric_static(const std::string& name);
   static std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name);
 
+  // 根据静态标签获取所有的指标, 如{{"method", "GET"}, {"url", "/"}}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
+      const std::map<std::string, std::string>& labels);
+
+  // 根据标签值获取所有的静态标签的指标, 如{"method", "GET"}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
+      const std::pair<std::string, std::string>& label);
+
+  // 根据标签值获取所有动态标签的指标, 如{"method", "GET"}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
+      const std::map<std::string, std::string>& labels);
+  
   // 序列化
   static async_simple::coro::Lazy<std::string> serialize_static();
   static async_simple::coro::Lazy<std::string> serialize_dynamic();
+
+  // 序列化静态标签的指标到json
+  static std::string serialize_to_json_static();
+  // 序列化动态标签的指标到json
+  static std::string serialize_to_json_dynamic();
+  // 序列化metric集合到json
+  static std::string serialize_to_json(
+      const std::vector<std::shared_ptr<metric_t>>& metrics);
+
+  // 过滤配置选项，如果name_regex和label_regex都设置了，则会检查这两个条件，如果只设置了一个则只检查设置过的条件
+  struct metric_filter_options {
+    std::optional<std::regex> name_regex{}; // metric 名称的过滤正则表达式
+    std::optional<std::regex> label_regex{};// metric label名称的过滤正则表达式
+    bool is_white = true; //true: 白名单，包括语义；false: 黑名单，排除语义
+  };
+
+  // 过滤静态标签的指标
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
+      const metric_filter_options& options);
+  // 过滤动态标签的指标
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
+      const metric_filter_options& options);  
 };
 using default_metric_manager = metric_manager_t<0>;
 ```
@@ -347,10 +393,22 @@ using my_metric_manager = metric_manager_t<metric_id>;
 // 内部还有一个+Inf 默认的桶，当输入的数据不在前面设置这些桶中，则会落到+Inf 默认桶中。
 // 实际上桶的总数为 buckets.size() + 1
 // 每个bucket 实际上对应了一个counter指标
+// 调用此函数，则metric为静态metric指标
 histogram_t(std::string name, std::string help, std::vector<double> buckets);
+
+// labels_value: 标签key，后面可以使用动态标签值去observe，调用此函数则metric为动态metric 指标
+histogram_t(std::string name, std::string help, std::vector<double> buckets,
+            std::vector<std::string> labels_name);
+
+// labels: 静态标签，调用此函数则metric为静态metric指标
+histogram_t(std::string name, std::string help, std::vector<double> buckets,
+            std::map<std::string, std::string> labels);
 
 // 往histogram_t 中插入数据，内部会自动增加对应桶的计数
 void observe(double value);
+
+// 根据标签值插入数据，可以是动态标签值也可以是静态标签值。如果是静态标签，会做额外的检车，检查传入的labels_value是否和注册时的静态标签值是否相同，不相同会抛异常；
+void observe(const std::vector<std::string> &labels_value, double value);
 
 // 获取所有桶对应的counter指标对象
 std::vector<std::shared_ptr<counter_t>> get_bucket_counts();
@@ -416,13 +474,28 @@ test_count 3.000000
 
 ```cpp
 // Quantiles: 百分位和误差, 如：{{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}
+// 调用此函数则metric为静态metric 指标
 summary_t(std::string name, std::string help, Quantiles quantiles);
+
+// labels_name: 标签名，调用此函数则metric为动态metric 指标
+summary_t(std::string name, std::string help, Quantiles quantiles, std::vector<std::string> labels_name);
+
+// static_labels：静态标签，调用此函数则metric为静态metric 指标
+summary_t(std::string name, std::string help, Quantiles quantiles, std::map<std::string, std::string> static_labels);
 
 // 往summary_t插入数据，会自动计算百分位的数量
 void observe(double value);
 
-// 获取百分位结果
-async_simple::coro::Lazy<std::vector<double>> get_rates();
+// 根据标签值(动态或静态的标签值，依据构造函数决定是动态还是静态metric)，往summary_t插入数据，会自动计算百分位的数量
+void observe(std::vector<std::string> labels_value, double value);
+
+// 获取分位数结果, sum 和count
+async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
+                                                        uint64_t &count)
+// 根据标签获取分位数结果, sum 和count
+async_simple::coro::Lazy<std::vector<double>> get_rates(
+    const std::vector<std::string> &labels_value, double &sum,
+    uint64_t &count);
 
 // 获取总和
 async_simple::coro::Lazy<double> get_sum();

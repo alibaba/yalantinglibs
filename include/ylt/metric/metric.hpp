@@ -1,17 +1,33 @@
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 
-namespace ylt {
+#ifdef CINATRA_ENABLE_METRIC_JSON
+namespace iguana {
+
+template <typename T>
+inline char* to_chars_float(T value, char* buffer) {
+  return buffer + snprintf(buffer, 65, "%g", value);
+}
+
+}  // namespace iguana
+
+#include <iguana/json_writer.hpp>
+#endif
+namespace ylt::metric {
 enum class MetricType {
   Counter,
   Gauge,
@@ -20,15 +36,32 @@ enum class MetricType {
   Nil,
 };
 
+struct metric_filter_options {
+  std::optional<std::regex> name_regex{};
+  std::optional<std::regex> label_regex{};
+  bool is_white = true;
+};
+
 class metric_t {
  public:
   metric_t() = default;
+  metric_t(MetricType type, std::string name, std::string help)
+      : type_(type), name_(std::move(name)), help_(std::move(help)) {}
   metric_t(MetricType type, std::string name, std::string help,
-           std::vector<std::string> labels_name = {})
-      : type_(type),
-        name_(std::move(name)),
-        help_(std::move(help)),
-        labels_name_(std::move(labels_name)) {}
+           std::vector<std::string> labels_name)
+      : metric_t(type, std::move(name), std::move(help)) {
+    labels_name_ = std::move(labels_name);
+  }
+
+  metric_t(MetricType type, std::string name, std::string help,
+           std::map<std::string, std::string> static_labels)
+      : metric_t(type, std::move(name), std::move(help)) {
+    static_labels_ = std::move(static_labels);
+    for (auto& [k, v] : static_labels_) {
+      labels_name_.push_back(k);
+      labels_value_.push_back(v);
+    }
+  }
   virtual ~metric_t() {}
 
   std::string_view name() { return name_; }
@@ -55,12 +88,34 @@ class metric_t {
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
 
+  const std::map<std::string, std::string>& get_static_labels() {
+    return static_labels_;
+  }
+
+  virtual std::map<std::vector<std::string>, double,
+                   std::less<std::vector<std::string>>>
+  value_map() {
+    return {};
+  }
+
   virtual void serialize(std::string& str) {}
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  virtual void serialize_to_json(std::string& str) {}
+#endif
 
   // only for summary
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
     co_return;
   }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  // only for summary
+  virtual async_simple::coro::Lazy<void> serialize_to_json_async(
+      std::string& out) {
+    co_return;
+  }
+#endif
 
   bool is_atomic() const { return use_atomic_; }
 
@@ -78,6 +133,19 @@ class metric_t {
         .append(" ")
         .append(metric_name())
         .append("\n");
+  }
+
+  void build_label_string(std::string& str,
+                          const std::vector<std::string>& label_name,
+                          const std::vector<std::string>& label_value) {
+    for (size_t i = 0; i < label_name.size(); i++) {
+      str.append(label_name[i])
+          .append("=\"")
+          .append(label_value[i])
+          .append("\"")
+          .append(",");
+    }
+    str.pop_back();
   }
 
 #ifdef __APPLE__
@@ -101,6 +169,7 @@ class metric_t {
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
+  std::map<std::string, std::string> static_labels_;
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   bool use_atomic_ = false;
@@ -138,12 +207,20 @@ struct metric_manager_t {
     return m;
   }
 
+  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
+    return register_metric_impl<false>(metric);
+  }
+
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
     return register_metric_impl<true>(metric);
   }
 
-  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
-    return register_metric_impl<false>(metric);
+  static bool remove_metric_static(const std::string& name) {
+    return remove_metric_impl<false>(name);
+  }
+
+  static bool remove_metric_dynamic(const std::string& name) {
+    return remove_metric_impl<true>(name);
   }
 
   template <typename... Metrics>
@@ -175,30 +252,144 @@ struct metric_manager_t {
     return metric_keys_impl<true>();
   }
 
+  // static labels: {{"method", "GET"}, {"url", "/"}}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
+      const std::map<std::string, std::string>& labels) {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    auto map = metric_map_static();
+    for (auto& [name, m] : map) {
+      const auto& static_labels = m->get_static_labels();
+      if (static_labels == labels) {
+        vec.push_back(m);
+      }
+    }
+    return vec;
+  }
+
+  // static label: {"method", "GET"}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
+      const std::pair<std::string, std::string>& label) {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    auto map = metric_map_static();
+    for (auto& [name, t] : map) {
+      const auto& static_labels = t->get_static_labels();
+      for (const auto& pair : static_labels) {
+        if (pair.first == label.first && pair.second == label.second) {
+          vec.push_back(t);
+        }
+      }
+    }
+    return vec;
+  }
+
+  // labels: {{"method", "POST"}, {"code", "200"}}
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
+      const std::map<std::string, std::string>& labels) {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    auto map = metric_map_dynamic();
+    for (auto& [name, t] : map) {
+      auto val_map = t->value_map();
+      auto labels_name = t->labels_name();
+
+      for (auto& [k, v] : labels) {
+        if (auto it = std::find(labels_name.begin(), labels_name.end(), k);
+            it != labels_name.end()) {
+          if (auto it = std::find_if(val_map.begin(), val_map.end(),
+                                     [label_val = v](auto& pair) {
+                                       auto& key = pair.first;
+                                       return std::find(key.begin(), key.end(),
+                                                        label_val) != key.end();
+                                     });
+              it != val_map.end()) {
+            vec.push_back(t);
+          }
+        }
+      }
+    }
+
+    return vec;
+  }
+
   template <typename T>
-  static T* get_metric_static(const std::string& name) {
+  static std::shared_ptr<T> get_metric_static(const std::string& name) {
     auto m = get_metric_impl<false>(name);
     if (m == nullptr) {
       return nullptr;
     }
-    return m->template as<T>();
+    return std::dynamic_pointer_cast<T>(m);
   }
 
   template <typename T>
-  static T* get_metric_dynamic(const std::string& name) {
+  static std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
     auto m = get_metric_impl<true>(name);
     if (m == nullptr) {
       return nullptr;
     }
-    return m->template as<T>();
+    return std::dynamic_pointer_cast<T>(m);
   }
 
-  static async_simple::coro::Lazy<std::string> serialize_static() {
-    return serialize_impl<false>();
+  static std::string serialize(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    std::string str;
+    for (auto& m : metrics) {
+      if (m->metric_type() == MetricType::Summary) {
+        async_simple::coro::syncAwait(m->serialize_async(str));
+      }
+      else {
+        m->serialize(str);
+      }
+    }
+
+    return str;
   }
 
-  static async_simple::coro::Lazy<std::string> serialize_dynamic() {
-    return serialize_impl<true>();
+  static std::string serialize_static() { return serialize(collect<false>()); }
+
+  static std::string serialize_dynamic() { return serialize(collect<true>()); }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  static std::string serialize_to_json_static() {
+    auto metrics = collect<false>();
+    return serialize_to_json(metrics);
+  }
+
+  static std::string serialize_to_json_dynamic() {
+    auto metrics = collect<true>();
+    return serialize_to_json(metrics);
+  }
+
+  static std::string serialize_to_json(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    if (metrics.empty()) {
+      return "";
+    }
+    std::string str;
+    str.append("[");
+    for (auto& m : metrics) {
+      size_t start = str.size();
+      if (m->metric_type() == MetricType::Summary) {
+        async_simple::coro::syncAwait(m->serialize_to_json_async(str));
+      }
+      else {
+        m->serialize_to_json(str);
+      }
+
+      if (str.size() > start)
+        str.append(",");
+    }
+    str.back() = ']';
+    return str;
+  }
+#endif
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
+      const metric_filter_options& options) {
+    return filter_metrics<false>(options);
+  }
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
+      const metric_filter_options& options) {
+    return filter_metrics<true>(options);
   }
 
  private:
@@ -240,6 +431,12 @@ struct metric_manager_t {
       CINATRA_LOG_ERROR << "duplicate registered metric name: " << name;
     }
     return r;
+  }
+
+  template <bool need_lock>
+  static size_t remove_metric_impl(const std::string& name) {
+    auto lock = get_lock<need_lock>();
+    return metric_map_.erase(name);
   }
 
   template <bool need_lock>
@@ -289,19 +486,64 @@ struct metric_manager_t {
     return metrics;
   }
 
-  template <bool need_lock = true>
-  static async_simple::coro::Lazy<std::string> serialize_impl() {
-    std::string str;
-    auto metrics = collect<need_lock>();
-    for (auto& m : metrics) {
-      if (m->metric_type() == MetricType::Summary) {
-        co_await m->serialize_async(str);
-      }
-      else {
-        m->serialize(str);
+  static void filter_by_label_name(
+      std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
+      std::shared_ptr<metric_t> m, const metric_filter_options& options,
+      std::vector<size_t>& indexs, size_t index) {
+    const auto& labels_name = m->labels_name();
+    for (auto& label_name : labels_name) {
+      if (std::regex_match(label_name, *options.label_regex)) {
+        if (options.is_white) {
+          filtered_metrics.push_back(m);
+        }
+        else {
+          indexs.push_back(index);
+        }
       }
     }
-    co_return str;
+  }
+
+  template <bool need_lock>
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics(
+      const metric_filter_options& options) {
+    auto metrics = collect<need_lock>();
+    if (!options.name_regex && !options.label_regex) {
+      return metrics;
+    }
+
+    std::vector<std::shared_ptr<metric_t>> filtered_metrics;
+    std::vector<size_t> indexs;
+    size_t index = 0;
+    for (auto& m : metrics) {
+      if (options.name_regex && !options.label_regex) {
+        if (std::regex_match(std::string(m->name()), *options.name_regex)) {
+          if (options.is_white) {
+            filtered_metrics.push_back(m);
+          }
+          else {
+            indexs.push_back(index);
+          }
+        }
+      }
+      else if (options.label_regex && !options.name_regex) {
+        filter_by_label_name(filtered_metrics, m, options, indexs, index);
+      }
+      else {
+        if (std::regex_match(std::string(m->name()), *options.name_regex)) {
+          filter_by_label_name(filtered_metrics, m, options, indexs, index);
+        }
+      }
+      index++;
+    }
+
+    if (!options.is_white) {
+      for (size_t i : indexs) {
+        metrics.erase(std::next(metrics.begin(), i));
+      }
+      return metrics;
+    }
+
+    return filtered_metrics;
   }
 
   static inline std::mutex mtx_;
@@ -313,4 +555,4 @@ struct metric_manager_t {
 };
 
 using default_metric_manager = metric_manager_t<0>;
-}  // namespace ylt
+}  // namespace ylt::metric

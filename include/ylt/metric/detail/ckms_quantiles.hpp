@@ -5,7 +5,7 @@
 
 // https://github.com/jupp0r/prometheus-cpp/blob/master/core/include/prometheus/detail/ckms_quantiles.h
 
-namespace ylt {
+namespace ylt::metric {
 class CKMSQuantiles {
  public:
   struct Quantile {
@@ -172,4 +172,4 @@ class CKMSQuantiles {
   std::array<double, 500> buffer_;
   std::size_t buffer_count_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric
