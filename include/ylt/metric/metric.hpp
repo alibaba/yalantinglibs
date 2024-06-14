@@ -253,18 +253,17 @@ struct metric_manager_t {
   }
 
   // static labels: {{"method", "GET"}, {"url", "/"}}
-  static std::shared_ptr<metric_t> get_metric_by_labels_static(
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
       const std::map<std::string, std::string>& labels) {
-    std::shared_ptr<metric_t> t = nullptr;
+    std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_static();
     for (auto& [name, m] : map) {
       const auto& static_labels = m->get_static_labels();
       if (static_labels == labels) {
-        t = m;
-        break;
+        vec.push_back(m);
       }
     }
-    return t;
+    return vec;
   }
 
   // static label: {"method", "GET"}

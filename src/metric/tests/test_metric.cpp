@@ -1,8 +1,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT
-#include "ylt/metric.hpp"
 #include <random>
 
 #include "doctest.h"
+#include "ylt/metric.hpp"
 
 using namespace ylt;
 using namespace ylt::metric;
@@ -520,13 +520,13 @@ TEST_CASE("test get metric by static labels and label") {
       "http_req_test2", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
 
-  auto c = metric_mgr::get_metric_by_labels_static(
+  auto v = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
-  CHECK(c->name() == "http_req_test2");
+  CHECK(v[0]->name() == "http_req_test2");
 
-  c = metric_mgr::get_metric_by_labels_static(
+  v = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
-  CHECK(c->name() == "http_req_test");
+  CHECK(v[0]->name() == "http_req_test");
 
   auto h1 = metric_mgr::create_metric_static<histogram_t>(
       "http_req_static_hist", "help",
@@ -554,13 +554,13 @@ TEST_CASE("test get metric by static labels and label") {
   vec = metric_mgr::get_metric_by_label_static({"method", "POST"});
   CHECK(vec.size() == 1);
 
-  c = metric_mgr::get_metric_by_labels_static(
+  vec = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "HEAD"}, {"url", "/test"}});
-  CHECK(c == nullptr);
+  CHECK(vec.empty());
 
-  c = metric_mgr::get_metric_by_labels_static(
+  vec = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}});
-  CHECK(c == nullptr);
+  CHECK(vec.empty());
 
   vec = metric_mgr::get_metric_by_label_static({"url", "/index"});
   CHECK(vec.empty());
