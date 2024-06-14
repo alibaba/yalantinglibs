@@ -182,12 +182,23 @@ class coro_http_server {
     }
   }
 
-  void use_metrics(std::string url_path = "/metrics") {
+  void use_metrics(bool enable_json = false,
+                   std::string url_path = "/metrics") {
     init_metrics();
     set_http_handler<http_method::GET>(
-        url_path, [](coro_http_request &req, coro_http_response &res) {
-          std::string str = async_simple::coro::syncAwait(
-              ylt::default_metric_manager::serialize_static());
+        url_path,
+        [enable_json](coro_http_request &req, coro_http_response &res) {
+          std::string str;
+#ifdef CINATRA_ENABLE_METRIC_JSON
+          if (enable_json) {
+            str =
+                ylt::metric::default_metric_manager::serialize_to_json_static();
+            res.set_content_type<resp_content_type::json>();
+          }
+          else
+#endif
+            str = ylt::metric::default_metric_manager::serialize_static();
+
           res.set_status_and_content(status_type::ok, std::move(str));
         });
   }
@@ -900,7 +911,7 @@ class coro_http_server {
 
  private:
   void init_metrics() {
-    using namespace ylt;
+    using namespace ylt::metric;
 
     cinatra_metric_conf::enable_metric = true;
     default_metric_manager::create_metric_static<counter_t>(

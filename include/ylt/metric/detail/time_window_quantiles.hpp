@@ -2,7 +2,7 @@
 #include "ckms_quantiles.hpp"
 // https://github.com/jupp0r/prometheus-cpp/blob/master/core/include/prometheus/detail/time_window_quantiles.h
 
-namespace ylt {
+namespace ylt::metric {
 class TimeWindowQuantiles {
   using Clock = std::chrono::steady_clock;
 
@@ -49,4 +49,4 @@ class TimeWindowQuantiles {
   mutable Clock::time_point last_rotation_;
   const Clock::duration rotation_interval_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

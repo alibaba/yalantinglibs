@@ -1,12 +1,11 @@
-#include "ylt/metric/gauge.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
+#include "ylt/metric.hpp"
 #include <random>
 
 #include "doctest.h"
-#include "ylt/metric/counter.hpp"
-#include "ylt/metric/histogram.hpp"
-#include "ylt/metric/summary.hpp"
+
 using namespace ylt;
+using namespace ylt::metric;
 
 TEST_CASE("test no lable") {
   {
@@ -139,6 +138,13 @@ TEST_CASE("test gauge") {
     CHECK(g.value() == 2);
     g.inc(0);
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    g.serialize_to_json(str_json);
+    std::cout << str_json << "\n";
+    CHECK(str_json.find("\"value\":2") != std::string::npos);
+#endif
+
     g.dec();
     CHECK(g.value() == 1);
     g.dec();
@@ -155,6 +161,15 @@ TEST_CASE("test gauge") {
     g.inc({"GET", "200", "/"}, 2);
     values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 3);
+
+    g.inc({"POST", "200", "/"}, 4);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    g.serialize_to_json(str_json);
+    std::cout << str_json << "\n";
+    CHECK(str_json.find("\"code\":\"200\"") != std::string::npos);
+#endif
 
     std::string str;
     g.serialize(str);
@@ -175,7 +190,7 @@ TEST_CASE("test gauge") {
 }
 
 TEST_CASE("test histogram") {
-  histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
+  histogram_t h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0});
   h.observe(23);
   auto counts = h.get_bucket_counts();
   CHECK(counts[3]->value() == 1);
@@ -189,11 +204,18 @@ TEST_CASE("test histogram") {
   CHECK(counts[0]->value() == 1);
   std::string str;
   h.serialize(str);
-  std::cout << str;
+  std::cout << str << "\n";
   CHECK(str.find("test_count") != std::string::npos);
   CHECK(str.find("test_sum") != std::string::npos);
-  CHECK(str.find("test_bucket{le=\"5") != std::string::npos);
+  CHECK(str.find("test_bucket{le=\"5.23") != std::string::npos);
   CHECK(str.find("test_bucket{le=\"+Inf\"}") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"5.23\":1") != std::string::npos);
+#endif
 }
 
 TEST_CASE("test summary") {
@@ -217,6 +239,13 @@ TEST_CASE("test summary") {
   CHECK(str.find("test_summary_count") != std::string::npos);
   CHECK(str.find("test_summary_sum") != std::string::npos);
   CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(str_json));
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
 }
 
 TEST_CASE("test register metric") {
@@ -245,8 +274,7 @@ TEST_CASE("test register metric") {
   CHECK(map["get_count"]->as<counter_t>()->value() == 1);
   CHECK(map["get_guage_count"]->as<gauge_t>()->value() == 1);
 
-  auto s =
-      async_simple::coro::syncAwait(default_metric_manager::serialize_static());
+  auto s = default_metric_manager::serialize_static();
   std::cout << s << "\n";
   CHECK(s.find("get_count 1") != std::string::npos);
   CHECK(s.find("get_guage_count 1") != std::string::npos);
@@ -273,6 +301,474 @@ TEST_CASE("test register metric") {
     CHECK_THROWS_AS(default_metric_manager::get_metric_dynamic<counter_t>(""),
                     std::invalid_argument);
   }
+}
+
+TEST_CASE("test remove metric and serialize metrics") {
+  using metric_mgr = metric_manager_t<1>;
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
+
+  size_t count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 2);
+
+  metric_mgr::remove_metric_dynamic("test_counter");
+  count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 1);
+
+  metric_mgr::remove_metric_dynamic("test_counter2");
+  count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 0);
+
+  CHECK_THROWS_AS(
+      metric_mgr::create_metric_static<counter_t>("test_static_counter", ""),
+      std::invalid_argument);
+
+  using metric_mgr2 = metric_manager_t<2>;
+  auto c =
+      metric_mgr2::create_metric_static<counter_t>("test_static_counter", "");
+  auto c2 =
+      metric_mgr2::create_metric_static<counter_t>("test_static_counter2", "");
+  c->inc();
+  c2->inc();
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto s = metric_mgr2::serialize_to_json_static();
+  std::cout << s << "\n";
+  auto s1 = metric_mgr2::serialize_to_json({c, c2});
+  CHECK(s == s1);
+#endif
+  CHECK_THROWS_AS(metric_mgr2::metric_count_dynamic(), std::invalid_argument);
+  count = metric_mgr2::metric_count_static();
+  CHECK(count == 2);
+  CHECK_THROWS_AS(metric_mgr2::remove_metric_dynamic("test_static_counter"),
+                  std::invalid_argument);
+
+  metric_mgr2::remove_metric_static("test_static_counter");
+  count = metric_mgr2::metric_count_static();
+  CHECK(count == 1);
+}
+
+TEST_CASE("test filter metrics static") {
+  using metric_mgr = metric_manager_t<3>;
+  auto c = metric_mgr::create_metric_static<counter_t>(
+      "test_static_counter", "",
+      std::map<std::string, std::string>{{"method", "GET"}});
+  auto c2 = metric_mgr::create_metric_static<counter_t>(
+      "test_static_counter2", "",
+      std::map<std::string, std::string>{{"url", "/"}});
+  c->inc({"GET"});
+  c2->inc({"/"});
+
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 2);
+
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = ".*ur.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_static_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.name_regex = "no_such_name";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.empty());
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.empty());
+  }
+
+  options = {};
+  options.label_regex = "no_such_label";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.empty());
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.empty());
+  }
+
+  // don't filter
+  options = {};
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 2);
+  }
+
+  // black
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    CHECK(s.find("test_static_counter2") == std::string::npos);
+  }
+
+  options = {};
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    CHECK(s.find("method") != std::string::npos);
+    CHECK(s.find("test_static_counter2") == std::string::npos);
+    CHECK(s.find("url") == std::string::npos);
+  }
+}
+
+TEST_CASE("test filter metrics dynamic") {
+  using metric_mgr = metric_manager_t<4>;
+  auto c = metric_mgr::create_metric_dynamic<counter_t>(
+      "test_dynamic_counter", "", std::vector<std::string>{{"method"}});
+  auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
+      "test_dynamic_counter2", "", std::vector<std::string>{{"url"}});
+  c->inc({"GET"});
+  c->inc({"POST"});
+  c2->inc({"/"});
+  c2->inc({"/test"});
+
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = ".*ur.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_dynamic_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.name_regex = "no_such_name";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.empty());
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.empty());
+  }
+
+  options = {};
+  options.label_regex = "no_such_label";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.empty());
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.empty());
+  }
+
+  // don't filter
+  options = {};
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+  }
+
+  // black
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    CHECK(s.find("test_dynamic_counter2") == std::string::npos);
+  }
+
+  options = {};
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::serialize(metrics);
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    CHECK(s.find("method") != std::string::npos);
+    CHECK(s.find("test_dynamic_counter2") == std::string::npos);
+    CHECK(s.find("url") == std::string::npos);
+  }
+}
+
+TEST_CASE("test get metric by static labels and label") {
+  using metric_mgr = metric_manager_t<9>;
+  metric_mgr::create_metric_static<counter_t>(
+      "http_req_test", "",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  metric_mgr::create_metric_static<gauge_t>(
+      "http_req_test1", "",
+      std::map<std::string, std::string>{{"method", "POST"}, {"url", "/"}});
+  metric_mgr::create_metric_static<counter_t>(
+      "http_req_test2", "",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
+
+  auto c = metric_mgr::get_metric_by_labels_static(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
+  CHECK(c->name() == "http_req_test2");
+
+  c = metric_mgr::get_metric_by_labels_static(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  CHECK(c->name() == "http_req_test");
+
+  auto h1 = metric_mgr::create_metric_static<histogram_t>(
+      "http_req_static_hist", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+
+  h1->observe({"GET", "/"}, 23);
+
+  auto s1 = metric_mgr::create_metric_static<summary_t>(
+      "http_req_static_summary", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  s1->observe({"GET", "/"}, 23);
+
+  auto vec = metric_mgr::get_metric_by_label_static({"method", "GET"});
+  CHECK(vec.size() == 4);
+
+  vec = metric_mgr::get_metric_by_label_static({"url", "/"});
+  CHECK(vec.size() == 4);
+
+  vec = metric_mgr::get_metric_by_label_static({"url", "/test"});
+  CHECK(vec.size() == 1);
+
+  vec = metric_mgr::get_metric_by_label_static({"method", "POST"});
+  CHECK(vec.size() == 1);
+
+  c = metric_mgr::get_metric_by_labels_static(
+      std::map<std::string, std::string>{{"method", "HEAD"}, {"url", "/test"}});
+  CHECK(c == nullptr);
+
+  c = metric_mgr::get_metric_by_labels_static(
+      std::map<std::string, std::string>{{"method", "GET"}});
+  CHECK(c == nullptr);
+
+  vec = metric_mgr::get_metric_by_label_static({"url", "/index"});
+  CHECK(vec.empty());
+}
+
+TEST_CASE("test get metric by dynamic labels") {
+  using metric_mgr = metric_manager_t<10>;
+  auto c = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static", "", std::vector<std::string>{"method", "code"});
+
+  auto c1 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static1", "", std::vector<std::string>{"method", "code"});
+
+  auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static2", "", std::vector<std::string>{"method", "code"});
+
+  auto c3 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static3", "", std::vector<std::string>{"method", "code"});
+
+  c->inc({"POST", "200"});
+  c1->inc({"GET", "200"});
+  c2->inc({"POST", "301"});
+  c3->inc({"POST", "400"});
+
+  auto c4 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static4", "", std::vector<std::string>{"host", "url"});
+
+  auto c5 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static5", "", std::vector<std::string>{"host", "url"});
+
+  c4->inc({"shanghai", "/"});
+  c5->inc({"shanghai", "/test"});
+
+  auto vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "POST"}});
+  CHECK(vec.size() == 3);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "GET"}});
+  CHECK(vec.size() == 1);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"host", "shanghai"}});
+  CHECK(vec.size() == 2);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/"}});
+  CHECK(vec.size() == 1);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/test"}});
+  CHECK(vec.size() == 1);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/none"}});
+  CHECK(vec.size() == 0);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "HEAD"}});
+  CHECK(vec.size() == 0);
+
+  auto h1 = metric_mgr::create_metric_dynamic<histogram_t>(
+      "http_req_static_hist", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method", "url"});
+
+  h1->observe({"GET", "/"}, 23);
+
+  auto s1 = metric_mgr::create_metric_dynamic<summary_t>(
+      "http_req_static_summary", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::vector<std::string>{"method", "url"});
+  s1->observe({"GET", "/"}, 23);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "GET"}});
+  CHECK(vec.size() >= 2);
+
+  auto str = metric_mgr::serialize(vec);
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json_str = metric_mgr::serialize_to_json(vec);
+  std::cout << json_str << "\n";
+#endif
+}
+
+TEST_CASE("test histogram serialize with dynamic labels") {
+  histogram_t h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+                std::vector<std::string>{"method", "url"});
+  h.observe({"GET", "/"}, 23);
+  auto counts = h.get_bucket_counts();
+  CHECK(counts[3]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 42);
+  CHECK(counts[3]->value({"GET", "/"}) == 2);
+  h.observe({"GET", "/"}, 60);
+  CHECK(counts[4]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 120);
+  CHECK(counts[5]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 1);
+  CHECK(counts[0]->value({"GET", "/"}) == 1);
+
+  h.observe({"POST", "/"}, 23);
+  CHECK(counts[3]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 42);
+  CHECK(counts[3]->value({"POST", "/"}) == 2);
+  h.observe({"POST", "/"}, 60);
+  CHECK(counts[4]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 120);
+  CHECK(counts[5]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 1);
+  CHECK(counts[0]->value({"POST", "/"}) == 1);
+
+  std::string str;
+  h.serialize(str);
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+#endif
+}
+
+TEST_CASE("test histogram serialize with static labels") {
+  histogram_t h(
+      "test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  h.observe({"GET", "/"}, 23);
+  auto counts = h.get_bucket_counts();
+  CHECK(counts[3]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 42);
+  CHECK(counts[3]->value({"GET", "/"}) == 2);
+  h.observe({"GET", "/"}, 60);
+  CHECK(counts[4]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 120);
+  CHECK(counts[5]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 1);
+  CHECK(counts[0]->value({"GET", "/"}) == 1);
+
+  std::string str;
+  h.serialize(str);
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+#endif
+}
+
+TEST_CASE("test summary with dynamic labels") {
+  summary_t summary{"test_summary",
+                    "summary help",
+                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+                    std::vector<std::string>{"method", "url"}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe({"GET", "/"}, distr(gen));
+    summary.observe({"POST", "/test"}, distr(gen));
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  double sum;
+  uint64_t count;
+  auto rates = async_simple::coro::syncAwait(
+      summary.get_rates({"GET", "/"}, sum, count));
+  std::cout << rates.size() << "\n";
+
+  std::string str;
+  async_simple::coro::syncAwait(summary.serialize_async(str));
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string json_str;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  std::cout << json_str << "\n";
+#endif
+}
+
+TEST_CASE("test summary with static labels") {
+  summary_t summary{
+      "test_summary",
+      "summary help",
+      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe({"GET", "/"}, distr(gen));
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  CHECK_THROWS_AS(summary.observe({"POST", "/"}, 1), std::invalid_argument);
+
+  double sum;
+  uint64_t count;
+  auto rates = async_simple::coro::syncAwait(
+      summary.get_rates({"GET", "/"}, sum, count));
+  std::cout << rates.size() << "\n";
+
+  std::string str;
+  async_simple::coro::syncAwait(summary.serialize_async(str));
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string json_str;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  std::cout << json_str << "\n";
+#endif
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
