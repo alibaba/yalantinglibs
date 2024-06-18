@@ -252,7 +252,7 @@ struct metric_manager_t {
                                  std::chrono::steady_clock::duration
                                      check_duration = std::chrono::minutes(5)) {
     metric_max_age_ = max_age;
-    metric_check_duration_ = check_duration;
+    metric_check_duration_ = (std::min)(max_age, check_duration);
     start_check();
   }
 
@@ -566,8 +566,9 @@ struct metric_manager_t {
   }
 
   static void check_impl() {
+    auto timer = check_timer_;
     check_timer_->expires_after(metric_check_duration_);
-    check_timer_->async_wait([](std::error_code ec) {
+    check_timer_->async_wait([timer](std::error_code ec) {
       if (ec) {
         return;
       }
