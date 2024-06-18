@@ -47,6 +47,25 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
+struct vector_hash {
+  size_t operator()(const std::vector<std::string>& vec) const {
+    unsigned int seed = 131;
+    unsigned int hash = 0;
+
+    for (const auto& str : vec) {
+      for (auto ch : str) {
+        hash = hash * seed + ch;
+      }
+    }
+
+    return (hash & 0x7FFFFFFF);
+  }
+};
+
+template <typename T>
+using metric_hash_map =
+    std::unordered_map<std::vector<std::string>, T, vector_hash>;
+
 class metric_t {
  public:
   metric_t() = default;
@@ -102,11 +121,7 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual std::map<std::vector<std::string>, double,
-                   std::less<std::vector<std::string>>>
-  value_map() {
-    return {};
-  }
+  virtual metric_hash_map<double> value_map() { return {}; }
 
   virtual void serialize(std::string& str) {}
 
@@ -246,14 +261,6 @@ struct metric_manager_t {
     bool r = true;
     ((void)(r && (r = register_metric_impl<false>(metrics), true)), ...);
     return r;
-  }
-
-  static void set_metric_max_age(std::chrono::steady_clock::duration max_age,
-                                 std::chrono::steady_clock::duration
-                                     check_duration = std::chrono::minutes(5)) {
-    metric_max_age_ = max_age;
-    metric_check_duration_ = (std::min)(max_age, check_duration);
-    start_check();
   }
 
   static auto metric_map_static() { return metric_map_impl<false>(); }
@@ -565,64 +572,12 @@ struct metric_manager_t {
     return filtered_metrics;
   }
 
-  static void check_impl() {
-    auto timer = check_timer_;
-    check_timer_->expires_after(metric_check_duration_);
-    check_timer_->async_wait([timer](std::error_code ec) {
-      if (ec) {
-        return;
-      }
-
-      check_clean_metrics();
-      check_impl();
-    });
-  }
-
-  static void start_check() {
-    if (has_start_check_metric_) {
-      return;
-    }
-
-    has_start_check_metric_ = true;
-
-    executor_ = coro_io::create_io_context_pool(1);
-
-    check_timer_ =
-        std::make_shared<coro_io::period_timer>(executor_->get_executor());
-
-    check_impl();
-  }
-
-  static void check_clean_metrics() {
-    auto cur_time = std::chrono::system_clock::now();
-    {
-      auto lock = get_lock<true>();
-      for (auto it = metric_map_.begin(); it != metric_map_.end();) {
-        if (cur_time - it->second->get_created_time() > metric_max_age_) {
-          metric_map_.erase(it++);
-        }
-        else {
-          ++it;
-        }
-      }
-    }
-  }
-
-  static inline bool has_start_check_metric_ = false;
-  static inline std::shared_ptr<coro_io::period_timer> check_timer_ = nullptr;
-  static inline std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
-
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 
   static inline null_mutex_t null_mtx_;
   static inline std::atomic_bool need_lock_ = true;
   static inline std::once_flag flag_;
-
-  static inline std::chrono::steady_clock::duration metric_max_age_{
-      std::chrono::hours(24)};
-  static inline std::chrono::steady_clock::duration metric_check_duration_{
-      std::chrono::minutes(5)};
 };
 
 using default_metric_manager = metric_manager_t<0>;

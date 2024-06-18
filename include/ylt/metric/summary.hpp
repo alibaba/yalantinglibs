@@ -98,24 +98,19 @@ class summary_t : public metric_t {
   struct labels_block_t {
     std::atomic<bool> stop_ = false;
     moodycamel::ConcurrentQueue<summary_label_sample> sample_queue_;
-
-    std::map<std::vector<std::string>, std::shared_ptr<TimeWindowQuantiles>,
-             std::less<std::vector<std::string>>>
+    metric_hash_map<std::shared_ptr<TimeWindowQuantiles>>
         label_quantile_values_;
-    std::map<std::vector<std::string>, std::uint64_t,
-             std::less<std::vector<std::string>>>
-        label_count_;
-    std::map<std::vector<std::string>, double,
-             std::less<std::vector<std::string>>>
-        label_sum_;
+    metric_hash_map<uint64_t> label_count_;
+    metric_hash_map<double> label_sum_;
   };
 
   void observe(double value) {
     if (!labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
-    while (block_->sample_queue_.size_approx() >= 20000000) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
     }
     block_->sample_queue_.enqueue(value);
 
@@ -135,8 +130,9 @@ class summary_t : public metric_t {
         throw std::invalid_argument("not equal with static label");
       }
     }
-    while (labels_block_->sample_queue_.size_approx() >= 20000000) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (labels_block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
     }
     labels_block_->sample_queue_.enqueue({std::move(labels_value), value});
 
@@ -198,9 +194,7 @@ class summary_t : public metric_t {
     co_return vec;
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() override {
+  metric_hash_map<double> value_map() override {
     auto ret = async_simple::coro::syncAwait(coro_io::post(
         [this] {
           return labels_block_->label_sum_;

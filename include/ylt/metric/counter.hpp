@@ -60,12 +60,8 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() override {
-    std::map<std::vector<std::string>, double,
-             std::less<std::vector<std::string>>>
-        map;
+  metric_hash_map<double> value_map() override {
+    metric_hash_map<double> map;
     if (use_atomic_) {
       map = {atomic_value_map_.begin(), atomic_value_map_.end()};
     }
@@ -192,9 +188,7 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, std::atomic<double>,
-           std::less<std::vector<std::string>>>
-      &atomic_value_map() {
+  metric_hash_map<std::atomic<double>> &atomic_value_map() {
     return atomic_value_map_;
   }
 
@@ -298,14 +292,10 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, std::atomic<double>,
-           std::less<std::vector<std::string>>>
-      atomic_value_map_;
+  metric_hash_map<std::atomic<double>> atomic_value_map_;
   std::atomic<double> default_lable_value_ = 0;
 
   std::mutex mtx_;
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-      value_map_;
+  metric_hash_map<double> value_map_;
 };
 }  // namespace ylt::metric

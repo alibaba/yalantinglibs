@@ -100,11 +100,7 @@ class histogram_t : public metric_t {
 
   auto get_bucket_counts() { return bucket_counts_; }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() override {
-    return sum_->value_map();
-  }
+  metric_hash_map<double> value_map() override { return sum_->value_map(); }
 
   void serialize(std::string &str) override {
     if (!sum_->labels_name().empty()) {
