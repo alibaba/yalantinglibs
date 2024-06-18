@@ -771,6 +771,30 @@ TEST_CASE("test summary with static labels") {
 #endif
 }
 
+TEST_CASE("check clean metrics") {
+  using metric_mgr = metric_manager_t<11>;
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
+  metric_mgr::create_metric_dynamic<histogram_t>(
+      "http_req_static_hist", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method", "url"});
+
+  metric_mgr::create_metric_dynamic<summary_t>(
+      "http_req_static_summary", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::vector<std::string>{"method", "url"});
+
+  CHECK(metric_mgr::metric_count_dynamic() == 4);
+  metric_mgr::set_metric_max_age(std::chrono::milliseconds(10),
+                                 std::chrono::milliseconds(10));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  CHECK(metric_mgr::metric_count_dynamic() == 0);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

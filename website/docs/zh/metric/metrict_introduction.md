@@ -318,6 +318,13 @@ struct metric_manager_t {
   static std::map<std::string, std::shared_ptr<metric_t>> metric_map_static();
   static std::map<std::string, std::shared_ptr<metric_t>> metric_map_dynamic();
 
+  // 启用metric 定时清理功能，在使用metric之前设置
+  // max_age：设置metric的过期时间，过期之后metric会被清理
+  // check_duration：设置定期监测metric过期的时间间隔
+  static void set_metric_max_age(std::chrono::steady_clock::duration max_age,
+                                 std::chrono::steady_clock::duration
+                                     check_duration = std::chrono::minutes(5));  
+
   // 获取注册的指标对象的总数
   static size_t metric_count_static();
   static size_t metric_count_dynamic();

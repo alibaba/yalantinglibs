@@ -14,6 +14,11 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
+#if __has_include("ylt/coro_io/coro_io.hpp")
+#include "ylt/coro_io/coro_io.hpp"
+#else
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#endif
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 namespace iguana {
@@ -46,7 +51,10 @@ class metric_t {
  public:
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help)
-      : type_(type), name_(std::move(name)), help_(std::move(help)) {}
+      : type_(type),
+        name_(std::move(name)),
+        help_(std::move(help)),
+        metric_created_time_(std::chrono::system_clock::now()) {}
   metric_t(MetricType type, std::string name, std::string help,
            std::vector<std::string> labels_name)
       : metric_t(type, std::move(name), std::move(help)) {
@@ -69,6 +77,8 @@ class metric_t {
   std::string_view help() { return help_; }
 
   MetricType metric_type() { return type_; }
+
+  auto get_created_time() { return metric_created_time_; }
 
   std::string_view metric_name() {
     switch (type_) {
@@ -173,6 +183,7 @@ class metric_t {
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   bool use_atomic_ = false;
+  std::chrono::system_clock::time_point metric_created_time_{};
 };
 
 template <size_t ID = 0>
@@ -235,6 +246,14 @@ struct metric_manager_t {
     bool r = true;
     ((void)(r && (r = register_metric_impl<false>(metrics), true)), ...);
     return r;
+  }
+
+  static void set_metric_max_age(std::chrono::steady_clock::duration max_age,
+                                 std::chrono::steady_clock::duration
+                                     check_duration = std::chrono::minutes(5)) {
+    metric_max_age_ = max_age;
+    metric_check_duration_ = check_duration;
+    start_check();
   }
 
   static auto metric_map_static() { return metric_map_impl<false>(); }
@@ -546,12 +565,63 @@ struct metric_manager_t {
     return filtered_metrics;
   }
 
+  static void check_impl() {
+    check_timer_->expires_after(metric_check_duration_);
+    check_timer_->async_wait([](std::error_code ec) {
+      if (ec) {
+        return;
+      }
+
+      check_clean_metrics();
+      check_impl();
+    });
+  }
+
+  static void start_check() {
+    if (has_start_check_metric_) {
+      return;
+    }
+
+    has_start_check_metric_ = true;
+
+    executor_ = coro_io::create_io_context_pool(1);
+
+    check_timer_ =
+        std::make_shared<coro_io::period_timer>(executor_->get_executor());
+
+    check_impl();
+  }
+
+  static void check_clean_metrics() {
+    auto cur_time = std::chrono::system_clock::now();
+    {
+      auto lock = get_lock<true>();
+      for (auto it = metric_map_.begin(); it != metric_map_.end();) {
+        if (cur_time - it->second->get_created_time() > metric_max_age_) {
+          metric_map_.erase(it++);
+        }
+        else {
+          ++it;
+        }
+      }
+    }
+  }
+
+  static inline bool has_start_check_metric_ = false;
+  static inline std::shared_ptr<coro_io::period_timer> check_timer_ = nullptr;
+  static inline std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
+
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 
   static inline null_mutex_t null_mtx_;
   static inline std::atomic_bool need_lock_ = true;
   static inline std::once_flag flag_;
+
+  static inline std::chrono::steady_clock::duration metric_max_age_{
+      std::chrono::hours(24)};
+  static inline std::chrono::steady_clock::duration metric_check_duration_{
+      std::chrono::minutes(5)};
 };
 
 using default_metric_manager = metric_manager_t<0>;

@@ -267,7 +267,12 @@ class counter_t : public metric_t {
           label_val += value;
         }
 #else
-        label_val += value;
+        if constexpr (is_atomic) {
+          label_val.fetch_add(value, std::memory_order_relaxed);
+        }
+        else {
+          label_val += value;
+        }
 #endif
       } break;
       case op_type_t::DEC:
@@ -278,9 +283,13 @@ class counter_t : public metric_t {
         else {
           label_val -= value;
         }
-
 #else
-        label_val -= value;
+        if constexpr (is_atomic) {
+          label_val.fetch_sub(value, std::memory_order_relaxed);
+        }
+        else {
+          label_val -= value;
+        }
 #endif
         break;
       case op_type_t::SET:
