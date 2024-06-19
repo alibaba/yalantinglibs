@@ -14,6 +14,11 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
+#if __has_include("ylt/coro_io/coro_io.hpp")
+#include "ylt/coro_io/coro_io.hpp"
+#else
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#endif
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 namespace iguana {
@@ -42,11 +47,33 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
+struct vector_hash {
+  size_t operator()(const std::vector<std::string>& vec) const {
+    unsigned int seed = 131;
+    unsigned int hash = 0;
+
+    for (const auto& str : vec) {
+      for (auto ch : str) {
+        hash = hash * seed + ch;
+      }
+    }
+
+    return (hash & 0x7FFFFFFF);
+  }
+};
+
+template <typename T>
+using metric_hash_map =
+    std::unordered_map<std::vector<std::string>, T, vector_hash>;
+
 class metric_t {
  public:
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help)
-      : type_(type), name_(std::move(name)), help_(std::move(help)) {}
+      : type_(type),
+        name_(std::move(name)),
+        help_(std::move(help)),
+        metric_created_time_(std::chrono::system_clock::now()) {}
   metric_t(MetricType type, std::string name, std::string help,
            std::vector<std::string> labels_name)
       : metric_t(type, std::move(name), std::move(help)) {
@@ -70,6 +97,8 @@ class metric_t {
 
   MetricType metric_type() { return type_; }
 
+  auto get_created_time() { return metric_created_time_; }
+
   std::string_view metric_name() {
     switch (type_) {
       case MetricType::Counter:
@@ -92,11 +121,7 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual std::map<std::vector<std::string>, double,
-                   std::less<std::vector<std::string>>>
-  value_map() {
-    return {};
-  }
+  virtual metric_hash_map<double> value_map() { return {}; }
 
   virtual void serialize(std::string& str) {}
 
@@ -173,6 +198,7 @@ class metric_t {
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   bool use_atomic_ = false;
+  std::chrono::system_clock::time_point metric_created_time_{};
 };
 
 template <size_t ID = 0>

@@ -3,8 +3,11 @@
 
 #include "detail/time_window_quantiles.hpp"
 #include "metric.hpp"
-#include "ylt/coro_io/coro_io.hpp"
+#if __has_include("ylt/util/concurrentqueue.h")
 #include "ylt/util/concurrentqueue.h"
+#else
+#include "cinatra/ylt/util/concurrentqueue.h"
+#endif
 
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -39,7 +42,6 @@ class summary_t : public metric_t {
         metric_t(MetricType::Summary, std::move(name), std::move(help)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
-    init_executor();
     init_block(block_);
     block_->quantile_values_ =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
@@ -55,7 +57,6 @@ class summary_t : public metric_t {
                  std::move(labels_name)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
-    init_executor();
     init_block(labels_block_);
   }
 
@@ -68,7 +69,6 @@ class summary_t : public metric_t {
                  std::move(static_labels)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
-    init_executor();
     init_block(labels_block_);
     labels_block_->label_quantile_values_[labels_value_] =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
@@ -85,9 +85,6 @@ class summary_t : public metric_t {
     if (labels_block_) {
       labels_block_->stop_ = true;
     }
-
-    work_ = nullptr;
-    thd_.join();
   }
 
   struct block_t {
@@ -101,23 +98,27 @@ class summary_t : public metric_t {
   struct labels_block_t {
     std::atomic<bool> stop_ = false;
     moodycamel::ConcurrentQueue<summary_label_sample> sample_queue_;
-
-    std::map<std::vector<std::string>, std::shared_ptr<TimeWindowQuantiles>,
-             std::less<std::vector<std::string>>>
+    metric_hash_map<std::shared_ptr<TimeWindowQuantiles>>
         label_quantile_values_;
-    std::map<std::vector<std::string>, std::uint64_t,
-             std::less<std::vector<std::string>>>
-        label_count_;
-    std::map<std::vector<std::string>, double,
-             std::less<std::vector<std::string>>>
-        label_sum_;
+    metric_hash_map<uint64_t> label_count_;
+    metric_hash_map<double> label_sum_;
   };
 
   void observe(double value) {
     if (!labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
+    if (block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
+    }
     block_->sample_queue_.enqueue(value);
+
+    bool expected = false;
+    if (is_coro_started_.compare_exchange_strong(expected, true)) {
+      start(block_).via(excutor_->get_executor()).start([](auto &&) {
+      });
+    }
   }
 
   void observe(std::vector<std::string> labels_value, double value) {
@@ -129,7 +130,17 @@ class summary_t : public metric_t {
         throw std::invalid_argument("not equal with static label");
       }
     }
+    if (labels_block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
+    }
     labels_block_->sample_queue_.enqueue({std::move(labels_value), value});
+
+    bool expected = false;
+    if (is_coro_started_.compare_exchange_strong(expected, true)) {
+      start(labels_block_).via(excutor_->get_executor()).start([](auto &&) {
+      });
+    }
   }
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
@@ -147,7 +158,7 @@ class summary_t : public metric_t {
             vec.push_back(block_->quantile_values_->get(quantile.quantile));
           }
         },
-        excutor_.get());
+        excutor_->get_executor());
 
     co_return vec;
   }
@@ -178,19 +189,17 @@ class summary_t : public metric_t {
             vec.push_back(it->second->get(quantile.quantile));
           }
         },
-        excutor_.get());
+        excutor_->get_executor());
 
     co_return vec;
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() override {
+  metric_hash_map<double> value_map() override {
     auto ret = async_simple::coro::syncAwait(coro_io::post(
         [this] {
           return labels_block_->label_sum_;
         },
-        excutor_.get()));
+        excutor_->get_executor()));
     return ret.value();
   }
 
@@ -199,7 +208,7 @@ class summary_t : public metric_t {
         [this] {
           return block_->sum_;
         },
-        excutor_.get());
+        excutor_->get_executor());
     co_return ret.value();
   }
 
@@ -208,7 +217,7 @@ class summary_t : public metric_t {
         [this] {
           return block_->count_;
         },
-        excutor_.get());
+        excutor_->get_executor());
     co_return ret.value();
   }
 
@@ -275,19 +284,10 @@ class summary_t : public metric_t {
   }
 #endif
  private:
-  void init_executor() {
-    work_ = std::make_shared<asio::io_context::work>(ctx_);
-    thd_ = std::thread([this] {
-      ctx_.run();
-    });
-    excutor_ =
-        std::make_unique<coro_io::ExecutorWrapper<>>(ctx_.get_executor());
-  }
-
   template <typename T>
   void init_block(std::shared_ptr<T> &block) {
     block = std::make_shared<T>();
-    start(block).via(excutor_.get()).start([](auto &&) {
+    start(block).via(excutor_->get_executor()).start([](auto &&) {
     });
   }
 
@@ -306,24 +306,34 @@ class summary_t : public metric_t {
         }
       }
 
-      co_await async_simple::coro::Yield{};
-
       if (block->sample_queue_.size_approx() == 0) {
-        co_await coro_io::sleep_for(std::chrono::milliseconds(5),
-                                    excutor_.get());
+        is_coro_started_ = false;
+        if (block->sample_queue_.size_approx() == 0) {
+          break;
+        }
+
+        bool expected = false;
+        if (!is_coro_started_.compare_exchange_strong(expected, true)) {
+          break;
+        }
+
+        continue;
       }
+
+      co_await async_simple::coro::Yield{};
     }
 
     co_return;
   }
 
-  async_simple::coro::Lazy<void> start(std::shared_ptr<labels_block_t> block) {
+  async_simple::coro::Lazy<void> start(
+      std::shared_ptr<labels_block_t> label_block) {
     summary_label_sample sample;
     size_t count = 1000000;
-    while (!block->stop_) {
+    while (!label_block->stop_) {
       size_t index = 0;
-      while (block->sample_queue_.try_dequeue(sample)) {
-        auto &ptr = block->label_quantile_values_[sample.labels_value];
+      while (label_block->sample_queue_.try_dequeue(sample)) {
+        auto &ptr = label_block->label_quantile_values_[sample.labels_value];
 
         if (ptr == nullptr) {
           ptr = std::make_shared<TimeWindowQuantiles>(quantiles_, max_age_,
@@ -332,8 +342,8 @@ class summary_t : public metric_t {
 
         ptr->insert(sample.value);
 
-        block->label_count_[sample.labels_value] += 1;
-        block->label_sum_[sample.labels_value] += sample.value;
+        label_block->label_count_[sample.labels_value] += 1;
+        label_block->label_sum_[sample.labels_value] += sample.value;
         index++;
         if (index == count) {
           break;
@@ -342,10 +352,20 @@ class summary_t : public metric_t {
 
       co_await async_simple::coro::Yield{};
 
-      if (block->sample_queue_.size_approx() == 0) {
-        co_await coro_io::sleep_for(std::chrono::milliseconds(5),
-                                    excutor_.get());
+      if (label_block->sample_queue_.size_approx() == 0) {
+        is_coro_started_ = false;
+        if (label_block->sample_queue_.size_approx() == 0) {
+          break;
+        }
+
+        bool expected = false;
+        if (!is_coro_started_.compare_exchange_strong(expected, true)) {
+          break;
+        }
+
+        continue;
       }
+      co_await async_simple::coro::Yield{};
     }
 
     co_return;
@@ -362,7 +382,7 @@ class summary_t : public metric_t {
         [this] {
           return labels_block_->label_sum_;
         },
-        excutor_.get());
+        excutor_->get_executor());
 
     for (auto &[labels_value, sum_val] : sum_map.value()) {
       double sum = 0;
@@ -403,7 +423,7 @@ class summary_t : public metric_t {
         [this] {
           return labels_block_->label_sum_;
         },
-        excutor_.get());
+        excutor_->get_executor());
 
     json_summary_t summary{name_, help_, std::string(metric_name())};
 
@@ -430,11 +450,10 @@ class summary_t : public metric_t {
   Quantiles quantiles_;  // readonly
   std::shared_ptr<block_t> block_;
   std::shared_ptr<labels_block_t> labels_block_;
-  std::unique_ptr<coro_io::ExecutorWrapper<>> excutor_ = nullptr;
-  std::shared_ptr<asio::io_context::work> work_;
-  asio::io_context ctx_;
-  std::thread thd_;
+  static inline std::shared_ptr<coro_io::io_context_pool> excutor_ =
+      coro_io::create_io_context_pool(1);
   std::chrono::milliseconds max_age_;
   int age_buckets_;
+  std::atomic<bool> is_coro_started_ = false;
 };
 }  // namespace ylt::metric

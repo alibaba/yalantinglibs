@@ -286,6 +286,18 @@ inline T &g_io_context_pool(
 }
 
 template <typename T = io_context_pool>
+inline std::shared_ptr<T> create_io_context_pool(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  auto pool = std::make_shared<T>(pool_size);
+  std::thread thrd{[pool] {
+    pool->run();
+  }};
+  thrd.detach();
+
+  return pool;
+}
+
+template <typename T = io_context_pool>
 inline T &g_block_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
