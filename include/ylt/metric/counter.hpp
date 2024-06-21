@@ -28,6 +28,7 @@ class counter_t : public metric_t {
   counter_t(std::string name, std::string help)
       : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
     use_atomic_ = true;
+    g_user_metric_count++;
   }
 
   // static labels value, contains a map with atomic value.
@@ -36,6 +37,7 @@ class counter_t : public metric_t {
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels)) {
     atomic_value_map_.emplace(labels_value_, 0);
+    g_user_metric_count++;
     use_atomic_ = true;
   }
 
@@ -43,9 +45,11 @@ class counter_t : public metric_t {
   counter_t(std::string name, std::string help,
             std::vector<std::string> labels_name)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)) {}
+                 std::move(labels_name)) {
+    g_user_metric_count++;
+  }
 
-  virtual ~counter_t() {}
+  virtual ~counter_t() { g_user_metric_count--; }
 
   double value() { return default_lable_value_; }
 
@@ -82,20 +86,16 @@ class counter_t : public metric_t {
       return;
     }
 
-    serialize_head(str);
-    std::string s;
-    if (use_atomic_) {
-      serialize_map(atomic_value_map_, s);
-    }
-    else {
-      serialize_map(value_map_, s);
+    auto map = value_map();
+    if (map.empty()) {
+      return;
     }
 
-    if (s.empty()) {
-      str.clear();
-    }
-    else {
-      str.append(s);
+    std::string value_str;
+    serialize_map(map, value_str);
+    if (!value_str.empty()) {
+      serialize_head(str);
+      str.append(value_str);
     }
   }
 
@@ -113,18 +113,17 @@ class counter_t : public metric_t {
       return;
     }
 
+    auto map = value_map();
     json_counter_t counter{name_, help_, std::string(metric_name())};
-    if (use_atomic_) {
-      to_json(counter, atomic_value_map_, str);
-    }
-    else {
-      to_json(counter, value_map_, str);
-    }
+    to_json(counter, map, str);
   }
 
   template <typename T>
   void to_json(json_counter_t &counter, T &map, std::string &str) {
     for (auto &[k, v] : map) {
+      if (v == 0) {
+        continue;
+      }
       json_counter_metric_t metric;
       size_t index = 0;
       for (auto &label_value : k) {
@@ -133,7 +132,9 @@ class counter_t : public metric_t {
       metric.value = (int64_t)v;
       counter.metrics.push_back(std::move(metric));
     }
-    iguana::to_json(counter, str);
+    if (!counter.metrics.empty()) {
+      iguana::to_json(counter, str);
+    }
   }
 #endif
 
@@ -164,7 +165,18 @@ class counter_t : public metric_t {
     }
     else {
       std::lock_guard lock(mtx_);
+      stat_metric(labels_value);
       set_value<false>(value_map_[labels_value], value, op_type_t::INC);
+    }
+  }
+
+  void stat_metric(const std::vector<std::string> &labels_value) {
+    if (!value_map_.contains(labels_value)) {
+      for (auto &key : labels_value) {
+        g_user_metric_memory->inc(key.size());
+      }
+      g_user_metric_memory->inc(8);
+      g_user_metric_labels->inc();
     }
   }
 

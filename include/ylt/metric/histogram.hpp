@@ -108,6 +108,10 @@ class histogram_t : public metric_t {
       return;
     }
 
+    if (sum_->value() == 0) {
+      return;
+    }
+
     serialize_head(str);
     double count = 0;
     auto bucket_counts = get_bucket_counts();
@@ -143,6 +147,10 @@ class histogram_t : public metric_t {
   void serialize_to_json(std::string &str) override {
     if (!sum_->labels_name().empty()) {
       serialize_to_json_with_labels(str);
+      return;
+    }
+
+    if (sum_->value() == 0) {
       return;
     }
 
@@ -183,11 +191,13 @@ class histogram_t : public metric_t {
   }
 
   void serialize_with_labels(std::string &str) {
-    serialize_head(str);
-
-    auto bucket_counts = get_bucket_counts();
-
     auto value_map = sum_->value_map();
+    if (value_map.empty()) {
+      return;
+    }
+
+    std::string value_str;
+    auto bucket_counts = get_bucket_counts();
     for (auto &[labels_value, value] : value_map) {
       if (value == 0) {
         continue;
@@ -196,23 +206,30 @@ class histogram_t : public metric_t {
       double count = 0;
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
-        str.append(name_).append("_bucket{");
+        value_str.append(name_).append("_bucket{");
         build_label_string(str, sum_->labels_name(), labels_value);
-        str.append(",");
+        value_str.append(",");
 
         if (i == bucket_boundaries_.size()) {
-          str.append("le=\"").append("+Inf").append("\"} ");
+          value_str.append("le=\"").append("+Inf").append("\"} ");
         }
         else {
-          str.append("le=\"")
+          value_str.append("le=\"")
               .append(std::to_string(bucket_boundaries_[i]))
               .append("\"} ");
         }
 
         count += counter->value(labels_value);
-        str.append(std::to_string(count));
-        str.append("\n");
+        value_str.append(std::to_string(count));
+        value_str.append("\n");
       }
+
+      if (value_str.empty()) {
+        return;
+      }
+
+      serialize_head(str);
+      str.append(value_str);
 
       str.append(name_);
       str.append("_sum{");
@@ -237,10 +254,14 @@ class histogram_t : public metric_t {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json_with_labels(std::string &str) {
+    auto value_map = sum_->value_map();
+    if (value_map.empty()) {
+      return;
+    }
+
     json_histogram_t hist{name_, help_, std::string(metric_name())};
     auto bucket_counts = get_bucket_counts();
 
-    auto value_map = sum_->value_map();
     for (auto &[labels_value, value] : value_map) {
       if (value == 0) {
         continue;
@@ -272,7 +293,9 @@ class histogram_t : public metric_t {
       hist.metrics.push_back(std::move(metric));
     }
 
-    iguana::to_json(hist, str);
+    if (!hist.metrics.empty()) {
+      iguana::to_json(hist, str);
+    }
   }
 #endif
 

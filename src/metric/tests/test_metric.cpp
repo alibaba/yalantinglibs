@@ -303,8 +303,11 @@ TEST_CASE("test register metric") {
   }
 }
 
+template <size_t id>
+struct test_id_t {};
+
 TEST_CASE("test remove metric and serialize metrics") {
-  using metric_mgr = metric_manager_t<1>;
+  using metric_mgr = metric_manager_t<test_id_t<1>>;
   metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
   metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
 
@@ -323,7 +326,7 @@ TEST_CASE("test remove metric and serialize metrics") {
       metric_mgr::create_metric_static<counter_t>("test_static_counter", ""),
       std::invalid_argument);
 
-  using metric_mgr2 = metric_manager_t<2>;
+  using metric_mgr2 = metric_manager_t<test_id_t<2>>;
   auto c =
       metric_mgr2::create_metric_static<counter_t>("test_static_counter", "");
   auto c2 =
@@ -349,7 +352,7 @@ TEST_CASE("test remove metric and serialize metrics") {
 }
 
 TEST_CASE("test filter metrics static") {
-  using metric_mgr = metric_manager_t<3>;
+  using metric_mgr = metric_manager_t<test_id_t<3>>;
   auto c = metric_mgr::create_metric_static<counter_t>(
       "test_static_counter", "",
       std::map<std::string, std::string>{{"method", "GET"}});
@@ -429,7 +432,7 @@ TEST_CASE("test filter metrics static") {
 }
 
 TEST_CASE("test filter metrics dynamic") {
-  using metric_mgr = metric_manager_t<4>;
+  using metric_mgr = metric_manager_t<test_id_t<4>>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "test_dynamic_counter", "", std::vector<std::string>{{"method"}});
   auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
@@ -509,7 +512,7 @@ TEST_CASE("test filter metrics dynamic") {
 }
 
 TEST_CASE("test get metric by static labels and label") {
-  using metric_mgr = metric_manager_t<9>;
+  using metric_mgr = metric_manager_t<test_id_t<9>>;
   metric_mgr::create_metric_static<counter_t>(
       "http_req_test", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
@@ -567,7 +570,7 @@ TEST_CASE("test get metric by static labels and label") {
 }
 
 TEST_CASE("test get metric by dynamic labels") {
-  using metric_mgr = metric_manager_t<10>;
+  using metric_mgr = metric_manager_t<test_id_t<10>>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "http_req_static", "", std::vector<std::string>{"method", "code"});
 
@@ -770,6 +773,205 @@ TEST_CASE("test summary with static labels") {
   std::cout << json_str << "\n";
 #endif
 }
+
+TEST_CASE("test serialize with emptry metrics") {
+  std::string s1;
+
+  auto h1 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method"});
+  h1->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  h1->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  auto h2 = std::make_shared<histogram_t>(
+      "get_count2", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0});
+  h2->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  h2->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  auto h3 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "/"}});
+  h3->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  h3->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  auto c1 = std::make_shared<counter_t>(std::string("get_count"),
+                                        std::string("get counter"));
+  c1->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  c1->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  auto c2 = std::make_shared<counter_t>(
+      std::string("get_count"), std::string("get counter"),
+      std::map<std::string, std::string>{{"method", "GET"}});
+  c2->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  c2->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  auto c3 = std::make_shared<counter_t>(std::string("get_count"),
+                                        std::string("get counter"),
+                                        std::vector<std::string>{"method"});
+  c3->serialize(s1);
+  CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  c3->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  {
+    std::string str;
+    h1->observe({"POST"}, 1);
+    h1->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    h1->serialize_to_json(str);
+    CHECK(!str.empty());
+#endif
+  }
+
+  {
+    std::string str;
+    h2->observe(1);
+    h2->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    h1->serialize_to_json(str);
+    CHECK(!str.empty());
+#endif
+  }
+
+  {
+    std::string str;
+    c1->inc();
+    c1->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    c1->serialize_to_json(str);
+    CHECK(!str.empty());
+#endif
+  }
+
+  {
+    std::string str;
+    c2->inc({"GET"});
+    c2->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    c2->serialize_to_json(str);
+    CHECK(!str.empty());
+#endif
+  }
+
+  {
+    std::string str;
+    c3->inc({"GET"});
+    c3->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    c3->serialize_to_json(str);
+    CHECK(!str.empty());
+#endif
+  }
+}
+
+TEST_CASE("test serialize with multiple threads") {
+  auto c = std::make_shared<counter_t>(std::string("get_count"),
+                                       std::string("get counter"),
+                                       std::vector<std::string>{"method"});
+  auto g = std::make_shared<gauge_t>(std::string("get_count1"),
+                                     std::string("get counter"),
+                                     std::vector<std::string>{"method"});
+
+  auto h1 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method"});
+
+  auto c1 = std::make_shared<counter_t>(std::string("get_count3"),
+                                        std::string("get counter"),
+                                        std::vector<std::string>{"method"});
+
+  using test_metric_manager = metric_manager_t<test_id_t<20>>;
+
+  test_metric_manager::register_metric_dynamic(c, g, h1, c1);
+
+  c->inc({"POST"}, 1);
+  g->inc({"GET"}, 1);
+  h1->observe({"HEAD"}, 1);
+
+  auto s = test_metric_manager::serialize_dynamic();
+  std::cout << s;
+  CHECK(!s.empty());
+  CHECK(s.find("get_count") != std::string::npos);
+  CHECK(s.find("get_count1") != std::string::npos);
+  CHECK(s.find("get_count2") != std::string::npos);
+  CHECK(s.find("get_count3") == std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json = test_metric_manager::serialize_to_json_dynamic();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+  CHECK(json.find("get_count") != std::string::npos);
+  CHECK(json.find("get_count1") != std::string::npos);
+  CHECK(json.find("get_count2") != std::string::npos);
+#endif
+}
+
+#if defined(__GNUC__)
+TEST_CASE("test system metric") {
+  start_system_metric();
+  detail::ylt_stat();
+
+  auto s = system_metric_manager::serialize_static();
+  std::cout << s;
+  CHECK(!s.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json = system_metric_manager::serialize_to_json_static();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+#endif
+
+  using metric_manager = metric_manager_t<test_id_t<21>>;
+  auto c = metric_manager::create_metric_dynamic<counter_t>("test_qps", "");
+  c->inc(42);
+  using root = metric_collector_t<metric_manager, default_metric_manager,
+                                  system_metric_manager>;
+  s.clear();
+  s = root::serialize();
+  std::cout << s;
+  CHECK(!s.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  json.clear();
+  json = root::serialize_to_json();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+#endif
+}
+#endif
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
