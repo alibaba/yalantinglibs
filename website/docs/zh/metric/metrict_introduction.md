@@ -295,7 +295,7 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 
 指标管理器的api
 ```cpp
-template <size_t ID = 0>
+template <typename T>
 struct metric_manager_t {
   // 创建并注册指标，返回注册的指标对象
   template <typename T, typename... Args>
@@ -325,6 +325,9 @@ struct metric_manager_t {
   // 获取注册的指标对象的名称
   static std::vector<std::string> metric_keys_static();
   static std::vector<std::string> metric_keys_dynamic();
+
+  // 获取管理器的所有指标
+  static std::shared_ptr<metric_t> get_metrics();
 
   // 根据名称获取指标对象，T为具体指标的类型，如 get_metric_static<gauge_t>();
   // 如果找不到则返回nullptr
@@ -374,13 +377,49 @@ struct metric_manager_t {
   static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
       const metric_filter_options& options);  
 };
-using default_metric_manager = metric_manager_t<0>;
+
+struct ylt_default_metric_tag_t {};
+using default_metric_manager = metric_manager_t<ylt_default_metric_tag_t>;
 ```
 metric_manager_t默认为default_metric_manager，如果希望有多个metric manager，用户可以自定义新的metric manager，如：
 
 ```cpp
-constexpr size_t metric_id = 100;
-using my_metric_manager = metric_manager_t<metric_id>;
+struct my_tag{};
+using my_metric_manager = metric_manager_t<my_tag>;
+```
+
+# system_metric_manager
+系统metric 管理器，需要调用ylt::metric::start_system_metric()，内部会每秒钟采集系统指标，系统指标：
+有进程的cpu，内存，io，平均负载，线程数，指标的指标等指标。
+
+指标的指标：
+- 总的metric数量
+- 总的label数量
+- metric的内存大小
+- summary失败的数量
+
+
+# metric_collector_t
+metric_collector_t 集中管理所有的metric_manager，如
+```cpp
+template <typename... Args>
+struct metric_collector_t {
+  // 序列化所有指标管理器中的指标
+  static std::string serialize();
+
+  // 序列化所有指标管理器中的指标为json
+  static std::string serialize_to_json();
+
+  // 获取所有指标管理器中的指标
+  static std::vector<std::shared_ptr<metric_t>> get_all_metrics();
+};
+```
+
+使用metric_collector_t，将所有的指标管理器作为参数传入：
+```cpp
+using root_manager = metric_collector_t<system_metric_manager, default_metric_manager>;
+
+std::string str = root_manager::serialize();
 ```
 
 # histogram

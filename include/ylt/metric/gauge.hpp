@@ -45,6 +45,7 @@ class gauge_t : public counter_t {
     }
     else {
       std::lock_guard lock(mtx_);
+      stat_metric(labels_value);
       set_value<false>(value_map_[labels_value], value, op_type_t::DEC);
     }
   }

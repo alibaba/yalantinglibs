@@ -109,7 +109,7 @@ class summary_t : public metric_t {
       throw std::invalid_argument("not a default label metric");
     }
     if (block_->sample_queue_.size_approx() >= 20000000) {
-      // TODO: record failed count.
+      g_summary_failed_count->inc();
       return;
     }
     block_->sample_queue_.enqueue(value);
@@ -131,7 +131,7 @@ class summary_t : public metric_t {
       }
     }
     if (labels_block_->sample_queue_.size_approx() >= 20000000) {
-      // TODO: record failed count.
+      g_summary_failed_count->inc();
       return;
     }
     labels_block_->sample_queue_.enqueue({std::move(labels_value), value});

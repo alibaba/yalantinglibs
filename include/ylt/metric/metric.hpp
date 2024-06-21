@@ -201,7 +201,22 @@ class metric_t {
   std::chrono::system_clock::time_point metric_created_time_{};
 };
 
-template <size_t ID = 0>
+template <typename Tag>
+struct metric_manager_t;
+
+struct ylt_system_tag_t {};
+using system_metric_manager = metric_manager_t<ylt_system_tag_t>;
+
+class counter_t;
+inline auto g_user_metric_memory =
+    std::make_shared<counter_t>("ylt_user_metric_memory", "");
+inline auto g_user_metric_labels =
+    std::make_shared<counter_t>("ylt_user_metric_labels", "");
+inline auto g_summary_failed_count =
+    std::make_shared<counter_t>("ylt_summary_failed_count", "");
+inline std::atomic<int64_t> g_user_metric_count = 0;
+
+template <typename Tag>
 struct metric_manager_t {
   struct null_mutex_t {
     void lock() {}
@@ -261,6 +276,15 @@ struct metric_manager_t {
     bool r = true;
     ((void)(r && (r = register_metric_impl<false>(metrics), true)), ...);
     return r;
+  }
+
+  static auto get_metrics() {
+    if (need_lock_) {
+      return collect<true>();
+    }
+    else {
+      return collect<false>();
+    }
   }
 
   static auto metric_map_static() { return metric_map_impl<false>(); }
@@ -580,5 +604,34 @@ struct metric_manager_t {
   static inline std::once_flag flag_;
 };
 
-using default_metric_manager = metric_manager_t<0>;
+struct ylt_default_metric_tag_t {};
+using default_metric_manager = metric_manager_t<ylt_default_metric_tag_t>;
+
+template <typename... Args>
+struct metric_collector_t {
+  static std::string serialize() {
+    auto vec = get_all_metrics();
+    return default_metric_manager::serialize(vec);
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  static std::string serialize_to_json() {
+    auto vec = get_all_metrics();
+    return default_metric_manager::serialize_to_json(vec);
+  }
+#endif
+
+  static std::vector<std::shared_ptr<metric_t>> get_all_metrics() {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    (append_vector<Args>(vec), ...);
+    return vec;
+  }
+
+ private:
+  template <typename T>
+  static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
+    auto v = T::get_metrics();
+    vec.insert(vec.end(), v.begin(), v.end());
+  }
+};
 }  // namespace ylt::metric
