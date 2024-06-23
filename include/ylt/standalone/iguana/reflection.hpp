@@ -17,6 +17,7 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
+#include <any>
 
 #include "detail/string_stream.hpp"
 #include "detail/traits.hpp"
@@ -563,7 +564,8 @@ struct field_info {
 struct base {
   virtual void to_pb(std::string &str) {}
   virtual void from_pb(std::string_view str) {}
-  virtual std::vector<std::string_view> get_fields_name() { return {}; }
+  virtual std::vector<std::string_view> get_fields_name() const { return {}; }
+  virtual std::any get_field_any(std::string_view name) const { return {}; }
   virtual iguana::detail::field_info get_field_info(std::string_view name) {
     return {};
   }
