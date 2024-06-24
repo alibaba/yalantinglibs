@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-#include "cinatra/uri.hpp"
 #ifdef YLT_ENABLE_SSL
 #define CINATRA_ENABLE_SSL
 #endif

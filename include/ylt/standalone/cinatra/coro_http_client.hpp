@@ -294,7 +294,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     bool no_schema = !has_schema(uri);
     std::string append_uri;
     if (no_schema) {
-      append_uri.append("http://").append(uri);
+#ifdef CINATRA_ENABLE_SSL
+      if (is_ssl_schema_)
+        append_uri.append("https://").append(uri);
+      else
+#endif
+        append_uri.append("http://").append(uri);
     }
 
     auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
