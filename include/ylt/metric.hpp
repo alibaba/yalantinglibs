@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 #pragma once
-
-// Note: Update the version when release a new version.
-
-// YLT_VERSION % 100 is the sub-minor version
-// YLT_VERSION / 100 % 1000 is the minor version
-// YLT_VERSION / 100000 is the major version
-#define YLT_VERSION 303  // 0.3.3
+#define CINATRA_ENABLE_METRIC_JSON
+#include "metric/gauge.hpp"
+#include "metric/histogram.hpp"
+#include "metric/summary.hpp"
+#include "metric/system_metric.hpp"
+#include "ylt/struct_json/json_writer.h"

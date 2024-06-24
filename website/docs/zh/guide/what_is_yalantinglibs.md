@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple </h6>
+<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http, metric 和 async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -10,7 +10,7 @@
 
 [English Version](../../en/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
+yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http, metric 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
 yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C++基础工具库, 帮助用户构建高性能的现代C++应用。
 
@@ -427,6 +427,10 @@ yalantinglibs工程自身支持如下配置项，如果你使用cmake find_packa
 无依赖。
 
 ### struct_pb
+
+无依赖。
+
+### metric
 
 无依赖。
 

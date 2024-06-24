@@ -35,6 +35,10 @@ export const struct_xxx_Links = [
     { text: 'struct_xml struct_json struct_yaml 简介', link: '/zh/struct_xxx/struct_xxx_introduction' },
 ];
 
+export const metric_Links = [
+    { text: 'metric简介', link: '/zh/metric/metric_introduction' },
+];
+
 export const aboutLinks = [
     { text: 'purecpp', link: '/zh/about/community' }, //TODO 未来支持英语
     { text: 'contribute', link: '/zh/about/contribute' },
