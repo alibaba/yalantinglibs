@@ -18,7 +18,7 @@ struct nest : struct_pb::base_impl<nest> {
   std::string name;
   my_struct value;
   int var;
-  std::variant<int,double> mv;
+  std::variant<int, double> mv;
 };
 REFLECTION(nest, name, value, var, mv);
 
@@ -53,7 +53,8 @@ int main() {
   // dynamic reflection
   auto t = struct_pb::create_instance("nest");
   auto names = t->get_fields_name();
-  bool r = (names == std::vector<std::string_view>{"name", "value", "var", "mv"});
+  bool r =
+      (names == std::vector<std::string_view>{"name", "value", "var", "mv"});
   assert(r);
 
   t->set_field_value("mv", std::variant<int, double>{1});
@@ -61,16 +62,15 @@ int main() {
   auto const temp = std::variant<int, double>{1};
   assert(mv == temp);
 
-
   t->set_field_value("name", std::string("tom"));
   auto name = t->get_field_value<std::string>("name");
   assert(name == "tom");
 
-  auto d = dynamic_cast<nest *>(t.get());
+  auto d = dynamic_cast<nest*>(t.get());
   assert(d->name == "tom");
 
   t->set_field_value<std::string>("name", "hello");
-  auto &field_name = t->get_field_value<std::string>("name");
+  auto& field_name = t->get_field_value<std::string>("name");
   assert(field_name == "hello");
 
   // dynamic any
@@ -80,7 +80,4 @@ int main() {
   auto const& mvar_any = t->get_field_any("mv");
   auto const& mvar = std::any_cast<std::variant<int, double>>(mvar_any);
   assert(mvar == temp);
-
-
-
 }

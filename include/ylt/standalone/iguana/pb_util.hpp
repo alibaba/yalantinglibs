@@ -178,8 +178,8 @@ constexpr inline WireType get_wire_type() {
 }
 
 template <typename T>
-constexpr bool is_lenprefix_v =
-    (get_wire_type<T>() == WireType::LengthDelimeted);
+constexpr bool is_lenprefix_v = (get_wire_type<T>() ==
+                                 WireType::LengthDelimeted);
 
 [[nodiscard]] IGUANA_INLINE uint32_t encode_zigzag(int32_t v) {
   return (static_cast<uint32_t>(v) << 1U) ^
