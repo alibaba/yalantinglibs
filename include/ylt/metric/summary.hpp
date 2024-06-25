@@ -46,6 +46,7 @@ class summary_t : public metric_t {
     block_->quantile_values_ =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
     use_atomic_ = true;
+    g_user_metric_count++;
   }
 
   summary_t(std::string name, std::string help, Quantiles quantiles,
@@ -58,6 +59,7 @@ class summary_t : public metric_t {
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_block(labels_block_);
+    g_user_metric_count++;
   }
 
   summary_t(std::string name, std::string help, Quantiles quantiles,
@@ -75,6 +77,7 @@ class summary_t : public metric_t {
     labels_block_->label_count_.emplace(labels_value_, 0);
     labels_block_->label_sum_.emplace(labels_value_, 0);
     use_atomic_ = true;
+    g_user_metric_count++;
   }
 
   ~summary_t() {

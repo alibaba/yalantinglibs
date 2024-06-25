@@ -109,7 +109,7 @@ inline void stat_memory() {
   file >> virtual_size >> resident >> share;
   static long page_size = sysconf(_SC_PAGE_SIZE);
 
-  process_memory_virtual->update(virtual_size);
+  process_memory_virtual->update(virtual_size * page_size);
   process_memory_resident->update(resident * page_size);
   process_memory_shared->update(share * page_size);
 }
@@ -324,7 +324,6 @@ inline bool start_system_metric() {
   system_metric_manager::create_metric_static<gauge_t>(
       "ylt_process_io_write_second", "");
 
-  system_metric_manager::register_metric_static(g_user_metric_memory);
   system_metric_manager::register_metric_static(g_user_metric_labels);
   system_metric_manager::register_metric_static(g_summary_failed_count);
 

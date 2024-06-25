@@ -36,6 +36,8 @@ class histogram_t : public metric_t {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
 
+    g_user_metric_count++;
+
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(std::make_shared<counter_t>("", ""));
     }
@@ -51,6 +53,8 @@ class histogram_t : public metric_t {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
 
+    g_user_metric_count++;
+
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(
           std::make_shared<counter_t>(name, help, labels_name));
@@ -65,6 +69,8 @@ class histogram_t : public metric_t {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
+
+    g_user_metric_count++;
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(std::make_shared<counter_t>(name, help, labels));
