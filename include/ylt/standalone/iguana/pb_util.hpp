@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -76,18 +77,47 @@ struct base_impl : public base {
     return info;
   }
 
-  std::vector<std::string_view> get_fields_name() override {
+  std::vector<std::string_view> get_fields_name() const override {
     static constexpr auto map = iguana::get_members<T>();
+
     std::vector<std::string_view> vec;
-    for (auto [no, val] : map) {
+    std::set<std::string_view> sets;
+
+    for (auto const& [no, val] : map) {
       std::visit(
-          [&](auto& field) {
-            vec.push_back(std::string_view(field.field_name.data(),
-                                           field.field_name.size()));
+          [&](auto const& field) {
+            if (auto it = sets.emplace(field.field_name.data(),
+                                       field.field_name.size());
+                it.second) {
+              vec.push_back(*it.first);
+            }
           },
           val);
     }
     return vec;
+  }
+
+  std::any get_field_any(std::string_view name) const override {
+    static constexpr auto map = iguana::get_members<T>();
+    std::any result;
+
+    for (auto [no, field] : map) {
+      if (result.has_value()) {
+        break;
+      }
+      std::visit(
+          [&](auto val) {
+            if (val.field_name == name) {
+              using value_type = typename decltype(val)::value_type;
+              auto const offset = member_offset((T*)this, val.member_ptr);
+              auto ptr = (((char*)this) + offset);
+              result = {*((value_type*)ptr)};
+            }
+          },
+          field);
+    }
+
+    return result;
   }
 
   virtual ~base_impl() {}
