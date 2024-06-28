@@ -538,6 +538,11 @@ TEST_CASE("test get metric by static labels and label") {
 
   h1->observe({"GET", "/"}, 23);
 
+  std::string str1;
+  h1->serialize(str1);
+  std::cout << str1;
+  CHECK(str1.find("method=\"GET\",url=\"/\",le=") != std::string::npos);
+
   auto s1 = metric_mgr::create_metric_static<summary_t>(
       "http_req_static_summary", "help",
       summary_t::Quantiles{

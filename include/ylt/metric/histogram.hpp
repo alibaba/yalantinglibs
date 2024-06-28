@@ -213,7 +213,7 @@ class histogram_t : public metric_t {
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         value_str.append(name_).append("_bucket{");
-        build_label_string(str, sum_->labels_name(), labels_value);
+        build_label_string(value_str, sum_->labels_name(), labels_value);
         value_str.append(",");
 
         if (i == bucket_boundaries_.size()) {
