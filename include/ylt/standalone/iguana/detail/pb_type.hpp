@@ -1,4 +1,5 @@
 #pragma once
+#include <type_traits>
 
 namespace iguana {
 
@@ -86,6 +87,12 @@ inline bool operator==(sfixed64_t value1, int64_t value2) {
 inline bool operator<(const sfixed64_t& lhs, const sfixed64_t& rhs) {
   return lhs.val < rhs.val;
 }
+
+template <typename Type, typename T = std::decay_t<Type>>
+constexpr bool is_pb_type_v =
+    std::is_same_v<sint32_t, T> || std::is_same_v<sint64_t, T> ||
+    std::is_same_v<fixed32_t, T> || std::is_same_v<fixed64_t, T> ||
+    std::is_same_v<sfixed32_t, T> || std::is_same_v<sfixed64_t, T>;
 
 }  // namespace iguana
 

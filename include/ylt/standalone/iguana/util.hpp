@@ -297,8 +297,8 @@ IGUANA_INLINE void write_string_with_escape(const Ch* it, SizeType length,
 
 template <typename T, size_t N>
 IGUANA_INLINE constexpr bool has_duplicate(const std::array<T, N>& arr) {
-  for (int i = 0; i < arr.size(); i++) {
-    for (int j = i + 1; j < arr.size(); j++) {
+  for (size_t i = 0; i < arr.size(); i++) {
+    for (size_t j = i + 1; j < arr.size(); j++) {
       if (arr[i] == arr[j]) {
         return true;
       }

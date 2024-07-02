@@ -6,6 +6,12 @@
 namespace iguana {
 
 template <bool Is_writing_escape = false, typename Stream, typename T,
+          std::enable_if_t<yaml_not_support_v<T>, int> = 0>
+IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces = 0) {
+  throw std::bad_function_call();
+}
+
+template <bool Is_writing_escape = false, typename Stream, typename T,
           std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces = 0);
 
@@ -39,6 +45,12 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, T value, size_t min_spaces) {
   ss.append(temp, p - temp);
   if constexpr (appendLf)
     ss.push_back('\n');
+}
+
+template <bool Is_writing_escape, bool appendLf = true, typename Stream,
+          typename T, std::enable_if_t<is_pb_type_v<T>, int> = 0>
+IGUANA_INLINE void render_yaml_value(Stream &ss, T value, size_t min_spaces) {
+  render_yaml_value<Is_writing_escape>(ss, value.val, min_spaces);
 }
 
 template <bool Is_writing_escape, bool appendLf = true, typename Stream>
@@ -191,4 +203,9 @@ IGUANA_INLINE void to_yaml(T &&t, Stream &s) {
     static_assert(!sizeof(T), "don't suppport this type");
 }
 
+template <typename T>
+IGUANA_INLINE void to_yaml_adl(iguana_adl_t *p, const T &t,
+                               std::string &pb_str) {
+  to_yaml(t, pb_str);
+}
 }  // namespace iguana

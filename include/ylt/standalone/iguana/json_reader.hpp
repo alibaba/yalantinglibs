@@ -86,6 +86,11 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   }
 }
 
+template <typename U, typename It, std::enable_if_t<is_pb_type_v<U>, int> = 0>
+IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
+  from_json_impl(value.val, it, end);
+}
+
 template <typename U, typename It, std::enable_if_t<numeric_str_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   skip_ws(it, end);
@@ -897,6 +902,12 @@ IGUANA_INLINE void from_json_file(T &value, const std::string &filename,
   } catch (std::runtime_error &e) {
     ec = iguana::make_error_code(e.what());
   }
+}
+
+template <typename T>
+IGUANA_INLINE void from_json_adl(iguana_adl_t *p, T &t,
+                                 std::string_view pb_str) {
+  iguana::from_json(t, pb_str);
 }
 
 }  // namespace iguana

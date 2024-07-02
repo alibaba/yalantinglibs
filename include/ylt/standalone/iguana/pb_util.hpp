@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -30,112 +29,8 @@ enum class WireType : uint32_t {
   Unknown
 };
 
-template <typename T, typename Stream>
-IGUANA_INLINE void to_pb(T& t, Stream& out);
-
 template <typename T>
-IGUANA_INLINE void from_pb(T& t, std::string_view pb_str);
-
-using base = detail::base;
-
-template <typename T, typename U>
-IGUANA_INLINE constexpr size_t member_offset(T* t, U T::*member) {
-  return (char*)&(t->*member) - (char*)t;
-}
-
-template <typename T>
-struct base_impl : public base {
-  void to_pb(std::string& str) override {
-    iguana::to_pb(*(static_cast<T*>(this)), str);
-  }
-
-  void from_pb(std::string_view str) override {
-    iguana::from_pb(*(static_cast<T*>(this)), str);
-  }
-
-  iguana::detail::field_info get_field_info(std::string_view name) override {
-    static constexpr auto map = iguana::get_members<T>();
-    iguana::detail::field_info info{};
-    for (auto [no, field] : map) {
-      if (info.offset > 0) {
-        break;
-      }
-      std::visit(
-          [&](auto val) {
-            if (val.field_name == name) {
-              info.offset = member_offset((T*)this, val.member_ptr);
-              using value_type = typename decltype(val)::value_type;
-#if defined(__clang__) || defined(_MSC_VER) || \
-    (defined(__GNUC__) && __GNUC__ > 8)
-              info.type_name = type_string<value_type>();
-#endif
-            }
-          },
-          field);
-    }
-
-    return info;
-  }
-
-  std::vector<std::string_view> get_fields_name() const override {
-    static constexpr auto map = iguana::get_members<T>();
-
-    std::vector<std::string_view> vec;
-    std::set<std::string_view> sets;
-
-    for (auto const& [no, val] : map) {
-      std::visit(
-          [&](auto const& field) {
-            if (auto it = sets.emplace(field.field_name.data(),
-                                       field.field_name.size());
-                it.second) {
-              vec.push_back(*it.first);
-            }
-          },
-          val);
-    }
-    return vec;
-  }
-
-  std::any get_field_any(std::string_view name) const override {
-    static constexpr auto map = iguana::get_members<T>();
-    std::any result;
-
-    for (auto [no, field] : map) {
-      if (result.has_value()) {
-        break;
-      }
-      std::visit(
-          [&](auto val) {
-            if (val.field_name == name) {
-              using value_type = typename decltype(val)::value_type;
-              auto const offset = member_offset((T*)this, val.member_ptr);
-              auto ptr = (((char*)this) + offset);
-              result = {*((value_type*)ptr)};
-            }
-          },
-          field);
-    }
-
-    return result;
-  }
-
-  virtual ~base_impl() {}
-
-  size_t cache_size = 0;
-};
-
-template <typename T>
-constexpr bool inherits_from_base_v = std::is_base_of_v<base, T>;
-
-IGUANA_INLINE std::shared_ptr<base> create_instance(std::string_view name) {
-  auto it = iguana::detail::g_pb_map.find(name);
-  if (it == iguana::detail::g_pb_map.end()) {
-    throw std::invalid_argument(std::string(name) +
-                                "not inheried from iguana::base_impl");
-  }
-  return it->second();
-}
+constexpr bool inherits_from_base_v = std::is_base_of_v<detail::base, T>;
 
 namespace detail {
 template <typename T>

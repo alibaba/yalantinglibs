@@ -19,7 +19,8 @@ endif()
 
 set(TEST_PROTO main.cpp)
 
-if (Protobuf_FOUND)
+if (TEST_STRUCT_PB_WITH_PROTO)
+  message(STATUS "Gen proto files")
   add_definitions(-DSTRUCT_PB_WITH_PROTO)
   message(STATUS "Found Protobuf: ${Protobuf_VERSION}")
   include_directories(${Protobuf_INCLUDE_DIRS})

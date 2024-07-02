@@ -1156,6 +1156,101 @@ TEST_CASE("test variant") {
   }
 }
 
+#if defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 8)
+struct person PUBLIC(person) {
+  person() = default;
+  person(int32_t a, std::string b, int c, double d)
+      : id(a), name(std::move(b)), age(c), salary(d) {}
+  int32_t id;
+  std::string name;
+  int age;
+  double salary;
+};
+REFLECTION(person, id, name, age, salary);
+
+enum Color { Red = 0, Black = 2, Green = 4 };
+
+namespace iguana {
+template <>
+struct enum_value<Color> {
+  constexpr static std::array<int, 3> value = {0, 2, 4};
+};
+}  // namespace iguana
+
+struct vector_t {
+  int id;
+  Color color;
+  std::variant<int, pair_t, std::string> variant;
+  std::vector<int> ids;
+  std::vector<pair_t> pairs;
+  std::vector<std::string> strs;
+  std::map<std::string, pair_t> map;
+  std::string name;
+  std::optional<int> op_val;
+};
+REFLECTION(vector_t, id, color, variant, ids, pairs, strs, map, name, op_val);
+
+TEST_CASE("struct to proto") {
+  {
+    std::string str;
+    iguana::to_proto<vector_t>(str, "pb");
+    std::cout << str;
+    CHECK(str.find(R"(syntax = "proto3";)") != std::string::npos);
+    CHECK(str.find("message vector_t") != std::string::npos);
+    CHECK(str.find("map<string, pair_t>  map = 9;") != std::string::npos);
+    CHECK(str.find("Green = 4;") != std::string::npos);
+
+    std::ofstream file("test_vector.proto", std::ios::binary);
+    iguana::to_proto_file<vector_t>(file, "pb");
+    file.sync_with_stdio(true);
+    file.flush();
+    file.close();
+
+    size_t size = std::filesystem::file_size("test_vector.proto");
+    std::ifstream in("test_vector.proto", std::ios::binary);
+    std::string read_str;
+    read_str.resize(size);
+    in.read(read_str.data(), size);
+    CHECK(read_str.find("map<string, pair_t>  map = 9;") != std::string::npos);
+    CHECK(read_str.find("Green = 4;") != std::string::npos);
+  }
+  {
+    std::string str;
+    iguana::to_proto<test_pb_st8>(str, "pb");
+    std::cout << str;
+    CHECK(str.find("message_t z = 3;") != std::string::npos);
+    CHECK(str.find("message message_t") != std::string::npos);
+    CHECK(str.find("pair_t t = 2;") != std::string::npos);
+    CHECK(str.find("message pair_t") != std::string::npos);
+  }
+  {
+    std::string str;
+    iguana::to_proto<test_pb_st1>(str, "pb");
+    std::cout << str;
+    CHECK(str.find("sint64 z = 3;") != std::string::npos);
+
+    iguana::to_proto<test_pb_st2, false>(str);
+    std::cout << str;
+    CHECK(str.find("fixed64 z = 3;") != std::string::npos);
+
+    iguana::to_proto<test_pb_st3, false>(str);
+    std::cout << str;
+    CHECK(str.find("sfixed64 z = 3;") != std::string::npos);
+
+    iguana::to_proto<message_t, false>(str);
+    std::cout << str;
+    CHECK(str.find("pair_t t = 2;") != std::string::npos);
+  }
+  {
+    std::string str;
+    iguana::to_proto<person>(str);
+    std::cout << str;
+    CHECK(str.find("int32 age = 3;") != std::string::npos);
+  }
+}
+#endif
+
 // doctest comments
 // 'function' : must be 'attribute' - see issue #182
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
