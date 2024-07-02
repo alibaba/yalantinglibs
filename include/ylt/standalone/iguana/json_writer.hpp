@@ -13,7 +13,7 @@ template <bool Is_writing_escape = true, typename Stream, typename T,
 IGUANA_INLINE void to_json(T &&t, Stream &s);
 namespace detail {
 template <bool Is_writing_escape = true, typename Stream, typename T>
-IGUANA_INLINE void to_json_impl(Stream &ss, std::optional<T> &val);
+IGUANA_INLINE void to_json_impl(Stream &ss, const std::optional<T> &val);
 
 template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<fixed_array_v<T>, int> = 0>
@@ -77,6 +77,12 @@ IGUANA_INLINE void to_json_impl(Stream &ss, T value) {
 }
 
 template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<is_pb_type_v<T>, int> = 0>
+IGUANA_INLINE void to_json_impl(Stream &ss, T value) {
+  to_json_impl<Is_writing_escape>(ss, value.val);
+}
+
+template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<numeric_str_v<T>, int> = 0>
 IGUANA_INLINE void to_json_impl(Stream &ss, T v) {
   ss.append(v.value().data(), v.value().size());
@@ -97,10 +103,16 @@ IGUANA_INLINE void to_json_impl(Stream &ss, T &&t) {
 
 template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<num_v<T>, int> = 0>
-IGUANA_INLINE void render_key(Stream &ss, T &t) {
+IGUANA_INLINE void render_key(Stream &ss, const T &t) {
   ss.push_back('"');
   to_json_impl<Is_writing_escape>(ss, t);
   ss.push_back('"');
+}
+
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<is_pb_type_v<T>, int> = 0>
+IGUANA_INLINE void render_key(Stream &ss, const T &t) {
+  render_key<Is_writing_escape>(ss, t.val);
 }
 
 template <bool Is_writing_escape, typename Stream, typename T,
@@ -140,7 +152,7 @@ IGUANA_INLINE void to_json_impl(Stream &ss, T val) {
 }
 
 template <bool Is_writing_escape, typename Stream, typename T>
-IGUANA_INLINE void to_json_impl(Stream &ss, std::optional<T> &val) {
+IGUANA_INLINE void to_json_impl(Stream &ss, const std::optional<T> &val) {
   if (!val) {
     ss.append("null");
   }
@@ -280,6 +292,11 @@ template <bool Is_writing_escape = true, typename Stream, typename T,
 IGUANA_INLINE void to_json(T &&t, Stream &s) {
   using namespace detail;
   to_json_impl<Is_writing_escape>(s, t);
+}
+
+template <typename T>
+IGUANA_INLINE void to_json_adl(iguana_adl_t *p, T &t, std::string &pb_str) {
+  to_json(t, pb_str);
 }
 
 }  // namespace iguana

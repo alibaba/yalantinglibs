@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <iguana/dynamic.hpp>
 #include <iguana/pb_reader.hpp>
 #include <iguana/pb_writer.hpp>
 namespace struct_pb = iguana;

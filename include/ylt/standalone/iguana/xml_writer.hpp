@@ -64,6 +64,11 @@ IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
                                     std::string_view name);
 
 template <bool pretty, size_t spaces, typename Stream, typename T,
+          std::enable_if_t<map_container_v<T>, int> = 0>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name);
+
+template <bool pretty, size_t spaces, typename Stream, typename T,
           std::enable_if_t<refletable_v<T>, int> = 0>
 IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name);
 
@@ -133,6 +138,12 @@ IGUANA_INLINE void render_value(Stream &ss, const T &value) {
   }
 }
 
+template <bool escape_quote_apos = false, typename Stream, typename T,
+          std::enable_if_t<is_pb_type_v<T>, int> = 0>
+IGUANA_INLINE void render_value(Stream &ss, const T &value) {
+  render_value<escape_quote_apos>(ss, value);
+}
+
 template <bool pretty, size_t spaces, typename Stream, typename T,
           std::enable_if_t<map_container_v<T>, int> = 0>
 inline void render_xml_attr(Stream &ss, const T &value, std::string_view name) {
@@ -158,6 +169,20 @@ IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
                                     std::string_view name) {
   render_value(ss, value);
   render_tail<pretty, 0>(ss, name);
+}
+
+template <bool pretty, size_t spaces, typename Stream, typename T,
+          std::enable_if_t<is_pb_type_v<std::decay_t<T>>, int> = 0>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  render_xml_value<pretty, spaces>(ss, value.val, name);
+}
+
+template <bool pretty, size_t spaces, typename Stream, typename T,
+          std::enable_if_t<variant_v<std::decay_t<T>>, int> = 0>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  throw std::bad_function_call();
 }
 
 template <bool pretty, size_t spaces, typename Stream, typename T,
@@ -207,6 +232,20 @@ IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
       render_xml_value<pretty, spaces>(ss, v, name);
     }
   }
+}
+
+template <bool pretty, size_t spaces, typename Stream, typename T,
+          std::enable_if_t<map_container_v<T>, int>>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  throw std::bad_function_call();
+}
+
+template <bool pretty, size_t spaces, typename Stream, typename T,
+          std::enable_if_t<variant_v<T>, int>>
+IGUANA_INLINE void render_xml_value(Stream &ss, const T &value,
+                                    std::string_view name) {
+  throw std::bad_function_call();
 }
 
 template <bool pretty, size_t spaces, typename Stream, typename T,
@@ -265,6 +304,11 @@ IGUANA_INLINE void to_xml(T &&t, Stream &s) {
       get_name<std::decay_t<T>>().data(), get_name<std::decay_t<T>>().size());
   render_head<pretty, 0>(s, root_name);
   render_xml_value<pretty, 0>(s, std::forward<T>(t), root_name);
+}
+
+template <typename T>
+IGUANA_INLINE void to_xml_adl(iguana_adl_t *p, T &t, std::string &pb_str) {
+  to_xml(t, pb_str);
 }
 
 }  // namespace iguana

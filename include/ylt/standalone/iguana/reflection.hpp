@@ -564,6 +564,12 @@ struct field_info {
 struct base {
   virtual void to_pb(std::string &str) {}
   virtual void from_pb(std::string_view str) {}
+  virtual void to_xml(std::string &str) {}
+  virtual void from_xml(std::string_view str) {}
+  virtual void to_json(std::string &str) {}
+  virtual void from_json(std::string_view str) {}
+  virtual void to_yaml(std::string &str) {}
+  virtual void from_yaml(std::string_view str) {}
   virtual std::vector<std::string_view> get_fields_name() const { return {}; }
   virtual std::any get_field_any(std::string_view name) const { return {}; }
   virtual iguana::detail::field_info get_field_info(std::string_view name) {
@@ -578,14 +584,16 @@ struct base {
     return *((T *)ptr);
   }
 
-  template <typename T>
+  template <typename T, typename FiledType = T>
   void set_field_value(std::string_view name, T val) {
     auto info = get_field_info(name);
-    check_field<T>(name, info);
+    check_field<FiledType>(name, info);
 
     auto ptr = (((char *)this) + info.offset);
 
-    *((T *)ptr) = std::move(val);
+    static_assert(std::is_constructible_v<FiledType, T>, "can not assign");
+
+    *((FiledType *)ptr) = std::move(val);
   }
   virtual ~base() {}
 
@@ -756,6 +764,8 @@ namespace iguana {
   MAKE_META_DATA(STRUCT_NAME, TABLE_NAME, GET_ARG_COUNT(__VA_ARGS__), \
                  __VA_ARGS__)
 
+struct iguana_adl_t {};
+
 template <typename T>
 inline auto iguana_reflect_type(const T &t);
 
@@ -836,7 +846,7 @@ constexpr inline auto build_fields(T t, S &s, uint32_t &index) {
     return build_variant_fields(t, s, I + 1, std::make_index_sequence<Size>{});
   }
   else {
-    uint32_t field_no = (I == index) ? (I + 1) : (I + index);
+    uint32_t field_no = (I == index) ? (I + 1) : (2 + index);
     index++;
     return std::tuple(field_t{t, field_no, s});
   }
