@@ -83,7 +83,7 @@ async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
 
   auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
     auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
-    co_return read_result{buf, file.eof(), ec};
+    co_return read_result{{buf.data(), size}, file.eof(), ec};
   };
 
   auto result = co_await client.async_upload_chunked(

@@ -168,9 +168,9 @@ async_simple::coro::Lazy<void> test_async_client() {
 ```
 
 ## https 请求
-发起https 请求之前确保已经安装了openssl，并开启CINATRA_ENABLE_SSL 预编译宏：
+发起https 请求之前确保已经安装了openssl，并开启YLT_ENABLE_SSL 预编译宏：
 ```
-option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
+option(YLT_ENABLE_SSL "Enable ssl support" OFF)
 ```
 client 只需要调用init_ssl 方法即可，之后便可以和之前一样发起https 请求了。
 
@@ -191,7 +191,7 @@ const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 ```
 
 ```cpp
-#ifdef CINATRA_ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
 void test_coro_http_client() {
   coro_http_client client{};
   auto data = client.get("https://www.bing.com");
@@ -520,11 +520,11 @@ for (auto &item : out) {
 
 ## coro_http_server 基本用法
 
-### cinatra指令集功能使用
+### coro_http指令集功能使用
 
-cinatra支持通过指令集优化其内部逻辑，其通过宏来控制是否使用指令集。使用之前请确保cpu支持。
+coro_http支持通过指令集优化其内部逻辑，其通过宏来控制是否使用指令集。使用之前请确保cpu支持。
 
-使用如下命令即可编译带simd优化的cinatra。注意只能开启一种simd指令集优化,开启多个会导致编译失败。
+使用如下命令即可编译带simd优化的coro_http。注意只能开启一种simd指令集优化,开启多个会导致编译失败。
 
 ```shell
 cmake -DENABLE_SIMD=SSE42 .. # 启用sse4.2指令集
@@ -661,8 +661,8 @@ async_simple::coro::Lazy<void> basic_usage() {
       "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
   assert(result.status == 200);
 
-  // make sure you have installed openssl and enable CINATRA_ENABLE_SSL
-#ifdef CINATRA_ENABLE_SSL
+  // make sure you have installed openssl and enable YLT_ENABLE_SSL
+#ifdef YLT_ENABLE_SSL
   coro_http_client client2{};
   result = co_await client2.async_get("https://baidu.com");
   assert(result.status == 200);
@@ -779,9 +779,9 @@ int main() {
 
   ```cpp
 void http_proxy() {
-  cinatra::coro_http_server web_one(1, 9001);
+  coro_http::coro_http_server web_one(1, 9001);
 
-  web_one.set_http_handler<cinatra::GET, cinatra::POST>(
+  web_one.set_http_handler<coro_http::GET, coro_http::POST>(
       "/",
       [](coro_http_request &req,
          coro_http_response &response) -> async_simple::coro::Lazy<void> {
@@ -792,9 +792,9 @@ void http_proxy() {
 
   web_one.async_start();
 
-  cinatra::coro_http_server web_two(1, 9002);
+  coro_http::coro_http_server web_two(1, 9002);
 
-  web_two.set_http_handler<cinatra::GET, cinatra::POST>(
+  web_two.set_http_handler<coro_http::GET, coro_http::POST>(
       "/",
       [](coro_http_request &req,
          coro_http_response &response) -> async_simple::coro::Lazy<void> {
@@ -805,9 +805,9 @@ void http_proxy() {
 
   web_two.async_start();
 
-  cinatra::coro_http_server web_three(1, 9003);
+  coro_http::coro_http_server web_three(1, 9003);
 
-  web_three.set_http_handler<cinatra::GET, cinatra::POST>(
+  web_three.set_http_handler<coro_http::GET, coro_http::POST>(
       "/", [](coro_http_request &req, coro_http_response &response) {
         response.set_status_and_content(status_type::ok, "web3");
       });

@@ -253,7 +253,7 @@ class websocket {
 
   size_t payload_length_ = 0;
 
-  size_t left_header_len_ = 0;
+  size_t left_header_len_ = 2;
   uint8_t mask_key_[4] = {};
   unsigned char msg_opcode_ = 0;
   unsigned char msg_fin_ = 0;

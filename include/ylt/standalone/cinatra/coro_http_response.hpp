@@ -15,6 +15,9 @@
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
+#ifdef CINATRA_ENABLE_BROTLI
+#include "brzip.hpp"
+#endif
 #include "picohttpparser.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
@@ -52,37 +55,105 @@ class coro_http_response {
   }
   void set_status_and_content(
       status_type status, std::string content = "",
-      content_encoding encoding = content_encoding::none) {
-    set_status_and_content_view(status, std::move(content), encoding, false);
+      content_encoding encoding = content_encoding::none,
+      std::string_view client_encoding_type = "") {
+    set_status_and_content_view(status, std::move(content), encoding, false,
+                                client_encoding_type);
   }
 
   template <typename String>
   void set_status_and_content_view(
       status_type status, String content = "",
-      content_encoding encoding = content_encoding::none, bool is_view = true) {
+      content_encoding encoding = content_encoding::none, bool is_view = true,
+      std::string_view client_encoding_type = "") {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip) {
-      std::string encode_str;
-      bool r = gzip_codec::compress(content, encode_str, true);
-      if (!r) {
-        set_status_and_content(status_type::internal_server_error,
-                               "gzip compress error");
+      if (client_encoding_type.empty() ||
+          client_encoding_type.find("gzip") != std::string_view::npos) {
+        std::string encode_str;
+        bool r = gzip_codec::compress(content, encode_str);
+        if (!r) {
+          set_status_and_content(status_type::internal_server_error,
+                                 "gzip compress error");
+        }
+        else {
+          add_header("Content-Encoding", "gzip");
+          set_content(std::move(encode_str));
+        }
       }
       else {
-        add_header("Content-Encoding", "gzip");
-        set_content(std::move(encode_str));
+        if (is_view) {
+          content_view_ = content;
+        }
+        else {
+          content_ = std::move(content);
+        }
       }
+      has_set_content_ = true;
+      return;
     }
-    else
-#endif
-    {
-      if (is_view) {
-        content_view_ = content;
+
+    if (encoding == content_encoding::deflate) {
+      if (client_encoding_type.empty() ||
+          client_encoding_type.find("deflate") != std::string_view::npos) {
+        std::string deflate_str;
+        bool r = gzip_codec::deflate(content, deflate_str);
+        if (!r) {
+          set_status_and_content(status_type::internal_server_error,
+                                 "deflate compress error");
+        }
+        else {
+          add_header("Content-Encoding", "deflate");
+          set_content(std::move(deflate_str));
+        }
       }
       else {
-        content_ = std::move(content);
+        if (is_view) {
+          content_view_ = content;
+        }
+        else {
+          content_ = std::move(content);
+        }
       }
+      has_set_content_ = true;
+      return;
+    }
+#endif
+
+#ifdef CINATRA_ENABLE_BROTLI
+    if (encoding == content_encoding::br) {
+      if (client_encoding_type.empty() ||
+          client_encoding_type.find("br") != std::string_view::npos) {
+        std::string br_str;
+        bool r = br_codec::brotli_compress(content, br_str);
+        if (!r) {
+          set_status_and_content(status_type::internal_server_error,
+                                 "br compress error");
+        }
+        else {
+          add_header("Content-Encoding", "br");
+          set_content(std::move(br_str));
+        }
+      }
+      else {
+        if (is_view) {
+          content_view_ = content;
+        }
+        else {
+          content_ = std::move(content);
+        }
+      }
+      has_set_content_ = true;
+      return;
+    }
+#endif
+
+    if (is_view) {
+      content_view_ = content;
+    }
+    else {
+      content_ = std::move(content);
     }
     has_set_content_ = true;
   }
