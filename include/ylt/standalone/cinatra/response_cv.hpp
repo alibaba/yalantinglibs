@@ -4,7 +4,6 @@
 #include "define.h"
 
 namespace cinatra {
-enum class content_encoding { gzip, none };
 
 enum class status_type {
   init,

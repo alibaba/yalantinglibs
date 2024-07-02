@@ -19,6 +19,7 @@ enum class http_method {
   OPTIONS,
   DEL,
 };
+enum class content_encoding { gzip, deflate, br, none };
 constexpr inline auto GET = http_method::GET;
 constexpr inline auto POST = http_method::POST;
 constexpr inline auto DEL = http_method::DEL;

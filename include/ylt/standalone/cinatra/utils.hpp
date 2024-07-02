@@ -290,6 +290,28 @@ get_cookies_map(std::string_view cookies_str) {
   return cookies;
 };
 
+template <bool is_first_time, bool is_last_time>
+inline std::string_view get_chuncked_buffers(size_t length,
+                                             std::array<char, 24> &buffer) {
+  if constexpr (is_last_time) {
+    return std::string_view{"\r\n0\r\n\r\n"};
+  }
+  else {
+    auto [ptr, ec] = std::to_chars(
+        buffer.data() + 2, buffer.data() + buffer.size() - 2, length, 16);
+    *ptr++ = '\r';
+    *ptr++ = '\n';
+    if constexpr (is_first_time) {
+      buffer[0] = '\r';
+      buffer[1] = '\n';
+      return std::string_view(buffer.data() + 2,
+                              std::distance(buffer.data() + 2, ptr));
+    }
+    else {
+      return std::string_view(buffer.data(), std::distance(buffer.data(), ptr));
+    }
+  }
+}
 }  // namespace cinatra
 
 #endif  // CINATRA_UTILS_HPP

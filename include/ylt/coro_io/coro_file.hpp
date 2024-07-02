@@ -112,14 +112,14 @@ class coro_file {
  public:
 #if defined(YLT_ENABLE_FILE_IO_URING)
   coro_file(
-      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor())
+      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor())
       : coro_file(executor->get_asio_executor()) {}
 
   coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
 #else
 
-  coro_file(coro_io::ExecutorWrapper<>* executor =
+  coro_file(coro_io::ExecutorWrapper<> *executor =
                 coro_io::get_global_block_executor())
       : coro_file(executor->get_asio_executor()) {}
 
@@ -127,7 +127,7 @@ class coro_file {
       : executor_wrapper_(executor) {}
 #endif
 
-  bool is_open() {
+  bool is_open() const {
     if (type_ == read_type::pread) {
       return fd_file_ != nullptr;
     }
@@ -150,7 +150,7 @@ class coro_file {
 #endif
   }
 
-  bool eof() { return eof_; }
+  bool eof() const { return eof_; }
 
   void close() {
     if (stream_file_) {
@@ -161,20 +161,22 @@ class coro_file {
     }
   }
 
-  static size_t file_size(std::string_view filepath) {
-    std::error_code ec;
-    size_t size = std::filesystem::file_size(filepath, ec);
-    return size;
+  size_t file_size(std::error_code ec) const noexcept {
+    return std::filesystem::file_size(file_path_, ec);
   }
 
+  size_t file_size() const { return std::filesystem::file_size(file_path_); }
+
+  std::string_view file_path() const { return file_path_; }
+
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
-      size_t offset, char* data, size_t size) {
+      size_t offset, char *data, size_t size) {
     if (type_ != read_type::pread) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
     }
 #if defined(ASIO_WINDOWS)
-    auto pread = [](int fd, void* buf, uint64_t count,
+    auto pread = [](int fd, void *buf, uint64_t count,
                     uint64_t offset) -> int64_t {
       DWORD bytes_read = 0;
       OVERLAPPED overlapped;
@@ -195,13 +197,13 @@ class coro_file {
   }
 
   async_simple::coro::Lazy<std::error_code> async_pwrite(size_t offset,
-                                                         const char* data,
+                                                         const char *data,
                                                          size_t size) {
     if (type_ != read_type::pread) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
     }
 #if defined(ASIO_WINDOWS)
-    auto pwrite = [](int fd, const void* buf, uint64_t count,
+    auto pwrite = [](int fd, const void *buf, uint64_t count,
                      uint64_t offset) -> int64_t {
       DWORD bytes_write = 0;
       OVERLAPPED overlapped;
@@ -218,7 +220,7 @@ class coro_file {
       return bytes_write;
     };
 #endif
-    auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
+    auto result = co_await async_prw(pwrite, false, offset, (char *)data, size);
     co_return result.first;
   }
 
@@ -240,7 +242,7 @@ class coro_file {
         stream_file_ = std::make_shared<asio::random_access_file>(
             executor_wrapper_.get_asio_executor());
       }
-    } catch (std::exception& ex) {
+    } catch (std::exception &ex) {
       stream_file_ = nullptr;
       std::cout << "line " << __LINE__ << " coro_file create failed"
                 << ex.what() << "\n";
@@ -267,7 +269,7 @@ class coro_file {
     }
 
     std::error_code seek_ec;
-    reinterpret_cast<asio::stream_file*>(stream_file_.get())
+    reinterpret_cast<asio::stream_file *>(stream_file_.get())
         ->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
                seek_ec);
     if (seek_ec) {
@@ -277,7 +279,7 @@ class coro_file {
   }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_at(
-      uint64_t offset, char* data, size_t size) {
+      uint64_t offset, char *data, size_t size) {
     if (type_ != read_type::uring_random) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
@@ -285,7 +287,7 @@ class coro_file {
 
     auto [ec, read_size] = co_await coro_io::async_read_at(
         offset,
-        *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
+        *reinterpret_cast<asio::random_access_file *>(stream_file_.get()),
         asio::buffer(data, size));
 
     if (ec == asio::error::eof) {
@@ -297,7 +299,7 @@ class coro_file {
   }
 
   async_simple::coro::Lazy<std::error_code> async_write_at(uint64_t offset,
-                                                           const char* data,
+                                                           const char *data,
                                                            size_t size) {
     if (type_ != read_type::uring_random) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
@@ -305,20 +307,20 @@ class coro_file {
 
     auto [ec, write_size] = co_await coro_io::async_write_at(
         offset,
-        *reinterpret_cast<asio::random_access_file*>(stream_file_.get()),
+        *reinterpret_cast<asio::random_access_file *>(stream_file_.get()),
         asio::buffer(data, size));
     co_return ec;
   }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      char* data, size_t size) {
+      char *data, size_t size) {
     if (type_ != read_type::uring) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
     }
 
     auto [ec, read_size] = co_await coro_io::async_read(
-        *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
+        *reinterpret_cast<asio::stream_file *>(stream_file_.get()),
         asio::buffer(data, size));
     if (ec == asio::error::eof) {
       eof_ = true;
@@ -328,14 +330,14 @@ class coro_file {
     co_return std::make_pair(std::error_code{}, read_size);
   }
 
-  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
+  async_simple::coro::Lazy<std::error_code> async_write(const char *data,
                                                         size_t size) {
     if (type_ != read_type::uring) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
     }
 
     auto [ec, write_size] = co_await coro_io::async_write(
-        *reinterpret_cast<asio::stream_file*>(stream_file_.get()),
+        *reinterpret_cast<asio::stream_file *>(stream_file_.get()),
         asio::buffer(data, size));
 
     co_return ec;
@@ -372,9 +374,10 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
+    file_path_ = std::move(filepath);
     type_ = type;
     if (type_ == read_type::pread) {
-      co_return open_fd(filepath, open_mode);
+      co_return open_fd(file_path_, open_mode);
     }
 
     if (stream_file_ != nullptr) {
@@ -382,14 +385,15 @@ class coro_file {
     }
 
     auto result = co_await coro_io::post(
-        [this, &filepath, open_mode] {
-          auto fptr = fopen(filepath.data(), str_mode(open_mode).data());
+        [this, open_mode] {
+          auto fptr =
+              fopen(this->file_path_.data(), str_mode(open_mode).data());
           if (fptr == nullptr) {
             std::cout << "line " << __LINE__ << " coro_file open failed "
-                      << filepath << "\n";
+                      << this->file_path_ << "\n";
             return false;
           }
-          stream_file_ = std::shared_ptr<FILE>(fptr, [](FILE* ptr) {
+          stream_file_ = std::shared_ptr<FILE>(fptr, [](FILE *ptr) {
             fclose(ptr);
           });
           return true;
@@ -399,7 +403,7 @@ class coro_file {
   }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      char* data, size_t size) {
+      char *data, size_t size) {
     if (type_ != read_type::fread) {
       co_return std::make_pair(
           std::make_error_code(std::errc::bad_file_descriptor), 0);
@@ -421,7 +425,7 @@ class coro_file {
     co_return result.value();
   }
 
-  async_simple::coro::Lazy<std::error_code> async_write(const char* data,
+  async_simple::coro::Lazy<std::error_code> async_write(const char *data,
                                                         size_t size) {
     if (type_ != read_type::fread) {
       co_return std::make_error_code(std::errc::bad_file_descriptor);
@@ -443,7 +447,7 @@ class coro_file {
 
  private:
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
-      auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
+      auto io_func, bool is_read, size_t offset, char *buf, size_t size) {
     std::function<int()> func = [=, this] {
       int fd = *fd_file_;
       return io_func(fd, buf, size, offset);
@@ -483,7 +487,7 @@ class coro_file {
       return false;
     }
 
-    fd_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+    fd_file_ = std::shared_ptr<int>(new int(fd), [](int *ptr) {
 #if defined(ASIO_WINDOWS)
       _close(*ptr);
 #else
@@ -536,6 +540,7 @@ class coro_file {
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
   std::shared_ptr<int> fd_file_;
+  std::string file_path_;
   std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io
