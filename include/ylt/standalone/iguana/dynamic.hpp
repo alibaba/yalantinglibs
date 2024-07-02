@@ -18,7 +18,7 @@ constexpr inline uint8_t ENABLE_ALL = 0x0F;
 template <typename T, uint8_t ENABLE_FLAG = ENABLE_PB>
 struct base_impl : public base {
   void to_pb(std::string& str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_PB) {
+    if constexpr ((ENABLE_FLAG & ENABLE_PB) != 0) {
       to_pb_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -27,7 +27,7 @@ struct base_impl : public base {
   }
 
   void from_pb(std::string_view str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_PB) {
+    if constexpr ((ENABLE_FLAG & ENABLE_PB) != 0) {
       from_pb_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -36,7 +36,7 @@ struct base_impl : public base {
   }
 
   void to_json(std::string& str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_JSON) {
+    if constexpr ((ENABLE_FLAG & ENABLE_JSON) != 0) {
       to_json_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -45,7 +45,7 @@ struct base_impl : public base {
   }
 
   void from_json(std::string_view str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_JSON) {
+    if constexpr ((ENABLE_FLAG & ENABLE_JSON) != 0) {
       from_json_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -54,7 +54,7 @@ struct base_impl : public base {
   }
 
   void to_xml(std::string& str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_XML) {
+    if constexpr ((ENABLE_FLAG & ENABLE_XML) != 0) {
       to_xml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -63,7 +63,7 @@ struct base_impl : public base {
   }
 
   void from_xml(std::string_view str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_XML) {
+    if constexpr ((ENABLE_FLAG & ENABLE_XML) != 0) {
       from_xml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -72,7 +72,7 @@ struct base_impl : public base {
   }
 
   void to_yaml(std::string& str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_YAML) {
+    if constexpr ((ENABLE_FLAG & ENABLE_YAML) != 0) {
       to_yaml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
@@ -81,7 +81,7 @@ struct base_impl : public base {
   }
 
   void from_yaml(std::string_view str) override {
-    if constexpr (ENABLE_FLAG & ENABLE_YAML) {
+    if constexpr ((ENABLE_FLAG & ENABLE_YAML) != 0) {
       from_yaml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
     }
     else {
