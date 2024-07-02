@@ -304,10 +304,11 @@ inline std::string_view get_chuncked_buffers(size_t length,
     if constexpr (is_first_time) {
       buffer[0] = '\r';
       buffer[1] = '\n';
-      return std::string_view{buffer.data() + 2, ptr};
+      return std::string_view(buffer.data() + 2,
+                              std::distance(buffer.data() + 2, ptr));
     }
     else {
-      return std::string_view{buffer.data(), ptr};
+      return std::string_view(buffer.data(), std::distance(buffer.data(), ptr));
     }
   }
 }

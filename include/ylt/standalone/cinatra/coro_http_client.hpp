@@ -1053,10 +1053,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     char buf[32];
     auto [ptr, _] = std::to_chars(buf, buf + 32, content_length);
     if (headers.empty()) {
-      add_header("Content-Length", std::string{buf, ptr});
+      add_header("Content-Length", std::string(buf, ptr - buf));
     }
     else {
-      headers.emplace("Content-Length", std::string_view{buf, ptr});
+      headers.emplace("Content-Length", std::string_view(buf, ptr - buf));
     }
 
     std::string header_str =
