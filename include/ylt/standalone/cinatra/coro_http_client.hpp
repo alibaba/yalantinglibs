@@ -849,7 +849,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
  private:
   async_simple::coro::Lazy<void> send_file_chunked_with_copy(
-      std::string source, std::error_code &ec) {
+      std::string_view source, std::error_code &ec) {
     std::string file_data;
     detail::resize(file_data, max_single_part_size_);
     coro_io::coro_file file{};
@@ -873,7 +873,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<void> send_file_no_chunked_with_copy(
-      std::string source, std::error_code &ec, std::size_t length) {
+      std::string_view source, std::error_code &ec, std::size_t length) {
     if (length <= 0) {
       co_return;
     }

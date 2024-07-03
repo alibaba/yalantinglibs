@@ -371,10 +371,10 @@ class coro_file {
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
 
-  async_simple::coro::Lazy<bool> async_open(std::string filepath,
+  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
-    file_path_ = std::move(filepath);
+    file_path_ = std::string{filepath};
     type_ = type;
     if (type_ == read_type::pread) {
       co_return open_fd(file_path_, open_mode);
