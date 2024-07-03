@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(yaLanTingLibs
-        VERSION 0.3.2
+        VERSION 0.3.4
         DESCRIPTION "yaLanTingLibs"
         HOMEPAGE_URL "https://github.com/alibaba/yalantinglibs"
         LANGUAGES CXX
