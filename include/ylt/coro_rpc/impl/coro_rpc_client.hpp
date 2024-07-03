@@ -722,7 +722,7 @@ class coro_rpc_client {
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
       return;
     }
-    control->executor_.schedule([control = std::move(control)]() {
+    control->executor_.schedule([control]() {
       asio::error_code ignored_ec;
       control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both,
                                 ignored_ec);
@@ -809,7 +809,14 @@ class coro_rpc_client {
         break;
       }
       uint32_t body_len = header.length;
-      struct_pack::detail::resize(controller->resp_buffer_.read_buf_, body_len);
+      struct_pack::detail::resize(
+          controller->resp_buffer_.read_buf_,
+          std::max<uint32_t>(body_len, sizeof(std::string)));
+      if (body_len < sizeof(std::string)) { /* this strange code just disable
+                                             any SSO optimize so that rpc result
+                                             wont point to illegal address*/
+        controller->resp_buffer_.read_buf_.resize(body_len);
+      }
       if (header.attach_length == 0) {
         ret = co_await coro_io::async_read(
             socket,

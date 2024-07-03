@@ -67,12 +67,16 @@ Lazy<void> show_rpc_call() {
 
   // assert(ret.error().code.val() == 404);
 
-  ret = co_await client.call<rpc_with_state_by_tag>();
-  assert(ret.value() == "1");
-  ret = co_await client.call<rpc_with_state_by_tag>();
-  assert(ret.value() == "2");
-  ret = co_await client.call<rpc_with_state_by_tag>();
-  assert(ret.value() == "3");
+  auto ret2 = co_await client.call<rpc_with_state_by_tag>();
+  auto str = ret2.value();
+  std::cout << ret2.value() << std::endl;
+  assert(ret2.value() == "1");
+  ret2 = co_await client.call<rpc_with_state_by_tag>();
+  std::cout << ret2.value() << std::endl;
+  assert(ret2.value() == "2");
+  ret2 = co_await client.call<rpc_with_state_by_tag>();
+  std::cout << ret2.value() << std::endl;
+  assert(ret2.value() == "3");
 }
 
 int main() {
