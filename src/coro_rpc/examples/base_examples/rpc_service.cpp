@@ -25,6 +25,7 @@
 #include "async_simple/coro/Sleep.h"
 #include "ylt/coro_io/client_pool.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
@@ -39,28 +40,21 @@ std::string_view echo(std::string_view data) {
   return data;
 }
 
-Lazy<std::string_view> coroutine_echo(std::string_view data) {
-  ELOGV(INFO, "call coroutine_echo");
-  co_await coro_io::sleep_for(1s);
-  co_return data;
-}
-
 void async_echo_by_callback(
     coro_rpc::context<std::string_view /*rpc response data here*/> conn,
     std::string_view /*rpc request data here*/ data) {
   ELOGV(INFO, "call async_echo_by_callback");
   /* rpc function runs in global io thread pool */
-  coro_io::post([conn, data]() mutable {
+  coro_io::get_global_block_executor()->schedule([conn, data]() mutable {
     /* send work to global non-io thread pool */
-    auto *ctx = conn.get_context_info();
+    std::this_thread::sleep_for(1s);
     conn.response_msg(data); /*response here*/
-  }).start([](auto &&) {
   });
 }
 
 Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
   ELOGV(INFO, "call async_echo_by_coroutine");
-  co_await coro_io::sleep_for(std::chrono::milliseconds(100));  // sleeping
+  co_await coro_io::sleep_for(1s);  // sleeping
   co_return sv;
 }
 
