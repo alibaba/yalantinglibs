@@ -61,6 +61,8 @@ Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
 Lazy<void> get_ctx_info() {
   ELOGV(INFO, "call get_ctx_info");
   auto *ctx = co_await coro_rpc::get_context_in_coro();
+  /*in callback rpc function, you can get ctx from coro_rpc::context*/
+  /*in normal rpc function, you can get ctx by  coro_rpc::get_context() */
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
@@ -91,12 +93,12 @@ void echo_with_attachment() {
 
 Lazy<std::string_view> nested_echo(std::string_view sv) {
   ELOGV(INFO, "start nested echo");
-  /*get a client by global client pool*/
-  auto client =
+  /*get a client_pool of global*/
+  auto client_pool =
       coro_io::g_clients_pool<coro_rpc::coro_rpc_client>().at("127.0.0.1:8802");
-  assert(client != nullptr);
+  assert(client_pool != nullptr);
   ELOGV(INFO, "connect another server");
-  auto ret = co_await client->send_request(
+  auto ret = co_await client_pool->send_request(
       [sv](coro_rpc_client &client)
           -> Lazy<coro_rpc::rpc_result<std::string_view>> {
         co_return co_await client.call<echo>(sv);
