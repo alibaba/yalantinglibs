@@ -57,15 +57,14 @@ Lazy<void> show_rpc_call() {
   ret_void = co_await client.call<get_ctx_info>();
   assert(ret_void);
 
-  // TODO: fix return error
-  // ret_void = co_await client.call<return_error_by_context>();
+  ret_void = co_await client.call<return_error_by_context>();
 
-  // assert(ret.error().code.val() == 404);
-  // assert(ret.error().msg == "404 Not Found.");
+  assert(ret_void.error().code.val() == 404);
+  assert(ret_void.error().msg == "404 Not Found.");
 
-  // ret_void = co_await client.call<return_error_by_exception>();
+  ret_void = co_await client.call<return_error_by_exception>();
 
-  // assert(ret.error().code.val() == 404);
+  assert(ret_void.error().code.val() == 404);
 
   auto ret2 = co_await client.call<rpc_with_state_by_tag>();
   auto str = ret2.value();
