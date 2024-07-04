@@ -13,9 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <string>
+#include <vector>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 
+#include "async_simple/Try.h"
+#include "async_simple/coro/Collect.h"
+#include "async_simple/coro/Lazy.h"
 #include "rpc_service.h"
+#include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 using namespace coro_rpc;
@@ -73,11 +79,34 @@ Lazy<void> show_rpc_call() {
   ret2 = co_await client.call<rpc_with_state_by_tag>();
   std::cout << ret2.value() << std::endl;
   assert(ret2.value() == "3");
+
+  ret = co_await client.call<rpc_with_response_handler>();
+  assert(ret == "Hello");
+}
+/*send multi request with same socket in the same time*/
+Lazy<void> connection_reuse() {
+  coro_rpc_client client;
+  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
+  assert(!ec);
+  std::vector<Lazy<async_rpc_result<int>>> handlers;
+  for (int i = 0; i < 10; ++i) {
+    /* send_request is thread-safe, so you can call it in different thread with
+     * same client*/
+    handlers.push_back(co_await client.send_request<add>(i, i + 1));
+  }
+  std::vector<async_simple::Try<async_rpc_result<int>>> results =
+      co_await collectAll(std::move(handlers));
+  for (int i = 0; i < 10; ++i) {
+    std::cout << results[i].value()->result() << std::endl;
+    assert(results[i].value()->result() == 2 * i + 1);
+  }
+  co_return;
 }
 
 int main() {
   try {
     syncAwait(show_rpc_call());
+    syncAwait(connection_reuse());
     std::cout << "Done!" << std::endl;
   } catch (const std::exception& e) {
     std::cout << "Error:" << e.what() << std::endl;

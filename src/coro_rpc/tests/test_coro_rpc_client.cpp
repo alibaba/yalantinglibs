@@ -427,13 +427,13 @@ TEST_CASE("testing std::string_view") {
   server.register_handler<test_string_view>();
 
   auto ret = client.sync_call<test_string_view>("123");
-  CHECK(ret.value() == "123");
+  CHECK(ret.value() == "123OK");
 
   ret = client.sync_call<test_string_view>("1231232132123123");
-  CHECK(ret.value() == "1231232132123123");
+  CHECK(ret.value() == "1231232132123123OK");
 
   ret = client.sync_call<test_string_view>("ABDD");
-  CHECK(ret.value() == "ABDD");
+  CHECK(ret.value() == "ABDDOK");
 }
 
 TEST_CASE("testing client with context response user-defined error") {

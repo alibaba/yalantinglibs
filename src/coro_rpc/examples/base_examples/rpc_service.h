@@ -27,6 +27,7 @@ void async_echo_by_callback(
     coro_rpc::context<std::string_view /*rpc response data here*/> conn,
     std::string_view /*rpc request data here*/ data);
 void echo_with_attachment();
+inline int add(int a, int b) { return a + b; }
 async_simple::coro::Lazy<std::string_view> nested_echo(std::string_view sv);
 void return_error_by_context(coro_rpc::context<void> conn);
 void return_error_by_exception();
@@ -36,4 +37,5 @@ class HelloService {
   std::string_view hello();
 };
 async_simple::coro::Lazy<std::string> rpc_with_state_by_tag();
+std::string_view rpc_with_response_handler();
 #endif  // CORO_RPC_RPC_API_HPP
