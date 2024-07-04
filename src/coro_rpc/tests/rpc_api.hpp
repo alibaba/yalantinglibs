@@ -22,6 +22,7 @@
 #include "ylt/coro_rpc/impl/errno.h"
 
 void hi();
+inline std::string_view test_string_view(std::string_view sv){return sv;}
 std::string hello();
 std::string hello_timeout();
 std::string client_hello();
