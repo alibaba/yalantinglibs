@@ -175,7 +175,7 @@ void test_write_with_pool() {
   create_temp_file("test1.txt", 10);
 
   coro_io::coro_file file{};
-  file.open(filename, std::ios::out|std::ios::app);
+  file.open(filename, std::ios::out | std::ios::app);
 
   bool r = file.is_open();
   if (!file.is_open()) {
@@ -190,7 +190,7 @@ void test_write_with_pool() {
   }
 
   auto& stream = file.get_stream_file();
-  if(stream.is_open()) {
+  if (stream.is_open()) {
     stream.flush();
   }
 
