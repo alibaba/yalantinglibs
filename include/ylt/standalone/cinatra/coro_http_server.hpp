@@ -413,7 +413,7 @@ class coro_http_server {
             detail::resize(content, chunked_size_);
 
             coro_io::coro_file in_file{};
-            co_await in_file.async_open(file_name, coro_io::flags::read_only);
+            in_file.open(file_name, std::ios::in);
             if (!in_file.is_open()) {
               resp.set_status_and_content(status_type::not_found,
                                           file_name + "not found");
@@ -468,7 +468,13 @@ class coro_http_server {
                 if (ranges.size() == 1) {
                   // single part
                   auto [start, end] = ranges[0];
-                  in_file.seek(start, SEEK_SET);
+                  bool ok = in_file.seek(start, std::ios::beg);
+                  if (!ok) {
+                    resp.set_status_and_content(status_type::bad_request,
+                                                "invalid range");
+                    co_await resp.get_conn()->reply();
+                    co_return;
+                  }
                   size_t part_size = end + 1 - start;
                   int status = (part_size == file_size) ? 200 : 206;
                   std::string content_range = "Content-Range: bytes ";
@@ -511,7 +517,13 @@ class coro_http_server {
                     }
 
                     auto [start, end] = ranges[i];
-                    in_file.seek(start, SEEK_SET);
+                    bool ok = in_file.seek(start, std::ios::beg);
+                    if (!ok) {
+                      resp.set_status_and_content(status_type::bad_request,
+                                                  "invalid range");
+                      co_await resp.get_conn()->reply();
+                      co_return;
+                    }
                     size_t part_size = end + 1 - start;
 
                     std::string_view more = CRCF;

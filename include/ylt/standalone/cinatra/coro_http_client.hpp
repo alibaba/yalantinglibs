@@ -778,7 +778,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                      std::string range = "") {
     resp_data data{};
     coro_io::coro_file file;
-    co_await file.async_open(filename, coro_io::flags::create_write);
+    file.open(filename, std::ios::trunc | std::ios::out);
     if (!file.is_open()) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
       data.status = 404;
@@ -853,8 +853,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string file_data;
     detail::resize(file_data, max_single_part_size_);
     coro_io::coro_file file{};
-    bool ok = co_await file.async_open(source, coro_io::flags::read_only);
-    if (!ok) {
+    file.open(source, std::ios::in);
+    if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
     }
@@ -880,8 +880,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string file_data;
     detail::resize(file_data, std::min(max_single_part_size_, length));
     coro_io::coro_file file{};
-    bool ok = co_await file.async_open(source, coro_io::flags::read_only);
-    if (!ok) {
+    file.open(source, std::ios::in);
+    if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
     }
@@ -1868,8 +1868,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       if (is_ranges) {
         if (ctx.resp_body_stream) {
-          auto ec =
-              co_await ctx.resp_body_stream->async_write(data_ptr, content_len);
+          auto [ec, size] = co_await ctx.resp_body_stream->async_write(
+              {data_ptr, content_len});
           if (ec) {
             data.net_err = ec;
             co_return;
@@ -1955,8 +1955,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       auto part_body = co_await multipart.read_part_body(boundary);
 
       if (ctx.resp_body_stream) {
-        ec = co_await ctx.resp_body_stream->async_write(part_body.data.data(),
-                                                        part_body.data.size());
+        size_t size;
+        std::tie(ec, size) =
+            co_await ctx.resp_body_stream->async_write(part_body.data);
       }
       else {
         resp_chunk_str_.append(part_body.data.data(), part_body.data.size());
@@ -2035,7 +2036,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
       if (ctx.resp_body_stream) {
-        ec = co_await ctx.resp_body_stream->async_write(data_ptr, chunk_size);
+        std::tie(ec, size) = co_await ctx.resp_body_stream->async_write(
+            {data_ptr, (size_t)chunk_size});
       }
       else {
         resp_chunk_str_.append(data_ptr, chunk_size);
@@ -2141,7 +2143,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     if (is_file) {
       coro_io::coro_file file{};
-      co_await file.async_open(part.filename, coro_io::flags::read_only);
+      file.open(part.filename, std::ios::in);
       assert(file.is_open());
       std::string file_data;
       detail::resize(file_data, max_single_part_size_);
