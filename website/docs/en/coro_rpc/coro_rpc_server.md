@@ -265,6 +265,26 @@ void echo(coro_rpc::context<void> ctx) {
 
 The RPC error code is a 16-bit unsigned integer. The range 0-255 is reserved for error codes used by the RPC framework, and user-defined error codes can be any integer between [256, 65535]. When an RPC returns a user-defined error code, the connection will not be terminated. However, if an error code from the RPC framework is returned, it is considered a serious RPC error, leading to the disconnection of the RPC link.
 
+### Complete Handler
+
+When the server successfully writes the RPC response data to the socket, the response callback function is invoked. Users can set this callback function for logging, statistics, etc. Moreover, when the return value of the RPC function includes types like `std::string_view` or `std::span`, this callback function can be used to destruct objects at an appropriate time.
+
+The callback function takes two parameters: the first is `const std::error_code&`, which represents the result of writing to the socket. The second is `std::size_t`, which represents the number of bytes sent. Note that a success here only indicates that the server successfully sent the data; it does not guarantee that the client has received it.
+
+```cpp
+void foo() {
+  auto ctx = coro_rpc::get_context();
+  ctx->set_complete_handler([](const std::error_code& ec, std::size_t length) {
+    if (ec) {
+      std::cout << "error: " << ec.message() << std::endl;
+    } else {
+      std::cout << "ok: wrote " << length << " bytes" << std::endl;
+    }
+  });
+  return;
+}
+```
+
 ## Connections and I/O Threads
 
 The server internally has an I/O thread pool, the size of which defaults to the number of logical threads of the CPU. After the server starts, it launches a listening task on one of the I/O threads to accept connections from clients. Each time a connection is accepted, the server selects an I/O thread through round-robin to bind it to. Subsequently, all steps including data transmission, serialization, RPC routing, etc., of that connection are executed on this I/O thread. The RPC functions are also executed on the same I/O thread.
@@ -278,7 +298,36 @@ coro_rpc allows users to register rpc functions with multiple parameters (up to 
 
 If your rpc argument or return value type is not supported by the struct_pack type system, we also allow users to register their own structures or custom serialization algorithms. For more details, see: [Custom feature](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#custom-type)
 
-## RPC Return Value Construction and Checking
+### Return Value with view
+
+The user's return value may contain view types such as `std::string_view` or `std::span`. These types can reduce copies during deserialization, thereby enhancing RPC performance. However, this requires that the objects they point to must not be destructed until after the RPC request has been successfully sent.
+
+Users can ensure this by setting a `complete_handler`:
+
+```cpp
+std::string_view hello() {
+  auto ctx = coro_rpc::get_context();
+  auto str = std::make_unique<std::string>("Hello");
+  ctx->set_complete_handler([str = std::move(str)](const std::error_code& ec, std::size_t length) {
+    if (ec) {
+      std::cout << "error: " << ec.message() << std::endl;
+    } else {
+      std::cout << "ok: write " << length << " bytes" << std::endl;
+    }
+  });
+  return *str; /*this is safe*/
+}
+```
+
+Especially, when the return value's view originates from the parameters within the RPC function, the RPC framework guarantees it to be valid without the need for extra operations.
+
+```cpp
+std::string_view echo(std::string_view sv) {
+  return sv;
+}
+```
+
+### RPC Return Value Construction and Checking
 
 Furthermore, for callback functions, coro_rpc will try to construct the return value type from the parameter list. If it fails to construct, it will lead to a compilation failure.
 

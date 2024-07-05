@@ -414,6 +414,28 @@ TEST_CASE("testing client with attachment") {
   CHECK(client.get_resp_attachment() == "");
 }
 
+TEST_CASE("testing std::string_view") {
+  g_action = {};
+  coro_rpc_server server(1, 8801);
+
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  auto ec = client.sync_connect("127.0.0.1", "8801");
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  server.register_handler<test_string_view>();
+
+  auto ret = client.sync_call<test_string_view>("123");
+  CHECK(ret.value() == "123OK");
+
+  ret = client.sync_call<test_string_view>("1231232132123123");
+  CHECK(ret.value() == "1231232132123123OK");
+
+  ret = client.sync_call<test_string_view>("ABDD");
+  CHECK(ret.value() == "ABDDOK");
+}
+
 TEST_CASE("testing client with context response user-defined error") {
   g_action = {};
   coro_rpc_server server(2, 8801);

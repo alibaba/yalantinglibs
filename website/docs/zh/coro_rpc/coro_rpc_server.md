@@ -262,6 +262,29 @@ void echo(coro_rpc::context<void> ctx) {
 
 rpc错误码是一个16位的无符号整数。其中，0-255是保留给rpc框架使用的错误码，用户自定义的错误码可以是[256,65535]之间的任一整数。当rpc返回用户自定义错误码时，连接不会断开。如果返回的是rpc框架自带的错误码，则视为发生了严重的rpc错误，会导致rpc连接断开。
 
+
+## 完成回调
+
+当服务器成功将rpc响应数据写入socket时，会调用完成回调函数。用户可以设置该回调函数，用于日志，统计。此外，当rpc函数的返回值具有`std::string_view`,`std::span`等类型时，也可以通过该回调函数在合适的时间点析构对象。
+
+该回调函数有两个参数，第一个参数是`const std::error_code&`，代表写入`socket`的结果。第二个参数是`std::size_t` ,代表发送的字节数。需要注意，这里的成功只能代表服务器成功发送数据，不能代表客户端收到了数据。
+
+```cpp
+void foo() {
+  auto ctx = coro_rpc::get_context();
+  ctx->set_complete_handler([](const std::error_code& ec, std::size_t length){
+    if (ec) {
+      std::cout<<"error: "<<ec.message()<<std::endl;
+    }
+    else {
+      std::cout<<"ok: write "<<length<<" bytes"<<std::endl;
+    }
+  });
+  return;
+}
+```
+
+
 ## 连接与IO线程
 
 服务器内部有一个IO线程池，其大小默认为cpu的逻辑线程数目。当服务器启动后，它会在某个IO线程上启动一个监听任务，接收客户端发来的连接。每次接收连接时，服务器会通过轮转法，选择一个IO线程将其绑定到连接上。随后，该连接上各请求收发数据，序列化，rpc路由等步骤都会在该IO线程上执行。rpc函数也同样会在该IO线程上执行。
@@ -276,7 +299,38 @@ coro_rpc允许用户注册的rpc函数具有多个参数（最多255个），参
 
 如果你的rpc参数或返回值类型不属于struct_pack的类型系统支持的类型，我们也允许用户注册自己的结构体或者自定义序列化算法，详见：[自定义功能支持](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E8%87%AA%E5%AE%9A%E4%B9%89%E7%B1%BB%E5%9E%8B%E7%9A%84%E5%BA%8F%E5%88%97%E5%8C%96)
 
-## RPC返回值的构造与检查
+### 返回值包含视图类型
+
+用户的返回值可能包含了`std::string_view`或`std::span`等视图类型，这些类型能够减少反序列化时的拷贝，从而提升rpc性能。然而，这要求其指向的对象必须在rpc请求成功发送后才能析构。
+
+用户可以利用设置`complete_handler`来保证这一点：
+
+```cpp
+std::string_view hello() {
+  auto ctx = coro_rpc::get_context();
+  auto str=std::make_unique<std::string>("Hello");
+  ctx->set_complete_handler([str=std::move(str)](const std::error_code& ec, std::size_t length){
+    if (ec) {
+      std::cout<<"error: "<<ec.message()<<std::endl;
+    }
+    else {
+      std::cout<<"ok: write "<<length<<" bytes"<<std::endl;
+    }
+  });
+  return *str; /*this is safe*/
+}
+```
+
+特别的，当返回值的视图来自rpc函数中的参数时，rpc框架保证其一定是合法的，无需额外操作。
+
+```cpp
+std::string_view echo(std::string_view sv) {
+  return sv;
+}
+```
+
+
+### RPC返回值的构造与检查
 
 此外，对于回调函数，coro_rpc会尝试通过参数列表构造返回值类型。如果无法构造则会导致编译失败。
 

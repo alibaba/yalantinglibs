@@ -27,10 +27,11 @@ int main() {
   coro_rpc_server server2{/*thread=*/1, /*port=*/8802};
 
   // regist normal function for rpc
-  server.register_handler<
-      echo, coroutine_echo, async_echo_by_callback, async_echo_by_coroutine,
-      echo_with_attachment, nested_echo, return_error_by_context,
-      return_error_by_exception, rpc_with_state_by_tag, get_ctx_info>();
+  server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,
+                          echo_with_attachment, nested_echo,
+                          return_error_by_context, return_error_by_exception,
+                          rpc_with_state_by_tag, get_ctx_info,
+                          rpc_with_complete_handler, add>();
 
   // regist member function for rpc
   HelloService hello_service;

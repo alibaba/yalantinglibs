@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <system_error>
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/easylog.hpp>
@@ -25,6 +26,7 @@
 #include "async_simple/coro/Sleep.h"
 #include "ylt/coro_io/client_pool.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
@@ -39,34 +41,29 @@ std::string_view echo(std::string_view data) {
   return data;
 }
 
-Lazy<std::string_view> coroutine_echo(std::string_view data) {
-  ELOGV(INFO, "call coroutine_echo");
-  co_await coro_io::sleep_for(1s);
-  co_return data;
-}
-
 void async_echo_by_callback(
     coro_rpc::context<std::string_view /*rpc response data here*/> conn,
     std::string_view /*rpc request data here*/ data) {
   ELOGV(INFO, "call async_echo_by_callback");
   /* rpc function runs in global io thread pool */
-  coro_io::post([conn, data]() mutable {
+  coro_io::get_global_block_executor()->schedule([conn, data]() mutable {
     /* send work to global non-io thread pool */
-    auto *ctx = conn.get_context_info();
+    std::this_thread::sleep_for(1s);
     conn.response_msg(data); /*response here*/
-  }).start([](auto &&) {
   });
 }
 
 Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
   ELOGV(INFO, "call async_echo_by_coroutine");
-  co_await coro_io::sleep_for(std::chrono::milliseconds(100));  // sleeping
+  co_await coro_io::sleep_for(1s);  // sleeping
   co_return sv;
 }
 
 Lazy<void> get_ctx_info() {
   ELOGV(INFO, "call get_ctx_info");
   auto *ctx = co_await coro_rpc::get_context_in_coro();
+  /*in callback rpc function, you can get ctx from coro_rpc::context*/
+  /*in normal rpc function, you can get ctx by  coro_rpc::get_context() */
   if (ctx->has_closed()) {
     throw std::runtime_error("connection is close!");
   }
@@ -97,12 +94,12 @@ void echo_with_attachment() {
 
 Lazy<std::string_view> nested_echo(std::string_view sv) {
   ELOGV(INFO, "start nested echo");
-  /*get a client by global client pool*/
-  auto client =
+  /*get a client_pool of global*/
+  auto client_pool =
       coro_io::g_clients_pool<coro_rpc::coro_rpc_client>().at("127.0.0.1:8802");
-  assert(client != nullptr);
+  assert(client_pool != nullptr);
   ELOGV(INFO, "connect another server");
-  auto ret = co_await client->send_request(
+  auto ret = co_await client_pool->send_request(
       [sv](coro_rpc_client &client)
           -> Lazy<coro_rpc::rpc_result<std::string_view>> {
         co_return co_await client.call<echo>(sv);
@@ -131,4 +128,17 @@ Lazy<std::string> rpc_with_state_by_tag() {
   auto &cnter = std::any_cast<uint64_t &>(ctx->tag());
   ELOGV(INFO, "call count: %d", ++cnter);
   co_return std::to_string(cnter);
+}
+std::string_view rpc_with_complete_handler() {
+  std::string s;
+  s.reserve(sizeof(std::string));
+  s = "Hello";
+  std::string_view result = s;
+  auto *ctx = coro_rpc::get_context();
+  ctx->set_complete_handler(
+      [s = std::move(s)](const std::error_code &ec, std::size_t len) {
+        std::cout << "RPC result write to socket, msg: " << ec.message()
+                  << " length:" << len << std::endl;
+      });
+  return result;
 }

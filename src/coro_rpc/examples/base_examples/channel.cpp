@@ -47,40 +47,6 @@ std::atomic<uint64_t> working_echo = 0;
 
 int request_cnt = 10000;
 
-// Lazy<std::vector<std::chrono::microseconds>>
-// call_echo(std::shared_ptr<coro_io::channel<coro_rpc_client>> channel) {
-//   std::vector<std::chrono::microseconds> result;
-//   result.reserve(request_cnt);
-//   auto tp = std::chrono::steady_clock::now();
-//   ++working_echo;
-//   for (int i = 0; i < request_cnt; ++i) {
-//     auto res = co_await channel->send_request(
-//         [](coro_rpc_client &client, std::string_view hostname) -> Lazy<void>
-//         {
-//           auto res = co_await client.call<echo>("Hello world!");
-//           if (!res.has_value()) {
-//             ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
-//             co_return;
-//           }
-//           if (res.value() != "Hello world!"sv) {
-//             ELOG_ERROR << "err echo resp: \n" << res.value();
-//             co_return;
-//           }
-//           co_return;
-//         });
-//     if (!res) {
-//       ELOG_ERROR << "client pool err: connect failed.\n";
-//       break;
-//     }
-//     ++qps;
-//     auto old_tp=tp;
-//     tp= std::chrono::steady_clock::now();
-//     result.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
-//         tp - old_tp));
-//   }
-//   co_return std::move(result);
-// }
-
 Lazy<std::vector<std::chrono::microseconds>> call_echo(
     std::shared_ptr<coro_io::channel<coro_rpc_client>> channel) {
   std::vector<std::chrono::microseconds> result;
@@ -89,21 +55,21 @@ Lazy<std::vector<std::chrono::microseconds>> call_echo(
   ++working_echo;
   for (int i = 0; i < request_cnt; ++i) {
     auto res = co_await channel->send_request(
-        [](coro_rpc_client &client, std::string_view hostname) {
-          return client.send_request<echo>("Hello world!");
+        [](coro_rpc_client &client, std::string_view hostname) -> Lazy<void> {
+          auto res = co_await client.call<echo>("Hello world!");
+          if (!res.has_value()) {
+            ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
+            co_return;
+          }
+          if (res.value() != "Hello world!"sv) {
+            ELOG_ERROR << "err echo resp: \n" << res.value();
+            co_return;
+          }
+          co_return;
         });
     if (!res) {
-      ELOG_ERROR << "client pool err: connect failed.\n"
-                 << std::make_error_code(res.error());
+      ELOG_ERROR << "client pool err: connect failed.\n";
       break;
-    }
-    auto rpc_result = co_await res.value();
-    if (!rpc_result) {
-      ELOG_ERROR << "recv response failed\n" << rpc_result.error().msg;
-      break;
-    }
-    if (rpc_result->result() != "Hello world!") {
-      ELOG_ERROR << "error rpc reponse\n" << rpc_result->result();
     }
     ++qps;
     auto old_tp = tp;

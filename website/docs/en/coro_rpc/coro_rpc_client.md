@@ -146,10 +146,10 @@ using namespace coro_rpc;
 using namespace async_simple::coro;
 std::string_view echo(std::string_view);
 Lazy<void> example(coro_rpc_client& client) {
-  // Wait for the request to be fully sent
-  Lazy<async_rpc_result> handler = co_await client.send_request<echo>("Hello");
-  // Then wait for the server to return the RPC request result
-  async_rpc_result result = co_await handler;
+  // send request to the server 
+  Lazy<async_rpc_result<std::string_view>> handler = co_await client.send_request<echo>("Hello");
+  // then wait server response
+  async_rpc_result<std::string_view> result = co_await std::move(handler);
   if (result) {
     assert(result->result() == "Hello");
   }
@@ -165,15 +165,15 @@ We can call send_request multiple times to implement connection reuse:
 ```cpp
 using namespace coro_rpc;
 using namespace async_simple::coro;
-std::string_view echo(std::string_view);
+std::string echo(std::string);
 Lazy<void> example(coro_rpc_client& client) {
-  std::vector<Lazy<async_rpc_result>> handlers;
+  std::vector<Lazy<async_rpc_result<std::string>>> handlers;
   // First, send 10 requests consecutively
   for (int i=0;i<10;++i) {
     handlers.push_back(co_await client.send_request<echo>(std::to_string(i)));
   }
   // Next, wait for all the requests to return
-  std::vector<async_rpc_result> results = co_await collectAll(std::move(handlers));
+  std::vector<async_rpc_result<std::string>> results = co_await collectAll(std::move(handlers));
   for (int i=0;i<10;++i) {
     assert(results[i]->result() == std::to_string(i));
   }
@@ -187,14 +187,13 @@ When using the `send_request` method, since multiple requests might be sent simu
 
 Instead, we can set the attachment when sending a request by calling the `send_request_with_attachment` function. Additionally, we can retrieve the attachment by calling the `->get_attachment()` and `->release_buffer()` methods of `async_rpc_result`.
 
-
-
 ```cpp
 using namespace coro_rpc;
 using namespace async_simple::coro;
 int add(int a, int b);
 Lazy<std::string> example(coro_rpc_client& client) {
-  async_rpc_result result = co_await co_await client.send_request_with_attachment<echo>("Hello", 1, 2);
+  auto handler = co_await client.send_request_with_attachment<add>("Hello", 1, 2);
+  async_rpc_result<std::string_view> result = co_await std::move(handler);
   assert(result->result() == 3);
   assert(result->get_attachment() == "Hello");
   co_return std::move(result->release_buffer().resp_attachment_buf_);

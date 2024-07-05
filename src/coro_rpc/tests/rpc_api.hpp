@@ -19,9 +19,21 @@
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
+#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 void hi();
+inline std::string_view test_string_view(std::string_view sv) {
+  auto ctx = coro_rpc::get_context();
+  std::string str;
+  str.reserve(sizeof(std::string));
+  str = std::string{sv}.append("OK");
+  std::string_view result = str;
+  ctx->set_complete_handler([str = std::move(str)](auto&&, auto) {
+  });
+  return result;
+}
 std::string hello();
 std::string hello_timeout();
 std::string client_hello();
