@@ -2,6 +2,8 @@
 name: debug Website static content
 
 on:
+  push:
+    branches: [ website ]
   pull_request:
     branches: [ website ]
 
