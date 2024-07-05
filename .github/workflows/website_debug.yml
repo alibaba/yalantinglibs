@@ -1,0 +1,37 @@
+# Simple workflow for deploying static content to GitHub Pages
+name: debug Website static content
+
+on:
+  pull_request:
+    branches: [ website ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  websiteDir: "${{github.workspace}}/website"
+
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Install package
+        run: sudo apt-get install doxygen graphviz
+      - name: Yarn Install
+        run: yarn install
+        working-directory: ${{env.websiteDir}}
+      - name: Clone doxygen-awesome-css
+        run: git clone https://github.com/jothepro/doxygen-awesome-css.git
+        working-directory: ${{env.websiteDir}}
+      - name: Build Website
+        run: bash generate.sh
+        working-directory: ${{env.websiteDir}}
