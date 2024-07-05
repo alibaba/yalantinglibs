@@ -25,13 +25,13 @@ node_load1 3.0703125
 ## Histogram 直方图类型
 Histogram 对观测值(通常是请求持续时间或响应大小之类的数据)进行采样，并将其计数在可配置的数值区间中。它也提供了所有数据的总和。
 
-基本数据指标名称为<basename>的直方图类型数据指标，在数据采集期间会显示多个时间序列：
+基本数据指标名称为basename的直方图类型数据指标，在数据采集期间会显示多个时间序列：
 
-数值区间的累计计数器，显示为<basename>_bucket{le="<数值区间的上边界>"}
+数值区间的累计计数器，显示为`basename_bucket{le="数值区间的上边界"}`
 
-所有观测值的总和，显示为<basename>_sum
+所有观测值的总和，显示为basename_sum
 
-统计到的事件计数，显示为<basename>_count(与上述<basename>_bucket{le="+Inf"}相同)
+统计到的事件计数，显示为basename_count(与上述`basename_bucket{le="+Inf"}`相同)
 
 如:
 
@@ -50,13 +50,13 @@ http_request_duration_seconds_count 144320
 ## Summary 汇总类型
 类似于 histogram，summary 会采样观察结果(通常是请求持续时间和响应大小之类的数据)。它不仅提供了观测值的总数和所有观测值的总和，还可以计算滑动时间窗口内的可配置分位数。
 
-基本数据指标名称为<basename>的 summary 类型数据指标，在数据采集期间会显示多个时间序列：
+基本数据指标名称为basename的 summary 类型数据指标，在数据采集期间会显示多个时间序列：
 
-流观察到的事件的 φ-quantiles(0≤φ≤1)，显示为<basename>{quantile="<φ>"}
+流观察到的事件的 `φ-quantiles(0≤φ≤1)`，显示为`basename{quantile="<φ>"}`
 
-所有观测值的总和，显示为<basename>_sum
+所有观测值的总和，显示为basename_sum
 
-观察到的事件计数，显示为<basename>_count
+观察到的事件计数，显示为basename_count
 
 如：
 
