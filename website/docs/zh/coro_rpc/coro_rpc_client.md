@@ -139,7 +139,7 @@ do_something();
 
 ## 连接复用
 
-`coro_rpc_client` 可以通过 `send_request`函数实现连接复用。该函数是线程安全的，允许多个线程同时调用同一个client的 `send_request`方法。该函数返回值为`Lazy<async_rpc_result<T>>`.
+`coro_rpc_client` 可以通过 `send_request`函数实现连接复用。该函数是线程安全的，允许多个线程同时调用同一个client的 `send_request`方法。该函数返回值为`Lazy<Lazy<async_rpc_result<T>>>`.
 
 
 连接复用允许我们在高并发下减少连接的个数，无需创建新的连接。同时也能提高每个连接的吞吐量。
@@ -152,7 +152,8 @@ using namespace async_simple::coro;
 std::string_view echo(std::string_view);
 Lazy<void> example(coro_rpc_client& client) {
   //向服务器发送请求
-  async_rpc_result<std::string_view> result = co_await client.send_request<echo>("Hello");
+  Lazy<async_rpc_result<std::string_view>> handler = co_await client.send_request<echo>("Hello");
+  async_rpc_result<std::string_view> result = co_await std::move(handler);
   if (result) {
     assert(result->result() == "Hello");
   }
@@ -173,7 +174,7 @@ Lazy<void> example(coro_rpc_client& client) {
   std::vector<Lazy<async_rpc_result<std::string>>> handlers;
   // 准备发送10个请求
   for (int i=0;i<10;++i) {
-    handlers.push_back(client.send_request<echo>(std::to_string(i)));
+    handlers.push_back(co_await client.send_request<echo>(std::to_string(i)));
   }
   //接下来等待所有的请求返回
   std::vector<async_rpc_result<std::string>> results = co_await collectAll(std::move(handlers));
