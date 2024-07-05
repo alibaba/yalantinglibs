@@ -265,7 +265,7 @@ void echo(coro_rpc::context<void> ctx) {
 
 The RPC error code is a 16-bit unsigned integer. The range 0-255 is reserved for error codes used by the RPC framework, and user-defined error codes can be any integer between [256, 65535]. When an RPC returns a user-defined error code, the connection will not be terminated. However, if an error code from the RPC framework is returned, it is considered a serious RPC error, leading to the disconnection of the RPC link.
 
-### Response Handler
+### Complete Handler
 
 When the server successfully writes the RPC response data to the socket, the response callback function is invoked. Users can set this callback function for logging, statistics, etc. Moreover, when the return value of the RPC function includes types like `std::string_view` or `std::span`, this callback function can be used to destruct objects at an appropriate time.
 
@@ -274,7 +274,7 @@ The callback function takes two parameters: the first is `const std::error_code&
 ```cpp
 void foo() {
   auto ctx = coro_rpc::get_context();
-  ctx->set_response_handler([](const std::error_code& ec, std::size_t length) {
+  ctx->set_complete_handler([](const std::error_code& ec, std::size_t length) {
     if (ec) {
       std::cout << "error: " << ec.message() << std::endl;
     } else {
@@ -302,13 +302,13 @@ If your rpc argument or return value type is not supported by the struct_pack ty
 
 The user's return value may contain view types such as `std::string_view` or `std::span`. These types can reduce copies during deserialization, thereby enhancing RPC performance. However, this requires that the objects they point to must not be destructed until after the RPC request has been successfully sent.
 
-Users can ensure this by setting a `response_handler`:
+Users can ensure this by setting a `complete_handler`:
 
 ```cpp
 std::string_view hello() {
   auto ctx = coro_rpc::get_context();
   auto str = std::make_unique<std::string>("Hello");
-  ctx->set_response_handler([str = std::move(str)](const std::error_code& ec, std::size_t length) {
+  ctx->set_complete_handler([str = std::move(str)](const std::error_code& ec, std::size_t length) {
     if (ec) {
       std::cout << "error: " << ec.message() << std::endl;
     } else {

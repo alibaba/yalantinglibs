@@ -83,7 +83,7 @@ class context_base {
           << ". error code:" << error_code.ec << ". message : " << error_msg;
     self_->conn_->template response_error<rpc_protocol>(
         error_code, error_msg, self_->req_head_,
-        std::move(self_->resp_handler_));
+        std::move(self_->complete_handler_));
   }
   void response_error(coro_rpc::err_code error_code) {
     response_error(error_code, error_code.message());
@@ -110,7 +110,7 @@ class context_base {
             self_->conn_->template response_msg<rpc_protocol>(
                 serialize_proto::serialize(),
                 std::move(self_->resp_attachment_), self_->req_head_,
-                std::move(self_->resp_handler_));
+                std::move(self_->complete_handler_));
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
     }
@@ -124,11 +124,11 @@ class context_base {
             self_->conn_->template response_msg<rpc_protocol>(
                 serialize_proto::serialize(ret),
                 std::move(self_->resp_attachment_), self_->req_head_,
-                std::move(self_->resp_handler_));
+                std::move(self_->complete_handler_));
           },
           *rpc_protocol::get_serialize_protocol(self_->req_head_));
 
-      // response_handler_(std::move(conn_), std::move(ret));
+      // complete_handler_(std::move(conn_), std::move(ret));
     }
     /*finish here*/
     self_->status_ = context_status::finish_response;

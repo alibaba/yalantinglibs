@@ -129,13 +129,13 @@ Lazy<std::string> rpc_with_state_by_tag() {
   ELOGV(INFO, "call count: %d", ++cnter);
   co_return std::to_string(cnter);
 }
-std::string_view rpc_with_response_handler() {
+std::string_view rpc_with_complete_handler() {
   std::string s;
   s.reserve(sizeof(std::string));
   s = "Hello";
   std::string_view result = s;
   auto *ctx = coro_rpc::get_context();
-  ctx->set_response_handler(
+  ctx->set_complete_handler(
       [s = std::move(s)](const std::error_code &ec, std::size_t len) {
         std::cout << "RPC result write to socket, msg: " << ec.message()
                   << " length:" << len << std::endl;

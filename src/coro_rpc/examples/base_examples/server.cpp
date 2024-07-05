@@ -31,7 +31,7 @@ int main() {
                           echo_with_attachment, nested_echo,
                           return_error_by_context, return_error_by_exception,
                           rpc_with_state_by_tag, get_ctx_info,
-                          rpc_with_response_handler, add>();
+                          rpc_with_complete_handler, add>();
 
   // regist member function for rpc
   HelloService hello_service;

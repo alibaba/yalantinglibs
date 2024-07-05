@@ -56,7 +56,7 @@ struct context_info_t {
   std::function<std::string_view()> resp_attachment_ = [] {
     return std::string_view{};
   };
-  std::function<void(const std::error_code &, std::size_t)> resp_handler_;
+  std::function<void(const std::error_code &, std::size_t)> complete_handler_;
   std::atomic<context_status> status_ = context_status::init;
 
  public:
@@ -84,9 +84,9 @@ struct context_info_t {
    * socket*/
   /* std::error_code: socket write result*/
   /* std::size_t : write length*/
-  void set_response_handler(
+  void set_complete_handler(
       std::function<void(const std::error_code &, std::size_t)> &&handler) {
-    resp_handler_ = std::move(handler);
+    complete_handler_ = std::move(handler);
   }
   std::string_view get_request_attachment() const;
   std::string release_request_attachment();
@@ -295,7 +295,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                 context_info->conn_->template direct_response_msg<rpc_protocol>(
                     ret.first, ret.second, context_info->req_head_,
                     std::move(context_info->resp_attachment_),
-                    std::move(context_info->resp_handler_));
+                    std::move(context_info->complete_handler_));
               });
             });
       }
@@ -337,7 +337,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         direct_response_msg<rpc_protocol>(
             resp_err, resp_buf, req_head,
             std::move(context_info->resp_attachment_),
-            std::move(context_info->resp_handler_));
+            std::move(context_info->complete_handler_));
         context_info->resp_attachment_ = [] {
           return std::string_view{};
         };
@@ -352,11 +352,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    * @param ret object of message type
    */
   template <typename rpc_protocol>
-  void direct_response_msg(coro_rpc::err_code &resp_err, std::string &resp_buf,
-                           const typename rpc_protocol::req_header &req_head,
-                           std::function<std::string_view()> &&attachment,
-                           std::function<void(const std::error_code &,
-                                              std::size_t)> &&resp_handler) {
+  void direct_response_msg(
+      coro_rpc::err_code &resp_err, std::string &resp_buf,
+      const typename rpc_protocol::req_header &req_head,
+      std::function<std::string_view()> &&attachment,
+      std::function<void(const std::error_code &, std::size_t)>
+          &&complete_handler) {
     std::string resp_error_msg;
     if (resp_err) {
       resp_error_msg = std::move(resp_buf);
@@ -368,7 +369,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         resp_buf, req_head, attachment().length(), resp_err, resp_error_msg);
 
     response(std::move(header_buf), std::move(resp_buf), std::move(attachment),
-             std::move(resp_handler), nullptr)
+             std::move(complete_handler), nullptr)
         .start([](auto &&) {
         });
   }
@@ -378,11 +379,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                     std::function<std::string_view()> &&resp_attachment,
                     const typename rpc_protocol::req_header &req_head,
                     std::function<void(const std::error_code &, std::size_t)>
-                        &&resp_handler) {
+                        &&complete_handler) {
     std::string header_buf = rpc_protocol::prepare_response(
         body_buf, req_head, resp_attachment().size());
     response(std::move(header_buf), std::move(body_buf),
-             std::move(resp_attachment), std::move(resp_handler),
+             std::move(resp_attachment), std::move(complete_handler),
              shared_from_this())
         .via(executor_)
         .detach();
@@ -392,7 +393,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   void response_error(coro_rpc::errc ec, std::string_view error_msg,
                       const typename rpc_protocol::req_header &req_head,
                       std::function<void(const std::error_code &, std::size_t)>
-                          &&resp_handler) {
+                          &&complete_handler) {
     std::function<std::string_view()> attach_ment = []() -> std::string_view {
       return {};
     };
@@ -400,7 +401,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     std::string header_buf =
         rpc_protocol::prepare_response(body_buf, req_head, 0, ec, error_msg);
     response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
-             std::move(resp_handler), shared_from_this())
+             std::move(complete_handler), shared_from_this())
         .via(executor_)
         .detach();
   }
@@ -455,7 +456,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> response(
       std::string header_buf, std::string body_buf,
       std::function<std::string_view()> resp_attachment,
-      std::function<void(const std::error_code, std::size_t)> resp_handler,
+      std::function<void(const std::error_code, std::size_t)> complete_handler,
       rpc_conn self) noexcept {
     if (has_closed())
       AS_UNLIKELY {
@@ -470,7 +471,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
     write_queue_.emplace_back(std::move(header_buf), std::move(body_buf),
                               std::move(resp_attachment),
-                              std::move(resp_handler));
+                              std::move(complete_handler));
     --rpc_processing_cnt_;
     assert(rpc_processing_cnt_ >= 0);
     reset_timer();
@@ -528,9 +529,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         }
 #endif
       }
-      auto &response_handler = std::get<3>(msg);
-      if (response_handler) {
-        response_handler(ret.first, ret.second);
+      auto &complete_handler = std::get<3>(msg);
+      if (complete_handler) {
+        complete_handler(ret.first, ret.second);
       }
       if (ret.first)
         AS_UNLIKELY {

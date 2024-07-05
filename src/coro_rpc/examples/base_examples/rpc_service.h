@@ -37,5 +37,5 @@ class HelloService {
   std::string_view hello();
 };
 async_simple::coro::Lazy<std::string> rpc_with_state_by_tag();
-std::string_view rpc_with_response_handler();
+std::string_view rpc_with_complete_handler();
 #endif  // CORO_RPC_RPC_API_HPP

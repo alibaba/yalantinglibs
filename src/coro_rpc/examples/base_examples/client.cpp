@@ -80,7 +80,7 @@ Lazy<void> show_rpc_call() {
   std::cout << ret2.value() << std::endl;
   assert(ret2.value() == "3");
 
-  ret = co_await client.call<rpc_with_response_handler>();
+  ret = co_await client.call<rpc_with_complete_handler>();
   assert(ret == "Hello");
 }
 /*send multi request with same socket in the same time*/

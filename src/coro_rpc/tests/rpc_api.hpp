@@ -30,7 +30,7 @@ inline std::string_view test_string_view(std::string_view sv) {
   str.reserve(sizeof(std::string));
   str = std::string{sv}.append("OK");
   std::string_view result = str;
-  ctx->set_response_handler([str = std::move(str)](auto&&, auto) {
+  ctx->set_complete_handler([str = std::move(str)](auto&&, auto) {
   });
   return result;
 }
