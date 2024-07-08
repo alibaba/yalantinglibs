@@ -507,6 +507,11 @@ inline std::error_code connect(executor_t &executor,
 }
 
 #ifdef __linux__
+// this help us ignore SIGPIPE when send data to a unexpected closed socket.
+inline auto pipe_signal_handler = [] {
+  std::signal(SIGPIPE, SIG_IGN);
+  return 0;
+}();
 
 inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
@@ -523,8 +528,8 @@ async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
     while (true) {
       // Try the system call.
       errno = 0;
-      int n = ::sendfile(socket.native_handle(), fd, &offset,
-                         std::min(std::size_t{65536}, least_bytes));
+      ssize_t n = ::sendfile(socket.native_handle(), fd, &offset,
+                             std::min(std::size_t{65536}, least_bytes));
       ec = asio::error_code(n < 0 ? errno : 0,
                             asio::error::get_system_category());
       least_bytes -= ec ? 0 : n;
