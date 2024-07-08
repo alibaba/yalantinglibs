@@ -199,12 +199,12 @@ class person : std::vector<int> {
 };
 STRUCT_PACK_REFL(person, name, age);
 }
+```
 
 `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`填入的第一个参数是需要反射的类型名，随后是若干个字段名，代表反射信息的各个字段。
 该宏必须定义在反射的类型所在的命名空间中。
 如果该类型不具有默认构造函数，则无法使用函数`struct_pack::deserialize`,不过你依然可以使用`struct_pack::deserialize_to`来实现反序列化。
 它使得struct_pack可以支持那些非聚合的结构体类型，允许用户自定义构造函数，继承其他类型，添加不序列化的字段等等。
-```
 
 有时，用户需要序列化/反序列化那些private字段，这可以通过函数`STRUCT_PACK_FRIEND_DECL(typenmae)`;来支持。
 ```cpp
