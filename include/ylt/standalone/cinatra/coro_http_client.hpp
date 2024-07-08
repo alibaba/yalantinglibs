@@ -1317,16 +1317,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (!body_.empty()) {
       body_.clear();
     }
-    if (!out_buf.empty()) {
-      out_buf_ = out_buf;
-    }
+
+    out_buf_ = out_buf;
 
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
-      }
-      if (!out_buf_.empty()) {
-        out_buf_ = {};
       }
     });
 
