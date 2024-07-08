@@ -808,6 +808,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         async_download(std::move(uri), std::move(filename), std::move(range)));
   }
 
+  bool is_body_in_out_buf() const { return !out_buf_.empty(); }
+
   void reset() {
     if (!has_closed())
       close_socket(*socket_);
@@ -1780,9 +1782,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       bool is_out_buf = !out_buf_.empty();
       if (is_out_buf) {
         if (content_len > 0 && out_buf_.size() < content_len) {
-          data.status = 404;
-          data.net_err = std::make_error_code(std::errc::no_buffer_space);
-          co_return data;
+          out_buf_ = {};
+          is_out_buf = false;
         }
       }
 
