@@ -21,6 +21,8 @@
 #include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include "asio/error.hpp"
+
 #if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
@@ -513,6 +515,8 @@ inline auto pipe_signal_handler = [] {
   return 0;
 }();
 
+// FIXME: this function may not thread-safe if it not running in socket's
+// executor
 inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
                size_t size) noexcept {
@@ -548,7 +552,6 @@ async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
                               handler.set_value_then_resume(ec);
                             });
         });
-        continue;
       }
       if (ec || n == 0 || least_bytes == 0) [[unlikely]] {  // End of File
         break;
