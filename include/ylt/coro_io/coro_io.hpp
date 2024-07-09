@@ -21,14 +21,11 @@
 #include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#include "asio/error.hpp"
-
 #if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
 
 #include <asio/connect.hpp>
-#include <asio/dispatch.hpp>
 #include <asio/experimental/channel.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
@@ -40,13 +37,16 @@
 #include <deque>
 
 #include "io_context_pool.hpp"
+#if __has_include("ylt/util/type_traits.h")
 #include "ylt/util/type_traits.h"
+#else
+#include "../util/type_traits.h"
+#endif
 #ifdef __linux__
 #include <sys/sendfile.h>
 #endif
 
 namespace coro_io {
-
 template <typename T>
 constexpr inline bool is_lazy_v =
     util::is_specialization_v<std::remove_cvref_t<T>, async_simple::coro::Lazy>;
@@ -369,19 +369,37 @@ struct coro_channel
   using return_type = R;
   using ValueType = std::pair<std::error_code, R>;
   using asio::experimental::channel<void(std::error_code, R)>::channel;
+  coro_channel(coro_io::ExecutorWrapper<> *executor, size_t capacity)
+      : executor_(executor),
+        asio::experimental::channel<void(std::error_code, R)>(
+            executor->get_asio_executor(), capacity) {}
+  auto get_executor() { return executor_; }
+
+ private:
+  coro_io::ExecutorWrapper<> *executor_;
 };
 
 template <typename R>
 inline coro_channel<R> create_channel(
     size_t capacity,
-    asio::io_context::executor_type executor =
-        coro_io::get_global_block_executor()->get_asio_executor()) {
+    coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
   return coro_channel<R>(executor, capacity);
+}
+
+template <typename R>
+inline auto create_shared_channel(
+    size_t capacity,
+    coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
+  return std::make_shared<coro_channel<R>>(executor, capacity);
 }
 
 template <typename T>
 inline async_simple::coro::Lazy<std::error_code> async_send(
     asio::experimental::channel<void(std::error_code, T)> &channel, T val) {
+  bool r = channel.try_send(std::error_code{}, val);
+  if (r) {
+    co_return std::error_code{};
+  }
   callback_awaitor<std::error_code> awaitor;
   co_return co_await awaitor.await_resume(
       [&, val = std::move(val)](auto handler) {
@@ -395,6 +413,14 @@ template <typename Channel>
 async_simple::coro::Lazy<std::pair<
     std::error_code,
     typename Channel::return_type>> inline async_receive(Channel &channel) {
+  using value_type = typename Channel::return_type;
+  value_type val;
+  bool r = channel.try_receive([&val](std::error_code, value_type result) {
+    val = result;
+  });
+  if (r) {
+    co_return std::make_pair(std::error_code{}, val);
+  }
   callback_awaitor<std::pair<std::error_code, typename Channel::return_type>>
       awaitor;
   co_return co_await awaitor.await_resume([&](auto handler) {
