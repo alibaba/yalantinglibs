@@ -893,13 +893,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
               file_data.data(), std::min(file_data.size(), length));
           ec) {
         // bad request, file may smaller than content-length
-        close();
         break;
       }
       length -= size;
       if (length > 0 && file.eof()) {
         // bad request, file may smaller than content-length
-        close();
         ec = std::make_error_code(std::errc::invalid_argument);
         break;
       }
@@ -936,7 +934,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     if (actual_len != length) [[unlikely]] {
       // bad request, file is smaller than content-length
-      close();
       ec = std::make_error_code(std::errc::invalid_argument);
       co_return;
     }
@@ -972,7 +969,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       if (actual_len != len) [[unlikely]] {
         // bad request, file is smaller than content-length
-        close();
         ec = std::make_error_code(std::errc::invalid_argument);
         co_return;
       }
@@ -1013,14 +1009,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       int64_t content_length = -1,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    std::shared_ptr<int> guard(nullptr, [this](auto) {
+    std::error_code ec{};
+    size_t size = 0;
+    bool is_keep_alive = true;
+    req_context<> ctx{content_type};
+    resp_data data{};
+
+    std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
       }
+      handle_result(data, ec, is_keep_alive);
     });
 
-    req_context<> ctx{content_type};
-    resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
       co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
@@ -1064,9 +1065,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
 
-    std::error_code ec{};
-    size_t size = 0;
-
     if (socket_->has_closed_) {
       {
         auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
@@ -1109,7 +1107,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (!ec && content_length > 0) {
         // bad request, file is smaller than content-length
         ec = std::make_error_code(std::errc::invalid_argument);
-        close();
       }
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
@@ -1147,7 +1144,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         else if (result.eof) [[unlikely]] {
           // bad request, file is smaller than content-length
           ec = std::make_error_code(std::errc::invalid_argument);
-          close();
           break;
         }
       }
@@ -1159,13 +1155,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return resp_data{ec, 404};
     }
 
-    bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
     if (ec && socket_->is_timeout_) {
       ec = std::make_error_code(std::errc::timed_out);
     }
-    handle_result(data, ec, is_keep_alive);
     co_return data;
   }
 
@@ -1174,18 +1168,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       S uri, http_method method, Source source,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    std::shared_ptr<int> guard(nullptr, [this](auto) {
+    req_context<> ctx{content_type};
+    resp_data data{};
+    std::error_code ec{};
+    size_t size = 0;
+    bool is_keep_alive = true;
+
+    std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
       }
+      handle_result(data, ec, is_keep_alive);
     });
 
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
 
-    req_context<> ctx{content_type};
-    resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
       co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
@@ -1215,9 +1214,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
-
-    std::error_code ec{};
-    size_t size = 0;
 
     if (socket_->has_closed_) {
       {
@@ -1296,7 +1292,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return resp_data{ec, 404};
     }
 
-    bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
     if (ec && socket_->is_timeout_) {
