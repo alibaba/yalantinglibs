@@ -42,7 +42,7 @@ struct wrapper {
 };
 
 template <class T>
-inline consteval T& get_fake_object() noexcept {
+inline constexpr T& get_fake_object() noexcept {
   return wrapper<T>::value;
 }
 
