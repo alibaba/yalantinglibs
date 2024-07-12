@@ -38,7 +38,7 @@ inline constexpr std::string_view get_member_name() {
   auto split = func_name.substr(0, func_name.size() - 2);
   return split.substr(split.find_last_of(":.") + 1);
 #elif defined(__GNUC__)
-  auto split = func_name.substr(0, func_name.size() - 2);
+  auto split = func_name.substr(0, func_name.rfind(")}"));
   return split.substr(split.find_last_of(":") + 1);
 #elif defined(_MSC_VER)
   auto split = func_name.substr(0, func_name.size() - 7);

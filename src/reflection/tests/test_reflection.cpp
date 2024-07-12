@@ -135,7 +135,7 @@ TEST_CASE("test member value") {
   });
 
   for_each<simple>([](std::string_view field_name) {
-    std::cout << index << ", " << field_name << "\n";
+    std::cout << field_name << "\n";
   });
 
   constexpr std::string_view name1 = name_of<simple, 2>();
