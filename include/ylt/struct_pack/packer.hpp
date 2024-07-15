@@ -283,7 +283,7 @@ class packer {
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
             write_wrapper<sizeof(uint32_t)>(writer_, (char *)&id);
-            template_switch<serialize_one_derived_class_helper<
+            ylt::reflection::template_switch<serialize_one_derived_class_helper<
                 derived_class_set_t<typename type::element_type>,
                 std::integral_constant<std::size_t, size_type>,
                 std::integral_constant<std::uint64_t, version>>>(index, this,
@@ -472,7 +472,7 @@ class packer {
             auto index = search_type_by_md5<typename type::element_type>(
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
-            template_switch<serialize_one_derived_class_helper<
+            ylt::reflection::template_switch<serialize_one_derived_class_helper<
                 derived_class_set_t<typename type::element_type>,
                 std::integral_constant<std::size_t, size_type>,
                 std::integral_constant<std::uint64_t, version>>>(index, this,
