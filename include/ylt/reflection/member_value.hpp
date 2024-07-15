@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "template_string.hpp"
+#include "template_switch.hpp"
 
 #if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
     (defined(__GNUC__) && __GNUC__ > 10)
@@ -33,20 +34,23 @@ struct is_variant : std::false_type {};
 template <typename... T>
 struct is_variant<std::variant<T...>> : std::true_type {};
 
-template <typename Member, class Tuple, std::size_t... Is>
-inline bool tuple_switch(Member& member, std::size_t i, Tuple& t,
-                         std::index_sequence<Is...>) {
-  if constexpr (is_variant<Member>::value) {
-    return (((i == Is) &&
-             ((member = Member{std::in_place_index<Is>, &std::get<Is>(t)}),
-              true)) ||
-            ...);
+struct switch_helper {
+  template <size_t index, typename Member, class Tuple>
+  static size_t run(Member& member, Tuple& t) {
+    if constexpr (index >= std::tuple_size_v<Tuple>) {
+      return index;
+    }
+    else {
+      if constexpr (is_variant<Member>::value) {
+        member = Member{std::in_place_index<index>, &std::get<index>(t)};
+      }
+      else {
+        set_member_ptr(member, &std::get<index>(t));
+      }
+      return index;
+    }
   }
-  else {
-    return (((i == Is) && ((set_member_ptr(member, &std::get<Is>(t))), true)) ||
-            ...);
-  }
-}
+};
 }  // namespace internal
 
 template <typename Member, typename T>
@@ -63,12 +67,7 @@ inline Member& get(T& t, size_t index) {
     throw std::out_of_range(str);
   }
   Member* member_ptr = nullptr;
-  internal::tuple_switch(member_ptr, index, ref_tp,
-                         std::make_index_sequence<tuple_size>{});
-  if (member_ptr == nullptr) {
-    throw std::invalid_argument(
-        "given member type is not match the real member type");
-  }
+  template_switch<internal::switch_helper>(index, member_ptr, ref_tp);
   return *member_ptr;
 }
 
@@ -79,12 +78,7 @@ inline Member& get(T& t, std::string_view name) {
   auto ref_tp = object_to_tuple(t);
 
   Member* member_ptr = nullptr;
-  internal::tuple_switch(member_ptr, index, ref_tp,
-                         std::make_index_sequence<map.size()>{});
-  if (member_ptr == nullptr) {
-    throw std::invalid_argument(
-        "given member type is not match the real member type");
-  }
+  template_switch<internal::switch_helper>(index, member_ptr, ref_tp);
   return *member_ptr;
 }
 
@@ -103,8 +97,7 @@ inline auto get(T& t, size_t index) {
 
   using variant = decltype(tuple_to_variant(ref_tp));
   variant member_ptr;
-  internal::tuple_switch(member_ptr, index, ref_tp,
-                         std::make_index_sequence<tuple_size>{});
+  template_switch<internal::switch_helper>(index, member_ptr, ref_tp);
   return member_ptr;
 }
 

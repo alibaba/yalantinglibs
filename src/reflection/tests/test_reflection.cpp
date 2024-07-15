@@ -105,6 +105,11 @@ TEST_CASE("test member value") {
   auto age3 = get<int>(p, 3);
   CHECK(age3 == 6);
 
+  CHECK_THROWS_AS(get<std::string>(p, 3), std::invalid_argument);
+  CHECK_THROWS_AS(get<int>(p, 5), std::out_of_range);
+  CHECK_THROWS_AS(get<int>(p, "no_such"), std::out_of_range);
+  CHECK_THROWS_AS(get<std::string>(p, "age"), std::invalid_argument);
+
   auto str2 = get<2>(p);
   CHECK(str2 == "hello reflection");
 
