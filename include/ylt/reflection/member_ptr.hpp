@@ -62,7 +62,7 @@ inline constexpr T& get_fake_object() noexcept {
   template <class T>                                                                \
   struct object_tuple_view_helper<T, n> {                                           \
     static constexpr auto tuple_view() {                                            \
-      auto& [__VA_ARGS__] = get_fake_object<remove_cvref_t<T>>();              \
+      auto& [__VA_ARGS__] = get_fake_object<remove_cvref_t<T>>();                   \
       auto ref_tup = std::tie(__VA_ARGS__);                                         \
       auto get_ptrs = [](auto&... _refs) {                                          \
         return std::make_tuple(&_refs...);                                          \

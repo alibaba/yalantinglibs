@@ -40,6 +40,8 @@
 #include "ylt/reflection/template_switch.hpp"
 #include "ylt/reflection/member_ptr.hpp"
 
+using namespace ylt::reflection;
+
 #if __cpp_concepts >= 201907L
 #include <concepts>
 #endif
