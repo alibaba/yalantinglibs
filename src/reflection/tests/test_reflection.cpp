@@ -1,15 +1,16 @@
 #include <sstream>
 #include <utility>
 
-#include "ylt/reflection/member_names.hpp"
-#include "ylt/reflection/member_value.hpp"
 #include "ylt/reflection/template_switch.hpp"
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
 
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
     (defined(__GNUC__) && __GNUC__ > 10)
+
+#include "ylt/reflection/member_names.hpp"
+#include "ylt/reflection/member_value.hpp"
 
 using namespace ylt::reflection;
 
@@ -140,23 +141,23 @@ TEST_CASE("test member value") {
       },
       var2);
 
-  for_each_members(p, [](auto& field) {
+  for_each(p, [](auto& field) {
     std::cout << field << "\n";
   });
 
-  for_each_members(p, [](auto& field, auto name, auto index) {
+  for_each(p, [](auto& field, auto name, auto index) {
     std::cout << field << ", " << name << ", " << index << "\n";
   });
 
-  for_each_members(p, [](auto& field, auto name) {
+  for_each(p, [](auto& field, auto name) {
     std::cout << field << ", " << name << "\n";
   });
 
-  for_each_members<simple>([](std::string_view field_name, size_t index) {
+  for_each<simple>([](std::string_view field_name, size_t index) {
     std::cout << index << ", " << field_name << "\n";
   });
 
-  for_each_members<simple>([](std::string_view field_name) {
+  for_each<simple>([](std::string_view field_name) {
     std::cout << field_name << "\n";
   });
 

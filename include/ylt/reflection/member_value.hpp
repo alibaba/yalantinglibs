@@ -7,7 +7,7 @@
 #include "template_string.hpp"
 #include "template_switch.hpp"
 
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
     (defined(__GNUC__) && __GNUC__ > 10)
 #include "member_names.hpp"
 
@@ -149,7 +149,7 @@ inline constexpr std::string_view name_of(T& t, Field& value) {
 #endif
 
 template <typename T, typename Visit>
-inline constexpr void for_each_members(T&& t, Visit&& func) {
+inline constexpr void for_each(T&& t, Visit&& func) {
   using Tuple = decltype(object_to_tuple(t));
   using first_t = std::tuple_element_t<0, Tuple>;
   if constexpr (std::is_invocable_v<Visit, first_t>) {

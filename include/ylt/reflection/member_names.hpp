@@ -3,7 +3,7 @@
 #include <variant>
 
 #include "template_string.hpp"
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
     (defined(__GNUC__) && __GNUC__ > 10)
 #include "member_ptr.hpp"
 
@@ -160,7 +160,7 @@ inline constexpr std::string_view name_of(size_t index) {
 }
 
 template <typename T, typename Visit>
-inline constexpr void for_each_members(Visit func) {
+inline constexpr void for_each(Visit func) {
   constexpr auto& arr = member_names<T>;
   [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     if constexpr (std::is_invocable_v<Visit, std::string_view, size_t>) {

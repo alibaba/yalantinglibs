@@ -13,6 +13,9 @@ concept tuple_size = requires(Type tuple) {
   std::tuple_size<std::remove_cvref_t<Type>>::value;
 };
 #else
+template <typename T>
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
 template <typename T, typename = void>
 struct tuple_size_impl : std::false_type {};
 
