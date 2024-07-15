@@ -33,7 +33,7 @@ concept optional = requires(Type optional) {
   optional.value();
   optional.has_value();
   optional.operator*();
-  typename std::remove_cvref_t<Type>::value_type;
+  typename remove_cvref_t<Type>::value_type;
 };
 #else
 template <typename T, typename = void>
@@ -129,7 +129,7 @@ inline constexpr std::size_t members_count_impl() {
 
 template <typename T>
 inline constexpr std::size_t members_count() {
-  using type = std::remove_cvref_t<T>;
+  using type = remove_cvref_t<T>;
   if constexpr (internal::tuple_size<type>) {
     return std::tuple_size<type>::value;
   }
