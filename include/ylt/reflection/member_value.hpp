@@ -20,9 +20,9 @@ inline void set_member_ptr(Member& member, T t) {
   }
   else {
     std::string str = "given type: ";
-    str.append(iguana::type_string<std::remove_pointer_t<Member>>());
+    str.append(type_string<std::remove_pointer_t<Member>>());
     str.append(" is not equal with real type: ")
-        .append(iguana::type_string<std::remove_pointer_t<T>>());
+        .append(type_string<std::remove_pointer_t<T>>());
     throw std::invalid_argument(str);
   }
 }

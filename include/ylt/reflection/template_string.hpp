@@ -5,7 +5,7 @@
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
-namespace iguana {
+namespace ylt::reflection {
 
 #if defined(__clang__) || defined(_MSC_VER) || \
     (defined(__GNUC__) && __GNUC__ > 8)
@@ -189,4 +189,4 @@ constexpr inline auto get_enum_map() {
 #pragma clang diagnostic pop
 #endif
 
-}  // namespace iguana
+}  // namespace ylt::reflection

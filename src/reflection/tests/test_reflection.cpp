@@ -3,6 +3,7 @@
 
 #include "ylt/reflection/member_names.hpp"
 #include "ylt/reflection/member_value.hpp"
+#include "ylt/reflection/template_switch.hpp"
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
@@ -165,6 +166,32 @@ TEST_CASE("test member value") {
   int no_such = 100;
   size_t idx5 = index_of(p, no_such);
   CHECK(idx5 == 4);
+}
+
+struct switch_helper {
+  template <size_t Index, typename U, typename T>
+  static bool run(U& tp, T&& value) {
+    if constexpr (Index > 3) {
+      return false;
+    }
+    else {
+      if constexpr (std::is_same_v<
+                        std::tuple_element_t<Index, std::remove_cvref_t<U>>,
+                        std::remove_cvref_t<T>>) {
+        CHECK(std::get<Index>(tp) == value);
+      }
+      return true;
+    }
+  }
+};
+
+TEST_CASE("test template switch") {
+  std::tuple<int, std::string, double, int> tuple(1, "test", 2, 3);
+  template_switch<switch_helper>(0, tuple, 1);
+  template_switch<switch_helper>(1, tuple, "test");
+  template_switch<switch_helper>(2, tuple, 2);
+  template_switch<switch_helper>(3, tuple, 3);
+  CHECK_FALSE(template_switch<switch_helper>(4, tuple, 100));
 }
 
 #endif
