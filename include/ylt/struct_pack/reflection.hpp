@@ -714,37 +714,6 @@ struct memory_reader;
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
-  concept expected = requires(Type e) {
-    typename remove_cvref_t<Type>::value_type;
-    typename remove_cvref_t<Type>::error_type;
-    typename remove_cvref_t<Type>::unexpected_type;
-    e.has_value();
-    e.error();
-    requires std::is_same_v<void,
-                            typename remove_cvref_t<Type>::value_type> ||
-        requires(Type e) {
-      e.value();
-    };
-  };
-#else
-  template <typename T, typename = void>
-  struct expected_impl : std::false_type {};
-
-  template <typename T>
-  struct expected_impl<T, std::void_t<
-    typename remove_cvref_t<T>::value_type,
-    typename remove_cvref_t<T>::error_type,
-    typename remove_cvref_t<T>::unexpected_type,
-    decltype(std::declval<T>().has_value()),
-    decltype(std::declval<T>().error())>> 
-      : std::true_type {};
-    //TODO: check e.value()
-  template <typename T>
-  constexpr bool expected = expected_impl<T>::value;
-#endif
-
-#if __cpp_concepts >= 201907L
-  template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
     typename remove_cvref_t<Type>::element_type;
