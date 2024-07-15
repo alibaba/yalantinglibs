@@ -129,7 +129,7 @@ inline constexpr std::size_t members_count_impl() {
 
 template <typename T>
 inline constexpr std::size_t members_count() {
-  using type = remove_cvref_t<T>;
+  using type = internal::remove_cvref_t<T>;
   if constexpr (internal::tuple_size<type>) {
     return std::tuple_size<type>::value;
   }
