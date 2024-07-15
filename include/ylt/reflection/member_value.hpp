@@ -36,7 +36,7 @@ struct is_variant<std::variant<T...>> : std::true_type {};
 
 struct switch_helper {
   template <size_t index, typename Member, class Tuple>
-  static size_t run(Member& member, Tuple& t) {
+  static constexpr size_t run(Member& member, Tuple& t) {
     if constexpr (index >= std::tuple_size_v<Tuple>) {
       return index;
     }
@@ -73,7 +73,7 @@ inline Member& get(T& t, size_t index) {
 
 template <typename Member, typename T>
 inline Member& get(T& t, std::string_view name) {
-  static constexpr auto map = get_member_names_map<T>();
+  static constexpr auto map = member_names_map<T>;
   size_t index = map.at(name);  // may throw out_of_range: unknown key.
   auto ref_tp = object_to_tuple(t);
 
@@ -102,14 +102,14 @@ inline auto get(T& t, size_t index) {
 }
 
 template <typename T>
-inline auto get(T& t, std::string_view name) {
-  static constexpr auto map = get_member_names_map<T>();
+inline constexpr auto get(T& t, std::string_view name) {
+  constexpr auto& map = member_names_map<T>;
   size_t index = map.at(name);  // may throw out_of_range: unknown key.
   return get(t, index);
 }
 
 template <size_t index, typename T>
-inline auto& get(T& t) {
+inline constexpr auto& get(T& t) {
   auto ref_tp = object_to_tuple(t);
 
   static_assert(index < std::tuple_size_v<decltype(ref_tp)>,
@@ -119,14 +119,14 @@ inline auto& get(T& t) {
 }
 
 template <FixedString name, typename T>
-inline auto& get(T& t) {
+inline constexpr auto& get(T& t) {
   constexpr size_t index = index_of<T, name>();
   return get<index>(t);
 }
 
 template <typename T, typename Field>
 inline size_t index_of(T& t, Field& value) {
-  const auto& offset_arr = get_member_offset_arr<T>();
+  const auto& offset_arr = member_offsets<T>;
   size_t cur_offset = (const char*)(&value) - (const char*)(&t);
   auto it = std::lower_bound(offset_arr.begin(), offset_arr.end(), cur_offset);
   if (it == offset_arr.end()) {
@@ -137,32 +137,46 @@ inline size_t index_of(T& t, Field& value) {
 }
 
 template <typename T, typename Field>
-inline std::string_view name_of(T& t, Field& value) {
+inline constexpr std::string_view name_of(T& t, Field& value) {
   size_t index = index_of(t, value);
-  constexpr auto arr = get_member_names<T>();
+  constexpr auto arr = member_names<T>;
   if (index == arr.size()) {
     return "";
   }
 
   return arr[index];
 }
+#endif
 
 template <typename T, typename Visit>
-inline void for_each(T& t, Visit func) {
-  auto ref_tp = object_to_tuple(t);
-  constexpr size_t tuple_size = std::tuple_size_v<decltype(ref_tp)>;
-  constexpr auto arr = get_member_names<T>();
-  [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-    if constexpr (std::is_invocable_v<Visit, decltype(std::get<0>(ref_tp))>) {
-      (func(std::get<Is>(ref_tp)), ...);
+inline constexpr void for_each_members(T&& t, Visit&& func) {
+  using Tuple = decltype(object_to_tuple(t));
+  using first_t = std::tuple_element_t<0, Tuple>;
+  if constexpr (std::is_invocable_v<Visit, first_t>) {
+    visit_members(t, [&func](auto&... args) {
+      (func(args), ...);
+    });
+  }
+  else {
+#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 10)
+    constexpr auto arr = member_names<T>;
+    if constexpr (std::is_invocable_v<Visit, first_t, std::string_view>) {
+      visit_members(t, [&](auto&... args) {
+        [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+          (func(args, arr[Is]), ...);
+        }
+        (std::make_index_sequence<arr.size()>{});
+      });
     }
-    else if constexpr (std::is_invocable_v<Visit, decltype(std::get<0>(ref_tp)),
-                                           std::string_view>) {
-      (func(std::get<Is>(ref_tp), arr[Is]), ...);
-    }
-    else if constexpr (std::is_invocable_v<Visit, decltype(std::get<0>(ref_tp)),
-                                           std::string_view, size_t>) {
-      (func(std::get<Is>(ref_tp), arr[Is], Is), ...);
+    else if constexpr (std::is_invocable_v<Visit, first_t, std::string_view,
+                                           size_t>) {
+      visit_members(t, [&](auto&... args) {
+        [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+          (func(args, arr[Is], Is), ...);
+        }
+        (std::make_index_sequence<arr.size()>{});
+      });
     }
     else {
       static_assert(sizeof(Visit) < 0,
@@ -170,12 +184,14 @@ inline void for_each(T& t, Visit func) {
                     "std::string_view, size_t], at least has field_value and "
                     "make sure keep the order of arguments");
     }
+#endif
   }
-  (std::make_index_sequence<tuple_size>{});
 }
 
 }  // namespace ylt::reflection
 
+#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+    (defined(__GNUC__) && __GNUC__ > 10)
 template <ylt::reflection::FixedString s>
 inline constexpr auto operator""_ylts() {
   return s;

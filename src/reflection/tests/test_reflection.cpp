@@ -34,7 +34,7 @@ TEST_CASE("test member names") {
   constexpr size_t tp_size = std::tuple_size_v<decltype(tp)>;
   CHECK(tp_size == 5);
 
-  constexpr auto arr = get_member_names<person>();
+  constexpr auto arr = member_names<person>;
   for (auto name : arr) {
     std::cout << name << ", ";
   }
@@ -50,6 +50,11 @@ struct simple {
   int age;
 };
 
+struct point_t {
+  int x;
+  int y;
+};
+
 void test_pointer() {
   simple t{};
   auto&& [a, b, c, d] = t;
@@ -58,7 +63,7 @@ void test_pointer() {
   size_t offset3 = (const char*)(&c) - (const char*)(&t);
   size_t offset4 = (const char*)(&d) - (const char*)(&t);
 
-  const auto& offset_arr = get_member_offset_arr<simple>();
+  const auto& offset_arr = member_offsets<simple>;
   CHECK(offset_arr[0] == offset1);
   CHECK(offset_arr[1] == offset2);
   CHECK(offset_arr[2] == offset3);
@@ -67,10 +72,22 @@ void test_pointer() {
 
 TEST_CASE("test member pointer and offset") { test_pointer(); }
 
+constexpr point_t pt{2, 4};
+
+void test_pt() {
+  constexpr size_t index1 = 1;
+  constexpr auto y = get<1>(pt);
+  static_assert(y == 4);
+  CHECK(y == 4);
+
+  constexpr auto x = get<"x"_ylts>(pt);
+  static_assert(x == 2);
+}
+
 TEST_CASE("test member value") {
   simple p{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
   auto ref_tp = object_to_tuple(p);
-  constexpr auto arr = get_member_names<simple>();
+  constexpr auto arr = member_names<simple>;
   std::stringstream out;
   [&]<size_t... Is>(std::index_sequence<Is...>) {
     ((out << "name: " << arr[Is] << ", value: " << std::get<Is>(ref_tp)
@@ -87,7 +104,7 @@ TEST_CASE("test member value") {
       "reflection\nname: age, value: 6\n";
   CHECK(result == expected_str);
 
-  constexpr auto map = get_member_names_map<simple>();
+  constexpr auto map = member_names_map<simple>;
   constexpr size_t index = map.at("age");
   CHECK(index == 3);
   auto age = std::get<index>(ref_tp);
@@ -102,8 +119,7 @@ TEST_CASE("test member value") {
   auto& var1 = get<"str"_ylts>(p);
   CHECK(var1 == "hello reflection");
 
-  auto age3 = get<int>(p, 3);
-  CHECK(age3 == 6);
+  test_pt();
 
   CHECK_THROWS_AS(get<std::string>(p, 3), std::invalid_argument);
   CHECK_THROWS_AS(get<int>(p, 5), std::out_of_range);
@@ -124,24 +140,29 @@ TEST_CASE("test member value") {
       },
       var2);
 
-  for_each(p, [](auto& field) {
+  for_each_members(p, [](auto& field) {
     std::cout << field << "\n";
   });
 
-  for_each(p, [](auto& field, auto name, auto index) {
+  for_each_members(p, [](auto& field, auto name, auto index) {
     std::cout << field << ", " << name << ", " << index << "\n";
   });
 
-  for_each(p, [](auto& field, auto name) {
+  for_each_members(p, [](auto& field, auto name) {
     std::cout << field << ", " << name << "\n";
   });
 
-  for_each<simple>([](std::string_view field_name, size_t index) {
+  for_each_members<simple>([](std::string_view field_name, size_t index) {
     std::cout << index << ", " << field_name << "\n";
   });
 
-  for_each<simple>([](std::string_view field_name) {
+  for_each_members<simple>([](std::string_view field_name) {
     std::cout << field_name << "\n";
+  });
+
+  visit_members(p, [](auto&&... args) {
+    ((std::cout << args << " "), ...);
+    std::cout << "\n";
   });
 
   constexpr std::string_view name1 = name_of<simple, 2>();
