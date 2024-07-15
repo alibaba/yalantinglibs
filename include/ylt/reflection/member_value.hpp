@@ -124,16 +124,6 @@ inline auto& get(T& t) {
   return get<index>(t);
 }
 
-template <size_t I, typename T, typename U>
-inline bool check_value(T value, U field_value) {
-  if constexpr (std::is_same_v<T, U>) {
-    return value == field_value;
-  }
-  else {
-    return false;
-  }
-}
-
 template <typename T, typename Field>
 inline size_t index_of(T& t, Field& value) {
   const auto& offset_arr = get_member_offset_arr<T>();

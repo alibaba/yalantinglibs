@@ -1,9 +1,7 @@
 #pragma once
 #include "member_count.hpp"
 
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
-    (defined(__GNUC__) && __GNUC__ > 10)
-// modify based on:
+// modified based on:
 // https://github.com/getml/reflect-cpp/blob/main/include/rfl/internal/bind_fake_object_to_tuple.hpp
 // thanks for alxn4's greate idea!
 namespace ylt::reflection {
@@ -28,12 +26,25 @@ struct object_tuple_view_helper {
         "unsupported. \n\n"
         "2) Your struct is not an aggregate type.\n\n");
   }
+
+  template <typename Visitor>
+  static constexpr decltype(auto) tuple_view(T&, Visitor&&) {
+    static_assert(
+        sizeof(T) < 0,
+        "\n\nThis error occurs for one of two reasons:\n\n"
+        "1) You have created a struct with more than 100 fields, which is "
+        "unsupported. \n\n"
+        "2) Your struct is not an aggregate type.\n\n");
+  }
 };
 
 template <class T>
 struct object_tuple_view_helper<T, 0> {
   static constexpr auto tuple_view() { return std::tie(); }
-  static constexpr auto tuple_view(auto&) { return std::tie(); }
+  static constexpr auto tuple_view(T&) { return std::tie(); }
+
+  template <typename Visitor>
+  static constexpr decltype(auto) tuple_view(T&, Visitor&&) {}
 };
 
 template <class T>
@@ -58,9 +69,14 @@ inline constexpr T& get_fake_object() noexcept {
       };                                                                            \
       return std::apply(get_ptrs, ref_tup);                                         \
     }                                                                               \
-    static constexpr auto tuple_view(auto& t) {                                     \
+    static constexpr auto tuple_view(T& t) {                                        \
       auto& [__VA_ARGS__] = t;                                                      \
       return std::tie(__VA_ARGS__);                                                 \
+    }                                                                               \
+    template <typename Visitor>                                                     \
+    static constexpr decltype(auto) tuple_view(T& t, Visitor&& visitor) {           \
+      auto& [__VA_ARGS__] = t;                                                      \
+      return visitor(__VA_ARGS__);                                                  \
     }                                                                               \
   }
 
@@ -826,6 +842,12 @@ inline constexpr auto tuple_view(T& t) {
   return internal::object_tuple_view_helper<T, members_count_v<T>>::tuple_view(
       t);
 }
+
+template <class T, typename Visitor>
+inline constexpr decltype(auto) tuple_view(T& t, Visitor&& visitor) {
+  return internal::object_tuple_view_helper<T, members_count_v<T>>::tuple_view(
+      t, std::forward<Visitor>(visitor));
+}
 }  // namespace internal
 
 template <class T>
@@ -838,5 +860,9 @@ template <class T>
 inline constexpr auto object_to_tuple(T& t) {
   return internal::tuple_view(t);
 }
+
+template <class T, typename Visitor>
+inline constexpr decltype(auto) visit_members(T& t, Visitor&& visitor) {
+  return internal::tuple_view(t, std::forward<Visitor>(visitor));
+}
 }  // namespace ylt::reflection
-#endif

@@ -199,6 +199,16 @@ TEST_CASE("test template switch") {
   CHECK_FALSE(template_switch<switch_helper>(4, tuple, 100));
 }
 
+TEST_CASE("test visitor") {
+  simple p{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
+  size_t size = visit_members(p, [](auto&&... args) {
+    ((std::cout << args << ", "), ...);
+    std::cout << "\n";
+    return sizeof...(args);
+  });
+  CHECK(size == 4);
+}
+
 #endif
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
