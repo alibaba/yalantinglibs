@@ -837,12 +837,13 @@ class unpacker {
             return errc::invalid_buffer;
           }
           else {
-            return template_switch<deserialize_one_derived_class_helper<
-                derived_class_set_t<typename type::element_type>,
-                std::integral_constant<std::size_t, size_type>,
-                std::integral_constant<std::uint64_t, version>,
-                std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
-                                                                 item);
+            return ylt::reflection::template_switch<
+                deserialize_one_derived_class_helper<
+                    derived_class_set_t<typename type::element_type>,
+                    std::integral_constant<std::size_t, size_type>,
+                    std::integral_constant<std::uint64_t, version>,
+                    std::integral_constant<std::uint64_t, NotSkip>>>(
+                index, this, item);
           }
         }
         else {
@@ -1169,7 +1170,7 @@ class unpacker {
           return struct_pack::errc::invalid_buffer;
         }
         else {
-          template_switch<variant_construct_helper<
+          ylt::reflection::template_switch<variant_construct_helper<
               std::integral_constant<std::size_t, size_type>,
               std::integral_constant<std::uint64_t, version>,
               std::integral_constant<bool, NotSkip>>>(index, *this, item);
@@ -1270,12 +1271,13 @@ class unpacker {
           bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           assert(ok);
-          return template_switch<deserialize_one_derived_class_helper<
-              derived_class_set_t<typename type::element_type>,
-              std::integral_constant<std::size_t, size_type>,
-              std::integral_constant<std::uint64_t, version>,
-              std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
-                                                               item);
+          return ylt::reflection::template_switch<
+              deserialize_one_derived_class_helper<
+                  derived_class_set_t<typename type::element_type>,
+                  std::integral_constant<std::size_t, size_type>,
+                  std::integral_constant<std::uint64_t, version>,
+                  std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
+                                                                   item);
         }
         else {
           deserialize_one<size_type, version, NotSkip>(*item);
@@ -1461,7 +1463,7 @@ deserialize_derived_class(std::unique_ptr<BaseClass> &base, Reader &reader) {
   if (result == MD5s.end() || result->md5 != md5_pair.md5) {
     return struct_pack::errc::invalid_buffer;
   }
-  auto ret = template_switch<
+  auto ret = ylt::reflection::template_switch<
       deserialize_derived_class_helper<std::tuple<DerivedClasses...>>>(
       result->index, base, unpack);
   reader = std::move(wrapper.release_reader());

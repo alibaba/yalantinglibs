@@ -115,9 +115,10 @@ constexpr size_info inline calculate_one_size(const T &item) {
           throw std::runtime_error{
               "illegal struct_pack_id in virtual function."};
         }
-        ret += template_switch<calculate_one_size_derived_class_helper<
-            derived_class_set_t<typename type::element_type>>>(index,
-                                                               item.get());
+        ret += ylt::reflection::template_switch<
+            calculate_one_size_derived_class_helper<
+                derived_class_set_t<typename type::element_type>>>(index,
+                                                                   item.get());
       }
       else {
         ret += calculate_one_size(*item);

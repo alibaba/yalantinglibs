@@ -3,7 +3,7 @@
 #include <variant>
 
 #include "template_string.hpp"
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
     (defined(__GNUC__) && __GNUC__ > 10)
 #include "member_ptr.hpp"
 
@@ -49,7 +49,6 @@ inline constexpr std::string_view get_member_name() {
                 "or MSVC or switch to the rfl::Field-syntax.");
 #endif
 }
-}  // namespace internal
 
 template <typename T>
 inline constexpr std::array<std::string_view, members_count_v<T>>
@@ -66,14 +65,15 @@ get_member_names() {
   return arr;
 }
 
-template <typename... Args>
-inline constexpr auto tuple_to_variant(std::tuple<Args...>) {
-  return std::variant<std::add_pointer_t<Args>...>{};
-}
-
 template <typename T>
-using struct_variant_t = decltype(tuple_to_variant(
-    std::declval<decltype(struct_to_tuple<std::remove_cvref_t<T>>())>));
+inline constexpr auto get_member_names_map() {
+  constexpr auto name_arr = get_member_names<T>();
+  return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+    return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
+        {name_arr[Is], Is}...};
+  }
+  (std::make_index_sequence<name_arr.size()>{});
+}
 
 template <typename T>
 inline const auto& get_member_offset_arr() {
@@ -88,20 +88,29 @@ inline const auto& get_member_offset_arr() {
   return arr;
 }
 (std::make_index_sequence<Count>{})
-};  // namespace ylt::reflection
+};  // namespace internal
 
 return arr;
+}  // namespace ylt::reflection
+}  // namespace internal
+
+template <typename... Args>
+inline constexpr auto tuple_to_variant(std::tuple<Args...>) {
+  return std::variant<std::add_pointer_t<Args>...>{};
 }
 
 template <typename T>
-inline constexpr auto get_member_names_map() {
-  constexpr auto name_arr = get_member_names<T>();
-  return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-    return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
-        {name_arr[Is], Is}...};
-  }
-  (std::make_index_sequence<name_arr.size()>{});
-}
+using struct_variant_t = decltype(tuple_to_variant(
+    std::declval<decltype(struct_to_tuple<std::remove_cvref_t<T>>())>));
+
+template <typename T>
+constexpr auto member_names_map = internal::get_member_names_map<T>();
+
+template <typename T>
+constexpr auto member_names = internal::get_member_names<T>();
+
+template <typename T>
+inline auto member_offsets = internal::get_member_offset_arr<T>();
 
 template <std::size_t N>
 struct FixedString {
@@ -118,7 +127,7 @@ struct FixedString {
 
 template <typename T>
 inline constexpr size_t index_of(std::string_view name) {
-  constexpr auto arr = get_member_names<T>();
+  constexpr auto& arr = member_names<T>;
   for (size_t i = 0; i < arr.size(); i++) {
     if (arr[i] == name) {
       return i;
@@ -136,13 +145,13 @@ inline constexpr size_t index_of() {
 template <typename T, size_t index>
 inline constexpr std::string_view name_of() {
   static_assert(index < members_count_v<T>, "index out of range");
-  constexpr auto arr = get_member_names<T>();
+  constexpr auto& arr = member_names<T>;
   return arr[index];
 }
 
 template <typename T>
 inline constexpr std::string_view name_of(size_t index) {
-  constexpr auto arr = get_member_names<T>();
+  constexpr auto& arr = member_names<T>;
   if (index >= arr.size()) {
     return "";
   }
@@ -152,7 +161,7 @@ inline constexpr std::string_view name_of(size_t index) {
 
 template <typename T, typename Visit>
 inline constexpr void for_each(Visit func) {
-  constexpr auto arr = get_member_names<T>();
+  constexpr auto& arr = member_names<T>;
   [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     if constexpr (std::is_invocable_v<Visit, std::string_view, size_t>) {
       (func(arr[Is], Is), ...);

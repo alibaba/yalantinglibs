@@ -4,25 +4,39 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#include <ylt/util/expected.hpp>
 
 namespace ylt::reflection {
-namespace internal {
+template <typename T>
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
 #if __cpp_concepts >= 201907L
 template <typename Type>
-concept tuple_size = requires(Type tuple) {
-  std::tuple_size<std::remove_cvref_t<Type>>::value;
+concept expected = requires(Type e) {
+  typename remove_cvref_t<Type>::value_type;
+  typename remove_cvref_t<Type>::error_type;
+  typename remove_cvref_t<Type>::unexpected_type;
+  e.has_value();
+  e.error();
+  requires std::is_same_v<void, typename remove_cvref_t<Type>::value_type> ||
+      requires(Type e) {
+    e.value();
+  };
 };
 #else
 template <typename T, typename = void>
-struct tuple_size_impl : std::false_type {};
+struct expected_impl : std::false_type {};
 
 template <typename T>
-struct tuple_size_impl<
-    T, std::void_t<decltype(std::tuple_size<remove_cvref_t<T>>::value)>>
+struct expected_impl<T, std::void_t<typename remove_cvref_t<T>::value_type,
+                                    typename remove_cvref_t<T>::error_type,
+                                    typename remove_cvref_t<T>::unexpected_type,
+                                    decltype(std::declval<T>().has_value()),
+                                    decltype(std::declval<T>().error())>>
     : std::true_type {};
-
+// TODO: check e.value()
 template <typename T>
-constexpr bool tuple_size = tuple_size_impl<T>::value;
+constexpr bool expected = expected_impl<T>::value;
 #endif
 
 #if __cpp_concepts >= 201907L
@@ -31,7 +45,7 @@ concept optional = requires(Type optional) {
   optional.value();
   optional.has_value();
   optional.operator*();
-  typename std::remove_cvref_t<Type>::value_type;
+  typename remove_cvref_t<Type>::value_type;
 };
 #else
 template <typename T, typename = void>
@@ -46,6 +60,25 @@ struct optional_impl<T, std::void_t<decltype(std::declval<T>().value()),
 
 template <typename T>
 constexpr bool optional = !expected<T> && optional_impl<T>::value;
+#endif
+
+namespace internal {
+#if __cpp_concepts >= 201907L
+template <typename Type>
+concept tuple_size = requires(Type tuple) {
+  std::tuple_size<remove_cvref_t<Type>>::value;
+};
+#else
+template <typename T, typename = void>
+struct tuple_size_impl : std::false_type {};
+
+template <typename T>
+struct tuple_size_impl<
+    T, std::void_t<decltype(std::tuple_size<remove_cvref_t<T>>::value)>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool tuple_size = tuple_size_impl<T>::value;
 #endif
 
 template <typename T, uint64_t version = 0>
@@ -127,7 +160,7 @@ inline constexpr std::size_t members_count_impl() {
 
 template <typename T>
 inline constexpr std::size_t members_count() {
-  using type = std::remove_cvref_t<T>;
+  using type = remove_cvref_t<T>;
   if constexpr (internal::tuple_size<type>) {
     return std::tuple_size<type>::value;
   }

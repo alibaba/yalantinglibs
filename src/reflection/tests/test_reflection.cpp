@@ -1,14 +1,16 @@
 #include <sstream>
 #include <utility>
 
-#include "ylt/reflection/member_names.hpp"
-#include "ylt/reflection/member_value.hpp"
+#include "ylt/reflection/template_switch.hpp"
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
 
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
+#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
     (defined(__GNUC__) && __GNUC__ > 10)
+
+#include "ylt/reflection/member_names.hpp"
+#include "ylt/reflection/member_value.hpp"
 
 using namespace ylt::reflection;
 
@@ -33,7 +35,7 @@ TEST_CASE("test member names") {
   constexpr size_t tp_size = std::tuple_size_v<decltype(tp)>;
   CHECK(tp_size == 5);
 
-  constexpr auto arr = get_member_names<person>();
+  constexpr auto arr = member_names<person>;
   for (auto name : arr) {
     std::cout << name << ", ";
   }
@@ -49,6 +51,11 @@ struct simple {
   int age;
 };
 
+struct point_t {
+  int x;
+  int y;
+};
+
 void test_pointer() {
   simple t{};
   auto&& [a, b, c, d] = t;
@@ -57,7 +64,7 @@ void test_pointer() {
   size_t offset3 = (const char*)(&c) - (const char*)(&t);
   size_t offset4 = (const char*)(&d) - (const char*)(&t);
 
-  const auto& offset_arr = get_member_offset_arr<simple>();
+  const auto& offset_arr = member_offsets<simple>;
   CHECK(offset_arr[0] == offset1);
   CHECK(offset_arr[1] == offset2);
   CHECK(offset_arr[2] == offset3);
@@ -66,10 +73,22 @@ void test_pointer() {
 
 TEST_CASE("test member pointer and offset") { test_pointer(); }
 
+constexpr point_t pt{2, 4};
+
+void test_pt() {
+  constexpr size_t index1 = 1;
+  constexpr auto y = get<1>(pt);
+  static_assert(y == 4);
+  CHECK(y == 4);
+
+  constexpr auto x = get<"x"_ylts>(pt);
+  static_assert(x == 2);
+}
+
 TEST_CASE("test member value") {
   simple p{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
   auto ref_tp = object_to_tuple(p);
-  constexpr auto arr = get_member_names<simple>();
+  constexpr auto arr = member_names<simple>;
   std::stringstream out;
   [&]<size_t... Is>(std::index_sequence<Is...>) {
     ((out << "name: " << arr[Is] << ", value: " << std::get<Is>(ref_tp)
@@ -86,7 +105,7 @@ TEST_CASE("test member value") {
       "reflection\nname: age, value: 6\n";
   CHECK(result == expected_str);
 
-  constexpr auto map = get_member_names_map<simple>();
+  constexpr auto map = member_names_map<simple>;
   constexpr size_t index = map.at("age");
   CHECK(index == 3);
   auto age = std::get<index>(ref_tp);
@@ -101,8 +120,12 @@ TEST_CASE("test member value") {
   auto& var1 = get<"str"_ylts>(p);
   CHECK(var1 == "hello reflection");
 
-  auto age3 = get<int>(p, 3);
-  CHECK(age3 == 6);
+  test_pt();
+
+  CHECK_THROWS_AS(get<std::string>(p, 3), std::invalid_argument);
+  CHECK_THROWS_AS(get<int>(p, 5), std::out_of_range);
+  CHECK_THROWS_AS(get<int>(p, "no_such"), std::out_of_range);
+  CHECK_THROWS_AS(get<std::string>(p, "age"), std::invalid_argument);
 
   auto str2 = get<2>(p);
   CHECK(str2 == "hello reflection");
@@ -138,6 +161,11 @@ TEST_CASE("test member value") {
     std::cout << field_name << "\n";
   });
 
+  visit_members(p, [](auto&&... args) {
+    ((std::cout << args << " "), ...);
+    std::cout << "\n";
+  });
+
   constexpr std::string_view name1 = name_of<simple, 2>();
   CHECK(name1 == "str");
 
@@ -165,6 +193,42 @@ TEST_CASE("test member value") {
   int no_such = 100;
   size_t idx5 = index_of(p, no_such);
   CHECK(idx5 == 4);
+}
+
+struct switch_helper {
+  template <size_t Index, typename U, typename T>
+  static bool run(U& tp, T&& value) {
+    if constexpr (Index > 3) {
+      return false;
+    }
+    else {
+      if constexpr (std::is_same_v<
+                        std::tuple_element_t<Index, std::remove_cvref_t<U>>,
+                        std::remove_cvref_t<T>>) {
+        CHECK(std::get<Index>(tp) == value);
+      }
+      return true;
+    }
+  }
+};
+
+TEST_CASE("test template switch") {
+  std::tuple<int, std::string, double, int> tuple(1, "test", 2, 3);
+  template_switch<switch_helper>(0, tuple, 1);
+  template_switch<switch_helper>(1, tuple, "test");
+  template_switch<switch_helper>(2, tuple, 2);
+  template_switch<switch_helper>(3, tuple, 3);
+  CHECK_FALSE(template_switch<switch_helper>(4, tuple, 100));
+}
+
+TEST_CASE("test visitor") {
+  simple p{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
+  size_t size = visit_members(p, [](auto&&... args) {
+    ((std::cout << args << ", "), ...);
+    std::cout << "\n";
+    return sizeof...(args);
+  });
+  CHECK(size == 4);
 }
 
 #endif
