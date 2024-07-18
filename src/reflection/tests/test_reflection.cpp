@@ -2,13 +2,20 @@
 #include <utility>
 
 #include "ylt/reflection/template_switch.hpp"
+#include "ylt/reflection/user_reflect_macro.hpp"
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
 
-#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
-    (defined(__GNUC__) && __GNUC__ > 10)
+struct simple {
+  int color;
+  int id;
+  std::string str;
+  int age;
+};
 
+#if (defined(__GNUC__) && __GNUC__ > 10) || defined(__clang__) || \
+    defined(_MSC_VER)
 #include "ylt/reflection/member_names.hpp"
 #include "ylt/reflection/member_value.hpp"
 
@@ -44,13 +51,6 @@ TEST_CASE("test member names") {
         std::array<std::string_view, size>{"color", "id", "s", "str", "arr"});
 }
 
-struct simple {
-  int color;
-  int id;
-  std::string str;
-  int age;
-};
-
 struct point_t {
   int x;
   int y;
@@ -58,8 +58,8 @@ struct point_t {
 
 void test_pointer() {
   simple t{};
-  auto&& [a, b, c, d] = t;
-  size_t offset1 = (const char*)(&a) - (const char*)(&t);
+  auto&& [o, b, c, d] = t;
+  size_t offset1 = (const char*)(&o) - (const char*)(&t);
   size_t offset2 = (const char*)(&b) - (const char*)(&t);
   size_t offset3 = (const char*)(&c) - (const char*)(&t);
   size_t offset4 = (const char*)(&d) - (const char*)(&t);
@@ -232,6 +232,40 @@ TEST_CASE("test visitor") {
 }
 
 #endif
+
+YLT_REFL(simple, color, id, str, age);
+
+struct dummy_t {
+  int id;
+  std::string name;
+  int age;
+  YLT_REFL(dummy_t, id, name, age);
+};
+
+TEST_CASE("test macros") {
+  simple t{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
+
+  visit_members(t, [](auto&... args) {
+    CHECK(sizeof...(args) == 4);
+    ((std::cout << args << ", "), ...);
+    std::cout << "\n";
+  });
+
+  for_each(t, [](auto& arg) {
+    std::cout << arg << "\n";
+  });
+
+  dummy_t d{.id = 42, .name = "tom", .age = 23};
+  dummy_t::for_each(d, [](auto& arg) {
+    std::cout << arg << "\n";
+  });
+
+  dummy_t::visit_members(d, [](auto&... args) {
+    CHECK(sizeof...(args) == 3);
+    ((std::cout << args << ", "), ...);
+    std::cout << "\n";
+  });
+}
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }

@@ -1,0 +1,260 @@
+/*
+macro = "#define YLT_CALL"
+with open("generated_foreach.txt", "w", encoding="utf-8") as codefile:
+    codefile.write(
+        "\n".join(
+            [
+                f"{macro}{i}(f,o,_1, ...) YLT_CALL1(f,o,_1)
+YLT_CALL{i-1}(f,o,__VA_ARGS__)" for i in range(2, 126)
+            ]
+        )
+    )
+*/
+#define YLT_CALL2(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL1(f, o, __VA_ARGS__)
+#define YLT_CALL3(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL2(f, o, __VA_ARGS__)
+#define YLT_CALL4(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL3(f, o, __VA_ARGS__)
+#define YLT_CALL5(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL4(f, o, __VA_ARGS__)
+#define YLT_CALL6(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL5(f, o, __VA_ARGS__)
+#define YLT_CALL7(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL6(f, o, __VA_ARGS__)
+#define YLT_CALL8(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL7(f, o, __VA_ARGS__)
+#define YLT_CALL9(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL8(f, o, __VA_ARGS__)
+#define YLT_CALL10(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL9(f, o, __VA_ARGS__)
+#define YLT_CALL11(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL10(f, o, __VA_ARGS__)
+#define YLT_CALL12(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL11(f, o, __VA_ARGS__)
+#define YLT_CALL13(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL12(f, o, __VA_ARGS__)
+#define YLT_CALL14(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL13(f, o, __VA_ARGS__)
+#define YLT_CALL15(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL14(f, o, __VA_ARGS__)
+#define YLT_CALL16(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL15(f, o, __VA_ARGS__)
+#define YLT_CALL17(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL16(f, o, __VA_ARGS__)
+#define YLT_CALL18(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL17(f, o, __VA_ARGS__)
+#define YLT_CALL19(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL18(f, o, __VA_ARGS__)
+#define YLT_CALL20(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL19(f, o, __VA_ARGS__)
+#define YLT_CALL21(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL20(f, o, __VA_ARGS__)
+#define YLT_CALL22(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL21(f, o, __VA_ARGS__)
+#define YLT_CALL23(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL22(f, o, __VA_ARGS__)
+#define YLT_CALL24(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL23(f, o, __VA_ARGS__)
+#define YLT_CALL25(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL24(f, o, __VA_ARGS__)
+#define YLT_CALL26(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL25(f, o, __VA_ARGS__)
+#define YLT_CALL27(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL26(f, o, __VA_ARGS__)
+#define YLT_CALL28(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL27(f, o, __VA_ARGS__)
+#define YLT_CALL29(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL28(f, o, __VA_ARGS__)
+#define YLT_CALL30(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL29(f, o, __VA_ARGS__)
+#define YLT_CALL31(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL30(f, o, __VA_ARGS__)
+#define YLT_CALL32(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL31(f, o, __VA_ARGS__)
+#define YLT_CALL33(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL32(f, o, __VA_ARGS__)
+#define YLT_CALL34(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL33(f, o, __VA_ARGS__)
+#define YLT_CALL35(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL34(f, o, __VA_ARGS__)
+#define YLT_CALL36(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL35(f, o, __VA_ARGS__)
+#define YLT_CALL37(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL36(f, o, __VA_ARGS__)
+#define YLT_CALL38(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL37(f, o, __VA_ARGS__)
+#define YLT_CALL39(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL38(f, o, __VA_ARGS__)
+#define YLT_CALL40(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL39(f, o, __VA_ARGS__)
+#define YLT_CALL41(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL40(f, o, __VA_ARGS__)
+#define YLT_CALL42(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL41(f, o, __VA_ARGS__)
+#define YLT_CALL43(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL42(f, o, __VA_ARGS__)
+#define YLT_CALL44(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL43(f, o, __VA_ARGS__)
+#define YLT_CALL45(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL44(f, o, __VA_ARGS__)
+#define YLT_CALL46(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL45(f, o, __VA_ARGS__)
+#define YLT_CALL47(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL46(f, o, __VA_ARGS__)
+#define YLT_CALL48(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL47(f, o, __VA_ARGS__)
+#define YLT_CALL49(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL48(f, o, __VA_ARGS__)
+#define YLT_CALL50(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL49(f, o, __VA_ARGS__)
+#define YLT_CALL51(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL50(f, o, __VA_ARGS__)
+#define YLT_CALL52(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL51(f, o, __VA_ARGS__)
+#define YLT_CALL53(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL52(f, o, __VA_ARGS__)
+#define YLT_CALL54(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL53(f, o, __VA_ARGS__)
+#define YLT_CALL55(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL54(f, o, __VA_ARGS__)
+#define YLT_CALL56(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL55(f, o, __VA_ARGS__)
+#define YLT_CALL57(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL56(f, o, __VA_ARGS__)
+#define YLT_CALL58(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL57(f, o, __VA_ARGS__)
+#define YLT_CALL59(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL58(f, o, __VA_ARGS__)
+#define YLT_CALL60(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL59(f, o, __VA_ARGS__)
+#define YLT_CALL61(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL60(f, o, __VA_ARGS__)
+#define YLT_CALL62(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL61(f, o, __VA_ARGS__)
+#define YLT_CALL63(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL62(f, o, __VA_ARGS__)
+#define YLT_CALL64(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL63(f, o, __VA_ARGS__)
+#define YLT_CALL65(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL64(f, o, __VA_ARGS__)
+#define YLT_CALL66(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL65(f, o, __VA_ARGS__)
+#define YLT_CALL67(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL66(f, o, __VA_ARGS__)
+#define YLT_CALL68(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL67(f, o, __VA_ARGS__)
+#define YLT_CALL69(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL68(f, o, __VA_ARGS__)
+#define YLT_CALL70(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL69(f, o, __VA_ARGS__)
+#define YLT_CALL71(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL70(f, o, __VA_ARGS__)
+#define YLT_CALL72(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL71(f, o, __VA_ARGS__)
+#define YLT_CALL73(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL72(f, o, __VA_ARGS__)
+#define YLT_CALL74(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL73(f, o, __VA_ARGS__)
+#define YLT_CALL75(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL74(f, o, __VA_ARGS__)
+#define YLT_CALL76(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL75(f, o, __VA_ARGS__)
+#define YLT_CALL77(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL76(f, o, __VA_ARGS__)
+#define YLT_CALL78(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL77(f, o, __VA_ARGS__)
+#define YLT_CALL79(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL78(f, o, __VA_ARGS__)
+#define YLT_CALL80(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL79(f, o, __VA_ARGS__)
+#define YLT_CALL81(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL80(f, o, __VA_ARGS__)
+#define YLT_CALL82(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL81(f, o, __VA_ARGS__)
+#define YLT_CALL83(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL82(f, o, __VA_ARGS__)
+#define YLT_CALL84(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL83(f, o, __VA_ARGS__)
+#define YLT_CALL85(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL84(f, o, __VA_ARGS__)
+#define YLT_CALL86(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL85(f, o, __VA_ARGS__)
+#define YLT_CALL87(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL86(f, o, __VA_ARGS__)
+#define YLT_CALL88(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL87(f, o, __VA_ARGS__)
+#define YLT_CALL89(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL88(f, o, __VA_ARGS__)
+#define YLT_CALL90(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL89(f, o, __VA_ARGS__)
+#define YLT_CALL91(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL90(f, o, __VA_ARGS__)
+#define YLT_CALL92(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL91(f, o, __VA_ARGS__)
+#define YLT_CALL93(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL92(f, o, __VA_ARGS__)
+#define YLT_CALL94(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL93(f, o, __VA_ARGS__)
+#define YLT_CALL95(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL94(f, o, __VA_ARGS__)
+#define YLT_CALL96(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL95(f, o, __VA_ARGS__)
+#define YLT_CALL97(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL96(f, o, __VA_ARGS__)
+#define YLT_CALL98(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL97(f, o, __VA_ARGS__)
+#define YLT_CALL99(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL98(f, o, __VA_ARGS__)
+#define YLT_CALL100(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL99(f, o, __VA_ARGS__)
+#define YLT_CALL101(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL100(f, o, __VA_ARGS__)
+#define YLT_CALL102(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL101(f, o, __VA_ARGS__)
+#define YLT_CALL103(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL102(f, o, __VA_ARGS__)
+#define YLT_CALL104(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL103(f, o, __VA_ARGS__)
+#define YLT_CALL105(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL104(f, o, __VA_ARGS__)
+#define YLT_CALL106(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL105(f, o, __VA_ARGS__)
+#define YLT_CALL107(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL106(f, o, __VA_ARGS__)
+#define YLT_CALL108(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL107(f, o, __VA_ARGS__)
+#define YLT_CALL109(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL108(f, o, __VA_ARGS__)
+#define YLT_CALL110(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL109(f, o, __VA_ARGS__)
+#define YLT_CALL111(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL110(f, o, __VA_ARGS__)
+#define YLT_CALL112(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL111(f, o, __VA_ARGS__)
+#define YLT_CALL113(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL112(f, o, __VA_ARGS__)
+#define YLT_CALL114(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL113(f, o, __VA_ARGS__)
+#define YLT_CALL115(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL114(f, o, __VA_ARGS__)
+#define YLT_CALL116(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL115(f, o, __VA_ARGS__)
+#define YLT_CALL117(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL116(f, o, __VA_ARGS__)
+#define YLT_CALL118(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL117(f, o, __VA_ARGS__)
+#define YLT_CALL119(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL118(f, o, __VA_ARGS__)
+#define YLT_CALL120(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL119(f, o, __VA_ARGS__)
+#define YLT_CALL121(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL120(f, o, __VA_ARGS__)
+#define YLT_CALL122(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL121(f, o, __VA_ARGS__)
+#define YLT_CALL123(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL122(f, o, __VA_ARGS__)
+#define YLT_CALL124(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL123(f, o, __VA_ARGS__)
+#define YLT_CALL125(f, o, _1, ...) \
+  YLT_CALL1(f, o, _1) YLT_CALL124(f, o, __VA_ARGS__)
