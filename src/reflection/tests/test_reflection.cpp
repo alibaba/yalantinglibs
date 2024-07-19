@@ -1,8 +1,11 @@
 #include <sstream>
 #include <utility>
 
+#include "ylt/reflection/member_value.hpp"
 #include "ylt/reflection/template_switch.hpp"
 #include "ylt/reflection/user_reflect_macro.hpp"
+
+using namespace ylt::reflection;
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
@@ -18,8 +21,6 @@ struct simple {
     defined(_MSC_VER)
 #include "ylt/reflection/member_names.hpp"
 #include "ylt/reflection/member_value.hpp"
-
-using namespace ylt::reflection;
 
 struct sub {
   int id;
@@ -233,8 +234,6 @@ TEST_CASE("test visitor") {
 
 #endif
 
-YLT_REFL(simple, color, id, str, age);
-
 struct dummy_t {
   int id;
   std::string name;
@@ -242,29 +241,157 @@ struct dummy_t {
   YLT_REFL(dummy_t, id, name, age);
 };
 
+struct dummy_t2 {
+  int id;
+  std::string name;
+  int age;
+};
+YLT_REFL(dummy_t2, id, name, age);
+
+struct dummy_t3 {
+  int id;
+  std::string name;
+  int age;
+};
+
+struct dummy_t4 {
+  int id;
+  std::string name;
+  int age;
+
+ public:
+  dummy_t4() {}
+};
+constexpr std::size_t refl_member_count(
+    const ylt::reflection::identity<dummy_t4>& t) {
+  return 3;
+}
+
+struct dummy_t5 {
+ private:
+  int id = 42;
+  std::string name = "tom";
+  int age = 20;
+
+ public:
+  int& get_id() { return id; }
+  std::string& get_name() { return name; }
+  int& get_age() { return age; }
+
+  const int& get_id() const { return id; }
+  const std::string& get_name() const { return name; }
+  const int& get_age() const { return age; }
+};
+YLT_REFL(dummy_t5, get_id(), get_name(), get_age());
+
+struct simple2 {
+  int color;
+  int id;
+  std::string str;
+  int age;
+  simple2() = default;
+  simple2(int a, int b, std::string c, int d)
+      : color(a), id(b), str(c), age(d) {}
+};
+YLT_REFL(simple2, color, id, str, age);
+
 TEST_CASE("test macros") {
-  simple t{.color = 2, .id = 10, .str = "hello reflection", .age = 6};
+  simple2 t{2, 10, "hello reflection", 6};
+  constexpr auto arr = member_names<simple2>;
+  static_assert(arr.size() == 4);
+  constexpr auto map = member_names_map<simple2>;
+  constexpr size_t index = map.at("age");
+  CHECK(index == 3);
+  constexpr size_t size = members_count_v<dummy_t>;
+  static_assert(size == 3);
 
-  visit_members(t, [](auto&... args) {
-    CHECK(sizeof...(args) == 4);
-    ((std::cout << args << ", "), ...);
-    std::cout << "\n";
-  });
+  auto ref_tp = object_to_tuple(t);
+  auto& c = std::get<0>(ref_tp);
+  c = 10;
 
-  for_each(t, [](auto& arg) {
-    std::cout << arg << "\n";
-  });
+  using Tuple = decltype(struct_to_tuple<simple2>());
+  std::cout << type_string<Tuple>() << "\n";
 
-  dummy_t d{.id = 42, .name = "tom", .age = 23};
-  dummy_t::for_each(d, [](auto& arg) {
-    std::cout << arg << "\n";
-  });
+  constexpr size_t size2 = members_count_v<dummy_t2>;
+  static_assert(size2 == 3);
 
-  dummy_t::visit_members(d, [](auto&... args) {
+  constexpr size_t size3 = members_count_v<dummy_t3>;
+  static_assert(size3 == 3);
+
+  constexpr size_t size4 = members_count<dummy_t4>();
+  static_assert(size4 == 3);
+
+  constexpr size_t size5 = members_count_v<dummy_t5>;
+  static_assert(size5 == 3);
+
+  dummy_t5 d5{};
+  refl_visit_members(d5, [](auto&... args) {
     CHECK(sizeof...(args) == 3);
     ((std::cout << args << ", "), ...);
     std::cout << "\n";
   });
+
+  visit_members(d5, [](auto&... args) {
+    CHECK(sizeof...(args) == 3);
+    ((std::cout << args << ", "), ...);
+    std::cout << "\n";
+  });
+
+  for_each(d5, [](auto& arg) {
+    std::cout << arg << "\n";
+  });
+
+  auto& age1 = get<int>(t, "age");
+  CHECK(age1 == 6);
+
+  auto str2 = get<2>(t);
+  CHECK(str2 == "hello reflection");
+
+  auto var = get(t, 3);
+  CHECK(*std::get<3>(var) == 6);
+
+  auto& age2 = get<"age"_ylts>(t);
+  CHECK(age2 == 6);
+
+  auto& var1 = get<"str"_ylts>(t);
+  CHECK(var1 == "hello reflection");
+
+  constexpr std::string_view name1 = name_of<simple2, 2>();
+  CHECK(name1 == "str");
+
+  constexpr std::string_view name2 = name_of<simple2>(2);
+  CHECK(name2 == "str");
+
+  constexpr size_t idx = index_of<simple2, "str"_ylts>();
+  CHECK(idx == 2);
+
+  constexpr size_t idx1 = index_of<simple2>("str");
+  CHECK(idx1 == 2);
+
+  constexpr size_t idx2 = index_of<simple2, "no_such"_ylts>();
+  CHECK(idx2 == 4);
+
+  size_t idx3 = index_of<simple2>("no_such");
+  CHECK(idx3 == 4);
+
+  size_t idx4 = index_of(t, age1);
+  CHECK(idx4 == 3);
+
+  auto name3 = name_of(t, age1);
+  CHECK(name3 == "age");
+
+  int no_such = 100;
+  size_t idx5 = index_of(t, no_such);
+  CHECK(idx5 == 4);
+
+  for_each(t, [](auto& arg) {
+    if constexpr (std::is_same_v<std::string,
+                                 std::remove_cvref_t<decltype(arg)>>) {
+      arg = "test";
+    }
+    std::cout << arg << "\n";
+  });
+  CHECK(t.str == "test");
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

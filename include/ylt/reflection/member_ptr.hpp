@@ -104,12 +104,30 @@ inline constexpr auto struct_to_tuple() {
 
 template <class T>
 inline constexpr auto object_to_tuple(T& t) {
-  return internal::tuple_view(t);
+  using type = remove_cvref_t<T>;
+  if constexpr (is_out_ylt_refl_v<type>) {
+    return refl_object_to_tuple(t);
+  }
+  else if constexpr (is_inner_ylt_refl_v<type>) {
+    return type::refl_object_to_tuple(t);
+  }
+  else {
+    return internal::tuple_view(t);
+  }
 }
 
 template <class T, typename Visitor, size_t Count = members_count_v<T>>
 inline constexpr decltype(auto) visit_members(T&& t, Visitor&& visitor) {
-  return internal::tuple_view<Count>(std::forward<T>(t),
-                                     std::forward<Visitor>(visitor));
+  using type = remove_cvref_t<T>;
+  if constexpr (is_out_ylt_refl_v<type>) {
+    return refl_visit_members(t, visitor);
+  }
+  else if constexpr (is_inner_ylt_refl_v<type>) {
+    return type::refl_object_to_tuple(t, visitor);
+  }
+  else {
+    return internal::tuple_view<Count>(std::forward<T>(t),
+                                       std::forward<Visitor>(visitor));
+  }
 }
 }  // namespace ylt::reflection
