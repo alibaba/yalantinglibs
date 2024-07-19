@@ -82,8 +82,10 @@ void test_pt() {
   static_assert(y == 4);
   CHECK(y == 4);
 
+#if __has_include(<concetps>)
   constexpr auto x = get<"x"_ylts>(pt);
   static_assert(x == 2);
+#endif
 }
 
 TEST_CASE("test member value") {
@@ -115,11 +117,13 @@ TEST_CASE("test member value") {
   auto& age1 = get<int>(p, "age");
   CHECK(age1 == 6);
 
+#if __has_include(<concetps>)
   auto& age2 = get<"age"_ylts>(p);
   CHECK(age2 == 6);
 
   auto& var1 = get<"str"_ylts>(p);
   CHECK(var1 == "hello reflection");
+#endif
 
   test_pt();
 
@@ -173,14 +177,16 @@ TEST_CASE("test member value") {
   constexpr std::string_view name2 = name_of<simple>(2);
   CHECK(name2 == "str");
 
+#if __has_include(<concetps>)
   constexpr size_t idx = index_of<simple, "str"_ylts>();
   CHECK(idx == 2);
 
-  constexpr size_t idx1 = index_of<simple>("str");
-  CHECK(idx1 == 2);
-
   constexpr size_t idx2 = index_of<simple, "no_such"_ylts>();
   CHECK(idx2 == 4);
+#endif
+
+  constexpr size_t idx1 = index_of<simple>("str");
+  CHECK(idx1 == 2);
 
   size_t idx3 = index_of<simple>("no_such");
   CHECK(idx3 == 4);
