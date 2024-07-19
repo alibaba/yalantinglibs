@@ -121,7 +121,7 @@ class client_pool : public std::enable_shared_from_this<
     do {
       ELOG_TRACE << "try to reconnect client{" << client.get() << "},host:{"
                  << client->get_host() << ":" << client->get_port()
-                 << "}, try count:" << i << "max retry limit:"
+                 << "}, try count:" << i + 1 << "max retry limit:"
                  << self->pool_config_.connect_retry_count;
       auto pre_time_point = std::chrono::steady_clock::now();
       bool ok = client_t::is_ok(co_await client->connect(self->host_name_));
@@ -245,7 +245,6 @@ class client_pool : public std::enable_shared_from_this<
     std::chrono::milliseconds reconnect_wait_time{1000};
     std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
-    std::chrono::milliseconds max_connection_time{60000};
     typename client_t::config client_config;
   };
 
