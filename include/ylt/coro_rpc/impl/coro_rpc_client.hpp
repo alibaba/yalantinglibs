@@ -162,7 +162,7 @@ class coro_rpc_client {
   struct config {
     uint64_t client_id = get_global_client_id();
     std::chrono::milliseconds timeout_duration =
-        std::chrono::milliseconds{5000};
+        std::chrono::milliseconds{30000};
     std::string host;
     std::string port;
     bool enable_tcp_no_delay = true;
@@ -234,7 +234,7 @@ class coro_rpc_client {
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
       std::chrono::steady_clock::duration timeout_duration =
-          std::chrono::seconds(5)) {
+          std::chrono::seconds(30)) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
       co_await connect_mutex_.coScopedLock();
@@ -252,7 +252,7 @@ class coro_rpc_client {
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
       std::chrono::steady_clock::duration timeout_duration =
-          std::chrono::seconds(5)) {
+          std::chrono::seconds(30)) {
     auto pos = endpoint.find(':');
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
@@ -296,7 +296,7 @@ class coro_rpc_client {
   ~coro_rpc_client() { close(); }
 
   /*!
-   * Call RPC function with default timeout (5 second)
+   * Call RPC function with default timeout (30 second)
    *
    * @tparam func the address of RPC function
    * @tparam Args the type of arguments
@@ -306,7 +306,8 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
-    return call_for<func>(std::chrono::seconds(5), std::forward<Args>(args)...);
+    return call_for<func>(std::chrono::seconds(30),
+                          std::forward<Args>(args)...);
   }
 
   /*!
@@ -919,7 +920,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request(Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{5}, {},
+    return send_request_for_with_attachment<func>(std::chrono::seconds{30}, {},
                                                   std::forward<Args>(args)...);
   }
 
@@ -928,7 +929,7 @@ class coro_rpc_client {
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_with_attachment(std::string_view request_attachment,
                                Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{5},
+    return send_request_for_with_attachment<func>(std::chrono::seconds{30},
                                                   request_attachment,
                                                   std::forward<Args>(args)...);
   }
@@ -937,7 +938,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_for(Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{5},
+    return send_request_for_with_attachment<func>(std::chrono::seconds{30},
                                                   std::string_view{},
                                                   std::forward<Args>(args)...);
   }
