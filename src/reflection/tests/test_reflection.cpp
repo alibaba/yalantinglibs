@@ -296,6 +296,7 @@ struct simple2 {
 YLT_REFL(simple2, color, id, str, age);
 
 TEST_CASE("test macros") {
+  static_assert(!std::is_aggregate_v<simple2>);
   simple2 t{2, 10, "hello reflection", 6};
   constexpr auto arr = member_names<simple2>;
   static_assert(arr.size() == 4);
@@ -308,6 +309,7 @@ TEST_CASE("test macros") {
   auto ref_tp = object_to_tuple(t);
   auto& c = std::get<0>(ref_tp);
   c = 10;
+  CHECK(t.color == 10);
 
   using Tuple = decltype(struct_to_tuple<simple2>());
   std::cout << type_string<Tuple>() << "\n";
@@ -393,6 +395,14 @@ TEST_CASE("test macros") {
     std::cout << arg << "\n";
   });
   CHECK(t.str == "test");
+
+  for_each<simple2>([](std::string_view field_name, size_t index) {
+    std::cout << index << ", " << field_name << "\n";
+  });
+
+  for_each<simple2>([](std::string_view field_name) {
+    std::cout << field_name << "\n";
+  });
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
