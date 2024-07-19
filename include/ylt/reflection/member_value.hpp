@@ -115,11 +115,13 @@ inline constexpr auto& get(T& t) {
   return std::get<index>(ref_tp);
 }
 
+#if __has_include(<concetps>)
 template <FixedString name, typename T>
 inline constexpr auto& get(T& t) {
   constexpr size_t index = index_of<T, name>();
   return get<index>(t);
 }
+#endif
 
 template <typename T, typename Field>
 inline size_t index_of(T& t, Field& value) {
@@ -183,8 +185,8 @@ inline constexpr void for_each(T&& t, Visit&& func) {
 
 }  // namespace ylt::reflection
 
-#if __has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER) || \
-    (defined(__GNUC__) && __GNUC__ > 10)
+#if (defined(__GNUC__) && __GNUC__ > 10) || \
+    ((defined(__clang__) || defined(_MSC_VER)) && __has_include(<concepts>))
 template <ylt::reflection::FixedString s>
 inline constexpr auto operator""_ylts() {
   return s;

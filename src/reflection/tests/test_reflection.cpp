@@ -350,11 +350,19 @@ TEST_CASE("test macros") {
   auto var = get(t, 3);
   CHECK(*std::get<3>(var) == 6);
 
+#if __has_include(<concetps>)
   auto& age2 = get<"age"_ylts>(t);
   CHECK(age2 == 6);
 
   auto& var1 = get<"str"_ylts>(t);
   CHECK(var1 == "hello reflection");
+
+  constexpr size_t idx = index_of<simple2, "str"_ylts>();
+  CHECK(idx == 2);
+
+  constexpr size_t idx2 = index_of<simple2, "no_such"_ylts>();
+  CHECK(idx2 == 4);
+#endif
 
   constexpr std::string_view name1 = name_of<simple2, 2>();
   CHECK(name1 == "str");
@@ -362,14 +370,8 @@ TEST_CASE("test macros") {
   constexpr std::string_view name2 = name_of<simple2>(2);
   CHECK(name2 == "str");
 
-  constexpr size_t idx = index_of<simple2, "str"_ylts>();
-  CHECK(idx == 2);
-
   constexpr size_t idx1 = index_of<simple2>("str");
   CHECK(idx1 == 2);
-
-  constexpr size_t idx2 = index_of<simple2, "no_such"_ylts>();
-  CHECK(idx2 == 4);
 
   size_t idx3 = index_of<simple2>("no_such");
   CHECK(idx3 == 4);
@@ -385,8 +387,7 @@ TEST_CASE("test macros") {
   CHECK(idx5 == 4);
 
   for_each(t, [](auto& arg) {
-    if constexpr (std::is_same_v<std::string,
-                                 std::remove_cvref_t<decltype(arg)>>) {
+    if constexpr (std::is_same_v<std::string, remove_cvref_t<decltype(arg)>>) {
       arg = "test";
     }
     std::cout << arg << "\n";

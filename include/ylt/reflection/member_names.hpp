@@ -109,7 +109,7 @@ inline constexpr auto tuple_to_variant(std::tuple<Args...>) {
 
 template <typename T>
 using struct_variant_t = decltype(tuple_to_variant(
-    std::declval<decltype(struct_to_tuple<std::remove_cvref_t<T>>())>));
+    std::declval<decltype(struct_to_tuple<remove_cvref_t<T>>())>));
 
 template <typename T>
 constexpr auto member_names_map = internal::get_member_names_map<T>();
@@ -145,10 +145,12 @@ inline constexpr size_t index_of(std::string_view name) {
   return arr.size();
 }
 
+#if __has_include(<concetps>)
 template <typename T, FixedString name>
 inline constexpr size_t index_of() {
   return index_of<T>(name.str());
 }
+#endif
 
 template <typename T, size_t index>
 inline constexpr std::string_view name_of() {
