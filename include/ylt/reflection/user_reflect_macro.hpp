@@ -45,13 +45,6 @@ using member_value_type_t = typename member_traits<T>::value_type;
     return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);                         \
   }
 
-// #define MAKE_ARRAY(STRUCT, ...) \
-//   MAKE_ARRAY_IMPL(STRUCT, YLT_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
-
-// #define MAKE_ARRAY_IMPL(STRUCT, N, ...)                            \
-//   constexpr std::array<std::string_view, N> arr_##STRUCT_NAME = { \
-//       YLT_MARCO_EXPAND(YLT_CONCAT(CON_STR, N)(__VA_ARGS__))};
-
 template <typename T, typename Tuple, typename Visitor>
 inline constexpr auto visit_private_fields_impl(T &t, const Tuple &tp,
                                                 Visitor &&visitor) {

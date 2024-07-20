@@ -1,9 +1,9 @@
 #pragma once
 
-#define YLT_MARCO_EXPAND(...) __VA_ARGS__
+#define YLT_MACRO_EXPAND(...) __VA_ARGS__
 
 #define YLT_ARG_COUNT(...)                                                     \
-  YLT_MARCO_EXPAND(YLT_ARG_COUNT_IMPL(                                         \
+  YLT_MACRO_EXPAND(YLT_ARG_COUNT_IMPL(                                         \
       0, ##__VA_ARGS__, 124, 123, 122, 121, 120, 119, 118, 117, 116, 115, 114, \
       113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100,    \
       99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82,  \
