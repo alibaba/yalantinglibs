@@ -52,14 +52,14 @@ using member_value_type_t = typename member_traits<T>::value_type;
   constexpr std::array<std::string_view, N> arr_##STRUCT_NAME = { \
       YLT_MARCO_EXPAND(YLT_CONCAT(CON_STR, N)(__VA_ARGS__))};
 
-#define REFL_PRIVATE_(STRUCT, ...) \
+#define YLT_REFL_PRIVATE_(STRUCT, ...) \
 namespace ylt::reflection {                                 \
   inline constexpr auto get_private_ptrs(const identity<STRUCT>& t);\
   template struct private_visitor<STRUCT, __VA_ARGS__>;      \
 }
 
-#define REFL_PRIVATE(STRUCT, ...) \
-  REFL_PRIVATE_(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))
+#define YLT_REFL_PRIVATE(STRUCT, ...) \
+  YLT_REFL_PRIVATE_(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))
 
 template <typename T, typename = void>
 struct is_out_ylt_refl : std::false_type {};

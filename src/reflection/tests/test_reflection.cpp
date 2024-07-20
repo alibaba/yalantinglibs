@@ -419,7 +419,7 @@ class Bank_t{
  public:
   Bank_t(int i, std::string str) : id(i), name(str){}
 };
-REFL_PRIVATE(Bank_t, id, name);
+YLT_REFL_PRIVATE(Bank_t, id, name);
 
 class private_struct{
   int a;
@@ -427,7 +427,7 @@ class private_struct{
  public:
   private_struct(int x, int y) : a(x), b(y) {}
 };
-REFL_PRIVATE(private_struct, a, b);
+YLT_REFL_PRIVATE(private_struct, a, b);
 
 template<typename T, typename Tuple, typename Visitor>
 auto visit_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {
