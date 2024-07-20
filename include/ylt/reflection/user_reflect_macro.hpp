@@ -7,9 +7,6 @@
 #include "internal/visit_user_macro.hpp"
 
 namespace ylt::reflection {
-template <typename T>
-struct identity {};
-
 template <class T>
 struct member_traits {
   using value_type = T;

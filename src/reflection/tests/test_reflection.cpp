@@ -4,6 +4,7 @@
 #include "ylt/reflection/member_value.hpp"
 #include "ylt/reflection/template_switch.hpp"
 #include "ylt/reflection/user_reflect_macro.hpp"
+#include "ylt/reflection/private_visitor.hpp"
 
 using namespace ylt::reflection;
 
@@ -411,17 +412,13 @@ TEST_CASE("test macros") {
   });
 }
 
-template <typename T, auto... field>
-struct private_visitor {
-  friend inline constexpr auto get_private_ptrs(const identity<T> & ) {
-    constexpr auto tp = std::make_tuple(field...);
-    return tp;
-  }
-};
+
 
 #define REFL_PRIVATE(STRUCT, ...) \
-inline constexpr auto get_private_ptrs(const identity<STRUCT>& t);\
-template struct private_visitor<STRUCT, __VA_ARGS__>;
+namespace ylt::reflection {                                 \
+  inline constexpr auto get_private_ptrs(const identity<STRUCT>& t);\
+  template struct private_visitor<STRUCT, __VA_ARGS__>;      \
+}
 
 #define REFL_PRIVATE1(STRUCT, ...) \
   REFL_PRIVATE(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))

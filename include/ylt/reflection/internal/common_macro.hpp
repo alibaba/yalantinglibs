@@ -7,3 +7,8 @@
 #define CONCAT_MEMBER(t, x) t.x
 
 #define CONCAT_ADDR(T, x) &T::x
+
+namespace ylt::reflection {
+template <typename T>
+struct identity {};
+}
