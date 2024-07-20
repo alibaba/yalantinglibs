@@ -8,7 +8,9 @@
 
 #define CONCAT_ADDR(T, x) &T::x
 
+#define CONCAT_NAME(t, x) #x
+
 namespace ylt::reflection {
 template <typename T>
 struct identity {};
-}
+}  // namespace ylt::reflection
