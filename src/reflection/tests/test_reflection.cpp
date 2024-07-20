@@ -412,12 +412,18 @@ TEST_CASE("test macros") {
 }
 
 template <typename T, auto... field>
-struct ThiefMember {
-  friend inline constexpr auto get_private_ptrs(T& t) {
-    constexpr auto tp = std::make_tuple(field...);
-    return tp;
-  }
-};
+struct private_visitor;
+
+#define REFL_PRIVATE(STRUCT, ...) \
+template <auto... field>\
+struct private_visitor<STRUCT, field...> {\
+  friend inline constexpr auto get_private_ptrs(STRUCT& t) {\
+    constexpr auto tp = std::make_tuple(field...);\
+    return tp;\
+  }\
+};\
+inline constexpr auto get_private_ptrs(STRUCT& t);\
+template struct private_visitor<STRUCT, __VA_ARGS__>;
 
 class Bank_t{
   int id;
@@ -426,9 +432,15 @@ class Bank_t{
  public:
   Bank_t(int i, std::string str) : id(i), name(str){}
 };
+REFL_PRIVATE(Bank_t, &Bank_t::id, &Bank_t::name);
 
-inline constexpr auto get_private_ptrs(Bank_t& t);
-template struct ThiefMember<Bank_t, &Bank_t::id, &Bank_t::name>;
+class private_struct{
+  int a;
+  int b;
+ public:
+  private_struct(int x, int y) : a(x), b(y) {}
+};
+REFL_PRIVATE(private_struct, &private_struct::a, &private_struct::b);
 
 template<typename T, typename Tuple, typename Visitor>
 auto visit_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {
@@ -447,6 +459,12 @@ TEST_CASE("test visit private") {
   Bank_t bank(1, "ok");
   constexpr auto tp = get_private_ptrs(bank);
   visit_fields(bank, [](auto&... args){
+    ((std::cout<<args<<" "), ...);
+    std::cout<<"\n";
+  });
+
+  private_struct st(2, 4);
+  visit_fields(st, [](auto&... args){
     ((std::cout<<args<<" "), ...);
     std::cout<<"\n";
   });
