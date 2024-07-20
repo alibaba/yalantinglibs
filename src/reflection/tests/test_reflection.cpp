@@ -429,32 +429,26 @@ class private_struct{
 };
 YLT_REFL_PRIVATE(private_struct, a, b);
 
-template<typename T, typename Tuple, typename Visitor>
-auto visit_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {
-  return std::apply([&](auto... args){
-    return visitor(t.*args...);
-  }, tp);
-}
-
-template<typename T, typename Visitor>
-constexpr auto visit_fields(T& t, Visitor&& visitor) {
-  auto tp = get_private_ptrs(identity<T>{});
-  return visit_fields_impl(t, tp, visitor);
-}
-
 TEST_CASE("test visit private") {
   Bank_t bank(1, "ok");
   constexpr auto tp = get_private_ptrs(identity<Bank_t>{});
-  visit_fields(bank, [](auto&... args){
+  refl_visit_members(bank, [](auto&... args){
     ((std::cout<<args<<" "), ...);
     std::cout<<"\n";
   });
 
   private_struct st(2, 4);
-  visit_fields(st, [](auto&... args){
+  refl_visit_members(st, [](auto&... args){
     ((std::cout<<args<<" "), ...);
     std::cout<<"\n";
   });
+
+  auto ref_tp = refl_object_to_tuple(st);
+  std::get<1>(ref_tp) = 8;
+
+  auto names = refl_member_names(identity<private_struct>{});
+  auto names1 = refl_member_names(identity<Bank_t>{});
+  auto count = refl_member_count(identity<private_struct>{});
 
   auto id = bank.*(std::get<0>(tp)); // 1
   auto name = bank.*(std::get<1>(tp)); //ok

@@ -52,13 +52,47 @@ using member_value_type_t = typename member_traits<T>::value_type;
   constexpr std::array<std::string_view, N> arr_##STRUCT_NAME = { \
       YLT_MARCO_EXPAND(YLT_CONCAT(CON_STR, N)(__VA_ARGS__))};
 
+template<typename T, typename Tuple, typename Visitor>
+inline constexpr auto visit_private_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {
+  return std::apply([&](auto... args){
+    return visitor(t.*args...);
+  }, tp);
+}
+
+template<typename T, typename Visitor>
+inline constexpr auto visit_private_fields(T& t, Visitor&& visitor) {
+  auto tp = get_private_ptrs(identity<T>{});
+  return visit_private_fields_impl(t, tp, visitor);
+}
+
 #define YLT_REFL_PRIVATE_(STRUCT, ...) \
 namespace ylt::reflection {                                 \
   inline constexpr auto get_private_ptrs(const identity<STRUCT>& t);\
-  template struct private_visitor<STRUCT, __VA_ARGS__>;      \
+  template struct private_visitor<STRUCT, __VA_ARGS__>;     \
+  template <typename Visitor>                                    \
+  inline static constexpr decltype(auto) refl_visit_members(     \
+      STRUCT &t, Visitor &&visitor) {                            \
+    return visit_private_fields(t, visitor);                   \
+  }                                    \
+  inline static decltype(auto) refl_object_to_tuple(STRUCT &t) { \
+    auto tp = get_private_ptrs(identity<STRUCT>{});\
+    auto to_ref = [&t](auto... fields) {\
+      return std::tie(t.*fields...);\
+    };\
+    return std::apply(to_ref, tp);\
+  }                                    \
+  inline static constexpr std::size_t refl_member_count(         \
+      const ylt::reflection::identity<STRUCT> &t) {              \
+    return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);              \
+  }\
 }
 
 #define YLT_REFL_PRIVATE(STRUCT, ...) \
+  inline static constexpr decltype(auto) refl_member_names(      \
+    const ylt::reflection::identity<STRUCT> &t) {              \
+    MAKE_LIST(STRUCT, __VA_ARGS__)                               \
+    return arr_##STRUCT_NAME;                                    \
+  }                                                              \
   YLT_REFL_PRIVATE_(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))
 
 template <typename T, typename = void>
