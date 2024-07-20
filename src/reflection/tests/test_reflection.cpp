@@ -2,9 +2,9 @@
 #include <utility>
 
 #include "ylt/reflection/member_value.hpp"
+#include "ylt/reflection/private_visitor.hpp"
 #include "ylt/reflection/template_switch.hpp"
 #include "ylt/reflection/user_reflect_macro.hpp"
-#include "ylt/reflection/private_visitor.hpp"
 
 using namespace ylt::reflection;
 
@@ -412,18 +412,19 @@ TEST_CASE("test macros") {
   });
 }
 
-class Bank_t{
+class Bank_t {
   int id;
   std::string name;
 
  public:
-  Bank_t(int i, std::string str) : id(i), name(str){}
+  Bank_t(int i, std::string str) : id(i), name(str) {}
 };
 YLT_REFL_PRIVATE(Bank_t, id, name);
 
-class private_struct{
+class private_struct {
   int a;
   int b;
+
  public:
   private_struct(int x, int y) : a(x), b(y) {}
 };
@@ -432,15 +433,15 @@ YLT_REFL_PRIVATE(private_struct, a, b);
 TEST_CASE("test visit private") {
   Bank_t bank(1, "ok");
   constexpr auto tp = get_private_ptrs(identity<Bank_t>{});
-  refl_visit_members(bank, [](auto&... args){
-    ((std::cout<<args<<" "), ...);
-    std::cout<<"\n";
+  refl_visit_members(bank, [](auto&... args) {
+    ((std::cout << args << " "), ...);
+    std::cout << "\n";
   });
 
   private_struct st(2, 4);
-  refl_visit_members(st, [](auto&... args){
-    ((std::cout<<args<<" "), ...);
-    std::cout<<"\n";
+  refl_visit_members(st, [](auto&... args) {
+    ((std::cout << args << " "), ...);
+    std::cout << "\n";
   });
 
   auto ref_tp = refl_object_to_tuple(st);
@@ -450,8 +451,8 @@ TEST_CASE("test visit private") {
   auto names1 = refl_member_names(identity<Bank_t>{});
   auto count = refl_member_count(identity<private_struct>{});
 
-  auto id = bank.*(std::get<0>(tp)); // 1
-  auto name = bank.*(std::get<1>(tp)); //ok
+  auto id = bank.*(std::get<0>(tp));    // 1
+  auto name = bank.*(std::get<1>(tp));  // ok
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

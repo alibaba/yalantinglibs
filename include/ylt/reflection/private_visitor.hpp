@@ -10,4 +10,4 @@ struct private_visitor {
     return tp;
   }
 };
-}
+}  // namespace ylt::reflection
