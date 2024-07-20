@@ -425,6 +425,9 @@ struct private_visitor<STRUCT, field...> {\
 inline constexpr auto get_private_ptrs(STRUCT& t);\
 template struct private_visitor<STRUCT, __VA_ARGS__>;
 
+#define REFL_PRIVATE1(STRUCT, ...) \
+  REFL_PRIVATE(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))
+
 class Bank_t{
   int id;
   std::string name;
@@ -432,7 +435,7 @@ class Bank_t{
  public:
   Bank_t(int i, std::string str) : id(i), name(str){}
 };
-REFL_PRIVATE(Bank_t, &Bank_t::id, &Bank_t::name);
+REFL_PRIVATE1(Bank_t, id, name);
 
 class private_struct{
   int a;
@@ -440,7 +443,7 @@ class private_struct{
  public:
   private_struct(int x, int y) : a(x), b(y) {}
 };
-REFL_PRIVATE(private_struct, &private_struct::a, &private_struct::b);
+REFL_PRIVATE1(private_struct, a, b);
 
 template<typename T, typename Tuple, typename Visitor>
 auto visit_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {

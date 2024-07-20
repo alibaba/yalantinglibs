@@ -5,3 +5,5 @@
 #define YLT_CONCAT(l, r) YLT_CONCAT_(l, r)
 
 #define CONCAT_MEMBER(t, x) t.x
+
+#define CONCAT_ADDR(T, x) &T::x
