@@ -6,6 +6,8 @@
 #include <vector>
 #include <ylt/util/expected.hpp>
 
+#include "user_reflect_macro.hpp"
+
 namespace ylt::reflection {
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
@@ -161,7 +163,13 @@ inline constexpr std::size_t members_count_impl() {
 template <typename T>
 inline constexpr std::size_t members_count() {
   using type = remove_cvref_t<T>;
-  if constexpr (internal::tuple_size<type>) {
+  if constexpr (is_out_ylt_refl_v<type>) {
+    return refl_member_count(ylt::reflection::identity<type>{});
+  }
+  else if constexpr (is_inner_ylt_refl_v<type>) {
+    return type::refl_member_count(ylt::reflection::identity<type>{});
+  }
+  else if constexpr (internal::tuple_size<type>) {
     return std::tuple_size<type>::value;
   }
   else {

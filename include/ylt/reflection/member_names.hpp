@@ -2,10 +2,8 @@
 #include <string_view>
 #include <variant>
 
-#include "template_string.hpp"
-#if (__has_include(<concepts>) || defined(__clang__) || defined(_MSC_VER)) || \
-    (defined(__GNUC__) && __GNUC__ > 10)
 #include "member_ptr.hpp"
+#include "template_string.hpp"
 
 namespace ylt::reflection {
 
@@ -54,15 +52,25 @@ template <typename T>
 inline constexpr std::array<std::string_view, members_count_v<T>>
 get_member_names() {
   constexpr size_t Count = members_count_v<T>;
-  constexpr auto tp = struct_to_tuple<T>();
-
-  std::array<std::string_view, Count> arr;
-  [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-    ((arr[Is] = internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
-     ...);
+  using type = remove_cvref_t<T>;
+  if constexpr (is_out_ylt_refl_v<type>) {
+    return refl_member_names(ylt::reflection::identity<type>{});
   }
-  (std::make_index_sequence<Count>{});
-  return arr;
+  else if constexpr (is_inner_ylt_refl_v<type>) {
+    return type::refl_member_names(ylt::reflection::identity<type>{});
+  }
+  else {
+    constexpr auto tp = struct_to_tuple<T>();
+
+    std::array<std::string_view, Count> arr;
+    [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+      ((arr[Is] =
+            internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
+       ...);
+    }
+    (std::make_index_sequence<Count>{});
+    return arr;
+  }
 }
 
 template <typename T>
@@ -101,7 +109,7 @@ inline constexpr auto tuple_to_variant(std::tuple<Args...>) {
 
 template <typename T>
 using struct_variant_t = decltype(tuple_to_variant(
-    std::declval<decltype(struct_to_tuple<std::remove_cvref_t<T>>())>));
+    std::declval<decltype(struct_to_tuple<remove_cvref_t<T>>())>));
 
 template <typename T>
 constexpr auto member_names_map = internal::get_member_names_map<T>();
@@ -137,10 +145,12 @@ inline constexpr size_t index_of(std::string_view name) {
   return arr.size();
 }
 
+#if __has_include(<concetps>)
 template <typename T, FixedString name>
 inline constexpr size_t index_of() {
   return index_of<T>(name.str());
 }
+#endif
 
 template <typename T, size_t index>
 inline constexpr std::string_view name_of() {
@@ -160,7 +170,7 @@ inline constexpr std::string_view name_of(size_t index) {
 }
 
 template <typename T, typename Visit>
-inline constexpr void for_each(Visit func) {
+inline constexpr void for_each(Visit&& func) {
   constexpr auto& arr = member_names<T>;
   [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     if constexpr (std::is_invocable_v<Visit, std::string_view, size_t>) {
@@ -180,4 +190,3 @@ inline constexpr void for_each(Visit func) {
 }
 
 }  // namespace ylt::reflection
-#endif
