@@ -11,6 +11,14 @@ range(1, 127)
         )
     )
 */
+#define WRAP_ARGS0(w, o)
+#define WRAP_ARGS1(w, o, _1) w(o, _1)
+#define WRAP_ARGS2(w, o, _1, ...) w(o, _1), WRAP_ARGS1(w, o, __VA_ARGS__)
+#define WRAP_ARGS3(w, o, _1, ...) w(o, _1), WRAP_ARGS2(w, o, __VA_ARGS__)
+#define WRAP_ARGS4(w, o, _1, ...) w(o, _1), WRAP_ARGS3(w, o, __VA_ARGS__)
+#define WRAP_ARGS5(w, o, _1, ...) w(o, _1), WRAP_ARGS4(w, o, __VA_ARGS__)
+#define WRAP_ARGS6(w, o, _1, ...) w(o, _1), WRAP_ARGS5(w, o, __VA_ARGS__)
+
 #define YLT_CALL_ARGS0(f, o) f()
 #define YLT_CALL_ARGS1(f, o, _1) f(CONCAT_MEMBER(o, _1))
 #define YLT_CALL_ARGS2(f, o, _1, _2) \

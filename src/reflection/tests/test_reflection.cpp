@@ -411,6 +411,50 @@ TEST_CASE("test macros") {
   });
 }
 
+template <typename T, auto... field>
+struct ThiefMember {
+  friend inline constexpr auto get_private_ptrs(T& t) {
+    constexpr auto tp = std::make_tuple(field...);
+    return tp;
+  }
+};
+
+class Bank_t{
+  int id;
+  std::string name;
+
+ public:
+  Bank_t(int i, std::string str) : id(i), name(str){}
+};
+
+inline constexpr auto get_private_ptrs(Bank_t& t);
+template struct ThiefMember<Bank_t, &Bank_t::id, &Bank_t::name>;
+
+template<typename T, typename Tuple, typename Visitor>
+auto visit_fields_impl(T& t, const Tuple& tp, Visitor&& visitor) {
+  return std::apply([&](auto... args){
+    return visitor(t.*args...);
+  }, tp);
+}
+
+template<typename T, typename Visitor>
+constexpr auto visit_fields(T& t, Visitor&& visitor) {
+  auto tp = get_private_ptrs(t);
+  return visit_fields_impl(t, tp, visitor);
+}
+
+TEST_CASE("test visit private") {
+  Bank_t bank(1, "ok");
+  constexpr auto tp = get_private_ptrs(bank);
+  visit_fields(bank, [](auto&... args){
+    ((std::cout<<args<<" "), ...);
+    std::cout<<"\n";
+  });
+
+  auto id = bank.*(std::get<0>(tp)); // 1
+  auto name = bank.*(std::get<1>(tp)); //ok
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

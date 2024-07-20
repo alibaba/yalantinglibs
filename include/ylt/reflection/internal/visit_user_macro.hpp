@@ -6,3 +6,8 @@
   YLT_CONCAT(YLT_CALL_ARGS, YLT_ARG_COUNT(__VA_ARGS__)) \
   (func, object, __VA_ARGS__)
 #define YLT_VISIT(func, object, ...) YLT_VISIT_(func, object, __VA_ARGS__)
+
+#define WRAP_ARGS_(w, object, ...)\
+YLT_CONCAT(WRAP_ARGS, YLT_ARG_COUNT(__VA_ARGS__)) \
+(w, object, __VA_ARGS__)
+#define WRAP_ARGS(w, object, ...) WRAP_ARGS_(w, object, __VA_ARGS__)
