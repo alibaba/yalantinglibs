@@ -37,7 +37,7 @@ using member_value_type_t = typename member_traits<T>::value_type;
   }                                                              \
   inline static constexpr decltype(auto) refl_member_names(      \
       const ylt::reflection::identity<STRUCT> &t) {              \
-    MAKE_LIST(STRUCT, __VA_ARGS__)                               \
+    MAKE_ARRAY(STRUCT, __VA_ARGS__)                               \
     return arr_##STRUCT_NAME;                                    \
   }                                                              \
   inline static constexpr std::size_t refl_member_count(         \
@@ -45,10 +45,10 @@ using member_value_type_t = typename member_traits<T>::value_type;
     return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);              \
   }
 
-#define MAKE_LIST(STRUCT, ...) \
-  MAKE_LIST_IMPL(STRUCT, YLT_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
+#define MAKE_ARRAY(STRUCT, ...) \
+  MAKE_ARRAY_IMPL(STRUCT, YLT_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
 
-#define MAKE_LIST_IMPL(STRUCT, N, ...)                            \
+#define MAKE_ARRAY_IMPL(STRUCT, N, ...)                            \
   constexpr std::array<std::string_view, N> arr_##STRUCT_NAME = { \
       YLT_MARCO_EXPAND(YLT_CONCAT(CON_STR, N)(__VA_ARGS__))};
 
@@ -90,7 +90,7 @@ namespace ylt::reflection {                                 \
 #define YLT_REFL_PRIVATE(STRUCT, ...) \
   inline static constexpr decltype(auto) refl_member_names(      \
     const ylt::reflection::identity<STRUCT> &t) {              \
-    MAKE_LIST(STRUCT, __VA_ARGS__)                               \
+    MAKE_ARRAY(STRUCT, __VA_ARGS__)                               \
     return arr_##STRUCT_NAME;                                    \
   }                                                              \
   YLT_REFL_PRIVATE_(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, __VA_ARGS__))
