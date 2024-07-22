@@ -232,7 +232,7 @@ class uri_t {
     std::string port_str;
     if (is_ssl) {
       if (port.empty()) {
-        port_str = "https";
+        port_str = "443";
       }
       else {
         port_str = std::string(port);
@@ -240,7 +240,7 @@ class uri_t {
     }
     else {
       if (port.empty()) {
-        port_str = "http";
+        port_str = "80";
       }
       else {
         port_str = std::string(port);
