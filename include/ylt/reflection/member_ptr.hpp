@@ -49,12 +49,12 @@ struct object_tuple_view_helper<T, 0> {
 
 template <class T>
 struct wrapper {
-  inline static T value;
+  inline static remove_cvref_t<T> value;
 };
 
 template <class T>
-inline constexpr T& get_fake_object() noexcept {
-  return wrapper<T>::value;
+inline constexpr remove_cvref_t<T>& get_fake_object() noexcept {
+  return wrapper<remove_cvref_t<T>>::value;
 }
 
 #define RFL_INTERNAL_OBJECT_IF_YOU_SEE_AN_ERROR_REFER_TO_DOCUMENTATION_ON_C_ARRAYS( \
@@ -103,16 +103,16 @@ inline constexpr auto struct_to_tuple() {
 }
 
 template <class T>
-inline constexpr auto object_to_tuple(T& t) {
+inline constexpr auto object_to_tuple(T&& t) {
   using type = remove_cvref_t<T>;
   if constexpr (is_out_ylt_refl_v<type>) {
-    return refl_object_to_tuple(t);
+    return refl_object_to_tuple(std::forward<T>(t));
   }
   else if constexpr (is_inner_ylt_refl_v<type>) {
-    return type::refl_object_to_tuple(t);
+    return type::refl_object_to_tuple(std::forward<T>(t));
   }
   else {
-    return internal::tuple_view(t);
+    return internal::tuple_view(std::forward<T>(t));
   }
 }
 
@@ -120,10 +120,12 @@ template <class T, typename Visitor, size_t Count = members_count_v<T>>
 inline constexpr decltype(auto) visit_members(T&& t, Visitor&& visitor) {
   using type = remove_cvref_t<T>;
   if constexpr (is_out_ylt_refl_v<type>) {
-    return refl_visit_members(t, visitor);
+    return refl_visit_members(std::forward<T>(t),
+                              std::forward<Visitor>(visitor));
   }
   else if constexpr (is_inner_ylt_refl_v<type>) {
-    return type::refl_object_to_tuple(t, visitor);
+    return type::refl_object_to_tuple(std::forward<T>(t),
+                                      std::forward<Visitor>(visitor));
   }
   else {
     return internal::tuple_view<Count>(std::forward<T>(t),

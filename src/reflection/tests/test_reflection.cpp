@@ -333,7 +333,7 @@ TEST_CASE("test macros") {
   constexpr size_t size5 = members_count_v<dummy_t5>;
   static_assert(size5 == 3);
 
-  dummy_t5 d5{};
+  const dummy_t5 d5{};
   refl_visit_members(d5, [](auto&... args) {
     CHECK(sizeof...(args) == 3);
     ((std::cout << args << ", "), ...);
@@ -431,7 +431,7 @@ class private_struct {
 YLT_REFL_PRIVATE(private_struct, a, b);
 
 TEST_CASE("test visit private") {
-  Bank_t bank(1, "ok");
+  const Bank_t bank(1, "ok");
   constexpr auto tp = get_private_ptrs(identity<Bank_t>{});
   refl_visit_members(bank, [](auto&... args) {
     ((std::cout << args << " "), ...);
