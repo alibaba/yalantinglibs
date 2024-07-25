@@ -3,9 +3,55 @@
 
 #include "doctest.h"
 #include "ylt/metric.hpp"
+#include "ylt/thread/thread_local.hpp"
 
 using namespace ylt;
 using namespace ylt::metric;
+
+struct test_counter {
+  ylt::thread::thread_local_t<std::atomic<int64_t>> val_;
+};
+
+TEST_CASE("test thread local") {
+  {
+    std::vector<std::shared_ptr<test_counter>> counters;
+    for (size_t i = 0; i < 10; i++)
+      counters.push_back(std::make_shared<test_counter>());
+
+    std::vector<ylt::thread::thread_local_t<std::atomic<int64_t>>*> vec;
+    for (auto& w : counters) {
+      vec.push_back(&w->val_);
+    }
+
+    const int N = 10;
+
+    std::cout << ylt::thread::tls_keys_max() << "\n";
+
+    ylt::thread::init_thread_locals(vec, N);
+    CHECK(counters[0]->val_.tls_count() == N);
+
+    const int64_t COUNT = 2;  // std::numeric_limits<int64_t>::max();
+    std::vector<std::thread> threads;
+    for (int i = 0; i < N; i++) {
+      std::thread thd([&, i] {
+        for (int64_t j = 0; j < COUNT; j++) {
+          counters[0]->val_.value()++;
+        }
+      });
+      threads.push_back(std::move(thd));
+    }
+
+    for (auto& thd : threads) {
+      thd.join();
+    }
+
+    int64_t total = 0;
+    counters[0]->val_.for_each([&](auto& val) {
+      total += val;
+    });
+    CHECK(total == 20);
+  }
+}
 
 TEST_CASE("test no lable") {
   {
