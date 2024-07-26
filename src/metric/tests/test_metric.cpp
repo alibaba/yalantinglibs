@@ -27,7 +27,7 @@ TEST_CASE("test thread local") {
 
     std::cout << ylt::thread::tls_keys_max() << "\n";
 
-    ylt::thread::init_thread_locals(vec, N);
+    ylt::thread::init_static_thread_locals(vec, N);
     CHECK(counters[0]->val_.tls_count() == N);
 
     const int64_t COUNT = 2;  // std::numeric_limits<int64_t>::max();
@@ -50,6 +50,99 @@ TEST_CASE("test thread local") {
       total += val;
     });
     CHECK(total == 20);
+  }
+}
+
+template <typename T>
+struct test_counter1 {
+  test_counter1(std::string str) : name(str) {}
+
+  ~test_counter1() {
+    ylt::thread::g_ylt_tls_map.for_each([this](auto& t) {
+      auto it = t.find(name);
+      if (it != t.end())
+        t.erase(it);
+    });
+  }
+
+  auto& value() {
+    // map and it's mutex
+    static thread_local auto pair = ylt::thread::get_tls_pair();
+
+    std::unique_lock lock(*pair.second);
+    auto [it, r] = pair.first->try_emplace(name, nullptr);
+    if (r) {
+      it->second = std::make_shared<std::atomic<T>>(0);
+      lock.unlock();
+
+      std::unique_lock guard(mtx_);
+      atomics_.push_back((std::atomic<T>*)it->second.get());
+    }
+    else {
+      lock.unlock();
+    }
+
+    return *((std::atomic<T>*)it->second.get());
+  }
+
+  T total() {
+    T val = 0;
+    std::shared_lock guard(mtx_);
+    for (auto& t : atomics_) {
+      val += t->load();
+    }
+    return val;
+  }
+
+  std::string name;
+  std::shared_mutex mtx_;
+  std::vector<std::atomic<T>*> atomics_;
+};
+
+TEST_CASE("test thread local") {
+  {
+    std::vector<std::shared_ptr<test_counter1<int64_t>>> counters;
+    for (size_t i = 0; i < 10; i++)
+      counters.push_back(
+          std::make_shared<test_counter1<int64_t>>(std::to_string(i)));
+
+    const int N = 10;
+
+    ylt::thread::init_dynamic_thread_locals(N);
+
+    const int64_t COUNT = 2;  // std::numeric_limits<int64_t>::max();
+    std::vector<std::thread> threads;
+    for (int i = 0; i < N; i++) {
+      std::thread thd([&, i] {
+        for (int64_t j = 0; j < COUNT; j++) {
+          counters[0]->value()++;
+        }
+      });
+      threads.push_back(std::move(thd));
+    }
+
+    for (auto& thd : threads) {
+      thd.join();
+    }
+
+    int64_t total = counters[0]->total();
+    CHECK(total == 20);
+    counters.clear();
+
+    std::vector<std::thread> test_vec;
+    for (size_t i = 0; i < N; i++) {
+      test_vec.push_back(std::thread([] {
+        static thread_local auto pair = ylt::thread::get_tls_pair();
+        CHECK(pair.first->empty());
+        for (auto& [k, v] : *pair.first) {
+          std::cout << k << ", " << *((int64_t*)v.get()) << "\n";
+        }
+      }));
+    }
+
+    for (auto& thd : test_vec) {
+      thd.join();
+    }
   }
 }
 
