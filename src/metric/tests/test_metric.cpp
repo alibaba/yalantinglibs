@@ -1,5 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <random>
+#include <shared_mutex>
 
 #include "doctest.h"
 #include "ylt/metric.hpp"
