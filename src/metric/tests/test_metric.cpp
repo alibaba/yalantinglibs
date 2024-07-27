@@ -96,7 +96,7 @@ TEST_CASE("test thread local") {
       counters.push_back(
           std::make_shared<test_counter1<int64_t>>(std::to_string(i)));
 
-    const int N = 10;
+    const int N = YLT_TLS_COUNT;
 
     ylt::thread::init_dynamic_thread_locals(N);
 
@@ -128,7 +128,7 @@ TEST_CASE("test thread local") {
     }
 
     int64_t total = counters[0]->total();
-    CHECK(total == 20);
+    CHECK(total == 2 * YLT_TLS_COUNT);
   }
 }
 
