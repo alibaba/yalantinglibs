@@ -19,8 +19,8 @@ TEST_CASE("test thread local") {
     for (size_t i = 0; i < 10; i++)
       counters.push_back(std::make_shared<test_counter>());
 
-    std::vector<ylt::thread::thread_local_t<std::atomic<int64_t>>*> vec;
-    for (auto& w : counters) {
+    std::vector<ylt::thread::thread_local_t<std::atomic<int64_t>> *> vec;
+    for (auto &w : counters) {
       vec.push_back(&w->val_);
     }
 
@@ -42,12 +42,12 @@ TEST_CASE("test thread local") {
       threads.push_back(std::move(thd));
     }
 
-    for (auto& thd : threads) {
+    for (auto &thd : threads) {
       thd.join();
     }
 
     int64_t total = 0;
-    counters[0]->val_.for_each([&](auto& val) {
+    counters[0]->val_.for_each([&](auto &val) {
       total += val;
     });
     CHECK(total == 20);
@@ -56,48 +56,37 @@ TEST_CASE("test thread local") {
 
 template <typename T>
 struct test_counter1 {
-  test_counter1(std::string str) : name(str) {}
+  test_counter1(std::string str) : name(str), vec_(YLT_TLS_COUNT) {}
 
-  ~test_counter1() {
-    ylt::thread::g_ylt_tls_map.for_each([this](auto& t) {
-      auto it = t.find(name);
-      if (it != t.end())
-        t.erase(it);
-    });
-  }
+  auto &value() {
+    static thread_local auto index = ylt::thread::get_tls_index();
 
-  auto& value() {
-    // map and it's mutex
-    static thread_local auto pair = ylt::thread::get_tls_pair();
-
-    std::unique_lock lock(*pair.second);
-    auto [it, r] = pair.first->try_emplace(name, nullptr);
-    if (r) {
-      it->second = std::make_shared<std::atomic<T>>(0);
-      lock.unlock();
-
-      std::unique_lock guard(mtx_);
-      atomics_.push_back((std::atomic<T>*)it->second.get());
+    auto &cur_ptr = atomics_[index];
+    if (cur_ptr == nullptr) {
+      auto ptr = std::make_unique<std::atomic<T>>(0);
+      cur_ptr = ptr.get();
+      std::unique_lock lock(mtx_);
+      vec_[index] = std::move(ptr);
     }
-    else {
-      lock.unlock();
-    }
-
-    return *((std::atomic<T>*)it->second.get());
+    return *cur_ptr;
   }
 
   T total() {
     T val = 0;
-    std::shared_lock guard(mtx_);
-    for (auto& t : atomics_) {
-      val += t->load();
+    std::shared_lock lock(mtx_);
+    for (auto &t : vec_) {
+      if (t) {
+        val += t->load();
+      }
     }
     return val;
   }
 
   std::string name;
   std::shared_mutex mtx_;
-  std::vector<std::atomic<T>*> atomics_;
+  inline static thread_local std::vector<std::atomic<T> *> atomics_{
+      YLT_TLS_COUNT};
+  std::vector<std::unique_ptr<std::atomic<T>>> vec_;
 };
 
 TEST_CASE("test thread local") {
@@ -119,31 +108,27 @@ TEST_CASE("test thread local") {
           counters[0]->value()++;
         }
       });
+
       threads.push_back(std::move(thd));
     }
 
-    for (auto& thd : threads) {
+    // std::thread thd2([&] {
+    //   while (true) {
+    //     int64_t cur_tls = counters[0]->total();
+
+    //     std::cout << "tls: " << cur_tls << "\n";
+    //     std::this_thread::sleep_for(std::chrono::seconds(1));
+    //   }
+    // });
+
+    // thd2.join();
+
+    for (auto &thd : threads) {
       thd.join();
     }
 
     int64_t total = counters[0]->total();
     CHECK(total == 20);
-    counters.clear();
-
-    std::vector<std::thread> test_vec;
-    for (size_t i = 0; i < N; i++) {
-      test_vec.push_back(std::thread([] {
-        static thread_local auto pair = ylt::thread::get_tls_pair();
-        CHECK(pair.first->empty());
-        for (auto& [k, v] : *pair.first) {
-          std::cout << k << ", " << *((int64_t*)v.get()) << "\n";
-        }
-      }));
-    }
-
-    for (auto& thd : test_vec) {
-      thd.join();
-    }
   }
 }
 
@@ -399,7 +384,7 @@ TEST_CASE("test register metric") {
   default_metric_manager::register_metric_static(g);
 
   auto map1 = default_metric_manager::metric_map_static();
-  for (auto& [k, v] : map1) {
+  for (auto &[k, v] : map1) {
     bool r = k == "get_count" || k == "get_guage_count";
     break;
   }
@@ -1186,5 +1171,5 @@ TEST_CASE("test remove dynamic metric") {
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
-int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
+int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
