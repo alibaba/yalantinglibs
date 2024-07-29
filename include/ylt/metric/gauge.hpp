@@ -4,25 +4,36 @@
 #include "counter.hpp"
 
 namespace ylt::metric {
-class gauge_t : public counter_t {
+
+template<typename value_type>
+class basic_gauge : public basic_counter<value_type> {
+  using metric_t::set_metric_type;
+  using basic_counter<value_type>::validate;
+  using metric_t::use_atomic_;
+  using basic_counter<value_type>::default_label_value_;
+  using metric_t::labels_value_;
+  using basic_counter<value_type>::atomic_value_map_;
+  using basic_counter<value_type>::value_map_;
+  using basic_counter<value_type>::mtx_;
+  using basic_counter<value_type>::stat_metric;
  public:
-  gauge_t(std::string name, std::string help)
-      : counter_t(std::move(name), std::move(help)) {
+  basic_gauge(std::string name, std::string help)
+      : basic_counter<value_type>(std::move(name), std::move(help)) {
     set_metric_type(MetricType::Gauge);
   }
-  gauge_t(std::string name, std::string help,
+  basic_gauge(std::string name, std::string help,
           std::vector<std::string> labels_name)
-      : counter_t(std::move(name), std::move(help), std::move(labels_name)) {
+      : basic_counter<value_type>(std::move(name), std::move(help), std::move(labels_name)) {
     set_metric_type(MetricType::Gauge);
   }
 
-  gauge_t(std::string name, std::string help,
+  basic_gauge(std::string name, std::string help,
           std::map<std::string, std::string> labels)
-      : counter_t(std::move(name), std::move(help), std::move(labels)) {
+      : basic_counter<value_type>(std::move(name), std::move(help), std::move(labels)) {
     set_metric_type(MetricType::Gauge);
   }
 
-  void dec(double value = 1) {
+  void dec(value_type value = 1) {
 #ifdef __APPLE__
     mac_os_atomic_fetch_sub(&default_label_value_, value);
 #else
@@ -30,7 +41,7 @@ class gauge_t : public counter_t {
 #endif
   }
 
-  void dec(const std::vector<std::string>& labels_value, double value = 1) {
+  void dec(const std::vector<std::string>& labels_value, value_type value = 1) {
     if (value == 0) {
       return;
     }
@@ -50,4 +61,6 @@ class gauge_t : public counter_t {
     }
   }
 };
+using gauge_t = basic_gauge<int64_t>;
+using gauge_d = basic_gauge<double>;
 }  // namespace ylt::metric

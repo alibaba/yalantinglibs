@@ -26,9 +26,10 @@ struct json_histogram_t {
 REFLECTION(json_histogram_t, name, help, type, metrics);
 #endif
 
-class histogram_t : public metric_t {
+template<typename value_type>
+class basic_histogram : public metric_t {
  public:
-  histogram_t(std::string name, std::string help, std::vector<double> buckets)
+  basic_histogram(std::string name, std::string help, std::vector<double> buckets)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
         sum_(std::make_shared<gauge_t>("", "")) {
@@ -44,7 +45,7 @@ class histogram_t : public metric_t {
     use_atomic_ = true;
   }
 
-  histogram_t(std::string name, std::string help, std::vector<double> buckets,
+  basic_histogram(std::string name, std::string help, std::vector<double> buckets,
               std::vector<std::string> labels_name)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels_name),
@@ -61,7 +62,7 @@ class histogram_t : public metric_t {
     }
   }
 
-  histogram_t(std::string name, std::string help, std::vector<double> buckets,
+  basic_histogram(std::string name, std::string help, std::vector<double> buckets,
               std::map<std::string, std::string> labels)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels),
@@ -78,7 +79,7 @@ class histogram_t : public metric_t {
     use_atomic_ = true;
   }
 
-  void observe(double value) {
+  void observe(value_type value) {
     if (!use_atomic_ || !labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
@@ -91,7 +92,7 @@ class histogram_t : public metric_t {
     bucket_counts_[bucket_index]->inc();
   }
 
-  void observe(const std::vector<std::string> &labels_value, double value) {
+  void observe(const std::vector<std::string> &labels_value, value_type value) {
     if (sum_->labels_name().empty()) {
       throw std::invalid_argument("not a label metric");
     }
@@ -121,7 +122,7 @@ class histogram_t : public metric_t {
     }
 
     serialize_head(str);
-    double count = 0;
+    value_type count = 0;
     auto bucket_counts = get_bucket_counts();
     for (size_t i = 0; i < bucket_counts.size(); i++) {
       auto counter = bucket_counts[i];
@@ -164,7 +165,7 @@ class histogram_t : public metric_t {
 
     json_histogram_t hist{name_, help_, std::string(metric_name())};
 
-    double count = 0;
+    value_type count = 0;
     auto bucket_counts = get_bucket_counts();
     json_histogram_metric_t metric{};
     for (size_t i = 0; i < bucket_counts.size(); i++) {
@@ -211,7 +212,7 @@ class histogram_t : public metric_t {
         continue;
       }
 
-      double count = 0;
+      value_type count = 0;
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         value_str.append(name_).append("_bucket{");
@@ -308,7 +309,9 @@ class histogram_t : public metric_t {
 #endif
 
   std::vector<double> bucket_boundaries_;
-  std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly
+  std::vector<std::shared_ptr<basic_counter<value_type>>> bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
+using histogram_t = basic_histogram<int64_t>;
+using histogram_d = basic_histogram<double>;
 }  // namespace ylt::metric
