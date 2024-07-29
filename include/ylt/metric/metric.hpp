@@ -122,7 +122,7 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual bool has_lable_value(const std::string& lable_value) { return false; }
+  virtual bool has_label_value(const std::string& label_value) { return false; }
 
   virtual void serialize(std::string& str) {}
 
@@ -403,7 +403,7 @@ struct metric_manager_t {
       for (auto& [k, v] : labels) {
         if (auto it = std::find(labels_name.begin(), labels_name.end(), k);
             it != labels_name.end()) {
-          if (t->has_lable_value(v)) {
+          if (t->has_label_value(v)) {
             vec.push_back(t);
           }
         }

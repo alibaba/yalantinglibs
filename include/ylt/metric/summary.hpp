@@ -206,11 +206,11 @@ class summary_t : public metric_t {
     return ret.value();
   }
 
-  bool has_lable_value(const std::string &lable_val) override {
+  bool has_label_value(const std::string &label_val) override {
     auto map = value_map();
-    auto it = std::find_if(map.begin(), map.end(), [&lable_val](auto &pair) {
+    auto it = std::find_if(map.begin(), map.end(), [&label_val](auto &pair) {
       auto &key = pair.first;
-      return std::find(key.begin(), key.end(), lable_val) != key.end();
+      return std::find(key.begin(), key.end(), label_val) != key.end();
     });
     return it != map.end();
   }
