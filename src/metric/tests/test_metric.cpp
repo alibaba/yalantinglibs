@@ -60,33 +60,30 @@ struct test_counter1 {
 
   auto &value() {
     static thread_local auto index = ylt::thread::get_tls_index();
+    if (vec_[index] == nullptr) {
+      auto ptr = new std::atomic<T>(0);
 
-    auto &cur_ptr = atomics_[index];
-    if (cur_ptr == nullptr) {
-      auto ptr = std::make_unique<std::atomic<T>>(0);
-      cur_ptr = ptr.get();
-      std::unique_lock lock(mtx_);
-      vec_[index] = std::move(ptr);
+      std::atomic<T> *expected = nullptr;
+      if (!vec_[index].compare_exchange_strong(expected, ptr)) {
+        delete ptr;
+      }
     }
-    return *cur_ptr;
+    return *vec_[index];
   }
 
   T total() {
     T val = 0;
-    std::shared_lock lock(mtx_);
     for (auto &t : vec_) {
       if (t) {
-        val += t->load();
+        val += t.load()->load();
       }
     }
     return val;
   }
 
   std::string name;
-  std::shared_mutex mtx_;
-  inline static thread_local std::vector<std::atomic<T> *> atomics_{
-      YLT_TLS_COUNT};
-  std::vector<std::unique_ptr<std::atomic<T>>> vec_;
+  std::vector<std::atomic<std::atomic<T> *>> vec_;
+  std::atomic<bool> is_first_ = true;
 };
 
 TEST_CASE("test thread local") {
@@ -100,7 +97,7 @@ TEST_CASE("test thread local") {
 
     ylt::thread::init_dynamic_thread_locals(N);
 
-    const int64_t COUNT = 2;  // std::numeric_limits<int64_t>::max();
+    const int64_t COUNT = std::numeric_limits<int64_t>::max();
     std::vector<std::thread> threads;
     for (int i = 0; i < N; i++) {
       std::thread thd([&, i] {
@@ -112,23 +109,33 @@ TEST_CASE("test thread local") {
       threads.push_back(std::move(thd));
     }
 
-    // std::thread thd2([&] {
-    //   while (true) {
-    //     int64_t cur_tls = counters[0]->total();
+    std::thread thd2([&] {
+      while (true) {
+        int64_t cur_tls = counters[0]->total();
 
-    //     std::cout << "tls: " << cur_tls << "\n";
-    //     std::this_thread::sleep_for(std::chrono::seconds(1));
-    //   }
-    // });
+        std::cout << "tls: " << cur_tls << "\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    });
 
-    // thd2.join();
+    thd2.join();
 
-    for (auto &thd : threads) {
-      thd.join();
-    }
+    // for (auto &thd : threads) {
+    //   thd.join();
+    // }
 
     int64_t total = counters[0]->total();
     CHECK(total == 2 * YLT_TLS_COUNT);
+    counters[0] = nullptr;
+    counters[1]->value()++;
+    counters[1]->value()++;
+    total = counters[1]->total();
+    std::cout << total << "\n";
+    counters[1] = nullptr;
+    counters[2]->value()++;
+    counters[2]->value()++;
+    total = counters[2]->total();
+    std::cout << total << "\n";
   }
 }
 
