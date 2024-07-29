@@ -54,12 +54,27 @@ TEST_CASE("test thread local") {
   }
 }
 
+size_t get_rr(size_t size) {
+  static std::atomic<size_t> round = 0;
+  static thread_local size_t index = round++;
+  return index % size;
+}
+
 template <typename T>
 struct test_counter1 {
-  test_counter1(std::string str) : name(str), vec_(YLT_TLS_COUNT) {}
+  test_counter1(std::string str,
+                size_t duplicate_count = std::thread::hardware_concurrency())
+      : name(str), vec_(duplicate_count) {}
+  ~test_counter1() {
+    for (auto &t : vec_) {
+      if (t) {
+        delete t.load();
+      }
+    }
+  }
 
   auto &value() {
-    static thread_local auto index = ylt::thread::get_tls_index();
+    static thread_local auto index = get_rr(vec_.size());
     if (vec_[index] == nullptr) {
       auto ptr = new std::atomic<T>(0);
 
@@ -88,18 +103,15 @@ struct test_counter1 {
 
 TEST_CASE("test thread local") {
   {
+    const int duplicate_count = 96;
     std::vector<std::shared_ptr<test_counter1<int64_t>>> counters;
     for (size_t i = 0; i < 10; i++)
-      counters.push_back(
-          std::make_shared<test_counter1<int64_t>>(std::to_string(i)));
+      counters.push_back(std::make_shared<test_counter1<int64_t>>(
+          std::to_string(i), duplicate_count));
 
-    const int N = YLT_TLS_COUNT;
-
-    ylt::thread::init_dynamic_thread_locals(N);
-
-    const int64_t COUNT = std::numeric_limits<int64_t>::max();
+    const int64_t COUNT = 2;  // std::numeric_limits<int64_t>::max();
     std::vector<std::thread> threads;
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < duplicate_count; i++) {
       std::thread thd([&, i] {
         for (int64_t j = 0; j < COUNT; j++) {
           counters[0]->value()++;
@@ -109,23 +121,23 @@ TEST_CASE("test thread local") {
       threads.push_back(std::move(thd));
     }
 
-    std::thread thd2([&] {
-      while (true) {
-        int64_t cur_tls = counters[0]->total();
+    // std::thread thd2([&] {
+    //   while (true) {
+    //     int64_t cur_tls = counters[0]->total();
 
-        std::cout << "tls: " << cur_tls << "\n";
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-      }
-    });
+    //     std::cout << "tls: " << cur_tls << "\n";
+    //     std::this_thread::sleep_for(std::chrono::seconds(1));
+    //   }
+    // });
 
-    thd2.join();
+    // thd2.join();
 
-    // for (auto &thd : threads) {
-    //   thd.join();
-    // }
+    for (auto &thd : threads) {
+      thd.join();
+    }
 
     int64_t total = counters[0]->total();
-    CHECK(total == 2 * YLT_TLS_COUNT);
+    CHECK(total == 2 * duplicate_count);
     counters[0] = nullptr;
     counters[1]->value()++;
     counters[1]->value()++;
