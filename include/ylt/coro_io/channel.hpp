@@ -166,11 +166,14 @@ class channel {
                                                              config)) {
     std::shared_ptr<client_pool_t> client_pool;
     if (client_pools_.size() > 1) {
-      client_pool = co_await std::visit(
-          [this](auto& worker) {
-            return worker(*this);
-          },
-          lb_worker);
+      int cnt = 0;
+      do {
+        client_pool = co_await std::visit(
+            [this](auto& worker) {
+              return worker(*this);
+            },
+            lb_worker);
+      } while (!client_pool->is_alive() && ++cnt <= size() * 2);
     }
     else {
       client_pool = client_pools_[0];

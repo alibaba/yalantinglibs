@@ -4,6 +4,7 @@
 
 #include <asio/io_context.hpp>
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -16,6 +17,7 @@
 #include <ylt/coro_io/io_context_pool.hpp>
 
 #include "async_simple/coro/Lazy.h"
+#include "ylt/coro_io/client_pool.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 
@@ -183,5 +185,110 @@ TEST_CASE("test send_request config") {
       CHECK(res.has_value());
     }
     server.stop();
+  }());
+}
+
+void hello() {}
+
+TEST_CASE("test server down") {
+  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+    coro_rpc::coro_rpc_server server1(1, 58801);
+    server1.register_handler<hello>();
+    auto res = server1.async_start();
+    REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+    coro_rpc::coro_rpc_server server2(1, 58802);
+    server2.register_handler<hello>();
+    auto res2 = server2.async_start();
+    REQUIRE_MESSAGE(!res2.hasResult(), "server start failed");
+    auto hosts =
+        std::vector<std::string_view>{"127.0.0.1:58801", "127.0.0.1:58802"};
+    auto config = coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config{
+        .connect_retry_count = 0,
+        .reconnect_wait_time = std::chrono::milliseconds{0},
+        .host_alive_detect_duration = std::chrono::milliseconds{500}};
+    auto channel =
+        coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts, {config});
+
+    for (int i = 0; i < 100; ++i) {
+      auto res = co_await channel.send_request(
+          [&i, &hosts](
+              coro_rpc::coro_rpc_client &client,
+              std::string_view host) -> async_simple::coro::Lazy<void> {
+            CHECK(host == hosts[i % 2]);
+            co_return;
+          });
+      CHECK(res.has_value());
+    }
+    server1.stop();
+    for (int i = 0; i < 100; ++i) {
+      auto res = co_await channel.send_request(
+          [&i, &hosts](
+              coro_rpc::coro_rpc_client &client,
+              std::string_view host) -> async_simple::coro::Lazy<void> {
+            co_await client.call<hello>();
+            if (i > 0)
+              CHECK(host == hosts[1]);
+            co_return;
+          });
+      if (i > 2)
+        CHECK(res.has_value());
+    }
+    server2.stop();
+    {
+      {
+        auto res = co_await channel.send_request(
+            [](coro_rpc::coro_rpc_client &client,
+               std::string_view host) -> async_simple::coro::Lazy<void> {
+              co_await client.call<hello>();
+              co_return;
+            });
+        res = co_await channel.send_request(
+            [](coro_rpc::coro_rpc_client &client,
+               std::string_view host) -> async_simple::coro::Lazy<void> {
+              co_await client.call<hello>();
+              co_return;
+            });
+        CHECK(!res.has_value());
+      }
+    }
+
+    coro_rpc::coro_rpc_server server3(1, 58801);
+    server3.register_handler<hello>();
+    auto res3 = server3.async_start();
+    REQUIRE_MESSAGE(!res3.hasResult(), "server start failed");
+    co_await coro_io::sleep_for(std::chrono::seconds{1});
+    {
+      for (int i = 0; i < 100; ++i) {
+        auto res = co_await channel.send_request(
+            [&i, &hosts](
+                coro_rpc::coro_rpc_client &client,
+                std::string_view host) -> async_simple::coro::Lazy<void> {
+              CHECK(host == hosts[0]);
+              co_return;
+            });
+        CHECK(res.has_value());
+      }
+    }
+    coro_rpc::coro_rpc_server server4(1, 58802);
+    server4.register_handler<hello>();
+    auto res4 = server4.async_start();
+    REQUIRE_MESSAGE(!res4.hasResult(), "server start failed");
+    co_await coro_io::sleep_for(std::chrono::seconds{1});
+    {
+      int counter = 0;
+      for (int i = 0; i < 100; ++i) {
+        auto res = co_await channel.send_request(
+            [&i, &hosts, &counter](
+                coro_rpc::coro_rpc_client &client,
+                std::string_view host) -> async_simple::coro::Lazy<void> {
+              if (host == hosts[1]) {
+                ++counter;
+              }
+              co_return;
+            });
+        CHECK(res.has_value());
+      }
+      CHECK(counter == 50);
+    }
   }());
 }

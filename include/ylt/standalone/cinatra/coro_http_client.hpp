@@ -164,6 +164,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       : coro_http_client(executor->get_asio_executor()) {}
 
   bool init_config(const config &conf) {
+    config_ = conf;
     if (conf.conn_timeout_duration.has_value()) {
       set_conn_timeout(*conf.conn_timeout_duration);
     }
@@ -206,6 +207,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   coro_io::ExecutorWrapper<> &get_executor() { return executor_wrapper_; }
+
+  const config &get_config() { return config_; }
 
 #ifdef CINATRA_ENABLE_SSL
   bool init_ssl(int verify_mode, const std::string &base_path,
@@ -2432,6 +2435,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
   bool should_reset_ = false;
+  config config_;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
