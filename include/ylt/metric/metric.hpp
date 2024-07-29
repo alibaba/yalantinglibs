@@ -208,11 +208,8 @@ struct metric_manager_t;
 struct ylt_system_tag_t {};
 using system_metric_manager = metric_manager_t<ylt_system_tag_t>;
 
-class counter_t;
-inline auto g_user_metric_labels =
-    std::make_shared<counter_t>("ylt_user_metric_labels", "");
-inline auto g_summary_failed_count =
-    std::make_shared<counter_t>("ylt_summary_failed_count", "");
+inline std::atomic<int64_t> g_user_metric_label_count = 0;
+inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;

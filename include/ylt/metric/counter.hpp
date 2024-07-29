@@ -181,7 +181,7 @@ class counter_t : public metric_t {
 
   void stat_metric(const std::vector<std::string> &labels_value) {
     if (!value_map_.contains(labels_value)) {
-      g_user_metric_labels->inc();
+      g_user_metric_label_count++;
     }
   }
 
