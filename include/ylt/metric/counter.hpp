@@ -64,7 +64,7 @@ class counter_t : public metric_t {
     }
   }
 
-  metric_hash_map<double> value_map() override {
+  metric_hash_map<double> value_map() {
     metric_hash_map<double> map;
     if (use_atomic_) {
       map = {atomic_value_map_.begin(), atomic_value_map_.end()};
@@ -74,6 +74,15 @@ class counter_t : public metric_t {
       map = value_map_;
     }
     return map;
+  }
+
+  bool has_lable_value(const std::string &lable_val) override {
+    auto map = value_map();
+    auto it = std::find_if(map.begin(), map.end(), [&lable_val](auto &pair) {
+      auto &key = pair.first;
+      return std::find(key.begin(), key.end(), lable_val) != key.end();
+    });
+    return it != map.end();
   }
 
   void serialize(std::string &str) override {

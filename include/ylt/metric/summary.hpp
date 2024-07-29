@@ -197,13 +197,22 @@ class summary_t : public metric_t {
     co_return vec;
   }
 
-  metric_hash_map<double> value_map() override {
+  metric_hash_map<double> value_map() {
     auto ret = async_simple::coro::syncAwait(coro_io::post(
         [this] {
           return labels_block_->label_sum_;
         },
         excutor_->get_executor()));
     return ret.value();
+  }
+
+  bool has_lable_value(const std::string &lable_val) override {
+    auto map = value_map();
+    auto it = std::find_if(map.begin(), map.end(), [&lable_val](auto &pair) {
+      auto &key = pair.first;
+      return std::find(key.begin(), key.end(), lable_val) != key.end();
+    });
+    return it != map.end();
   }
 
   async_simple::coro::Lazy<double> get_sum() {

@@ -106,7 +106,9 @@ class histogram_t : public metric_t {
 
   auto get_bucket_counts() { return bucket_counts_; }
 
-  metric_hash_map<double> value_map() override { return sum_->value_map(); }
+  bool has_lable_value(const std::string &lable_val) override {
+    return sum_->has_lable_value(lable_val);
+  }
 
   void serialize(std::string &str) override {
     if (!sum_->labels_name().empty()) {
