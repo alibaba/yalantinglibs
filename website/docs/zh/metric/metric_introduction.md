@@ -261,16 +261,16 @@ class metric_t {
 ```cpp
 auto c = std::make_shared<counter_t>("qps_count", "qps help");
 auto g = std::make_shared<gauge_t>("fd_count", "fd count help");
-default_metric_manager::register_metric_static(c);
-default_metric_manager::register_metric_static(g);
+default_metric_manager::instance().register_metric_static(c);
+default_metric_manager::instance().register_metric_static(g);
 
 c->inc();
 g->inc();
 
-auto m = default_metric_manager::get_metric_static("qps_count");
+auto m = default_metric_manager::instance().get_metric_static("qps_count");
 CHECK(m->as<counter_t>()->value() == 1);
 
-auto m1 = default_metric_manager::get_metric_static("fd_count");
+auto m1 = default_metric_manager::instance().get_metric_static("fd_count");
 CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 
@@ -279,16 +279,16 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```cpp
 auto c = std::make_shared<counter_t>("qps_count", "qps help");
 auto g = std::make_shared<gauge_t>("fd_count", "fd count help");
-default_metric_manager::register_metric_dynamic(c);
-default_metric_manager::register_metric_dynamic(g);
+default_metric_manager::instance().register_metric_dynamic(c);
+default_metric_manager::instance().register_metric_dynamic(g);
 
 c->inc();
 g->inc();
 
-auto m = default_metric_manager::get_metric_dynamic("qps_count");
+auto m = default_metric_manager::instance().get_metric_dynamic("qps_count");
 CHECK(m->as<counter_t>()->value() == 1);
 
-auto m1 = default_metric_manager::get_metric_dynamic("fd_count");
+auto m1 = default_metric_manager::instance().get_metric_dynamic("fd_count");
 CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 注意：一旦注册时使用了static或者dynamic，那么后面调用default_metric_manager时则应该使用相同后缀的接口，比如注册时使用了get_metric_static，那么后面调用根据名称获取指标对象的方法必须是get_metric_static，否则会抛异常。同样，如果注册使用register_metric_dynamic，则后面应该get_metric_dynamic，否则会抛异常。
@@ -297,84 +297,86 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```cpp
 template <typename T>
 struct metric_manager_t {
+  // 管理器的单例
+  metric_manager_t<T> & instance();
   // 创建并注册指标，返回注册的指标对象
   template <typename T, typename... Args>
-  static std::shared_ptr<T> create_metric_static(const std::string& name,
+  std::shared_ptr<T> create_metric_static(const std::string& name,
                                                  const std::string& help,
                                                  Args&&... args);
   template <typename T, typename... Args>
-  static std::shared_ptr<T> create_metric_dynamic(const std::string& name,
+  std::shared_ptr<T> create_metric_dynamic(const std::string& name,
                                                  const std::string& help,
                                                  Args&&... args)
   // 注册metric
-  static bool register_metric_static(std::shared_ptr<metric_t> metric);
-  static bool register_metric_dynamic(std::shared_ptr<metric_t> metric);
+  bool register_metric_static(std::shared_ptr<metric_t> metric);
+  bool register_metric_dynamic(std::shared_ptr<metric_t> metric);
 
   // 根据metric名称删除metric
-  static bool remove_metric_static(const std::string& name);  
-  static bool remove_metric_dynamic(const std::string& name);
+  bool remove_metric_static(const std::string& name);  
+  bool remove_metric_dynamic(const std::string& name);
 
   // 获取注册的所有指标对象
-  static std::map<std::string, std::shared_ptr<metric_t>> metric_map_static();
-  static std::map<std::string, std::shared_ptr<metric_t>> metric_map_dynamic();
+  std::map<std::string, std::shared_ptr<metric_t>> metric_map_static();
+  std::map<std::string, std::shared_ptr<metric_t>> metric_map_dynamic();
 
   // 获取注册的指标对象的总数
-  static size_t metric_count_static();
-  static size_t metric_count_dynamic();
+  size_t metric_count_static();
+  size_t metric_count_dynamic();
 
   // 获取注册的指标对象的名称
-  static std::vector<std::string> metric_keys_static();
-  static std::vector<std::string> metric_keys_dynamic();
+  std::vector<std::string> metric_keys_static();
+  std::vector<std::string> metric_keys_dynamic();
 
   // 获取管理器的所有指标
-  static std::shared_ptr<metric_t> get_metrics();
+  std::shared_ptr<metric_t> get_metrics();
 
   // 根据名称获取指标对象，T为具体指标的类型，如 get_metric_static<gauge_t>();
   // 如果找不到则返回nullptr
   template <typename T>
-  static T* get_metric_static(const std::string& name);
+  T* get_metric_static(const std::string& name);
   template <typename T>
-  static T* get_metric_static(const std::string& name);
+  T* get_metric_static(const std::string& name);
 
-  static std::shared_ptr<metric_t> get_metric_static(const std::string& name);
-  static std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name);
+  std::shared_ptr<metric_t> get_metric_static(const std::string& name);
+  std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name);
 
   // 根据静态标签获取所有的指标, 如{{"method", "GET"}, {"url", "/"}}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
       const std::map<std::string, std::string>& labels);
 
   // 根据标签值获取所有的静态标签的指标, 如{"method", "GET"}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
       const std::pair<std::string, std::string>& label);
 
   // 根据标签值获取所有动态标签的指标, 如{"method", "GET"}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
       const std::map<std::string, std::string>& labels);
   
   // 序列化
-  static async_simple::coro::Lazy<std::string> serialize_static();
-  static async_simple::coro::Lazy<std::string> serialize_dynamic();
+  async_simple::coro::Lazy<std::string> serialize_static();
+  async_simple::coro::Lazy<std::string> serialize_dynamic();
 
   // 序列化静态标签的指标到json
-  static std::string serialize_to_json_static();
+  std::string serialize_to_json_static();
   // 序列化动态标签的指标到json
-  static std::string serialize_to_json_dynamic();
+  std::string serialize_to_json_dynamic();
   // 序列化metric集合到json
-  static std::string serialize_to_json(
+  std::string serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics);
 
   // 过滤配置选项，如果name_regex和label_regex都设置了，则会检查这两个条件，如果只设置了一个则只检查设置过的条件
-  struct metric_filter_options {
+  metric_filter_options {
     std::optional<std::regex> name_regex{}; // metric 名称的过滤正则表达式
     std::optional<std::regex> label_regex{};// metric label名称的过滤正则表达式
     bool is_white = true; //true: 白名单，包括语义；false: 黑名单，排除语义
   };
 
   // 过滤静态标签的指标
-  static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
+  std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
       const metric_filter_options& options);
   // 过滤动态标签的指标
-  static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
+  std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
       const metric_filter_options& options);  
 };
 
@@ -419,7 +421,7 @@ struct metric_collector_t {
 ```cpp
 using root_manager = metric_collector_t<system_metric_manager, default_metric_manager>;
 
-std::string str = root_manager::serialize();
+std::string str = root_manager::instance().serialize();
 ```
 
 # histogram
