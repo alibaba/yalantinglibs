@@ -10,7 +10,7 @@ using namespace ylt::metric;
 template <size_t id>
 struct test_id_t {};
 
-using my_metric_mgr = metric_manager_t<test_id_t<1>>;
+using my_metric_mgr = metric_manager_t<test_id_t<100>>;
 
 auto g_counter = my_metric_mgr::create_metric_dynamic<counter_t>("test1", "");
 
