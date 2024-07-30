@@ -5,7 +5,7 @@
 
 namespace ylt::metric {
 
-template<typename value_type>
+template <typename value_type>
 class basic_gauge : public basic_counter<value_type> {
   using metric_t::set_metric_type;
   using basic_counter<value_type>::validate;
@@ -16,28 +16,31 @@ class basic_gauge : public basic_counter<value_type> {
   using basic_counter<value_type>::value_map_;
   using basic_counter<value_type>::mtx_;
   using basic_counter<value_type>::stat_metric;
+
  public:
   basic_gauge(std::string name, std::string help)
       : basic_counter<value_type>(std::move(name), std::move(help)) {
     set_metric_type(MetricType::Gauge);
   }
   basic_gauge(std::string name, std::string help,
-          std::vector<std::string> labels_name)
-      : basic_counter<value_type>(std::move(name), std::move(help), std::move(labels_name)) {
+              std::vector<std::string> labels_name)
+      : basic_counter<value_type>(std::move(name), std::move(help),
+                                  std::move(labels_name)) {
     set_metric_type(MetricType::Gauge);
   }
 
   basic_gauge(std::string name, std::string help,
-          std::map<std::string, std::string> labels)
-      : basic_counter<value_type>(std::move(name), std::move(help), std::move(labels)) {
+              std::map<std::string, std::string> labels)
+      : basic_counter<value_type>(std::move(name), std::move(help),
+                                  std::move(labels)) {
     set_metric_type(MetricType::Gauge);
   }
 
   void dec(value_type value = 1) {
 #ifdef __APPLE__
-    mac_os_atomic_fetch_sub(&default_label_value_, value);
+    mac_os_atomic_fetch_sub(&default_label_value_.local_value(), value);
 #else
-    default_label_value_ -= value;
+    default_label_value_.dec(value);
 #endif
   }
 

@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "metric.hpp"
+#include "thread_local_value.hpp"
 
 namespace ylt::metric {
 enum class op_type_t { INC, DEC, SET };
@@ -22,7 +23,7 @@ struct json_counter_t {
 REFLECTION(json_counter_t, name, help, type, metrics);
 #endif
 
-template<typename value_type>
+template <typename value_type>
 class basic_counter : public metric_t {
  public:
   // default, no labels, only contains an atomic value.
@@ -34,7 +35,7 @@ class basic_counter : public metric_t {
 
   // static labels value, contains a map with atomic value.
   basic_counter(std::string name, std::string help,
-            std::map<std::string, std::string> labels)
+                std::map<std::string, std::string> labels)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels)) {
     atomic_value_map_.emplace(labels_value_, 0);
@@ -44,7 +45,7 @@ class basic_counter : public metric_t {
 
   // dynamic labels value
   basic_counter(std::string name, std::string help,
-            std::vector<std::string> labels_name)
+                std::vector<std::string> labels_name)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels_name)) {
     g_user_metric_count++;
@@ -52,7 +53,7 @@ class basic_counter : public metric_t {
 
   virtual ~basic_counter() { g_user_metric_count--; }
 
-  value_type value() { return default_label_value_; }
+  value_type value() { return default_label_value_.value(); }
 
   value_type value(const std::vector<std::string> &labels_value) {
     if (use_atomic_) {
@@ -90,7 +91,7 @@ class basic_counter : public metric_t {
 
   void serialize(std::string &str) override {
     if (labels_name_.empty()) {
-      if (default_label_value_ == 0) {
+      if (default_label_value_.value() == 0) {
         return;
       }
       serialize_head(str);
@@ -115,11 +116,11 @@ class basic_counter : public metric_t {
   void serialize_to_json(std::string &str) override {
     std::string s;
     if (labels_name_.empty()) {
-      if (default_label_value_ == 0) {
+      if (default_label_value_.value() == 0) {
         return;
       }
       json_counter_t counter{name_, help_, std::string(metric_name())};
-      int64_t value = default_label_value_;
+      int64_t value = default_label_value_.value();
       counter.metrics.push_back({{}, value});
       iguana::to_json(counter, str);
       return;
@@ -156,9 +157,9 @@ class basic_counter : public metric_t {
     }
 
 #ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_label_value_, val);
+    mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
 #else
-    default_label_value_ += val;
+    default_label_value_.inc(val);
 #endif
   }
 
@@ -188,7 +189,7 @@ class basic_counter : public metric_t {
     }
   }
 
-  void update(value_type value) { default_label_value_ = value; }
+  void update(value_type value) { default_label_value_.update(value); }
 
   void update(const std::vector<std::string> &labels_value, value_type value) {
     if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
@@ -219,7 +220,7 @@ class basic_counter : public metric_t {
       str.append(" ");
     }
 
-    str.append(std::to_string(default_label_value_));
+    str.append(std::to_string(default_label_value_.value()));
 
     str.append("\n");
   }
@@ -249,7 +250,8 @@ class basic_counter : public metric_t {
     str.pop_back();
   }
 
-  void validate(const std::vector<std::string> &labels_value, value_type value) {
+  void validate(const std::vector<std::string> &labels_value,
+                value_type value) {
     if (value < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
@@ -303,7 +305,7 @@ class basic_counter : public metric_t {
   }
 
   metric_hash_map<std::atomic<value_type>> atomic_value_map_;
-  std::atomic<value_type> default_label_value_ = 0;
+  thread_local_value<value_type> default_label_value_ = {10};
 
   std::mutex mtx_;
   metric_hash_map<value_type> value_map_;

@@ -26,10 +26,11 @@ struct json_histogram_t {
 REFLECTION(json_histogram_t, name, help, type, metrics);
 #endif
 
-template<typename value_type>
+template <typename value_type>
 class basic_histogram : public metric_t {
  public:
-  basic_histogram(std::string name, std::string help, std::vector<double> buckets)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
         sum_(std::make_shared<gauge_t>("", "")) {
@@ -45,8 +46,9 @@ class basic_histogram : public metric_t {
     use_atomic_ = true;
   }
 
-  basic_histogram(std::string name, std::string help, std::vector<double> buckets,
-              std::vector<std::string> labels_name)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets,
+                  std::vector<std::string> labels_name)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels_name),
         sum_(std::make_shared<gauge_t>(name, help, labels_name)) {
@@ -62,8 +64,9 @@ class basic_histogram : public metric_t {
     }
   }
 
-  basic_histogram(std::string name, std::string help, std::vector<double> buckets,
-              std::map<std::string, std::string> labels)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets,
+                  std::map<std::string, std::string> labels)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels),
         sum_(std::make_shared<gauge_t>(name, help, labels)) {
@@ -309,7 +312,8 @@ class basic_histogram : public metric_t {
 #endif
 
   std::vector<double> bucket_boundaries_;
-  std::vector<std::shared_ptr<basic_counter<value_type>>> bucket_counts_;  // readonly
+  std::vector<std::shared_ptr<basic_counter<value_type>>>
+      bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
 using histogram_t = basic_histogram<int64_t>;
