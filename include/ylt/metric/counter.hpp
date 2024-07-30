@@ -38,7 +38,7 @@ class basic_counter : public metric_t {
                 std::map<std::string, std::string> labels)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels)) {
-    atomic_value_map_.emplace(labels_value_, 0);
+    atomic_value_map_.emplace(labels_value_, thread_local_value<value_type>());
     g_user_metric_count++;
     use_atomic_ = true;
   }
@@ -57,19 +57,17 @@ class basic_counter : public metric_t {
 
   value_type value(const std::vector<std::string> &labels_value) {
     if (use_atomic_) {
-      value_type val = atomic_value_map_[labels_value];
+      value_type val = atomic_value_map_[labels_value].value();
       return val;
     }
     else {
       std::lock_guard lock(mtx_);
-      return value_map_[labels_value];
+      return value_map_[labels_value].value();
     }
   }
 
-  void set_metric_type0(MetricType type) { type_ = type; }
-
-  metric_hash_map<value_type> value_map() {
-    metric_hash_map<value_type> map;
+  metric_hash_map<thread_local_value<value_type>> value_map() {
+    metric_hash_map<thread_local_value<value_type>> map;
     if (use_atomic_) {
       map = {atomic_value_map_.begin(), atomic_value_map_.end()};
     }
@@ -134,7 +132,7 @@ class basic_counter : public metric_t {
   template <typename T>
   void to_json(json_counter_t &counter, T &map, std::string &str) {
     for (auto &[k, v] : map) {
-      if (v == 0) {
+      if (v.value() == 0) {
         continue;
       }
       json_counter_metric_t metric;
@@ -142,7 +140,7 @@ class basic_counter : public metric_t {
       for (auto &label_value : k) {
         metric.labels.emplace(labels_name_[index++], label_value);
       }
-      metric.value = (int64_t)v;
+      metric.value = (int64_t)v.value();
       counter.metrics.push_back(std::move(metric));
     }
     if (!counter.metrics.empty()) {
@@ -174,12 +172,14 @@ class basic_counter : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::INC);
+      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
+                      op_type_t::INC);
     }
     else {
       std::lock_guard lock(mtx_);
       stat_metric(labels_value);
-      set_value<false>(value_map_[labels_value], value, op_type_t::INC);
+      set_value<false>(value_map_[labels_value].local_value(), value,
+                       op_type_t::INC);
     }
   }
 
@@ -201,17 +201,17 @@ class basic_counter : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::SET);
+      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
+                      op_type_t::SET);
     }
     else {
       std::lock_guard lock(mtx_);
-      set_value<false>(value_map_[labels_value], value, op_type_t::SET);
+      set_value<false>(value_map_[labels_value].local_value(), value,
+                       op_type_t::SET);
     }
   }
 
-  metric_hash_map<std::atomic<value_type>> &atomic_value_map() {
-    return atomic_value_map_;
-  }
+  auto &atomic_value_map() { return atomic_value_map_; }
 
  protected:
   void serialize_default_label(std::string &str) {
@@ -228,7 +228,7 @@ class basic_counter : public metric_t {
   template <typename T>
   void serialize_map(T &value_map, std::string &str) {
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
       str.append(name_);
@@ -236,7 +236,7 @@ class basic_counter : public metric_t {
       build_string(str, labels_name_, labels_value);
       str.append("} ");
 
-      str.append(std::to_string(value));
+      str.append(std::to_string(value.value()));
 
       str.append("\n");
     }
@@ -267,7 +267,7 @@ class basic_counter : public metric_t {
       case op_type_t::INC: {
 #ifdef __APPLE__
         if constexpr (is_atomic) {
-          mac_os_atomic_fetch_add(&label_val, value);
+          mac_os_atomic_fetch_add(&label_val.local_value(), value);
         }
         else {
           label_val += value;
@@ -304,11 +304,11 @@ class basic_counter : public metric_t {
     }
   }
 
-  metric_hash_map<std::atomic<value_type>> atomic_value_map_;
+  metric_hash_map<thread_local_value<value_type>> atomic_value_map_;
   thread_local_value<value_type> default_label_value_ = {10};
 
   std::mutex mtx_;
-  metric_hash_map<value_type> value_map_;
+  metric_hash_map<thread_local_value<value_type>> value_map_;
 };
 using counter_t = basic_counter<int64_t>;
 using counter_d = basic_counter<double>;

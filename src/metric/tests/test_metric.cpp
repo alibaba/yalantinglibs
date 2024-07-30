@@ -114,10 +114,10 @@ TEST_CASE("test counter with dynamic labels value") {
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
     auto values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 1);
+    CHECK(values[{"GET", "200"}].value() == 1);
     c.inc({"GET", "200"}, 2);
     values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 3);
+    CHECK(values[{"GET", "200"}].value() == 3);
 
     std::string str;
     c.serialize(str);
@@ -131,7 +131,7 @@ TEST_CASE("test counter with dynamic labels value") {
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 20);
+    CHECK(values[{"GET", "200"}].value() == 20);
   }
 }
 
@@ -165,10 +165,10 @@ TEST_CASE("test gauge") {
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
     auto values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 1);
+    CHECK(values[{"GET", "200", "/"}].value() == 1);
     g.inc({"GET", "200", "/"}, 2);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 3);
+    CHECK(values[{"GET", "200", "/"}].value() == 3);
 
     g.inc({"POST", "200", "/"}, 4);
 
@@ -190,10 +190,10 @@ TEST_CASE("test gauge") {
 
     g.dec({"GET", "200", "/"}, 1);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 2);
+    CHECK(values[{"GET", "200", "/"}].value() == 2);
     g.dec({"GET", "200", "/"}, 2);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 0);
+    CHECK(values[{"GET", "200", "/"}].value() == 0);
   }
 }
 

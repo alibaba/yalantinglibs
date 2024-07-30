@@ -55,12 +55,14 @@ class basic_gauge : public basic_counter<value_type> {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::DEC);
+      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
+                      op_type_t::DEC);
     }
     else {
       std::lock_guard lock(mtx_);
       stat_metric(labels_value);
-      set_value<false>(value_map_[labels_value], value, op_type_t::DEC);
+      set_value<false>(value_map_[labels_value].local_value(), value,
+                       op_type_t::DEC);
     }
   }
 };

@@ -211,7 +211,7 @@ class basic_histogram : public metric_t {
     std::string value_str;
     auto bucket_counts = get_bucket_counts();
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
 
@@ -248,12 +248,7 @@ class basic_histogram : public metric_t {
       build_label_string(str, sum_->labels_name(), labels_value);
       str.append("} ");
 
-      if (type_ == MetricType::Counter) {
-        str.append(std::to_string((int64_t)value));
-      }
-      else {
-        str.append(std::to_string(value));
-      }
+      str.append(std::to_string(value.value()));
       str.append("\n");
 
       str.append(name_).append("_count{");
@@ -275,7 +270,7 @@ class basic_histogram : public metric_t {
     auto bucket_counts = get_bucket_counts();
 
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
 
