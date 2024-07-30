@@ -17,7 +17,7 @@ TEST_CASE("test no lable") {
   g_counter->inc();
   CHECK(g_counter->value() == 1);
   {
-    gauge_t g{"test_gauge", "help"};
+    gauge_t g{"test_gauge", "help", 10};
     g.inc();
     g.inc();
 
@@ -31,12 +31,20 @@ TEST_CASE("test no lable") {
     CHECK_THROWS_AS(g.inc({}, 1), std::invalid_argument);
     CHECK_THROWS_AS(g.update({}, 1), std::invalid_argument);
 
-    counter_t c{"test_counter", "help"};
+    counter_t c{"test_counter", "help", 10};
     c.inc();
     c.inc();
     std::string str1;
     c.serialize(str1);
     CHECK(str1.find("test_counter 2") != std::string::npos);
+
+    auto r = c.reset();
+    CHECK(r == 2);
+    CHECK(c.value() == 0);
+
+    r = g.update(10);
+    CHECK(r == 1);
+    CHECK(g.value() == 10);
   }
   {
     counter_t c("get_count", "get counter");

@@ -27,27 +27,32 @@ template <typename value_type>
 class basic_counter : public metric_t {
  public:
   // default, no labels, only contains an atomic value.
-  basic_counter(std::string name, std::string help)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
+  basic_counter(std::string name, std::string help, size_t dupli_count = 2)
+      : metric_t(MetricType::Counter, std::move(name), std::move(help)),
+        dupli_count_(dupli_count) {
     use_atomic_ = true;
     g_user_metric_count++;
   }
 
   // static labels value, contains a map with atomic value.
   basic_counter(std::string name, std::string help,
-                std::map<std::string, std::string> labels)
+                std::map<std::string, std::string> labels,
+                size_t dupli_count = 2)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {
-    atomic_value_map_.emplace(labels_value_, thread_local_value<value_type>());
+                 std::move(labels)),
+        dupli_count_(dupli_count) {
+    atomic_value_map_.emplace(labels_value_,
+                              thread_local_value<value_type>(dupli_count));
     g_user_metric_count++;
     use_atomic_ = true;
   }
 
   // dynamic labels value
   basic_counter(std::string name, std::string help,
-                std::vector<std::string> labels_name)
+                std::vector<std::string> labels_name, size_t dupli_count = 2)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)) {
+                 std::move(labels_name)),
+        dupli_count_(dupli_count) {
     g_user_metric_count++;
   }
 
@@ -62,7 +67,9 @@ class basic_counter : public metric_t {
     }
     else {
       std::lock_guard lock(mtx_);
-      return value_map_[labels_value].value();
+      auto [it, r] = value_map_.try_emplace(
+          labels_value, thread_local_value<value_type>(dupli_count_));
+      return it->second.value();
     }
   }
 
@@ -189,7 +196,30 @@ class basic_counter : public metric_t {
     }
   }
 
-  void update(value_type value) { default_label_value_.update(value); }
+  value_type update(value_type value) {
+    return default_label_value_.update(value);
+  }
+
+  value_type reset() {
+    value_type val = {};
+    if (use_atomic_) {
+      if (labels_name_.empty()) {
+        val = default_label_value_.reset();
+        return val;
+      }
+
+      for (auto &[key, t] : atomic_value_map_) {
+        val += t.reset();
+      }
+    }
+    else {
+      std::lock_guard lock(mtx_);
+      for (auto &[key, t] : value_map_) {
+        val += t.reset();
+      }
+    }
+    return val;
+  }
 
   void update(const std::vector<std::string> &labels_value, value_type value) {
     if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
@@ -201,13 +231,11 @@ class basic_counter : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
-                      op_type_t::SET);
+      atomic_value_map_[labels_value].update(value);
     }
     else {
       std::lock_guard lock(mtx_);
-      set_value<false>(value_map_[labels_value].local_value(), value,
-                       op_type_t::SET);
+      value_map_[labels_value].update(value);
     }
   }
 
@@ -309,6 +337,7 @@ class basic_counter : public metric_t {
 
   std::mutex mtx_;
   metric_hash_map<thread_local_value<value_type>> value_map_;
+  size_t dupli_count_ = 1;
 };
 using counter_t = basic_counter<int64_t>;
 using counter_d = basic_counter<double>;

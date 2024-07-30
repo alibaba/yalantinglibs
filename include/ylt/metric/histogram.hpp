@@ -30,10 +30,10 @@ template <typename value_type>
 class basic_histogram : public metric_t {
  public:
   basic_histogram(std::string name, std::string help,
-                  std::vector<double> buckets)
+                  std::vector<double> buckets, size_t dupli_count = 2)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
-        sum_(std::make_shared<gauge_t>("", "")) {
+        sum_(std::make_shared<gauge_t>("", "", dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -48,10 +48,10 @@ class basic_histogram : public metric_t {
 
   basic_histogram(std::string name, std::string help,
                   std::vector<double> buckets,
-                  std::vector<std::string> labels_name)
+                  std::vector<std::string> labels_name, size_t dupli_count = 2)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels_name),
-        sum_(std::make_shared<gauge_t>(name, help, labels_name)) {
+        sum_(std::make_shared<gauge_t>(name, help, labels_name, dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -60,16 +60,17 @@ class basic_histogram : public metric_t {
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(
-          std::make_shared<counter_t>(name, help, labels_name));
+          std::make_shared<counter_t>(name, help, labels_name, dupli_count));
     }
   }
 
   basic_histogram(std::string name, std::string help,
                   std::vector<double> buckets,
-                  std::map<std::string, std::string> labels)
+                  std::map<std::string, std::string> labels,
+                  size_t dupli_count = std::thread::hardware_concurrency())
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels),
-        sum_(std::make_shared<gauge_t>(name, help, labels)) {
+        sum_(std::make_shared<gauge_t>(name, help, labels, dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -77,7 +78,8 @@ class basic_histogram : public metric_t {
     g_user_metric_count++;
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
-      bucket_counts_.push_back(std::make_shared<counter_t>(name, help, labels));
+      bucket_counts_.push_back(
+          std::make_shared<counter_t>(name, help, labels, dupli_count));
     }
     use_atomic_ = true;
   }

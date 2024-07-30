@@ -18,21 +18,22 @@ class basic_gauge : public basic_counter<value_type> {
   using basic_counter<value_type>::stat_metric;
 
  public:
-  basic_gauge(std::string name, std::string help)
-      : basic_counter<value_type>(std::move(name), std::move(help)) {
+  basic_gauge(std::string name, std::string help, size_t dupli_count = 2)
+      : basic_counter<value_type>(std::move(name), std::move(help),
+                                  dupli_count) {
     set_metric_type(MetricType::Gauge);
   }
   basic_gauge(std::string name, std::string help,
-              std::vector<std::string> labels_name)
+              std::vector<std::string> labels_name, size_t dupli_count = 2)
       : basic_counter<value_type>(std::move(name), std::move(help),
-                                  std::move(labels_name)) {
+                                  std::move(labels_name), dupli_count) {
     set_metric_type(MetricType::Gauge);
   }
 
   basic_gauge(std::string name, std::string help,
-              std::map<std::string, std::string> labels)
+              std::map<std::string, std::string> labels, size_t dupli_count = 2)
       : basic_counter<value_type>(std::move(name), std::move(help),
-                                  std::move(labels)) {
+                                  std::move(labels), dupli_count) {
     set_metric_type(MetricType::Gauge);
   }
 
