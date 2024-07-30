@@ -45,13 +45,13 @@ inline int64_t timeval_to_microseconds(const timeval &tv) {
 
 inline void stat_cpu() {
   static auto process_cpu_usage =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_cpu_usage");
   static auto process_cpu_usage_system =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_cpu_usage_system");
   static auto process_cpu_usage_user =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_cpu_usage_user");
 
   rusage usage{};
@@ -90,13 +90,13 @@ inline void stat_cpu() {
 
 inline void stat_memory() {
   static auto process_memory_virtual =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_memory_virtual");
   static auto process_memory_resident =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_memory_resident");
   static auto process_memory_shared =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_memory_shared");
   long virtual_size = 0;
   long resident = 0;
@@ -126,16 +126,16 @@ struct ProcIO {
 
 inline void stat_io() {
   static auto process_io_read_bytes_second =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_io_read_bytes_second");
   static auto process_io_write_bytes_second =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_io_write_bytes_second");
   static auto process_io_read_second =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_io_read_second");
   static auto process_io_write_second =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_io_write_second");
 
   auto stream_file =
@@ -162,13 +162,13 @@ inline void stat_io() {
 
 inline void stat_avg_load() {
   static auto system_loadavg_1m =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_system_loadavg_1m");
   static auto system_loadavg_5m =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_system_loadavg_5m");
   static auto system_loadavg_15m =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_system_loadavg_15m");
   std::ifstream file("/proc/loadavg");
   if (!file) {
@@ -209,17 +209,20 @@ struct ProcStat {
 
 inline void process_status() {
   static auto process_uptime =
-      system_metric_manager::get_metric_static<counter_t>("ylt_process_uptime");
+      system_metric_manager::instance().get_metric_static<counter_t>(
+          "ylt_process_uptime");
   static auto process_priority =
-      system_metric_manager::get_metric_static<gauge_t>("ylt_process_priority");
+      system_metric_manager::instance().get_metric_static<gauge_t>(
+          "ylt_process_priority");
   static auto pid =
-      system_metric_manager::get_metric_static<gauge_t>("ylt_pid");
+      system_metric_manager::instance().get_metric_static<gauge_t>("ylt_pid");
   static auto ppid =
-      system_metric_manager::get_metric_static<gauge_t>("ylt_ppid");
+      system_metric_manager::instance().get_metric_static<gauge_t>("ylt_ppid");
   static auto pgrp =
-      system_metric_manager::get_metric_static<gauge_t>("ylt_pgrp");
+      system_metric_manager::instance().get_metric_static<gauge_t>("ylt_pgrp");
   static auto thread_count =
-      system_metric_manager::get_metric_static<gauge_t>("ylt_thread_count");
+      system_metric_manager::instance().get_metric_static<gauge_t>(
+          "ylt_thread_count");
 
   auto stream_file =
       std::shared_ptr<FILE>(fopen("/proc/self/stat", "r"), [](FILE *ptr) {
@@ -254,7 +257,7 @@ inline void process_status() {
 
 inline void stat_metric() {
   static auto user_metric_count =
-      system_metric_manager::get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_user_metric_count");
   user_metric_count->update(g_user_metric_count);
 }
@@ -282,50 +285,56 @@ inline void start_stat(std::shared_ptr<coro_io::period_timer> timer) {
 }  // namespace detail
 
 inline bool start_system_metric() {
-  system_metric_manager::create_metric_static<gauge_t>("ylt_process_cpu_usage",
-                                                       "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_process_cpu_usage", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_cpu_usage_system", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_cpu_usage_user", "");
 
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_memory_virtual", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_memory_resident", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_memory_shared", "");
 
-  system_metric_manager::create_metric_static<gauge_t>("ylt_process_uptime",
-                                                       "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_pid", "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_ppid", "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_pgrp", "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_thread_count", "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_process_priority",
-                                                       "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_process_uptime", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>("ylt_pid",
+                                                                  "");
+  system_metric_manager::instance().create_metric_static<gauge_t>("ylt_ppid",
+                                                                  "");
+  system_metric_manager::instance().create_metric_static<gauge_t>("ylt_pgrp",
+                                                                  "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_thread_count", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_process_priority", "");
 
-  system_metric_manager::create_metric_static<gauge_t>("ylt_user_metric_count",
-                                                       "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_user_metric_count", "");
 
-  system_metric_manager::create_metric_static<gauge_t>("ylt_system_loadavg_1m",
-                                                       "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_system_loadavg_5m",
-                                                       "");
-  system_metric_manager::create_metric_static<gauge_t>("ylt_system_loadavg_15m",
-                                                       "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_system_loadavg_1m", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_system_loadavg_5m", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_system_loadavg_15m", "");
 
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_io_read_bytes_second", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_io_write_bytes_second", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_io_read_second", "");
-  system_metric_manager::create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_io_write_second", "");
 
-  system_metric_manager::register_metric_static(g_user_metric_labels);
-  system_metric_manager::register_metric_static(g_summary_failed_count);
+  system_metric_manager::instance().register_metric_static(
+      g_user_metric_labels);
+  system_metric_manager::instance().register_metric_static(
+      g_summary_failed_count);
 
   static auto exucutor = coro_io::create_io_context_pool(1);
   auto timer =

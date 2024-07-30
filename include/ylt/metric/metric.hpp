@@ -223,16 +223,26 @@ inline void set_metric_capacity(int64_t max_count) {
 
 template <typename Tag>
 struct metric_manager_t {
+  metric_manager_t(metric_manager_t const&) = delete;
+  metric_manager_t(metric_manager_t&&) = delete;
+  metric_manager_t& operator=(metric_manager_t const&) = delete;
+  metric_manager_t& operator=(metric_manager_t&&) = delete;
+
   struct null_mutex_t {
     void lock() {}
     void unlock() {}
   };
 
+  static metric_manager_t<Tag>& instance() {
+    static metric_manager_t<Tag> inst;
+    return inst;
+  }
+
   // create and register metric
   template <typename T, typename... Args>
-  static std::shared_ptr<T> create_metric_static(const std::string& name,
-                                                 const std::string& help,
-                                                 Args&&... args) {
+  std::shared_ptr<T> create_metric_static(const std::string& name,
+                                          const std::string& help,
+                                          Args&&... args) {
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
     bool r = register_metric_static(m);
     if (!r) {
@@ -242,38 +252,39 @@ struct metric_manager_t {
   }
 
   template <typename T, typename... Args>
-  static std::shared_ptr<T> create_metric_dynamic(const std::string& name,
-                                                  const std::string& help,
-                                                  Args&&... args) {
+  std::shared_ptr<T> create_metric_dynamic(const std::string& name,
+                                           const std::string& help,
+                                           Args&&... args) {
+    auto& inst = metric_manager_t<Tag>::instance();
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
-    bool r = register_metric_dynamic(m);
+    bool r = inst.register_metric_dynamic(m);
     if (!r) {
       return nullptr;
     }
     return m;
   }
 
-  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
+  bool register_metric_static(std::shared_ptr<metric_t> metric) {
     return register_metric_impl<false>(metric);
   }
 
-  static bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
+  bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
     return register_metric_impl<true>(metric);
   }
 
-  static bool remove_metric_static(const std::string& name) {
+  bool remove_metric_static(const std::string& name) {
     return remove_metric_impl<false>(name);
   }
 
-  static bool remove_metric_dynamic(const std::string& name) {
+  bool remove_metric_dynamic(const std::string& name) {
     return remove_metric_impl<true>(name);
   }
 
-  static bool remove_metric_dynamic(std::shared_ptr<metric_t> metric) {
+  bool remove_metric_dynamic(std::shared_ptr<metric_t> metric) {
     return remove_metric_impl<true>(std::string(metric->name()));
   }
 
-  static void remove_metric_dynamic(const std::vector<std::string>& names) {
+  void remove_metric_dynamic(const std::vector<std::string>& names) {
     if (names.empty()) {
       return;
     }
@@ -283,8 +294,7 @@ struct metric_manager_t {
     }
   }
 
-  static void remove_metric_dynamic(
-      std::vector<std::shared_ptr<metric_t>> metrics) {
+  void remove_metric_dynamic(std::vector<std::shared_ptr<metric_t>> metrics) {
     if (metrics.empty()) {
       return;
     }
@@ -295,14 +305,13 @@ struct metric_manager_t {
   }
 
   template <typename... Metrics>
-  static bool register_metric_dynamic(Metrics... metrics) {
+  bool register_metric_dynamic(Metrics... metrics) {
     bool r = true;
     ((void)(r && (r = register_metric_impl<true>(metrics), true)), ...);
     return r;
   }
 
-  static bool register_metric_dynamic(
-      std::vector<std::shared_ptr<metric_t>> metrics) {
+  bool register_metric_dynamic(std::vector<std::shared_ptr<metric_t>> metrics) {
     bool r = true;
     std::vector<std::shared_ptr<metric_t>> vec;
     for (auto& metric : metrics) {
@@ -323,13 +332,13 @@ struct metric_manager_t {
   }
 
   template <typename... Metrics>
-  static bool register_metric_static(Metrics... metrics) {
+  bool register_metric_static(Metrics... metrics) {
     bool r = true;
     ((void)(r && (r = register_metric_impl<false>(metrics), true)), ...);
     return r;
   }
 
-  static auto get_metrics() {
+  auto get_metrics() {
     if (need_lock_) {
       return collect<true>();
     }
@@ -338,23 +347,23 @@ struct metric_manager_t {
     }
   }
 
-  static auto metric_map_static() { return metric_map_impl<false>(); }
-  static auto metric_map_dynamic() { return metric_map_impl<true>(); }
+  auto metric_map_static() { return metric_map_impl<false>(); }
+  auto metric_map_dynamic() { return metric_map_impl<true>(); }
 
-  static size_t metric_count_static() { return metric_count_impl<false>(); }
+  size_t metric_count_static() { return metric_count_impl<false>(); }
 
-  static size_t metric_count_dynamic() { return metric_count_impl<true>(); }
+  size_t metric_count_dynamic() { return metric_count_impl<true>(); }
 
-  static std::vector<std::string> metric_keys_static() {
+  std::vector<std::string> metric_keys_static() {
     return metric_keys_impl<false>();
   }
 
-  static std::vector<std::string> metric_keys_dynamic() {
+  std::vector<std::string> metric_keys_dynamic() {
     return metric_keys_impl<true>();
   }
 
   // static labels: {{"method", "GET"}, {"url", "/"}}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_static(
       const std::map<std::string, std::string>& labels) {
     std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_static();
@@ -368,7 +377,7 @@ struct metric_manager_t {
   }
 
   // static label: {"method", "GET"}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
       const std::pair<std::string, std::string>& label) {
     std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_static();
@@ -384,7 +393,7 @@ struct metric_manager_t {
   }
 
   // labels: {{"method", "POST"}, {"code", "200"}}
-  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
+  std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
       const std::map<std::string, std::string>& labels) {
     std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_dynamic();
@@ -412,7 +421,7 @@ struct metric_manager_t {
   }
 
   template <typename T>
-  static std::shared_ptr<T> get_metric_static(const std::string& name) {
+  std::shared_ptr<T> get_metric_static(const std::string& name) {
     auto m = get_metric_impl<false>(name);
     if (m == nullptr) {
       return nullptr;
@@ -421,7 +430,7 @@ struct metric_manager_t {
   }
 
   template <typename T>
-  static std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
+  std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
     auto m = get_metric_impl<true>(name);
     if (m == nullptr) {
       return nullptr;
@@ -429,8 +438,7 @@ struct metric_manager_t {
     return std::dynamic_pointer_cast<T>(m);
   }
 
-  static std::string serialize(
-      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+  std::string serialize(const std::vector<std::shared_ptr<metric_t>>& metrics) {
     std::string str;
     for (auto& m : metrics) {
       if (m->metric_type() == MetricType::Summary) {
@@ -444,22 +452,22 @@ struct metric_manager_t {
     return str;
   }
 
-  static std::string serialize_static() { return serialize(collect<false>()); }
+  std::string serialize_static() { return serialize(collect<false>()); }
 
-  static std::string serialize_dynamic() { return serialize(collect<true>()); }
+  std::string serialize_dynamic() { return serialize(collect<true>()); }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  static std::string serialize_to_json_static() {
+  std::string serialize_to_json_static() {
     auto metrics = collect<false>();
     return serialize_to_json(metrics);
   }
 
-  static std::string serialize_to_json_dynamic() {
+  std::string serialize_to_json_dynamic() {
     auto metrics = collect<true>();
     return serialize_to_json(metrics);
   }
 
-  static std::string serialize_to_json(
+  std::string serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
     if (metrics.empty()) {
       return "";
@@ -483,19 +491,21 @@ struct metric_manager_t {
   }
 #endif
 
-  static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
+  std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
       const metric_filter_options& options) {
     return filter_metrics<false>(options);
   }
 
-  static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
+  std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
       const metric_filter_options& options) {
     return filter_metrics<true>(options);
   }
 
  private:
+  metric_manager_t() = default;
+
   template <bool need_lock>
-  static void check_lock() {
+  void check_lock() {
     if (need_lock_ != need_lock) {
       std::string str = "need lock ";
       std::string s = need_lock_ ? "true" : "false";
@@ -506,7 +516,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock = true>
-  static auto get_lock() {
+  auto get_lock() {
     check_lock<need_lock>();
     if constexpr (need_lock) {
       return std::scoped_lock(mtx_);
@@ -517,11 +527,11 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static bool register_metric_impl(std::shared_ptr<metric_t> metric) {
+  bool register_metric_impl(std::shared_ptr<metric_t> metric) {
     // the first time regiter_metric will set metric_manager_t lock or not lock.
     // visit metric_manager_t with different lock strategy will cause throw
     // exception.
-    std::call_once(flag_, [] {
+    std::call_once(flag_, [this] {
       need_lock_ = need_lock;
     });
 
@@ -540,25 +550,25 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static size_t remove_metric_impl(const std::string& name) {
+  size_t remove_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
     return metric_map_.erase(name);
   }
 
   template <bool need_lock>
-  static auto metric_map_impl() {
+  auto metric_map_impl() {
     auto lock = get_lock<need_lock>();
     return metric_map_;
   }
 
   template <bool need_lock>
-  static size_t metric_count_impl() {
+  size_t metric_count_impl() {
     auto lock = get_lock<need_lock>();
     return metric_map_.size();
   }
 
   template <bool need_lock>
-  static std::vector<std::string> metric_keys_impl() {
+  std::vector<std::string> metric_keys_impl() {
     std::vector<std::string> keys;
     {
       auto lock = get_lock<need_lock>();
@@ -571,7 +581,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static std::shared_ptr<metric_t> get_metric_impl(const std::string& name) {
+  std::shared_ptr<metric_t> get_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
     auto it = metric_map_.find(name);
     if (it == metric_map_.end()) {
@@ -581,7 +591,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static auto collect() {
+  auto collect() {
     std::vector<std::shared_ptr<metric_t>> metrics;
     {
       auto lock = get_lock<need_lock>();
@@ -592,7 +602,7 @@ struct metric_manager_t {
     return metrics;
   }
 
-  static void filter_by_label_name(
+  void filter_by_label_name(
       std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
       std::shared_ptr<metric_t> m, const metric_filter_options& options,
       std::vector<size_t>& indexs, size_t index) {
@@ -610,7 +620,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static std::vector<std::shared_ptr<metric_t>> filter_metrics(
+  std::vector<std::shared_ptr<metric_t>> filter_metrics(
       const metric_filter_options& options) {
     auto metrics = collect<need_lock>();
     if (!options.name_regex && !options.label_regex) {
@@ -652,13 +662,12 @@ struct metric_manager_t {
     return filtered_metrics;
   }
 
-  static inline std::mutex mtx_;
-  static inline std::unordered_map<std::string, std::shared_ptr<metric_t>>
-      metric_map_;
+  std::mutex mtx_;
+  std::unordered_map<std::string, std::shared_ptr<metric_t>> metric_map_;
 
-  static inline null_mutex_t null_mtx_;
-  static inline std::atomic_bool need_lock_ = true;
-  static inline std::once_flag flag_;
+  null_mutex_t null_mtx_;
+  std::atomic_bool need_lock_ = true;
+  std::once_flag flag_;
 };
 
 struct ylt_default_metric_tag_t {};
@@ -668,13 +677,13 @@ template <typename... Args>
 struct metric_collector_t {
   static std::string serialize() {
     auto vec = get_all_metrics();
-    return default_metric_manager::serialize(vec);
+    return default_metric_manager::instance().serialize(vec);
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   static std::string serialize_to_json() {
     auto vec = get_all_metrics();
-    return default_metric_manager::serialize_to_json(vec);
+    return default_metric_manager::instance().serialize_to_json(vec);
   }
 #endif
 
@@ -687,7 +696,7 @@ struct metric_collector_t {
  private:
   template <typename T>
   static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
-    auto v = T::get_metrics();
+    auto v = T::instance().get_metrics();
     vec.insert(vec.end(), v.begin(), v.end());
   }
 };

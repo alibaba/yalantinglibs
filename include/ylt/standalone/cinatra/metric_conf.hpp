@@ -25,8 +25,9 @@ struct cinatra_metric_conf {
       return;
     }
 
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::counter_t>(server_total_req);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::counter_t>(server_total_req);
     if (m == nullptr) {
       return;
     }
@@ -37,8 +38,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::counter_t>(server_failed_req);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::counter_t>(server_failed_req);
     if (m == nullptr) {
       return;
     }
@@ -49,8 +51,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::gauge_t>(server_total_fd);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::gauge_t>(server_total_fd);
     if (m == nullptr) {
       return;
     }
@@ -61,8 +64,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::gauge_t>(server_total_fd);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::gauge_t>(server_total_fd);
     if (m == nullptr) {
       return;
     }
@@ -73,8 +77,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::counter_t>(server_total_recv_bytes);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::counter_t>(server_total_recv_bytes);
     if (m == nullptr) {
       return;
     }
@@ -85,8 +90,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::counter_t>(server_total_send_bytes);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::counter_t>(server_total_send_bytes);
     if (m == nullptr) {
       return;
     }
@@ -97,8 +103,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::histogram_t>(server_req_latency);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::histogram_t>(server_req_latency);
     if (m == nullptr) {
       return;
     }
@@ -109,8 +116,9 @@ struct cinatra_metric_conf {
     if (!enable_metric) {
       return;
     }
-    static auto m = ylt::metric::default_metric_manager::get_metric_static<
-        ylt::metric::histogram_t>(server_read_latency);
+    static auto m =
+        ylt::metric::default_metric_manager::instance()
+            .get_metric_static<ylt::metric::histogram_t>(server_read_latency);
     if (m == nullptr) {
       return;
     }
