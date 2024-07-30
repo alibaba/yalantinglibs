@@ -327,6 +327,7 @@ struct test_id_t {};
 
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = metric_manager_t<test_id_t<1>>;
+
   metric_mgr::instance().create_metric_dynamic<counter_t>("test_counter", "");
   metric_mgr::instance().create_metric_dynamic<counter_t>("test_counter2", "");
 
