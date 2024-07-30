@@ -279,7 +279,7 @@ struct metric_manager_t {
     }
     auto lock = get_lock<true>();
     for (auto& name : names) {
-      metric_map_.erase(name);
+      metric_map_->erase(name);
     }
   }
 
@@ -290,7 +290,7 @@ struct metric_manager_t {
     }
     auto lock = get_lock<true>();
     for (auto& metric : metrics) {
-      metric_map_.erase(std::string(metric->name()));
+      metric_map_->erase(std::string(metric->name()));
     }
   }
 
@@ -532,7 +532,11 @@ struct metric_manager_t {
                         << g_user_metric_count;
       return false;
     }
-    bool r = metric_map_.emplace(name, std::move(metric)).second;
+    if (metric_map_ == nullptr) {
+      metric_map_ = std::make_shared<
+          std::unordered_map<std::string, std::shared_ptr<metric_t>>>();
+    }
+    bool r = metric_map_->emplace(name, std::move(metric)).second;
     if (!r) {
       CINATRA_LOG_ERROR << "duplicate registered metric name: " << name;
     }
@@ -542,19 +546,19 @@ struct metric_manager_t {
   template <bool need_lock>
   static size_t remove_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
-    return metric_map_.erase(name);
+    return metric_map_->erase(name);
   }
 
   template <bool need_lock>
   static auto metric_map_impl() {
     auto lock = get_lock<need_lock>();
-    return metric_map_;
+    return *metric_map_;
   }
 
   template <bool need_lock>
   static size_t metric_count_impl() {
     auto lock = get_lock<need_lock>();
-    return metric_map_.size();
+    return metric_map_->size();
   }
 
   template <bool need_lock>
@@ -562,7 +566,7 @@ struct metric_manager_t {
     std::vector<std::string> keys;
     {
       auto lock = get_lock<need_lock>();
-      for (auto& pair : metric_map_) {
+      for (auto& pair : *metric_map_) {
         keys.push_back(pair.first);
       }
     }
@@ -573,8 +577,8 @@ struct metric_manager_t {
   template <bool need_lock>
   static std::shared_ptr<metric_t> get_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
-    auto it = metric_map_.find(name);
-    if (it == metric_map_.end()) {
+    auto it = metric_map_->find(name);
+    if (it == metric_map_->end()) {
       return nullptr;
     }
     return it->second;
@@ -585,7 +589,7 @@ struct metric_manager_t {
     std::vector<std::shared_ptr<metric_t>> metrics;
     {
       auto lock = get_lock<need_lock>();
-      for (auto& pair : metric_map_) {
+      for (auto& pair : *metric_map_) {
         metrics.push_back(pair.second);
       }
     }
@@ -653,8 +657,8 @@ struct metric_manager_t {
   }
 
   static inline std::mutex mtx_;
-  static inline std::unordered_map<std::string, std::shared_ptr<metric_t>>
-      metric_map_;
+  static inline auto metric_map_ = std::make_shared<
+      std::unordered_map<std::string, std::shared_ptr<metric_t>>>();
 
   static inline null_mutex_t null_mtx_;
   static inline std::atomic_bool need_lock_ = true;

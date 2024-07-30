@@ -7,7 +7,20 @@
 using namespace ylt;
 using namespace ylt::metric;
 
+template <size_t id>
+struct test_id_t {};
+
+using my_metric_mgr = metric_manager_t<test_id_t<1>>;
+
+auto g_counter = my_metric_mgr::create_metric_dynamic<counter_t>("test1", "");
+
 TEST_CASE("test no lable") {
+  {
+    g_counter->inc();
+    g_counter->inc();
+    CHECK(g_counter->value() == 2);
+  }
+
   {
     gauge_t g{"test_gauge", "help"};
     g.inc();
@@ -302,9 +315,6 @@ TEST_CASE("test register metric") {
                     std::invalid_argument);
   }
 }
-
-template <size_t id>
-struct test_id_t {};
 
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = metric_manager_t<test_id_t<1>>;
