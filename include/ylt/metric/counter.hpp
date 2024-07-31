@@ -162,7 +162,12 @@ class basic_counter : public metric_t {
     }
 
 #ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
+    if constexpr (std::is_floating_point_v<value_type>) {
+      mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
+    }
+    else {
+      default_label_value_.inc(val);
+    }
 #else
     default_label_value_.inc(val);
 #endif
@@ -305,7 +310,12 @@ class basic_counter : public metric_t {
       case op_type_t::INC: {
 #ifdef __APPLE__
         if constexpr (is_atomic) {
-          mac_os_atomic_fetch_add(&label_val.local_value(), value);
+          if constexpr (std::is_floating_point_v<value_type>) {
+            mac_os_atomic_fetch_add(&label_val.local_value(), value);
+          }
+          else {
+            label_val += value;
+          }
         }
         else {
           label_val += value;
@@ -322,7 +332,12 @@ class basic_counter : public metric_t {
       case op_type_t::DEC:
 #ifdef __APPLE__
         if constexpr (is_atomic) {
-          mac_os_atomic_fetch_sub(&label_val, value);
+          if constexpr (std::is_floating_point_v<value_type>) {
+            mac_os_atomic_fetch_sub(&label_val, value);
+          }
+          else {
+            label_val -= value;
+          }
         }
         else {
           label_val -= value;

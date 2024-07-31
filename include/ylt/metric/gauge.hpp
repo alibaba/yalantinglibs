@@ -41,7 +41,12 @@ class basic_gauge : public basic_counter<value_type> {
 
   void dec(value_type value = 1) {
 #ifdef __APPLE__
-    mac_os_atomic_fetch_sub(&default_label_value_.local_value(), value);
+    if constexpr (std::is_floating_point_v<value_type>) {
+      mac_os_atomic_fetch_sub(&default_label_value_.local_value(), value);
+    }
+    else {
+      default_label_value_.dec(value);
+    }
 #else
     default_label_value_.dec(value);
 #endif

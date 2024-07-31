@@ -35,6 +35,16 @@ class thread_local_value {
     }
   }
 
+  thread_local_value &operator=(const thread_local_value &other) {
+    for (size_t i = 0; i < other.duplicates_.size(); i++) {
+      if (other.duplicates_[i]) {
+        auto ptr =
+            new std::atomic<value_type>(other.duplicates_[i].load()->load());
+        duplicates_[i] = ptr;
+      }
+    }
+  }
+
   thread_local_value(thread_local_value &&other) {
     duplicates_ = std::move(other.duplicates_);
   }
