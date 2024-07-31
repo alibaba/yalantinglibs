@@ -289,6 +289,16 @@ class basic_counter : public metric_t {
     }
   }
 
+  template <typename T>
+  void set_value_static(T &label_val, value_type value, op_type_t type) {
+    set_value<true>(label_val, value, type);
+  }
+
+  template <typename T>
+  void set_value_dynamic(T &label_val, value_type value, op_type_t type) {
+    set_value<false>(label_val, value, type);
+  }
+
   template <bool is_atomic = false, typename T>
   void set_value(T &label_val, value_type value, op_type_t type) {
     switch (type) {

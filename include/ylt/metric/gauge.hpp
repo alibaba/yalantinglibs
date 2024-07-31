@@ -16,6 +16,8 @@ class basic_gauge : public basic_counter<value_type> {
   using basic_counter<value_type>::value_map_;
   using basic_counter<value_type>::mtx_;
   using basic_counter<value_type>::stat_metric;
+  using basic_counter<value_type>::set_value_static;
+  using basic_counter<value_type>::set_value_dynamic;
 
  public:
   basic_gauge(std::string name, std::string help, size_t dupli_count = 2)
@@ -56,14 +58,14 @@ class basic_gauge : public basic_counter<value_type> {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
-                      op_type_t::DEC);
+      set_value_static(atomic_value_map_[labels_value].local_value(), value,
+                       op_type_t::DEC);
     }
     else {
       std::lock_guard lock(mtx_);
       stat_metric(labels_value);
-      set_value<false>(value_map_[labels_value].local_value(), value,
-                       op_type_t::DEC);
+      set_value_dynamic(value_map_[labels_value].local_value(), value,
+                        op_type_t::DEC);
     }
   }
 };
