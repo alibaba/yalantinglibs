@@ -476,6 +476,11 @@ struct metric_manager_t {
       if (str.size() > start)
         str.append(",");
     }
+
+    if (str.size() == 1) {
+      return "";
+    }
+
     str.back() = ']';
     return str;
   }
