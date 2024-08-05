@@ -26,12 +26,14 @@ struct json_histogram_t {
 REFLECTION(json_histogram_t, name, help, type, metrics);
 #endif
 
-class histogram_t : public metric_t {
+template <typename value_type>
+class basic_histogram : public metric_t {
  public:
-  histogram_t(std::string name, std::string help, std::vector<double> buckets)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets, size_t dupli_count = 2)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
-        sum_(std::make_shared<gauge_t>("", "")) {
+        sum_(std::make_shared<gauge_t>("", "", dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -44,11 +46,12 @@ class histogram_t : public metric_t {
     use_atomic_ = true;
   }
 
-  histogram_t(std::string name, std::string help, std::vector<double> buckets,
-              std::vector<std::string> labels_name)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets,
+                  std::vector<std::string> labels_name, size_t dupli_count = 2)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels_name),
-        sum_(std::make_shared<gauge_t>(name, help, labels_name)) {
+        sum_(std::make_shared<gauge_t>(name, help, labels_name, dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -57,15 +60,17 @@ class histogram_t : public metric_t {
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(
-          std::make_shared<counter_t>(name, help, labels_name));
+          std::make_shared<counter_t>(name, help, labels_name, dupli_count));
     }
   }
 
-  histogram_t(std::string name, std::string help, std::vector<double> buckets,
-              std::map<std::string, std::string> labels)
+  basic_histogram(std::string name, std::string help,
+                  std::vector<double> buckets,
+                  std::map<std::string, std::string> labels,
+                  size_t dupli_count = std::thread::hardware_concurrency())
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, name, help, labels),
-        sum_(std::make_shared<gauge_t>(name, help, labels)) {
+        sum_(std::make_shared<gauge_t>(name, help, labels, dupli_count)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
@@ -73,12 +78,13 @@ class histogram_t : public metric_t {
     g_user_metric_count++;
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
-      bucket_counts_.push_back(std::make_shared<counter_t>(name, help, labels));
+      bucket_counts_.push_back(
+          std::make_shared<counter_t>(name, help, labels, dupli_count));
     }
     use_atomic_ = true;
   }
 
-  void observe(double value) {
+  void observe(value_type value) {
     if (!use_atomic_ || !labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
@@ -91,7 +97,7 @@ class histogram_t : public metric_t {
     bucket_counts_[bucket_index]->inc();
   }
 
-  void observe(const std::vector<std::string> &labels_value, double value) {
+  void observe(const std::vector<std::string> &labels_value, value_type value) {
     if (sum_->labels_name().empty()) {
       throw std::invalid_argument("not a label metric");
     }
@@ -106,7 +112,9 @@ class histogram_t : public metric_t {
 
   auto get_bucket_counts() { return bucket_counts_; }
 
-  metric_hash_map<double> value_map() override { return sum_->value_map(); }
+  bool has_label_value(const std::string &label_val) override {
+    return sum_->has_label_value(label_val);
+  }
 
   void serialize(std::string &str) override {
     if (!sum_->labels_name().empty()) {
@@ -119,7 +127,7 @@ class histogram_t : public metric_t {
     }
 
     serialize_head(str);
-    double count = 0;
+    value_type count = 0;
     auto bucket_counts = get_bucket_counts();
     for (size_t i = 0; i < bucket_counts.size(); i++) {
       auto counter = bucket_counts[i];
@@ -162,7 +170,7 @@ class histogram_t : public metric_t {
 
     json_histogram_t hist{name_, help_, std::string(metric_name())};
 
-    double count = 0;
+    value_type count = 0;
     auto bucket_counts = get_bucket_counts();
     json_histogram_metric_t metric{};
     for (size_t i = 0; i < bucket_counts.size(); i++) {
@@ -205,11 +213,11 @@ class histogram_t : public metric_t {
     std::string value_str;
     auto bucket_counts = get_bucket_counts();
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
 
-      double count = 0;
+      value_type count = 0;
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         value_str.append(name_).append("_bucket{");
@@ -242,12 +250,7 @@ class histogram_t : public metric_t {
       build_label_string(str, sum_->labels_name(), labels_value);
       str.append("} ");
 
-      if (type_ == MetricType::Counter) {
-        str.append(std::to_string((int64_t)value));
-      }
-      else {
-        str.append(std::to_string(value));
-      }
+      str.append(std::to_string(value.value()));
       str.append("\n");
 
       str.append(name_).append("_count{");
@@ -269,7 +272,7 @@ class histogram_t : public metric_t {
     auto bucket_counts = get_bucket_counts();
 
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
 
@@ -306,7 +309,10 @@ class histogram_t : public metric_t {
 #endif
 
   std::vector<double> bucket_boundaries_;
-  std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly
+  std::vector<std::shared_ptr<basic_counter<value_type>>>
+      bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
+using histogram_t = basic_histogram<int64_t>;
+using histogram_d = basic_histogram<double>;
 }  // namespace ylt::metric

@@ -112,7 +112,7 @@ class summary_t : public metric_t {
       throw std::invalid_argument("not a default label metric");
     }
     if (block_->sample_queue_.size_approx() >= 20000000) {
-      g_summary_failed_count->inc();
+      g_summary_failed_count++;
       return;
     }
     block_->sample_queue_.enqueue(value);
@@ -134,7 +134,7 @@ class summary_t : public metric_t {
       }
     }
     if (labels_block_->sample_queue_.size_approx() >= 20000000) {
-      g_summary_failed_count->inc();
+      g_summary_failed_count++;
       return;
     }
     labels_block_->sample_queue_.enqueue({std::move(labels_value), value});
@@ -197,13 +197,22 @@ class summary_t : public metric_t {
     co_return vec;
   }
 
-  metric_hash_map<double> value_map() override {
+  metric_hash_map<double> value_map() {
     auto ret = async_simple::coro::syncAwait(coro_io::post(
         [this] {
           return labels_block_->label_sum_;
         },
         excutor_->get_executor()));
     return ret.value();
+  }
+
+  bool has_label_value(const std::string &label_val) override {
+    auto map = value_map();
+    auto it = std::find_if(map.begin(), map.end(), [&label_val](auto &pair) {
+      auto &key = pair.first;
+      return std::find(key.begin(), key.end(), label_val) != key.end();
+    });
+    return it != map.end();
   }
 
   async_simple::coro::Lazy<double> get_sum() {

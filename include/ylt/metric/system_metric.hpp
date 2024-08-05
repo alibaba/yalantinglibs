@@ -260,6 +260,16 @@ inline void stat_metric() {
       system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_user_metric_count");
   user_metric_count->update(g_user_metric_count);
+
+  static auto user_metric_label_count =
+      system_metric_manager::instance().get_metric_static<gauge_t>(
+          "ylt_user_metric_labels");
+  user_metric_label_count->update(g_user_metric_label_count);
+
+  static auto ylt_summary_failed_count =
+      system_metric_manager::instance().get_metric_static<gauge_t>(
+          "ylt_summary_failed_count");
+  ylt_summary_failed_count->update(g_summary_failed_count);
 }
 
 inline void ylt_stat() {
@@ -314,6 +324,10 @@ inline bool start_system_metric() {
 
   system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_user_metric_count", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_user_metric_labels", "");
+  system_metric_manager::instance().create_metric_static<gauge_t>(
+      "ylt_summary_failed_count", "");
 
   system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_system_loadavg_1m", "");
@@ -330,11 +344,6 @@ inline bool start_system_metric() {
       "ylt_process_io_read_second", "");
   system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_process_io_write_second", "");
-
-  system_metric_manager::instance().register_metric_static(
-      g_user_metric_labels);
-  system_metric_manager::instance().register_metric_static(
-      g_summary_failed_count);
 
   static auto exucutor = coro_io::create_io_context_pool(1);
   auto timer =

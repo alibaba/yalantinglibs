@@ -122,7 +122,7 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual metric_hash_map<double> value_map() { return {}; }
+  virtual bool has_label_value(const std::string& label_value) { return false; }
 
   virtual void serialize(std::string& str) {}
 
@@ -208,11 +208,8 @@ struct metric_manager_t;
 struct ylt_system_tag_t {};
 using system_metric_manager = metric_manager_t<ylt_system_tag_t>;
 
-class counter_t;
-inline auto g_user_metric_labels =
-    std::make_shared<counter_t>("ylt_user_metric_labels", "");
-inline auto g_summary_failed_count =
-    std::make_shared<counter_t>("ylt_summary_failed_count", "");
+inline std::atomic<int64_t> g_user_metric_label_count = 0;
+inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
@@ -398,19 +395,12 @@ struct metric_manager_t {
     std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_dynamic();
     for (auto& [name, t] : map) {
-      auto val_map = t->value_map();
       auto labels_name = t->labels_name();
 
       for (auto& [k, v] : labels) {
         if (auto it = std::find(labels_name.begin(), labels_name.end(), k);
             it != labels_name.end()) {
-          if (auto it = std::find_if(val_map.begin(), val_map.end(),
-                                     [label_val = v](auto& pair) {
-                                       auto& key = pair.first;
-                                       return std::find(key.begin(), key.end(),
-                                                        label_val) != key.end();
-                                     });
-              it != val_map.end()) {
+          if (t->has_label_value(v)) {
             vec.push_back(t);
           }
         }

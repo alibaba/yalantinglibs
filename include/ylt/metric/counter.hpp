@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "metric.hpp"
+#include "thread_local_value.hpp"
 
 namespace ylt::metric {
 enum class op_type_t { INC, DEC, SET };
@@ -22,50 +23,58 @@ struct json_counter_t {
 REFLECTION(json_counter_t, name, help, type, metrics);
 #endif
 
-class counter_t : public metric_t {
+template <typename value_type>
+class basic_counter : public metric_t {
  public:
   // default, no labels, only contains an atomic value.
-  counter_t(std::string name, std::string help)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
+  basic_counter(std::string name, std::string help, size_t dupli_count = 2)
+      : metric_t(MetricType::Counter, std::move(name), std::move(help)),
+        dupli_count_(dupli_count) {
     use_atomic_ = true;
     g_user_metric_count++;
   }
 
   // static labels value, contains a map with atomic value.
-  counter_t(std::string name, std::string help,
-            std::map<std::string, std::string> labels)
+  basic_counter(std::string name, std::string help,
+                std::map<std::string, std::string> labels,
+                size_t dupli_count = 2)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {
-    atomic_value_map_.emplace(labels_value_, 0);
+                 std::move(labels)),
+        dupli_count_(dupli_count) {
+    atomic_value_map_.emplace(labels_value_,
+                              thread_local_value<value_type>(dupli_count));
     g_user_metric_count++;
     use_atomic_ = true;
   }
 
   // dynamic labels value
-  counter_t(std::string name, std::string help,
-            std::vector<std::string> labels_name)
+  basic_counter(std::string name, std::string help,
+                std::vector<std::string> labels_name, size_t dupli_count = 2)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)) {
+                 std::move(labels_name)),
+        dupli_count_(dupli_count) {
     g_user_metric_count++;
   }
 
-  virtual ~counter_t() { g_user_metric_count--; }
+  virtual ~basic_counter() { g_user_metric_count--; }
 
-  double value() { return default_label_value_; }
+  value_type value() { return default_label_value_.value(); }
 
-  double value(const std::vector<std::string> &labels_value) {
+  value_type value(const std::vector<std::string> &labels_value) {
     if (use_atomic_) {
-      double val = atomic_value_map_[labels_value];
+      value_type val = atomic_value_map_[labels_value].value();
       return val;
     }
     else {
       std::lock_guard lock(mtx_);
-      return value_map_[labels_value];
+      auto [it, r] = value_map_.try_emplace(
+          labels_value, thread_local_value<value_type>(dupli_count_));
+      return it->second.value();
     }
   }
 
-  metric_hash_map<double> value_map() override {
-    metric_hash_map<double> map;
+  metric_hash_map<thread_local_value<value_type>> value_map() {
+    metric_hash_map<thread_local_value<value_type>> map;
     if (use_atomic_) {
       map = {atomic_value_map_.begin(), atomic_value_map_.end()};
     }
@@ -76,9 +85,18 @@ class counter_t : public metric_t {
     return map;
   }
 
+  bool has_label_value(const std::string &label_val) override {
+    auto map = value_map();
+    auto it = std::find_if(map.begin(), map.end(), [&label_val](auto &pair) {
+      auto &key = pair.first;
+      return std::find(key.begin(), key.end(), label_val) != key.end();
+    });
+    return it != map.end();
+  }
+
   void serialize(std::string &str) override {
     if (labels_name_.empty()) {
-      if (default_label_value_ == 0) {
+      if (default_label_value_.value() == 0) {
         return;
       }
       serialize_head(str);
@@ -103,11 +121,11 @@ class counter_t : public metric_t {
   void serialize_to_json(std::string &str) override {
     std::string s;
     if (labels_name_.empty()) {
-      if (default_label_value_ == 0) {
+      if (default_label_value_.value() == 0) {
         return;
       }
       json_counter_t counter{name_, help_, std::string(metric_name())};
-      int64_t value = default_label_value_;
+      int64_t value = default_label_value_.value();
       counter.metrics.push_back({{}, value});
       iguana::to_json(counter, str);
       return;
@@ -121,7 +139,7 @@ class counter_t : public metric_t {
   template <typename T>
   void to_json(json_counter_t &counter, T &map, std::string &str) {
     for (auto &[k, v] : map) {
-      if (v == 0) {
+      if (v.value() == 0) {
         continue;
       }
       json_counter_metric_t metric;
@@ -129,7 +147,7 @@ class counter_t : public metric_t {
       for (auto &label_value : k) {
         metric.labels.emplace(labels_name_[index++], label_value);
       }
-      metric.value = (int64_t)v;
+      metric.value = (int64_t)v.value();
       counter.metrics.push_back(std::move(metric));
     }
     if (!counter.metrics.empty()) {
@@ -138,19 +156,24 @@ class counter_t : public metric_t {
   }
 #endif
 
-  void inc(double val = 1) {
+  void inc(value_type val = 1) {
     if (val < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
 
 #ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_label_value_, val);
+    if constexpr (std::is_floating_point_v<value_type>) {
+      mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
+    }
+    else {
+      default_label_value_.inc(val);
+    }
 #else
-    default_label_value_ += val;
+    default_label_value_.inc(val);
 #endif
   }
 
-  void inc(const std::vector<std::string> &labels_value, double value = 1) {
+  void inc(const std::vector<std::string> &labels_value, value_type value = 1) {
     if (value == 0) {
       return;
     }
@@ -161,24 +184,49 @@ class counter_t : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::INC);
+      set_value<true>(atomic_value_map_[labels_value].local_value(), value,
+                      op_type_t::INC);
     }
     else {
       std::lock_guard lock(mtx_);
       stat_metric(labels_value);
-      set_value<false>(value_map_[labels_value], value, op_type_t::INC);
+      set_value<false>(value_map_[labels_value].local_value(), value,
+                       op_type_t::INC);
     }
   }
 
   void stat_metric(const std::vector<std::string> &labels_value) {
     if (!value_map_.contains(labels_value)) {
-      g_user_metric_labels->inc();
+      g_user_metric_label_count++;
     }
   }
 
-  void update(double value) { default_label_value_ = value; }
+  value_type update(value_type value) {
+    return default_label_value_.update(value);
+  }
 
-  void update(const std::vector<std::string> &labels_value, double value) {
+  value_type reset() {
+    value_type val = {};
+    if (use_atomic_) {
+      if (labels_name_.empty()) {
+        val = default_label_value_.reset();
+        return val;
+      }
+
+      for (auto &[key, t] : atomic_value_map_) {
+        val += t.reset();
+      }
+    }
+    else {
+      std::lock_guard lock(mtx_);
+      for (auto &[key, t] : value_map_) {
+        val += t.reset();
+      }
+    }
+    return val;
+  }
+
+  void update(const std::vector<std::string> &labels_value, value_type value) {
     if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
       throw std::invalid_argument(
           "the number of labels_value name and labels_value is not match");
@@ -188,17 +236,15 @@ class counter_t : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::SET);
+      atomic_value_map_[labels_value].update(value);
     }
     else {
       std::lock_guard lock(mtx_);
-      set_value<false>(value_map_[labels_value], value, op_type_t::SET);
+      value_map_[labels_value].update(value);
     }
   }
 
-  metric_hash_map<std::atomic<double>> &atomic_value_map() {
-    return atomic_value_map_;
-  }
+  auto &atomic_value_map() { return atomic_value_map_; }
 
  protected:
   void serialize_default_label(std::string &str) {
@@ -207,12 +253,7 @@ class counter_t : public metric_t {
       str.append(" ");
     }
 
-    if (type_ == MetricType::Counter) {
-      str.append(std::to_string((int64_t)default_label_value_));
-    }
-    else {
-      str.append(std::to_string(default_label_value_));
-    }
+    str.append(std::to_string(default_label_value_.value()));
 
     str.append("\n");
   }
@@ -220,7 +261,7 @@ class counter_t : public metric_t {
   template <typename T>
   void serialize_map(T &value_map, std::string &str) {
     for (auto &[labels_value, value] : value_map) {
-      if (value == 0) {
+      if (value.value() == 0) {
         continue;
       }
       str.append(name_);
@@ -228,12 +269,7 @@ class counter_t : public metric_t {
       build_string(str, labels_name_, labels_value);
       str.append("} ");
 
-      if (type_ == MetricType::Counter) {
-        str.append(std::to_string((int64_t)value));
-      }
-      else {
-        str.append(std::to_string(value));
-      }
+      str.append(std::to_string(value.value()));
 
       str.append("\n");
     }
@@ -247,7 +283,8 @@ class counter_t : public metric_t {
     str.pop_back();
   }
 
-  void validate(const std::vector<std::string> &labels_value, double value) {
+  void validate(const std::vector<std::string> &labels_value,
+                value_type value) {
     if (value < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
@@ -257,13 +294,28 @@ class counter_t : public metric_t {
     }
   }
 
+  template <typename T>
+  void set_value_static(T &label_val, value_type value, op_type_t type) {
+    set_value<true>(label_val, value, type);
+  }
+
+  template <typename T>
+  void set_value_dynamic(T &label_val, value_type value, op_type_t type) {
+    set_value<false>(label_val, value, type);
+  }
+
   template <bool is_atomic = false, typename T>
-  void set_value(T &label_val, double value, op_type_t type) {
+  void set_value(T &label_val, value_type value, op_type_t type) {
     switch (type) {
       case op_type_t::INC: {
 #ifdef __APPLE__
         if constexpr (is_atomic) {
-          mac_os_atomic_fetch_add(&label_val, value);
+          if constexpr (std::is_floating_point_v<value_type>) {
+            mac_os_atomic_fetch_add(&label_val.local_value(), value);
+          }
+          else {
+            label_val += value;
+          }
         }
         else {
           label_val += value;
@@ -280,7 +332,12 @@ class counter_t : public metric_t {
       case op_type_t::DEC:
 #ifdef __APPLE__
         if constexpr (is_atomic) {
-          mac_os_atomic_fetch_sub(&label_val, value);
+          if constexpr (std::is_floating_point_v<value_type>) {
+            mac_os_atomic_fetch_sub(&label_val, value);
+          }
+          else {
+            label_val -= value;
+          }
         }
         else {
           label_val -= value;
@@ -300,10 +357,13 @@ class counter_t : public metric_t {
     }
   }
 
-  metric_hash_map<std::atomic<double>> atomic_value_map_;
-  std::atomic<double> default_label_value_ = 0;
+  metric_hash_map<thread_local_value<value_type>> atomic_value_map_;
+  thread_local_value<value_type> default_label_value_ = {10};
 
   std::mutex mtx_;
-  metric_hash_map<double> value_map_;
+  metric_hash_map<thread_local_value<value_type>> value_map_;
+  size_t dupli_count_ = 1;
 };
+using counter_t = basic_counter<int64_t>;
+using counter_d = basic_counter<double>;
 }  // namespace ylt::metric

@@ -17,7 +17,7 @@ TEST_CASE("test no lable") {
   g_counter->inc();
   CHECK(g_counter->value() == 1);
   {
-    gauge_t g{"test_gauge", "help"};
+    gauge_t g{"test_gauge", "help", 10};
     g.inc();
     g.inc();
 
@@ -31,12 +31,20 @@ TEST_CASE("test no lable") {
     CHECK_THROWS_AS(g.inc({}, 1), std::invalid_argument);
     CHECK_THROWS_AS(g.update({}, 1), std::invalid_argument);
 
-    counter_t c{"test_counter", "help"};
+    counter_t c{"test_counter", "help", 10};
     c.inc();
     c.inc();
     std::string str1;
     c.serialize(str1);
     CHECK(str1.find("test_counter 2") != std::string::npos);
+
+    auto r = c.reset();
+    CHECK(r == 2);
+    CHECK(c.value() == 0);
+
+    r = g.update(10);
+    CHECK(r == 1);
+    CHECK(g.value() == 10);
   }
   {
     counter_t c("get_count", "get counter");
@@ -114,10 +122,10 @@ TEST_CASE("test counter with dynamic labels value") {
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
     auto values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 1);
+    CHECK(values[{"GET", "200"}].value() == 1);
     c.inc({"GET", "200"}, 2);
     values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 3);
+    CHECK(values[{"GET", "200"}].value() == 3);
 
     std::string str;
     c.serialize(str);
@@ -131,7 +139,7 @@ TEST_CASE("test counter with dynamic labels value") {
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     values = c.value_map();
-    CHECK(values[{"GET", "200"}] == 20);
+    CHECK(values[{"GET", "200"}].value() == 20);
   }
 }
 
@@ -165,10 +173,10 @@ TEST_CASE("test gauge") {
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
     auto values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 1);
+    CHECK(values[{"GET", "200", "/"}].value() == 1);
     g.inc({"GET", "200", "/"}, 2);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 3);
+    CHECK(values[{"GET", "200", "/"}].value() == 3);
 
     g.inc({"POST", "200", "/"}, 4);
 
@@ -190,10 +198,10 @@ TEST_CASE("test gauge") {
 
     g.dec({"GET", "200", "/"}, 1);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 2);
+    CHECK(values[{"GET", "200", "/"}].value() == 2);
     g.dec({"GET", "200", "/"}, 2);
     values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}] == 0);
+    CHECK(values[{"GET", "200", "/"}].value() == 0);
   }
 }
 
@@ -319,6 +327,7 @@ struct test_id_t {};
 
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = metric_manager_t<test_id_t<1>>;
+
   metric_mgr::instance().create_metric_dynamic<counter_t>("test_counter", "");
   metric_mgr::instance().create_metric_dynamic<counter_t>("test_counter2", "");
 
