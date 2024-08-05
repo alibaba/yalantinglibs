@@ -43,6 +43,7 @@ class thread_local_value {
         duplicates_[i] = ptr;
       }
     }
+    return *this;
   }
 
   thread_local_value(thread_local_value &&other) {
