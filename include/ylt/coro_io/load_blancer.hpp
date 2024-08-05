@@ -25,22 +25,22 @@
 #include "io_context_pool.hpp"
 namespace coro_io {
 
-enum class load_blance_algorithm {
+enum class load_blancer_algorithm {
   RR = 0,  // round-robin
   WRR,     // weight round-robin
   random,
 };
 
 template <typename client_t, typename io_context_pool_t = io_context_pool>
-class channel {
+class load_blancer {
   using client_pool_t = client_pool<client_t, io_context_pool_t>;
   using client_pools_t = client_pools<client_t, io_context_pool_t>;
 
  public:
-  struct channel_config {
+  struct load_blancer_config {
     typename client_pool_t::pool_config pool_config;
-    load_blance_algorithm lba = load_blance_algorithm::RR;
-    ~channel_config(){};
+    load_blancer_algorithm lba = load_blancer_algorithm::RR;
+    ~load_blancer_config(){};
   };
 
  private:
@@ -48,9 +48,10 @@ class channel {
     std::unique_ptr<std::atomic<uint32_t>> index =
         std::make_unique<std::atomic<uint32_t>>();
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const channel& channel) {
+        const load_blancer& load_blancer) {
       auto i = index->fetch_add(1, std::memory_order_relaxed);
-      co_return channel.client_pools_[i % channel.client_pools_.size()];
+      co_return load_blancer
+          .client_pools_[i % load_blancer.client_pools_.size()];
     }
   };
 
@@ -84,14 +85,15 @@ class channel {
     }
 
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const channel& channel) {
+        const load_blancer& load_blancer) {
       int selected = select_host_with_weight_round_robin();
       if (selected == -1) {
         selected = 0;
       }
 
       wrr_current_ = selected;
-      co_return channel.client_pools_[selected % channel.client_pools_.size()];
+      co_return load_blancer
+          .client_pools_[selected % load_blancer.client_pools_.size()];
     }
 
    private:
@@ -138,27 +140,27 @@ class channel {
 
   struct RandomLoadBlancer {
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const channel& channel) {
+        const load_blancer& load_blancer) {
       static thread_local std::default_random_engine e(std::time(nullptr));
       std::uniform_int_distribution rnd{std::size_t{0},
-                                        channel.client_pools_.size() - 1};
-      co_return channel.client_pools_[rnd(e)];
+                                        load_blancer.client_pools_.size() - 1};
+      co_return load_blancer.client_pools_[rnd(e)];
     }
   };
-  channel() = default;
+  load_blancer() = default;
 
  public:
-  channel(channel&& o)
+  load_blancer(load_blancer&& o)
       : config_(std::move(o.config_)),
         lb_worker(std::move(o.lb_worker)),
         client_pools_(std::move(o.client_pools_)){};
-  channel& operator=(channel&& o) {
+  load_blancer& operator=(load_blancer&& o) {
     this->config_ = std::move(o.config_);
     this->lb_worker = std::move(o.lb_worker);
     this->client_pools_ = std::move(o.client_pools_);
   }
-  channel(const channel& o) = delete;
-  channel& operator=(const channel& o) = delete;
+  load_blancer(const load_blancer& o) = delete;
+  load_blancer& operator=(const load_blancer& o) = delete;
 
   auto send_request(auto op, typename client_t::config& config)
       -> decltype(std::declval<client_pool_t>().send_request(std::move(op),
@@ -185,18 +187,19 @@ class channel {
     return send_request(std::move(op), config_.pool_config.client_config);
   }
 
-  static channel create(const std::vector<std::string_view>& hosts,
-                        const channel_config& config = {},
-                        const std::vector<int>& weights = {},
-                        client_pools_t& client_pools =
-                            g_clients_pool<client_t, io_context_pool_t>()) {
-    channel ch;
+  static load_blancer create(
+      const std::vector<std::string_view>& hosts,
+      const load_blancer_config& config = {},
+      const std::vector<int>& weights = {},
+      client_pools_t& client_pools =
+          g_clients_pool<client_t, io_context_pool_t>()) {
+    load_blancer ch;
     ch.init(hosts, config, weights, client_pools);
     return ch;
   }
 
   /**
-   * @brief return the channel's hosts size.
+   * @brief return the load_blancer's hosts size.
    *
    * @return std::size_t
    */
@@ -204,7 +207,7 @@ class channel {
 
  private:
   void init(const std::vector<std::string_view>& hosts,
-            const channel_config& config, const std::vector<int>& weights,
+            const load_blancer_config& config, const std::vector<int>& weights,
             client_pools_t& client_pools) {
     config_ = config;
     client_pools_.reserve(hosts.size());
@@ -212,10 +215,10 @@ class channel {
       client_pools_.emplace_back(client_pools.at(host, config.pool_config));
     }
     switch (config_.lba) {
-      case load_blance_algorithm::RR:
+      case load_blancer_algorithm::RR:
         lb_worker = RRLoadBlancer{};
         break;
-      case load_blance_algorithm::WRR: {
+      case load_blancer_algorithm::WRR: {
         if (hosts.empty() || weights.empty()) {
           throw std::invalid_argument("host/weight list is empty!");
         }
@@ -224,13 +227,13 @@ class channel {
         }
         lb_worker = WRRLoadBlancer(weights);
       } break;
-      case load_blance_algorithm::random:
+      case load_blancer_algorithm::random:
       default:
         lb_worker = RandomLoadBlancer{};
     }
     return;
   }
-  channel_config config_;
+  load_blancer_config config_;
   std::variant<RRLoadBlancer, WRRLoadBlancer, RandomLoadBlancer> lb_worker;
   std::vector<std::shared_ptr<client_pool_t>> client_pools_;
 };

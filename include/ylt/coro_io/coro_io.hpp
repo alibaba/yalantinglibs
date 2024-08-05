@@ -380,7 +380,7 @@ struct coro_channel
 };
 
 template <typename R>
-inline coro_channel<R> create_channel(
+inline coro_channel<R> create_load_blancer(
     size_t capacity,
     coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
   return coro_channel<R>(executor, capacity);

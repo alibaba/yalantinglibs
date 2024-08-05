@@ -7,10 +7,10 @@
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
-#include "ylt/coro_io/channel.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_io/load_blancer.hpp"
 #include "ylt/metric/system_metric.hpp"
 
 namespace cinatra {
@@ -208,22 +208,23 @@ class coro_http_server {
   template <http_method... method, typename... Aspects>
   void set_http_proxy_handler(std::string url_path,
                               std::vector<std::string_view> hosts,
-                              coro_io::load_blance_algorithm type =
-                                  coro_io::load_blance_algorithm::random,
+                              coro_io::load_blancer_algorithm type =
+                                  coro_io::load_blancer_algorithm::random,
                               std::vector<int> weights = {},
                               Aspects &&...aspects) {
     if (hosts.empty()) {
       throw std::invalid_argument("not config hosts yet!");
     }
 
-    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
-        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
-                                                   weights));
+    auto load_blancer =
+        std::make_shared<coro_io::load_blancer<coro_http_client>>(
+            coro_io::load_blancer<coro_http_client>::create(
+                hosts, {.lba = type}, weights));
     auto handler =
-        [this, channel, type](
+        [this, load_blancer, type](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
-      co_await channel->send_request(
+      co_await load_blancer->send_request(
           [this, &req, &response](
               coro_http_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -247,22 +248,23 @@ class coro_http_server {
   template <http_method... method, typename... Aspects>
   void set_websocket_proxy_handler(std::string url_path,
                                    std::vector<std::string_view> hosts,
-                                   coro_io::load_blance_algorithm type =
-                                       coro_io::load_blance_algorithm::random,
+                                   coro_io::load_blancer_algorithm type =
+                                       coro_io::load_blancer_algorithm::random,
                                    std::vector<int> weights = {},
                                    Aspects &&...aspects) {
     if (hosts.empty()) {
       throw std::invalid_argument("not config hosts yet!");
     }
 
-    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
-        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
-                                                   weights));
+    auto load_blancer =
+        std::make_shared<coro_io::load_blancer<coro_http_client>>(
+            coro_io::load_blancer<coro_http_client>::create(
+                hosts, {.lba = type}, weights));
 
     set_http_handler<cinatra::GET>(
         url_path,
-        [channel](coro_http_request &req,
-                  coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        [load_blancer](coro_http_request &req, coro_http_response &resp)
+            -> async_simple::coro::Lazy<void> {
           websocket_result result{};
           while (true) {
             result = co_await req.get_conn()->read_websocket();
@@ -275,7 +277,7 @@ class coro_http_server {
               break;
             }
 
-            co_await channel->send_request(
+            co_await load_blancer->send_request(
                 [&req, result](
                     coro_http_client &client,
                     std::string_view host) -> async_simple::coro::Lazy<void> {
