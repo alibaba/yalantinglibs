@@ -20,9 +20,9 @@
 #include <iostream>
 #include <thread>
 #include <ylt/coro_http/coro_http_client.hpp>
-#include <ylt/coro_io/channel.hpp>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
+#include <ylt/coro_io/load_blancer.hpp>
 #include <ylt/easylog.hpp>
 
 using namespace async_simple::coro;
@@ -30,7 +30,8 @@ using namespace coro_http;
 using namespace std::chrono_literals;
 using namespace coro_io;
 std::atomic<int> qps, working_echo;
-Lazy<void> test_async_channel(coro_io::channel<coro_http_client> &chan) {
+Lazy<void> test_async_load_blancer(
+    coro_io::load_blancer<coro_http_client> &chan) {
   ++working_echo;
   for (int i = 0; i < 100; ++i) {
     auto result = co_await chan.send_request(
@@ -65,12 +66,11 @@ Lazy<void> qps_watcher() {
 int main() {
   std::vector<std::string_view> hosts{"http://baidu.com",
                                       "http://www.baidu.com"};
-  auto chan = coro_io::channel<coro_http_client>::create(
-      hosts, coro_io::channel<coro_http_client>::channel_config{
-                 .pool_config{.max_connection = 100}});
+  auto chan = coro_io::load_blancer<coro_http_client>::create(
+      hosts, {.pool_config{.max_connection = 100}});
 
   for (int i = 0, lim = std::thread::hardware_concurrency(); i < lim; ++i)
-    test_async_channel(chan).start([](auto &&) {
+    test_async_load_blancer(chan).start([](auto &&) {
     });
   syncAwait(qps_watcher());
   std::cout << "OK" << std::endl;

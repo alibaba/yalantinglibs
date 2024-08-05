@@ -55,7 +55,7 @@ template <typename client_t, typename io_context_pool_t>
 class client_pools;
 
 template <typename, typename>
-class channel;
+class load_blancer;
 
 template <typename client_t,
           typename io_context_pool_t = coro_io::io_context_pool>
@@ -405,7 +405,7 @@ class client_pool : public std::enable_shared_from_this<
   friend class client_pools;
 
   template <typename, typename>
-  friend class channel;
+  friend class load_blancer;
 
   template <typename T>
   async_simple::coro::Lazy<return_type_with_host<T>> send_request(
