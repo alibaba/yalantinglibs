@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <variant>
 
 #include "metric.hpp"
 #include "thread_local_value.hpp"
@@ -11,7 +12,7 @@ enum class op_type_t { INC, DEC, SET };
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_counter_metric_t {
   std::unordered_multimap<std::string, std::string> labels;
-  int64_t value;
+  std::variant<int64_t, double> value;
 };
 REFLECTION(json_counter_metric_t, labels, value);
 struct json_counter_t {
@@ -29,7 +30,8 @@ class basic_counter : public metric_t {
   // default, no labels, only contains an atomic value.
   basic_counter(std::string name, std::string help, size_t dupli_count = 2)
       : metric_t(MetricType::Counter, std::move(name), std::move(help)),
-        dupli_count_(dupli_count) {
+        dupli_count_(dupli_count),
+        default_label_value_(dupli_count) {
     use_atomic_ = true;
     g_user_metric_count++;
   }
@@ -58,9 +60,18 @@ class basic_counter : public metric_t {
 
   virtual ~basic_counter() { g_user_metric_count--; }
 
-  value_type value() { return default_label_value_.value(); }
+  value_type value() {
+    if (!labels_name_.empty()) {
+      throw std::invalid_argument("it's not a default value counter!");
+    }
+    return default_label_value_.value();
+  }
 
   value_type value(const std::vector<std::string> &labels_value) {
+    if (labels_name_.empty()) {
+      throw std::invalid_argument("it is a default value counter");
+    }
+
     if (use_atomic_) {
       value_type val = atomic_value_map_[labels_value].value();
       return val;
@@ -125,7 +136,7 @@ class basic_counter : public metric_t {
         return;
       }
       json_counter_t counter{name_, help_, std::string(metric_name())};
-      int64_t value = default_label_value_.value();
+      auto value = default_label_value_.value();
       counter.metrics.push_back({{}, value});
       iguana::to_json(counter, str);
       return;
@@ -157,6 +168,10 @@ class basic_counter : public metric_t {
 #endif
 
   void inc(value_type val = 1) {
+    if (!labels_name_.empty()) {
+      throw std::invalid_argument("it's not a default value counter!");
+    }
+
     if (val < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
@@ -176,6 +191,10 @@ class basic_counter : public metric_t {
   void inc(const std::vector<std::string> &labels_value, value_type value = 1) {
     if (value == 0) {
       return;
+    }
+
+    if (labels_name_.empty()) {
+      throw std::invalid_argument("it's a default value counter!");
     }
 
     validate(labels_value, value);
@@ -358,7 +377,7 @@ class basic_counter : public metric_t {
   }
 
   metric_hash_map<thread_local_value<value_type>> atomic_value_map_;
-  thread_local_value<value_type> default_label_value_ = {10};
+  thread_local_value<value_type> default_label_value_;
 
   std::mutex mtx_;
   metric_hash_map<thread_local_value<value_type>> value_map_;

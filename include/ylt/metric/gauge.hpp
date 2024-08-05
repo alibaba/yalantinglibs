@@ -11,6 +11,7 @@ class basic_gauge : public basic_counter<value_type> {
   using basic_counter<value_type>::validate;
   using metric_t::use_atomic_;
   using basic_counter<value_type>::default_label_value_;
+  using metric_t::labels_name_;
   using metric_t::labels_value_;
   using basic_counter<value_type>::atomic_value_map_;
   using basic_counter<value_type>::value_map_;
@@ -40,6 +41,9 @@ class basic_gauge : public basic_counter<value_type> {
   }
 
   void dec(value_type value = 1) {
+    if (!labels_name_.empty()) {
+      throw std::bad_function_call();
+    }
 #ifdef __APPLE__
     if constexpr (std::is_floating_point_v<value_type>) {
       mac_os_atomic_fetch_sub(&default_label_value_.local_value(), value);
