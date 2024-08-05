@@ -364,12 +364,11 @@ post(Func func,
 }
 
 template <typename R>
-struct coro_channel
-    : public asio::experimental::channel<void(std::error_code, R)> {
+struct channel : public asio::experimental::channel<void(std::error_code, R)> {
   using return_type = R;
   using ValueType = std::pair<std::error_code, R>;
   using asio::experimental::channel<void(std::error_code, R)>::channel;
-  coro_channel(coro_io::ExecutorWrapper<> *executor, size_t capacity)
+  channel(coro_io::ExecutorWrapper<> *executor, size_t capacity)
       : executor_(executor),
         asio::experimental::channel<void(std::error_code, R)>(
             executor->get_asio_executor(), capacity) {}
@@ -380,17 +379,17 @@ struct coro_channel
 };
 
 template <typename R>
-inline coro_channel<R> create_load_blancer(
+inline channel<R> create_load_blancer(
     size_t capacity,
     coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
-  return coro_channel<R>(executor, capacity);
+  return channel<R>(executor, capacity);
 }
 
 template <typename R>
 inline auto create_shared_channel(
     size_t capacity,
     coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
-  return std::make_shared<coro_channel<R>>(executor, capacity);
+  return std::make_shared<channel<R>>(executor, capacity);
 }
 
 template <typename T>

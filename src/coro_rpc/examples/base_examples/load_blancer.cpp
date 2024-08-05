@@ -113,8 +113,7 @@ int main() {
       std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
   auto chan = coro_io::load_blancer<coro_rpc_client>::create(
-      hosts, coro_io::load_blancer<coro_rpc_client>::load_blancer_config{
-                 .pool_config{.max_connection = worker_cnt}});
+      hosts, {.pool_config{.max_connection = worker_cnt}});
   auto chan_ptr = std::make_shared<decltype(chan)>(std::move(chan));
   auto executor = coro_io::get_global_block_executor();
   for (int i = 0; i < worker_cnt; ++i) {

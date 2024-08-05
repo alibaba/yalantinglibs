@@ -67,8 +67,7 @@ int main() {
   std::vector<std::string_view> hosts{"http://baidu.com",
                                       "http://www.baidu.com"};
   auto chan = coro_io::load_blancer<coro_http_client>::create(
-      hosts, coro_io::load_blancer<coro_http_client>::load_blancer_config{
-                 .pool_config{.max_connection = 100}});
+      hosts, {.pool_config{.max_connection = 100}});
 
   for (int i = 0, lim = std::thread::hardware_concurrency(); i < lim; ++i)
     test_async_load_blancer(chan).start([](auto &&) {
