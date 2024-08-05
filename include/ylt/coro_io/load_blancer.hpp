@@ -37,10 +37,10 @@ class load_blancer {
   using client_pools_t = client_pools<client_t, io_context_pool_t>;
 
  public:
-  struct load_blancer_config {
+  struct load_blance_config {
     typename client_pool_t::pool_config pool_config;
     load_blancer_algorithm lba = load_blancer_algorithm::RR;
-    ~load_blancer_config(){};
+    ~load_blance_config(){};
   };
 
  private:
@@ -189,7 +189,7 @@ class load_blancer {
 
   static load_blancer create(
       const std::vector<std::string_view>& hosts,
-      const load_blancer_config& config = {},
+      const load_blance_config& config = {},
       const std::vector<int>& weights = {},
       client_pools_t& client_pools =
           g_clients_pool<client_t, io_context_pool_t>()) {
@@ -207,7 +207,7 @@ class load_blancer {
 
  private:
   void init(const std::vector<std::string_view>& hosts,
-            const load_blancer_config& config, const std::vector<int>& weights,
+            const load_blance_config& config, const std::vector<int>& weights,
             client_pools_t& client_pools) {
     config_ = config;
     client_pools_.reserve(hosts.size());
@@ -233,7 +233,7 @@ class load_blancer {
     }
     return;
   }
-  load_blancer_config config_;
+  load_blance_config config_;
   std::variant<RRLoadBlancer, WRRLoadBlancer, RandomLoadBlancer> lb_worker;
   std::vector<std::shared_ptr<client_pool_t>> client_pools_;
 };
