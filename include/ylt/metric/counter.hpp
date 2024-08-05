@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <variant>
 
 #include "metric.hpp"
 #include "thread_local_value.hpp"
@@ -11,7 +12,7 @@ enum class op_type_t { INC, DEC, SET };
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_counter_metric_t {
   std::unordered_multimap<std::string, std::string> labels;
-  int64_t value;
+  std::variant<int64_t, double> value;
 };
 REFLECTION(json_counter_metric_t, labels, value);
 struct json_counter_t {
@@ -125,7 +126,7 @@ class basic_counter : public metric_t {
         return;
       }
       json_counter_t counter{name_, help_, std::string(metric_name())};
-      int64_t value = default_label_value_.value();
+      auto value = default_label_value_.value();
       counter.metrics.push_back({{}, value});
       iguana::to_json(counter, str);
       return;

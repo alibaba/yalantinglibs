@@ -59,23 +59,23 @@ class thread_local_value {
   void dec(value_type value = 1) { local_value() -= value; }
 
   value_type update(value_type value = 1) {
-    value_type val = reset();
-    local_value() = value;
-    return val;
-  }
-
-  value_type reset() {
-    value_type val = 0;
-    for (auto &t : duplicates_) {
-      if (t) {
-        val += t.load()->exchange(0);
+    value_type val = get_value(0).exchange(value);
+    for (size_t i = 1; i < duplicates_.size(); i++) {
+      if (duplicates_[i]) {
+        val += duplicates_[i].load()->exchange(0);
       }
     }
     return val;
   }
 
+  value_type reset() { return update(0); }
+
   auto &local_value() {
     static thread_local auto index = get_round_index(duplicates_.size());
+    return get_value(index);
+  }
+
+  auto &get_value(size_t index) {
     if (duplicates_[index] == nullptr) {
       auto ptr = new std::atomic<value_type>(0);
 

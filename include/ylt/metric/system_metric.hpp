@@ -24,10 +24,52 @@
 #include "cinatra/ylt/metric/metric.hpp"
 #endif
 
-// reference: brpc/src/bvar/default_variables.cpp
+// modified based on: brpc/src/bvar/default_variables.cpp
 
 namespace ylt::metric {
 namespace detail {
+
+#if defined(__APPLE__)
+#include <stdio.h>
+
+inline int read_command_output_through_popen(std::ostream& os,
+                                             const char* cmd) {
+  FILE* pipe = popen(cmd, "r");
+  if (pipe == NULL) {
+    return -1;
+  }
+  char buffer[1024];
+  for (;;) {
+    size_t nr = fread(buffer, 1, sizeof(buffer), pipe);
+    if (nr != 0) {
+      os.write(buffer, nr);
+    }
+    if (nr != sizeof(buffer)) {
+      if (feof(pipe)) {
+        break;
+      }
+      else if (ferror(pipe)) {
+        break;
+      }
+      // retry;
+    }
+  }
+
+  const int wstatus = pclose(pipe);
+
+  if (wstatus < 0) {
+    return wstatus;
+  }
+  if (WIFEXITED(wstatus)) {
+    return WEXITSTATUS(wstatus);
+  }
+  if (WIFSIGNALED(wstatus)) {
+    os << "Child process was killed by signal " << WTERMSIG(wstatus);
+  }
+  errno = ECHILD;
+  return -1;
+}
+#endif
 
 inline int64_t last_time_us = 0;
 inline int64_t last_sys_time_us = 0;
@@ -39,7 +81,7 @@ inline int64_t gettimeofday_us() {
   return now.tv_sec * 1000000L + now.tv_usec;
 }
 
-inline int64_t timeval_to_microseconds(const timeval &tv) {
+inline int64_t timeval_to_microseconds(const timeval& tv) {
   return tv.tv_sec * 1000000L + tv.tv_usec;
 }
 
@@ -101,13 +143,29 @@ inline void stat_memory() {
   long virtual_size = 0;
   long resident = 0;
   long share = 0;
+  static long page_size = sysconf(_SC_PAGE_SIZE);
+
+#if defined(__APPLE__)
+  static pid_t pid = getpid();
+  static int64_t pagesize = getpagesize();
+  std::ostringstream oss;
+  char cmdbuf[128];
+  snprintf(cmdbuf, sizeof(cmdbuf), "ps -p %ld -o rss=,vsz=", (long)pid);
+  if (read_command_output_through_popen(oss, cmdbuf) != 0) {
+    return;
+  }
+  const std::string& result = oss.str();
+  if (sscanf(result.c_str(), "%ld %ld", &resident, &virtual_size) != 2) {
+    return;
+  }
+#else
   std::ifstream file("/proc/self/statm");
   if (!file) {
     return;
   }
 
   file >> virtual_size >> resident >> share;
-  static long page_size = sysconf(_SC_PAGE_SIZE);
+#endif
 
   process_memory_virtual->update(virtual_size * page_size);
   process_memory_resident->update(resident * page_size);
@@ -138,6 +196,9 @@ inline void stat_io() {
       system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_process_io_write_second");
 
+  ProcIO s{};
+#if defined(__APPLE__)
+#else
   auto stream_file =
       std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE *ptr) {
         fclose(ptr);
@@ -146,13 +207,13 @@ inline void stat_io() {
     return;
   }
 
-  ProcIO s{};
   if (fscanf(stream_file.get(),
              "%*s %lu %*s %lu %*s %lu %*s %lu %*s %lu %*s %lu %*s %lu",
              &s.rchar, &s.wchar, &s.syscr, &s.syscw, &s.read_bytes,
              &s.write_bytes, &s.cancelled_write_bytes) != 7) {
     return;
   }
+#endif
 
   process_io_read_bytes_second->update(s.rchar);
   process_io_write_bytes_second->update(s.wchar);
@@ -162,26 +223,41 @@ inline void stat_io() {
 
 inline void stat_avg_load() {
   static auto system_loadavg_1m =
-      system_metric_manager::instance().get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_d>(
           "ylt_system_loadavg_1m");
   static auto system_loadavg_5m =
-      system_metric_manager::instance().get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_d>(
           "ylt_system_loadavg_5m");
   static auto system_loadavg_15m =
-      system_metric_manager::instance().get_metric_static<gauge_t>(
+      system_metric_manager::instance().get_metric_static<gauge_d>(
           "ylt_system_loadavg_15m");
+
+  double loadavg_1m = 0;
+  double loadavg_5m = 0;
+  double loadavg_15m = 0;
+
+#if defined(__APPLE__)
+  std::ostringstream oss;
+  if (read_command_output_through_popen(oss, "sysctl -n vm.loadavg") != 0) {
+    return;
+  }
+  const std::string& result = oss.str();
+  if (sscanf(result.c_str(), "{ %lf %lf %lf }", &loadavg_1m, &loadavg_5m,
+             &loadavg_15m) != 3) {
+    return;
+  }
+#else
   std::ifstream file("/proc/loadavg");
   if (!file) {
     return;
   }
 
-  double loadavg_1m = 0;
-  double loadavg_5m = 0;
-  double loadavg_15m = 0;
   file >> loadavg_1m >> loadavg_5m >> loadavg_15m;
+#endif
+
   system_loadavg_1m->update(loadavg_1m);
-  system_loadavg_1m->update(loadavg_5m);
-  system_loadavg_1m->update(loadavg_15m);
+  system_loadavg_5m->update(loadavg_5m);
+  system_loadavg_15m->update(loadavg_15m);
 }
 
 struct ProcStat {
@@ -224,15 +300,16 @@ inline void process_status() {
       system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_thread_count");
 
+  ProcStat stat{};
+#if defined(__linux__)
   auto stream_file =
-      std::shared_ptr<FILE>(fopen("/proc/self/stat", "r"), [](FILE *ptr) {
+      std::shared_ptr<FILE>(fopen("/proc/self/stat", "r"), [](FILE* ptr) {
         fclose(ptr);
       });
   if (stream_file == nullptr) {
     return;
   }
 
-  ProcStat stat{};
   if (fscanf(stream_file.get(),
              "%d %*s %c "
              "%d %d %d %d %d "
@@ -246,7 +323,26 @@ inline void process_status() {
              &stat.nice, &stat.num_threads) != 19) {
     return;
   }
-
+#elif defined(__APPLE__)
+  static pid_t proc_id = getpid();
+  std::ostringstream oss;
+  char cmdbuf[128];
+  snprintf(cmdbuf, sizeof(cmdbuf),
+           "ps -p %ld -o pid,ppid,pgid,sess"
+           ",tpgid,flags,pri,nice | tail -n1",
+           (long)proc_id);
+  if (read_command_output_through_popen(oss, cmdbuf) != 0) {
+    return;
+  }
+  const std::string &result = oss.str();
+  if (sscanf(result.c_str(),
+             "%d %d %d %d"
+             "%d %u %ld %ld",
+             &stat.pid, &stat.ppid, &stat.pgrp, &stat.session, &stat.tpgid,
+             &stat.flags, &stat.priority, &stat.nice) != 8) {
+    return;
+  }
+#endif
   process_uptime->inc();
   process_priority->update(stat.priority);
   pid->update(stat.pid);
@@ -329,11 +425,11 @@ inline bool start_system_metric() {
   system_metric_manager::instance().create_metric_static<gauge_t>(
       "ylt_summary_failed_count", "");
 
-  system_metric_manager::instance().create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_d>(
       "ylt_system_loadavg_1m", "");
-  system_metric_manager::instance().create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_d>(
       "ylt_system_loadavg_5m", "");
-  system_metric_manager::instance().create_metric_static<gauge_t>(
+  system_metric_manager::instance().create_metric_static<gauge_d>(
       "ylt_system_loadavg_15m", "");
 
   system_metric_manager::instance().create_metric_static<gauge_t>(
