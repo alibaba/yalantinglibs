@@ -208,8 +208,8 @@ class coro_http_server {
   template <http_method... method, typename... Aspects>
   void set_http_proxy_handler(std::string url_path,
                               std::vector<std::string_view> hosts,
-                              coro_io::load_blancer_algorithm type =
-                                  coro_io::load_blancer_algorithm::random,
+                              coro_io::load_blance_algorithm type =
+                                  coro_io::load_blance_algorithm::random,
                               std::vector<int> weights = {},
                               Aspects &&...aspects) {
     if (hosts.empty()) {
@@ -248,8 +248,8 @@ class coro_http_server {
   template <http_method... method, typename... Aspects>
   void set_websocket_proxy_handler(std::string url_path,
                                    std::vector<std::string_view> hosts,
-                                   coro_io::load_blancer_algorithm type =
-                                       coro_io::load_blancer_algorithm::random,
+                                   coro_io::load_blance_algorithm type =
+                                       coro_io::load_blance_algorithm::random,
                                    std::vector<int> weights = {},
                                    Aspects &&...aspects) {
     if (hosts.empty()) {

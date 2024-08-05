@@ -49,17 +49,17 @@ TEST_CASE("test WRR") {
       "exception tests: empty hosts, empty weights test or count not equal") {
     CHECK_THROWS_AS(
         coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
-            {}, {.lba = coro_io::load_blancer_algorithm::WRR}, {2, 1}),
+            {}, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1}),
         std::invalid_argument);
 
     CHECK_THROWS_AS(coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
                         {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blancer_algorithm::WRR}),
+                        {.lba = coro_io::load_blance_algorithm::WRR}),
                     std::invalid_argument);
 
     CHECK_THROWS_AS(coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
                         {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blancer_algorithm::WRR}, {1}),
+                        {.lba = coro_io::load_blance_algorithm::WRR}, {1}),
                     std::invalid_argument);
   }
 
@@ -75,7 +75,7 @@ TEST_CASE("test WRR") {
         std::vector<std::string_view>{"127.0.0.1:8801", "127.0.0.1:8802"};
     auto load_blancer =
         coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
-            hosts, {.lba = coro_io::load_blancer_algorithm::WRR}, {2, 1});
+            hosts, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1});
     for (int i = 0; i < 6; ++i) {
       auto res = co_await load_blancer.send_request(
           [&i, &hosts](
@@ -101,7 +101,7 @@ TEST_CASE("test WRR") {
         std::vector<std::string_view>{"127.0.0.1:8801", "127.0.0.1:8802"};
     auto load_blancer =
         coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
-            hosts, {.lba = coro_io::load_blancer_algorithm::WRR}, {0, 0});
+            hosts, {.lba = coro_io::load_blance_algorithm::WRR}, {0, 0});
     for (int i = 0; i < 6; ++i) {
       auto res = co_await load_blancer.send_request(
           [&i, &hosts](
@@ -129,7 +129,7 @@ TEST_CASE("test Random") {
         std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
     auto load_blancer =
         coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
-            hosts, {.lba = coro_io::load_blancer_algorithm::random});
+            hosts, {.lba = coro_io::load_blance_algorithm::random});
     int host0_cnt = 0, hostRR_cnt = 0;
     for (int i = 0; i < 100; ++i) {
       auto res = co_await load_blancer.send_request(

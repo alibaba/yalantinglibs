@@ -25,7 +25,7 @@
 #include "io_context_pool.hpp"
 namespace coro_io {
 
-enum class load_blancer_algorithm {
+enum class load_blance_algorithm {
   RR = 0,  // round-robin
   WRR,     // weight round-robin
   random,
@@ -39,7 +39,7 @@ class load_blancer {
  public:
   struct load_blancer_config {
     typename client_pool_t::pool_config pool_config;
-    load_blancer_algorithm lba = load_blancer_algorithm::RR;
+    load_blance_algorithm lba = load_blance_algorithm::RR;
     ~load_blancer_config(){};
   };
 
@@ -215,10 +215,10 @@ class load_blancer {
       client_pools_.emplace_back(client_pools.at(host, config.pool_config));
     }
     switch (config_.lba) {
-      case load_blancer_algorithm::RR:
+      case load_blance_algorithm::RR:
         lb_worker = RRLoadBlancer{};
         break;
-      case load_blancer_algorithm::WRR: {
+      case load_blance_algorithm::WRR: {
         if (hosts.empty() || weights.empty()) {
           throw std::invalid_argument("host/weight list is empty!");
         }
@@ -227,7 +227,7 @@ class load_blancer {
         }
         lb_worker = WRRLoadBlancer(weights);
       } break;
-      case load_blancer_algorithm::random:
+      case load_blance_algorithm::random:
       default:
         lb_worker = RandomLoadBlancer{};
     }
