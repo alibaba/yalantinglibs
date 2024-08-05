@@ -19,8 +19,8 @@ using namespace std::chrono_literals;
 #define IS_OK
 #endif
 
-async_simple::coro::Lazy<void> test_coro_channel() {
-  auto ch = coro_io::create_channel<int>(1000);
+async_simple::coro::Lazy<void> test_channel() {
+  auto ch = coro_io::create_load_blancer<int>(1000);
 
   co_await coro_io::async_send(ch, 41);
   co_await coro_io::async_send(ch, 42);
@@ -37,8 +37,8 @@ async_simple::coro::Lazy<void> test_coro_channel() {
 async_simple::coro::Lazy<void> test_select_channel() {
   using namespace coro_io;
   using namespace async_simple::coro;
-  auto ch1 = coro_io::create_channel<int>(1000);
-  auto ch2 = coro_io::create_channel<int>(1000);
+  auto ch1 = coro_io::create_load_blancer<int>(1000);
+  auto ch2 = coro_io::create_load_blancer<int>(1000);
 
   co_await async_send(ch1, 41);
   co_await async_send(ch2, 42);
@@ -162,7 +162,7 @@ void callback_lazy() {
 }
 
 TEST_CASE("test channel send recieve, test select channel and coroutine") {
-  async_simple::coro::syncAwait(test_coro_channel());
+  async_simple::coro::syncAwait(test_channel());
   async_simple::coro::syncAwait(test_select_channel());
   callback_lazy();
 }

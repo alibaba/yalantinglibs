@@ -11,10 +11,10 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
-#include <ylt/coro_io/channel.hpp>
 #include <ylt/coro_io/coro_file.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_io/io_context_pool.hpp>
+#include <ylt/coro_io/load_blancer.hpp>
 
 #include "async_simple/coro/Lazy.h"
 #include "ylt/coro_io/client_pool.hpp"
@@ -28,9 +28,10 @@ TEST_CASE("test RR") {
     REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -47,18 +48,18 @@ TEST_CASE("test WRR") {
   SUBCASE(
       "exception tests: empty hosts, empty weights test or count not equal") {
     CHECK_THROWS_AS(
-        coro_io::channel<coro_rpc::coro_rpc_client>::create(
-            {}, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1}),
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
+            {}, {.lba = coro_io::load_blancer_algorithm::WRR}, {2, 1}),
         std::invalid_argument);
 
-    CHECK_THROWS_AS(coro_io::channel<coro_rpc::coro_rpc_client>::create(
+    CHECK_THROWS_AS(coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
                         {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blance_algorithm::WRR}),
+                        {.lba = coro_io::load_blancer_algorithm::WRR}),
                     std::invalid_argument);
 
-    CHECK_THROWS_AS(coro_io::channel<coro_rpc::coro_rpc_client>::create(
+    CHECK_THROWS_AS(coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
                         {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blance_algorithm::WRR}, {1}),
+                        {.lba = coro_io::load_blancer_algorithm::WRR}, {1}),
                     std::invalid_argument);
   }
 
@@ -72,10 +73,11 @@ TEST_CASE("test WRR") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "127.0.0.1:8802"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(
-        hosts, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1});
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
+            hosts, {.lba = coro_io::load_blancer_algorithm::WRR}, {2, 1});
     for (int i = 0; i < 6; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -97,10 +99,11 @@ TEST_CASE("test WRR") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "127.0.0.1:8802"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(
-        hosts, {.lba = coro_io::load_blance_algorithm::WRR}, {0, 0});
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
+            hosts, {.lba = coro_io::load_blancer_algorithm::WRR}, {0, 0});
     for (int i = 0; i < 6; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -124,11 +127,12 @@ TEST_CASE("test Random") {
     REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
     auto hosts =
         std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(
-        hosts, {.lba = coro_io::load_blance_algorithm::random});
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(
+            hosts, {.lba = coro_io::load_blancer_algorithm::random});
     int host0_cnt = 0, hostRR_cnt = 0;
     for (int i = 0; i < 100; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts, &host0_cnt, &hostRR_cnt](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -152,9 +156,10 @@ TEST_CASE("test single host") {
     auto res = server.async_start();
     REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
     auto hosts = std::vector<std::string_view>{"127.0.0.1:8801"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&hosts](coro_rpc::coro_rpc_client &client,
                    std::string_view host) -> async_simple::coro::Lazy<void> {
             CHECK(host == hosts[0]);
@@ -172,10 +177,11 @@ TEST_CASE("test send_request config") {
     auto res = server.async_start();
     REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
     auto hosts = std::vector<std::string_view>{"127.0.0.1:9813"};
-    auto channel = coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts);
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
       auto config = coro_rpc::coro_rpc_client::config{.client_id = 114514};
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](coro_rpc::coro_rpc_client &client, std::string_view host)
               -> async_simple::coro::Lazy<void> {
             CHECK(client.get_client_id() == 114514);
@@ -206,11 +212,12 @@ TEST_CASE("test server down") {
         .connect_retry_count = 0,
         .reconnect_wait_time = std::chrono::milliseconds{0},
         .host_alive_detect_duration = std::chrono::milliseconds{500}};
-    auto channel =
-        coro_io::channel<coro_rpc::coro_rpc_client>::create(hosts, {config});
+    auto load_blancer =
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(hosts,
+                                                                 {config});
 
     for (int i = 0; i < 100; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -221,7 +228,7 @@ TEST_CASE("test server down") {
     }
     server1.stop();
     for (int i = 0; i < 100; ++i) {
-      auto res = co_await channel.send_request(
+      auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -236,13 +243,13 @@ TEST_CASE("test server down") {
     server2.stop();
     {
       {
-        auto res = co_await channel.send_request(
+        auto res = co_await load_blancer.send_request(
             [](coro_rpc::coro_rpc_client &client,
                std::string_view host) -> async_simple::coro::Lazy<void> {
               co_await client.call<hello>();
               co_return;
             });
-        res = co_await channel.send_request(
+        res = co_await load_blancer.send_request(
             [](coro_rpc::coro_rpc_client &client,
                std::string_view host) -> async_simple::coro::Lazy<void> {
               co_await client.call<hello>();
@@ -259,7 +266,7 @@ TEST_CASE("test server down") {
     co_await coro_io::sleep_for(std::chrono::seconds{1});
     {
       for (int i = 0; i < 100; ++i) {
-        auto res = co_await channel.send_request(
+        auto res = co_await load_blancer.send_request(
             [&i, &hosts](
                 coro_rpc::coro_rpc_client &client,
                 std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -277,7 +284,7 @@ TEST_CASE("test server down") {
     {
       int counter = 0;
       for (int i = 0; i < 100; ++i) {
-        auto res = co_await channel.send_request(
+        auto res = co_await load_blancer.send_request(
             [&i, &hosts, &counter](
                 coro_rpc::coro_rpc_client &client,
                 std::string_view host) -> async_simple::coro::Lazy<void> {

@@ -17,6 +17,7 @@
 
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
+#include "ylt/coro_io/coro_io.hpp"
 
 using namespace std::chrono_literals;
 using namespace coro_http;
@@ -569,12 +570,12 @@ void http_proxy() {
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
       "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::WRR, {10, 5, 5});
+      coro_io::load_blancer_algorithm::WRR, {10, 5, 5});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
       "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::RR);
+      coro_io::load_blancer_algorithm::RR);
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
@@ -628,8 +629,8 @@ void http_proxy() {
   assert(!resp_random.resp_body.empty());
 }
 
-void coro_channel() {
-  auto ch = coro_io::create_channel<int>(10000);
+void coro_load_blancer() {
+  auto ch = coro_io::create_load_blancer<int>(10000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   assert(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
@@ -660,6 +661,6 @@ int main() {
   test_gzip();
 #endif
   http_proxy();
-  coro_channel();
+  coro_load_blancer();
   return 0;
 }
