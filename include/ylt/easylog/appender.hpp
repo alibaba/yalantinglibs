@@ -402,7 +402,7 @@ class appender {
 
   std::mutex que_mtx_;
 
-  moodycamel::ConcurrentQueue<record_t> queue_;
+  ylt::detail::moodycamel::ConcurrentQueue<record_t> queue_;
   std::thread write_thd_;
   std::condition_variable cnd_;
   std::atomic<bool> stop_ = false;
