@@ -109,6 +109,11 @@ class summary_t : public metric_t {
   };
 
   void observe(double value) {
+    if (!labels_value_.empty()) {
+      observe(labels_value_, value);
+      return;
+    }
+
     if (!labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
@@ -149,6 +154,10 @@ class summary_t : public metric_t {
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
                                                           uint64_t &count) {
+    if (!labels_value_.empty()) {
+      co_return co_await get_rates(labels_value_, sum, count);
+    }
+
     std::vector<double> vec;
     if (quantiles_.empty()) {
       co_return std::vector<double>{};

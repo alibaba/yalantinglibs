@@ -61,8 +61,13 @@ class basic_counter : public metric_t {
   virtual ~basic_counter() { g_user_metric_count--; }
 
   value_type value() {
+    if (!labels_value_.empty()) {
+      value_type val = atomic_value_map_[labels_value_].value();
+      return val;
+    }
+
     if (!labels_name_.empty()) {
-      throw std::invalid_argument("it's not a default value counter!");
+      throw std::invalid_argument("it's not a dynamic counter!");
     }
     return default_label_value_.value();
   }
@@ -168,8 +173,14 @@ class basic_counter : public metric_t {
 #endif
 
   void inc(value_type val = 1) {
+    if (!labels_value_.empty()) {
+      set_value<true>(atomic_value_map_[labels_value_].local_value(), val,
+                      op_type_t::INC);
+      return;
+    }
+
     if (!labels_name_.empty()) {
-      throw std::invalid_argument("it's not a default value counter!");
+      throw std::invalid_argument("it's not a dynamic counter!");
     }
 
     if (val < 0) {

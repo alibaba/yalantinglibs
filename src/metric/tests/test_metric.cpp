@@ -112,6 +112,22 @@ TEST_CASE("test with atomic") {
   std::cout << str1;
   CHECK(str.find("} 10") != std::string::npos);
   CHECK(str1.find("} 1") != std::string::npos);
+
+  {
+    gauge_t g("get_qps", "get qps",
+              std::map<std::string, std::string>{{"method", "POST"},
+                                                 {"url", "/test"}});
+    g.inc();
+    g.inc({"POST", "/test"});
+    CHECK(g.value() == 2);
+    CHECK(g.value({"POST", "/test"}) == 2);
+    g.dec();
+    CHECK(g.value() == 1);
+    CHECK(g.value({"POST", "/test"}) == 1);
+    g.dec({"POST", "/test"});
+    CHECK(g.value() == 0);
+    CHECK(g.value({"POST", "/test"}) == 0);
+  }
 }
 
 TEST_CASE("test counter with dynamic labels value") {
@@ -585,6 +601,20 @@ TEST_CASE("test get metric by static labels and label") {
       metric_mgr::instance().get_metric_by_label_static({"method", "GET"});
   CHECK(vec.size() == 4);
 
+  {
+    using metric_mgr2 = metric_manager_t<test_id_t<19>>;
+    auto s2 = metric_mgr2::instance().create_metric_static<summary_t>(
+        "http_req_static_summary2", "help",
+        summary_t::Quantiles{
+            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+        std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+    s2->observe(23);
+
+    auto vec =
+        metric_mgr2::instance().get_metric_by_label_static({"method", "GET"});
+    CHECK(vec.size() == 1);
+  }
+
   vec = metric_mgr::instance().get_metric_by_label_static({"url", "/"});
   CHECK(vec.size() == 4);
 
@@ -723,6 +753,23 @@ TEST_CASE("test histogram serialize with dynamic labels") {
 #endif
 }
 
+TEST_CASE("test histogram serialize with static labels default") {
+  histogram_t h(
+      "test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  h.observe(23);
+  auto counts = h.get_bucket_counts();
+  CHECK(counts[3]->value({"GET", "/"}) == 1);
+  h.observe(42);
+  CHECK(counts[3]->value({"GET", "/"}) == 2);
+  h.observe({"GET", "/"}, 60);
+  CHECK(counts[4]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 120);
+  CHECK(counts[5]->value({"GET", "/"}) == 1);
+  h.observe(1);
+  CHECK(counts[0]->value({"GET", "/"}) == 1);
+}
+
 TEST_CASE("test histogram serialize with static labels") {
   histogram_t h(
       "test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
@@ -804,6 +851,9 @@ TEST_CASE("test summary with static labels") {
   auto rates = async_simple::coro::syncAwait(
       summary.get_rates({"GET", "/"}, sum, count));
   std::cout << rates.size() << "\n";
+
+  auto rates1 = async_simple::coro::syncAwait(summary.get_rates(sum, count));
+  CHECK(rates == rates1);
 
   std::string str;
   async_simple::coro::syncAwait(summary.serialize_async(str));

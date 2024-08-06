@@ -41,8 +41,14 @@ class basic_gauge : public basic_counter<value_type> {
   }
 
   void dec(value_type value = 1) {
+    if (!labels_value_.empty()) {
+      set_value_static(atomic_value_map_[labels_value_].local_value(), value,
+                       op_type_t::DEC);
+      return;
+    }
+
     if (!labels_name_.empty()) {
-      throw std::bad_function_call();
+      throw std::invalid_argument("it's not a dynamic counter!");
     }
 #ifdef __APPLE__
     if constexpr (std::is_floating_point_v<value_type>) {
