@@ -1034,7 +1034,7 @@ TEST_CASE("test serialize with multiple threads") {
 #if defined(__GNUC__)
 TEST_CASE("test system metric") {
   start_system_metric();
-  detail::ylt_stat();
+  metric::detail::ylt_stat();
 
   auto s = system_metric_manager::instance().serialize_static();
   std::cout << s;

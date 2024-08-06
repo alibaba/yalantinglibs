@@ -93,7 +93,7 @@ class summary_t : public metric_t {
 
   struct block_t {
     std::atomic<bool> stop_ = false;
-    moodycamel::ConcurrentQueue<double> sample_queue_;
+    ylt::detail::moodycamel::ConcurrentQueue<double> sample_queue_;
     std::shared_ptr<TimeWindowQuantiles> quantile_values_;
     std::uint64_t count_;
     double sum_;
@@ -101,7 +101,8 @@ class summary_t : public metric_t {
 
   struct labels_block_t {
     std::atomic<bool> stop_ = false;
-    moodycamel::ConcurrentQueue<summary_label_sample> sample_queue_;
+    ylt::detail::moodycamel::ConcurrentQueue<summary_label_sample>
+        sample_queue_;
     metric_hash_map<std::shared_ptr<TimeWindowQuantiles>>
         label_quantile_values_;
     metric_hash_map<uint64_t> label_count_;
