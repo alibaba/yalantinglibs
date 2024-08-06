@@ -42,11 +42,7 @@ class summary_t : public metric_t {
         metric_t(MetricType::Summary, std::move(name), std::move(help)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
-    init_block(block_);
-    block_->quantile_values_ =
-        std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
-    use_atomic_ = true;
-    g_user_metric_count++;
+    init_no_label(max_age, age_buckets);
   }
 
   summary_t(std::string name, std::string help, Quantiles quantiles,
@@ -71,6 +67,11 @@ class summary_t : public metric_t {
                  std::move(static_labels)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
+    if (static_labels_.empty()) {
+      init_no_label(max_age, age_buckets);
+      return;
+    }
+
     init_block(labels_block_);
     labels_block_->label_quantile_values_[labels_value_] =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
@@ -108,6 +109,11 @@ class summary_t : public metric_t {
   };
 
   void observe(double value) {
+    if (!labels_value_.empty()) {
+      observe(labels_value_, value);
+      return;
+    }
+
     if (!labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
@@ -148,6 +154,10 @@ class summary_t : public metric_t {
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
                                                           uint64_t &count) {
+    if (!labels_value_.empty()) {
+      co_return co_await get_rates(labels_value_, sum, count);
+    }
+
     std::vector<double> vec;
     if (quantiles_.empty()) {
       co_return std::vector<double>{};
@@ -301,6 +311,14 @@ class summary_t : public metric_t {
     block = std::make_shared<T>();
     start(block).via(excutor_->get_executor()).start([](auto &&) {
     });
+  }
+
+  void init_no_label(std::chrono::milliseconds max_age, int age_buckets) {
+    init_block(block_);
+    block_->quantile_values_ =
+        std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
+    use_atomic_ = true;
+    g_user_metric_count++;
   }
 
   async_simple::coro::Lazy<void> start(std::shared_ptr<block_t> block) {

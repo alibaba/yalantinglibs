@@ -85,6 +85,11 @@ class basic_histogram : public metric_t {
   }
 
   void observe(value_type value) {
+    if (!labels_value_.empty()) {
+      observe(labels_value_, value);
+      return;
+    }
+
     if (!use_atomic_ || !labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
