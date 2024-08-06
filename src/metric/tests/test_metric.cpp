@@ -14,6 +14,15 @@ auto g_counter = my_manager::instance().create_metric_dynamic<counter_t>(
     "test_g_counter", "");
 
 TEST_CASE("test no lable") {
+  {
+    std::map<std::string, std::string> customMap = {};
+    auto summary = std::make_shared<summary_t>(
+        "test", "help",
+        summary_t::Quantiles{
+            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+        customMap);
+    summary->observe(100);
+  }
   g_counter->inc();
   CHECK(g_counter->value() == 1);
   {
