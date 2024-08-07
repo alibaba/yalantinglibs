@@ -232,6 +232,9 @@ class basic_counter : public metric_t {
   }
 
   value_type update(value_type value) {
+    if (!labels_value_.empty()) {
+      return update(labels_value_, value);
+    }
     return default_label_value_.update(value);
   }
 
@@ -256,7 +259,8 @@ class basic_counter : public metric_t {
     return val;
   }
 
-  void update(const std::vector<std::string> &labels_value, value_type value) {
+  value_type update(const std::vector<std::string> &labels_value,
+                    value_type value) {
     if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
       throw std::invalid_argument(
           "the number of labels_value name and labels_value is not match");
@@ -266,11 +270,11 @@ class basic_counter : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      atomic_value_map_[labels_value].update(value);
+      return atomic_value_map_[labels_value].update(value);
     }
     else {
       std::lock_guard lock(mtx_);
-      value_map_[labels_value].update(value);
+      return value_map_[labels_value].update(value);
     }
   }
 
