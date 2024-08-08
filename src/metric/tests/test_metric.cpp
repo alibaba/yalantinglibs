@@ -21,10 +21,21 @@ TEST_CASE("test metric manager") {
   auto v2 = inst_s.get_metric_by_name("test1");
   CHECK(v2 != nullptr);
 
+  c->inc();
+  g->inc();
+
   inst_s.create_metric_static<counter_t>(
       "test_counter", "", std::map<std::string, std::string>{{"url", "/"}});
   auto ms = inst_s.filter_metrics_by_label_value(std::regex("/"));
   CHECK(ms.size() == 1);
+
+  {
+    std::string str = inst_s.serialize_static();
+    std::cout << str << "\n";
+
+    std::string json = inst_s.serialize_to_json_static();
+    std::cout << json << "\n";
+  }
 
   {
     metric_filter_options options;
@@ -45,6 +56,22 @@ TEST_CASE("test metric manager") {
       std::string("test3"), std::string(""), std::array<std::string, 2>{});
   CHECK(pair1.first == std::errc::invalid_argument);
   dc->inc({"/", "200"});
+
+  {
+    std::string str = inst_d.serialize_dynamic();
+    std::cout << str << "\n";
+
+    std::string json = inst_d.serialize_to_json_dynamic();
+    std::cout << json << "\n";
+
+    using root_manager = metric_collector_t<static_metric_manager<metrc_tag>,
+                                            dynamic_metric_manager<metrc_tag>>;
+    str = root_manager::serialize();
+    std::cout << str << "\n";
+    json = root_manager::serialize_to_json();
+    std::cout << json << "\n";
+  }
+
   auto v3 = inst_d.get_metric_by_label({{"url", "/"}, {"code", "200"}});
   CHECK(v3.size() == 1);
 

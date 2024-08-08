@@ -24,6 +24,51 @@ class manager_helper {
     return true;
   }
 
+  static std::string serialize(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    std::string str;
+    for (auto& m : metrics) {
+      if (m->metric_type() == MetricType::Summary) {
+        async_simple::coro::syncAwait(m->serialize_async(str));
+      }
+      else {
+        m->serialize(str);
+      }
+    }
+
+    return str;
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  static std::string serialize_to_json(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    if (metrics.empty()) {
+      return "";
+    }
+    std::string str;
+    str.append("[");
+    for (auto& m : metrics) {
+      size_t start = str.size();
+      if (m->metric_type() == MetricType::Summary) {
+        async_simple::coro::syncAwait(m->serialize_to_json_async(str));
+      }
+      else {
+        m->serialize_to_json(str);
+      }
+
+      if (str.size() > start)
+        str.append(",");
+    }
+
+    if (str.size() == 1) {
+      return "";
+    }
+
+    str.back() = ']';
+    return str;
+  }
+#endif
+
   static std::vector<std::shared_ptr<metric_t>> filter_metrics_by_label_value(
       auto& metrics, const std::regex& label_regex, bool is_white) {
     std::vector<std::shared_ptr<metric_t>> filtered_metrics;
@@ -159,6 +204,16 @@ class static_metric_manager {
     return metrics;
   }
 
+  std::string serialize_static() {
+    return manager_helper::serialize(collect());
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string serialize_to_json_static() {
+    return manager_helper::serialize_to_json(collect());
+  }
+#endif
+
   std::shared_ptr<static_metric> get_metric_by_name(const std::string& name) {
     auto it = metric_map_.find(name);
     if (it == metric_map_.end()) {
@@ -250,6 +305,16 @@ class dynamic_metric_manager {
 
     return r;
   }
+
+  std::string serialize_dynamic() {
+    return manager_helper::serialize(collect());
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string serialize_to_json_dynamic() {
+    return manager_helper::serialize_to_json(collect());
+  }
+#endif
 
   bool remove_metric(const std::string& name) {
     std::unique_lock lock(mtx_);
@@ -413,5 +478,46 @@ class dynamic_metric_manager {
 
   std::shared_mutex mtx_;
   std::unordered_map<std::string, std::shared_ptr<dynamic_metric>> metric_map_;
+};
+
+template <typename... Args>
+struct metric_collector_t {
+  static std::string serialize() {
+    auto vec = get_all_metrics();
+    return manager_helper::serialize(vec);
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  static std::string serialize_to_json() {
+    auto vec = get_all_metrics();
+    return manager_helper::serialize_to_json(vec);
+  }
+#endif
+
+  static std::vector<std::shared_ptr<metric_t>> get_all_metrics() {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    (append_vector<Args>(vec), ...);
+    return vec;
+  }
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics(
+      const metric_filter_options& options) {
+    auto vec = get_all_metrics();
+    return manager_helper::filter_metrics(vec, options);
+  }
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_by_label_value(
+      const std::regex& label_regex, bool is_white = true) {
+    auto vec = get_all_metrics();
+    return manager_helper::filter_metrics_by_label_value(vec, label_regex,
+                                                         is_white);
+  }
+
+ private:
+  template <typename T>
+  static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
+    auto v = T::instance().collect();
+    vec.insert(vec.end(), v.begin(), v.end());
+  }
 };
 }  // namespace ylt::metric

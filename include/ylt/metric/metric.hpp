@@ -682,31 +682,4 @@ struct metric_manager_t {
 struct ylt_default_metric_tag_t {};
 using default_metric_manager = metric_manager_t<ylt_default_metric_tag_t>;
 
-template <typename... Args>
-struct metric_collector_t {
-  static std::string serialize() {
-    auto vec = get_all_metrics();
-    return default_metric_manager::instance().serialize(vec);
-  }
-
-#ifdef CINATRA_ENABLE_METRIC_JSON
-  static std::string serialize_to_json() {
-    auto vec = get_all_metrics();
-    return default_metric_manager::instance().serialize_to_json(vec);
-  }
-#endif
-
-  static std::vector<std::shared_ptr<metric_t>> get_all_metrics() {
-    std::vector<std::shared_ptr<metric_t>> vec;
-    (append_vector<Args>(vec), ...);
-    return vec;
-  }
-
- private:
-  template <typename T>
-  static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
-    auto v = T::instance().get_metrics();
-    vec.insert(vec.end(), v.begin(), v.end());
-  }
-};
 }  // namespace ylt::metric
