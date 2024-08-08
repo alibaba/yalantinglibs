@@ -48,25 +48,6 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
-struct vector_hash {
-  size_t operator()(const std::vector<std::string>& vec) const {
-    unsigned int seed = 131;
-    unsigned int hash = 0;
-
-    for (const auto& str : vec) {
-      for (auto ch : str) {
-        hash = hash * seed + ch;
-      }
-    }
-
-    return (hash & 0x7FFFFFFF);
-  }
-};
-
-template <typename T>
-using metric_hash_map =
-    std::unordered_map<std::vector<std::string>, T, vector_hash>;
-
 class metric_t {
  public:
   metric_t() = default;
@@ -75,10 +56,14 @@ class metric_t {
         name_(std::move(name)),
         help_(std::move(help)),
         metric_created_time_(std::chrono::system_clock::now()) {}
+
+  template <size_t N>
   metric_t(MetricType type, std::string name, std::string help,
-           std::vector<std::string> labels_name)
+           std::array<std::string, N> labels_name)
       : metric_t(type, std::move(name), std::move(help)) {
-    labels_name_ = std::move(labels_name);
+    for (size_t i = 0; i < N; i++) {
+      labels_name_.push_back(std::move(labels_name[i]));
+    }
   }
 
   metric_t(MetricType type, std::string name, std::string help,
@@ -122,7 +107,10 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual bool has_label_value(const std::string& label_value) { return false; }
+  virtual bool has_label_value(const std::string& label_value) {
+    return std::find(labels_value_.begin(), labels_value_.end(), label_value) !=
+           labels_value_.end();
+  }
 
   virtual void serialize(std::string& str) {}
 
@@ -143,8 +131,6 @@ class metric_t {
   }
 #endif
 
-  bool is_atomic() const { return use_atomic_; }
-
   template <typename T>
   T* as() {
     return dynamic_cast<T*>(this);
@@ -163,7 +149,7 @@ class metric_t {
 
   void build_label_string(std::string& str,
                           const std::vector<std::string>& label_name,
-                          const std::vector<std::string>& label_value) {
+                          const auto& label_value) {
     for (size_t i = 0; i < label_name.size(); i++) {
       str.append(label_name[i])
           .append("=\"")
@@ -198,7 +184,6 @@ class metric_t {
   std::map<std::string, std::string> static_labels_;
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
-  bool use_atomic_ = false;
   std::chrono::system_clock::time_point metric_created_time_{};
 };
 
