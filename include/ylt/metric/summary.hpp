@@ -35,14 +35,14 @@ struct block_t {
   double sum_;
 };
 
-class summary_t : public metric_t {
+class summary_t : public static_metric {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
   summary_t(std::string name, std::string help, Quantiles quantiles,
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
             int age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        metric_t(MetricType::Summary, std::move(name), std::move(help)),
+        static_metric(MetricType::Summary, std::move(name), std::move(help)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_no_label(max_age, age_buckets);
@@ -53,8 +53,8 @@ class summary_t : public metric_t {
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
             int age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        metric_t(MetricType::Summary, std::move(name), std::move(help),
-                 std::move(static_labels)),
+        static_metric(MetricType::Summary, std::move(name), std::move(help),
+                      std::move(static_labels)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_no_label(max_age, age_buckets);
@@ -257,7 +257,7 @@ struct labels_block_t {
 };
 
 template <size_t N>
-class basic_dynamic_summary : public metric_t {
+class basic_dynamic_summary : public dynamic_metric {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
 
@@ -267,8 +267,8 @@ class basic_dynamic_summary : public metric_t {
       std::chrono::milliseconds max_age = std::chrono::seconds{60},
       int age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        metric_t(MetricType::Summary, std::move(name), std::move(help),
-                 std::move(labels_name)),
+        dynamic_metric(MetricType::Summary, std::move(name), std::move(help),
+                       std::move(labels_name)),
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_block(labels_block_);

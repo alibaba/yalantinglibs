@@ -27,12 +27,12 @@ REFLECTION(json_histogram_t, name, help, type, metrics);
 #endif
 
 template <typename value_type>
-class basic_static_histogram : public metric_t {
+class basic_static_histogram : public static_metric {
  public:
   basic_static_histogram(std::string name, std::string help,
                          std::vector<double> buckets, size_t dupli_count = 2)
       : bucket_boundaries_(std::move(buckets)),
-        metric_t(MetricType::Histogram, std::move(name), std::move(help)),
+        static_metric(MetricType::Histogram, std::move(name), std::move(help)),
         sum_(std::make_shared<gauge_t>("", "", dupli_count)) {
     init_bucket_counter(dupli_count, bucket_boundaries_.size());
   }
@@ -42,7 +42,7 @@ class basic_static_histogram : public metric_t {
                          std::map<std::string, std::string> labels,
                          size_t dupli_count = 2)
       : bucket_boundaries_(std::move(buckets)),
-        metric_t(MetricType::Histogram, name, help, labels),
+        static_metric(MetricType::Histogram, name, help, labels),
         sum_(std::make_shared<gauge_t>("", "", dupli_count)) {
     init_bucket_counter(dupli_count, bucket_boundaries_.size());
   }
@@ -163,14 +163,14 @@ using histogram_t = basic_static_histogram<int64_t>;
 using histogram_d = basic_static_histogram<double>;
 
 template <typename value_type, size_t N>
-class basic_dynamic_histogram : public metric_t {
+class basic_dynamic_histogram : public dynamic_metric {
  public:
   basic_dynamic_histogram(std::string name, std::string help,
                           std::vector<double> buckets,
                           std::array<std::string, N> labels_name,
                           size_t dupli_count = 2)
       : bucket_boundaries_(buckets),
-        metric_t(MetricType::Histogram, name, help, labels_name),
+        dynamic_metric(MetricType::Histogram, name, help, labels_name),
         sum_(std::make_shared<basic_dynamic_gauge<value_type, N>>(
             name, help, labels_name, dupli_count)) {
     g_user_metric_count++;
@@ -196,6 +196,14 @@ class basic_dynamic_histogram : public metric_t {
 
   bool has_label_value(const std::string &label_val) override {
     return sum_->has_label_value(label_val);
+  }
+
+  bool has_label_value(const std::regex &regex) override {
+    return sum_->has_label_value(regex);
+  }
+
+  bool has_label_value(const std::vector<std::string> &label_value) override {
+    return sum_->has_label_value(label_value);
   }
 
   void serialize(std::string &str) override {

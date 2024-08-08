@@ -7,6 +7,97 @@
 using namespace ylt;
 using namespace ylt::metric;
 
+struct metrc_tag {};
+TEST_CASE("test metric manager") {
+  auto c = std::make_shared<counter_t>("test1", "");
+  auto g = std::make_shared<gauge_t>("test2", "");
+  auto& inst_s = static_metric_manager<metrc_tag>::instance();
+  static_metric_manager<metrc_tag>::instance().register_metric(c);
+  static_metric_manager<metrc_tag>::instance().register_metric(g);
+  auto pair = inst_s.create_metric_static<counter_t>("test1", "");
+  CHECK(pair.first == std::errc::invalid_argument);
+  auto v1 = inst_s.get_metric_by_label({});
+  CHECK(v1.size() == 2);
+  auto v2 = inst_s.get_metric_by_name("test1");
+  CHECK(v2 != nullptr);
+
+  inst_s.create_metric_static<counter_t>(
+      "test_counter", "", std::map<std::string, std::string>{{"url", "/"}});
+  auto ms = inst_s.filter_metrics_by_label_value(std::regex("/"));
+  CHECK(ms.size() == 1);
+
+  {
+    metric_filter_options options;
+    options.name_regex = ".*test.*";
+    auto v5 = inst_s.filter_metrics_static(options);
+    CHECK(v5.size() == 3);
+    options.label_regex = "url";
+    auto v6 = inst_s.filter_metrics_static(options);
+    CHECK(v6.size() == 1);
+  }
+
+  auto dc = std::make_shared<dynamic_counter_t>(
+      std::string("test3"), std::string(""),
+      std::array<std::string, 2>{"url", "code"});
+  dynamic_metric_manager<metrc_tag>::instance().register_metric(dc);
+  auto& inst_d = dynamic_metric_manager<metrc_tag>::instance();
+  auto pair1 = inst_d.create_metric_dynamic<dynamic_counter_t>(
+      std::string("test3"), std::string(""), std::array<std::string, 2>{});
+  CHECK(pair1.first == std::errc::invalid_argument);
+  dc->inc({"/", "200"});
+  auto v3 = inst_d.get_metric_by_label({{"url", "/"}, {"code", "200"}});
+  CHECK(v3.size() == 1);
+
+  auto v4 = inst_d.get_metric_by_label_name({"url", "code"});
+  CHECK(v4.size() == 1);
+
+  inst_d.remove_metric(dc);
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric(dc->str_name());
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric(std::vector<std::shared_ptr<dynamic_metric>>{dc});
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric({dc->str_name()});
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric_by_label({{"url", "/"}, {"code", "200"}});
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric_by_label_name(std::vector<std::string>{"url", "code"});
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric_by_label_name("url");
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.remove_metric_by_label_name("code");
+  CHECK(inst_d.metric_count() == 0);
+  inst_d.register_metric(dc);
+
+  inst_d.create_metric_dynamic<dynamic_counter_t>(
+      "test4", "", std::array<std::string, 2>{"method", "code"});
+
+  metric_filter_options options;
+  options.name_regex = ".*test.*";
+  auto v5 = inst_d.filter_metrics_dynamic(options);
+  CHECK(v5.size() == 2);
+  options.label_regex = "method";
+  auto v6 = inst_d.filter_metrics_dynamic(options);
+  CHECK(v6.size() == 1);
+
+  auto v7 = inst_d.filter_metrics_by_label_value(std::regex("200"));
+  CHECK(v7.size() == 1);
+}
+
 TEST_CASE("test dynamic counter") {
   basic_dynamic_counter<int64_t, 2> c("test", "", {"url", "code"});
   c.inc({"/", "200"});

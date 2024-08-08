@@ -60,12 +60,12 @@ inline void set_value(T &label_val, value_type value, op_type_t type) {
 }
 
 template <typename value_type>
-class basic_static_counter : public metric_t {
+class basic_static_counter : public static_metric {
  public:
   // static counter, no labels, only contains an atomic value.
   basic_static_counter(std::string name, std::string help,
                        size_t dupli_count = 2)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
+      : static_metric(MetricType::Counter, std::move(name), std::move(help)) {
     init_thread_local(dupli_count);
   }
 
@@ -73,8 +73,8 @@ class basic_static_counter : public metric_t {
   basic_static_counter(std::string name, std::string help,
                        std::map<std::string, std::string> labels,
                        size_t dupli_count = 2)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {
+      : static_metric(MetricType::Counter, std::move(name), std::move(help),
+                      std::move(labels)) {
     init_thread_local(dupli_count);
   }
 
@@ -190,14 +190,14 @@ using dynamic_metric_hash_map =
     std::unordered_map<std::array<std::string, N>, T, array_hash<N>>;
 
 template <typename value_type, size_t N>
-class basic_dynamic_counter : public metric_t {
+class basic_dynamic_counter : public dynamic_metric {
  public:
   // dynamic labels value
   basic_dynamic_counter(std::string name, std::string help,
                         std::array<std::string, N> labels_name,
                         size_t dupli_count = 2)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)),
+      : dynamic_metric(MetricType::Counter, std::move(name), std::move(help),
+                       std::move(labels_name)),
         dupli_count_(dupli_count) {
     g_user_metric_count++;
   }
@@ -257,13 +257,40 @@ class basic_dynamic_counter : public metric_t {
     return map;
   }
 
-  bool has_label_value(const std::string &label_val) override {
+  bool has_label_value(const std::string &value) override {
     auto map = value_map();
-    auto it = std::find_if(map.begin(), map.end(), [&label_val](auto &pair) {
-      auto &key = pair.first;
-      return std::find(key.begin(), key.end(), label_val) != key.end();
-    });
-    return it != map.end();
+    for (auto &[label_value, _] : map) {
+      if (auto it = std::find(label_value.begin(), label_value.end(), value);
+          it != label_value.end()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool has_label_value(const std::regex &regex) override {
+    auto map = value_map();
+    for (auto &[label_value, _] : map) {
+      if (auto it = std::find_if(label_value.begin(), label_value.end(),
+                                 [&](auto &val) {
+                                   return std::regex_match(val, regex);
+                                 });
+          it != label_value.end()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool has_label_value(const std::vector<std::string> &label_value) override {
+    std::array<std::string, N> arr;
+    for (size_t i = 0; i < N; i++) {
+      arr[i] = label_value[i];
+    }
+    std::lock_guard lock(mtx_);
+    return value_map_.contains(arr);
   }
 
   void serialize(std::string &str) override {

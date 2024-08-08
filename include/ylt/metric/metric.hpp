@@ -79,6 +79,8 @@ class metric_t {
 
   std::string_view name() { return name_; }
 
+  const std::string& str_name() { return name_; }
+
   std::string_view help() { return help_; }
 
   MetricType metric_type() { return type_; }
@@ -110,6 +112,25 @@ class metric_t {
   virtual bool has_label_value(const std::string& label_value) {
     return std::find(labels_value_.begin(), labels_value_.end(), label_value) !=
            labels_value_.end();
+  }
+
+  virtual bool has_label_value(const std::vector<std::string>& label_value) {
+    return labels_value_ == label_value;
+  }
+  virtual bool has_label_value(const std::regex& regex) {
+    auto it = std::find_if(labels_value_.begin(), labels_value_.end(),
+                           [&](auto& value) {
+                             return std::regex_match(value, regex);
+                           });
+
+    return it != labels_value_.end();
+  }
+  bool has_label_name(const std::vector<std::string>& label_name) {
+    return labels_name_ == label_name;
+  }
+  bool has_label_name(const std::string& label_name) {
+    return std::find(labels_name_.begin(), labels_name_.end(), label_name) !=
+           labels_name_.end();
   }
 
   virtual void serialize(std::string& str) {}
@@ -185,6 +206,14 @@ class metric_t {
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   std::chrono::system_clock::time_point metric_created_time_{};
+};
+
+class static_metric : public metric_t {
+  using metric_t::metric_t;
+};
+
+class dynamic_metric : public metric_t {
+  using metric_t::metric_t;
 };
 
 template <typename Tag>
