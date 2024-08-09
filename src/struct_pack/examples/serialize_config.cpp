@@ -16,6 +16,9 @@
 
 #include <cassert>
 
+#include "ylt/struct_pack/reflection.hpp"
+#include "ylt/struct_pack/type_calculate.hpp"
+
 #define STRUCT_PACK_OPTIMIZE  // add this macro to speed up
                               // serialize/deserialize but it will cost more
                               // time to compile
@@ -26,6 +29,12 @@
 // add this macro to enable support of int128/uint128
 
 #include <ylt/struct_pack.hpp>
+// set global default struct pack config
+namespace struct_pack {
+constexpr sp_config set_default(sp_config*) {
+  return sp_config::DISABLE_TYPE_INFO;
+}
+}  // namespace struct_pack
 
 struct rect {
   int a, b, c, d;
