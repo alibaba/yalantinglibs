@@ -104,37 +104,32 @@ class manager_helper {
     }
 
     std::vector<std::shared_ptr<metric_t>> filtered_metrics;
-    std::vector<size_t> indexs;
-    size_t index = 0;
     for (auto& m : metrics) {
       if (options.name_regex &&
           !options.label_regex) {  // only check metric name
         if (std::regex_match(std::string(m->name()), *options.name_regex)) {
-          if (options.is_white) {
-            filtered_metrics.push_back(m);
-          }
-          else {
-            indexs.push_back(index);
-          }
+          filtered_metrics.push_back(m);
         }
       }
       else if (options.label_regex &&
                !options.name_regex) {  // only check label name
-        filter_by_label_name(filtered_metrics, m, options, indexs, index);
+        filter_by_label_name(filtered_metrics, m, options);
       }
       else {
         if (std::regex_match(
                 std::string(m->name()),
                 *options.name_regex)) {  // check label name and label value
-          filter_by_label_name(filtered_metrics, m, options, indexs, index);
+          filter_by_label_name(filtered_metrics, m, options);
         }
       }
-      index++;
     }
 
     if (!options.is_white) {
-      for (size_t i : indexs) {
-        metrics.erase(std::next(metrics.begin(), i));
+      auto it = metrics.begin();
+      for (auto& m : filtered_metrics) {
+        std::erase_if(metrics, [&](auto t) {
+          return t == m;
+        });
       }
       return metrics;
     }
@@ -144,17 +139,11 @@ class manager_helper {
 
   static void filter_by_label_name(
       std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
-      std::shared_ptr<metric_t> m, const metric_filter_options& options,
-      std::vector<size_t>& indexs, size_t index) {
+      std::shared_ptr<metric_t> m, const metric_filter_options& options) {
     const auto& labels_name = m->labels_name();
     for (auto& label_name : labels_name) {
       if (std::regex_match(label_name, *options.label_regex)) {
-        if (options.is_white) {
-          filtered_metrics.push_back(m);
-        }
-        else {
-          indexs.push_back(index);
-        }
+        filtered_metrics.push_back(m);
       }
     }
   }
@@ -529,6 +518,10 @@ struct metric_collector_t {
     return manager_helper::serialize_to_json(vec);
   }
 #endif
+
+  static std::string serialize(std::vector<std::shared_ptr<metric_t>> metrics) {
+    return manager_helper::serialize(metrics);
+  }
 
   static std::vector<std::shared_ptr<metric_t>> get_all_metrics() {
     std::vector<std::shared_ptr<metric_t>> vec;
