@@ -185,9 +185,9 @@ class coro_http_server {
   void use_metrics(bool enable_json = false,
                    std::string url_path = "/metrics") {
     init_metrics();
-    using root =
-        ylt::metric::metric_collector_t<ylt::metric::default_metric_manager,
-                                        ylt::metric::system_metric_manager>;
+    using root = ylt::metric::metric_collector_t<
+        ylt::metric::default_static_metric_manager,
+        ylt::metric::system_metric_manager>;
     set_http_handler<http_method::GET>(
         url_path,
         [enable_json](coro_http_request &req, coro_http_response &res) {
@@ -930,20 +930,20 @@ class coro_http_server {
     using namespace ylt::metric;
 
     cinatra_metric_conf::enable_metric = true;
-    default_metric_manager::instance().create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_req, "");
-    default_metric_manager::instance().create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_failed_req, "");
-    default_metric_manager::instance().create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_recv_bytes, "");
-    default_metric_manager::instance().create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_send_bytes, "");
-    default_metric_manager::instance().create_metric_static<gauge_t>(
+    default_static_metric_manager::instance().create_metric_static<gauge_t>(
         cinatra_metric_conf::server_total_fd, "");
-    default_metric_manager::instance().create_metric_static<histogram_t>(
+    default_static_metric_manager::instance().create_metric_static<histogram_t>(
         cinatra_metric_conf::server_req_latency, "",
         std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-    default_metric_manager::instance().create_metric_static<histogram_t>(
+    default_static_metric_manager::instance().create_metric_static<histogram_t>(
         cinatra_metric_conf::server_read_latency, "",
         std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
 #if defined(__GNUC__)

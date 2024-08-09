@@ -16,12 +16,14 @@
 #include "ylt/metric/counter.hpp"
 #include "ylt/metric/gauge.hpp"
 #include "ylt/metric/metric.hpp"
+#include "ylt/metric/metric_manager.hpp"
 #else
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #include "cinatra/ylt/metric/counter.hpp"
 #include "cinatra/ylt/metric/gauge.hpp"
 #include "cinatra/ylt/metric/metric.hpp"
+#include "cinatra/ylt/metric/metric_manager.hpp"
 #endif
 
 // modified based on: brpc/src/bvar/default_variables.cpp

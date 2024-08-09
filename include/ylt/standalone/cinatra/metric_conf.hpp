@@ -7,6 +7,7 @@
 #include "ylt/metric/histogram.hpp"
 #include "ylt/metric/metric.hpp"
 #include "ylt/metric/summary.hpp"
+#include "ylt/metric/system_metric.hpp"
 
 namespace cinatra {
 struct cinatra_metric_conf {
@@ -26,7 +27,7 @@ struct cinatra_metric_conf {
     }
 
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::counter_t>(server_total_req);
     if (m == nullptr) {
       return;
@@ -39,7 +40,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::counter_t>(server_failed_req);
     if (m == nullptr) {
       return;
@@ -52,7 +53,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::gauge_t>(server_total_fd);
     if (m == nullptr) {
       return;
@@ -65,7 +66,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::gauge_t>(server_total_fd);
     if (m == nullptr) {
       return;
@@ -78,7 +79,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::counter_t>(server_total_recv_bytes);
     if (m == nullptr) {
       return;
@@ -91,7 +92,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::counter_t>(server_total_send_bytes);
     if (m == nullptr) {
       return;
@@ -104,7 +105,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::histogram_t>(server_req_latency);
     if (m == nullptr) {
       return;
@@ -117,7 +118,7 @@ struct cinatra_metric_conf {
       return;
     }
     static auto m =
-        ylt::metric::default_metric_manager::instance()
+        ylt::metric::default_static_metric_manager::instance()
             .get_metric_static<ylt::metric::histogram_t>(server_read_latency);
     if (m == nullptr) {
       return;

@@ -213,6 +213,14 @@ class static_metric_manager {
     return manager_helper::serialize_to_json(collect());
   }
 #endif
+  template <typename T>
+  std::shared_ptr<T> get_metric_static(const std::string& name) {
+    auto it = metric_map_.find(name);
+    if (it == metric_map_.end()) {
+      return nullptr;
+    }
+    return std::dynamic_pointer_cast<T>(it->second);
+  }
 
   std::shared_ptr<static_metric> get_metric_by_name(const std::string& name) {
     auto it = metric_map_.find(name);
@@ -294,12 +302,6 @@ class dynamic_metric_manager {
       r = register_metric(m);
       if (!r) {
         break;
-      }
-    }
-
-    if (!r) {
-      for (auto& m : metrics) {
-        remove_metric(m);
       }
     }
 
@@ -405,6 +407,16 @@ class dynamic_metric_manager {
     return metrics;
   }
 
+  template <typename T>
+  std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
+    auto map = metric_map();
+    auto it = map.find(name);
+    if (it == map.end()) {
+      return nullptr;
+    }
+    return std::dynamic_pointer_cast<T>(it->second);
+  }
+
   std::shared_ptr<dynamic_metric> get_metric_by_name(std::string_view name) {
     auto map = metric_map();
     auto it = map.find(name);
@@ -479,6 +491,18 @@ class dynamic_metric_manager {
   std::shared_mutex mtx_;
   std::unordered_map<std::string, std::shared_ptr<dynamic_metric>> metric_map_;
 };
+
+struct ylt_default_metric_tag_t {};
+using default_static_metric_manager =
+    static_metric_manager<ylt_default_metric_tag_t>;
+using default_dynamiv_metric_manager =
+    dynamic_metric_manager<ylt_default_metric_tag_t>;
+
+template <typename Tag>
+struct metric_manager_t;
+
+struct ylt_system_tag_t {};
+using system_metric_manager = static_metric_manager<ylt_system_tag_t>;
 
 template <typename... Args>
 struct metric_collector_t {
