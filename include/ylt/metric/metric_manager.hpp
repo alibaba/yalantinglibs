@@ -204,6 +204,10 @@ class static_metric_manager {
     return metrics;
   }
 
+  std::string serialize(const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    return manager_helper::serialize(metrics);
+  }
+
   std::string serialize_static() {
     return manager_helper::serialize(collect());
   }
@@ -215,6 +219,8 @@ class static_metric_manager {
 #endif
   template <typename T>
   std::shared_ptr<T> get_metric_static(const std::string& name) {
+    static_assert(std::is_base_of_v<static_metric, T>,
+                  "must be dynamic metric");
     auto it = metric_map_.find(name);
     if (it == metric_map_.end()) {
       return nullptr;
@@ -310,6 +316,10 @@ class dynamic_metric_manager {
 
   std::string serialize_dynamic() {
     return manager_helper::serialize(collect());
+  }
+
+  std::string serialize(const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    return manager_helper::serialize(metrics);
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -409,6 +419,8 @@ class dynamic_metric_manager {
 
   template <typename T>
   std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
+    static_assert(std::is_base_of_v<dynamic_metric, T>,
+                  "must be dynamic metric");
     auto map = metric_map();
     auto it = map.find(name);
     if (it == map.end()) {

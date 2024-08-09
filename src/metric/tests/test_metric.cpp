@@ -1408,6 +1408,72 @@ TEST_CASE("test remove dynamic metric") {
   CHECK(test_metric_manager::instance().metric_count() == 2);
 }
 
+TEST_CASE("testFilterMetricsDynamicWithMultiLabel") {
+  using metric_mgr = dynamic_metric_manager<test_id_t<31>>;
+  auto [ec, c] =
+      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+          "test_dynamic_counter", "",
+          std::array<std::string, 2>{"method", "bucket"});
+  auto [ec2, c2] =
+      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+          "test_dynamic_counter2", "",
+          std::array<std::string, 2>{"url", "bucket"});
+  c->inc({"GET", "bucket1"});
+  c->inc({"POST", "bucket2"});
+  c2->inc({"/", "bucket1"});
+  c2->inc({"/test", "bucket3"});
+
+  auto counter = metric_mgr::instance().get_metric_dynamic<dynamic_counter_t>(
+      "test_dynamic_counter");
+  CHECK(counter != nullptr);
+
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  {
+    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+
+    auto s = metric_mgr::instance().serialize(metrics);
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = "bucket";
+  {
+    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+    auto s = metric_mgr::instance().serialize(metrics);
+    CHECK(s.find("test_dynamic_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = "method";
+  {
+    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::instance().serialize(metrics);
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = "url";
+  {
+    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s = metric_mgr::instance().serialize(metrics);
+    CHECK(s.find("test_dynamic_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  // black
+  options.label_regex = ".*bucket.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 0);
+  }
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
