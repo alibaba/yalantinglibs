@@ -590,6 +590,33 @@ template <typename T, typename = void>
   constexpr bool user_defined_config_by_ADL = user_defined_config_by_ADL_impl<T>::value;
 #endif
 
+template<typename T>
+constexpr decltype(auto) delay_sp_config_eval() {
+  if constexpr (sizeof(T)==0) {
+    return (T*){};
+  }
+  else {
+    return (sp_config*){};
+  }
+}
+
+#if __cpp_concepts >= 201907L
+  template<typename T>
+  concept has_default_config = std::is_same_v<decltype(set_default(decltype(delay_sp_config_eval<T>()){})),struct_pack::sp_config>;
+#else
+  template <typename T, typename = void>
+  struct has_default_config_impl : std::false_type {};
+
+  template <typename T>
+  struct has_default_config_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(set_default(decltype(delay_sp_config_eval<T>()){})),struct_pack::sp_config>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool has_default_config = has_default_config_impl<T>::value;
+#endif
+
+
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept user_defined_config = requires {

@@ -153,17 +153,24 @@ constexpr decltype(auto) get_type_end_flag() {
   }
 }
 
-template <typename Arg, typename...>
-constexpr uint64_t get_parent_tag_impl() {
-  if constexpr (user_defined_config_by_ADL<Arg>) {
-    return static_cast<uint64_t>(set_sp_config((Arg *)nullptr));
+template <typename T>
+constexpr sp_config get_type_config() {
+  if constexpr (struct_pack::detail::user_defined_config_by_ADL<T>) {
+    return set_sp_config((T *)nullptr);
   }
-  else if constexpr (user_defined_config<Arg>) {
-    return static_cast<uint64_t>(Arg::struct_pack_config);
+  else if constexpr (struct_pack::detail::user_defined_config<T>) {
+    return static_cast<sp_config>(T::struct_pack_config);
+  }
+  else if constexpr (struct_pack::detail::has_default_config<T>) {
+    return set_default(decltype(delay_sp_config_eval<T>()){});
   }
   else {
-    return 0;
+    return sp_config::DEFAULT;
   }
+}
+template <typename T, typename... Args>
+constexpr uint64_t get_parent_tag_impl() {
+  return static_cast<uint64_t>(get_type_config<T>());
 }
 
 template <typename... Args>
@@ -715,26 +722,12 @@ template <uint64_t conf, typename T>
 constexpr bool check_if_add_type_literal() {
   constexpr auto config = conf & 0b11;
   if constexpr (config == sp_config::DEFAULT) {
-    if constexpr (struct_pack::detail::user_defined_config_by_ADL<T>) {
-      constexpr auto config = set_sp_config((T *)nullptr) & 0b11;
-      if constexpr (config == sp_config::DEFAULT) {
-        return serialize_static_config<T>::has_type_literal;
-      }
-      else {
-        return config == sp_config::ENABLE_TYPE_INFO;
-      }
-    }
-    else if constexpr (struct_pack::detail::user_defined_config<T>) {
-      constexpr auto config = T::struct_pack_config & 0b11;
-      if constexpr (config == sp_config::DEFAULT) {
-        return serialize_static_config<T>::has_type_literal;
-      }
-      else {
-        return config == sp_config::ENABLE_TYPE_INFO;
-      }
+    constexpr auto config = get_type_config<T>() & 0b11;
+    if constexpr (config == sp_config::DEFAULT) {
+      return serialize_static_config<T>::has_type_literal;
     }
     else {
-      return serialize_static_config<T>::has_type_literal;
+      return config == sp_config::ENABLE_TYPE_INFO;
     }
   }
   else {
@@ -830,22 +823,13 @@ constexpr bool check_if_has_container() {
 template <uint64_t conf, typename T>
 constexpr bool check_if_disable_hash_head_impl() {
   constexpr auto config = conf & 0b11;
-  if constexpr (config != sp_config::DISABLE_ALL_META_INFO) {
-    if constexpr (struct_pack::detail::user_defined_config_by_ADL<T>) {
-      constexpr auto config = set_sp_config((T *)nullptr) & 0b11;
-      if constexpr (config == sp_config::DISABLE_ALL_META_INFO) {
-        return true;
-      }
-    }
-    else if constexpr (struct_pack::detail::user_defined_config<T>) {
-      constexpr auto config = T::struct_pack_config & 0b11;
-      if constexpr (config == sp_config::DISABLE_ALL_META_INFO) {
-        return true;
-      }
-    }
-    return false;
+  if constexpr (config == sp_config::DEFAULT) {
+    constexpr auto config = get_type_config<T>() & 0b11;
+    return config == sp_config::DISABLE_ALL_META_INFO;
   }
-  return true;
+  else {
+    return config == sp_config::DISABLE_ALL_META_INFO;
+  }
 }
 
 template <uint64_t conf, typename T>
