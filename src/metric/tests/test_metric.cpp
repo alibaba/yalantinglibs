@@ -1367,18 +1367,22 @@ TEST_CASE("test metric capacity") {
 
 TEST_CASE("test remove dynamic metric") {
   using test_metric_manager = dynamic_metric_manager<test_id_t<22>>;
-  auto [ec, c] =
+  auto pair =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter"), "", std::array<std::string, 1>{});
-  CHECK(c != nullptr);
-  auto [ec1, c1] =
+  CHECK(pair.second != nullptr);
+  auto pair1 =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter1"), "", std::array<std::string, 1>{});
-  CHECK(c1 != nullptr);
-  auto [ec2, c2] =
+  CHECK(pair1.second != nullptr);
+  auto pair2 =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter2"), "", std::array<std::string, 1>{});
-  CHECK(c2 != nullptr);
+  CHECK(pair2.second != nullptr);
+
+  auto c = pair.second;
+  auto c1 = pair1.second;
+  auto c2 = pair2.second;
 
   test_metric_manager::instance().remove_metric(c);
   CHECK(test_metric_manager::instance().metric_count() == 2);
