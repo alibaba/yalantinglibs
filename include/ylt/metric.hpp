@@ -17,6 +17,7 @@
 #define CINATRA_ENABLE_METRIC_JSON
 #include "metric/gauge.hpp"
 #include "metric/histogram.hpp"
+#include "metric/metric_manager.hpp"
 #include "metric/summary.hpp"
 #include "metric/system_metric.hpp"
 #include "ylt/struct_json/json_writer.h"

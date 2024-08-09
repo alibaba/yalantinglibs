@@ -52,6 +52,7 @@ class thread_local_value {
 
   thread_local_value &operator=(thread_local_value &&other) {
     duplicates_ = std::move(other.duplicates_);
+    return *this;
   }
 
   void inc(value_type value = 1) { local_value() += value; }
