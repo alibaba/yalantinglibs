@@ -48,6 +48,24 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
+#ifdef __APPLE__
+double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
+  double v;
+  do {
+    v = obj->load();
+  } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
+  return v;
+}
+
+double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
+  double v;
+  do {
+    v = obj->load();
+  } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
+  return v;
+}
+#endif
+
 class metric_t {
  public:
   metric_t() = default;
@@ -180,24 +198,6 @@ class metric_t {
     }
     str.pop_back();
   }
-
-#ifdef __APPLE__
-  double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
-    double v;
-    do {
-      v = obj->load();
-    } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
-    return v;
-  }
-
-  double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
-    double v;
-    do {
-      v = obj->load();
-    } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
-    return v;
-  }
-#endif
 
   MetricType type_ = MetricType::Nil;
   std::string name_;

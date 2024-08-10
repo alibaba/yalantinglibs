@@ -32,7 +32,7 @@ inline void set_value(T &label_val, value_type value, op_type_t type) {
     case op_type_t::INC: {
 #ifdef __APPLE__
       if constexpr (std::is_floating_point_v<value_type>) {
-        mac_os_atomic_fetch_add(&label_val.local_value(), value);
+        mac_os_atomic_fetch_add(&label_val, value);
       }
       else {
         label_val += value;

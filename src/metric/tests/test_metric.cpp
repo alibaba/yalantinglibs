@@ -1260,6 +1260,11 @@ TEST_CASE("test serialize with emptry metrics") {
 }
 
 TEST_CASE("test serialize with multiple threads") {
+  {
+    dynamic_histogram_d h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+                          std::array<std::string, 2>{"url", "code"});
+    h.observe({"/", "code"}, 23);
+  }
   auto c = std::make_shared<dynamic_counter_1t>(
       std::string("get_count"), std::string("get counter"),
       std::array<std::string, 1>{"method"});
