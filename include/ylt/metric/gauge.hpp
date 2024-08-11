@@ -67,6 +67,9 @@ class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
     }
 
     std::lock_guard lock(mtx_);
+    if (value_map_.size() > ylt_label_capacity) {
+      return;
+    }
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
     if (r) {

@@ -226,8 +226,13 @@ inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
+inline int64_t ylt_label_capacity = 20000000;
 
 inline void set_metric_capacity(int64_t max_count) {
   ylt_metric_capacity = max_count;
+}
+
+inline void set_label_capacity(int64_t max_label_count) {
+  ylt_label_capacity = max_label_count;
 }
 }  // namespace ylt::metric
