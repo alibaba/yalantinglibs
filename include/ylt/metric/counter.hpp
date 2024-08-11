@@ -257,6 +257,66 @@ class basic_dynamic_counter : public dynamic_metric {
     return map;
   }
 
+  size_t label_value_count() override {
+    std::lock_guard lock(mtx_);
+    return value_map_.size();
+  }
+
+  void remove_label_value(
+      const std::map<std::string, std::string> &labels) override {
+    {
+      std::lock_guard lock(mtx_);
+      if (value_map_.empty()) {
+        return;
+      }
+    }
+
+    const auto &labels_name = this->labels_name();
+    if (labels.size() > labels_name.size()) {
+      return;
+    }
+
+    if (labels.size() == labels_name.size()) {
+      std::vector<std::string> label_value;
+      for (auto &lb_name : labels_name) {
+        if (auto i = labels.find(lb_name); i != labels.end()) {
+          label_value.push_back(i->second);
+        }
+      }
+
+      std::lock_guard lock(mtx_);
+      std::erase_if(value_map_, [&, this](auto &pair) {
+        return equal(label_value, pair.first);
+      });
+      return;
+    }
+    else {
+      std::vector<std::string> vec;
+      for (auto &lb_name : labels_name) {
+        if (auto i = labels.find(lb_name); i != labels.end()) {
+          vec.push_back(i->second);
+        }
+        else {
+          vec.push_back("");
+        }
+      }
+      if (vec.empty()) {
+        return;
+      }
+
+      std::lock_guard lock(mtx_);
+      std::erase_if(value_map_, [&](auto &pair) {
+        auto &[arr, _] = pair;
+        for (size_t i = 0; i < vec.size(); i++) {
+          if (!vec[i].empty() && vec[i] != arr[i]) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+  }
+
   bool has_label_value(const std::string &value) override {
     auto map = value_map();
     for (auto &[label_value, _] : map) {
@@ -359,6 +419,14 @@ class basic_dynamic_counter : public dynamic_metric {
 
       str.append("\n");
     }
+  }
+
+  template <class T, std::size_t Size>
+  bool equal(const std::vector<T> &v, const std::array<T, Size> &a) {
+    if (v.size() != N)
+      return false;
+
+    return std::equal(v.begin(), v.end(), a.begin());
   }
 
   void build_string(std::string &str, const std::vector<std::string> &v1,

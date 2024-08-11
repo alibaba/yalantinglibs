@@ -127,6 +127,8 @@ class metric_t {
     return static_labels_;
   }
 
+  virtual size_t label_value_count() { return 0; }
+
   virtual bool has_label_value(const std::string& label_value) {
     return std::find(labels_value_.begin(), labels_value_.end(), label_value) !=
            labels_value_.end();
@@ -150,6 +152,9 @@ class metric_t {
     return std::find(labels_name_.begin(), labels_name_.end(), label_name) !=
            labels_name_.end();
   }
+
+  virtual void remove_label_value(
+      const std::map<std::string, std::string>& labels) {}
 
   virtual void serialize(std::string& str) {}
 

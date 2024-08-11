@@ -350,6 +350,13 @@ class dynamic_metric_manager {
     }
   }
 
+  void remove_label(const std::map<std::string, std::string>& labels) {
+    std::unique_lock lock(mtx_);
+    for (auto& [_, m] : metric_map_) {
+      m->remove_label_value(labels);
+    }
+  }
+
   void remove_metric_by_label(
       const std::map<std::string, std::string>& labels) {
     std::unique_lock lock(mtx_);

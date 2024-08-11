@@ -100,6 +100,22 @@ TEST_CASE("test metric manager") {
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
 
+  inst_d.remove_label({{"code", "400"}});
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_label({{"code", "200"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
+
+  CHECK(dc->label_value_count() == 1);
+  inst_d.remove_label({{"url", "/"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
+
+  CHECK(dc->label_value_count() == 1);
+  inst_d.remove_label({{"url", "/"}, {"code", "200"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
+
   inst_d.remove_metric_by_label_name(std::vector<std::string>{"url", "code"});
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
