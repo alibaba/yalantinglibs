@@ -49,7 +49,7 @@ struct metric_filter_options {
 };
 
 #ifdef __APPLE__
-double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
+inline double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
   double v;
   do {
     v = obj->load();
@@ -57,7 +57,7 @@ double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
   return v;
 }
 
-double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
+inline double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
   double v;
   do {
     v = obj->load();

@@ -351,13 +351,47 @@ class dynamic_metric_manager {
   }
 
   void remove_metric_by_label(
-      const std::vector<std::pair<std::string, std::string>>& labels) {
-    std::vector<std::string> label_value;
-    for (auto& [k, v] : labels) {
-      label_value.push_back(v);
-    }
+      const std::map<std::string, std::string>& labels) {
+    std::unique_lock lock(mtx_);
+    for (auto it = metric_map_.begin(); it != metric_map_.end();) {
+      auto& m = it->second;
+      const auto& labels_name = m->labels_name();
+      if (labels.size() > labels_name.size()) {
+        continue;
+      }
 
-    remove_metric_by_label_value(label_value);
+      if (labels.size() == labels_name.size()) {
+        std::vector<std::string> label_value;
+        for (auto& lb_name : labels_name) {
+          if (auto i = labels.find(lb_name); i != labels.end()) {
+            label_value.push_back(i->second);
+          }
+        }
+
+        std::erase_if(metric_map_, [&](auto& pair) {
+          return pair.second->has_label_value(label_value);
+        });
+        if (m->has_label_value(label_value)) {
+          metric_map_.erase(it);
+        }
+        break;
+      }
+      else {
+        bool need_erase = false;
+        for (auto& lb_name : labels_name) {
+          if (auto i = labels.find(lb_name); i != labels.end()) {
+            if (m->has_label_value(i->second)) {
+              it = metric_map_.erase(it);
+              need_erase = true;
+              break;
+            }
+          }
+        }
+
+        if (!need_erase)
+          ++it;
+      }
+    }
   }
 
   void remove_metric_by_label_name(
@@ -517,9 +551,15 @@ struct metric_collector_t {
     auto vec = get_all_metrics();
     return manager_helper::serialize_to_json(vec);
   }
+
+  static std::string serialize_to_json(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    return manager_helper::serialize_to_json(metrics);
+  }
 #endif
 
-  static std::string serialize(std::vector<std::shared_ptr<metric_t>> metrics) {
+  static std::string serialize(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
     return manager_helper::serialize(metrics);
   }
 

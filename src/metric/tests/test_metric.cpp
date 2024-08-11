@@ -94,7 +94,9 @@ TEST_CASE("test metric manager") {
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
 
-  inst_d.remove_metric_by_label({{"url", "/"}, {"code", "200"}});
+  inst_d.remove_metric_by_label({{"code", "400"}});
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_metric_by_label({{"code", "200"}});
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
 
