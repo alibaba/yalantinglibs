@@ -48,6 +48,24 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
+#ifdef __APPLE__
+inline double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
+  double v;
+  do {
+    v = obj->load();
+  } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
+  return v;
+}
+
+inline double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
+  double v;
+  do {
+    v = obj->load();
+  } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
+  return v;
+}
+#endif
+
 class metric_t {
  public:
   metric_t() = default;
@@ -109,6 +127,8 @@ class metric_t {
     return static_labels_;
   }
 
+  virtual size_t label_value_count() { return 0; }
+
   virtual bool has_label_value(const std::string& label_value) {
     return std::find(labels_value_.begin(), labels_value_.end(), label_value) !=
            labels_value_.end();
@@ -132,6 +152,9 @@ class metric_t {
     return std::find(labels_name_.begin(), labels_name_.end(), label_name) !=
            labels_name_.end();
   }
+
+  virtual void remove_label_value(
+      const std::map<std::string, std::string>& labels) {}
 
   virtual void serialize(std::string& str) {}
 
@@ -181,24 +204,6 @@ class metric_t {
     str.pop_back();
   }
 
-#ifdef __APPLE__
-  double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
-    double v;
-    do {
-      v = obj->load();
-    } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
-    return v;
-  }
-
-  double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
-    double v;
-    do {
-      v = obj->load();
-    } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
-    return v;
-  }
-#endif
-
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
@@ -221,8 +226,13 @@ inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
+inline int64_t ylt_label_capacity = 20000000;
 
 inline void set_metric_capacity(int64_t max_count) {
   ylt_metric_capacity = max_count;
+}
+
+inline void set_label_capacity(int64_t max_label_count) {
+  ylt_label_capacity = max_label_count;
 }
 }  // namespace ylt::metric

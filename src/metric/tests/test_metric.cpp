@@ -94,9 +94,27 @@ TEST_CASE("test metric manager") {
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
 
-  inst_d.remove_metric_by_label({{"url", "/"}, {"code", "200"}});
+  inst_d.remove_metric_by_label({{"code", "400"}});
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_metric_by_label({{"code", "200"}});
   CHECK(inst_d.metric_count() == 0);
   inst_d.register_metric(dc);
+
+  inst_d.remove_label_value({{"code", "400"}});
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_label_value({{"code", "200"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
+
+  CHECK(dc->label_value_count() == 1);
+  inst_d.remove_label_value({{"url", "/"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
+
+  CHECK(dc->label_value_count() == 1);
+  inst_d.remove_label_value({{"url", "/"}, {"code", "200"}});
+  CHECK(dc->label_value_count() == 0);
+  dc->inc({"/", "200"});
 
   inst_d.remove_metric_by_label_name(std::vector<std::string>{"url", "code"});
   CHECK(inst_d.metric_count() == 0);
@@ -1260,6 +1278,11 @@ TEST_CASE("test serialize with emptry metrics") {
 }
 
 TEST_CASE("test serialize with multiple threads") {
+  {
+    dynamic_histogram_d h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+                          std::array<std::string, 2>{"url", "code"});
+    h.observe({"/", "code"}, 23);
+  }
   auto c = std::make_shared<dynamic_counter_1t>(
       std::string("get_count"), std::string("get counter"),
       std::array<std::string, 1>{"method"});
