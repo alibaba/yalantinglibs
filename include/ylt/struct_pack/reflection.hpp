@@ -593,10 +593,10 @@ template <typename T, typename = void>
 template<typename T>
 constexpr decltype(auto) delay_sp_config_eval() {
   if constexpr (sizeof(T)==0) {
-    return (T*){};
+    return (T*)nullptr;
   }
   else {
-    return (sp_config*){};
+    return (sp_config*)nullptr;
   }
 }
 
