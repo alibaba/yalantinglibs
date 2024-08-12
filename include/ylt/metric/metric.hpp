@@ -46,6 +46,7 @@ enum class MetricType {
 struct metric_filter_options {
   std::optional<std::regex> name_regex{};
   std::optional<std::regex> label_regex{};
+  std::optional<std::regex> label_value_regex{};
   bool is_white = true;
 };
 
