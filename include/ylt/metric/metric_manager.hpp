@@ -505,7 +505,34 @@ class dynamic_metric_manager {
   }
 
  private:
-  dynamic_metric_manager() = default;
+  void clean_label_expired() {
+    executor_ = coro_io::create_io_context_pool(1);
+    timer_ = std::make_shared<coro_io::period_timer>(executor_->get_executor());
+    check_label_expired().via(executor_->get_executor()).start([](auto&&) {
+    });
+  }
+
+  async_simple::coro::Lazy<void> check_label_expired() {
+    auto timer = timer_;
+    timer_->expires_after(ylt_label_check_expire_duration);
+    bool r = co_await timer_->async_await();
+    if (!r) {
+      co_return;
+    }
+
+    std::unique_lock lock(mtx_);
+    for (auto& [_, m] : metric_map_) {
+      m->clean_expired_label();
+    }
+    lock.unlock();
+    co_await check_label_expired();
+  }
+
+  dynamic_metric_manager() {
+    if (ylt_label_max_age.count() > 0) {
+      clean_label_expired();
+    }
+  }
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label_value(
       const std::vector<std::string>& label_value) {
@@ -532,6 +559,8 @@ class dynamic_metric_manager {
 
   std::shared_mutex mtx_;
   std::unordered_map<std::string, std::shared_ptr<dynamic_metric>> metric_map_;
+  std::shared_ptr<coro_io::period_timer> timer_ = nullptr;
+  std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
 };
 
 struct ylt_default_metric_tag_t {};

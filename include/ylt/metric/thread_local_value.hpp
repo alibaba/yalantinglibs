@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <thread>
 #include <vector>
@@ -98,7 +99,14 @@ class thread_local_value {
     return val;
   }
 
+  void set_created_time(std::chrono::system_clock::time_point tm) {
+    created_time_ = tm;
+  }
+
+  auto get_created_time() { return created_time_; }
+
  private:
   std::vector<std::atomic<std::atomic<value_type> *>> duplicates_;
+  std::chrono::system_clock::time_point created_time_{};
 };
 }  // namespace ylt::metric

@@ -8,6 +8,22 @@ using namespace ylt;
 using namespace ylt::metric;
 
 struct metrc_tag {};
+
+struct test_tag {};
+
+TEST_CASE("test metric manager clean expired label") {
+  set_label_max_age(std::chrono::seconds(1), std::chrono::seconds(1));
+  auto& inst = dynamic_metric_manager<test_tag>::instance();
+  auto [ec, c] = inst.create_metric_dynamic<dynamic_counter_1t>(
+      std::string("some_counter"), "", std::array<std::string, 1>{"url"});
+  c->inc({"/"});
+  c->inc({"/test"});
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  c->inc({"/index"});
+  size_t count = c->label_value_count();
+  CHECK(count == 1);
+}
+
 TEST_CASE("test metric manager") {
   auto c = std::make_shared<counter_t>("test1", "");
   auto g = std::make_shared<gauge_t>("test2", "");

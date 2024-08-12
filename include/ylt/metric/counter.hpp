@@ -218,6 +218,9 @@ class basic_dynamic_counter : public dynamic_metric {
         labels_value, thread_local_value<value_type>(dupli_count_));
     if (r) {
       g_user_metric_label_count.local_value()++;
+      if (ylt_label_max_age.count()) {
+        it->second.set_created_time(std::chrono::system_clock::now());
+      }
     }
     set_value(it->second.local_value(), value, op_type_t::INC);
   }
@@ -232,6 +235,9 @@ class basic_dynamic_counter : public dynamic_metric {
         labels_value, thread_local_value<value_type>(dupli_count_));
     if (r) {
       g_user_metric_label_count.local_value()++;
+      if (ylt_label_max_age.count()) {
+        it->second.set_created_time(std::chrono::system_clock::now());
+      }
     }
     return it->second.update(value);
   }
@@ -269,6 +275,21 @@ class basic_dynamic_counter : public dynamic_metric {
   size_t label_value_count() override {
     std::lock_guard lock(mtx_);
     return value_map_.size();
+  }
+
+  void clean_expired_label() override {
+    if (ylt_label_max_age.count() == 0) {
+      return;
+    }
+
+    auto now = std::chrono::system_clock::now();
+    std::lock_guard lock(mtx_);
+    std::erase_if(value_map_, [&now](auto &pair) {
+      bool r = std::chrono::duration_cast<std::chrono::seconds>(
+                   now - pair.second.get_created_time())
+                   .count() >= ylt_label_max_age.count();
+      return r;
+    });
   }
 
   void remove_label_value(
