@@ -73,7 +73,10 @@ class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
     if (r) {
-      g_user_metric_label_count++;  // TODO: use thread local
+      g_user_metric_label_count.local_value()++;
+      if (ylt_label_max_age.count()) {
+        it->second.set_created_time(std::chrono::system_clock::now());
+      }
     }
 
     set_value(it->second.local_value(), value, op_type_t::DEC);
