@@ -1513,8 +1513,9 @@ TEST_CASE("testFilterMetricsDynamicWithMultiLabel") {
 TEST_CASE("test metric manager clean expired label") {
   set_label_max_age(std::chrono::seconds(1), std::chrono::seconds(1));
   auto& inst = dynamic_metric_manager<test_tag>::instance();
-  auto [ec, c] = inst.create_metric_dynamic<dynamic_counter_1t>(
+  auto pair = inst.create_metric_dynamic<dynamic_counter_1t>(
       std::string("some_counter"), "", std::array<std::string, 1>{"url"});
+  auto c = pair.second;
   c->inc({"/"});
   c->inc({"/test"});
   CHECK(c->label_value_count() == 2);
