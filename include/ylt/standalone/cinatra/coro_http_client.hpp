@@ -1733,11 +1733,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
+      bool is_out_buf = false;
+
       bool is_ranges = parser_.is_resp_ranges();
       if (is_ranges) {
         is_keep_alive = true;
       }
       if (parser_.is_chunked()) {
+        out_buf_ = {};
         is_keep_alive = true;
         if (head_buf_.size() > 0) {
           const char *data_ptr =
@@ -1750,6 +1753,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (parser_.is_multipart()) {
+        out_buf_ = {};
         is_keep_alive = true;
         if (head_buf_.size() > 0) {
           const char *data_ptr =
@@ -1786,7 +1790,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       total_len_ = parser_.total_len();
 #endif
 
-      bool is_out_buf = !out_buf_.empty();
+      is_out_buf = !out_buf_.empty();
       if (is_out_buf) {
         if (content_len > 0 && out_buf_.size() < content_len) {
           out_buf_ = {};
