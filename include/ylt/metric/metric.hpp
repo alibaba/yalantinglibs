@@ -15,6 +15,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
+#include "thread_local_value.hpp"
 #if __has_include("ylt/coro_io/coro_io.hpp")
 #include "ylt/coro_io/coro_io.hpp"
 #else
@@ -221,7 +222,7 @@ class dynamic_metric : public metric_t {
   using metric_t::metric_t;
 };
 
-inline std::atomic<int64_t> g_user_metric_label_count = 0;
+inline thread_local_value<int64_t> g_user_metric_label_count{2};
 inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
