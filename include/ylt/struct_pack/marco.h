@@ -31,7 +31,8 @@
 #define STRUCT_PACK_MAY_INLINE inline
 #endif
 
-#if __has_cpp_attribute(likely) && __has_cpp_attribute(unlikely)
+#if __has_cpp_attribute(likely) && __has_cpp_attribute(unlikely) && \
+    __cplusplus >= 202002L
 #define SP_LIKELY(expr) (expr) [[likely]]
 #define SP_UNLIKELY(expr) (expr) [[unlikely]]
 #elif __GNUC__

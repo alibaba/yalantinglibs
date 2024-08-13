@@ -21,7 +21,8 @@
 #define IGUANA__INLINE_LAMBDA constexpr __attribute__((always_inline))
 #endif
 
-#if __has_cpp_attribute(likely) && __has_cpp_attribute(unlikely)
+#if __has_cpp_attribute(likely) && __has_cpp_attribute(unlikely) && \
+    __cplusplus >= 202002L
 #define IGUANA_LIKELY [[likely]]
 #define IGUANA_UNLIKELY [[unlikely]]
 #else

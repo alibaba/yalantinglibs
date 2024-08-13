@@ -62,7 +62,7 @@ void serialize_config() {
   // only need 4 bytes
   assert(buffer.size() == 4);
   // deserialize with config
-  auto result =
+  [[maybe_unused]] auto result =
       struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO, rect>(
           buffer);
   assert(result.value() == r);
@@ -75,6 +75,6 @@ void serialize_config_by_ADL() {
   // only need 4 bytes
   assert(buffer.size() == 4);
   // deserialize with config
-  auto result = struct_pack::deserialize<rect>(buffer);
+  [[maybe_unused]] auto result = struct_pack::deserialize<rect>(buffer);
   assert(result.value() == r);
 }

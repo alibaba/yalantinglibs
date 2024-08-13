@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <span>
 
 #include "ylt/struct_pack/calculate_size.hpp"
 #include "ylt/struct_pack/packer.hpp"
