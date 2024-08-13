@@ -60,12 +60,6 @@ inline constexpr std::string_view type_string() {
 #endif
 }
 
-#if __cpp_concepts >= 201907L
-constexpr bool is_string_reserve_shrink = requires { std::string{}.reserve(); };
-#else
-constexpr bool is_string_reserve_shrink = true;
-#endif
-
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
@@ -201,12 +195,7 @@ inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
     raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)
-    if constexpr (is_string_reserve_shrink) {
-      if (sz > raw_str.capacity()) {
-        raw_str.reserve(sz);
-      }
-    }
-    else {
+    if (sz > raw_str.capacity()) {
       raw_str.reserve(sz);
     }
     std::string &str = *reinterpret_cast<std::string *>(&raw_str);

@@ -151,7 +151,6 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DENABLE_CPP_20=OFF\
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}

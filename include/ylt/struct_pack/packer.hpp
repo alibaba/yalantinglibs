@@ -361,7 +361,6 @@ class packer {
         if constexpr (trivially_copyable_container<type> &&
                       is_little_endian_copyable<sizeof(
                           typename type::value_type)>) {
-          using value_type = typename type::value_type;
           write_bytes_array(writer_, (char *)item.data(),
                             item.size() * sizeof(typename type::value_type));
           return;
@@ -441,13 +440,13 @@ class packer {
                 item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
                   constexpr uint64_t tag =
                       get_parent_tag<type>();  // to pass msvc with c++17
-                  serialize_fast_varint<tag>(items...);
+                  this->serialize_fast_varint<tag>(items...);
                 });
           }
           visit_members(item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             constexpr uint64_t tag =
                 get_parent_tag<type>();  // to pass msvc with c++17
-            serialize_many<size_type, version, tag>(items...);
+            this->serialize_many<size_type, version, tag>(items...);
           });
         }
       }
