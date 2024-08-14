@@ -169,8 +169,8 @@ class static_metric_manager {
   static_metric_manager& operator=(static_metric_manager&&) = delete;
 
   static static_metric_manager<Tag>& instance() {
-    static static_metric_manager<Tag> inst;
-    return inst;
+    static auto* inst = new static_metric_manager<Tag>();
+    return *inst;
   }
 
   template <typename T, typename... Args>
@@ -279,8 +279,8 @@ class dynamic_metric_manager {
   dynamic_metric_manager& operator=(dynamic_metric_manager&&) = delete;
 
   static dynamic_metric_manager<Tag>& instance() {
-    static dynamic_metric_manager<Tag> inst;
-    return inst;
+    static auto* inst = new dynamic_metric_manager<Tag>();
+    return *inst;
   }
 
   template <typename T, typename... Args>

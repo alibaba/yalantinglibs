@@ -210,14 +210,15 @@ class basic_dynamic_counter : public dynamic_metric {
       return;
     }
 
-    std::lock_guard lock(mtx_);
+    std::unique_lock lock(mtx_);
     if (value_map_.size() > ylt_label_capacity) {
       return;
     }
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
+    lock.unlock();
     if (r) {
-      g_user_metric_label_count.local_value()++;
+      g_user_metric_label_count->local_value()++;
       if (ylt_label_max_age.count()) {
         it->second.set_created_time(std::chrono::system_clock::now());
       }
@@ -227,14 +228,15 @@ class basic_dynamic_counter : public dynamic_metric {
 
   value_type update(const std::array<std::string, N> &labels_value,
                     value_type value) {
-    std::lock_guard lock(mtx_);
+    std::unique_lock lock(mtx_);
     if (value_map_.size() > ylt_label_capacity) {
       return value_type{};
     }
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
+    lock.unlock();
     if (r) {
-      g_user_metric_label_count.local_value()++;
+      g_user_metric_label_count->local_value()++;
       if (ylt_label_max_age.count()) {
         it->second.set_created_time(std::chrono::system_clock::now());
       }
