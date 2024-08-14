@@ -225,7 +225,7 @@ class dynamic_metric : public metric_t {
   using metric_t::metric_t;
 };
 
-inline thread_local_value<int64_t> g_user_metric_label_count{2};
+inline auto g_user_metric_label_count = new thread_local_value<int64_t>(2);
 inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 

@@ -362,7 +362,7 @@ inline void stat_metric() {
   static auto user_metric_label_count =
       system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_user_metric_labels");
-  user_metric_label_count->update(g_user_metric_label_count.value());
+  user_metric_label_count->update(g_user_metric_label_count->value());
 
   static auto ylt_summary_failed_count =
       system_metric_manager::instance().get_metric_static<gauge_t>(
@@ -379,7 +379,12 @@ inline void ylt_stat() {
   stat_metric();
 }
 
-inline void start_stat(std::shared_ptr<coro_io::period_timer> timer) {
+inline void start_stat(std::weak_ptr<coro_io::period_timer> weak) {
+  auto timer = weak.lock();
+  if (timer == nullptr) {
+    return;
+  }
+
   timer->expires_after(std::chrono::seconds(1));
   timer->async_wait([timer](std::error_code ec) {
     if (ec) {
