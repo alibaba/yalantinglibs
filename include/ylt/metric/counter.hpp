@@ -72,13 +72,13 @@ class basic_static_counter : public static_metric {
   // static counter, contains a static labels with atomic value.
   basic_static_counter(std::string name, std::string help,
                        std::map<std::string, std::string> labels,
-                       size_t dupli_count = 2)
+                       uint32_t dupli_count = 2)
       : static_metric(MetricType::Counter, std::move(name), std::move(help),
                       std::move(labels)) {
     init_thread_local(dupli_count);
   }
 
-  void init_thread_local(size_t dupli_count) {
+  void init_thread_local(uint32_t dupli_count) {
     if (dupli_count > 0) {
       dupli_count_ = dupli_count;
       default_label_value_ = {dupli_count};
@@ -163,7 +163,7 @@ class basic_static_counter : public static_metric {
   }
 
   thread_local_value<value_type> default_label_value_;
-  size_t dupli_count_ = 2;
+  uint32_t dupli_count_ = 2;
 };
 
 template <size_t N>
