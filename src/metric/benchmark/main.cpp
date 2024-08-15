@@ -86,7 +86,76 @@ void bench_dynamic_counter(size_t thd_num, std::chrono::seconds duration,
   }
 }
 
+void bench_many_metric_serialize(size_t COUNT, size_t LABEL_COUNT,
+                                 bool to_json = false) {
+  std::vector<std::shared_ptr<metric_t>> vec;
+  for (size_t i = 0; i < COUNT; i++) {
+    auto counter = std::make_shared<dynamic_counter_t>(
+        std::string("qps"), "", std::array<std::string, 2>{"url", "code"});
+    for (size_t j = 0; j < LABEL_COUNT; j++) {
+      counter->inc({"test_label_value", std::to_string(j)});
+    }
+    vec.push_back(counter);
+  }
+
+  std::cout << "begin test\n";
+
+  std::string str;
+
+  auto start = std::chrono::system_clock::now();
+  if (to_json) {
+    str = manager_helper::serialize_to_json(vec);
+  }
+  else {
+    str = manager_helper::serialize(vec);
+  }
+
+  auto end = std::chrono::system_clock::now();
+  auto elaps =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  std::cout << "string size: " << str.size() << ", " << elaps << "ms\n";
+}
+
+void bench_many_labels_serialize(size_t COUNT, bool to_json = false) {
+  dynamic_counter_t counter("qps2", "", {"url", "code"});
+  std::string val(36, ' ');
+  for (size_t i = 0; i < COUNT; i++) {
+    strcpy(val.data(), std::to_string(i).data());
+    counter.inc({"123e4567-e89b-12d3-a456-426614174000", val});
+  }
+
+  std::string str;
+  auto start = std::chrono::system_clock::now();
+  if (to_json) {
+    counter.serialize_to_json(str);
+  }
+  else {
+    counter.serialize(str);
+  }
+
+  auto end = std::chrono::system_clock::now();
+  auto elaps =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  std::cout << elaps << "ms\n";
+  std::cout << "label value count: " << counter.label_value_count()
+            << " string size: " << str.size() << "\n";
+}
+
 int main() {
+  bench_many_labels_serialize(100000);
+  bench_many_labels_serialize(1000000);
+  bench_many_labels_serialize(10000000);
+  bench_many_labels_serialize(100000, true);
+  bench_many_labels_serialize(1000000, true);
+  bench_many_labels_serialize(10000000, true);
+
+  bench_many_metric_serialize(100000, 10);
+  bench_many_metric_serialize(1000000, 10);
+  bench_many_metric_serialize(100000, 10, true);
+  bench_many_metric_serialize(1000000, 10, true);
+
   bench_static_counter(1, 5s);
   bench_static_counter(2, 5s);
   bench_static_counter(8, 5s);
