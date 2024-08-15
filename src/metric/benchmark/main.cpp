@@ -10,8 +10,8 @@
 using namespace std::chrono_literals;
 using namespace ylt::metric;
 
-void bench_static_counter(size_t thd_num, std::chrono::seconds duration,
-                          size_t dupli_count = 2) {
+void bench_static_counter_qps(size_t thd_num, std::chrono::seconds duration,
+                              size_t dupli_count = 2) {
   counter_t counter("qps", "", dupli_count);
   std::vector<std::thread> vec;
   std::atomic<bool> stop = false;
@@ -49,8 +49,8 @@ auto get_random(size_t range = 10000) {
   return distr(gen);
 }
 
-void bench_dynamic_counter(size_t thd_num, std::chrono::seconds duration,
-                           size_t dupli_count = 2) {
+void bench_dynamic_counter_qps(size_t thd_num, std::chrono::seconds duration,
+                               size_t dupli_count = 2) {
   dynamic_counter_t counter("qps2", "", {"url", "code"}, dupli_count);
   std::atomic<bool> stop = false;
   std::vector<std::thread> vec;
@@ -156,21 +156,21 @@ int main() {
   bench_many_metric_serialize(100000, 10, true);
   bench_many_metric_serialize(1000000, 10, true);
 
-  bench_static_counter(1, 5s);
-  bench_static_counter(2, 5s);
-  bench_static_counter(8, 5s);
-  bench_static_counter(16, 5s);
-  bench_static_counter(32, 5s);
-  bench_static_counter(96, 5s);
-  bench_static_counter(32, 5s, 32);
-  bench_static_counter(96, 5s, 96);
+  bench_static_counter_qps(1, 5s);
+  bench_static_counter_qps(2, 5s);
+  bench_static_counter_qps(8, 5s);
+  bench_static_counter_qps(16, 5s);
+  bench_static_counter_qps(32, 5s);
+  bench_static_counter_qps(96, 5s);
+  bench_static_counter_qps(32, 5s, 32);
+  bench_static_counter_qps(96, 5s, 96);
 
-  bench_dynamic_counter(1, 5s);
-  bench_dynamic_counter(2, 5s);
-  bench_dynamic_counter(8, 5s);
-  bench_dynamic_counter(16, 5s);
-  bench_dynamic_counter(32, 5s);
-  bench_dynamic_counter(96, 10s);
-  bench_dynamic_counter(32, 5s, 32);
-  bench_dynamic_counter(96, 5s, 96);
+  bench_dynamic_counter_qps(1, 5s);
+  bench_dynamic_counter_qps(2, 5s);
+  bench_dynamic_counter_qps(8, 5s);
+  bench_dynamic_counter_qps(16, 5s);
+  bench_dynamic_counter_qps(32, 5s);
+  bench_dynamic_counter_qps(96, 10s);
+  bench_dynamic_counter_qps(32, 5s, 32);
+  bench_dynamic_counter_qps(96, 5s, 96);
 }
