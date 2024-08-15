@@ -6,6 +6,7 @@
 #include "ylt/metric/gauge.hpp"
 #include "ylt/metric/histogram.hpp"
 #include "ylt/metric/metric.hpp"
+#include "ylt/metric/metric_manager.hpp"
 #include "ylt/metric/summary.hpp"
 #include "ylt/metric/system_metric.hpp"
 
