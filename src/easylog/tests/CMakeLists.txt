@@ -5,7 +5,4 @@ add_executable(easylog_test
         )
 add_test(NAME easylog_test COMMAND easylog_test)
 target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        target_link_libraries(easylog_test PRIVATE -lstdc++fs)
-endif()
 
