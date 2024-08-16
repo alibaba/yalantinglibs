@@ -286,7 +286,7 @@ class basic_dynamic_counter : public dynamic_metric {
 
     auto now = std::chrono::system_clock::now();
     std::lock_guard lock(mtx_);
-    std::erase_if(value_map_, [&now](auto &pair) {
+    std::erase_if(value_map_, [&now](auto &pair) mutable {
       bool r = std::chrono::duration_cast<std::chrono::seconds>(
                    now - pair.second.get_created_time())
                    .count() >= ylt_label_max_age.count();

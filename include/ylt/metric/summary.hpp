@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <atomic>
 
 #include "detail/time_window_quantiles.hpp"
@@ -67,7 +68,8 @@ class summary_t : public static_metric {
   }
 
   void observe(double value) {
-    if (block_->sample_queue_.size_approx() >= 20000000) {
+    int64_t max_limit = (std::min)(ylt_label_capacity, (int64_t)1000000);
+    if (block_->sample_queue_.size_approx() >= max_limit) {
       g_summary_failed_count++;
       return;
     }
@@ -197,7 +199,7 @@ class summary_t : public static_metric {
 
   async_simple::coro::Lazy<void> start(std::shared_ptr<block_t> block) {
     double sample;
-    size_t count = 1000000;
+    size_t count = 100000;
     while (!block->stop_) {
       size_t index = 0;
       while (block->sample_queue_.try_dequeue(sample)) {
@@ -282,7 +284,8 @@ class basic_dynamic_summary : public dynamic_metric {
   }
 
   void observe(std::array<std::string, N> labels_value, double value) {
-    if (labels_block_->sample_queue_.size_approx() >= 20000000) {
+    int64_t max_limit = (std::min)(ylt_label_capacity, (int64_t)1000000);
+    if (labels_block_->sample_queue_.size_approx() >= max_limit) {
       g_summary_failed_count++;
       return;
     }
@@ -294,6 +297,8 @@ class basic_dynamic_summary : public dynamic_metric {
       });
     }
   }
+
+  size_t size_approx() { return labels_block_->sample_queue_.size_approx(); }
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(
       const std::array<std::string, N> &labels_value, double &sum,
@@ -350,7 +355,7 @@ class basic_dynamic_summary : public dynamic_metric {
   async_simple::coro::Lazy<void> start(
       std::shared_ptr<labels_block_t<N>> label_block) {
     summary_label_sample<N> sample;
-    size_t count = 1000000;
+    size_t count = 100000;
     while (!label_block->stop_) {
       size_t index = 0;
       while (label_block->sample_queue_.try_dequeue(sample)) {
