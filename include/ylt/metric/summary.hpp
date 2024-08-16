@@ -295,6 +295,8 @@ class basic_dynamic_summary : public dynamic_metric {
     }
   }
 
+  size_t size_approx() { return labels_block_->sample_queue_.size_approx(); }
+
   async_simple::coro::Lazy<std::vector<double>> get_rates(
       const std::array<std::string, N> &labels_value, double &sum,
       uint64_t &count) {
