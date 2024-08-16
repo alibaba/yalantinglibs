@@ -143,7 +143,110 @@ void bench_many_labels_serialize(size_t COUNT, bool to_json = false) {
             << " string size: " << str.size() << "\n";
 }
 
+void bench_many_labels_qps_summary(size_t thd_num,
+                                   std::chrono::seconds duration) {
+  dynamic_summary_2 summary(
+      "qps2", "",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::array<std::string, 2>{"method", "url"});
+  std::atomic<bool> stop = false;
+  std::vector<std::thread> vec;
+  std::array<std::string, 2> arr{"/test", "200"};
+  thread_local_value<uint64_t> local_val(thd_num);
+  auto start = std::chrono::system_clock::now();
+  std::string val(36, ' ');
+  for (size_t i = 0; i < thd_num; i++) {
+    vec.push_back(std::thread([&, i] {
+      while (!stop) {
+        strcpy(val.data(), std::to_string(i).data());
+        summary.observe({"/test", std::to_string(get_random())},
+                        get_random(100));
+        local_val.inc();
+      }
+    }));
+  }
+  std::this_thread::sleep_for(duration);
+  stop = true;
+  auto end = std::chrono::system_clock::now();
+
+  auto elaps =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+
+  double seconds = double(elaps) / 1000;
+  std::cout << "run " << elaps << "ms, " << seconds << " seconds\n";
+
+  auto qps = local_val.value() / seconds;
+  std::cout << "thd num: " << thd_num << ", qps: " << (int64_t)qps << "\n";
+  for (auto& thd : vec) {
+    thd.join();
+  }
+
+  start = std::chrono::system_clock::now();
+  size_t last = summary.size_approx();
+  std::cout << "total size: " << last << "\n";
+  while (true) {
+    std::this_thread::sleep_for(1s);
+    size_t current = summary.size_approx();
+    if (current == 0) {
+      break;
+    }
+
+    std::cout << last - current << "\n";
+    last = current;
+  }
+  end = std::chrono::system_clock::now();
+  elaps = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+              .count();
+  std::cout << "consume " << elaps << "ms\n";
+}
+
+void bench_many_labels_serialize_summary(size_t COUNT, bool to_json = false) {
+  dynamic_summary_2 summary(
+      "qps2", "",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::array<std::string, 2>{"method", "url"});
+  std::string val(36, ' ');
+  for (size_t i = 0; i < COUNT; i++) {
+    strcpy(val.data(), std::to_string(i).data());
+    summary.observe({"123e4567-e89b-12d3-a456-426614174000", val},
+                    get_random(100));
+  }
+
+  std::string str;
+  auto start = std::chrono::system_clock::now();
+  if (to_json) {
+    async_simple::coro::syncAwait(summary.serialize_to_json_async(str));
+  }
+  else {
+    async_simple::coro::syncAwait(summary.serialize_async(str));
+  }
+
+  auto end = std::chrono::system_clock::now();
+  auto elaps =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  std::cout << elaps << "ms\n";
+  std::cout << "label value count: " << summary.label_value_count()
+            << " string size: " << str.size() << "\n";
+}
+
 int main() {
+  bench_many_labels_serialize_summary(100000);
+  bench_many_labels_serialize_summary(1000000);
+
+  bench_many_labels_serialize_summary(100000, true);
+  bench_many_labels_serialize_summary(1000000, true);
+
+  bench_many_labels_qps_summary(1, 5s);
+  bench_many_labels_qps_summary(2, 5s);
+  bench_many_labels_qps_summary(8, 5s);
+  bench_many_labels_qps_summary(16, 5s);
+  bench_many_labels_qps_summary(32, 5s);
+  bench_many_labels_qps_summary(96, 5s);
+
   bench_many_labels_serialize(100000);
   bench_many_labels_serialize(1000000);
   bench_many_labels_serialize(10000000);
