@@ -257,9 +257,11 @@ struct labels_block_t {
   std::atomic<bool> stop_ = false;
   ylt::detail::moodycamel::ConcurrentQueue<summary_label_sample<N>>
       sample_queue_;
-  dynamic_metric_hash_map<std::shared_ptr<TimeWindowQuantiles>, N>
+  dynamic_metric_hash_map<std::array<std::string, N>,
+                          std::shared_ptr<TimeWindowQuantiles>>
       label_quantile_values_;
-  dynamic_metric_hash_map<sum_and_count_t, N> sum_and_count_;
+  dynamic_metric_hash_map<std::array<std::string, N>, sum_and_count_t>
+      sum_and_count_;
 };
 
 template <uint8_t N>

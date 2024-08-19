@@ -166,9 +166,9 @@ class basic_static_counter : public static_metric {
   uint32_t dupli_count_ = 2;
 };
 
-template <size_t N>
+template <typename Key>
 struct array_hash {
-  size_t operator()(const std::array<std::string, N> &arr) const {
+  size_t operator()(const Key &arr) const {
     unsigned int seed = 131;
     unsigned int hash = 0;
 
@@ -185,9 +185,8 @@ struct array_hash {
 using counter_t = basic_static_counter<int64_t>;
 using counter_d = basic_static_counter<double>;
 
-template <typename T, uint8_t N>
-using dynamic_metric_hash_map =
-    std::unordered_map<std::array<std::string, N>, T, array_hash<N>>;
+template <typename Key, typename T>
+using dynamic_metric_hash_map = std::unordered_map<Key, T, array_hash<Key>>;
 
 template <typename value_type, uint8_t N>
 class basic_dynamic_counter : public dynamic_metric {
@@ -264,8 +263,12 @@ class basic_dynamic_counter : public dynamic_metric {
     return val;
   }
 
-  dynamic_metric_hash_map<thread_local_value<value_type>, N> value_map() {
-    dynamic_metric_hash_map<thread_local_value<value_type>, N> map;
+  dynamic_metric_hash_map<std::array<std::string, N>,
+                          thread_local_value<value_type>>
+  value_map() {
+    dynamic_metric_hash_map<std::array<std::string, N>,
+                            thread_local_value<value_type>>
+        map;
     {
       std::lock_guard lock(mtx_);
       map = value_map_;
@@ -470,7 +473,9 @@ class basic_dynamic_counter : public dynamic_metric {
   }
 
   std::mutex mtx_;
-  dynamic_metric_hash_map<thread_local_value<value_type>, N> value_map_;
+  dynamic_metric_hash_map<std::array<std::string, N>,
+                          thread_local_value<value_type>>
+      value_map_;
   size_t dupli_count_ = 2;
 };
 
