@@ -117,7 +117,7 @@ class CKMSQuantiles {
     std::size_t idx = 0;
     std::size_t item = idx++;
 
-    for (std::size_t i = start; i < buffer_count_; ++i) {
+    for (uint16_t i = start; i < buffer_count_; ++i) {
       double v = buffer_[i];
       while (idx < sample_.size() && sample_[item].value < v) {
         item = idx++;
@@ -167,9 +167,9 @@ class CKMSQuantiles {
  private:
   const std::reference_wrapper<const std::vector<Quantile>> quantiles_;
 
-  std::size_t count_;
+  uint16_t count_;
   std::vector<Item> sample_;
-  std::array<double, 500> buffer_;
-  std::size_t buffer_count_;
+  std::array<double, 200> buffer_;
+  uint16_t buffer_count_;
 };
 }  // namespace ylt::metric
