@@ -247,6 +247,11 @@ struct summary_label_sample {
   double value;
 };
 
+struct sum_and_count_t {
+  double sum;
+  uint64_t count;
+};
+
 template <uint8_t N>
 struct labels_block_t {
   std::atomic<bool> stop_ = false;
@@ -254,8 +259,7 @@ struct labels_block_t {
       sample_queue_;
   dynamic_metric_hash_map<std::shared_ptr<TimeWindowQuantiles>, N>
       label_quantile_values_;
-  dynamic_metric_hash_map<uint64_t, N> label_count_;
-  dynamic_metric_hash_map<double, N> label_sum_;
+  dynamic_metric_hash_map<sum_and_count_t, N> sum_and_count_;
 };
 
 template <uint8_t N>
@@ -314,8 +318,8 @@ class basic_dynamic_summary : public dynamic_metric {
           if (it == labels_block_->label_quantile_values_.end()) {
             return;
           }
-          sum = labels_block_->label_sum_[labels_value];
-          count = labels_block_->label_count_[labels_value];
+          sum = labels_block_->sum_and_count_[labels_value].sum;
+          count = labels_block_->sum_and_count_[labels_value].count;
           for (const auto &quantile : quantiles_) {
             vec.push_back(it->second->get(quantile.quantile));
           }
@@ -323,15 +327,6 @@ class basic_dynamic_summary : public dynamic_metric {
         excutor_->get_executor());
 
     co_return vec;
-  }
-
-  dynamic_metric_hash_map<double, N> value_map() {
-    auto ret = async_simple::coro::syncAwait(coro_io::post(
-        [this] {
-          return labels_block_->label_sum_;
-        },
-        excutor_->get_executor()));
-    return ret.value();
   }
 
   async_simple::coro::Lazy<void> serialize_async(std::string &str) override {
@@ -368,8 +363,8 @@ class basic_dynamic_summary : public dynamic_metric {
 
         ptr->insert(sample.value);
 
-        label_block->label_count_[sample.labels_value] += 1;
-        label_block->label_sum_[sample.labels_value] += sample.value;
+        label_block->sum_and_count_[sample.labels_value].count += 1;
+        label_block->sum_and_count_[sample.labels_value].sum += sample.value;
         index++;
         if (index == count) {
           break;
@@ -406,11 +401,11 @@ class basic_dynamic_summary : public dynamic_metric {
 
     auto sum_map = co_await coro_io::post(
         [this] {
-          return labels_block_->label_sum_;
+          return labels_block_->sum_and_count_;
         },
         excutor_->get_executor());
 
-    for (auto &[labels_value, sum_val] : sum_map.value()) {
+    for (auto &[labels_value, _] : sum_map.value()) {
       double sum = 0;
       uint64_t count = 0;
       auto rates = co_await get_rates(labels_value, sum, count);
@@ -447,13 +442,13 @@ class basic_dynamic_summary : public dynamic_metric {
 
     auto sum_map = co_await coro_io::post(
         [this] {
-          return labels_block_->label_sum_;
+          return labels_block_->sum_and_count_;
         },
         excutor_->get_executor());
 
     json_summary_t summary{name_, help_, std::string(metric_name())};
 
-    for (auto &[labels_value, sum_val] : sum_map.value()) {
+    for (auto &[labels_value, _] : sum_map.value()) {
       json_summary_metric_t metric;
       double sum = 0;
       uint64_t count = 0;
