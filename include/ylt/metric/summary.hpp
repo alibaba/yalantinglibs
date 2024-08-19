@@ -241,13 +241,13 @@ class summary_t : public static_metric {
   std::atomic<bool> is_coro_started_ = false;
 };
 
-template <size_t N>
+template <uint8_t N>
 struct summary_label_sample {
   std::array<std::string, N> labels_value;
   double value;
 };
 
-template <size_t N>
+template <uint8_t N>
 struct labels_block_t {
   std::atomic<bool> stop_ = false;
   ylt::detail::moodycamel::ConcurrentQueue<summary_label_sample<N>>
@@ -258,7 +258,7 @@ struct labels_block_t {
   dynamic_metric_hash_map<double, N> label_sum_;
 };
 
-template <size_t N>
+template <uint8_t N>
 class basic_dynamic_summary : public dynamic_metric {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;

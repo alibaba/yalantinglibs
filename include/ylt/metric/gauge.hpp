@@ -43,7 +43,7 @@ class basic_static_gauge : public basic_static_counter<value_type> {
 using gauge_t = basic_static_gauge<int64_t>;
 using gauge_d = basic_static_gauge<double>;
 
-template <typename value_type, size_t N>
+template <typename value_type, uint8_t N>
 class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
   using metric_t::set_metric_type;
   using basic_dynamic_counter<value_type, N>::value_map_;

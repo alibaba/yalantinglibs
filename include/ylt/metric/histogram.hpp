@@ -162,7 +162,7 @@ class basic_static_histogram : public static_metric {
 using histogram_t = basic_static_histogram<int64_t>;
 using histogram_d = basic_static_histogram<double>;
 
-template <typename value_type, size_t N>
+template <typename value_type, uint8_t N>
 class basic_dynamic_histogram : public dynamic_metric {
  public:
   basic_dynamic_histogram(std::string name, std::string help,
