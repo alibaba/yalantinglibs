@@ -300,6 +300,14 @@ class basic_dynamic_summary : public dynamic_metric {
 
   size_t size_approx() { return labels_block_->sample_queue_.size_approx(); }
 
+  size_t label_value_count() override {
+    auto block = labels_block_;
+    return async_simple::coro::syncAwait(coro_io::post([block] {
+             return block->sum_and_count_.size();
+           }))
+        .value();
+  }
+
   async_simple::coro::Lazy<std::vector<double>> get_rates(
       const std::array<std::string, N> &labels_value, double &sum,
       uint64_t &count) {
