@@ -41,7 +41,7 @@ class summary_t : public static_metric {
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
   summary_t(std::string name, std::string help, Quantiles quantiles,
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
-            int age_buckets = 5)
+            uint16_t age_buckets = 5)
       : quantiles_{std::move(quantiles)},
         static_metric(MetricType::Summary, std::move(name), std::move(help)),
         max_age_(max_age),
@@ -52,7 +52,7 @@ class summary_t : public static_metric {
   summary_t(std::string name, std::string help, Quantiles quantiles,
             std::map<std::string, std::string> static_labels,
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
-            int age_buckets = 5)
+            uint16_t age_buckets = 5)
       : quantiles_{std::move(quantiles)},
         static_metric(MetricType::Summary, std::move(name), std::move(help),
                       std::move(static_labels)),
@@ -190,7 +190,7 @@ class summary_t : public static_metric {
     });
   }
 
-  void init_no_label(std::chrono::milliseconds max_age, int age_buckets) {
+  void init_no_label(std::chrono::milliseconds max_age, uint16_t age_buckets) {
     init_block(block_);
     block_->quantile_values_ =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
@@ -237,7 +237,7 @@ class summary_t : public static_metric {
   static inline std::shared_ptr<coro_io::io_context_pool> excutor_ =
       coro_io::create_io_context_pool(1);
   std::chrono::milliseconds max_age_;
-  int age_buckets_;
+  uint16_t age_buckets_;
   std::atomic<bool> is_coro_started_ = false;
 };
 
@@ -267,7 +267,7 @@ class basic_dynamic_summary : public dynamic_metric {
       std::string name, std::string help, Quantiles quantiles,
       std::array<std::string, N> labels_name,
       std::chrono::milliseconds max_age = std::chrono::seconds{60},
-      int age_buckets = 5)
+      uint16_t age_buckets = 5)
       : quantiles_{std::move(quantiles)},
         dynamic_metric(MetricType::Summary, std::move(name), std::move(help),
                        std::move(labels_name)),
@@ -478,7 +478,7 @@ class basic_dynamic_summary : public dynamic_metric {
   static inline std::shared_ptr<coro_io::io_context_pool> excutor_ =
       coro_io::create_io_context_pool(1);
   std::chrono::milliseconds max_age_;
-  int age_buckets_;
+  uint16_t age_buckets_;
   std::atomic<bool> is_coro_started_ = false;
 };
 
