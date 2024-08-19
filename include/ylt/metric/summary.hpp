@@ -43,9 +43,7 @@ class summary_t : public static_metric {
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
             uint16_t age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        static_metric(MetricType::Summary, std::move(name), std::move(help)),
-        max_age_(max_age),
-        age_buckets_(age_buckets) {
+        static_metric(MetricType::Summary, std::move(name), std::move(help)) {
     init_no_label(max_age, age_buckets);
   }
 
@@ -55,9 +53,7 @@ class summary_t : public static_metric {
             uint16_t age_buckets = 5)
       : quantiles_{std::move(quantiles)},
         static_metric(MetricType::Summary, std::move(name), std::move(help),
-                      std::move(static_labels)),
-        max_age_(max_age),
-        age_buckets_(age_buckets) {
+                      std::move(static_labels)) {
     init_no_label(max_age, age_buckets);
   }
 
@@ -236,8 +232,6 @@ class summary_t : public static_metric {
   std::shared_ptr<block_t> block_;
   static inline std::shared_ptr<coro_io::io_context_pool> excutor_ =
       coro_io::create_io_context_pool(1);
-  std::chrono::milliseconds max_age_;
-  uint16_t age_buckets_;
   std::atomic<bool> is_coro_started_ = false;
 };
 
