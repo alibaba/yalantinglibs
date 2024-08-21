@@ -107,6 +107,9 @@ class basic_static_counter : public static_metric {
   }
 
   value_type update(value_type value) {
+    if (!has_change_) [[unlikely]] {
+      has_change_ = true;
+    }
     return default_label_value_.update(value);
   }
 
@@ -116,7 +119,7 @@ class basic_static_counter : public static_metric {
 
   void serialize(std::string &str) override {
     auto value = default_label_value_.value();
-    if (value == 0) {
+    if (value == 0 && !has_change_) {
       return;
     }
 
@@ -164,6 +167,7 @@ class basic_static_counter : public static_metric {
 
   thread_local_value<value_type> default_label_value_;
   uint32_t dupli_count_ = 2;
+  bool has_change_ = false;
 };
 
 template <typename Key>
@@ -231,6 +235,8 @@ class basic_dynamic_counter : public dynamic_metric {
     if (value_map_.size() > ylt_label_capacity) {
       return value_type{};
     }
+    if (!has_change_) [[unlikely]]
+      has_change_ = true;
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
     lock.unlock();
@@ -266,12 +272,20 @@ class basic_dynamic_counter : public dynamic_metric {
   dynamic_metric_hash_map<std::array<std::string, N>,
                           thread_local_value<value_type>>
   value_map() {
+    [[maybe_unused]] bool has_change = false;
+    return value_map(has_change);
+  }
+
+  dynamic_metric_hash_map<std::array<std::string, N>,
+                          thread_local_value<value_type>>
+  value_map(bool &has_change) {
     dynamic_metric_hash_map<std::array<std::string, N>,
                             thread_local_value<value_type>>
         map;
     {
       std::lock_guard lock(mtx_);
       map = value_map_;
+      has_change = has_change_;
     }
 
     return map;
@@ -353,7 +367,8 @@ class basic_dynamic_counter : public dynamic_metric {
   }
 
   bool has_label_value(const std::string &value) override {
-    auto map = value_map();
+    [[maybe_unused]] bool has_change = false;
+    auto map = value_map(has_change);
     for (auto &[label_value, _] : map) {
       if (auto it = std::find(label_value.begin(), label_value.end(), value);
           it != label_value.end()) {
@@ -365,7 +380,8 @@ class basic_dynamic_counter : public dynamic_metric {
   }
 
   bool has_label_value(const std::regex &regex) override {
-    auto map = value_map();
+    [[maybe_unused]] bool has_change = false;
+    auto map = value_map(has_change);
     for (auto &[label_value, _] : map) {
       if (auto it = std::find_if(label_value.begin(), label_value.end(),
                                  [&](auto &val) {
@@ -390,13 +406,14 @@ class basic_dynamic_counter : public dynamic_metric {
   }
 
   void serialize(std::string &str) override {
-    auto map = value_map();
+    bool has_change = false;
+    auto map = value_map(has_change);
     if (map.empty()) {
       return;
     }
 
     std::string value_str;
-    serialize_map(map, value_str);
+    serialize_map(map, value_str, has_change);
     if (!value_str.empty()) {
       serialize_head(str);
       str.append(value_str);
@@ -406,16 +423,18 @@ class basic_dynamic_counter : public dynamic_metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
     std::string s;
-    auto map = value_map();
+    bool has_change = false;
+    auto map = value_map(has_change);
     json_counter_t counter{name_, help_, std::string(metric_name())};
-    to_json(counter, map, str);
+    to_json(counter, map, str, has_change);
   }
 
   template <typename T>
-  void to_json(json_counter_t &counter, T &map, std::string &str) {
+  void to_json(json_counter_t &counter, T &map, std::string &str,
+               bool has_change) {
     for (auto &[k, v] : map) {
       auto val = v.value();
-      if (val == 0) {
+      if (val == 0 && !has_change) {
         continue;
       }
       json_counter_metric_t metric;
@@ -434,10 +453,10 @@ class basic_dynamic_counter : public dynamic_metric {
 
  protected:
   template <typename T>
-  void serialize_map(T &value_map, std::string &str) {
+  void serialize_map(T &value_map, std::string &str, bool has_change) {
     for (auto &[labels_value, value] : value_map) {
       auto val = value.value();
-      if (val == 0) {
+      if (val == 0 && !has_change) {
         continue;
       }
       str.append(name_);
@@ -477,6 +496,7 @@ class basic_dynamic_counter : public dynamic_metric {
                           thread_local_value<value_type>>
       value_map_;
   size_t dupli_count_ = 2;
+  bool has_change_ = false;
 };
 
 using dynamic_counter_1t = basic_dynamic_counter<int64_t, 1>;

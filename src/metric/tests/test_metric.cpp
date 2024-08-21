@@ -1,5 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT
+#include <chrono>
 #include <random>
+using namespace std::chrono_literals;
 
 #include "doctest.h"
 #include "ylt/metric.hpp"
@@ -10,6 +12,91 @@ using namespace ylt::metric;
 struct metrc_tag {};
 
 struct test_tag {};
+
+TEST_CASE("serialize zero") {
+  counter_t c("test", "");
+  gauge_t g("test1", "");
+  std::string str;
+  c.serialize(str);
+  CHECK(str.empty());
+  g.serialize(str);
+  CHECK(str.empty());
+  c.inc();
+  c.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+  g.inc();
+  g.serialize(str);
+  CHECK(!str.empty());
+  c.update(0);
+  c.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+  g.dec();
+  g.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  dynamic_counter_1t c1("test", "", {"url"});
+  c1.serialize(str);
+  CHECK(str.empty());
+  dynamic_gauge_1t g1("test", "", {"url"});
+  g1.serialize(str);
+  CHECK(str.empty());
+  c1.inc({"/test"});
+  c1.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+  g1.inc({"/test"});
+  g1.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  c1.update({"/test"}, 0);
+  c1.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  g1.dec({"/test"});
+  g1.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  c1.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+  g1.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  histogram_t h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0});
+  h.serialize(str);
+  CHECK(str.empty());
+  h.serialize_to_json(str);
+  CHECK(str.empty());
+  h.observe(23);
+  h.serialize(str);
+  CHECK(!str.empty());
+  str.clear();
+
+  std::map<std::string, std::string> customMap = {};
+  auto summary = std::make_shared<summary_t>(
+      "test", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      customMap);
+  async_simple::coro::syncAwait(summary->serialize_async(str));
+  CHECK(str.empty());
+  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  CHECK(str.empty());
+  summary->observe(0);
+  async_simple::coro::syncAwait(summary->serialize_async(str));
+  CHECK(!str.empty());
+  str.clear();
+  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  CHECK(!str.empty());
+  str.clear();
+}
 
 TEST_CASE("test metric manager") {
   auto c = std::make_shared<counter_t>("test1", "");

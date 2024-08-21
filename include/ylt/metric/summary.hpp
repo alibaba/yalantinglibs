@@ -64,6 +64,9 @@ class summary_t : public static_metric {
   }
 
   void observe(double value) {
+    if (!has_observe_) [[unlikely]] {
+      has_observe_ = true;
+    }
     int64_t max_limit = (std::min)(ylt_label_capacity, (int64_t)1000000);
     if (block_->sample_queue_.size_approx() >= max_limit) {
       g_summary_failed_count++;
@@ -123,6 +126,10 @@ class summary_t : public static_metric {
       co_return;
     }
 
+    if (!has_observe_) {
+      co_return;
+    }
+
     serialize_head(str);
 
     double sum = 0;
@@ -153,6 +160,10 @@ class summary_t : public static_metric {
   async_simple::coro::Lazy<void> serialize_to_json_async(
       std::string &str) override {
     if (quantiles_.empty()) {
+      co_return;
+    }
+
+    if (!has_observe_) {
       co_return;
     }
 
@@ -233,6 +244,7 @@ class summary_t : public static_metric {
   static inline std::shared_ptr<coro_io::io_context_pool> excutor_ =
       coro_io::create_io_context_pool(1);
   std::atomic<bool> is_coro_started_ = false;
+  bool has_observe_ = false;
 };
 
 template <uint8_t N>
@@ -284,6 +296,9 @@ class basic_dynamic_summary : public dynamic_metric {
   }
 
   void observe(std::array<std::string, N> labels_value, double value) {
+    if (!has_observe_) [[unlikely]] {
+      has_observe_ = true;
+    }
     int64_t max_limit = (std::min)(ylt_label_capacity, (int64_t)1000000);
     if (labels_block_->sample_queue_.size_approx() >= max_limit) {
       g_summary_failed_count++;
@@ -401,6 +416,10 @@ class basic_dynamic_summary : public dynamic_metric {
       co_return;
     }
 
+    if (!has_observe_) {
+      co_return;
+    }
+
     serialize_head(str);
 
     auto sum_map = co_await coro_io::post(
@@ -444,6 +463,10 @@ class basic_dynamic_summary : public dynamic_metric {
       co_return;
     }
 
+    if (!has_observe_) {
+      co_return;
+    }
+
     auto sum_map = co_await coro_io::post(
         [this] {
           return labels_block_->sum_and_count_;
@@ -479,6 +502,7 @@ class basic_dynamic_summary : public dynamic_metric {
   std::chrono::milliseconds max_age_;
   uint16_t age_buckets_;
   std::atomic<bool> is_coro_started_ = false;
+  bool has_observe_ = false;
 };
 
 using dynamic_summary_1 = basic_dynamic_summary<1>;
