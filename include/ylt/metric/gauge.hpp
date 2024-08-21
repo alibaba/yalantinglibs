@@ -11,6 +11,7 @@ class basic_static_gauge : public basic_static_counter<value_type> {
   using basic_static_counter<value_type>::default_label_value_;
   using metric_t::labels_value_;
   using basic_static_counter<value_type>::dupli_count_;
+  using basic_static_counter<value_type>::has_change_;
 
  public:
   basic_static_gauge(std::string name, std::string help, size_t dupli_count = 2)
@@ -28,6 +29,9 @@ class basic_static_gauge : public basic_static_counter<value_type> {
   }
 
   void dec(value_type value = 1) {
+    if (!has_change_) [[unlikely]] {
+      has_change_ = true;
+    }
 #ifdef __APPLE__
     if constexpr (std::is_floating_point_v<value_type>) {
       mac_os_atomic_fetch_sub(&default_label_value_.local_value(), value);
@@ -49,6 +53,7 @@ class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
   using basic_dynamic_counter<value_type, N>::value_map_;
   using basic_dynamic_counter<value_type, N>::mtx_;
   using basic_dynamic_counter<value_type, N>::dupli_count_;
+  using basic_dynamic_counter<value_type, N>::has_change_;
 
  public:
   basic_dynamic_gauge(std::string name, std::string help,
@@ -70,6 +75,8 @@ class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
     if (value_map_.size() > ylt_label_capacity) {
       return;
     }
+    if (!has_change_) [[unlikely]]
+      has_change_ = true;
     auto [it, r] = value_map_.try_emplace(
         labels_value, thread_local_value<value_type>(dupli_count_));
     lock.unlock();
