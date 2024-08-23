@@ -50,7 +50,7 @@ class CKMSQuantiles {
     compress();
 
     if (sample_.empty()) {
-      return std::numeric_limits<double>::quiet_NaN();
+      return 0;
     }
 
     int rankMin = 0;
