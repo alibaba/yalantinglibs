@@ -109,7 +109,7 @@ get_member_names() {
     constexpr auto tp = struct_to_tuple<T>();
 
     std::array<std::string_view, Count> arr;
-#if __cplusplus >= 202002L
+#if __cplusplus >= 202002L || defined(_MSC_VER)
     [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
@@ -133,7 +133,7 @@ inline constexpr auto get_member_names_map_impl(T& name_arr,
 template <typename T>
 inline constexpr auto get_member_names_map() {
   constexpr auto name_arr = get_member_names<T>();
-#if __cplusplus >= 202002L
+#if __cplusplus >= 202002L || defined(_MSC_VER)
   return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
         {name_arr[Is], Is}...};
