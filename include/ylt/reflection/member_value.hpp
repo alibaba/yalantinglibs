@@ -48,7 +48,48 @@ struct switch_helper {
     }
   }
 };
+
+inline constexpr frozen::string filter_str(const frozen::string& str) {
+  if (str.size() > 3 && str[0] == '_' && str[1] == '_' && str[2] == '_') {
+    auto ptr = str.data() + 3;
+    return frozen::string(ptr, str.size() - 3);
+  }
+  return str;
+}
+
+template <typename value_type>
+struct offset_t {
+  using type = value_type;
+  size_t value;
+};
+
+template <typename T, typename Tuple, size_t... Is>
+inline auto get_variant_type() {
+  return std::variant<offset_t<
+      ylt::reflection::remove_cvref_t<std::tuple_element_t<Is, Tuple>>>...>{};
+}
+
+template <typename T, size_t... Is>
+inline constexpr auto get_variant_map_impl(std::index_sequence<Is...>) {
+  using U = ylt::reflection::remove_cvref_t<T>;
+  constexpr auto arr = ylt::reflection::get_member_names<U>();
+  auto& offset_arr = get_member_offset_arr(wrapper<U>::value);
+  using Tuple = decltype(ylt::reflection::object_to_tuple(std::declval<U>()));
+  using ValueType = decltype(get_variant_type<U, Tuple, Is...>());
+  return frozen::unordered_map<frozen::string, ValueType, sizeof...(Is)>{
+      {filter_str(arr[Is]),
+       ValueType{std::in_place_index<Is>,
+                 offset_t<ylt::reflection::remove_cvref_t<
+                     std::tuple_element_t<Is, Tuple>>>{offset_arr[Is]}}}...};
+}
+
 }  // namespace internal
+
+template <typename T>
+inline constexpr auto get_variant_map() {
+  return internal::get_variant_map_impl<T>(
+      std::make_index_sequence<members_count_v<T>>{});
+}
 
 template <typename Member, typename T>
 inline Member& get(T& t, size_t index) {
@@ -138,12 +179,29 @@ inline size_t index_of(T& t, Field& value) {
 template <typename T, typename Field>
 inline constexpr std::string_view name_of(T& t, Field& value) {
   size_t index = index_of(t, value);
-  constexpr auto arr = member_names<T>;
+  constexpr auto arr = get_member_names<T>();
   if (index == arr.size()) {
     return "";
   }
 
   return arr[index];
+}
+
+template <typename T, typename Visit, typename U, size_t... Is,
+          typename... Args>
+inline constexpr void visit_members_impl0(Visit&& func,
+                                          std::index_sequence<Is...>,
+                                          Args&... args) {
+  constexpr auto arr = get_member_names<T>();
+  (func(args, arr[Is]), ...);
+}
+
+template <typename T, typename Visit, size_t... Is, typename... Args>
+inline constexpr void visit_members_impl(Visit&& func,
+                                         std::index_sequence<Is...>,
+                                         Args&... args) {
+  constexpr auto arr = get_member_names<T>();
+  (func(args, arr[Is], Is), ...);
 }
 
 template <typename T, typename Visit>
@@ -156,22 +214,35 @@ inline constexpr void for_each(T&& t, Visit&& func) {
     });
   }
   else {
-    constexpr auto arr = member_names<T>;
     if constexpr (std::is_invocable_v<Visit, first_t, std::string_view>) {
       visit_members(t, [&](auto&... args) {
+#if __cplusplus >= 202002L
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+          constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is]), ...);
         }
-        (std::make_index_sequence<arr.size()>{});
+        (std::make_index_sequence<sizeof...(args)>{});
+#else
+            visit_members_impl0<T>(std::forward<Visit>(func),
+                                   std::make_index_sequence<sizeof...(args)>{},
+                                   args...);
+#endif
       });
     }
     else if constexpr (std::is_invocable_v<Visit, first_t, std::string_view,
                                            size_t>) {
       visit_members(t, [&](auto&... args) {
+#if __cplusplus >= 202002L
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
+          constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is], Is), ...);
         }
-        (std::make_index_sequence<arr.size()>{});
+        (std::make_index_sequence<sizeof...(args)>{});
+#else
+            visit_members_impl<T>(std::forward<Visit>(func),
+                                  std::make_index_sequence<sizeof...(args)>{},
+                                  args...);
+#endif
       });
     }
     else {
@@ -187,8 +258,10 @@ inline constexpr void for_each(T&& t, Visit&& func) {
 
 #if (defined(__GNUC__) && __GNUC__ > 10) || \
     ((defined(__clang__) || defined(_MSC_VER)) && __has_include(<concepts>))
+#if __has_include(<concetps>)
 template <ylt::reflection::FixedString s>
 inline constexpr auto operator""_ylts() {
   return s;
 }
+#endif
 #endif

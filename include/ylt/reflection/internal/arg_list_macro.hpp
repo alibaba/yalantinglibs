@@ -7,5 +7,5 @@
 
 #define WRAP_ARGS_(w, object, ...)                  \
   YLT_CONCAT(WRAP_ARGS, YLT_ARG_COUNT(__VA_ARGS__)) \
-  (w, object, __VA_ARGS__)
-#define WRAP_ARGS(w, object, ...) WRAP_ARGS_(w, object, __VA_ARGS__)
+  (w, object, ##__VA_ARGS__)
+#define WRAP_ARGS(w, object, ...) WRAP_ARGS_(w, object, ##__VA_ARGS__)

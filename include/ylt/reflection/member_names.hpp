@@ -7,6 +7,12 @@
 
 namespace ylt::reflection {
 
+template <typename T>
+struct ylt_alias_struct;
+
+template <typename T>
+inline constexpr auto get_alias_field_names();
+
 namespace internal {
 
 template <class T>
@@ -48,6 +54,46 @@ inline constexpr std::string_view get_member_name() {
 #endif
 }
 
+template <class T>
+struct member_tratis {};
+
+template <class T, class Owner>
+struct member_tratis<T Owner::*> {
+  using owner_type = Owner;
+  using value_type = T;
+};
+
+template <typename T, typename = void>
+struct has_alias_field_names_t : std::false_type {};
+
+template <typename T>
+struct has_alias_field_names_t<
+    T, std::void_t<decltype(ylt_alias_struct<T>::get_alias_field_names())>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool has_alias_field_names_v =
+    has_alias_field_names_t<T>::value;
+
+template <typename T, typename = void>
+struct has_alias_struct_names_t : std::false_type {};
+
+template <typename T>
+struct has_alias_struct_names_t<
+    T, std::void_t<decltype(ylt_alias_struct<T>::get_alias_struct_name())>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool has_alias_struct_name_v =
+    has_alias_struct_names_t<T>::value;
+
+template <typename T, typename U, size_t... Is>
+inline constexpr void init_arr_with_tuple(const T& tp, U& arr,
+                                          std::index_sequence<Is...>) {
+  ((arr[Is] = internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
+   ...);
+}
+
 template <typename T>
 inline constexpr std::array<std::string_view, members_count_v<T>>
 get_member_names() {
@@ -63,42 +109,75 @@ get_member_names() {
     constexpr auto tp = struct_to_tuple<T>();
 
     std::array<std::string_view, Count> arr;
+#if __cplusplus >= 202002L
     [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
        ...);
     }
     (std::make_index_sequence<Count>{});
+#else
+    init_arr_with_tuple(tp, arr, std::make_index_sequence<Count>{});
+#endif
     return arr;
   }
+}
+
+template <typename T, size_t... Is>
+inline constexpr auto get_member_names_map_impl(T& name_arr,
+                                                std::index_sequence<Is...>) {
+  return frozen::unordered_map<frozen::string, size_t, sizeof...(Is)>{
+      {name_arr[Is], Is}...};
 }
 
 template <typename T>
 inline constexpr auto get_member_names_map() {
   constexpr auto name_arr = get_member_names<T>();
+#if __cplusplus >= 202002L
   return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
         {name_arr[Is], Is}...};
   }
   (std::make_index_sequence<name_arr.size()>{});
+#else
+  return get_member_names_map_impl(name_arr,
+                                   std::make_index_sequence<name_arr.size()>{});
+#endif
+}
+
+template <typename T, typename Tuple, size_t... Is>
+inline auto get_member_offset_arr_impl(T& t, Tuple& tp,
+                                       std::index_sequence<Is...>) {
+  std::array<size_t, sizeof...(Is)> arr;
+  ((arr[Is] = size_t((const char*)&std::get<Is>(tp) - (char*)(&t))), ...);
+  return arr;
 }
 
 template <typename T>
-inline const auto& get_member_offset_arr() {
+inline const auto& get_member_offset_arr(T&& t) {
   constexpr size_t Count = members_count_v<T>;
-  constexpr auto tp = struct_to_tuple<T>();
+  auto tp = ylt::reflection::object_to_tuple(std::forward<T>(t));
 
+#if __cplusplus >= 202002L
   [[maybe_unused]] static std::array<size_t, Count> arr = {[&]<size_t... Is>(
       std::index_sequence<Is...>) mutable {std::array<size_t, Count> arr;
-  ((arr[Is] = size_t((const char*)std::get<Is>(tp) -
-                     (char*)(&internal::wrapper<T>::value))),
-   ...);
+  ((arr[Is] = size_t((const char*)&std::get<Is>(tp) - (char*)(&t))), ...);
   return arr;
 }
 (std::make_index_sequence<Count>{})
 };  // namespace internal
 
 return arr;
+#else
+  [[maybe_unused]] static std::array<size_t, Count> arr =
+      get_member_offset_arr_impl(t, tp, std::make_index_sequence<Count>{});
+  return arr;
+#endif
+}  // namespace ylt::reflection
+
+template <typename T>
+inline const auto& get_member_offset_arr() {
+  return get_member_offset_arr(internal::wrapper<T>::value);
 }  // namespace ylt::reflection
 }  // namespace internal
 
@@ -115,10 +194,71 @@ template <typename T>
 constexpr auto member_names_map = internal::get_member_names_map<T>();
 
 template <typename T>
-constexpr auto member_names = internal::get_member_names<T>();
+inline auto member_offsets = internal::get_member_offset_arr<T>();
+
+template <auto member>
+inline constexpr size_t index_of() {
+  using T = typename internal::member_tratis<
+      std::remove_const_t<decltype(member)>>::owner_type;
+  constexpr auto name = field_string<member>();
+  constexpr auto names = internal::get_member_names<T>();
+  for (size_t i = 0; i < names.size(); i++) {
+    if (name == names[i]) {
+      return i;
+    }
+  }
+  return names.size();
+}
+
+template <size_t Idx>
+struct field_alias_t {
+  std::string_view alias_name;
+  inline static constexpr auto index = Idx;
+};
+
+template <typename Tuple, size_t... Is>
+inline constexpr auto get_alias_field_names_impl(Tuple& tp,
+                                                 std::index_sequence<Is...>) {
+  return std::array<std::pair<size_t, std::string_view>, sizeof...(Is)>{
+      std::make_pair(std::tuple_element_t<Is, std::decay_t<Tuple>>::index,
+                     std::get<Is>(tp).alias_name)...};
+}
 
 template <typename T>
-inline auto member_offsets = internal::get_member_offset_arr<T>();
+inline constexpr auto get_alias_field_names() {
+  if constexpr (internal::has_alias_field_names_v<T>) {
+    constexpr auto tp = ylt_alias_struct<T>::get_alias_field_names();
+    return get_alias_field_names_impl(
+        tp, std::make_index_sequence<std::tuple_size_v<decltype(tp)>>{});
+  }
+  else {
+    return std::array<std::string_view, 0>{};
+  }
+}
+
+template <typename T>
+constexpr std::string_view get_struct_name() {
+  if constexpr (internal::has_alias_struct_name_v<T>) {
+    return ylt_alias_struct<T>::get_alias_struct_name();
+  }
+  else {
+    return type_string<T>();
+  }
+}
+
+template <typename T>
+inline constexpr std::array<std::string_view, members_count_v<T>>
+get_member_names() {
+  auto arr = internal::get_member_names<T>();
+  using U = ylt::reflection::remove_cvref_t<T>;
+  if constexpr (internal::has_alias_field_names_v<U>) {
+    constexpr auto alias_arr = get_alias_field_names<U>();
+    for (size_t i = 0; i < alias_arr.size(); i++) {
+      arr[alias_arr[i].first] = alias_arr[i].second;
+    }
+  }
+  return arr;
+}
 
 template <std::size_t N>
 struct FixedString {
@@ -135,7 +275,7 @@ struct FixedString {
 
 template <typename T>
 inline constexpr size_t index_of(std::string_view name) {
-  constexpr auto& arr = member_names<T>;
+  constexpr auto arr = get_member_names<T>();
   for (size_t i = 0; i < arr.size(); i++) {
     if (arr[i] == name) {
       return i;
@@ -155,13 +295,13 @@ inline constexpr size_t index_of() {
 template <typename T, size_t index>
 inline constexpr std::string_view name_of() {
   static_assert(index < members_count_v<T>, "index out of range");
-  constexpr auto& arr = member_names<T>;
+  constexpr auto arr = get_member_names<T>();
   return arr[index];
 }
 
 template <typename T>
 inline constexpr std::string_view name_of(size_t index) {
-  constexpr auto& arr = member_names<T>;
+  constexpr auto arr = get_member_names<T>();
   if (index >= arr.size()) {
     return "";
   }
@@ -169,9 +309,27 @@ inline constexpr std::string_view name_of(size_t index) {
   return arr[index];
 }
 
+template <typename Visit, typename U, size_t... Is>
+inline constexpr void for_each_impl(Visit&& func, U& arr,
+                                    std::index_sequence<Is...>) {
+  if constexpr (std::is_invocable_v<Visit, std::string_view, size_t>) {
+    (func(arr[Is], Is), ...);
+  }
+  else if constexpr (std::is_invocable_v<Visit, std::string_view>) {
+    (func(arr[Is]), ...);
+  }
+  else {
+    static_assert(sizeof(Visit) < 0,
+                  "invalid arguments, full arguments: [std::string_view, "
+                  "size_t], at least has std::string_view and make sure keep "
+                  "the order of arguments");
+  }
+}
+
 template <typename T, typename Visit>
 inline constexpr void for_each(Visit&& func) {
-  constexpr auto& arr = member_names<T>;
+  constexpr auto arr = get_member_names<T>();
+#if __cplusplus >= 202002L
   [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     if constexpr (std::is_invocable_v<Visit, std::string_view, size_t>) {
       (func(arr[Is], Is), ...);
@@ -187,6 +345,10 @@ inline constexpr void for_each(Visit&& func) {
     }
   }
   (std::make_index_sequence<arr.size()>{});
+#else
+  for_each_impl(std::forward<Visit>(func), arr,
+                std::make_index_sequence<arr.size()>{});
+#endif
 }
 
 }  // namespace ylt::reflection

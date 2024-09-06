@@ -1,4 +1,6 @@
 #pragma once
+#include <tuple>
+
 #include "internal/common_macro.hpp"
 
 namespace ylt::reflection {
