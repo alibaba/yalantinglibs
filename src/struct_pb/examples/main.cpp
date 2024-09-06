@@ -9,7 +9,7 @@ struct my_struct : struct_pb::base_impl<my_struct> {
   bool y;
   struct_pb::fixed64_t z;
 };
-REFLECTION(my_struct, x, y, z);
+YLT_REFL(my_struct, x, y, z);
 
 struct nest : struct_pb::base_impl<nest> {
   nest() = default;
@@ -20,14 +20,14 @@ struct nest : struct_pb::base_impl<nest> {
   int var;
   std::variant<int, double> mv;
 };
-REFLECTION(nest, name, value, var, mv);
+YLT_REFL(nest, name, value, var, mv);
 
 struct person {
   int id;
   std::string name;
   int age;
 };
-REFLECTION(person, id, name, age);
+YLT_REFL(person, id, name, age);
 
 int main() {
   nest v{"Hi", my_struct{1, false, {3}}, 5};

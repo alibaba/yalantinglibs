@@ -16,14 +16,14 @@ struct json_histogram_metric_t {
   int64_t count;
   double sum;
 };
-REFLECTION(json_histogram_metric_t, labels, quantiles, count, sum);
+YLT_REFL(json_histogram_metric_t, labels, quantiles, count, sum);
 struct json_histogram_t {
   std::string name;
   std::string help;
   std::string type;
   std::vector<json_histogram_metric_t> metrics;
 };
-REFLECTION(json_histogram_t, name, help, type, metrics);
+YLT_REFL(json_histogram_t, name, help, type, metrics);
 #endif
 
 template <typename value_type>

@@ -16,14 +16,14 @@ struct my_struct : struct_pb::base_impl<my_struct> {
   bool y;
   struct_pb::fixed64_t z;
 };
-REFLECTION(my_struct, x, y, z);
+YLT_REFL(my_struct, x, y, z);
 
 struct nest : struct_pb::base_impl<nest> {
   std::string name;
   my_struct value;
   int var;
 };
-REFLECTION(nest, name, value, var);
+YLT_REFL(nest, name, value, var);
 ```
 
 ### 序列化
@@ -66,7 +66,7 @@ struct my_struct {
   bool y;
   iguana::fixed64_t z;
 };
-REFLECTION(my_struct, x, y, z);
+YLT_REFL(my_struct, x, y, z);
 
 struct nest1 : public iguana::base_imple<nest1> {
   nest1() = default;
@@ -76,7 +76,7 @@ struct nest1 : public iguana::base_imple<nest1> {
   my_struct value;
   int var;
 };
-REFLECTION(nest1, name, value, var);
+YLT_REFL(nest1, name, value, var);
 ```
 
 ```cpp

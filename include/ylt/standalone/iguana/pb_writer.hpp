@@ -83,6 +83,7 @@ IGUANA_INLINE void to_pb_oneof(Type&& t, It&& it, uint32_t*& sz_ptr) {
   using T = std::decay_t<Type>;
   std::visit(
       [&it, &sz_ptr](auto&& value) IGUANA__INLINE_LAMBDA {
+        using raw_value_type = decltype(value);
         using value_type =
             std::remove_const_t<std::remove_reference_t<decltype(value)>>;
         constexpr auto offset =
@@ -90,7 +91,7 @@ IGUANA_INLINE void to_pb_oneof(Type&& t, It&& it, uint32_t*& sz_ptr) {
         constexpr uint32_t key =
             ((field_no + offset) << 3) |
             static_cast<uint32_t>(get_wire_type<value_type>());
-        to_pb_impl<key, false>(std::forward<value_type>(value), it, sz_ptr);
+        to_pb_impl<key, false>(std::forward<raw_value_type>(value), it, sz_ptr);
       },
       std::forward<Type>(t));
 }
@@ -99,7 +100,7 @@ IGUANA_INLINE void to_pb_oneof(Type&& t, It&& it, uint32_t*& sz_ptr) {
 template <uint32_t key, bool omit_default_val, typename Type, typename It>
 IGUANA_INLINE void to_pb_impl(Type&& t, It&& it, uint32_t*& sz_ptr) {
   using T = std::remove_const_t<std::remove_reference_t<Type>>;
-  if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
+  if constexpr (ylt_refletable_v<T> || is_custom_reflection_v<T>) {
     // can't be omitted even if values are empty
     if constexpr (key != 0) {
       auto len = pb_value_size(t, sz_ptr);
@@ -108,21 +109,21 @@ IGUANA_INLINE void to_pb_impl(Type&& t, It&& it, uint32_t*& sz_ptr) {
       if (len == 0)
         IGUANA_UNLIKELY { return; }
     }
-    static constexpr auto tuple = get_members_tuple<T>();
+    static auto tuple = get_pb_members_tuple(std::forward<Type>(t));
     constexpr size_t SIZE = std::tuple_size_v<std::decay_t<decltype(tuple)>>;
     for_each_n(
         [&t, &it, &sz_ptr](auto i) IGUANA__INLINE_LAMBDA {
           using field_type =
               std::tuple_element_t<decltype(i)::value,
                                    std::decay_t<decltype(tuple)>>;
-          constexpr auto value = std::get<decltype(i)::value>(tuple);
+          auto value = std::get<decltype(i)::value>(tuple);
           auto& val = value.value(t);
 
           using U = typename field_type::value_type;
+          using sub_type = typename field_type::sub_type;
           if constexpr (variant_v<U>) {
             constexpr auto offset =
-                get_variant_index<U, typename field_type::sub_type,
-                                  std::variant_size_v<U> - 1>();
+                get_variant_index<U, sub_type, std::variant_size_v<U> - 1>();
             if constexpr (offset == 0) {
               to_pb_oneof<value.field_no>(val, it, sz_ptr);
             }
@@ -296,10 +297,11 @@ IGUANA_INLINE void to_proto_impl(
     std::string_view field_name = "", uint32_t field_no = 0) {
   std::string sub_str;
   using T = std::remove_const_t<std::remove_reference_t<Type>>;
-  if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
-    constexpr auto name = get_name<T>();
+  if constexpr (ylt_refletable_v<T> || is_custom_reflection_v<T>) {
+    constexpr auto name = type_string<T>();
     out.append("message ").append(name).append(" {\n");
-    static constexpr auto tuple = get_members_tuple<T>();
+    static T t;
+    static auto tuple = get_pb_members_tuple(t);
     constexpr size_t SIZE = std::tuple_size_v<std::decay_t<decltype(tuple)>>;
 
     for_each_n(
@@ -307,10 +309,11 @@ IGUANA_INLINE void to_proto_impl(
           using field_type =
               std::tuple_element_t<decltype(i)::value,
                                    std::decay_t<decltype(tuple)>>;
-          constexpr auto value = std::get<decltype(i)::value>(tuple);
+          auto value = std::get<decltype(i)::value>(tuple);
 
           using U = typename field_type::value_type;
-          if constexpr (is_reflection_v<U>) {
+          using sub_type = typename field_type::sub_type;
+          if constexpr (ylt_refletable_v<U>) {
             constexpr auto str_type = get_type_string<U>();
             build_proto_field(
                 out, str_type,
@@ -321,7 +324,6 @@ IGUANA_INLINE void to_proto_impl(
           }
           else if constexpr (variant_v<U>) {
             constexpr size_t var_size = std::variant_size_v<U>;
-            using sub_type = typename field_type::sub_type;
 
             constexpr auto offset =
                 get_variant_index<U, sub_type, var_size - 1>();
@@ -339,7 +341,7 @@ IGUANA_INLINE void to_proto_impl(
             out.append("  ");
             build_proto_field(out, str_type, field_name, value.field_no);
 
-            if constexpr (is_reflection_v<sub_type>) {
+            if constexpr (ylt_refletable_v<sub_type>) {
               build_sub_proto<sub_type>(map, str_type, sub_str);
             }
 
@@ -362,7 +364,7 @@ IGUANA_INLINE void to_proto_impl(
 
     if constexpr (is_lenprefix_v<item_type>) {
       // non-packed
-      if constexpr (is_reflection_v<item_type>) {
+      if constexpr (ylt_refletable_v<item_type>) {
         constexpr auto str_type = get_type_string<item_type>();
         build_proto_field(out, str_type, field_name, field_no);
 
@@ -388,7 +390,7 @@ IGUANA_INLINE void to_proto_impl(
 
     build_proto_field<1>(out, "", field_name, field_no);
 
-    if constexpr (is_reflection_v<second_type>) {
+    if constexpr (ylt_refletable_v<second_type>) {
       constexpr auto str_type = get_type_string<second_type>();
       build_sub_proto<second_type>(map, str_type, sub_str);
     }
@@ -448,8 +450,11 @@ IGUANA_INLINE void build_sub_proto(Map& map, std::string_view str_type,
 #endif
 }  // namespace detail
 
-template <typename T, typename Stream>
-IGUANA_INLINE void to_pb(T& t, Stream& out) {
+template <
+    typename T, typename Stream,
+    std::enable_if_t<ylt_refletable_v<T> || detail::is_custom_reflection_v<T>,
+                     int> = 0>
+IGUANA_INLINE void to_pb(T const& t, Stream& out) {
   std::vector<uint32_t> size_arr;
   auto byte_len = detail::pb_key_value_size<0>(t, size_arr);
   detail::resize(out, byte_len);
@@ -491,7 +496,7 @@ IGUANA_INLINE void to_proto_file(Stream& stream, std::string_view ns = "") {
 #endif
 
 template <typename T, typename Stream>
-IGUANA_INLINE void to_pb_adl(iguana_adl_t* p, T& t, Stream& out) {
+IGUANA_INLINE void to_pb_adl(iguana_adl_t* p, T const& t, Stream& out) {
   to_pb(t, out);
 }
 

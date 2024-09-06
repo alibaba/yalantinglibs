@@ -16,7 +16,8 @@ template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int> = 0>
 IGUANA_INLINE void xml_parse_item(U &value, It &&it, It &&end,
                                   std::string_view name);
 
-template <typename U, typename It, std::enable_if_t<refletable_v<U>, int> = 0>
+template <typename U, typename It,
+          std::enable_if_t<ylt_refletable_v<U>, int> = 0>
 IGUANA_INLINE void xml_parse_item(U &value, It &&it, It &&end,
                                   std::string_view name);
 
@@ -289,7 +290,7 @@ IGUANA_INLINE void skip_comment(It &&it, It &&end) {
 
 // return true means reach the close tag
 template <size_t cdata_idx, typename T, typename It,
-          std::enable_if_t<refletable_v<T>, int> = 0>
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE auto skip_till_close_tag(T &value, It &&it, It &&end) {
   while (true) {
     skip_sapces_and_newline(it, end);
@@ -309,7 +310,7 @@ IGUANA_INLINE auto skip_till_close_tag(T &value, It &&it, It &&end) {
         ++it;
         if (*it == '[') {
           // <![
-          if constexpr (cdata_idx == iguana::get_value<std::decay_t<T>>()) {
+          if constexpr (cdata_idx == ylt::reflection::members_count_v<T>) {
             skip_cdata(it, end);
           }
           else {
@@ -317,7 +318,7 @@ IGUANA_INLINE auto skip_till_close_tag(T &value, It &&it, It &&end) {
             ++it;
             match<'C', 'D', 'A', 'T', 'A', '['>(it, end);
             skip_sapces_and_newline(it, end);
-            auto &cdata_value = get<cdata_idx>(value);
+            auto &cdata_value = ylt::reflection::get<cdata_idx>(value);
             using VT = typename std::decay_t<decltype(cdata_value)>::value_type;
             auto vb = it;
             auto ve = skip_pass<']'>(it, end);
@@ -392,7 +393,7 @@ IGUANA_INLINE void check_required(std::string_view key_set) {
   }
 }
 
-template <typename T, typename It, std::enable_if_t<refletable_v<T>, int>>
+template <typename T, typename It, std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void xml_parse_item(T &value, It &&it, It &&end,
                                   std::string_view name) {
   using U = std::decay_t<T>;
@@ -411,21 +412,19 @@ IGUANA_INLINE void xml_parse_item(T &value, It &&it, It &&end,
   [[maybe_unused]] std::string key_set;
   bool parse_done = false;
   // sequential parse
-  for_each(value, [&](const auto member_ptr, auto i) IGUANA__INLINE_LAMBDA {
+  ylt::reflection::for_each(value, [&](auto &field, auto st_key, auto index) {
 #if defined(_MSC_VER) && _MSVC_LANG < 202002L
     // seems MVSC can't pass a constexpr value to lambda
     constexpr auto cdata_idx = get_type_index<is_cdata_t, U>();
 #endif
-    using item_type = std::remove_reference_t<decltype(value.*member_ptr)>;
-    constexpr auto mkey = iguana::get_name<T, decltype(i)::value>();
-    constexpr std::string_view st_key(mkey.data(), mkey.size());
+    using item_type = std::remove_reference_t<decltype(field)>;
     if constexpr (cdata_v<item_type>) {
       return;
     }
     if (parse_done || key != st_key)
       IGUANA_UNLIKELY { return; }
     if constexpr (!cdata_v<item_type>) {
-      xml_parse_item(value.*member_ptr, it, end, key);
+      xml_parse_item(field, it, end, key);
       if constexpr (iguana::has_iguana_required_arr_v<U>) {
         key_set.append(key).append(", ");
       }
@@ -448,18 +447,17 @@ IGUANA_INLINE void xml_parse_item(T &value, It &&it, It &&end,
     }
   // map parse
   while (true) {
-    static constexpr auto frozen_map = get_iguana_struct_map<T>();
+    static auto frozen_map = ylt::reflection::get_variant_map<U>();
     const auto &member_it = frozen_map.find(key);
     if (member_it != frozen_map.end())
       IGUANA_LIKELY {
         std::visit(
-            [&](auto &&member_ptr) IGUANA__INLINE_LAMBDA {
-              static_assert(
-                  std::is_member_pointer_v<std::decay_t<decltype(member_ptr)>>,
-                  "type must be memberptr");
-              using V = std::remove_reference_t<decltype(value.*member_ptr)>;
-              if constexpr (!cdata_v<V>) {
-                xml_parse_item(value.*member_ptr, it, end, key);
+            [&](auto offset) IGUANA__INLINE_LAMBDA {
+              using value_type = typename decltype(offset)::type;
+              if constexpr (!cdata_v<value_type>) {
+                auto member_ptr =
+                    (value_type *)((char *)(&value) + offset.value);
+                xml_parse_item(*member_ptr, it, end, key);
                 if constexpr (iguana::has_iguana_required_arr_v<U>) {
                   key_set.append(key).append(", ");
                 }
@@ -500,7 +498,8 @@ IGUANA_INLINE void from_xml(U &value, It &&it, It &&end) {
   detail::xml_parse_item(value.value(), it, end, key);
 }
 
-template <typename It, typename U, std::enable_if_t<refletable_v<U>, int> = 0>
+template <typename It, typename U,
+          std::enable_if_t<ylt_refletable_v<U>, int> = 0>
 IGUANA_INLINE void from_xml(U &value, It &&it, It &&end) {
   detail::skip_till_first_key(it, end);
   auto start = it;

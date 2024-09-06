@@ -18,14 +18,14 @@ struct json_summary_metric_t {
   int64_t count;
   double sum;
 };
-REFLECTION(json_summary_metric_t, labels, quantiles, count, sum);
+YLT_REFL(json_summary_metric_t, labels, quantiles, count, sum);
 struct json_summary_t {
   std::string name;
   std::string help;
   std::string type;
   std::vector<json_summary_metric_t> metrics;
 };
-REFLECTION(json_summary_t, name, help, type, metrics);
+YLT_REFL(json_summary_t, name, help, type, metrics);
 #endif
 
 struct block_t {

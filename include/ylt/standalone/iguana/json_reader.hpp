@@ -4,8 +4,17 @@
 #include "json_util.hpp"
 namespace iguana {
 
-template <typename T, typename It, std::enable_if_t<refletable_v<T>, int> = 0>
+template <typename T, typename It,
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end);
+
+template <typename T, typename View,
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
+IGUANA_INLINE void from_json(T &value, const View &view);
+
+template <typename T, typename View,
+          std::enable_if_t<non_ylt_refletable_v<T>, int> = 0>
+IGUANA_INLINE void from_json(T &value, const View &view);
 
 namespace detail {
 
@@ -16,7 +25,8 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 
-template <typename U, typename It, std::enable_if_t<refletable_v<U>, int> = 0>
+template <typename U, typename It,
+          std::enable_if_t<ylt_refletable_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   from_json(value, it, end);
 }
@@ -86,10 +96,10 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   }
 }
 
-template <typename U, typename It, std::enable_if_t<is_pb_type_v<U>, int> = 0>
-IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
-  from_json_impl(value.val, it, end);
-}
+// template <typename U, typename It, std::enable_if_t<is_pb_type_v<U>, int> =
+// 0> IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
+//   from_json_impl(value.val, it, end);
+// }
 
 template <typename U, typename It, std::enable_if_t<numeric_str_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
@@ -404,18 +414,20 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   match<'['>(it, end);
   skip_ws(it, end);
 
-  for_each(value, [&](auto &v, auto i) IGUANA__INLINE_LAMBDA {
-    constexpr auto I = decltype(i)::value;
-    if (it == end || *it == ']') {
-      return;
-    }
-    if constexpr (I != 0) {
-      match<','>(it, end);
-      skip_ws(it, end);
-    }
-    from_json_impl(v, it, end);
-    skip_ws(it, end);
-  });
+  foreach_tuple(
+      [&](auto &v, auto i) IGUANA__INLINE_LAMBDA {
+        constexpr auto I = decltype(i)::value;
+        if (it == end || *it == ']') {
+          return;
+        }
+        if constexpr (I != 0) {
+          match<','>(it, end);
+          skip_ws(it, end);
+        }
+        from_json_impl(v, it, end);
+        skip_ws(it, end);
+      },
+      value);
 
   match<']'>(it, end);
 }
@@ -542,7 +554,7 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
 }
 }  // namespace detail
 
-template <typename T, typename It, std::enable_if_t<refletable_v<T>, int>>
+template <typename T, typename It, std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
   skip_ws(it, end);
   match<'{'>(it, end);
@@ -553,80 +565,80 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
       ++it;
       return;
     }
-  std::string_view key = detail::get_key(it, end);
+  using U = ylt::reflection::remove_cvref_t<T>;
+  constexpr auto Count = ylt::reflection::members_count_v<U>;
+  if constexpr (Count > 0) {
+    std::string_view key = detail::get_key(it, end);
 #ifdef SEQUENTIAL_PARSE
-  bool parse_done = false;
-  for_each(value, [&](const auto member_ptr, auto i) IGUANA__INLINE_LAMBDA {
-    constexpr auto mkey = iguana::get_name<T, decltype(i)::value>();
-    constexpr std::string_view st_key(mkey.data(), mkey.size());
-    if (parse_done || (key != st_key))
-      IGUANA_UNLIKELY { return; }
-    skip_ws(it, end);
-    match<':'>(it, end);
-    {
-      using namespace detail;
-      from_json_impl(value.*member_ptr, it, end);
-    }
+    bool parse_done = false;
+    ylt::reflection::for_each(
+        value, [&](auto &field, auto name, auto index) IGUANA__INLINE_LAMBDA {
+          if (parse_done || (key != name))
+            IGUANA_UNLIKELY { return; }
+          skip_ws(it, end);
+          match<':'>(it, end);
+          {
+            using namespace detail;
+            from_json_impl(field, it, end);
+          }
 
-    skip_ws(it, end);
-    if (*it == '}')
-      IGUANA_UNLIKELY {
-        ++it;
-        parse_done = true;
-        return;
-      }
-    else
-      IGUANA_LIKELY { match<','>(it, end); }
-    key = detail::get_key(it, end);
-  });
-  if (parse_done) [[unlikely]] {
-    return;
-  }
+          skip_ws(it, end);
+          if (*it == '}')
+            IGUANA_UNLIKELY {
+              ++it;
+              parse_done = true;
+              return;
+            }
+          else
+            IGUANA_LIKELY { match<','>(it, end); }
+          key = detail::get_key(it, end);
+        });
+    if (parse_done) [[unlikely]] {
+      return;
+    }
 #endif
-  while (it != end) {
-    static constexpr auto frozen_map = get_iguana_struct_map<T>();
-    if constexpr (frozen_map.size() > 0) {
-      const auto &member_it = frozen_map.find(key);
-      skip_ws(it, end);
-      match<':'>(it, end);
-      if (member_it != frozen_map.end())
-        IGUANA_LIKELY {
-          std::visit(
-              [&](auto &&member_ptr) IGUANA__INLINE_LAMBDA {
-                using V = std::decay_t<decltype(member_ptr)>;
-                if constexpr (std::is_member_pointer_v<V>) {
+    while (it != end) {
+      static auto frozen_map = ylt::reflection::get_variant_map<U>();
+      if (frozen_map.size() > 0) {
+        const auto &member_it = frozen_map.find(key);
+        skip_ws(it, end);
+        match<':'>(it, end);
+        if (member_it != frozen_map.end())
+          IGUANA_LIKELY {
+            std::visit(
+                [&](auto offset) IGUANA__INLINE_LAMBDA {
                   using namespace detail;
-                  from_json_impl(value.*member_ptr, it, end);
-                }
-                else {
-                  static_assert(!sizeof(V), "type not supported");
-                }
-              },
-              member_it->second);
+                  using value_type = typename decltype(offset)::type;
+                  auto member_ptr =
+                      (value_type *)((char *)(&value) + offset.value);
+                  from_json_impl(*member_ptr, it, end);
+                },
+                member_it->second);
+          }
+        else
+          IGUANA_UNLIKELY {
+#ifdef THROW_UNKNOWN_KEY
+            throw std::runtime_error("Unknown key: " + std::string(key));
+#else
+            detail::skip_object_value(it, end);
+#endif
+          }
+      }
+      skip_ws(it, end);
+      if (*it == '}')
+        IGUANA_UNLIKELY {
+          ++it;
+          return;
         }
       else
-        IGUANA_UNLIKELY {
-#ifdef THROW_UNKNOWN_KEY
-          throw std::runtime_error("Unknown key: " + std::string(key));
-#else
-          detail::skip_object_value(it, end);
-#endif
-        }
+        IGUANA_LIKELY { match<','>(it, end); }
+      key = detail::get_key(it, end);
     }
-    skip_ws(it, end);
-    if (*it == '}')
-      IGUANA_UNLIKELY {
-        ++it;
-        return;
-      }
-    else
-      IGUANA_LIKELY { match<','>(it, end); }
-    key = detail::get_key(it, end);
   }
 }
 
 template <typename T, typename It,
-          std::enable_if_t<non_refletable_v<T>, int> = 0>
+          std::enable_if_t<non_ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void from_json(T &value, It &&it, It &&end) {
   using namespace detail;
   from_json_impl(value, it, end);
@@ -643,35 +655,15 @@ IGUANA_INLINE void from_json(T &value, It &&it, It &&end,
   }
 }
 
-template <typename T, typename View,
-          std::enable_if_t<json_view_v<View>, int> = 0>
+template <typename T, typename View, std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void from_json(T &value, const View &view) {
   from_json(value, std::begin(view), std::end(view));
 }
 
-template <
-    auto member,
-    typename Parant = typename member_tratis<decltype(member)>::owner_type,
-    typename T>
-IGUANA_INLINE void from_json(T &value, std::string_view str) {
-  constexpr size_t duplicate_count =
-      iguana::duplicate_count<std::remove_reference_t<Parant>, member>();
-  static_assert(duplicate_count != 1, "the member is not belong to the object");
-  static_assert(duplicate_count == 2, "has duplicate field name");
-
-  constexpr auto name = name_of<member>();
-  constexpr size_t index = index_of<member>();
-  constexpr size_t member_count = member_count_of<member>();
-  str = str.substr(str.find(name) + name.size());
-  size_t pos = str.find(":") + 1;
-  if constexpr (index == member_count - 1) {  // last field
-    str = str.substr(pos, str.find("}") - pos + 1);
-  }
-  else {
-    str = str.substr(pos, str.find(",") - pos);
-  }
-
-  detail::from_json_impl(value.*member, std::begin(str), std::end(str));
+template <typename T, typename View,
+          std::enable_if_t<non_ylt_refletable_v<T>, int>>
+IGUANA_INLINE void from_json(T &value, const View &view) {
+  from_json(value, std::begin(view), std::end(view));
 }
 
 template <typename T, typename View,

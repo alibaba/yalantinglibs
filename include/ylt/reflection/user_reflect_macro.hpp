@@ -23,32 +23,34 @@ struct member_traits<T Owner::*> {
 template <class T>
 using member_value_type_t = typename member_traits<T>::value_type;
 
-#define YLT_REFL(STRUCT, ...)                                               \
-  template <typename Visitor>                                               \
-  inline static constexpr decltype(auto) refl_visit_members(                \
-      STRUCT &t, Visitor &&visitor) {                                       \
-    return visitor(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));             \
-  }                                                                         \
-  template <typename Visitor>                                               \
-  inline static constexpr decltype(auto) refl_visit_members(                \
-      const STRUCT &t, Visitor &&visitor) {                                 \
-    return visitor(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));             \
-  }                                                                         \
-  inline static decltype(auto) refl_object_to_tuple(STRUCT &t) {            \
-    return std::tie(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));            \
-  }                                                                         \
-  inline static decltype(auto) refl_object_to_tuple(const STRUCT &t) {      \
-    return std::tie(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));            \
-  }                                                                         \
-  inline static constexpr decltype(auto) refl_member_names(                 \
-      const ylt::reflection::identity<STRUCT> &t) {                         \
-    constexpr std::array<std::string_view, YLT_ARG_COUNT(__VA_ARGS__)> arr{ \
-        WRAP_ARGS(CONCAT_NAME, t, ##__VA_ARGS__)};                          \
-    return arr;                                                             \
-  }                                                                         \
-  inline static constexpr std::size_t refl_member_count(                    \
-      const ylt::reflection::identity<STRUCT> &t) {                         \
-    return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);                         \
+#define YLT_REFL(STRUCT, ...)                                                \
+  template <typename Visitor>                                                \
+  inline static constexpr decltype(auto) refl_visit_members(                 \
+      STRUCT &t, Visitor &&visitor) {                                        \
+    return visitor(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));              \
+  }                                                                          \
+  template <typename Visitor>                                                \
+  inline static constexpr decltype(auto) refl_visit_members(                 \
+      const STRUCT &t, Visitor &&visitor) {                                  \
+    return visitor(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));              \
+  }                                                                          \
+  [[maybe_unused]] inline static decltype(auto) refl_object_to_tuple(        \
+      STRUCT &t) {                                                           \
+    return std::tie(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));             \
+  }                                                                          \
+  [[maybe_unused]] inline static decltype(auto) refl_object_to_tuple(        \
+      const STRUCT &t) {                                                     \
+    return std::tie(WRAP_ARGS(CONCAT_MEMBER, t, ##__VA_ARGS__));             \
+  }                                                                          \
+  [[maybe_unused]] inline static constexpr decltype(auto) refl_member_names( \
+      const ylt::reflection::identity<STRUCT> &t) {                          \
+    constexpr std::array<std::string_view, YLT_ARG_COUNT(__VA_ARGS__)> arr{  \
+        WRAP_ARGS(CONCAT_NAME, t, ##__VA_ARGS__)};                           \
+    return arr;                                                              \
+  }                                                                          \
+  [[maybe_unused]] inline static constexpr std::size_t refl_member_count(    \
+      const ylt::reflection::identity<STRUCT> &t) {                          \
+    return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);                          \
   }
 
 template <typename T, typename Tuple, typename Visitor>

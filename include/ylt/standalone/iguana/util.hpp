@@ -13,13 +13,15 @@
 
 #include "define.h"
 #include "detail/charconv.h"
+#include "detail/pb_type.hpp"
+#include "detail/traits.hpp"
 #include "detail/utf.hpp"
-#include "enum_reflection.hpp"
 #include "error_code.h"
-#include "reflection.hpp"
+#include "field_reflection.hpp"
+#include "ylt/reflection/member_value.hpp"
+#include "ylt/reflection/user_reflect_macro.hpp"
 
 namespace iguana {
-
 template <typename T>
 inline constexpr bool char_v = std::is_same_v<std::decay_t<T>, char> ||
                                std::is_same_v<std::decay_t<T>, char16_t> ||
@@ -137,11 +139,35 @@ template <size_t Idx, typename T>
 using variant_element_t = std::remove_reference_t<decltype(std::get<Idx>(
     std::declval<std::remove_reference_t<T>>()))>;
 
-template <typename T>
-constexpr inline bool refletable_v = is_reflection_v<std::remove_cvref_t<T>>;
+template <typename F, typename Tuple, size_t... Is>
+constexpr void foreach_tuple(F&& f, Tuple& tp, std::index_sequence<Is...>) {
+  (void(f(std::get<Is>(tp), std::integral_constant<size_t, Is>{})), ...);
+}
+
+template <typename F, typename Tuple>
+constexpr void foreach_tuple(F&& f, Tuple& tp) {
+  foreach_tuple(std::forward<F>(f), tp,
+                std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename F, typename T>
+inline constexpr auto for_each_tuple(F&& f, T&& tup) {
+  std::apply(
+      [&f](auto&&... args) {
+        (f(args), ...);
+      },
+      std::forward<T>(tup));
+}
 
 template <class T>
-constexpr inline bool non_refletable_v = !refletable_v<T>;
+constexpr inline bool ylt_refletable_v =
+    (ylt::reflection::is_ylt_refl_v<T> ||
+     std::is_aggregate_v<
+         ylt::reflection::remove_cvref_t<T>>)&&!fixed_array_v<T> &&
+    !ylt::reflection::is_custom_refl_v<T> && !is_pb_type_v<T>;
+
+template <class T>
+constexpr inline bool non_ylt_refletable_v = !ylt_refletable_v<T>;
 
 template <typename T>
 constexpr inline bool plain_v =

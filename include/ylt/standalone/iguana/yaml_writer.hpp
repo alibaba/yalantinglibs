@@ -12,11 +12,11 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces = 0) {
 }
 
 template <bool Is_writing_escape = false, typename Stream, typename T,
-          std::enable_if_t<refletable_v<T>, int> = 0>
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces = 0);
 
 template <bool Is_writing_escape, typename Stream, typename T,
-          std::enable_if_t<refletable_v<T>, int> = 0>
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
   ss.push_back('\n');
   to_yaml<Is_writing_escape>(std::forward<T>(t), ss, min_spaces);
@@ -119,12 +119,13 @@ template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<tuple_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
   ss.push_back('\n');
-  for_each(std::forward<T>(t),
-           [&ss, min_spaces](auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             ss.append(min_spaces, ' ');
-             ss.append("- ");
-             render_yaml_value<Is_writing_escape>(ss, v, min_spaces + 1);
-           });
+  for_each_tuple(
+      [&ss, min_spaces](auto &v) IGUANA__INLINE_LAMBDA {
+        ss.append(min_spaces, ' ');
+        ss.append("- ");
+        render_yaml_value<Is_writing_escape>(ss, v, min_spaces + 1);
+      },
+      std::forward<T>(t));
 }
 
 template <bool Is_writing_escape, typename Stream, typename T,
@@ -165,36 +166,25 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, const T &val,
   }
 }
 
-constexpr auto write_yaml_key = [](auto &s, auto i,
-                                   auto &t) IGUANA__INLINE_LAMBDA {
-  constexpr auto name = get_name<decltype(t), decltype(i)::value>();
-  s.append(name.data(), name.size());
-};
-
 template <bool Is_writing_escape, typename Stream, typename T,
-          std::enable_if_t<refletable_v<T>, int>>
+          std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces) {
-  for_each(std::forward<T>(t),
-           [&t, &s, min_spaces](const auto &v, auto i) IGUANA__INLINE_LAMBDA {
-             using M = decltype(iguana_reflect_type(std::forward<T>(t)));
-             constexpr auto Idx = decltype(i)::value;
-             constexpr auto Count = M::value();
-             static_assert(Idx < Count);
-             s.append(min_spaces, ' ');
-             write_yaml_key(s, i, t);
-             s.append(": ");
-             if constexpr (!is_reflection<std::decay_t<decltype(v)>>::value) {
-               render_yaml_value<Is_writing_escape>(s, t.*v, min_spaces + 1);
-             }
-             else {
-               s.push_back('\n');
-               to_yaml<Is_writing_escape>(t.*v, s, min_spaces + 1);
-             }
-           });
+  ylt::reflection::for_each(t, [&](auto &field, auto field_name, auto index) {
+    s.append(min_spaces, ' ');
+    s.append(field_name);
+    s.append(": ");
+    if constexpr (!ylt_refletable_v<std::decay_t<decltype(field)>>) {
+      render_yaml_value<Is_writing_escape>(s, field, min_spaces + 1);
+    }
+    else {
+      s.push_back('\n');
+      to_yaml<Is_writing_escape>(field, s, min_spaces + 1);
+    }
+  });
 }
 
 template <bool Is_writing_escape = false, typename Stream, typename T,
-          std::enable_if_t<non_refletable_v<T>, int> = 0>
+          std::enable_if_t<non_ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s) {
   if constexpr (tuple_v<T> || map_container_v<T> || sequence_container_v<T> ||
                 optional_v<T> || smart_ptr_v<T>)
