@@ -19,8 +19,7 @@ struct Contents_t {
   std::string_view StorageClass;
   Owner_t Owner;
 };
-YLT_REFL(Contents_t, Key, LastModified, ETag, Type, Size, StorageClass,
-           Owner);
+YLT_REFL(Contents_t, Key, LastModified, ETag, Type, Size, StorageClass, Owner);
 
 struct ListBucketResult {
   std::string_view Name;
@@ -33,7 +32,7 @@ struct ListBucketResult {
   //  std::unordered_map<std::string, std::string> __attr;
 };
 YLT_REFL(ListBucketResult, Name, Prefix, Marker, MaxKeys, Delimiter,
-           IsTruncated, Contents);
+         IsTruncated, Contents);
 
 std::string xml_str = R"(
 <?xml version="1.0" encoding="UTF-8"?>
@@ -290,6 +289,8 @@ struct next_obj_t {
   int x;
   int y;
 };
+YLT_REFL(next_obj_t, x, y);
+
 template <>
 struct ylt::reflection::ylt_alias_struct<next_obj_t> {
   static constexpr std::string_view get_alias_struct_name() { return "next"; }
@@ -304,6 +305,7 @@ struct out_object {
   std::string_view name;
   next_obj_t obj;
 };
+YLT_REFL(out_object, id, name, obj);
 
 template <>
 struct ylt::reflection::ylt_alias_struct<out_object> {

@@ -53,8 +53,8 @@ struct BaseTypeMsg PUBLIC(BaseTypeMsg) {
   }
 };
 YLT_REFL(BaseTypeMsg, optional_int32, optional_int64, optional_uint32,
-           optional_uint64, optional_float, optional_double, optional_bool,
-           optional_string, optional_enum);
+         optional_uint64, optional_float, optional_double, optional_bool,
+         optional_string, optional_enum);
 
 struct IguanaTypeMsg PUBLIC(IguanaTypeMsg) {
   IguanaTypeMsg() = default;
@@ -84,7 +84,7 @@ struct IguanaTypeMsg PUBLIC(IguanaTypeMsg) {
   }
 };
 YLT_REFL(IguanaTypeMsg, optional_sint32, optional_sint64, optional_fixed32,
-           optional_fixed64, optional_sfixed32, optional_sfixed64);
+         optional_fixed64, optional_sfixed32, optional_sfixed64);
 
 struct RepeatBaseTypeMsg PUBLIC(RepeatBaseTypeMsg) {
   RepeatBaseTypeMsg() = default;
@@ -111,8 +111,8 @@ struct RepeatBaseTypeMsg PUBLIC(RepeatBaseTypeMsg) {
 };
 
 YLT_REFL(RepeatBaseTypeMsg, repeated_uint32, repeated_uint64, repeated_int32,
-           repeated_int64, repeated_float, repeated_double, repeated_string,
-           repeated_enum);
+         repeated_int64, repeated_float, repeated_double, repeated_string,
+         repeated_enum);
 
 struct RepeatIguanaTypeMsg PUBLIC(RepeatIguanaTypeMsg) {
   RepeatIguanaTypeMsg() = default;
@@ -137,8 +137,8 @@ struct RepeatIguanaTypeMsg PUBLIC(RepeatIguanaTypeMsg) {
 };
 
 YLT_REFL(RepeatIguanaTypeMsg, repeated_sint32, repeated_sint64,
-           repeated_fixed32, repeated_fixed64, repeated_sfixed32,
-           repeated_sfixed64);
+         repeated_fixed32, repeated_fixed64, repeated_sfixed32,
+         repeated_sfixed64);
 
 struct NestedMsg PUBLIC(NestedMsg) {
   NestedMsg() = default;
@@ -156,7 +156,7 @@ struct NestedMsg PUBLIC(NestedMsg) {
   std::vector<RepeatBaseTypeMsg> repeat_repeat_base_msg;
 };
 YLT_REFL(NestedMsg, base_msg, repeat_base_msg, iguana_type_msg,
-           repeat_iguna_msg, repeat_repeat_base_msg);
+         repeat_iguna_msg, repeat_repeat_base_msg);
 
 struct MapMsg PUBLIC(MapMsg) {
   MapMsg() = default;
@@ -171,7 +171,7 @@ struct MapMsg PUBLIC(MapMsg) {
   std::map<int, RepeatBaseTypeMsg> int_repeat_base_msg_map{};
 };
 YLT_REFL(MapMsg, sfix64_str_map, str_iguana_type_msg_map,
-           int_repeat_base_msg_map);
+         int_repeat_base_msg_map);
 
 struct BaseOneofMsg PUBLIC(BaseOneofMsg) {
   BaseOneofMsg() = default;
@@ -294,7 +294,7 @@ struct Monster PUBLIC(Monster) {
   std::vector<Vec3> path;
 };
 YLT_REFL(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
-           path);
+         path);
 
 struct bench_int32 PUBLIC(bench_int32) {
   bench_int32() = default;

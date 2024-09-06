@@ -77,7 +77,7 @@ struct Monster : public iguana::base_impl<Monster> {
   std::vector<Vec3> path;
 };
 YLT_REFL(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
-           path);
+         path);
 
 struct Monsters : public iguana::base_impl<Monsters> {
   Monsters() = default;

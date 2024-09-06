@@ -568,7 +568,7 @@ struct inner_struct PUBLIC(inner_struct) {
   int z;
 };
 
-constexpr inline auto get_members_impl(inner_struct *) {
+inline auto get_members_impl(inner_struct *) {
   return std::make_tuple(iguana::build_pb_field<&inner_struct::x, 7>("a"),
                          iguana::build_pb_field<&inner_struct::y, 9>("b"),
                          iguana::build_pb_field<&inner_struct::z, 12>("c"));
