@@ -1,13 +1,8 @@
 #pragma once
-#include "reflection.hpp"
+#include "common.hpp"
 
 namespace iguana {
 using base = detail::base;
-
-template <typename T, typename U>
-IGUANA_INLINE constexpr size_t member_offset(T* t, U T::*member) {
-  return (char*)&(t->*member) - (char*)t;
-}
 
 constexpr inline uint8_t ENABLE_JSON = 0x01;
 constexpr inline uint8_t ENABLE_YAML = 0x02;
@@ -17,9 +12,10 @@ constexpr inline uint8_t ENABLE_ALL = 0x0F;
 
 template <typename T, uint8_t ENABLE_FLAG = ENABLE_PB>
 struct base_impl : public base {
-  void to_pb(std::string& str) override {
+  base_impl() { [[maybe_unused]] static bool r = register_type<T>(); }
+  void to_pb(std::string& str) const override {
     if constexpr ((ENABLE_FLAG & ENABLE_PB) != 0) {
-      to_pb_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
+      to_pb_adl((iguana_adl_t*)nullptr, *(static_cast<T const*>(this)), str);
     }
     else {
       throw std::runtime_error("Protobuf Disabled");
@@ -35,9 +31,9 @@ struct base_impl : public base {
     }
   }
 
-  void to_json(std::string& str) override {
+  void to_json(std::string& str) const override {
     if constexpr ((ENABLE_FLAG & ENABLE_JSON) != 0) {
-      to_json_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
+      to_json_adl((iguana_adl_t*)nullptr, *(static_cast<T const*>(this)), str);
     }
     else {
       throw std::runtime_error("Json Disabled");
@@ -53,9 +49,9 @@ struct base_impl : public base {
     }
   }
 
-  void to_xml(std::string& str) override {
+  void to_xml(std::string& str) const override {
     if constexpr ((ENABLE_FLAG & ENABLE_XML) != 0) {
-      to_xml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
+      to_xml_adl((iguana_adl_t*)nullptr, *(static_cast<T const*>(this)), str);
     }
     else {
       throw std::runtime_error("Xml Disabled");
@@ -71,9 +67,9 @@ struct base_impl : public base {
     }
   }
 
-  void to_yaml(std::string& str) override {
+  void to_yaml(std::string& str) const override {
     if constexpr ((ENABLE_FLAG & ENABLE_YAML) != 0) {
-      to_yaml_adl((iguana_adl_t*)nullptr, *(static_cast<T*>(this)), str);
+      to_yaml_adl((iguana_adl_t*)nullptr, *(static_cast<T const*>(this)), str);
     }
     else {
       throw std::runtime_error("Yaml Disabled");
@@ -89,18 +85,21 @@ struct base_impl : public base {
     }
   }
 
-  iguana::detail::field_info get_field_info(std::string_view name) override {
-    static constexpr auto map = iguana::get_members<T>();
+  iguana::detail::field_info get_field_info(
+      std::string_view name) const override {
+    static auto map =
+        detail::get_members(ylt::reflection::internal::wrapper<T>::value);
     iguana::detail::field_info info{};
-    for (auto& [no, field] : map) {
+    for (auto const& [no, field] : map) {
       if (info.offset > 0) {
         break;
       }
       std::visit(
-          [&](auto val) {
+          [&](auto const& val) {
             if (val.field_name == name) {
-              info.offset = member_offset((T*)this, val.member_ptr);
-              using value_type = typename decltype(val)::value_type;
+              info.offset = val.offset;
+              using value_type =
+                  typename std::remove_reference_t<decltype(val)>::value_type;
 #if defined(__clang__) || defined(_MSC_VER) || \
     (defined(__GNUC__) && __GNUC__ > 8)
               info.type_name = type_string<value_type>();
@@ -114,7 +113,8 @@ struct base_impl : public base {
   }
 
   std::vector<std::string_view> get_fields_name() const override {
-    static constexpr auto map = iguana::get_members<T>();
+    static auto map =
+        detail::get_members(ylt::reflection::internal::wrapper<T>::value);
 
     std::vector<std::string_view> vec;
 
@@ -133,20 +133,21 @@ struct base_impl : public base {
   }
 
   std::any get_field_any(std::string_view name) const override {
-    static constexpr auto map = iguana::get_members<T>();
+    static auto map =
+        detail::get_members(ylt::reflection::internal::wrapper<T>::value);
     std::any result;
 
-    for (auto [no, field] : map) {
+    for (auto const& [no, field] : map) {
       if (result.has_value()) {
         break;
       }
       std::visit(
-          [&](auto val) {
+          [&](auto const& val) {
             if (val.field_name == name) {
-              using value_type = typename decltype(val)::value_type;
-              auto const offset = member_offset((T*)this, val.member_ptr);
-              auto ptr = (((char*)this) + offset);
-              result = {*((value_type*)ptr)};
+              using value_type =
+                  typename std::remove_reference_t<decltype(val)>::value_type;
+              auto ptr = (char*)this + val.offset;
+              result = *((value_type*)ptr);
             }
           },
           field);
@@ -157,7 +158,7 @@ struct base_impl : public base {
 
   virtual ~base_impl() {}
 
-  size_t cache_size = 0;
+  mutable size_t cache_size = 0;
 };
 
 IGUANA_INLINE std::shared_ptr<base> create_instance(std::string_view name) {

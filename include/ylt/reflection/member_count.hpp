@@ -4,7 +4,11 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#if __has_include(<ylt/util/expected.hpp>)
 #include <ylt/util/expected.hpp>
+#else
+#include "iguana/ylt/util/expected.hpp"
+#endif
 
 #include "user_reflect_macro.hpp"
 

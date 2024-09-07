@@ -8,7 +8,8 @@
 
 namespace iguana {
 
-template <typename T, typename It, std::enable_if_t<refletable_v<T>, int> = 0>
+template <typename T, typename It,
+          std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end,
                              size_t min_spaces = 0);
 
@@ -221,7 +222,8 @@ IGUANA_INLINE void yaml_parse_value(U &&value, It &&value_begin,
     IGUANA_UNLIKELY { throw std::runtime_error("Expected true or false"); }
 }
 
-template <typename U, typename It, std::enable_if_t<refletable_v<U>, int> = 0>
+template <typename U, typename It,
+          std::enable_if_t<ylt_refletable_v<U>, int> = 0>
 IGUANA_INLINE void yaml_parse_item(U &value, It &&it, It &&end,
                                    size_t min_spaces) {
   from_yaml(value, it, end, min_spaces);
@@ -349,43 +351,47 @@ IGUANA_INLINE void yaml_parse_item(U &value, It &&it, It &&end,
   if (*it == '[') {
     ++it;
     skip_space_and_lines(it, end, min_spaces);
-    for_each(value, [&](auto &v, auto i) IGUANA__INLINE_LAMBDA {
-      using value_type = std::decay_t<decltype(v)>;
-      skip_space_and_lines(it, end, min_spaces);
-      if constexpr (plain_v<value_type>) {
-        auto start = it;
-        auto value_end = yaml_skip_till<',', ']'>(it, end);
-        yaml_parse_value(v, start, value_end);
-      }
-      else {
-        yaml_parse_item(v, it, end, spaces + 1);
-        skip_space_and_lines(it, end, min_spaces);
-        ++it;  // skip ,
-      }
-    });
+    for_each_tuple(
+        [&](auto &v) IGUANA__INLINE_LAMBDA {
+          using value_type = std::decay_t<decltype(v)>;
+          skip_space_and_lines(it, end, min_spaces);
+          if constexpr (plain_v<value_type>) {
+            auto start = it;
+            auto value_end = yaml_skip_till<',', ']'>(it, end);
+            yaml_parse_value(v, start, value_end);
+          }
+          else {
+            yaml_parse_item(v, it, end, spaces + 1);
+            skip_space_and_lines(it, end, min_spaces);
+            ++it;  // skip ,
+          }
+        },
+        value);
   }
   else if (*it == '-') {
-    for_each(value, [&](auto &v, auto i) IGUANA__INLINE_LAMBDA {
-      // we don't need to determine when it will end
-      // because the user decides how many items there are
-      // the following is similar to sequence_t
-      using value_type = std::decay_t<decltype(v)>;
-      skip_space_and_lines(it, end, spaces);
-      match<'-'>(it, end);
-      [[maybe_unused]] auto subspaces =
-          skip_space_and_lines(it, end, spaces + 1);
-      if constexpr (string_v<value_type>) {
-        yaml_parse_item(v, it, end, spaces + 1);
-      }
-      else if constexpr (plain_v<value_type>) {
-        auto start = it;
-        auto value_end = skip_till_newline(it, end);
-        yaml_parse_value(v, start, value_end);
-      }
-      else {
-        yaml_parse_item(v, it, end, subspaces);
-      }
-    });
+    for_each_tuple(
+        [&](auto &v) IGUANA__INLINE_LAMBDA {
+          // we don't need to determine when it will end
+          // because the user decides how many items there are
+          // the following is similar to sequence_t
+          using value_type = std::decay_t<decltype(v)>;
+          skip_space_and_lines(it, end, spaces);
+          match<'-'>(it, end);
+          [[maybe_unused]] auto subspaces =
+              skip_space_and_lines(it, end, spaces + 1);
+          if constexpr (string_v<value_type>) {
+            yaml_parse_item(v, it, end, spaces + 1);
+          }
+          else if constexpr (plain_v<value_type>) {
+            auto start = it;
+            auto value_end = skip_till_newline(it, end);
+            yaml_parse_value(v, start, value_end);
+          }
+          else {
+            yaml_parse_item(v, it, end, subspaces);
+          }
+        },
+        value);
   }
   else {
     throw std::runtime_error("Expected ']' or '-'");
@@ -530,7 +536,7 @@ IGUANA_INLINE void skip_object_value(It &&it, It &&end, size_t min_spaces) {
 
 }  // namespace detail
 
-template <typename T, typename It, std::enable_if_t<refletable_v<T>, int>>
+template <typename T, typename It, std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end, size_t min_spaces) {
   auto spaces = skip_space_and_lines(it, end, min_spaces);
   while (it != end) {
@@ -538,21 +544,18 @@ IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end, size_t min_spaces) {
     auto keyend = yaml_skip_till<':'>(it, end);
     std::string_view key = std::string_view{
         &*start, static_cast<size_t>(std::distance(start, keyend))};
-    static constexpr auto frozen_map = get_iguana_struct_map<T>();
+    static auto frozen_map = ylt::reflection::get_variant_map<T>();
+
     if constexpr (frozen_map.size() > 0) {
       const auto &member_it = frozen_map.find(key);
       if (member_it != frozen_map.end())
         IGUANA_LIKELY {
           std::visit(
-              [&](auto &&member_ptr) IGUANA__INLINE_LAMBDA {
-                using V = std::decay_t<decltype(member_ptr)>;
-                if constexpr (std::is_member_pointer_v<V>) {
-                  detail::yaml_parse_item(value.*member_ptr, it, end,
-                                          spaces + 1);
-                }
-                else {
-                  static_assert(!sizeof(V), "type not supported");
-                }
+              [&](auto offset) IGUANA__INLINE_LAMBDA {
+                using value_type = typename decltype(offset)::type;
+                auto member_ptr =
+                    (value_type *)((char *)(&value) + offset.value);
+                detail::yaml_parse_item(*member_ptr, it, end, spaces + 1);
               },
               member_it->second);
         }
@@ -575,7 +578,7 @@ IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end, size_t min_spaces) {
 }
 
 template <typename T, typename It,
-          std::enable_if_t<non_refletable_v<T>, int> = 0>
+          std::enable_if_t<non_ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void from_yaml(T &value, It &&it, It &&end) {
   detail::yaml_parse_item(value, it, end, 0);
 }

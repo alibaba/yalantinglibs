@@ -16,14 +16,14 @@ struct json_counter_metric_t {
   std::map<std::string, std::string> labels;
   std::variant<int64_t, double> value;
 };
-REFLECTION(json_counter_metric_t, labels, value);
+YLT_REFL(json_counter_metric_t, labels, value);
 struct json_counter_t {
   std::string name;
   std::string help;
   std::string type;
   std::vector<json_counter_metric_t> metrics;
 };
-REFLECTION(json_counter_t, name, help, type, metrics);
+YLT_REFL(json_counter_t, name, help, type, metrics);
 #endif
 
 template <typename T, typename value_type>

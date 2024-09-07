@@ -27,7 +27,7 @@ template <typename T>
 IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
                                 uint32_t field_no) {
   size_t pos = 0;
-  if constexpr (is_reflection_v<T>) {
+  if constexpr (ylt_refletable_v<T>) {
     size_t pos;
     uint32_t size = detail::decode_varint(pb_str, pos);
     pb_str = pb_str.substr(pos);
@@ -191,14 +191,16 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
   WireType wire_type = static_cast<WireType>(key & 0b0111);
   uint32_t field_number = key >> 3;
 #ifdef SEQUENTIAL_PARSE
-  constexpr static auto tp = get_members_tuple<T>();
+  static auto tp = detail::get_pb_members_tuple(t);
   constexpr size_t SIZE = std::tuple_size_v<std::decay_t<decltype(tp)>>;
   bool parse_done = false;
+  auto ptr = &t;
   detail::for_each_n(
-      [&](auto i) IGUANA__INLINE_LAMBDA {
-        constexpr auto val = std::get<decltype(i)::value>(tp);
+      [&, ptr](auto i) IGUANA__INLINE_LAMBDA {
+        auto val = std::get<decltype(i)::value>(tp);
         using sub_type = typename std::decay_t<decltype(val)>::sub_type;
         using value_type = typename std::decay_t<decltype(val)>::value_type;
+        constexpr bool is_variant_v = variant_v<value_type>;
         // sub_type is the element type when value_type is the variant type;
         // otherwise, they are the same.
         if (parse_done || field_number != val.field_no) {
@@ -207,11 +209,13 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
         pb_str = pb_str.substr(pos);
         if (wire_type != detail::get_wire_type<sub_type>())
           IGUANA_UNLIKELY { throw std::runtime_error("unmatched wire_type"); }
-        if constexpr (variant_v<value_type>) {
-          detail::parse_oneof(val.value(t), val, pb_str);
+
+        auto member_ptr = (value_type*)((char*)(ptr) + val.offset);
+        if constexpr (is_variant_v) {
+          detail::parse_oneof(*member_ptr, val, pb_str);
         }
         else {
-          detail::from_pb_impl(val.value(t), pb_str, val.field_no);
+          detail::from_pb_impl(*member_ptr, pb_str, val.field_no);
         }
         if (pb_str.empty()) {
           parse_done = true;
@@ -227,7 +231,7 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
 #endif
   while (true) {
     pb_str = pb_str.substr(pos);
-    constexpr static auto map = get_members<T>();
+    static auto map = detail::get_members(std::forward<T>(t));
     auto& member = map.at(field_number);
     std::visit(
         [&t, &pb_str, wire_type](auto& val) {

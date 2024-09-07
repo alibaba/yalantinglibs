@@ -52,9 +52,9 @@ struct BaseTypeMsg PUBLIC(BaseTypeMsg) {
            optional_enum == other.optional_enum;
   }
 };
-REFLECTION(BaseTypeMsg, optional_int32, optional_int64, optional_uint32,
-           optional_uint64, optional_float, optional_double, optional_bool,
-           optional_string, optional_enum);
+YLT_REFL(BaseTypeMsg, optional_int32, optional_int64, optional_uint32,
+         optional_uint64, optional_float, optional_double, optional_bool,
+         optional_string, optional_enum);
 
 struct IguanaTypeMsg PUBLIC(IguanaTypeMsg) {
   IguanaTypeMsg() = default;
@@ -83,8 +83,8 @@ struct IguanaTypeMsg PUBLIC(IguanaTypeMsg) {
            optional_sfixed64 == other.optional_sfixed64;
   }
 };
-REFLECTION(IguanaTypeMsg, optional_sint32, optional_sint64, optional_fixed32,
-           optional_fixed64, optional_sfixed32, optional_sfixed64);
+YLT_REFL(IguanaTypeMsg, optional_sint32, optional_sint64, optional_fixed32,
+         optional_fixed64, optional_sfixed32, optional_sfixed64);
 
 struct RepeatBaseTypeMsg PUBLIC(RepeatBaseTypeMsg) {
   RepeatBaseTypeMsg() = default;
@@ -110,9 +110,9 @@ struct RepeatBaseTypeMsg PUBLIC(RepeatBaseTypeMsg) {
   std::vector<Enum> repeated_enum;
 };
 
-REFLECTION(RepeatBaseTypeMsg, repeated_uint32, repeated_uint64, repeated_int32,
-           repeated_int64, repeated_float, repeated_double, repeated_string,
-           repeated_enum);
+YLT_REFL(RepeatBaseTypeMsg, repeated_uint32, repeated_uint64, repeated_int32,
+         repeated_int64, repeated_float, repeated_double, repeated_string,
+         repeated_enum);
 
 struct RepeatIguanaTypeMsg PUBLIC(RepeatIguanaTypeMsg) {
   RepeatIguanaTypeMsg() = default;
@@ -136,9 +136,9 @@ struct RepeatIguanaTypeMsg PUBLIC(RepeatIguanaTypeMsg) {
   std::vector<iguana::sfixed64_t> repeated_sfixed64;
 };
 
-REFLECTION(RepeatIguanaTypeMsg, repeated_sint32, repeated_sint64,
-           repeated_fixed32, repeated_fixed64, repeated_sfixed32,
-           repeated_sfixed64);
+YLT_REFL(RepeatIguanaTypeMsg, repeated_sint32, repeated_sint64,
+         repeated_fixed32, repeated_fixed64, repeated_sfixed32,
+         repeated_sfixed64);
 
 struct NestedMsg PUBLIC(NestedMsg) {
   NestedMsg() = default;
@@ -155,8 +155,8 @@ struct NestedMsg PUBLIC(NestedMsg) {
   std::vector<IguanaTypeMsg> repeat_iguna_msg;
   std::vector<RepeatBaseTypeMsg> repeat_repeat_base_msg;
 };
-REFLECTION(NestedMsg, base_msg, repeat_base_msg, iguana_type_msg,
-           repeat_iguna_msg, repeat_repeat_base_msg);
+YLT_REFL(NestedMsg, base_msg, repeat_base_msg, iguana_type_msg,
+         repeat_iguna_msg, repeat_repeat_base_msg);
 
 struct MapMsg PUBLIC(MapMsg) {
   MapMsg() = default;
@@ -170,8 +170,8 @@ struct MapMsg PUBLIC(MapMsg) {
   std::unordered_map<std::string, IguanaTypeMsg> str_iguana_type_msg_map{};
   std::map<int, RepeatBaseTypeMsg> int_repeat_base_msg_map{};
 };
-REFLECTION(MapMsg, sfix64_str_map, str_iguana_type_msg_map,
-           int_repeat_base_msg_map);
+YLT_REFL(MapMsg, sfix64_str_map, str_iguana_type_msg_map,
+         int_repeat_base_msg_map);
 
 struct BaseOneofMsg PUBLIC(BaseOneofMsg) {
   BaseOneofMsg() = default;
@@ -182,7 +182,7 @@ struct BaseOneofMsg PUBLIC(BaseOneofMsg) {
   std::variant<double, std::string, BaseTypeMsg> one_of;
   double optional_double;
 };
-REFLECTION(BaseOneofMsg, optional_int32, one_of, optional_double);
+YLT_REFL(BaseOneofMsg, optional_int32, one_of, optional_double);
 
 struct NestOneofMsg PUBLIC(NestOneofMsg) {
   NestOneofMsg() = default;
@@ -190,7 +190,7 @@ struct NestOneofMsg PUBLIC(NestOneofMsg) {
       : nest_one_of_msg(std::move(a)) {}
   std::variant<std::string, BaseOneofMsg> nest_one_of_msg;
 };
-REFLECTION(NestOneofMsg, nest_one_of_msg);
+YLT_REFL(NestOneofMsg, nest_one_of_msg);
 
 struct simple_t PUBLIC(simple_t) {
   simple_t() = default;
@@ -202,7 +202,7 @@ struct simple_t PUBLIC(simple_t) {
   int64_t d;
   std::string str;
 };
-REFLECTION(simple_t, a, b, c, d, str);
+YLT_REFL(simple_t, a, b, c, d, str);
 
 struct simple_t1 PUBLIC(simple_t1) {
   simple_t1() = default;
@@ -214,7 +214,7 @@ struct simple_t1 PUBLIC(simple_t1) {
   int64_t d;
   std::string_view str;
 };
-REFLECTION(simple_t1, a, b, c, d, str);
+YLT_REFL(simple_t1, a, b, c, d, str);
 
 enum Color : uint8_t { Red, Green, Blue };
 
@@ -228,7 +228,7 @@ struct simple_t2 PUBLIC(simple_t2) {
   int64_t d;
   std::string_view str;
 };
-REFLECTION(simple_t2, a, b, c, d, str);
+YLT_REFL(simple_t2, a, b, c, d, str);
 
 struct person {
   person() = default;
@@ -239,7 +239,7 @@ struct person {
   int age;
   double salary;
 };
-REFLECTION(person, id, name, age, salary);
+YLT_REFL(person, id, name, age, salary);
 
 struct rect PUBLIC(rect) {
   rect() = default;
@@ -250,7 +250,7 @@ struct rect PUBLIC(rect) {
   int32_t width = 11;
   int32_t height = 1;
 };
-REFLECTION(rect, x, y, width, height);
+YLT_REFL(rect, x, y, width, height);
 
 struct Vec3 PUBLIC(Vec3) {
   Vec3() = default;
@@ -259,7 +259,7 @@ struct Vec3 PUBLIC(Vec3) {
   float y;
   float z;
 
-  REFLECTION(Vec3, x, y, z);
+  YLT_REFL(Vec3, x, y, z);
 };
 
 struct Weapon PUBLIC(Weapon) {
@@ -268,7 +268,7 @@ struct Weapon PUBLIC(Weapon) {
   std::string name;
   int32_t damage;
 };
-REFLECTION(Weapon, name, damage);
+YLT_REFL(Weapon, name, damage);
 
 struct Monster PUBLIC(Monster) {
   Monster() = default;
@@ -293,8 +293,8 @@ struct Monster PUBLIC(Monster) {
   Weapon equipped;
   std::vector<Vec3> path;
 };
-REFLECTION(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
-           path);
+YLT_REFL(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
+         path);
 
 struct bench_int32 PUBLIC(bench_int32) {
   bench_int32() = default;
@@ -305,7 +305,7 @@ struct bench_int32 PUBLIC(bench_int32) {
   int32_t c;
   int32_t d;
 };
-REFLECTION(bench_int32, a, b, c, d);
+YLT_REFL(bench_int32, a, b, c, d);
 
 }  // namespace stpb
 

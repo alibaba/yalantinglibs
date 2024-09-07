@@ -17,7 +17,7 @@ bool operator==(const person& a, const person& b) {
   return a.name == b.name && a.age == b.age;
 }
 
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 class some_object {
   int id;
@@ -28,7 +28,7 @@ class some_object {
   some_object(int i, std::string str) : id(i), name(str) {}
   int get_id() const { return id; }
   std::string get_name() const { return name; }
-  REFLECTION(some_object, id, name);
+  YLT_REFL(some_object, id, name);
 };
 
 void test_inner_object() {
@@ -47,7 +47,7 @@ struct person1 {
   std::shared_ptr<std::string> name;
   std::unique_ptr<int64_t> age;
 };
-REFLECTION(person1, name, age);
+YLT_REFL(person1, name, age);
 
 void use_smart_pointer() {
   person1 p{std::make_shared<std::string>("tom"),

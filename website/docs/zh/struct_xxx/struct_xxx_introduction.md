@@ -31,7 +31,7 @@ struct person
     std::string_view name;
     int age;
 };
-REFLECTION(person, name, age); // 通过这个宏定义元数据让person 成为一个可反射对象
+YLT_REFL(person, name, age); // 通过这个宏定义元数据让person 成为一个可反射对象
 ```
 通过REFLECTION 宏定义元数据之后就可以一行代码实现json 的序列化与反序列化了。
 
@@ -78,7 +78,7 @@ struct some_obj {
     std::string_view name;
     struct_json::numeric_str age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test_view(){
     std::string_view str = "{\"name\":\"tom\", \"age\":20}";
@@ -114,7 +114,7 @@ struct some_obj {
     std::string_view name;
     int age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test() {
     person p = {"admin", 20};
@@ -139,7 +139,7 @@ struct person {
     std::string_view name;
     int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void test_pretty() {
     person p{"tom", 20};
@@ -167,11 +167,11 @@ struct book_t {
   std::string title;
   std::string author;
 };
-REFLECTION(book_t, title, author);
+YLT_REFL(book_t, title, author);
 struct library {
   struct_xml::xml_attr_t<book_t> book;
 };
-REFLECTION(library, book);
+YLT_REFL(library, book);
 TEST_CASE("test library with attr") {
   auto validator = [](library lib) {
     CHECK(lib.book.attr()["id"] == "1234");
@@ -210,7 +210,7 @@ struct some_obj {
     std::string_view name;
     int age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test() {
     std::string_view xml = R"(
@@ -266,7 +266,7 @@ class person {
     std::string name;
     int age;
 public:
-    REFLECTION(person, name, age);
+    YLT_REFL(person, name, age);
 };
 ```
 
@@ -285,7 +285,7 @@ struct plain_type_t {
   std::optional<float> num;
   std::optional<int> price;
 };
-REFLECTION(plain_type_t, isok, status, c, hasprice, num, price);
+YLT_REFL(plain_type_t, isok, status, c, hasprice, num, price);
 ```
 
 ```cpp
@@ -316,7 +316,7 @@ struct enum_t {
     Status a;
     Status b;
 };
-REFLECTION(enum_t, a, b);
+YLT_REFL(enum_t, a, b);
 
 namespace iguana {
     template <> struct enum_value<Status> {

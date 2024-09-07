@@ -13,8 +13,8 @@
 #include <variant>
 #include <vector>
 
+#include "common.hpp"
 #include "detail/pb_type.hpp"
-#include "reflection.hpp"
 #include "util.hpp"
 
 namespace iguana {
@@ -60,7 +60,7 @@ constexpr inline WireType get_wire_type() {
   }
   else if constexpr (std::is_same_v<T, std::string> ||
                      std::is_same_v<T, std::string_view> ||
-                     is_reflection_v<T> || is_sequence_container<T>::value ||
+                     ylt_refletable_v<T> || is_sequence_container<T>::value ||
                      is_map_container<T>::value) {
     return WireType::LengthDelimeted;
   }
@@ -419,6 +419,7 @@ IGUANA_INLINE size_t pb_oneof_size(Type&& t, Arr& size_arr) {
   int len = 0;
   std::visit(
       [&len, &size_arr](auto&& value) IGUANA__INLINE_LAMBDA {
+        using raw_value_type = decltype(value);
         using value_type =
             std::remove_const_t<std::remove_reference_t<decltype(value)>>;
         constexpr auto offset =
@@ -427,7 +428,7 @@ IGUANA_INLINE size_t pb_oneof_size(Type&& t, Arr& size_arr) {
             ((field_no + offset) << 3) |
             static_cast<uint32_t>(get_wire_type<value_type>());
         len = pb_key_value_size<variant_uint32_size_constexpr(key), false>(
-            std::forward<value_type>(value), size_arr);
+            std::forward<raw_value_type>(value), size_arr);
       },
       std::forward<Type>(t));
   return len;
@@ -438,9 +439,9 @@ IGUANA_INLINE size_t pb_oneof_size(Type&& t, Arr& size_arr) {
 template <size_t key_size, bool omit_default_val, typename Type, typename Arr>
 IGUANA_INLINE size_t pb_key_value_size(Type&& t, Arr& size_arr) {
   using T = std::remove_const_t<std::remove_reference_t<Type>>;
-  if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
+  if constexpr (ylt_refletable_v<T> || is_custom_reflection_v<T>) {
     size_t len = 0;
-    static constexpr auto tuple = get_members_tuple<T>();
+    static auto tuple = get_pb_members_tuple(std::forward<Type>(t));
     constexpr size_t SIZE = std::tuple_size_v<std::decay_t<decltype(tuple)>>;
     size_t pre_index = -1;
     if constexpr (!inherits_from_base_v<T> && key_size != 0) {
@@ -452,13 +453,13 @@ IGUANA_INLINE size_t pb_key_value_size(Type&& t, Arr& size_arr) {
           using field_type =
               std::tuple_element_t<decltype(i)::value,
                                    std::decay_t<decltype(tuple)>>;
-          constexpr auto value = std::get<decltype(i)::value>(tuple);
+          auto value = std::get<decltype(i)::value>(tuple);
           using U = typename field_type::value_type;
+          using sub_type = typename field_type::sub_type;
           auto& val = value.value(t);
           if constexpr (variant_v<U>) {
             constexpr auto offset =
-                get_variant_index<U, typename field_type::sub_type,
-                                  std::variant_size_v<U> - 1>();
+                get_variant_index<U, sub_type, std::variant_size_v<U> - 1>();
             if constexpr (offset == 0) {
               len += pb_oneof_size<value.field_no>(val, size_arr);
             }
@@ -540,7 +541,7 @@ IGUANA_INLINE size_t pb_key_value_size(Type&& t, Arr& size_arr) {
 template <bool skip_next = true, typename Type>
 IGUANA_INLINE size_t pb_value_size(Type&& t, uint32_t*& sz_ptr) {
   using T = std::remove_const_t<std::remove_reference_t<Type>>;
-  if constexpr (is_reflection_v<T> || is_custom_reflection_v<T>) {
+  if constexpr (ylt_refletable_v<T> || is_custom_reflection_v<T>) {
     if constexpr (inherits_from_base_v<T>) {
       return t.cache_size;
     }

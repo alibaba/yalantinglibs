@@ -557,7 +557,7 @@ struct point_t PUBLIC(point_t) {
   int x;
   double y;
 };
-REFLECTION(point_t, x, y);
+YLT_REFL(point_t, x, y);
 
 namespace my_space {
 struct inner_struct PUBLIC(inner_struct) {
@@ -568,10 +568,10 @@ struct inner_struct PUBLIC(inner_struct) {
   int z;
 };
 
-constexpr inline auto get_members_impl(inner_struct *) {
-  return std::make_tuple(struct_pb::field_t{&inner_struct::x, 7, "a"},
-                         struct_pb::field_t{&inner_struct::y, 9, "b"},
-                         struct_pb::field_t{&inner_struct::z, 12, "c"});
+inline auto get_members_impl(inner_struct *) {
+  return std::make_tuple(iguana::build_pb_field<&inner_struct::x, 7>("a"),
+                         iguana::build_pb_field<&inner_struct::y, 9>("b"),
+                         iguana::build_pb_field<&inner_struct::z, 12>("c"));
 }
 }  // namespace my_space
 
@@ -583,7 +583,7 @@ struct test_pb_st1 PUBLIC(test_pb_st1) {
   iguana::sint32_t y;
   iguana::sint64_t z;
 };
-REFLECTION(test_pb_st1, x, y, z);
+YLT_REFL(test_pb_st1, x, y, z);
 
 struct test_pb_st2 {
   test_pb_st2() = default;
@@ -593,7 +593,7 @@ struct test_pb_st2 {
   iguana::fixed32_t y;
   iguana::fixed64_t z;
 };
-REFLECTION(test_pb_st2, x, y, z);
+YLT_REFL(test_pb_st2, x, y, z);
 
 struct test_pb_st3 PUBLIC(test_pb_st3) {
   test_pb_st3() = default;
@@ -603,7 +603,7 @@ struct test_pb_st3 PUBLIC(test_pb_st3) {
   iguana::sfixed32_t y;
   iguana::sfixed64_t z;
 };
-REFLECTION(test_pb_st3, x, y, z);
+YLT_REFL(test_pb_st3, x, y, z);
 
 struct test_pb_st4 PUBLIC(test_pb_st3) {
   test_pb_st4() = default;
@@ -611,7 +611,7 @@ struct test_pb_st4 PUBLIC(test_pb_st3) {
   int x;
   std::string y;
 };
-REFLECTION(test_pb_st4, x, y);
+YLT_REFL(test_pb_st4, x, y);
 
 struct test_pb_st5 PUBLIC(test_pb_st5) {
   test_pb_st5() = default;
@@ -619,7 +619,7 @@ struct test_pb_st5 PUBLIC(test_pb_st5) {
   int x;
   std::string_view y;
 };
-REFLECTION(test_pb_st5, x, y);
+YLT_REFL(test_pb_st5, x, y);
 
 struct test_pb_st6 PUBLIC(test_pb_st6) {
   test_pb_st6() = default;
@@ -628,7 +628,7 @@ struct test_pb_st6 PUBLIC(test_pb_st6) {
   std::optional<int> x;
   std::optional<std::string> y;
 };
-REFLECTION(test_pb_st6, x, y);
+YLT_REFL(test_pb_st6, x, y);
 
 struct pair_t PUBLIC(pair_t) {
   pair_t() = default;
@@ -636,7 +636,7 @@ struct pair_t PUBLIC(pair_t) {
   int x;
   int y;
 };
-REFLECTION(pair_t, x, y);
+YLT_REFL(pair_t, x, y);
 
 struct message_t PUBLIC(message_t) {
   message_t() = default;
@@ -644,7 +644,7 @@ struct message_t PUBLIC(message_t) {
   int id;
   pair_t t;
 };
-REFLECTION(message_t, id, t);
+YLT_REFL(message_t, id, t);
 
 struct test_pb_st8 PUBLIC(test_pb_st8) {
   test_pb_st8() = default;
@@ -654,7 +654,7 @@ struct test_pb_st8 PUBLIC(test_pb_st8) {
   pair_t y;
   message_t z;
 };
-REFLECTION(test_pb_st8, x, y, z);
+YLT_REFL(test_pb_st8, x, y, z);
 
 struct test_pb_st9 PUBLIC(test_pb_st9) {
   test_pb_st9() = default;
@@ -664,7 +664,7 @@ struct test_pb_st9 PUBLIC(test_pb_st9) {
   std::vector<int> y;
   std::string z;
 };
-REFLECTION(test_pb_st9, x, y, z);
+YLT_REFL(test_pb_st9, x, y, z);
 
 struct test_pb_st10 PUBLIC(test_pb_st10) {
   test_pb_st10() = default;
@@ -674,7 +674,7 @@ struct test_pb_st10 PUBLIC(test_pb_st10) {
   std::vector<message_t> y;
   std::string z;
 };
-REFLECTION(test_pb_st10, x, y, z);
+YLT_REFL(test_pb_st10, x, y, z);
 
 struct test_pb_st11 PUBLIC(test_pb_st11) {
   test_pb_st11() = default;
@@ -685,7 +685,7 @@ struct test_pb_st11 PUBLIC(test_pb_st11) {
   std::vector<std::optional<message_t>> y;
   std::vector<std::string> z;
 };
-REFLECTION(test_pb_st11, x, y, z);
+YLT_REFL(test_pb_st11, x, y, z);
 
 struct test_pb_st12 PUBLIC(test_pb_st12) {
   test_pb_st12() = default;
@@ -697,7 +697,7 @@ struct test_pb_st12 PUBLIC(test_pb_st12) {
   std::map<int, std::string> y;
   std::map<std::string, int> z;
 };
-REFLECTION(test_pb_st12, x, y, z);
+YLT_REFL(test_pb_st12, x, y, z);
 
 struct test_pb_st13 PUBLIC(test_pb_st13) {
   test_pb_st13() = default;
@@ -708,7 +708,7 @@ struct test_pb_st13 PUBLIC(test_pb_st13) {
   std::map<int, message_t> y;
   std::string z;
 };
-REFLECTION(test_pb_st13, x, y, z);
+YLT_REFL(test_pb_st13, x, y, z);
 
 enum class colors_t { red, black };
 
@@ -721,7 +721,7 @@ struct test_pb_st14 PUBLIC(test_pb_st14) {
   colors_t y;
   level_t z;
 };
-REFLECTION(test_pb_st14, x, y, z);
+YLT_REFL(test_pb_st14, x, y, z);
 
 namespace client {
 struct person PUBLIC(person) {
@@ -731,7 +731,7 @@ struct person PUBLIC(person) {
   int64_t age;
 };
 
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 }  // namespace client
 
 struct my_struct PUBLIC(my_struct) {
@@ -741,7 +741,7 @@ struct my_struct PUBLIC(my_struct) {
   bool y;
   iguana::fixed64_t z;
 };
-REFLECTION(my_struct, x, y, z);
+YLT_REFL(my_struct, x, y, z);
 
 struct nest1 PUBLIC(nest1) {
   nest1() = default;
@@ -752,7 +752,7 @@ struct nest1 PUBLIC(nest1) {
   int var;
 };
 
-REFLECTION(nest1, name, value, var);
+YLT_REFL(nest1, name, value, var);
 
 struct numer_st PUBLIC(numer_st) {
   numer_st() = default;
@@ -761,7 +761,7 @@ struct numer_st PUBLIC(numer_st) {
   double b;
   float c;
 };
-REFLECTION(numer_st, a, b, c);
+YLT_REFL(numer_st, a, b, c);
 
 TEST_CASE("test reflection") {
   {
@@ -1075,7 +1075,7 @@ TEST_CASE("test members") {
   using namespace iguana::detail;
 
   my_space::inner_struct inner{41, 42, 43};
-  const auto &map = iguana::get_members<my_space::inner_struct>();
+  const auto &map = detail::get_members(inner);
   std::visit(
       [&inner](auto &member) mutable {
         CHECK(member.field_no == 9);
@@ -1085,7 +1085,7 @@ TEST_CASE("test members") {
       map.at(9));
 
   point_t pt{2, 3};
-  const auto &arr1 = iguana::get_members<point_t>();
+  const auto &arr1 = detail::get_members(pt);
   auto &val = arr1.at(1);
   std::visit(
       [&pt](auto &member) mutable {
@@ -1104,38 +1104,9 @@ struct test_variant PUBLIC(test_variant) {
   std::variant<double, std::string, int> y;
   double z;
 };
-REFLECTION(test_variant, x, y, z);
+YLT_REFL(test_variant, x, y, z);
 
 TEST_CASE("test variant") {
-  {
-    constexpr auto tp = iguana::get_members_tuple<test_variant>();
-    static_assert(std::get<0>(tp).field_no == 1);
-    static_assert(std::get<1>(tp).field_no == 2);
-    static_assert(std::get<2>(tp).field_no == 3);
-    static_assert(std::get<3>(tp).field_no == 4);
-    static_assert(std::get<4>(tp).field_no == 5);
-  }
-  {
-    constexpr static auto map = iguana::get_members<test_variant>();
-    static_assert(map.find(1) != map.end());
-    static_assert(map.find(2) != map.end());
-    static_assert(map.find(3) != map.end());
-    static_assert(map.find(4) != map.end());
-    auto val1 = map.find(2);
-    auto val2 = map.find(3);
-    std::visit(
-        [](auto &member) mutable {
-          CHECK(member.field_no == 2);
-          CHECK(member.field_name == "y");
-        },
-        val1->second);
-    std::visit(
-        [](auto &member) mutable {
-          CHECK(member.field_no == 3);
-          CHECK(member.field_name == "y");
-        },
-        val2->second);
-  }
   {
     test_variant st1 = {5, "Hello, variant!", 3.14};
     std::string str;
@@ -1167,7 +1138,7 @@ struct person PUBLIC(person) {
   int age;
   double salary;
 };
-REFLECTION(person, id, name, age, salary);
+YLT_REFL(person, id, name, age, salary);
 
 enum Color { Red = 0, Black = 2, Green = 4 };
 
@@ -1189,7 +1160,7 @@ struct vector_t {
   std::string name;
   std::optional<int> op_val;
 };
-REFLECTION(vector_t, id, color, variant, ids, pairs, strs, map, name, op_val);
+YLT_REFL(vector_t, id, color, variant, ids, pairs, strs, map, name, op_val);
 
 TEST_CASE("struct to proto") {
   {

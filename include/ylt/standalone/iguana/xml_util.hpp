@@ -1,8 +1,35 @@
 #pragma once
+#include "common.hpp"
 #include "detail/pb_type.hpp"
 #include "util.hpp"
 
 namespace iguana {
+template <typename T>
+struct iguana_required_struct;
+#define REQUIRED_IMPL(STRUCT_NAME, N, ...)             \
+  template <>                                          \
+  struct iguana::iguana_required_struct<STRUCT_NAME> { \
+    inline static constexpr auto requied_arr() {       \
+      std::array<std::string_view, N> arr_required = { \
+          WRAP_ARGS(CONCAT_NAME, 0, ##__VA_ARGS__)};   \
+      return arr_required;                             \
+    }                                                  \
+  };
+
+#define REQUIRED(STRUCT_NAME, ...) \
+  REQUIRED_IMPL(STRUCT_NAME, YLT_ARG_COUNT(__VA_ARGS__), __VA_ARGS__)
+
+template <class T, class = void>
+struct has_iguana_required_arr : std::false_type {};
+
+template <class T>
+struct has_iguana_required_arr<
+    T, std::void_t<decltype(iguana_required_struct<T>::requied_arr())>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool has_iguana_required_arr_v = has_iguana_required_arr<T>::value;
+
 template <typename T,
           typename map_type = std::unordered_map<std::string, std::string>>
 class xml_attr_t {
@@ -48,6 +75,33 @@ struct is_cdata_t : std::false_type {};
 
 template <typename T>
 struct is_cdata_t<xml_cdata_t<T>> : std::true_type {};
+
+template <std::size_t index, template <typename...> typename Condition,
+          typename Tuple>
+constexpr int element_index_helper() {
+  if constexpr (index == std::tuple_size_v<Tuple>) {
+    return index;
+  }
+  else {
+    using item_type =
+        ylt::reflection::remove_cvref_t<std::tuple_element_t<index, Tuple>>;
+
+    return Condition<item_type>::value
+               ? index
+               : element_index_helper<index + 1, Condition, Tuple>();
+  }
+}
+
+template <template <typename...> typename Condition, typename T>
+constexpr int tuple_element_index() {
+  using Tuple = decltype(ylt::reflection::object_to_tuple(std::declval<T>()));
+  return element_index_helper<0, Condition, Tuple>();
+}
+
+template <template <typename...> typename Condition, typename T>
+constexpr size_t get_type_index() {
+  return tuple_element_index<Condition, T>();
+}
 
 template <typename T>
 constexpr inline bool cdata_v = is_cdata_t<std::remove_cvref_t<T>>::value;

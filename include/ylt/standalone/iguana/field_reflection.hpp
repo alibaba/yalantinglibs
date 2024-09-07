@@ -59,6 +59,12 @@ inline constexpr std::string_view enum_string() {
   return s1;
 }
 
+template <auto field>
+inline constexpr std::string_view field_string() {
+  constexpr std::string_view raw_name = enum_string<field>();
+  return raw_name.substr(raw_name.rfind(":") + 1);
+}
+
 #if defined(__clang__) && (__clang_major__ >= 17)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wenum-constexpr-conversion"

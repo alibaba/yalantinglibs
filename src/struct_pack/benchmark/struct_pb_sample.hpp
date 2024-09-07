@@ -15,14 +15,14 @@ struct person : public iguana::base_impl<person> {
   int age;
   double salary;
 };
-REFLECTION(person, id, name, age, salary);
+YLT_REFL(person, id, name, age, salary);
 
 struct persons : public iguana::base_impl<persons> {
   persons() = default;
   explicit persons(std::vector<person> l) : list(std::move(l)) {}
   std::vector<person> list;
 };
-REFLECTION(persons, list);
+YLT_REFL(persons, list);
 
 struct rect : public iguana::base_impl<rect> {
   rect() = default;
@@ -33,14 +33,14 @@ struct rect : public iguana::base_impl<rect> {
   int32_t width = 11;
   int32_t height = 1;
 };
-REFLECTION(rect, x, y, width, height);
+YLT_REFL(rect, x, y, width, height);
 
 struct rects : public iguana::base_impl<rects> {
   rects() = default;
   explicit rects(std::vector<rect> l) : list(std::move(l)) {}
   std::vector<rect> list;
 };
-REFLECTION(rects, list);
+YLT_REFL(rects, list);
 
 struct Vec3 : public iguana::base_impl<Vec3> {
   Vec3() = default;
@@ -49,7 +49,7 @@ struct Vec3 : public iguana::base_impl<Vec3> {
   float y;
   float z;
 
-  REFLECTION(Vec3, x, y, z);
+  YLT_REFL(Vec3, x, y, z);
 };
 
 struct Weapon : public iguana::base_impl<Weapon> {
@@ -58,7 +58,7 @@ struct Weapon : public iguana::base_impl<Weapon> {
   std::string name;
   int32_t damage;
 };
-REFLECTION(Weapon, name, damage);
+YLT_REFL(Weapon, name, damage);
 
 enum Color : uint8_t { Red, Green, Blue };
 
@@ -76,15 +76,15 @@ struct Monster : public iguana::base_impl<Monster> {
   Weapon equipped;
   std::vector<Vec3> path;
 };
-REFLECTION(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
-           path);
+YLT_REFL(Monster, pos, mana, hp, name, inventory, color, weapons, equipped,
+         path);
 
 struct Monsters : public iguana::base_impl<Monsters> {
   Monsters() = default;
   explicit Monsters(std::vector<Monster> l) : list(std::move(l)) {}
   std::vector<Monster> list;
 };
-REFLECTION(Monsters, list);
+YLT_REFL(Monsters, list);
 
 inline auto create_rects(size_t object_count) {
   rect rc{1, 0, 11, 1};
