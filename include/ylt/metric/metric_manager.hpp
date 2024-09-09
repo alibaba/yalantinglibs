@@ -28,14 +28,8 @@ class manager_helper {
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
     std::string str;
     for (auto& m : metrics) {
-      if (m->metric_type() == MetricType::Summary) {
-        async_simple::coro::syncAwait(m->serialize_async(str));
-      }
-      else {
-        m->serialize(str);
-      }
+      m->serialize(str);
     }
-
     return str;
   }
 
@@ -49,13 +43,7 @@ class manager_helper {
     str.append("[");
     for (auto& m : metrics) {
       size_t start = str.size();
-      if (m->metric_type() == MetricType::Summary) {
-        async_simple::coro::syncAwait(m->serialize_to_json_async(str));
-      }
-      else {
-        m->serialize_to_json(str);
-      }
-
+      m->serialize_to_json(str);
       if (str.size() > start)
         str.append(",");
     }

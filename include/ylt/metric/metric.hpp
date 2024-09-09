@@ -166,19 +166,6 @@ class metric_t {
   virtual void serialize_to_json(std::string& str) {}
 #endif
 
-  // only for summary
-  virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
-    co_return;
-  }
-
-#ifdef CINATRA_ENABLE_METRIC_JSON
-  // only for summary
-  virtual async_simple::coro::Lazy<void> serialize_to_json_async(
-      std::string& out) {
-    co_return;
-  }
-#endif
-
   template <typename T>
   T* as() {
     return dynamic_cast<T*>(this);
