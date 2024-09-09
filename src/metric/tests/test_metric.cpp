@@ -1,3 +1,4 @@
+#include <cmath>
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <chrono>
 #include <random>
@@ -81,19 +82,16 @@ TEST_CASE("serialize zero") {
 
   std::map<std::string, std::string> customMap = {};
   auto summary = std::make_shared<summary_t>(
-      "test", "help",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      customMap);
-  async_simple::coro::syncAwait(summary->serialize_async(str));
+      "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
+  summary->serialize(str);
   CHECK(str.empty());
-  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  summary->serialize_to_json(str);
   CHECK(str.empty());
   summary->observe(0);
-  async_simple::coro::syncAwait(summary->serialize_async(str));
+  summary->serialize(str);
   CHECK(!str.empty());
   str.clear();
-  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  summary->serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
 }
@@ -455,10 +453,7 @@ TEST_CASE("test no lable") {
   {
     std::map<std::string, std::string> customMap = {};
     auto summary = std::make_shared<summary_t>(
-        "test", "help",
-        summary_t::Quantiles{
-            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-        customMap);
+        "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
     summary->observe(100);
   }
   auto g_counter = g_pair.second;
@@ -686,22 +681,21 @@ TEST_CASE("test histogram") {
 }
 
 TEST_CASE("test summary") {
-  summary_t summary{"test_summary",
-                    "summary help",
-                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}};
+  summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 0.99}};
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
   for (int i = 0; i < 50; i++) {
     summary.observe(distr(gen));
   }
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
-  CHECK(async_simple::coro::syncAwait(summary.get_count()) == 50);
-  CHECK(async_simple::coro::syncAwait(summary.get_sum()) > 0);
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  CHECK(sum > 0);
   CHECK(str.find("test_summary") != std::string::npos);
   CHECK(str.find("test_summary_count") != std::string::npos);
   CHECK(str.find("test_summary_sum") != std::string::npos);
@@ -709,7 +703,133 @@ TEST_CASE("test summary") {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string str_json;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(str_json));
+  summary.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
+}
+
+TEST_CASE("test summary with INF") {
+  summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 0.99}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(INFINITY);
+  }
+  std::string str;
+  summary.serialize(str);
+  std::cout << str;
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  CHECK(sum < 1e99);
+  CHECK(str.find("test_summary") != std::string::npos);
+  CHECK(str.find("test_summary_count") != std::string::npos);
+  CHECK(str.find("test_summary_sum") != std::string::npos);
+  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  summary.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
+}
+
+TEST_CASE("test summary with NAN") {
+  summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 0.99}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(NAN);
+  }
+  std::string str;
+  summary.serialize(str);
+  std::cout << str;
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  CHECK(sum < 1e99);
+  CHECK(str.find("test_summary") != std::string::npos);
+  CHECK(str.find("test_summary_count") != std::string::npos);
+  CHECK(str.find("test_summary_sum") != std::string::npos);
+  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  summary.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
+}
+
+TEST_CASE("test summary with illegal quantities") {
+  summary_t summary{
+      "test_summary", "summary help", {-1, 0.9, 0.5, 0.9, 0, 0.95, 1.1}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 100; i++) {
+    summary.observe(i);
+  }
+  std::string str;
+  summary.serialize(str);
+  std::cout << str;
+  double sum;
+  uint64_t cnt;
+  auto result = summary.get_rates(sum, cnt);
+  CHECK(cnt == 100);
+  CHECK(sum > 0);
+  CHECK(str.find("test_summary") != std::string::npos);
+  CHECK(str.find("test_summary_count") != std::string::npos);
+  CHECK(str.find("test_summary_sum") != std::string::npos);
+  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+  CHECK(result[0] < 0);
+  CHECK(result[1] < 0);
+  CHECK(result[result.size() - 1] > result[result.size() - 2]);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  summary.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
+}
+
+TEST_CASE("test summary with many quantities") {
+  std::vector<double> q;
+  for (int i = 0; i <= 1000; ++i) {
+    q.push_back(1.0 * i / 1000);
+  }
+  summary_t summary{"test_summary", "summary help", q};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(i);
+  }
+  std::string str;
+  summary.serialize(str);
+  std::cout << str;
+  double sum;
+  uint64_t cnt;
+  auto result = summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  CHECK(sum > 0);
+  CHECK(str.find("test_summary") != std::string::npos);
+  CHECK(str.find("test_summary_count") != std::string::npos);
+  CHECK(str.find("test_summary_sum") != std::string::npos);
+  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+  CHECK(result[1] == result[2]);
+  CHECK(result[result.size() - 2] == result[result.size() - 3]);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   CHECK(str_json.find("\"0.9\":") != std::string::npos);
 #endif
@@ -991,9 +1111,7 @@ TEST_CASE("test get metric by static labels and label") {
   auto map =
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}};
   auto [ec1, s1] = metric_mgr::instance().create_metric_static<summary_t>(
-      "http_req_static_summary", "help",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   s1->observe(23);
 
@@ -1003,9 +1121,7 @@ TEST_CASE("test get metric by static labels and label") {
   {
     using metric_mgr2 = static_metric_manager<test_id_t<19>>;
     auto [ec, s2] = metric_mgr2::instance().create_metric_static<summary_t>(
-        "http_req_static_summary2", "help",
-        summary_t::Quantiles{
-            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+        "http_req_static_summary2", "help", std::vector{0.5, 0.9, 0.95, 0.99},
         map);
     s2->observe(23);
 
@@ -1084,9 +1200,7 @@ TEST_CASE("test get metric by dynamic labels") {
 
   auto [ec7, s1] =
       metric_mgr::instance().create_metric_dynamic<dynamic_summary_2>(
-          "http_req_static_summary", "help",
-          summary_t::Quantiles{
-              {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+          "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
           std::array<std::string, 2>{"method", "url"});
   s1->observe({"GET", "/"}, 23);
 
@@ -1184,11 +1298,10 @@ TEST_CASE("test histogram serialize with static labels") {
 }
 
 TEST_CASE("test summary with dynamic labels") {
-  basic_dynamic_summary<2> summary{
-      "test_summary",
-      "summary help",
-      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      {"method", "url"}};
+  basic_dynamic_summary<2> summary{"test_summary",
+                                   "summary help",
+                                   {0.5, 0.9, 0.95, 0.99},
+                                   {"method", "url"}};
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
@@ -1201,17 +1314,17 @@ TEST_CASE("test summary with dynamic labels") {
 
   double sum;
   uint64_t count;
-  auto rates = async_simple::coro::syncAwait(
-      summary.get_rates({"GET", "/"}, sum, count));
+
+  auto rates = summary.get_rates({"GET", "/"}, sum, count);
   std::cout << rates.size() << "\n";
 
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
 }
@@ -1220,7 +1333,7 @@ TEST_CASE("test summary with static labels") {
   summary_t summary{
       "test_summary",
       "summary help",
-      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      {0.5, 0.9, 0.95, 0.99},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}}};
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -1233,19 +1346,19 @@ TEST_CASE("test summary with static labels") {
 
   double sum;
   uint64_t count;
-  auto rates = async_simple::coro::syncAwait(summary.get_rates(sum, count));
+  auto rates = summary.get_rates(sum, count);
   std::cout << rates.size() << "\n";
 
-  auto rates1 = async_simple::coro::syncAwait(summary.get_rates(sum, count));
+  auto rates1 = summary.get_rates(sum, count);
   CHECK(rates == rates1);
 
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
 }

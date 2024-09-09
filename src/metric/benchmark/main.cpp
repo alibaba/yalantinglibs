@@ -145,11 +145,8 @@ void bench_many_labels_serialize(size_t COUNT, bool to_json = false) {
 
 void bench_many_labels_qps_summary(size_t thd_num,
                                    std::chrono::seconds duration) {
-  dynamic_summary_2 summary(
-      "qps2", "",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      std::array<std::string, 2>{"method", "url"});
+  dynamic_summary_2 summary("qps2", "", {0.5, 0.9, 0.95, 0.99},
+                            std::array<std::string, 2>{"method", "url"});
   std::atomic<bool> stop = false;
   std::vector<std::thread> vec;
   std::array<std::string, 2> arr{"/test", "200"};
@@ -182,32 +179,11 @@ void bench_many_labels_qps_summary(size_t thd_num,
   for (auto& thd : vec) {
     thd.join();
   }
-
-  start = std::chrono::system_clock::now();
-  size_t last = summary.size_approx();
-  std::cout << "total size: " << last << "\n";
-  while (true) {
-    std::this_thread::sleep_for(1s);
-    size_t current = summary.size_approx();
-    if (current == 0) {
-      break;
-    }
-
-    std::cout << last - current << "\n";
-    last = current;
-  }
-  end = std::chrono::system_clock::now();
-  elaps = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-              .count();
-  std::cout << "consume " << elaps << "ms\n";
 }
 
 void bench_many_labels_serialize_summary(size_t COUNT, bool to_json = false) {
-  dynamic_summary_2 summary(
-      "qps2", "",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      std::array<std::string, 2>{"method", "url"});
+  dynamic_summary_2 summary("qps2", "", {0.5, 0.9, 0.95, 0.005},
+                            std::array<std::string, 2>{"method", "url"});
   std::string val(36, ' ');
   for (size_t i = 0; i < COUNT; i++) {
     strcpy(val.data(), std::to_string(i).data());
@@ -218,10 +194,10 @@ void bench_many_labels_serialize_summary(size_t COUNT, bool to_json = false) {
   std::string str;
   auto start = std::chrono::system_clock::now();
   if (to_json) {
-    async_simple::coro::syncAwait(summary.serialize_to_json_async(str));
+    summary.serialize_to_json(str);
   }
   else {
-    async_simple::coro::syncAwait(summary.serialize_async(str));
+    summary.serialize(str);
   }
 
   auto end = std::chrono::system_clock::now();
