@@ -218,7 +218,7 @@ class summary_impl {
       --arr[pos];
       int upper = (pos < bucket_size / 2) ? (bucket_size / 2) : (bucket_size);
       int lower = (pos < bucket_size / 2) ? (0) : (bucket_size / 2);
-      for (int delta = 1, lim = std::max(upper - pos, pos - lower + 1);
+      for (int delta = 1, lim = (std::max)(upper - pos, pos - lower + 1);
            delta < lim; ++delta) {
         if (pos + delta < upper) {
           if (++arr[pos + delta] <= near_uint32_max) {
