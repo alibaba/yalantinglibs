@@ -160,7 +160,7 @@ constexpr auto calculate_padding_size() {
   std::array<std::size_t, struct_pack::members_count<T> + 1> padding_size{};
   std::size_t offset = 0;
   for_each<T, calculate_padding_size_impl>(offset, padding_size);
-  if (offset % align::alignment_v<T>) {
+  if (align::alignment_v < T >> 0 && offset % align::alignment_v<T>) {
     padding_size[struct_pack::members_count<T>] =
         align::alignment_v<T> - offset % align::alignment_v<T>;
   }
