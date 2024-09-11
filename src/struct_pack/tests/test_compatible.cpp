@@ -1311,11 +1311,10 @@ TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
 }
 
 struct only_compatible {
-  int i;
   struct_pack::compatible<int> hi;
 };
 TEST_CASE("test only_compatible") {
-  only_compatible o{{0}};
+  only_compatible o{0};
   auto buffer = struct_pack::serialize(o);
   auto result = struct_pack::deserialize<only_compatible>(buffer);
   CHECK(result.has_value());
