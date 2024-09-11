@@ -296,7 +296,7 @@ struct ylt::reflection::ylt_alias_struct<next_obj_t> {
   static constexpr std::string_view get_alias_struct_name() { return "next"; }
 
   static constexpr auto get_alias_field_names() {
-    return std::make_tuple(field_alias_t<0>{"w"}, field_alias_t<1>{"h"});
+    return std::array{field_alias_t{"w", 0}, field_alias_t{"h", 1}};
   }
 };
 
@@ -312,7 +312,7 @@ struct ylt::reflection::ylt_alias_struct<out_object> {
   static constexpr std::string_view get_alias_struct_name() { return "qi"; }
 
   static constexpr auto get_alias_field_names() {
-    return std::make_tuple(field_alias_t<0>{"i"}, field_alias_t<1>{"na"});
+    return std::array{field_alias_t{"i", 0}, field_alias_t{"na", 1}};
   }
 };
 

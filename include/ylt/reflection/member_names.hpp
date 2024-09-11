@@ -88,8 +88,8 @@ inline constexpr bool has_alias_struct_name_v =
     has_alias_struct_names_t<T>::value;
 
 template <typename T, typename U, size_t... Is>
-inline constexpr void init_arr_with_tuple(const T& tp, U& arr,
-                                          std::index_sequence<Is...>) {
+inline constexpr void init_arr_with_tuple(U& arr, std::index_sequence<Is...>) {
+  constexpr auto tp = struct_to_tuple<T>();
   ((arr[Is] = internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
    ...);
 }
@@ -106,10 +106,9 @@ get_member_names() {
     return type::refl_member_names(ylt::reflection::identity<type>{});
   }
   else {
-    constexpr auto tp = struct_to_tuple<T>();
-
     std::array<std::string_view, Count> arr;
-#if __cplusplus >= 202002L || defined(_MSC_VER)
+#if __cplusplus >= 202002L
+    constexpr auto tp = struct_to_tuple<T>();
     [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
@@ -117,7 +116,7 @@ get_member_names() {
     }
     (std::make_index_sequence<Count>{});
 #else
-    init_arr_with_tuple(tp, arr, std::make_index_sequence<Count>{});
+    init_arr_with_tuple<T>(arr, std::make_index_sequence<Count>{});
 #endif
     return arr;
   }
@@ -133,7 +132,7 @@ inline constexpr auto get_member_names_map_impl(T& name_arr,
 template <typename T>
 inline constexpr auto get_member_names_map() {
   constexpr auto name_arr = get_member_names<T>();
-#if __cplusplus >= 202002L || defined(_MSC_VER)
+#if __cplusplus >= 202002L
   return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
         {name_arr[Is], Is}...};
@@ -210,26 +209,15 @@ inline constexpr size_t index_of() {
   return names.size();
 }
 
-template <size_t Idx>
 struct field_alias_t {
   std::string_view alias_name;
-  inline static constexpr auto index = Idx;
+  size_t index;
 };
-
-template <typename Tuple, size_t... Is>
-inline constexpr auto get_alias_field_names_impl(Tuple& tp,
-                                                 std::index_sequence<Is...>) {
-  return std::array<std::pair<size_t, std::string_view>, sizeof...(Is)>{
-      std::make_pair(std::tuple_element_t<Is, std::decay_t<Tuple>>::index,
-                     std::get<Is>(tp).alias_name)...};
-}
 
 template <typename T>
 inline constexpr auto get_alias_field_names() {
   if constexpr (internal::has_alias_field_names_v<T>) {
-    constexpr auto tp = ylt_alias_struct<T>::get_alias_field_names();
-    return get_alias_field_names_impl(
-        tp, std::make_index_sequence<std::tuple_size_v<decltype(tp)>>{});
+    return ylt_alias_struct<T>::get_alias_field_names();
   }
   else {
     return std::array<std::string_view, 0>{};
@@ -254,7 +242,7 @@ get_member_names() {
   if constexpr (internal::has_alias_field_names_v<U>) {
     constexpr auto alias_arr = get_alias_field_names<U>();
     for (size_t i = 0; i < alias_arr.size(); i++) {
-      arr[alias_arr[i].first] = alias_arr[i].second;
+      arr[alias_arr[i].index] = alias_arr[i].alias_name;
     }
   }
   return arr;
