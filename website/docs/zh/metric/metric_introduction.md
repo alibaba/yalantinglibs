@@ -1,5 +1,5 @@
 # metric 介绍
-metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。
+metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。yalantinglibs提供了一系列高性能且线程安全的统计工具。
 
 ## Counter 计数器类型
 Counter是一个累计类型的数据指标，它代表单调递增的计数器，其值只能在重新启动时增加或重置为 0。例如，您可以使用计数器来表示已响应的请求数，已完成或出错的任务数。
@@ -52,7 +52,7 @@ http_request_duration_seconds_count 144320
 
 基本数据指标名称为basename的 summary 类型数据指标，在数据采集期间会显示多个时间序列：
 
-流观察到的事件的 `φ-quantiles(0≤φ≤1)`，显示为`basename{quantile="<φ>"}`
+流观察到的事件的 `φ-quantiles(0<φ<=1)`，显示为`basename{quantile="<φ>"}`
 
 所有观测值的总和，显示为basename_sum
 
@@ -238,9 +238,6 @@ class metric_t {
   // 序列化，调用派生类实现序列化
   virtual void serialize(std::string& str);
 
-  // 给summary专用的api，序列化，调用派生类实现序列化
-  virtual async_simple::coro::Lazy<void> serialize_async(std::string& out);
-
   // 序列化到json
   void serialize_to_json(std::string& str);
 
@@ -398,7 +395,6 @@ using my_metric_manager = metric_manager_t<my_tag>;
 - 总的metric数量
 - 总的label数量
 - metric的内存大小
-- summary失败的数量
 
 
 # metric_collector_t
@@ -511,18 +507,64 @@ test_count 3.000000
 ```
 
 # summary
+
+summary可以用于统计一组数据的百分位数，如统计中位数，p95，p99延迟等。summary同时也统计了数据的总和与个数。需要注意的是，出于性能和内存占用考虑，百分位和总和的统计结果并不完全精确，一般情况下会有1%以内的误差。
+
+## 内存占用
+
+summary内部采用浮点数分桶的策略进行统计。内部的桶被分为128段，只有当插入的数据命中了该段桶时才会动态分配内存。summary的内存上限为130KB，不过通常情况下，输入数据只会命中部分的分段，此时的内存占用会小得多。
+
+## 并发与性能
+
+summary的读写操作均为线程安全的。写操作的时间复杂度为O(1), 读操作的时间复杂度为O(N), N与统计数据的总数无关，只取决于统计数据的数字包含的数量级。最坏情况下读操作的耗时约为2^14。
+
+在测试环境中，不同数据下单线程读性能从1200万到3万QPS不等。写入速度可达1800万QPS。
+
+在多线程测试（100线程）中，不同数据下多线程读性能从1600万到150万QPS不等。多线程写入速度与插入数据的分布有关（同时插入相同或接近的数字会导致数据共享），随机插入1到1000的数字，写入速度可达6500万QPS。
+
+## 数据的过期
+
+summary在构造时可以设置过期时间，过期数据会在读写时被惰性删除，不会影响到统计结果，并且过期后其占用的内存会被清除。
+
+设置过期时间为0意味着禁用过期策略，这可以提升summary一倍的读速度，并在短期内降低内存占用。然而，如果summary对象长时间未被析构，由于未设置数据的过期时间，其占用的内存不会被回收。
+
+我们可以调用`refresh()`函数主动清除过期数据。
+
+## 误差分析
+
+summary每次写入的数据会被映射到一个14位的浮点数中，其指数位数为7位，小数位数为6位
+
+### 精度误差
+
+由于小数位数只有6位，在映射的过程中会引入相对比例不超过1/128的浮点数误差，可以认为误差小于1%。
+
+### 大数误差
+
+由于该浮点数的指数位只有7位，其只能统计(-2^64,2^64)范围内的数字，超过该数据范围的数字会被视作2^64或-2^64。此外，nan也会被当做2^64处理。
+
+### 小数误差
+
+由于小数位数只有6位，因此绝对值小于2^-63次方的数字，会被当做0处理。
+
+### 大量重复数字导致的误差
+
+为节省内存空间，summary内部的每个桶仅能存储一个32位数字，因此，在一个过期时间周期内同一个数字被插入超过2^32次后，为了避免溢出，新的数字会被插入到与该数字临近的桶（相差约1%）中，这可能导致一定误差。
+
+### 过期时间误差
+
+由于summary采用的是维护前后台两个时间窗口来更新数据的手段，超过过期时间一半以上的数据可能会被提早删除。
+
 ## api
 
 ```cpp
-// Quantiles: 百分位和误差, 如：{{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}
-// 调用此函数则metric为静态metric 指标
-summary_t(std::string name, std::string help, Quantiles quantiles);
 
-// labels_name: 标签名，调用此函数则metric为动态metric 指标
-summary_t(std::string name, std::string help, Quantiles quantiles, std::vector<std::string> labels_name);
+summary_t(std::string name, std::string help, std::vector<double> quantiles,std::chrono::seconds expire_time = std::chrono::seconds{60});
 
-// static_labels：静态标签，调用此函数则metric为静态metric 指标
-summary_t(std::string name, std::string help, Quantiles quantiles, std::map<std::string, std::string> static_labels);
+// static_labels: 该summary的labels
+summary_t(std::string name, std::string help, std::vector<double> quantiles, std::map<std::string, std::string> static_labels,std::chrono::seconds expire_time = std::chrono::seconds{60});
+
+// labels_name: 标签名,动态metric 指标
+basic_dynamic_summary_t<N>(std::string name, std::string help, std::vector<double> quantiles, std::array<std::string, N> labels_name);
 
 // 往summary_t插入数据，会自动计算百分位的数量
 void observe(double value);
@@ -530,61 +572,26 @@ void observe(double value);
 // 根据标签值(动态或静态的标签值，依据构造函数决定是动态还是静态metric)，往summary_t插入数据，会自动计算百分位的数量
 void observe(std::vector<std::string> labels_value, double value);
 
-// 获取分位数结果, sum 和count
-async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
-                                                        uint64_t &count)
-// 根据标签获取分位数结果, sum 和count
-async_simple::coro::Lazy<std::vector<double>> get_rates(
-    const std::vector<std::string> &labels_value, double &sum,
-    uint64_t &count);
+// 获取分位数结果, sum 和count可选
+std::vector<double> get_rates(double &sum,uint64_t &count)
 
-// 获取总和
-async_simple::coro::Lazy<double> get_sum();
+// 按metric格式序列化
+void serialize(std::string &str);
 
-// 获取插入数据的个数
-async_simple::coro::Lazy<uint64_t> get_count();
-
-// 序列化
-async_simple::coro::Lazy<void> serialize_async(std::string &str);
+// 按json格式序列化
+void serialize_to_json(std::string &str);
 ```
 
 ## 例子
+
+创建Summary时需要指定需要统计的分位数列表，分位数的范围在0到1之间。
 ```cpp
   summary_t summary{"test_summary",
                     "summary help",
-                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distr(1, 100);
-  for (int i = 0; i < 50; i++) {
-    summary.observe(distr(gen));
+                    {0.5,0.9,0.95,0.99, 0.001}};
+  for (int i = 1; i <= 100; i++) {
+    summary.observe(i);
   }
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
-  std::cout << str;
-  CHECK(async_simple::coro::syncAwait(summary.get_count()) == 50);
-  CHECK(async_simple::coro::syncAwait(summary.get_sum()) > 0);
-  CHECK(str.find("test_summary") != std::string::npos);
-  CHECK(str.find("test_summary_count") != std::string::npos);
-  CHECK(str.find("test_summary_sum") != std::string::npos);
-  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
-```
-summary 百分位的计算相比其它指标是最耗时的，应该避免在关键路径上使用它以免对性能造成影响。
-
-创建Summary时需要指定分位数和误差，分位数在0到1之间，左右都为闭区间，比如p50就是一个中位数，p99指中位数为0.99的分位数。
-```cpp
-  summary_t summary{"test_summary",
-                    "summary help",
-                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distr(1, 100);
-  for (int i = 0; i < 50; i++) {
-    summary.observe(distr(gen));
-  }
-
   std::string str;
   summary.serialize(str);
   std::cout << str;
@@ -593,12 +600,12 @@ summary 百分位的计算相比其它指标是最耗时的，应该避免在关
 ```
 # HELP test_summary summary help
 # TYPE test_summary summary
-test_summary{quantile="0.500000"} 45.000000
-test_summary{quantile="0.900000"} 83.000000
-test_summary{quantile="0.950000"} 88.000000
-test_summary{quantile="0.990000"} 93.000000
-test_summary_sum 2497.000000
-test_summary_count 50
+test_summary{quantile="0.500000"} 50.000000
+test_summary{quantile="0.900000"} 90.000000
+test_summary{quantile="0.950000"} 95.000000
+test_summary{quantile="0.990000"} 99.000000
+test_summary_sum 5050.000000
+test_summary_count 100
 ```
 
 ## 配置prometheus 前端

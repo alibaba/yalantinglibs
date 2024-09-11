@@ -213,7 +213,6 @@ class dynamic_metric : public metric_t {
 };
 
 inline auto g_user_metric_label_count = new thread_local_value<int64_t>(2);
-inline std::atomic<int64_t> g_summary_failed_count = 0;
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;

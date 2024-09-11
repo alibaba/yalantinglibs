@@ -267,6 +267,10 @@ class summary_impl {
     increase(data, encode(value));
     return;
   }
+  void refresh() {
+    refresh<true>();
+    return;
+  }
   struct data_delete_guard {
     summary_impl* self_;
     data_delete_guard(summary_impl* self) : self_(self) {
