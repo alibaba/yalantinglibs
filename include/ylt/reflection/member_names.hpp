@@ -88,8 +88,8 @@ inline constexpr bool has_alias_struct_name_v =
     has_alias_struct_names_t<T>::value;
 
 template <typename T, typename U, size_t... Is>
-inline constexpr void init_arr_with_tuple(const T& tp, U& arr,
-                                          std::index_sequence<Is...>) {
+inline constexpr void init_arr_with_tuple(U& arr, std::index_sequence<Is...>) {
+  constexpr auto tp = struct_to_tuple<T>();
   ((arr[Is] = internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
    ...);
 }
@@ -106,10 +106,9 @@ get_member_names() {
     return type::refl_member_names(ylt::reflection::identity<type>{});
   }
   else {
-    constexpr auto tp = struct_to_tuple<T>();
-
     std::array<std::string_view, Count> arr;
 #if __cplusplus >= 202002L
+    constexpr auto tp = struct_to_tuple<T>();
     [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
@@ -117,7 +116,7 @@ get_member_names() {
     }
     (std::make_index_sequence<Count>{});
 #else
-    init_arr_with_tuple(tp, arr, std::make_index_sequence<Count>{});
+    init_arr_with_tuple<T>(arr, std::make_index_sequence<Count>{});
 #endif
     return arr;
   }
