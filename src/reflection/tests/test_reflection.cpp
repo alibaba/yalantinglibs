@@ -433,13 +433,13 @@ YLT_REFL_PRIVATE(private_struct, a, b);
 TEST_CASE("test visit private") {
   const Bank_t bank(1, "ok");
   constexpr auto tp = get_private_ptrs(identity<Bank_t>{});
-  refl_visit_members(bank, [](auto&... args) {
+  ylt::reflection::visit_members(bank, [](auto&... args) {
     ((std::cout << args << " "), ...);
     std::cout << "\n";
   });
 
   private_struct st(2, 4);
-  refl_visit_members(st, [](auto&... args) {
+  visit_members(st, [](auto&... args) {
     ((std::cout << args << " "), ...);
     std::cout << "\n";
   });

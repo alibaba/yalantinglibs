@@ -80,39 +80,41 @@ inline static decltype(auto) refl_object_to_tuple_impl(T &&t) {
   return std::apply(to_ref, tp);
 }
 
-#define YLT_REFL_PRIVATE_(STRUCT, ...)                                 \
-  namespace ylt::reflection {                                          \
-  inline constexpr auto get_private_ptrs(const identity<STRUCT> &t);   \
-  template struct private_visitor<STRUCT, ##__VA_ARGS__>;              \
-  template <typename Visitor>                                          \
-  inline static constexpr decltype(auto) refl_visit_members(           \
-      STRUCT &t, Visitor &&visitor) {                                  \
-    return visit_private_fields(t, std::forward<Visitor>(visitor));    \
-  }                                                                    \
-  template <typename Visitor>                                          \
-  inline static constexpr decltype(auto) refl_visit_members(           \
-      const STRUCT &t, Visitor &&visitor) {                            \
-    return visit_private_fields(t, std::forward<Visitor>(visitor));    \
-  }                                                                    \
-  inline static decltype(auto) refl_object_to_tuple(STRUCT &t) {       \
-    return refl_object_to_tuple_impl(t);                               \
-  }                                                                    \
-  inline static decltype(auto) refl_object_to_tuple(const STRUCT &t) { \
-    return refl_object_to_tuple_impl(t);                               \
-  }                                                                    \
-  inline static constexpr std::size_t refl_member_count(               \
-      const ylt::reflection::identity<STRUCT> &t) {                    \
-    return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);                    \
-  }                                                                    \
+#define YLT_REFL_PRIVATE_(STRUCT, ...)                                    \
+  namespace ylt::reflection {                                             \
+  inline constexpr auto get_private_ptrs(const identity<STRUCT> &t);      \
+  template struct private_visitor<STRUCT, ##__VA_ARGS__>;                 \
+  }                                                                       \
+  template <typename Visitor>                                             \
+  inline static constexpr decltype(auto) refl_visit_members(              \
+      STRUCT &t, Visitor &&visitor) {                                     \
+    return visit_private_fields(t, std::forward<Visitor>(visitor));       \
+  }                                                                       \
+  template <typename Visitor>                                             \
+  inline static constexpr decltype(auto) refl_visit_members(              \
+      const STRUCT &t, Visitor &&visitor) {                               \
+    return visit_private_fields(t, std::forward<Visitor>(visitor));       \
+  }                                                                       \
+  [[maybe_unused]] inline static decltype(auto) refl_object_to_tuple(     \
+      STRUCT &t) {                                                        \
+    return refl_object_to_tuple_impl(t);                                  \
+  }                                                                       \
+  [[maybe_unused]] inline static decltype(auto) refl_object_to_tuple(     \
+      const STRUCT &t) {                                                  \
+    return refl_object_to_tuple_impl(t);                                  \
+  }                                                                       \
+  [[maybe_unused]] inline static constexpr std::size_t refl_member_count( \
+      const ylt::reflection::identity<STRUCT> &t) {                       \
+    return (std::size_t)YLT_ARG_COUNT(__VA_ARGS__);                       \
   }
 
-#define YLT_REFL_PRIVATE(STRUCT, ...)                                       \
-  inline static constexpr decltype(auto) refl_member_names(                 \
-      const ylt::reflection::identity<STRUCT> &t) {                         \
-    constexpr std::array<std::string_view, YLT_ARG_COUNT(__VA_ARGS__)> arr{ \
-        WRAP_ARGS(CONCAT_NAME, t, ##__VA_ARGS__)};                          \
-    return arr;                                                             \
-  }                                                                         \
+#define YLT_REFL_PRIVATE(STRUCT, ...)                                        \
+  [[maybe_unused]] inline static constexpr decltype(auto) refl_member_names( \
+      const ylt::reflection::identity<STRUCT> &t) {                          \
+    constexpr std::array<std::string_view, YLT_ARG_COUNT(__VA_ARGS__)> arr{  \
+        WRAP_ARGS(CONCAT_NAME, t, ##__VA_ARGS__)};                           \
+    return arr;                                                              \
+  }                                                                          \
   YLT_REFL_PRIVATE_(STRUCT, WRAP_ARGS(CONCAT_ADDR, STRUCT, ##__VA_ARGS__))
 
 template <typename T, typename = void>
