@@ -3,7 +3,7 @@
 
 // modified based on:
 // https://github.com/getml/reflect-cpp/blob/main/include/rfl/internal/bind_fake_object_to_tuple.hpp
-// thanks for alxn4's greate idea!
+// thanks for alxn4's great idea!
 namespace ylt::reflection {
 namespace internal {
 
