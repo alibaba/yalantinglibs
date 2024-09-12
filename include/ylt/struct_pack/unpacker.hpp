@@ -1131,14 +1131,15 @@ class unpacker {
             },
             item);
       }
-      else if constexpr (optional<type> || expected<type>) {
+      else if constexpr (ylt::reflection::optional<type> ||
+                         ylt::reflection::expected<type>) {
         bool has_value{};
         if SP_UNLIKELY (!read_wrapper<sizeof(bool)>(reader_,
                                                     (char *)&has_value)) {
           return struct_pack::errc::no_buffer_space;
         }
         if SP_UNLIKELY (!has_value) {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             item = typename type::unexpected_type{typename type::error_type{}};
             deserialize_one<size_type, version, NotSkip>(item.error());
           }
@@ -1147,7 +1148,7 @@ class unpacker {
           }
         }
         else {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             if constexpr (!std::is_same_v<typename type::value_type, void>)
               deserialize_one<size_type, version, NotSkip>(item.value());
           }
@@ -1338,15 +1339,16 @@ class unpacker {
             },
             item);
       }
-      else if constexpr (optional<type> || expected<type>) {
+      else if constexpr (ylt::reflection::optional<type> ||
+                         ylt::reflection::expected<type>) {
         bool has_value = item.has_value();
         if (!has_value) {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             deserialize_one<size_type, version, NotSkip>(item.error());
           }
         }
         else {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             if constexpr (!std::is_same_v<typename type::value_type, void>)
               deserialize_one<size_type, version, NotSkip>(item.value());
           }

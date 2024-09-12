@@ -861,8 +861,9 @@ constexpr auto get_types() {
     return declval<std::tuple<T>>();
   }
   else if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T> ||
-                     varint_t<T> || string<T> || container<T> || optional<T> ||
-                     unique_ptr<T> || is_variant_v<T> || expected<T> ||
+                     varint_t<T> || string<T> || container<T> ||
+                     ylt::reflection::optional<T> || unique_ptr<T> ||
+                     is_variant_v<T> || ylt::reflection::expected<T> ||
                      array<T> || c_array<T> ||
                      std::is_same_v<std::monostate, T> || bitset<T>
 #if (__GNUC__ || __clang__) && defined(STRUCT_PACK_ENABLE_INT128)

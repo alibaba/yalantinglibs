@@ -383,7 +383,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (optional<type>) {
+      else if constexpr (ylt::reflection::optional<type>) {
         bool has_value = item.has_value();
         write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
@@ -401,7 +401,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (expected<type>) {
+      else if constexpr (ylt::reflection::expected<type>) {
         bool has_value = item.has_value();
         write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
@@ -500,7 +500,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (optional<type>) {
+      else if constexpr (ylt::reflection::optional<type>) {
         if (item.has_value()) {
           serialize_one<size_type, version>(*item);
         }
@@ -512,7 +512,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (expected<type>) {
+      else if constexpr (ylt::reflection::expected<type>) {
         if (item.has_value()) {
           if constexpr (!std::is_same_v<typename type::value_type, void>)
             serialize_one<size_type, version>(item.value());

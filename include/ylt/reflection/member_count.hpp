@@ -47,7 +47,7 @@ constexpr bool expected = expected_impl<T>::value;
 
 #if __cpp_concepts >= 201907L
 template <typename Type>
-concept optional = requires(Type optional) {
+concept optional = !expected<Type> && requires(Type optional) {
   optional.value();
   optional.has_value();
   optional.operator*();
