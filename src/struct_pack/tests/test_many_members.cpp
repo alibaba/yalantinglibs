@@ -278,9 +278,10 @@ STRUCT_PACK_REFL(many_members2, a1, b1, a2, b2, a3, b3, a4, b4, a5, b5, a6, b6,
                  a62, b62);
 TEST_CASE("test many members") {
   int size = 384;
-  if (_MSC_VER) {
+
+#ifdef _MSC_VER
     size = 188;
-  }
+#endif
   CHECK(struct_pack::get_type_literal<many_members>().size() == size);
   CHECK(struct_pack::get_type_literal<many_members2>().size() == 188);
 }
