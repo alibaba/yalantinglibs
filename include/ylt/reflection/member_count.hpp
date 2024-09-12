@@ -11,7 +11,10 @@
 #endif
 
 #include "user_reflect_macro.hpp"
-
+namespace struct_pack {
+template <typename T, uint64_t version>
+struct compatible;
+}
 namespace ylt::reflection {
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
@@ -25,9 +28,7 @@ concept expected = requires(Type e) {
   e.has_value();
   e.error();
   requires std::is_same_v<void, typename remove_cvref_t<Type>::value_type> ||
-      requires(Type e) {
-    e.value();
-  };
+               requires(Type e) { e.value(); };
 };
 #else
 template <typename T, typename = void>
@@ -71,9 +72,8 @@ constexpr bool optional = !expected<T> && optional_impl<T>::value;
 namespace internal {
 #if __cpp_concepts >= 201907L
 template <typename Type>
-concept tuple_size = requires(Type tuple) {
-  std::tuple_size<remove_cvref_t<Type>>::value;
-};
+concept tuple_size =
+    requires(Type tuple) { std::tuple_size<remove_cvref_t<Type>>::value; };
 #else
 template <typename T, typename = void>
 struct tuple_size_impl : std::false_type {};
@@ -87,14 +87,12 @@ template <typename T>
 constexpr bool tuple_size = tuple_size_impl<T>::value;
 #endif
 
-template <typename T, uint64_t version = 0>
-struct compatible;
-
 template <typename Type>
 constexpr inline bool is_compatible_v = false;
 
 template <typename Type, uint64_t version>
-constexpr inline bool is_compatible_v<compatible<Type, version>> = true;
+constexpr inline bool is_compatible_v<struct_pack::compatible<Type, version>> =
+    true;
 
 struct UniversalVectorType {
   template <typename T>
