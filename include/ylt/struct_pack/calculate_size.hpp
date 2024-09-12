@@ -97,7 +97,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (optional<type>) {
+  else if constexpr (ylt::reflection::optional<type>) {
     ret.total = sizeof(char);
     if (item) {
       ret += calculate_one_size(*item);
@@ -133,7 +133,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (expected<type>) {
+  else if constexpr (ylt::reflection::expected<type>) {
     ret.total = sizeof(bool);
     if (item.has_value()) {
       if constexpr (!std::is_same_v<typename type::value_type, void>)

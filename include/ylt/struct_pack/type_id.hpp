@@ -290,7 +290,7 @@ constexpr type_id get_type_id() {
   if constexpr (user_defined_serialization<T>) {
     return type_id::user_defined_type;
   }
-  else if constexpr (optional<T> && is_compatible_v<T>) {
+  else if constexpr (ylt::reflection::optional<T> && is_compatible_v<T>) {
     return type_id::compatible_t;
   }
   else if constexpr (detail::varint_t<T, parent_tag>) {
@@ -334,7 +334,7 @@ constexpr type_id get_type_id() {
   else if constexpr (container<T>) {
     return type_id::container_t;
   }
-  else if constexpr (optional<T>) {
+  else if constexpr (ylt::reflection::optional<T>) {
     return type_id::optional_t;
   }
   else if constexpr (unique_ptr<T>) {
@@ -354,7 +354,7 @@ constexpr type_id get_type_id() {
     static_assert(std::variant_size_v<T> < 256, "The variant is too complex!");
     return type_id::variant_t;
   }
-  else if constexpr (expected<T>) {
+  else if constexpr (ylt::reflection::expected<T>) {
     return type_id::expected_t;
   }
   else if constexpr (is_trivial_tuple<T> || pair<T> || std::is_class_v<T>) {

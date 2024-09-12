@@ -40,7 +40,6 @@
 #include "ylt/reflection/template_switch.hpp"
 #include "ylt/reflection/member_ptr.hpp"
 
-using namespace ylt::reflection;
 
 #if __cpp_concepts >= 201907L
 #include <concepts>
@@ -763,32 +762,6 @@ struct memory_reader;
 #endif
 
 
-#if __cpp_concepts >= 201907L
-  template <typename Type>
-  concept optional = !expected<Type> && requires(Type optional) {
-    optional.value();
-    optional.has_value();
-    optional.operator*();
-    typename remove_cvref_t<Type>::value_type;
-  };
-#else
-  template <typename T, typename = void>
-  struct optional_impl : std::false_type {};
-
-  template <typename T>
-  struct optional_impl<T, std::void_t<
-    decltype(std::declval<T>().value()),
-    decltype(std::declval<T>().has_value()),
-    decltype(std::declval<T>().operator*()),
-    typename remove_cvref_t<T>::value_type>> 
-      : std::true_type {};
-
-  template <typename T>
-  constexpr bool optional = !expected<T> && optional_impl<T>::value;
-#endif
-
-
-
 
 
   template <typename Type>
@@ -875,8 +848,8 @@ struct memory_reader;
         else if constexpr (user_defined_refl<T>) {
           return false;
         }
-        else if constexpr (container<T> || optional<T> || is_variant_v<T> ||
-                          unique_ptr<T> || expected<T> || container_adapter<T>) {
+        else if constexpr (container<T> || ylt::reflection::optional<T> || is_variant_v<T> ||
+                          unique_ptr<T> || ylt::reflection::expected<T> || container_adapter<T>) {
           return false;
         }
         else if constexpr (pair<T>) {
