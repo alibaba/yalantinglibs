@@ -28,7 +28,9 @@ concept expected = requires(Type e) {
   e.has_value();
   e.error();
   requires std::is_same_v<void, typename remove_cvref_t<Type>::value_type> ||
-               requires(Type e) { e.value(); };
+      requires(Type e) {
+    e.value();
+  };
 };
 #else
 template <typename T, typename = void>
@@ -72,8 +74,9 @@ constexpr bool optional = !expected<T> && optional_impl<T>::value;
 namespace internal {
 #if __cpp_concepts >= 201907L
 template <typename Type>
-concept tuple_size =
-    requires(Type tuple) { std::tuple_size<remove_cvref_t<Type>>::value; };
+concept tuple_size = requires(Type tuple) {
+  std::tuple_size<remove_cvref_t<Type>>::value;
+};
 #else
 template <typename T, typename = void>
 struct tuple_size_impl : std::false_type {};

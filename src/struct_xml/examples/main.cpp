@@ -291,14 +291,13 @@ struct next_obj_t {
 };
 YLT_REFL(next_obj_t, x, y);
 
-template <>
-struct ylt::reflection::ylt_alias_struct<next_obj_t> {
-  static constexpr std::string_view get_alias_struct_name() { return "next"; }
-
-  static constexpr auto get_alias_field_names() {
-    return std::array{field_alias_t{"w", 0}, field_alias_t{"h", 1}};
-  }
-};
+constexpr std::string_view get_alias_struct_name(next_obj_t *) {
+  return "next";
+}
+constexpr auto get_alias_field_names(next_obj_t *) {
+  using namespace ylt::reflection;
+  return std::array{field_alias_t{"w", 0}, field_alias_t{"h", 1}};
+}
 
 struct out_object {
   std::unique_ptr<int> id;
@@ -307,14 +306,11 @@ struct out_object {
 };
 YLT_REFL(out_object, id, name, obj);
 
-template <>
-struct ylt::reflection::ylt_alias_struct<out_object> {
-  static constexpr std::string_view get_alias_struct_name() { return "qi"; }
-
-  static constexpr auto get_alias_field_names() {
-    return std::array{field_alias_t{"i", 0}, field_alias_t{"na", 1}};
-  }
-};
+constexpr std::string_view get_alias_struct_name(out_object *) { return "qi"; }
+constexpr auto get_alias_field_names(out_object *) {
+  using namespace ylt::reflection;
+  return std::array{field_alias_t{"i", 0}, field_alias_t{"na", 1}};
+}
 
 void test_alias() {
   out_object m{std::make_unique<int>(20), "tom", {21, 42}};
