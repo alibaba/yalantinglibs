@@ -1175,6 +1175,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (ec && socket_->is_timeout_) {
       ec = std::make_error_code(std::errc::timed_out);
     }
+    handle_result(data, ec, is_keep_alive);
     co_return data;
   }
 
