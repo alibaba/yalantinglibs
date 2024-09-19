@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include "ylt/struct_pack/calculate_size.hpp"
+#include "ylt/struct_pack/endian_wrapper.hpp"
 #include "ylt/struct_pack/packer.hpp"
 #include "ylt/struct_pack/reflection.hpp"
 #include "ylt/struct_pack/unpacker.hpp"
@@ -17,7 +18,7 @@ template <std::size_t size_width = sizeof(uint64_t), typename Writer,
 STRUCT_PACK_INLINE void write(Writer& writer, const T* t, std::size_t len) {
   if constexpr (detail::is_trivial_serializable<T>::value &&
                 detail::is_little_endian_copyable<sizeof(T)>) {
-    write_bytes_array(writer, (char*)t, sizeof(T) * len);
+    detail::write_bytes_array(writer, (char*)t, sizeof(T) * len);
   }
   else {
     struct_pack::detail::packer<Writer, T, true> packer{writer};
@@ -40,7 +41,8 @@ STRUCT_PACK_INLINE struct_pack::err_code read(Reader& reader, T* t,
   if constexpr (detail::is_trivial_serializable<T>::value &&
                 detail::is_little_endian_copyable<sizeof(T)>) {
     if constexpr (!ifSkip) {
-      if SP_UNLIKELY (!read_bytes_array(reader, (char*)t, sizeof(T) * len)) {
+      if SP_UNLIKELY (!detail::read_bytes_array(reader, (char*)t,
+                                                sizeof(T) * len)) {
         return struct_pack::errc::no_buffer_space;
       }
     }
