@@ -240,22 +240,23 @@ class basic_dynamic_summary : public dynamic_metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   virtual void serialize_to_json(std::string& str) override {
     json_summary_t summary{name_, help_, std::string(metric_name())};
-
-    for (auto& [labels_value, summary_value] : label_quantile_values_) {
-      json_summary_metric_t metric;
-      double sum = 0;
-      uint64_t count = 0;
-      auto rates = summary_value->stat(sum, count);
-      metric.count = count;
-      metric.sum = sum;
-      for (size_t i = 0; i < quantiles_.size(); i++) {
-        for (size_t i = 0; i < labels_value.size(); i++) {
-          metric.labels[labels_name_[i]] = labels_value[i];
+    {
+      std::lock_guard guard(mutex_);
+      for (auto& [labels_value, summary_value] : label_quantile_values_) {
+        json_summary_metric_t metric;
+        double sum = 0;
+        uint64_t count = 0;
+        auto rates = summary_value->stat(sum, count);
+        metric.count = count;
+        metric.sum = sum;
+        for (size_t i = 0; i < quantiles_.size(); i++) {
+          for (size_t i = 0; i < labels_value.size(); i++) {
+            metric.labels[labels_name_[i]] = labels_value[i];
+          }
+          metric.quantiles.emplace(quantiles_[i], rates[i]);
         }
-        metric.quantiles.emplace(quantiles_[i], rates[i]);
+        summary.metrics.push_back(std::move(metric));
       }
-
-      summary.metrics.push_back(std::move(metric));
     }
     iguana::to_json(summary, str);
   }
