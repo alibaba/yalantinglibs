@@ -9,9 +9,6 @@
 #include <memory>
 #include <vector>
 
-#include "ylt/easylog.hpp"
-#include "ylt/metric/counter.hpp"
-
 namespace ylt::metric::detail {
 
 template <std::size_t frac_bit = 6>
@@ -316,15 +313,15 @@ class summary_impl {
     std::vector<float> result;
     result.reserve(rate_.size());
     float v = -float16_max;
-    for (auto e : rate_) {
-      if (e < 0) [[unlikely]] {
+    for (double e : rate_) {
+      if (std::isnan(e) || e < 0) {
         result.push_back(v);
         continue;
       }
-      else if (e > 1) {
+      else if (e > 1) [[unlikely]] {
         e = 1;
       }
-      auto target_count = std::min<int64_t>(e * count, count);
+      auto target_count = std::min<double>(e * count, count);
       while (true) {
         if (target_count <= count_now) [[unlikely]] {
           result.push_back(v);

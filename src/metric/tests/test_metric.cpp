@@ -449,12 +449,16 @@ using my_manager = static_metric_manager<my_tag>;
 auto g_pair = my_manager::instance().create_metric_static<counter_t>(
     "test_g_counter", "");
 
-TEST_CASE("test no lable") {
+TEST_CASE("test no label") {
   {
     std::map<std::string, std::string> customMap = {};
     auto summary = std::make_shared<summary_t>(
         "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
     summary->observe(100);
+    auto result = summary->get_rates();
+    for (auto&e: result) {
+      CHECK(e==100);
+    }
   }
   auto g_counter = g_pair.second;
   g_counter->inc();
