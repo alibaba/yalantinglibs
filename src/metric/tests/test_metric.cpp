@@ -456,8 +456,8 @@ TEST_CASE("test no label") {
         "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
     summary->observe(100);
     auto result = summary->get_rates();
-    for (auto&e: result) {
-      CHECK(e==100);
+    for (auto& e : result) {
+      CHECK(e == 100);
     }
   }
   auto g_counter = g_pair.second;
