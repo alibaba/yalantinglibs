@@ -47,8 +47,7 @@ template <typename T>
 inline constexpr bool enum_v = std::is_enum_v<std::decay_t<T>>;
 
 template <typename T>
-constexpr inline bool optional_v =
-    is_template_instant_of<std::optional, std::remove_cvref_t<T>>::value;
+constexpr inline bool optional_v = ylt::reflection::optional<T>;
 
 template <class, class = void>
 struct is_container : std::false_type {};

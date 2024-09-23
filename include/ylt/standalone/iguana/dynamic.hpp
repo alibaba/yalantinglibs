@@ -159,6 +159,13 @@ struct base_impl : public base {
   virtual ~base_impl() {}
 
   mutable size_t cache_size = 0;
+
+ private:
+  virtual void dummy() {
+    // make sure init T before main, and can register_type before main.
+    [[maybe_unused]] static auto t =
+        ylt::reflection::internal::wrapper<T>::value;
+  }
 };
 
 IGUANA_INLINE std::shared_ptr<base> create_instance(std::string_view name) {
