@@ -12,8 +12,9 @@ template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<ylt_refletable_v<T>, int> = 0>
 IGUANA_INLINE void to_json(T &&t, Stream &s);
 namespace detail {
-template <bool Is_writing_escape = true, typename Stream, typename T>
-IGUANA_INLINE void to_json_impl(Stream &ss, const std::optional<T> &val);
+template <bool Is_writing_escape = true, typename Stream, typename T,
+          std::enable_if_t<optional_v<T>, int> = 0>
+IGUANA_INLINE void to_json_impl(Stream &ss, const T &val);
 
 template <bool Is_writing_escape = true, typename Stream, typename T,
           std::enable_if_t<fixed_array_v<T>, int> = 0>
@@ -151,8 +152,9 @@ IGUANA_INLINE void to_json_impl(Stream &ss, T val) {
   }
 }
 
-template <bool Is_writing_escape, typename Stream, typename T>
-IGUANA_INLINE void to_json_impl(Stream &ss, const std::optional<T> &val) {
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<optional_v<T>, int>>
+IGUANA_INLINE void to_json_impl(Stream &ss, const T &val) {
   if (!val) {
     ss.append("null");
   }
