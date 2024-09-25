@@ -16,6 +16,7 @@ export const zh_themeConfig = <DefaultTheme.Config>
             { text: 'coro_http', items: data.coro_http_Links },
             { text: 'struct_xxx', items: data.struct_xxx_Links },
             { text: 'metric', items: data.metric_Links },
+            { text: 'reflection', items: data.reflection_Links },
         ]
     };
 

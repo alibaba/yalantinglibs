@@ -39,6 +39,10 @@ export const metric_Links = [
     { text: 'metric简介', link: '/zh/metric/metric_introduction' },
 ];
 
+export const reflection_Links = [
+    { text: 'reflection简介', link: '/zh/reflection/reflection_introduction' },
+];
+
 export const aboutLinks = [
     { text: 'purecpp', link: '/zh/about/community' }, //TODO 未来支持英语
     { text: 'contribute', link: '/zh/about/contribute' },

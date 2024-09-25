@@ -23,7 +23,7 @@ include_directories(include/ylt/thirdparty)
 gcc9+、clang11+、msvc2019+
 
 # json 序列化/反序列化
-序列化需要先定义一个可反射的对象，通过REFLECTION 可以轻松定义一个可反射对象。
+序列化需要先定义一个可反射的对象，通过YLT_REFL 可以轻松定义一个可反射对象。
 
 ```cpp
 struct person
@@ -33,7 +33,7 @@ struct person
 };
 YLT_REFL(person, name, age); // 通过这个宏定义元数据让person 成为一个可反射对象
 ```
-通过REFLECTION 宏定义元数据之后就可以一行代码实现json 的序列化与反序列化了。
+通过YLT_REFL 宏定义元数据之后就可以一行代码实现json 的序列化与反序列化了。
 
 ```cpp
 person p = { "tom", 28 };
@@ -245,7 +245,14 @@ public:
     person() = default;
     person(std::shared_ptr<std::string> id, std::unique_ptr<std::string> name) : id_(id), name_(std::move(name)) {}
 
-    REFLECTION_ALIAS(person, "rootnode", FLDALIAS(&person::id_, "id"), FLDALIAS(&person::name_, "name"));
+    static constexpr auto get_alias_field_names(person*) {
+      return std::array{field_alias_t{"id", 0}, field_alias_t{"name", 1}};
+    }
+    static constexpr std::string_view get_alias_struct_name(person*) {
+      return "rootnode";
+    }
+
+    YLT_REFL(person, id_, name_);
 
     void parse_xml() {
         struct_xml::from_xml(*this, xml_str);
@@ -255,12 +262,12 @@ public:
     }
 }
 ```
-REFLECTION_ALIAS 中需要填写结构体的别名和字段的别名，通过别名将标签和结构体字段关联起来就可以保证正确的解析了。
+get_alias_field_names 函数中需要填写结构体的别名，get_alias_struct_name 函数中填写字段的别名，别名字段的索引需要和YLT_REFL宏定义的字段顺序一致，通过别名将标签和结构体字段关联起来就可以保证正确的解析了。
 
 这个例子同时也展示了序列化和反序列化智能指针。
 
 # 如何处理私有字段
-如果类里面有私有字段，在外面定义REFLECTION 宏会出错，因为无法访问私有字段，这时候把宏定义到类里面即可，但要保证宏是public的。
+如果类里面有私有字段，在外面定义YLT_REFL 宏会出错，因为无法访问私有字段，这时候把宏定义到类里面即可，但要保证宏是public的。
 ```cpp
 class person {
     std::string name;
