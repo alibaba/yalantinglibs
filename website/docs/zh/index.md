@@ -26,6 +26,8 @@ features:
     details: 基于C++20 协程的 http(https) server 和 client, 包括 get/post, websocket, multipart file upload, chunked and ranges download etc.
   - title: easylog
     details: C++17 实现的高性能易用的日志库, 支持cout 流式、sprintf 和 fmt::format/std::format 输出.
+  - title: reflection
+    details: C++17/C++20 实现的编译期反射库，提供了易用、丰富的反射API.
   - title: struct_xml struct_json struct_yaml
     details: C++17 实现的高性能易用的序列化库, 支持xml, json和yaml 的序列化/反序列化.
   - title: metric

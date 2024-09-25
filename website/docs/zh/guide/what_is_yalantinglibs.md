@@ -10,7 +10,7 @@
 
 [English Version](../../en/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http, metric 和 async_simple, 目前我们正在开发并添加更多的新功能。
+yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http, metric, reflection 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
 yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C++基础工具库, 帮助用户构建高性能的现代C++应用。
 
@@ -433,6 +433,10 @@ yalantinglibs工程自身支持如下配置项，如果你使用cmake find_packa
 ### metric
 
 无依赖。
+
+### reflection
+
+无依赖
 
 ## 独立子仓库
 
