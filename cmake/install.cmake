@@ -22,6 +22,7 @@ target_include_directories(yalantinglibs INTERFACE
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include/ylt/thirdparty>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include/ylt/standalone>
 )
 install(TARGETS yalantinglibs
        EXPORT yalantinglibsTargets
