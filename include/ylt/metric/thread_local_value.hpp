@@ -21,7 +21,7 @@ static value_type inc_impl(std::atomic<value_type> &obj, value_type value) {
                   std::atomic<value_type>{}.fetch_add(value_type{});
                 }) {
     value_type v = obj.load(std::memory_order::relaxed);
-    while (!std::atomic_compare_exchange_weak(&obj, v, v + value))
+    while (!std::atomic_compare_exchange_weak(&obj, &v, v + value))
       ;
     return v;
   }
@@ -35,7 +35,7 @@ static value_type dec_impl(std::atomic<value_type> &obj, value_type value) {
                   std::atomic<value_type>{}.fetch_add(value_type{});
                 }) {
     value_type v = obj.load(std::memory_order::relaxed);
-    while (!std::atomic_compare_exchange_weak(&obj, v, v - value))
+    while (!std::atomic_compare_exchange_weak(&obj, &v, v - value))
       ;
     return v;
   }
