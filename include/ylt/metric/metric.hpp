@@ -1,15 +1,13 @@
 #pragma once
 #include <algorithm>
 #include <atomic>
-#include <cassert>
-#include <map>
-#include <memory>
-#include <mutex>
+#include <chrono>
+#include <cstddef>
 #include <optional>
 #include <regex>
-#include <stdexcept>
+#include <span>
 #include <string>
-#include <unordered_map>
+#include <thread>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -34,6 +32,7 @@ inline char* to_chars_float(T value, char* buffer) {
 
 #include <iguana/json_writer.hpp>
 #endif
+
 namespace ylt::metric {
 enum class MetricType {
   Counter,
@@ -50,32 +49,19 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
-#ifdef __APPLE__
-inline double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
-  double v;
-  do {
-    v = obj->load();
-  } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
-  return v;
-}
-
-inline double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
-  double v;
-  do {
-    v = obj->load();
-  } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
-  return v;
-}
-#endif
-
 class metric_t {
  public:
+  static inline std::atomic<int64_t> g_user_metric_count = 0;
+  static inline auto g_user_metric_label_count =
+      new thread_local_value<int64_t>(std::thread::hardware_concurrency());
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help)
       : type_(type),
         name_(std::move(name)),
         help_(std::move(help)),
-        metric_created_time_(std::chrono::system_clock::now()) {}
+        metric_created_time_(std::chrono::system_clock::now()) {
+    g_user_metric_count.fetch_add(1, std::memory_order::relaxed);
+  }
 
   template <size_t N>
   metric_t(MetricType type, std::string name, std::string help,
@@ -95,7 +81,9 @@ class metric_t {
       labels_value_.push_back(v);
     }
   }
-  virtual ~metric_t() {}
+  virtual ~metric_t() {
+    g_user_metric_count.fetch_sub(1, std::memory_order::relaxed);
+  }
 
   std::string_view name() { return name_; }
 
@@ -128,8 +116,6 @@ class metric_t {
   const std::map<std::string, std::string>& get_static_labels() {
     return static_labels_;
   }
-
-  virtual size_t label_value_count() { return 0; }
 
   virtual bool has_label_value(const std::string& label_value) {
     return std::find(labels_value_.begin(), labels_value_.end(), label_value) !=
@@ -208,18 +194,11 @@ class static_metric : public metric_t {
   using metric_t::metric_t;
 };
 
-class dynamic_metric : public metric_t {
-  using metric_t::metric_t;
-};
-
-inline auto g_user_metric_label_count = new thread_local_value<int64_t>(2);
-inline std::atomic<int64_t> g_user_metric_count = 0;
+inline std::chrono::seconds ylt_label_max_age{0};
+inline std::chrono::seconds ylt_label_check_expire_duration{0};
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
 inline int64_t ylt_label_capacity = 20000000;
-
-inline std::chrono::seconds ylt_label_max_age{0};
-inline std::chrono::seconds ylt_label_check_expire_duration{0};
 
 inline void set_metric_capacity(int64_t max_count) {
   ylt_metric_capacity = max_count;

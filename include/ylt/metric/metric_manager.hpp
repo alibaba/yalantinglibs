@@ -9,9 +9,9 @@ namespace ylt::metric {
 class manager_helper {
  public:
   static bool register_metric(auto& metric_map, auto metric) {
-    if (g_user_metric_count > ylt_metric_capacity) {
+    if (metric::metric_t::g_user_metric_count > ylt_metric_capacity) {
       CINATRA_LOG_ERROR << "metric count at capacity size: "
-                        << g_user_metric_count;
+                        << metric::metric_t::g_user_metric_count;
       return false;
     }
     auto [it, r] = metric_map.try_emplace(metric->str_name(), metric);

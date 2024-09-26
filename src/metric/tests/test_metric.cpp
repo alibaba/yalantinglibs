@@ -575,11 +575,9 @@ TEST_CASE("test counter with dynamic labels value") {
                         std::array<std::string, 2>{"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
-    auto values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 1);
+    CHECK(c.value({"GET", "200"}) == 1);
     c.inc({"GET", "200"}, 2);
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 3);
+    CHECK(c.value({"GET", "200"}) == 3);
 
     std::string str;
     c.serialize(str);
@@ -590,8 +588,7 @@ TEST_CASE("test counter with dynamic labels value") {
 
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 20);
+    CHECK(c.value({"GET", "200"}) == 20);
   }
 }
 
@@ -624,11 +621,9 @@ TEST_CASE("test gauge") {
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
-    auto values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 1);
+    CHECK(g.value({"GET", "200", "/"}) == 1);
     g.inc({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 3);
+    CHECK(g.value({"GET", "200", "/"}) == 3);
 
     g.inc({"POST", "200", "/"}, 4);
 
@@ -647,11 +642,9 @@ TEST_CASE("test gauge") {
           std::string::npos);
 
     g.dec({"GET", "200", "/"}, 1);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 2);
+    CHECK(g.value({"GET", "200", "/"}) == 2);
     g.dec({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 0);
+    CHECK(g.value({"GET", "200", "/"}) == 0);
   }
 }
 
@@ -1572,9 +1565,9 @@ TEST_CASE("test system metric") {
 }
 
 TEST_CASE("test metric capacity") {
-  std::cout << g_user_metric_count << "\n";
+  std::cout << ylt::metric::metric_t::g_user_metric_count << "\n";
   using test_metric_manager = dynamic_metric_manager<test_id_t<21>>;
-  set_metric_capacity(g_user_metric_count + 2);
+  set_metric_capacity(ylt::metric::metric_t::g_user_metric_count + 2);
   auto c =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter"), "", std::array<std::string, 1>{});
