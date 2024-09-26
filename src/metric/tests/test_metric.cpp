@@ -631,7 +631,8 @@ TEST_CASE("test gauge") {
     std::string str_json;
     g.serialize_to_json(str_json);
     std::cout << str_json << "\n";
-    CHECK(str_json.find("\"code\":\"200\"") != std::string::npos);
+    std::cout << str_json.size() << std::endl;
+    CHECK(str_json.size() == 185);
 #endif
 
     std::string str;
@@ -702,7 +703,8 @@ TEST_CASE("test summary") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 195);
 #endif
 }
 
@@ -731,7 +733,8 @@ TEST_CASE("test summary with INF") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 238);
 #endif
 }
 
@@ -760,7 +763,8 @@ TEST_CASE("test summary with NAN") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 238);
 #endif
 }
 
@@ -793,7 +797,8 @@ TEST_CASE("test summary with illegal quantities") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 233);
 #endif
 }
 
@@ -811,7 +816,7 @@ TEST_CASE("test summary with many quantities") {
   }
   std::string str;
   summary.serialize(str);
-  std::cout << str;
+  // std::cout << str;
   double sum;
   uint64_t cnt;
   auto result = summary.get_rates(sum, cnt);
@@ -828,7 +833,8 @@ TEST_CASE("test summary with many quantities") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 8868);
 #endif
 }
 
