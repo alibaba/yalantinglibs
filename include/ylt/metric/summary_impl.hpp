@@ -95,7 +95,9 @@ class summary_impl {
       piece_t* piece = arr[index / piece_size];
       if (piece == nullptr) {
         auto ptr = new piece_t{};
-        arr[index / piece_size].compare_exchange_strong(piece, ptr);
+        if (!arr[index / piece_size].compare_exchange_strong(piece, ptr)) {
+          delete ptr;
+        }
         return (*arr[index / piece_size].load())[index % piece_size];
       }
       else {
