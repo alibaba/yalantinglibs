@@ -241,7 +241,6 @@ class basic_dynamic_summary
       metric.labels.reserve(labels_value.size());
       for (auto& e : labels_value) metric.labels.emplace_back(e);
     }
-    auto i3 = std::chrono::steady_clock::now();
     iguana::to_json(summary, str);
   }
 #endif
