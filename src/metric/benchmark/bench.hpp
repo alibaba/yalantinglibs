@@ -56,7 +56,7 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
   auto total_ms = clock.duration();
   stop = true;
   std::cout << "run " << total_ms.count() << "ms\n";
-  size_t cnt;
+  uint64_t cnt;
   double sum;
   auto result = lantency_summary.get_rates(sum, cnt);
   auto seconds = total_ms.count() / 1000.0;
