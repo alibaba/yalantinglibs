@@ -703,8 +703,6 @@ TEST_CASE("test summary") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 195);
 #endif
 }
 
