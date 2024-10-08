@@ -299,7 +299,7 @@ inline constexpr size_t index_of(std::string_view name) {
   return arr.size();
 }
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
 template <typename T, FixedString name>
 inline constexpr size_t index_of() {
   return index_of<T>(name.str());

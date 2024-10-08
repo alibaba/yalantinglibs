@@ -156,7 +156,7 @@ inline constexpr auto& get(T& t) {
   return std::get<index>(ref_tp);
 }
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
 template <FixedString name, typename T>
 inline constexpr auto& get(T& t) {
   constexpr size_t index = index_of<T, name>();
@@ -257,7 +257,7 @@ inline constexpr void for_each(T&& t, Visit&& func) {
 
 #if (defined(__GNUC__) && __GNUC__ > 10) || \
     ((defined(__clang__) || defined(_MSC_VER)) && __has_include(<concepts>))
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
 template <ylt::reflection::FixedString s>
 inline constexpr auto operator""_ylts() {
   return s;
