@@ -27,7 +27,8 @@ struct person {
   std::string name;
   int age;
 };
-#if __cplusplus >= 202002L
+
+#if __GNUC__ < 11 || __cplusplus < 202002L
 YLT_REFL(person, id, name, age);
 #endif
 
