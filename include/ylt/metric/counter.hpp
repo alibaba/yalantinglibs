@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <memory>
 #include <thread>
 #include <variant>
@@ -14,17 +15,18 @@ enum class op_type_t { INC, DEC, SET };
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_counter_metric_t {
-  std::map<std::string, std::string> labels;
+  std::vector<std::string_view> labels;
   std::variant<int64_t, double> value;
 };
 YLT_REFL(json_counter_metric_t, labels, value);
 struct json_counter_t {
-  std::string name;
-  std::string help;
-  std::string type;
+  std::string_view name;
+  std::string_view help;
+  std::string_view type;
+  std::vector<std::string_view> labels_name;
   std::vector<json_counter_metric_t> metrics;
 };
-YLT_REFL(json_counter_t, name, help, type, metrics);
+YLT_REFL(json_counter_t, name, help, type, labels_name, metrics);
 #endif
 
 template <typename value_type>
@@ -78,13 +80,23 @@ class basic_static_counter : public static_metric {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    if (default_label_value_.value() == 0) {
+    auto value = default_label_value_.value();
+    if (value == 0 && !has_change_) {
       return;
     }
 
-    json_counter_t counter{name_, help_, std::string(metric_name())};
-    auto value = default_label_value_.value();
-    counter.metrics.push_back({static_labels_, value});
+    json_counter_t counter{name_, help_, metric_name()};
+
+    counter.labels_name.reserve(static_labels_.size());
+    for (auto &[k, _] : static_labels_) {
+      counter.labels_name.emplace_back(k);
+    }
+    counter.metrics.resize(1);
+    counter.metrics[0].labels.reserve(static_labels_.size());
+    for (auto &[k, _] : static_labels_) {
+      counter.metrics[0].labels.emplace_back(k);
+    }
+    counter.metrics[0].value = value;
     iguana::to_json(counter, str);
   }
 #endif
@@ -248,10 +260,12 @@ class basic_dynamic_counter
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    std::string s;
     auto map = Base::copy();
-    json_counter_t counter{Base::name_, Base::help_,
-                           std::string(Base::metric_name())};
+    json_counter_t counter{Base::name_, Base::help_, Base::metric_name()};
+    counter.labels_name.reserve(Base::labels_name().size());
+    for (auto &e : Base::labels_name()) {
+      counter.labels_name.emplace_back(e);
+    }
     to_json(counter, map, str);
   }
 
@@ -262,10 +276,11 @@ class basic_dynamic_counter
       auto &val = e->value;
       json_counter_metric_t metric;
       size_t index = 0;
+      metric.labels.reserve(k.size());
       for (auto &label_value : k) {
-        metric.labels.emplace(Base::labels_name_[index++], label_value);
+        metric.labels.emplace_back(label_value);
       }
-      metric.value = (int64_t)val;
+      metric.value = val.load(std::memory_order::relaxed);
       counter.metrics.push_back(std::move(metric));
     }
     if (!counter.metrics.empty()) {
@@ -279,7 +294,7 @@ class basic_dynamic_counter
   void serialize_map(T &value_map, std::string &str) {
     for (auto &e : value_map) {
       auto &labels_value = e->label;
-      auto &val = e->value;
+      auto val = e->value.load(std::memory_order::relaxed);
       str.append(Base::name_);
       if (Base::labels_name_.empty()) {
         str.append(" ");
