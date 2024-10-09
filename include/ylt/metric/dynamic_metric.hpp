@@ -1,5 +1,7 @@
 #pragma once
 #include "metric.hpp"
+#include "ylt/util/map_sharded.hpp"
+
 namespace ylt::metric {
 
 class dynamic_metric : public metric_t {
@@ -78,35 +80,33 @@ class dynamic_metric_impl : public dynamic_metric {
 
  public:
   using dynamic_metric::dynamic_metric;
-  size_t size() const {
-    std::lock_guard guard(mtx_);
-    return table.size();
-  }
+  size_t size() const { return map_.size(); }
   size_t empty() const { return !size(); }
   size_t label_value_count() const { return size(); }
 
   std::vector<std::shared_ptr<metric_pair>> copy() const {
-    std::lock_guard guard(mtx_);
-    std::vector<std::shared_ptr<metric_pair>> ret;
-    ret.reserve(table.size());
-    for (auto& e : table) {
-      ret.push_back(e.second);
-    }
-    return ret;
+    return map_.template copy<std::shared_ptr<metric_pair>>();
+    // std::lock_guard guard(mtx_);
+    // std::vector<std::shared_ptr<metric_pair>> ret;
+    // ret.reserve(table.size());
+    // for (auto& e : table) {
+    //   ret.push_back(e.second);
+    // }
+    // return ret;
   }
 
  protected:
   template <typename Key, typename... Args>
   std::shared_ptr<metric_pair> try_emplace(Key&& key, Args&&... args) {
-    std::lock_guard guard(mtx_);
+    // std::lock_guard guard(mtx_);
     std::span<const std::string, N> view = key;
-    auto iter = table.try_emplace(view, std::forward<Key>(key),
-                                  std::forward<Args>(args)...);
+    auto iter = map_.try_emplace(view, std::forward<Key>(key),
+                                 std::forward<Args>(args)...);
     if (iter.second) {
       *const_cast<std::span<const std::string, N>*>(&iter.first->first) =
           iter.first->second->label;
     }
-    return table
+    return map_
         .try_emplace(view, std::forward<Key>(key), std::forward<Args>(args)...)
         .first->second;
   }
@@ -120,8 +120,8 @@ class dynamic_metric_impl : public dynamic_metric {
   }
   std::shared_ptr<metric_pair> find(std::span<const std::string, N> key) {
     std::lock_guard guard(mtx_);
-    auto iter = table.find(key);
-    if (iter != table.end()) {
+    auto [iter, r] = map_.find(key);
+    if (r) {
       return iter->second;
     }
     else {
@@ -129,16 +129,21 @@ class dynamic_metric_impl : public dynamic_metric {
     }
   }
   size_t erase(std::span<const std::string, N> key) {
-    std::lock_guard guard(mtx_);
-    return table.erase(key);
+    // std::lock_guard guard(mtx_);
+    return map_.erase(key);
   }
   void erase_if(auto&& op) {
-    std::lock_guard guard(mtx_);
-    std::erase_if(table, op);
+    // std::lock_guard guard(mtx_);
+    // std::erase_if(table, op);
+    return map_.erase_if(op);
   }
 
  private:
   mutable std::mutex mtx_;
+  util::map_sharded_t<std::unordered_map<std::span<const std::string, N>,
+                                         value_type, my_hash, my_equal>,
+                      my_hash>
+      map_{96, my_hash{}};
   std::unordered_map<std::span<const std::string, N>, value_type, my_hash,
                      my_equal>
       table;
