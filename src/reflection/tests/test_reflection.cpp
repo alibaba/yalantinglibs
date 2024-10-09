@@ -83,7 +83,7 @@ void test_pt() {
   static_assert(y == 4);
   CHECK(y == 4);
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
   constexpr auto x = get<"x"_ylts>(pt);
   static_assert(x == 2);
 #endif
@@ -118,7 +118,7 @@ TEST_CASE("test member value") {
   auto& age1 = get<int>(p, "age");
   CHECK(age1 == 6);
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
   auto& age2 = get<"age"_ylts>(p);
   CHECK(age2 == 6);
 
@@ -178,7 +178,7 @@ TEST_CASE("test member value") {
   constexpr std::string_view name2 = name_of<simple>(2);
   CHECK(name2 == "str");
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
   constexpr size_t idx = index_of<simple, "str"_ylts>();
   CHECK(idx == 2);
 
@@ -359,7 +359,7 @@ TEST_CASE("test macros") {
   auto var = get(t, 3);
   CHECK(*std::get<3>(var) == 6);
 
-#if __has_include(<concetps>)
+#if __cplusplus >= 202002L
   auto& age2 = get<"age"_ylts>(t);
   CHECK(age2 == 6);
 
