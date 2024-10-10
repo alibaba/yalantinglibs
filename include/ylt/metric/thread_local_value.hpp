@@ -125,7 +125,7 @@ class thread_local_value {
     return *duplicates_[index];
   }
 
-  value_type value() {
+  value_type value() const {
     value_type val = 0;
     for (auto &t : duplicates_) {
       if (t) {

@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "metric.hpp"
+#include "ylt/util/map_sharded.hpp"
 
 namespace ylt::metric {
 class manager_helper {
@@ -14,7 +15,7 @@ class manager_helper {
                         << metric::metric_t::g_user_metric_count;
       return false;
     }
-    auto [it, r] = metric_map.try_emplace(metric->str_name(), metric);
+    auto&& [it, r] = metric_map.try_emplace(metric->str_name(), metric);
     if (!r) {
       CINATRA_LOG_ERROR << "duplicate registered metric name: "
                         << metric->str_name();
@@ -285,7 +286,6 @@ class dynamic_metric_manager {
   }
 
   bool register_metric(std::shared_ptr<dynamic_metric> metric) {
-    std::unique_lock lock(mtx_);
     return manager_helper::register_metric(metric_map_, metric);
   }
 
@@ -316,7 +316,6 @@ class dynamic_metric_manager {
 #endif
 
   bool remove_metric(const std::string& name) {
-    std::unique_lock lock(mtx_);
     return metric_map_.erase(name);
   }
 
@@ -324,7 +323,6 @@ class dynamic_metric_manager {
     if (metric == nullptr) {
       return false;
     }
-
     return remove_metric(metric->str_name());
   }
 
@@ -332,7 +330,6 @@ class dynamic_metric_manager {
     if (names.empty()) {
       return;
     }
-
     for (auto& name : names) {
       remove_metric(name);
     }
@@ -349,20 +346,19 @@ class dynamic_metric_manager {
   }
 
   void remove_label_value(const std::map<std::string, std::string>& labels) {
-    std::unique_lock lock(mtx_);
-    for (auto& [_, m] : metric_map_) {
-      m->remove_label_value(labels);
-    }
+    metric_map_.for_each([&](auto& m) {
+      auto&& [_, metric] = m;
+      metric->remove_label_value(labels);
+    });
   }
 
   void remove_metric_by_label(
       const std::map<std::string, std::string>& labels) {
-    std::unique_lock lock(mtx_);
-    for (auto it = metric_map_.begin(); it != metric_map_.end();) {
-      auto& m = it->second;
+    metric_map_.erase_if([&](auto& metric) {
+      auto&& [_, m] = metric;
       const auto& labels_name = m->labels_name();
       if (labels.size() > labels_name.size()) {
-        continue;
+        return false;
       }
 
       if (labels.size() == labels_name.size()) {
@@ -372,99 +368,56 @@ class dynamic_metric_manager {
             label_value.push_back(i->second);
           }
         }
-
-        std::erase_if(metric_map_, [&](auto& pair) {
-          return pair.second->has_label_value(label_value);
-        });
-        if (m->has_label_value(label_value)) {
-          metric_map_.erase(it);
-        }
-        break;
+        return m->has_label_value(label_value);
       }
       else {
-        bool need_erase = false;
-        for (auto& lb_name : labels_name) {
-          if (auto i = labels.find(lb_name); i != labels.end()) {
-            if (m->has_label_value(i->second)) {
-              it = metric_map_.erase(it);
-              need_erase = true;
-              break;
+        for (auto& label : labels) {
+          if (auto i = std::find(labels_name.begin(), labels_name.end(),
+                                 label.first);
+              i != labels_name.end()) {
+            if (!m->has_label_value(label.second)) {
+              return false;
             }
           }
+          else {
+            return false;
+          }
         }
-
-        if (!need_erase)
-          ++it;
+        return true;
       }
-    }
+    });
   }
 
   void remove_metric_by_label_name(
       const std::vector<std::string>& labels_name) {
-    std::unique_lock lock(mtx_);
-    for (auto& [name, m] : metric_map_) {
-      if (m->labels_name() == labels_name) {
-        metric_map_.erase(name);
-        break;
-      }
-    }
+    metric_map_.erase_one([&](auto& m) {
+      auto&& [name, metric] = m;
+      return metric->labels_name() == labels_name;
+    });
   }
 
   void remove_metric_by_label_name(std::string_view labels_name) {
-    std::unique_lock lock(mtx_);
-    for (auto it = metric_map_.cbegin(); it != metric_map_.cend();) {
-      auto& names = it->second->labels_name();
-      if (auto sit = std::find(names.begin(), names.end(), labels_name);
-          sit != names.end()) {
-        metric_map_.erase(it++);
-      }
-      else {
-        ++it;
-      }
-    }
+    metric_map_.erase_if([&](auto& m) {
+      auto&& [_, metric] = m;
+      auto& names = metric->labels_name();
+      return std::find(names.begin(), names.end(), labels_name) != names.end();
+    });
   }
 
-  size_t metric_count() {
-    std::unique_lock lock(mtx_);
-    return metric_map_.size();
-  }
-
-  auto metric_map() {
-    std::unique_lock lock(mtx_);
-    return metric_map_;
-  }
-
-  auto collect() {
-    std::vector<std::shared_ptr<metric_t>> metrics;
-    {
-      std::unique_lock lock(mtx_);
-      for (auto& pair : metric_map_) {
-        metrics.push_back(pair.second);
-      }
-    }
-    return metrics;
+  size_t metric_count() { return metric_map_.size(); }
+  std::vector<std::shared_ptr<metric_t>> collect() const {
+    return metric_map_.template copy<std::shared_ptr<metric_t>>();
   }
 
   template <typename T>
   std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
     static_assert(std::is_base_of_v<dynamic_metric, T>,
                   "must be dynamic metric");
-    auto map = metric_map();
-    auto it = map.find(name);
-    if (it == map.end()) {
-      return nullptr;
-    }
-    return std::dynamic_pointer_cast<T>(it->second);
+    return std::dynamic_pointer_cast<T>(metric_map_.find(name));
   }
 
   std::shared_ptr<dynamic_metric> get_metric_by_name(std::string_view name) {
-    auto map = metric_map();
-    auto it = map.find(name);
-    if (it == map.end()) {
-      return nullptr;
-    }
-
-    return it->second;
+    return metric_map_.find(name);
   }
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label(
@@ -479,14 +432,10 @@ class dynamic_metric_manager {
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label_name(
       const std::vector<std::string>& labels_name) {
-    auto map = metric_map();
-    std::vector<std::shared_ptr<dynamic_metric>> vec;
-    for (auto& [name, m] : map) {
-      if (m->labels_name() == labels_name) {
-        vec.push_back(m);
-      }
-    }
-    return vec;
+    return metric_map_.template copy<std::shared_ptr<dynamic_metric>>(
+        [&](auto& m) {
+          return m->labels_name() == labels_name;
+        });
   }
 
   std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
@@ -518,21 +467,20 @@ class dynamic_metric_manager {
       if (timer == nullptr) {
         co_return;
       }
-
       timer->expires_after(ylt_label_check_expire_duration);
       bool r = co_await timer->async_await();
       if (!r) {
         co_return;
       }
-
-      std::unique_lock lock(mtx_);
-      for (auto& [_, m] : metric_map_) {
-        m->clean_expired_label();
-      }
+      metric_map_.for_each([](auto& metric) {
+        metric.second->clean_expired_label();
+      });
     }
   }
 
-  dynamic_metric_manager() {
+  dynamic_metric_manager()
+      : metric_map_(
+            std::min<unsigned>(std::thread::hardware_concurrency(), 128u)) {
     if (ylt_label_max_age.count() > 0) {
       clean_label_expired();
     }
@@ -540,29 +488,35 @@ class dynamic_metric_manager {
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label_value(
       const std::vector<std::string>& label_value) {
-    auto map = metric_map();
-    std::vector<std::shared_ptr<dynamic_metric>> vec;
-    for (auto& [name, m] : map) {
-      if (m->has_label_value(label_value)) {
-        vec.push_back(m);
-      }
-    }
-    return vec;
+    return metric_map_.template copy<std::shared_ptr<dynamic_metric>>(
+        [&label_value](auto& metric) {
+          return metric->has_label_value(label_value);
+        });
   }
 
   void remove_metric_by_label_value(
       const std::vector<std::string>& label_value) {
-    std::unique_lock lock(mtx_);
-    for (auto& [name, m] : metric_map_) {
-      if (m->has_label_value(label_value)) {
-        metric_map_.erase(name);
-        break;
-      }
-    }
+    metric_map_.erase_if([&](auto& metric) {
+      return metric.second->has_label_value(label_value);
+    });
   }
 
-  std::shared_mutex mtx_;
-  std::unordered_map<std::string, std::shared_ptr<dynamic_metric>> metric_map_;
+  template <size_t seed = 131>
+  struct my_hash {
+    using is_transparent = void;
+    std::size_t operator()(std::string_view s) const noexcept {
+      unsigned int hash = 0;
+      for (auto ch : s) {
+        hash = hash * seed + ch;
+      }
+      return hash;
+    }
+  };
+
+  util::map_sharded_t<
+      std::unordered_map<std::string, std::shared_ptr<dynamic_metric>>,
+      my_hash<>>
+      metric_map_;
   std::shared_ptr<coro_io::period_timer> timer_ = nullptr;
   std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
 };

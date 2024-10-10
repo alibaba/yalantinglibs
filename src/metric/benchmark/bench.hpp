@@ -105,11 +105,10 @@ inline void bench_dynamic_summary_mixed(size_t thd_num,
                                        {"a", "b"}, age);
   bench_mixed_impl(
       summary,
-      [&, i = 0]() mutable {
-        ++i;
-        summary.observe(
-            {"123e4567-e89b-12d3-a456-426614174000", std::to_string(i)},
-            get_random(100));
+      [&]() mutable {
+        summary.observe({"123e4567-e89b-12d3-a456-426614174000",
+                         std::to_string(get_random(1000000))},
+                        get_random(100));
       },
       thd_num, duration);
 }
@@ -122,7 +121,8 @@ inline void bench_dynamic_counter_mixed(size_t thd_num,
       counter,
       [&, i = 0]() mutable {
         ++i;
-        counter.inc({"123e4567-e89b-12d3-a456-426614174000", std::to_string(i)},
+        counter.inc({"123e4567-e89b-12d3-a456-426614174000",
+                     std::to_string(get_random(1000000))},
                     1);
       },
       thd_num, duration);
