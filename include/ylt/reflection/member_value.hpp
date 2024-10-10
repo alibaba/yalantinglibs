@@ -215,8 +215,7 @@ inline constexpr void for_each(T&& t, Visit&& func) {
   else {
     if constexpr (std::is_invocable_v<Visit, first_t, std::string_view>) {
       visit_members(t, [&](auto&... args) {
-#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >=
-        1930)
+#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >= 1930)
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
           constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is]), ...);
@@ -233,8 +232,7 @@ inline constexpr void for_each(T&& t, Visit&& func) {
     else if constexpr (std::is_invocable_v<Visit, first_t, std::string_view,
                                            size_t>) {
       visit_members(t, [&](auto&... args) {
-#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >=
-        1930)
+#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >= 1930)
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
           constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is], Is), ...);
