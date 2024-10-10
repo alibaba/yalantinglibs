@@ -132,7 +132,8 @@ get_member_names() {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
        ...);
-    }(std::make_index_sequence<Count>{});
+    }
+    (std::make_index_sequence<Count>{});
 #else
     init_arr_with_tuple<T>(arr, std::make_index_sequence<Count>{});
 #endif
@@ -154,7 +155,8 @@ inline constexpr auto get_member_names_map() {
   return [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
     return frozen::unordered_map<frozen::string, size_t, name_arr.size()>{
         {name_arr[Is], Is}...};
-  }(std::make_index_sequence<name_arr.size()>{});
+  }
+  (std::make_index_sequence<name_arr.size()>{});
 #else
   return get_member_names_map_impl(name_arr,
                                    std::make_index_sequence<name_arr.size()>{});
@@ -175,14 +177,15 @@ inline const auto& get_member_offset_arr(T&& t) {
   auto tp = ylt::reflection::object_to_tuple(std::forward<T>(t));
 
 #if __cplusplus >= 202002L
-  [[maybe_unused]] static std::array<size_t, Count> arr = {
-      [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-        std::array<size_t, Count> arr;
-        ((arr[Is] = size_t((const char*)&std::get<Is>(tp) - (char*)(&t))), ...);
-        return arr;
-      }(std::make_index_sequence<Count>{})};  // namespace internal
-
+  [[maybe_unused]] static std::array<size_t, Count> arr = {[&]<size_t... Is>(
+      std::index_sequence<Is...>) mutable {std::array<size_t, Count> arr;
+  ((arr[Is] = size_t((const char*)&std::get<Is>(tp) - (char*)(&t))), ...);
   return arr;
+}
+(std::make_index_sequence<Count>{})
+};  // namespace internal
+
+return arr;
 #else
   [[maybe_unused]] static std::array<size_t, Count> arr =
       get_member_offset_arr_impl(t, tp, std::make_index_sequence<Count>{});
@@ -354,7 +357,8 @@ inline constexpr void for_each(Visit&& func) {
                     "size_t], at least has std::string_view and make sure keep "
                     "the order of arguments");
     }
-  }(std::make_index_sequence<arr.size()>{});
+  }
+  (std::make_index_sequence<arr.size()>{});
 #else
   for_each_impl(std::forward<Visit>(func), arr,
                 std::make_index_sequence<arr.size()>{});
