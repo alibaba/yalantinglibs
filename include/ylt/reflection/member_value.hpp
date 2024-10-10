@@ -215,22 +215,11 @@ inline constexpr void for_each(T&& t, Visit&& func) {
   else {
     if constexpr (std::is_invocable_v<Visit, first_t, std::string_view>) {
       visit_members(t, [&](auto&... args) {
-#if __cplusplus >= 202002L
-#if defined(_MSC_VER)
-#if _MSC_VER >= 1930
+#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >= 1930)
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
           constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is]), ...);
         }(std::make_index_sequence<sizeof...(args)>{});
-#else
-        visit_members_impl0<T>(std::forward<Visit>(func), std::make_index_sequence<sizeof...(args)>{}, args...);
-#endif
-#else
-        [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-            constexpr auto arr = get_member_names<T>();
-            (func(args, arr[Is]), ...);
-        }(std::make_index_sequence<sizeof...(args)>{});
-#endif
 #else
         visit_members_impl0<T>(std::forward<Visit>(func), std::make_index_sequence<sizeof...(args)>{}, args...);
 #endif
@@ -239,24 +228,13 @@ inline constexpr void for_each(T&& t, Visit&& func) {
     else if constexpr (std::is_invocable_v<Visit, first_t, std::string_view,
                                            size_t>) {
       visit_members(t, [&](auto&... args) {
-#if __cplusplus >= 202002L
-#if defined(_MSC_VER)
-#if _MSC_VER >= 1930
+#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >= 1930)
         [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
           constexpr auto arr = get_member_names<T>();
           (func(args, arr[Is], Is), ...);
         }(std::make_index_sequence<sizeof...(args)>{});
 #else
         visit_members_impl<T>(std::forward<Visit>(func), std::make_index_sequence<sizeof...(args)>{}, args...);
-#endif
-#else
-        [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-            constexpr auto arr = get_member_names<T>();
-            (func(args, arr[Is], Is), ...);
-        }(std::make_index_sequence<sizeof...(args)>{});
-#endif
-#else
-		visit_members_impl<T>(std::forward<Visit>(func), std::make_index_sequence<sizeof...(args)>{}, args...);
 #endif
       });
     }

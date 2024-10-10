@@ -126,26 +126,13 @@ get_member_names() {
   }
   else {
     std::array<std::string_view, Count> arr;
-#if __cplusplus >= 202002L
-#if defined(_MSC_VER)
-#if _MSC_VER >= 1930
+#if __cplusplus >= 202002L && (!defined(_MSC_VER) || _MSC_VER >= 1930)
     constexpr auto tp = struct_to_tuple<T>();
     [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
       ((arr[Is] =
             internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
        ...);
     }(std::make_index_sequence<Count>{});
-#else
-    init_arr_with_tuple<T>(arr, std::make_index_sequence<Count>{});
-#endif
-#else
-    constexpr auto tp = struct_to_tuple<T>();
-    [&]<size_t... Is>(std::index_sequence<Is...>) mutable {
-      ((arr[Is] =
-            internal::get_member_name<internal::wrap(std::get<Is>(tp))>()),
-       ...);
-    }(std::make_index_sequence<Count>{});
-#endif
 #else
     init_arr_with_tuple<T>(arr, std::make_index_sequence<Count>{});
 #endif
