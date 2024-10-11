@@ -35,8 +35,8 @@ make -j
 export LLVM_PROFILE_FILE="ylt_test-%m.profraw"
 ls
 cd output
-./tests/coro_io_test ./tests/coro_rpc_test ./tests/easylog_test ./tests/struct_pack_test ./tests/struct_pack_test_with_optimize
+./tests/coro_io_test ./tests/coro_rpc_test ./tests/easylog_test ./tests/struct_pack_test ./tests/struct_pack_test_with_optimize ./tests/metric_test ./tests/struct_pb_test ./tests/reflection_test
 llvm-profdata merge -sparse ylt_test-*.profraw -o ylt_test.profdata
-llvm-cov show ./tests/coro_io_test ./tests/coro_rpc_test ./tests/easylog_test ./tests/struct_pack_test ./tests/struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio" -show-instantiations=false
+llvm-cov show ./tests/coro_io_test ./tests/coro_rpc_test ./tests/easylog_test ./tests/struct_pack_test ./tests/struct_pack_test_with_optimize ./tests/metric_test ./tests/struct_pb_test ./tests/reflection_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio" -show-instantiations=false
 echo 'Done!!!'
 fi
