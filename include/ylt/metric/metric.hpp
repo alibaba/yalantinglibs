@@ -195,7 +195,7 @@ class static_metric : public metric_t {
 };
 
 inline std::chrono::seconds ylt_label_max_age{0};
-inline std::chrono::seconds ylt_label_check_expire_duration{0};
+inline std::chrono::seconds ylt_label_check_expire_duration{60};
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
 inline int64_t ylt_label_capacity = 20000000;
@@ -210,7 +210,7 @@ inline void set_label_capacity(int64_t max_label_count) {
 
 inline void set_label_max_age(
     std::chrono::seconds max_age,
-    std::chrono::seconds check_duration = std::chrono::seconds(60 * 10)) {
+    std::chrono::seconds check_duration = std::chrono::seconds{60}) {
   ylt_label_max_age = max_age;
   ylt_label_check_expire_duration = check_duration;
 }
