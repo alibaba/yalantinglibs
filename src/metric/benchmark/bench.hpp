@@ -36,11 +36,13 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
   std::string val(36, ' ');
   for (size_t i = 0; i < thd_num; i++) {
     vec.push_back(std::thread([&, i] {
-      while (!stop) {
-        bench_clock_t clock;
+      bench_clock_t clock_loop;
+      auto dur = clock.duration<std::chrono::microseconds>();
+      while (!stop || dur < duration * 2) {
         op();
-        auto t = clock.duration<std::chrono::microseconds>();
-        lantency_summary.observe(t.count() / 1000.0f);
+        auto new_dur = clock.duration<std::chrono::microseconds>();
+        lantency_summary.observe((new_dur - dur).count() / 1000.0f);
+        dur = new_dur;
       }
     }));
   }
@@ -55,6 +57,10 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
   } while (clock2.duration() < duration);
   auto total_ms = clock.duration();
   stop = true;
+  if constexpr (requires { impl.size(); }) {
+    std::cout << "size:" << impl.size() << "\n";
+  }
+
   std::cout << "run " << total_ms.count() << "ms\n";
   uint64_t cnt;
   double sum;
