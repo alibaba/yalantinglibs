@@ -836,6 +836,38 @@ TEST_CASE("test summary with many quantities") {
 #endif
 }
 
+TEST_CASE("test summary refresh") {
+  summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 1.1}, 1s};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(i);
+  }
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  std::this_thread::sleep_for(1s);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 0);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(i);
+  }
+  std::this_thread::sleep_for(500ms);
+  for (int i = 0; i < 10; i++) {
+    summary.observe(i);
+  }
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 60);
+  std::this_thread::sleep_for(500ms);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 10);
+  std::this_thread::sleep_for(500ms);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 0);
+}
+
 TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"));

@@ -77,7 +77,7 @@ inline void bench_static_summary_mixed(size_t thd_num,
                                        std::chrono::seconds duration,
                                        std::chrono::seconds age = 1s) {
   ylt::metric::summary_t summary("summary mixed test", "",
-                                 {0.5, 0.9, 0.95, 0.99, 0.995}, 1s);
+                                 {0.5, 0.9, 0.95, 0.99, 0.995}, age);
   bench_mixed_impl(
       summary,
       [&]() {
