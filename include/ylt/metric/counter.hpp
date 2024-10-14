@@ -147,12 +147,12 @@ class basic_dynamic_counter
              std::move(labels_name)) {}
   using label_key_type = const std::array<std::string, N> &;
   void inc(label_key_type labels_value, value_type value = 1) {
-    detail::inc_impl(Base::try_emplace(labels_value)->value, value);
+    detail::inc_impl(Base::try_emplace(labels_value).first->value, value);
   }
 
   value_type update(label_key_type labels_value, value_type value) {
     return Base::try_emplace(labels_value)
-        ->value.exchange(value, std::memory_order::relaxed);
+        .first->value.exchange(value, std::memory_order::relaxed);
   }
 
   value_type value(label_key_type labels_value) {

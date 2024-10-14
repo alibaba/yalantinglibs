@@ -91,18 +91,16 @@ class dynamic_metric_impl : public dynamic_metric {
 
  protected:
   template <typename Key, typename... Args>
-  std::shared_ptr<metric_pair> try_emplace(Key&& key, Args&&... args) {
+  std::pair<std::shared_ptr<metric_pair>, bool> try_emplace(Key&& key,
+                                                            Args&&... args) {
     std::span<const std::string, N> view = key;
-    auto iter =
-        map_.try_emplace(view, std::forward<Key>(key),  // rehash problem
-                         std::forward<Args>(args)...);
-    if (iter.second) {
-      *const_cast<std::span<const std::string, N>*>(&iter.first.first) =
-          iter.first.second->label;
-    }
-    return map_
-        .try_emplace(view, std::forward<Key>(key), std::forward<Args>(args)...)
-        .first.second;
+    return map_.try_emplace_with_op(
+        view,
+        [](auto result) {
+          *const_cast<std::span<const std::string, N>*>(&result.first->first) =
+              result.first->second->label;
+        },
+        std::forward<Key>(key), std::forward<Args>(args)...);
   }
   void clean_expired_label() override {
     erase_if([now = std::chrono::steady_clock::now()](auto& pair) mutable {

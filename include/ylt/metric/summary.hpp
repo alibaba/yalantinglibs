@@ -156,33 +156,34 @@ class basic_dynamic_summary
   }
 
   void observe(const std::array<std::string, N>& labels_value, float value) {
-    Base::try_emplace(labels_value, quantiles_)->value.insert(value);
+    Base::try_emplace(labels_value, quantiles_).first->value.insert(value);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value) {
     double sum;
     uint64_t count;
     return Base::try_emplace(labels_value, quantiles_)
-        ->value.get_rates(sum, count);
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                uint64_t& count) {
     double sum;
     return Base::try_emplace(labels_value, quantiles_)
-        ->value.get_rates(sum, count);
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum) {
     uint64_t count;
     return Base::try_emplace(labels_value, quantiles_)
-        ->value.get_rates(sum, count);
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum, uint64_t& count) {
-    return Base::try_emplace(labels_value, quantiles_)->value.stat(sum, count);
+    return Base::try_emplace(labels_value, quantiles_)
+        .first->value.stat(sum, count);
   }
 
   virtual void serialize(std::string& str) override {
