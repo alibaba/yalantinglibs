@@ -97,8 +97,10 @@ class dynamic_metric_impl : public dynamic_metric {
     return map_.try_emplace_with_op(
         view,
         [](auto result) {
-          *const_cast<std::span<const std::string, N>*>(&result.first->first) =
-              result.first->second->label;
+          if (result.second) {
+            *const_cast<std::span<const std::string, N>*>(
+                &result.first->first) = result.first->second->label;
+          }
         },
         std::forward<Key>(key), std::forward<Args>(args)...);
   }
