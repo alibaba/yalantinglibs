@@ -39,7 +39,7 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
     vec.push_back(std::thread([&, i] {
       bench_clock_t clock_loop;
       auto dur = clock.duration<std::chrono::microseconds>();
-      while (!stop || dur < duration * 2) {
+      while (!stop && dur < duration + 1s) {
         op();
         auto new_dur = clock.duration<std::chrono::microseconds>();
         lantency_summary.observe((new_dur - dur).count() / 1000.0f);
