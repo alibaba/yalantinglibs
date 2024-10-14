@@ -54,7 +54,7 @@ class basic_dynamic_gauge : public basic_dynamic_counter<value_type, N> {
 
   void dec(const std::array<std::string, N>& labels_value,
            value_type value = 1) {
-    detail::dec_impl(Base::try_emplace(labels_value)->value, value);
+    detail::dec_impl(Base::try_emplace(labels_value).first->value, value);
   }
 };
 

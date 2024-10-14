@@ -28,20 +28,13 @@ class map_lock_t {
     return it->second;
   }
 
-  template <typename... Args>
-  std::pair<value_type&, bool> try_emplace(const key_type& key,
-                                           Args&&... args) {
+  template <typename Op, typename... Args>
+  std::pair<std::shared_ptr<typename mapped_type::element_type>, bool>
+  try_emplace_with_op(const key_type& key, Op&& op, Args&&... args) {
     std::lock_guard lock(*mtx_);
     auto result = visit_map().try_emplace(key, std::forward<Args>(args)...);
-    return {*result.first, result.second};
-  }
-
-  template <typename... Args>
-  std::pair<value_type&, bool> try_emplace(key_type&& key, Args&&... args) {
-    std::lock_guard lock(*mtx_);
-    auto result =
-        visit_map().try_emplace(std::move(key), std::forward<Args>(args)...);
-    return {*result.first, result.second};
+    op(result);
+    return {result.first->second, result.second};
   }
 
   size_t erase(const key_type& key) {
@@ -118,39 +111,49 @@ template <typename Map, typename Hash>
 class map_sharded_t {
  public:
   using key_type = typename Map::key_type;
-  using value_type = typename Map::mapped_type;
+  using value_type = typename Map::value_type;
+  using mapped_type = typename Map::mapped_type;
   map_sharded_t(size_t shard_num) : shards_(shard_num) {}
 
-  template <typename... Args>
-  auto try_emplace(key_type&& key, Args&&... args) {
-    auto result = get_sharded(Hash{}(key))
-                      .try_emplace(std::move(key), std::forward<Args>(args)...);
-    if (result.second) {
-      size_.fetch_add(1, std::memory_order_relaxed);
-    }
-    return result;
+  template <typename KeyType, typename... Args>
+  std::pair<std::shared_ptr<typename mapped_type::element_type>, bool>
+  try_emplace(KeyType&& key, Args&&... args) {
+    return try_emplace_with_op(
+        std::forward<KeyType>(key),
+        [](auto&&) {
+        },
+        std::forward<Args>(args)...);
   }
 
-  template <typename... Args>
-  auto try_emplace(const key_type& key, Args&&... args) {
-    auto result =
-        get_sharded(Hash{}(key)).try_emplace(key, std::forward<Args>(args)...);
-    if (result.second) {
-      size_.fetch_add(1, std::memory_order_relaxed);
+  template <typename Op, typename... Args>
+  std::pair<std::shared_ptr<typename mapped_type::element_type>, bool>
+  try_emplace_with_op(const key_type& key, Op&& func, Args&&... args) {
+    auto ret = get_sharded(Hash{}(key))
+                   .try_emplace_with_op(key, std::forward<Op>(func),
+                                        std::forward<Args>(args)...);
+    if (ret.second) {
+      size_.fetch_add(1);
     }
-    return result;
+    return ret;
   }
 
-  size_t size() const { return size_.load(std::memory_order_relaxed); }
+  size_t size() const {  // this value is approx
+    int64_t val = size_.load();
+    if (val < 0) [[unlikely]] {  // may happen when insert & deleted frequently
+      val = 0;
+    }
+    return val;
+  }
 
-  auto find(const key_type& key) const {
+  std::shared_ptr<typename mapped_type::element_type> find(
+      const key_type& key) const {
     return get_sharded(Hash{}(key)).find(key);
   }
 
   size_t erase(const key_type& key) {
     auto result = get_sharded(Hash{}(key)).erase(key);
     if (result) {
-      size_.fetch_sub(result, std::memory_order_relaxed);
+      size_.fetch_sub(result);
     }
     return result;
   }
@@ -161,7 +164,7 @@ class map_sharded_t {
     for (auto& map : shards_) {
       auto result = map.erase_if(std::forward<Func>(op));
       total += result;
-      size_.fetch_sub(result, std::memory_order_relaxed);
+      size_.fetch_sub(result);
     }
     return total;
   }
@@ -173,7 +176,7 @@ class map_sharded_t {
       auto result = map.erase_if(std::forward<Func>(op));
       if (result) {
         total += result;
-        size_.fetch_sub(result, std::memory_order_relaxed);
+        size_.fetch_sub(result);
         break;
       }
     }
@@ -191,7 +194,7 @@ class map_sharded_t {
   template <typename T>
   std::vector<T> copy(auto&& op) const {
     std::vector<T> ret;
-    ret.reserve(size_.load(std::memory_order_relaxed));
+    ret.reserve(size());
     for (auto& map : shards_) {
       map.for_each([&ret, &op](auto& e) {
         if (op(e.second)) {
@@ -217,6 +220,6 @@ class map_sharded_t {
   }
 
   std::vector<internal::map_lock_t<Map>> shards_;
-  std::atomic<std::size_t> size_;
+  std::atomic<int64_t> size_;
 };
 }  // namespace ylt::util

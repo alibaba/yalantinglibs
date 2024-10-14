@@ -1,3 +1,4 @@
+#include <exception>
 #include <random>
 
 #include "ylt/metric.hpp"
@@ -38,7 +39,7 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
     vec.push_back(std::thread([&, i] {
       bench_clock_t clock_loop;
       auto dur = clock.duration<std::chrono::microseconds>();
-      while (!stop || dur < duration * 2) {
+      while (!stop && dur < duration + 1s) {
         op();
         auto new_dur = clock.duration<std::chrono::microseconds>();
         lantency_summary.observe((new_dur - dur).count() / 1000.0f);
@@ -105,7 +106,8 @@ inline void bench_static_counter_mixed(size_t thd_num,
 
 inline void bench_dynamic_summary_mixed(size_t thd_num,
                                         std::chrono::seconds duration,
-                                        std::chrono::seconds age = 1s) {
+                                        std::chrono::seconds age = 1s,
+                                        int max_cnt = 1000000) {
   ylt::metric::dynamic_summary summary("dynamic summary mixed test", "",
                                        {0.5, 0.9, 0.95, 0.99, 0.995},
                                        {"a", "b"}, age);
@@ -113,14 +115,34 @@ inline void bench_dynamic_summary_mixed(size_t thd_num,
       summary,
       [&]() mutable {
         summary.observe({"123e4567-e89b-12d3-a456-426614174000",
-                         std::to_string(get_random(1000000))},
+                         std::to_string(get_random(max_cnt))},
                         get_random(100));
       },
       thd_num, duration);
 }
 
+inline void bench_dynamic_counter_mixed_with_delete(
+    size_t thd_num, std::chrono::seconds duration,
+    std::chrono::seconds age = 1s, int max_cnt = 1000000) {
+  ylt::metric::dynamic_counter_2d counter("dynamic summary mixed test", "",
+                                          {"a", "b"});
+  bench_mixed_impl(
+      counter,
+      [&, i = 0]() mutable {
+        ++i;
+        std::array<std::string, 2> label = {
+            "123e4567-e89b-12d3-a456-426614174000",
+            std::to_string(get_random(max_cnt))};
+        counter.inc(label, 1);
+        counter.remove_label_value({{"a", label[0]}, {"b", label[1]}});
+      },
+      thd_num, duration);
+}
+
 inline void bench_dynamic_counter_mixed(size_t thd_num,
-                                        std::chrono::seconds duration) {
+                                        std::chrono::seconds duration,
+                                        std::chrono::seconds age = 1s,
+                                        int max_cnt = 1000000) {
   ylt::metric::dynamic_counter_2d counter("dynamic summary mixed test", "",
                                           {"a", "b"});
   bench_mixed_impl(
@@ -128,7 +150,7 @@ inline void bench_dynamic_counter_mixed(size_t thd_num,
       [&, i = 0]() mutable {
         ++i;
         counter.inc({"123e4567-e89b-12d3-a456-426614174000",
-                     std::to_string(get_random(1000000))},
+                     std::to_string(get_random(max_cnt))},
                     1);
       },
       thd_num, duration);
