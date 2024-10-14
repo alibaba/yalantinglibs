@@ -132,14 +132,14 @@ class map_sharded_t {
                    .try_emplace_with_op(key, std::forward<Op>(func),
                                         std::forward<Args>(args)...);
     if (ret.second) {
-      size_.fetch_add(1, std::memory_order_relaxed);
+      size_.fetch_add(1);
     }
     return ret;
   }
 
   size_t size() const {  // this value is approx
-    auto val = size_.load(std::memory_order_relaxed);
-    if (val < 0) {  // may happen when insert & deleted frequently
+    int64_t val = size_.load();
+    if (val < 0) [[unlikely]] {  // may happen when insert & deleted frequently
       val = 0;
     }
     return val;
@@ -153,7 +153,7 @@ class map_sharded_t {
   size_t erase(const key_type& key) {
     auto result = get_sharded(Hash{}(key)).erase(key);
     if (result) {
-      size_.fetch_sub(result, std::memory_order_relaxed);
+      size_.fetch_sub(result);
     }
     return result;
   }
@@ -164,7 +164,7 @@ class map_sharded_t {
     for (auto& map : shards_) {
       auto result = map.erase_if(std::forward<Func>(op));
       total += result;
-      size_.fetch_sub(result, std::memory_order_relaxed);
+      size_.fetch_sub(result);
     }
     return total;
   }
@@ -176,7 +176,7 @@ class map_sharded_t {
       auto result = map.erase_if(std::forward<Func>(op));
       if (result) {
         total += result;
-        size_.fetch_sub(result, std::memory_order_relaxed);
+        size_.fetch_sub(result);
         break;
       }
     }
