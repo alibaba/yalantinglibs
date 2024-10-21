@@ -836,10 +836,6 @@ TEST_CASE("test reflection") {
 
 TEST_CASE("test struct_pb") {
   {
-    uint8_t c = 0x1;
-    printf("%x", ~c);
-  }
-  {
     my_space::inner_struct inner{41, 42, 43};
 
     std::string str;
@@ -1201,9 +1197,6 @@ TEST_CASE("struct to proto") {
   }
   {
     std::string str;
-    auto s1 = iguana::detail::get_type_string1<iguana::sint32_t>();
-    auto s2 = iguana::detail::get_type_string1<iguana::sint64_t>();
-
     iguana::to_proto<test_pb_st1>(str, "pb");
     std::cout << str;
     CHECK(str.find("sint64 z = 3;") != std::string::npos);
