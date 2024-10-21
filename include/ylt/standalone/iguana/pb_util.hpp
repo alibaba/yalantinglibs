@@ -193,41 +193,43 @@ constexpr size_t variant_uint32_size_constexpr(uint32_t value) {
   return log / 7 + 1;
 }
 
-template <uint64_t v, size_t I, typename It>
-IGUANA_INLINE void append_varint_u32_constexpr_help(It&& it) {
-  *(it++) = static_cast<uint8_t>((v >> (7 * I)) | 0x80);
+template <uint64_t v, typename Writer, size_t... I>
+IGUANA_INLINE void append_varint_u32(Writer& writer,
+                                     std::index_sequence<I...>) {
+  uint8_t temp = 0;
+  ((temp = static_cast<uint8_t>(v >> (7 * I)), writer.write(&temp, 1)), ...);
 }
 
-template <uint64_t v, typename It, size_t... I>
-IGUANA_INLINE void append_varint_u32_constexpr(It&& it,
-                                               std::index_sequence<I...>) {
-  (append_varint_u32_constexpr_help<v, I>(it), ...);
-}
-
-template <uint32_t v, typename It>
-IGUANA_INLINE void serialize_varint_u32_constexpr(It&& it) {
+template <uint32_t v, typename Writer>
+IGUANA_INLINE void serialize_varint_u32(Writer& writer) {
   constexpr auto size = variant_uint32_size_constexpr(v);
-  append_varint_u32_constexpr<v>(it, std::make_index_sequence<size - 1>{});
-  *(it++) = static_cast<uint8_t>(v >> (7 * (size - 1)));
+  append_varint_u32<v>(writer, std::make_index_sequence<size - 1>{});
+  uint8_t temp = static_cast<uint8_t>(v >> (7 * (size - 1)));
+  writer.write((const char*)&temp, 1);
 }
 
-template <typename It>
-IGUANA_INLINE void serialize_varint(uint64_t v, It&& it) {
+template <typename Writer>
+IGUANA_INLINE void serialize_varint(uint64_t v, Writer& writer) {
+  uint8_t temp = static_cast<uint8_t>(v);
   if (v < 0x80) {
-    *(it++) = static_cast<uint8_t>(v);
+    writer.write((const char*)&temp, 1);
     return;
   }
-  *(it++) = static_cast<uint8_t>(v | 0x80);
+  temp = static_cast<uint8_t>(v | 0x80);
+  writer.write((const char*)&temp, 1);
   v >>= 7;
   if (v < 0x80) {
-    *(it++) = static_cast<uint8_t>(v);
+    temp = static_cast<uint8_t>(v);
+    writer.write((const char*)&temp, 1);
     return;
   }
   do {
-    *(it++) = static_cast<uint8_t>(v | 0x80);
+    temp = static_cast<uint8_t>(v | 0x80);
+    writer.write((const char*)&temp, 1);
     v >>= 7;
   } while (v >= 0x80);
-  *(it++) = static_cast<uint8_t>(v);
+  temp = static_cast<uint8_t>(v);
+  writer.write((const char*)&temp, 1);
 }
 
 IGUANA_INLINE uint32_t log2_floor_uint32(uint32_t n) {
