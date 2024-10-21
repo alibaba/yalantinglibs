@@ -854,7 +854,7 @@ TEST_CASE("test struct_pb") {
     iguana::from_pb(inner2, str);
     CHECK(inner.x == inner2.x);
     CHECK(inner.y == inner2.y);
-    CHECK(inner.z == inner2.z);    
+    CHECK(inner.z == inner2.z);
   }
 
   {
