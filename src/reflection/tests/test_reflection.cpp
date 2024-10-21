@@ -84,7 +84,7 @@ void test_pt() {
   CHECK(y == 4);
 
 #if __cplusplus >= 202002L
-  constexpr auto x = get<"x"_ylts>(pt);
+  constexpr auto x = get<"x">(pt);
   static_assert(x == 2);
 #endif
 }
@@ -119,10 +119,10 @@ TEST_CASE("test member value") {
   CHECK(age1 == 6);
 
 #if __cplusplus >= 202002L
-  auto& age2 = get<"age"_ylts>(p);
+  auto& age2 = get<"age">(p);
   CHECK(age2 == 6);
 
-  auto& var1 = get<"str"_ylts>(p);
+  auto& var1 = get<"str">(p);
   CHECK(var1 == "hello reflection");
 #endif
 
@@ -179,10 +179,10 @@ TEST_CASE("test member value") {
   CHECK(name2 == "str");
 
 #if __cplusplus >= 202002L
-  constexpr size_t idx = index_of<simple, "str"_ylts>();
+  constexpr size_t idx = index_of<simple, "str">();
   CHECK(idx == 2);
 
-  constexpr size_t idx2 = index_of<simple, "no_such"_ylts>();
+  constexpr size_t idx2 = index_of<simple, "no_such">();
   CHECK(idx2 == 4);
 #endif
 
@@ -360,16 +360,16 @@ TEST_CASE("test macros") {
   CHECK(*std::get<3>(var) == 6);
 
 #if __cplusplus >= 202002L
-  auto& age2 = get<"age"_ylts>(t);
+  auto& age2 = get<"age">(t);
   CHECK(age2 == 6);
 
-  auto& var1 = get<"str"_ylts>(t);
+  auto& var1 = get<"str">(t);
   CHECK(var1 == "hello reflection");
 
-  constexpr size_t idx = index_of<simple2, "str"_ylts>();
+  constexpr size_t idx = index_of<simple2, "str">();
   CHECK(idx == 2);
 
-  constexpr size_t idx2 = index_of<simple2, "no_such"_ylts>();
+  constexpr size_t idx2 = index_of<simple2, "no_such">();
   CHECK(idx2 == 4);
 #endif
 

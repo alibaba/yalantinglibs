@@ -51,11 +51,11 @@ int main() {
   static_assert(name_of<simple, 1>()== "id");
 
   // 根据编译期字段名获取字段值
-  CHECK(get<"age"_ylts>(p) == 6);
-  CHECK(get<"str"_ylts>(p) == "hello reflection");
+  CHECK(get<"age">(p) == 6);
+  CHECK(get<"str">(p) == "hello reflection");
 
   // 根据编译期字段名获取字段索引
-  static_assert(index_of<simple2, "str"_ylts>() == 2);
+  static_assert(index_of<simple2, "str">() == 2);
 
   // 遍历对象的字段、字段名、字段索引, 并打印
   for_each(p, [](auto& field, auto name, auto index) {
