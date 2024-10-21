@@ -232,6 +232,24 @@ IGUANA_INLINE constexpr std::string_view get_type_string() {
       }
     }
   }
+  else if constexpr (std::is_same_v<T, iguana::sint32_t>) {
+    return "sint32";
+  }
+  else if constexpr (std::is_same_v<T, iguana::sint64_t>) {
+    return "sint64";
+  }
+  else if constexpr (std::is_same_v<T, iguana::fixed32_t>) {
+    return "fixed32";
+  }
+  else if constexpr (std::is_same_v<T, iguana::fixed64_t>) {
+    return "fixed64";
+  }
+  else if constexpr (std::is_same_v<T, iguana::sfixed32_t>) {
+    return "sfixed32";
+  }
+  else if constexpr (std::is_same_v<T, iguana::sfixed64_t>) {
+    return "sfixed64";
+  }
   else if constexpr (std::is_same_v<T, std::string> ||
                      std::is_same_v<T, std::string_view>) {
     return "string";
