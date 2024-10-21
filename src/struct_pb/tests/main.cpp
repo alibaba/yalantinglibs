@@ -846,6 +846,15 @@ TEST_CASE("test struct_pb") {
     CHECK(inner.x == inner1.x);
     CHECK(inner.y == inner1.y);
     CHECK(inner.z == inner1.z);
+
+    std::stringstream ss;
+    iguana::to_pb(inner, ss);
+    std::string str1 = ss.str();
+    my_space::inner_struct inner2;
+    iguana::from_pb(inner2, str);
+    CHECK(inner.x == inner2.x);
+    CHECK(inner.y == inner2.y);
+    CHECK(inner.z == inner2.z);    
   }
 
   {

@@ -195,6 +195,14 @@ struct underline_type<std::optional<T>> {
 template <typename T>
 using underline_type_t = typename underline_type<std::remove_cvref_t<T>>::type;
 
+struct memory_writer {
+  char* buffer;
+  void write(const char* data, std::size_t len) {
+    memcpy(buffer, data, len);
+    buffer += len;
+  }
+};
+
 template <char... C, typename It>
 IGUANA_INLINE void match(It&& it, It&& end) {
   const auto n = static_cast<size_t>(std::distance(it, end));
