@@ -63,7 +63,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|asio|src" -show-region-summary=false >> tmp.log
+          llvm-cov report coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test -object struct_pb_test -object reflection_test -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|asio|src" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
