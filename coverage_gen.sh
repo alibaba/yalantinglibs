@@ -27,7 +27,7 @@ cd output/tests
 llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
 llvm-cov show -object ./coro_io_test -object ./coro_rpc_test -object ./easylog_test -object ./struct_pack_test -object ./struct_pack_test_with_optimize -object ./metric_test -object ./struct_pb_test -object ./reflection_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|standalone|src|template_switch" -show-instantiations=false
 llvm-cov report -object ./coro_io_test -object ./coro_rpc_test -object ./easylog_test -object ./struct_pack_test -object ./struct_pack_test_with_optimize -object ./metric_test -object ./struct_pb_test -object ./reflection_test -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|standalone|src|template_switch" -show-region-summary=false
-echo 'For more Detail, see:/output/.coverage_llvm_cov/index.html'
+echo 'For more Detail, see:/build/.coverage_llvm_cov/index.html'
 
 # OR, we can use gcc && lcov
 # for coverage, we should install
