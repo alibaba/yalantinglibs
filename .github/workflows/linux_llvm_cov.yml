@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: llvm-cov
-          path: ${{ github.workspace }}/build/.coverage_llvm_cov
+          path: ${{github.workspace}}/build/.coverage_llvm_cov
 
       - name: Create Code Coverage Report
         working-directory: ${{github.workspace}}/build/output/tests
