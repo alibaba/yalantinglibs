@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: |
@@ -34,7 +34,7 @@ jobs:
           cp -r src/coro_rpc/tests/openssl_files .
           ls
           mkdir build && cd build
-          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DYLT_ENABLE_SSL=ON
+          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DYLT_ENABLE_SSL=ON -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
           make -j
           export LLVM_PROFILE_FILE="test_ylt-%m.profraw"
           cd output
@@ -48,11 +48,11 @@ jobs:
           ./struct_pb_test 
           ./reflection_test
           llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
-          llvm-cov show coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test -object struct_pb_test -object reflection_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio|src" -show-instantiations=false
+          llvm-cov show -object coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test  -object struct_pb_test -object reflection_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|src|template_switch" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: llvm-cov
           path: ${{ github.workspace }}/build/.coverage_llvm_cov
@@ -63,7 +63,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test -object struct_pb_test -object reflection_test -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|asio|src" -show-region-summary=false >> tmp.log
+          llvm-cov report -object coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test -object struct_pb_test -object reflection_test -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|src|template_switch" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
