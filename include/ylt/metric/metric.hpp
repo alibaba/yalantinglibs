@@ -13,7 +13,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
-#include "thread_local_value.hpp"
 #if __has_include("ylt/coro_io/coro_io.hpp")
 #include "ylt/coro_io/coro_io.hpp"
 #else
@@ -52,8 +51,7 @@ struct metric_filter_options {
 class metric_t {
  public:
   static inline std::atomic<int64_t> g_user_metric_count = 0;
-  static inline auto g_user_metric_label_count =
-      new thread_local_value<int64_t>(std::thread::hardware_concurrency());
+
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help)
       : type_(type),
