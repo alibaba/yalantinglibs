@@ -629,8 +629,8 @@ void http_proxy() {
   assert(!resp_random.resp_body.empty());
 }
 
-void coro_load_blancer() {
-  auto ch = coro_io::create_load_blancer<int>(10000);
+void coro_channel() {
+  auto ch = coro_io::create_channel<int>(10000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   assert(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
@@ -661,6 +661,6 @@ int main() {
   test_gzip();
 #endif
   http_proxy();
-  coro_load_blancer();
+  coro_channel();
   return 0;
 }
