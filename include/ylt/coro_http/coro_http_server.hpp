@@ -15,14 +15,26 @@
  */
 #pragma once
 #ifdef YLT_ENABLE_SSL
+#ifndef CINATRA_ENABLE_SSL
 #define CINATRA_ENABLE_SSL
 #endif
+#endif
 #include <ylt/easylog.hpp>
+#ifndef CINATRA_LOG_ERROR
 #define CINATRA_LOG_ERROR ELOG_ERROR
+#endif
+#ifndef CINATRA_LOG_WARNING
 #define CINATRA_LOG_WARNING ELOG_WARN
+#endif
+#ifndef CINATRA_LOG_INFO
 #define CINATRA_LOG_INFO ELOG_INFO
+#endif
+#ifndef CINATRA_LOG_DEBUG
 #define CINATRA_LOG_DEBUG ELOG_DEBUG
+#endif
+#ifndef CINATRA_LOG_TRACE
 #define CINATRA_LOG_TRACE ELOG_TRACE
+#endif
 
 #include <cinatra/coro_http_server.hpp>
 
