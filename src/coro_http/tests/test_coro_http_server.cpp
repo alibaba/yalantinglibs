@@ -1139,9 +1139,9 @@ TEST_CASE("test websocket with different message size") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl server") {
   cinatra::coro_http_server server(1, 9001);
-
-  server.init_ssl("../../include/cinatra/server.crt",
-                  "../../include/cinatra/server.key", "test");
+  std::cout << std::filesystem::current_path() << "\n";
+  server.init_ssl("../../../src/coro_http/tests/server.crt",
+                  "../../../src/coro_http/tests/server.key", "test");
   server.set_http_handler<GET, POST>(
       "/ssl", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ssl");
@@ -1151,8 +1151,8 @@ TEST_CASE("test ssl server") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
-  [[maybe_unused]] auto r = client.init_ssl(asio::ssl::verify_peer,
-                                            "../../include/cinatra/server.crt");
+  [[maybe_unused]] auto r = client.init_ssl(
+      asio::ssl::verify_peer, "../../../src/coro_http/tests/server.crt");
 
   auto result = client.get("https://127.0.0.1:9001/ssl");
   CHECK(result.status == 200);

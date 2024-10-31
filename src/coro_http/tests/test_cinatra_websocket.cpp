@@ -15,8 +15,8 @@ using namespace coro_http;
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test wss client") {
   cinatra::coro_http_server server(1, 9001);
-  server.init_ssl("../../include/cinatra/server.crt",
-                  "../../include/cinatra/server.key", "test");
+  server.init_ssl("../../../src/coro_http/tests/server.crt",
+                  "../../../src/coro_http/tests/server.key", "test");
   server.set_http_handler<cinatra::GET>(
       "/",
       [](coro_http_request &req,
@@ -40,7 +40,7 @@ TEST_CASE("test wss client") {
 
   coro_http_client client{};
   bool ok = client.init_ssl(asio::ssl::verify_peer,
-                            "../../include/cinatra/server.crt");
+                            "../../../src/coro_http/tests/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
   async_simple::coro::syncAwait(client.connect("wss://localhost:9001"));
