@@ -1151,8 +1151,7 @@ TEST_CASE("test ssl server") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
-  [[maybe_unused]] auto r = client.init_ssl(
-      asio::ssl::verify_peer, "../../../src/coro_http/tests", "server.crt");
+  [[maybe_unused]] auto r = client.init_ssl();
 
   auto result = client.get("https://127.0.0.1:9001/ssl");
   CHECK(result.status == 200);
