@@ -24,6 +24,18 @@ add_executable(coro_http_test
         test_http_parse.cpp
         main.cpp
         )
+
+add_custom_command(
+        TARGET coro_http_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/src/coro_http/openssl_files)
+add_custom_command(
+        TARGET coro_http_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/output/openssl_files)
+
 add_test(NAME coro_http_test COMMAND coro_http_test)
 # target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 if (YLT_ENABLE_SSL)
