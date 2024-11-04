@@ -379,7 +379,7 @@ struct channel : public asio::experimental::channel<void(std::error_code, R)> {
 };
 
 template <typename R>
-inline channel<R> create_load_blancer(
+inline channel<R> create_channel(
     size_t capacity,
     coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor()) {
   return channel<R>(executor, capacity);
