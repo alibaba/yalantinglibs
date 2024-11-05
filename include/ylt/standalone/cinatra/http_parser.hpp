@@ -48,10 +48,7 @@ class http_parser {
     if (header_len_ < 0) [[unlikely]] {
       CINATRA_LOG_WARNING << "parse http head failed";
       if (num_headers_ == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
-        CINATRA_LOG_ERROR << "the field of http head is out of max limit "
-                          << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
-                          << ", you can define macro "
-                             "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
+        output_error();
       }
     }
     return header_len_;
@@ -76,10 +73,7 @@ class http_parser {
     if (header_len_ < 0) [[unlikely]] {
       CINATRA_LOG_WARNING << "parse http head failed";
       if (num_headers_ == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
-        CINATRA_LOG_ERROR << "the field of http head is out of max limit "
-                          << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
-                          << ", you can define macro "
-                             "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
+        output_error();
       }
       return header_len_;
     }
@@ -241,6 +235,14 @@ class http_parser {
       }
       queries_.emplace(key, val);
     }
+  }
+
+ private:
+  void output_error() {
+    CINATRA_LOG_ERROR << "the field of http head is out of max limit "
+                      << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
+                      << ", you can define macro "
+                         "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
   }
 
  private:
