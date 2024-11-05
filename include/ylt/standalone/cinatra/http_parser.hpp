@@ -173,11 +173,6 @@ class http_parser {
     return content_type.substr(pos + 1);
   }
 
-  bool is_req_ranges() const {
-    auto value = this->get_header_value("Range"sv);
-    return !value.empty();
-  }
-
   bool is_resp_ranges() const {
     auto value = this->get_header_value("Accept-Ranges"sv);
     return !value.empty();
@@ -246,13 +241,6 @@ class http_parser {
       }
       queries_.emplace(key, val);
     }
-  }
-
-  std::string_view trim(std::string_view v) {
-    v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
-    v.remove_suffix(
-        (std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
-    return v;
   }
 
  private:

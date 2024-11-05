@@ -141,10 +141,6 @@ class coro_http_request {
 
   bool is_chunked() { return parser_.is_chunked(); }
 
-  bool is_resp_ranges() { return parser_.is_resp_ranges(); }
-
-  bool is_req_ranges() { return parser_.is_req_ranges(); }
-
   std::string_view get_accept_encoding() {
     return get_header_value("Accept-Encoding");
   }
