@@ -428,6 +428,17 @@ struct add_more_data {
   }
 };
 
+struct auth_t {
+  bool before(coro_http_request &req, coro_http_response &res) { return true; }
+};
+
+struct dely_t {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    res.set_status_and_content(status_type::unauthorized, "unauthorized");
+    return false;
+  }
+};
+
 TEST_CASE("test aspect") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
@@ -448,6 +459,34 @@ TEST_CASE("test aspect") {
         resp.set_status_and_content(status_type::ok, "ok");
       },
       add_more_data{});
+  server.set_http_handler<GET>(
+      "/auth",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      dely_t{}, auth_t{});
+  server.set_http_handler<GET>(
+      "/exception", [](coro_http_request &req, coro_http_response &resp) {
+        throw std::invalid_argument("invalid argument");
+      });
+  server.set_http_handler<GET>(
+      "/throw", [](coro_http_request &req, coro_http_response &resp) {
+        throw 9;
+      });
+  server.set_http_handler<GET>(
+      "/coro_exception",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        throw std::invalid_argument("invalid argument");
+        co_return;
+      });
+  server.set_http_handler<GET>(
+      "/coro_throw",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        throw 9;
+        co_return;
+      });
 
   server.async_start();
 
@@ -457,6 +496,17 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 200);
   result = async_simple::coro::syncAwait(client.async_get("/get_more"));
   CHECK(result.status == 200);
+  result = async_simple::coro::syncAwait(client.async_get("/auth"));
+  CHECK(result.status == 401);
+  CHECK(result.resp_body == "unauthorized");
+  result = async_simple::coro::syncAwait(client.async_get("/exception"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/throw"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/coro_exception"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/coro_throw"));
+  CHECK(result.status == 503);
 }
 
 TEST_CASE("test response") {
