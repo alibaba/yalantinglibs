@@ -20,7 +20,6 @@ using namespace std::chrono_literals;
 
 using namespace coro_http;
 
-#ifdef CINATRA_ENABLE_GZIP
 std::string_view get_header_value(auto &resp_headers, std::string_view key) {
   for (const auto &[k, v] : resp_headers) {
     if (k == key)
@@ -29,6 +28,7 @@ std::string_view get_header_value(auto &resp_headers, std::string_view key) {
   return {};
 }
 
+#ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test for gzip") {
   coro_http_server server(1, 8090);
   server.set_http_handler<GET, POST>(
