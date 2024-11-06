@@ -34,20 +34,55 @@ TEST_CASE("test for gzip") {
   server.set_http_handler<GET, POST>(
       "/gzip", [](coro_http_request &req, coro_http_response &res) {
         CHECK(req.get_header_value("Content-Encoding") == "gzip");
+        CHECK(req.get_encoding_type() == content_encoding::gzip);
         res.set_status_and_content(status_type::ok, "hello world",
                                    content_encoding::gzip);
       });
+  server.set_http_handler<GET, POST>(
+      "/deflate", [](coro_http_request &req, coro_http_response &res) {
+        CHECK(req.get_header_value("Content-Encoding") == "deflate");
+        CHECK(req.get_encoding_type() == content_encoding::deflate);
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   content_encoding::deflate);
+      });
+  server.set_http_handler<GET, POST>(
+      "/none", [](coro_http_request &req, coro_http_response &res) {
+        CHECK(req.get_header_value("Content-Encoding") == "none");
+        CHECK(req.get_encoding_type() == content_encoding::none);
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   content_encoding::none);
+      });
   server.async_start();
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/gzip";
+    client.add_header("Content-Encoding", "gzip");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
+    CHECK(result.resp_body == "hello world");
+  }
 
-  coro_http_client client{};
-  std::string uri = "http://127.0.0.1:8090/gzip";
-  client.add_header("Content-Encoding", "gzip");
-  auto result = async_simple::coro::syncAwait(client.async_get(uri));
-  auto content = get_header_value(result.resp_headers, "Content-Encoding");
-  CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
-  CHECK(result.resp_body == "hello world");
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/deflate";
+    client.add_header("Content-Encoding", "deflate");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding") ==
+          "deflate");
+    CHECK(result.resp_body == "hello world");
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/none";
+    client.add_header("Content-Encoding", "none");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding").empty());
+    CHECK(result.resp_body == "hello world");
+  }
   server.stop();
 }
 
@@ -347,6 +382,51 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   memcpy(s.data() + oldlen, s2.data(), s2.length());
   CHECK(strlen(s.data()) == 5010);
   CHECK(s == sum);
+}
+
+struct add_data {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data("hello world");
+    return true;
+  }
+};
+
+struct add_more_data {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data(std::vector<std::string>{"test", "aspect"});
+    return true;
+  }
+};
+
+TEST_CASE("test aspect") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get",
+      [](coro_http_request &req, coro_http_response &resp) {
+        auto val = req.get_aspect_data();
+        CHECK(val[0] == "hello world");
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      add_data{});
+  server.set_http_handler<GET>(
+      "/get_more",
+      [](coro_http_request &req, coro_http_response &resp) {
+        auto val = req.get_aspect_data();
+        CHECK(val[0] == "test");
+        CHECK(val[1] == "aspect");
+        CHECK(!req.is_upgrade());
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      add_more_data{});
+
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/get"));
+  CHECK(result.status == 200);
+  result = async_simple::coro::syncAwait(client.async_get("/get_more"));
+  CHECK(result.status == 200);
 }
 
 async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {

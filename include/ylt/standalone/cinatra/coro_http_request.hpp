@@ -239,10 +239,6 @@ class coro_http_request {
     return false;
   }
 
-  void set_aspect_data(std::string data) {
-    aspect_data_.push_back(std::move(data));
-  }
-
   void set_aspect_data(std::vector<std::string> data) {
     aspect_data_ = std::move(data);
   }
