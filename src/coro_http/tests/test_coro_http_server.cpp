@@ -942,7 +942,11 @@ TEST_CASE("test websocket") {
 
   auto lazy = []() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+    auto ret = co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+    if (ret.status != 101) {
+      std::cout << ret.net_err.message() << "\n";
+    }
+    CHECK(ret.status == 101);
     co_await client.write_websocket(std::string_view("test2fdsaf"),
                                     opcode::binary);
     auto data = co_await client.read_websocket();
@@ -1107,7 +1111,7 @@ TEST_CASE("check connecton timeout") {
 }
 
 TEST_CASE("test websocket with different message size") {
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(1, 9003);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo1",
       [](cinatra::coro_http_request &req,
@@ -1136,11 +1140,17 @@ TEST_CASE("test websocket with different message size") {
       });
   server.async_start();
 
-  auto lazy = [](std::string &str) -> async_simple::coro::Lazy<void> {
+  auto lazy = [](std::string str) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.connect("ws://127.0.0.1:9001/ws_echo1");
+    auto ret = co_await client.connect("ws://127.0.0.1:9003/ws_echo1");
+    if (ret.status != 101) {
+      std::cout << ret.net_err.message() << "\n";
+    }
+
+    CHECK(ret.status == 101);
     co_await client.write_websocket(str);
     auto data = co_await client.read_websocket();
+    CHECK(data.status == 200);
     CHECK(data.resp_body.size() == str.size());
     co_await client.write_websocket_close();
     data = co_await client.read_websocket();
@@ -1163,6 +1173,7 @@ TEST_CASE("test websocket with different message size") {
   }
 
   server.stop();
+  std::cout << "server stop" << std::endl;
 }
 
 #ifdef CINATRA_ENABLE_SSL
