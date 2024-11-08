@@ -20,7 +20,6 @@ using namespace std::chrono_literals;
 
 using namespace coro_http;
 
-#ifdef CINATRA_ENABLE_GZIP
 std::string_view get_header_value(auto &resp_headers, std::string_view key) {
   for (const auto &[k, v] : resp_headers) {
     if (k == key)
@@ -29,25 +28,61 @@ std::string_view get_header_value(auto &resp_headers, std::string_view key) {
   return {};
 }
 
+#ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test for gzip") {
   coro_http_server server(1, 8090);
   server.set_http_handler<GET, POST>(
       "/gzip", [](coro_http_request &req, coro_http_response &res) {
         CHECK(req.get_header_value("Content-Encoding") == "gzip");
+        CHECK(req.get_encoding_type() == content_encoding::gzip);
         res.set_status_and_content(status_type::ok, "hello world",
                                    content_encoding::gzip);
       });
+  server.set_http_handler<GET, POST>(
+      "/deflate", [](coro_http_request &req, coro_http_response &res) {
+        CHECK(req.get_header_value("Content-Encoding") == "deflate");
+        CHECK(req.get_encoding_type() == content_encoding::deflate);
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   content_encoding::deflate);
+      });
+  server.set_http_handler<GET, POST>(
+      "/none", [](coro_http_request &req, coro_http_response &res) {
+        CHECK(req.get_header_value("Content-Encoding") == "none");
+        CHECK(req.get_encoding_type() == content_encoding::none);
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   content_encoding::none);
+      });
   server.async_start();
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/gzip";
+    client.add_header("Content-Encoding", "gzip");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
+    CHECK(result.resp_body == "hello world");
+  }
 
-  coro_http_client client{};
-  std::string uri = "http://127.0.0.1:8090/gzip";
-  client.add_header("Content-Encoding", "gzip");
-  auto result = async_simple::coro::syncAwait(client.async_get(uri));
-  auto content = get_header_value(result.resp_headers, "Content-Encoding");
-  CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
-  CHECK(result.resp_body == "hello world");
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/deflate";
+    client.add_header("Content-Encoding", "deflate");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding") ==
+          "deflate");
+    CHECK(result.resp_body == "hello world");
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:8090/none";
+    client.add_header("Content-Encoding", "none");
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    CHECK(get_header_value(result.resp_headers, "Content-Encoding").empty());
+    CHECK(result.resp_body == "hello world");
+  }
   server.stop();
 }
 
@@ -92,6 +127,27 @@ TEST_CASE("test encoding type") {
         CHECK(resp.content() == "ok");
         co_return;
       });
+  std::string_view content = "ok";
+  server.set_http_handler<GET>(
+      "/only_deflate_view",
+      [content](coro_http_request &req,
+                coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content_view(status_type::ok, content,
+                                         content_encoding::deflate, true, "ok");
+        co_return;
+      });
+  server.set_http_handler<GET>(
+      "/only_deflate",
+      [content](coro_http_request &req,
+                coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok",
+                                    content_encoding::deflate,
+                                    req.get_accept_encoding());
+        // client4 accept-encoding not allow gzip, response content no
+        // compression
+        CHECK(resp.content() == "ok");
+        co_return;
+      });
 
   server.async_start();
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -123,6 +179,15 @@ TEST_CASE("test encoding type") {
   client4.add_header("Accept-Encoding", "deflate");
   result = async_simple::coro::syncAwait(
       client4.async_get("http://127.0.0.1:9001/only_gzip"));
+  CHECK(result.resp_body == "ok");
+
+  coro_http_client client5{};
+  result = async_simple::coro::syncAwait(
+      client5.async_get("http://127.0.0.1:9001/only_deflate_view"));
+  CHECK(result.resp_body == "ok");
+  client5.add_header("Accept-Encoding", "gzip");
+  result = async_simple::coro::syncAwait(
+      client5.async_get("http://127.0.0.1:9001/only_deflate"));
   CHECK(result.resp_body == "ok");
 
   server.stop();
@@ -347,6 +412,195 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   memcpy(s.data() + oldlen, s2.data(), s2.length());
   CHECK(strlen(s.data()) == 5010);
   CHECK(s == sum);
+}
+
+struct add_data {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data("hello world");
+    return true;
+  }
+};
+
+struct add_more_data {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data(std::vector<std::string>{"test", "aspect"});
+    return true;
+  }
+};
+
+struct auth_t {
+  bool before(coro_http_request &req, coro_http_response &res) { return true; }
+};
+
+struct dely_t {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    res.set_status_and_content(status_type::unauthorized, "unauthorized");
+    return false;
+  }
+};
+
+TEST_CASE("test aspect") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get",
+      [](coro_http_request &req, coro_http_response &resp) {
+        auto val = req.get_aspect_data();
+        CHECK(val[0] == "hello world");
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      add_data{});
+  server.set_http_handler<GET>(
+      "/get_more",
+      [](coro_http_request &req, coro_http_response &resp) {
+        auto val = req.get_aspect_data();
+        CHECK(val[0] == "test");
+        CHECK(val[1] == "aspect");
+        CHECK(!req.is_upgrade());
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      add_more_data{});
+  server.set_http_handler<GET>(
+      "/auth",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      dely_t{}, auth_t{});
+  server.set_http_handler<GET>(
+      "/exception", [](coro_http_request &req, coro_http_response &resp) {
+        throw std::invalid_argument("invalid argument");
+      });
+  server.set_http_handler<GET>(
+      "/throw", [](coro_http_request &req, coro_http_response &resp) {
+        throw 9;
+      });
+  server.set_http_handler<GET>(
+      "/coro_exception",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        throw std::invalid_argument("invalid argument");
+        co_return;
+      });
+  server.set_http_handler<GET>(
+      "/coro_throw",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        throw 9;
+        co_return;
+      });
+
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/get"));
+  CHECK(result.status == 200);
+  result = async_simple::coro::syncAwait(client.async_get("/get_more"));
+  CHECK(result.status == 200);
+  result = async_simple::coro::syncAwait(client.async_get("/auth"));
+  CHECK(result.status == 401);
+  CHECK(result.resp_body == "unauthorized");
+  result = async_simple::coro::syncAwait(client.async_get("/exception"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/throw"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/coro_exception"));
+  CHECK(result.status == 503);
+  result = async_simple::coro::syncAwait(client.async_get("/coro_throw"));
+  CHECK(result.status == 503);
+}
+
+TEST_CASE("test response") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.get_conn()->set_multi_buf(false);
+        resp.set_status_and_content(status_type::ok, "ok");
+        CHECK(resp.content_size() == 2);
+        CHECK(resp.need_date());
+      });
+  server.set_http_handler<GET>(
+      "/get2", [](coro_http_request &req, coro_http_response &resp) {
+        resp.get_conn()->set_multi_buf(false);
+        resp.set_status(status_type::ok);
+      });
+  std::array<http_header, 1> span{{"hello", "span"}};
+  server.set_http_handler<GET>(
+      "/get1", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.get_conn()->set_multi_buf(false);
+        resp.need_date_head(false);
+        CHECK(!resp.need_date());
+        resp.set_keepalive(true);
+        resp.add_header_span({span.data(), span.size()});
+
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  std::string sv = "hello view";
+  server.set_http_handler<GET>(
+      "/view", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.get_conn()->set_multi_buf(false);
+        resp.need_date_head(false);
+        resp.set_content_type<2>();
+        CHECK(!resp.need_date());
+        resp.add_header_span({span.data(), span.size()});
+
+        resp.set_status_and_content_view(
+            status_type::ok, std::string_view(sv.data(), sv.size()));
+      });
+  server.set_http_handler<GET>(
+      "/empty", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.get_conn()->set_multi_buf(false);
+        resp.need_date_head(false);
+        resp.set_content_type<2>();
+        CHECK(!resp.need_date());
+        resp.add_header_span({span.data(), span.size()});
+
+        resp.set_status_and_content_view(status_type::ok, "");
+      });
+  server.set_http_handler<GET>(
+      "/empty1", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_content_type<2>();
+        CHECK(!resp.need_date());
+        resp.add_header_span({span.data(), span.size()});
+
+        resp.set_status_and_content_view(status_type::ok, "");
+      });
+  server.set_http_handler<GET>(
+      "/empty2", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_content_type<2>();
+        CHECK(!resp.need_date());
+        resp.add_header_span({span.data(), span.size()});
+
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.async_start();
+  coro_http_client client{};
+  auto result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/get"));
+  CHECK(result.status == 200);
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/get1"));
+  CHECK(result.status == 200);
+  CHECK(get_header_value(result.resp_headers, "hello") == "span");
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/get2"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "200 OK");
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/view"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello view");
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/empty"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body.empty());
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/empty1"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body.empty());
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:9001/empty2"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body.empty());
 }
 
 async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
@@ -1732,13 +1986,13 @@ TEST_CASE("test coro http redirect request") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   if (result.status != 404 && !result.net_err) {
     CHECK(!result.net_err);
-    if (result.status != 502)
+    if (result.status < 500)
       CHECK(result.status == 302);
 
     if (client.is_redirect(result)) {
       std::string redirect_uri = client.get_redirect_uri();
       result = async_simple::coro::syncAwait(client.async_get(redirect_uri));
-      if (result.status != 502 && result.status != 404)
+      if (result.status < 400)
         CHECK(result.status == 200);
     }
 

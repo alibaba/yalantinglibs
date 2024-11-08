@@ -917,7 +917,7 @@ class coro_http_connection
 
     code_utils::base64_encode(accept_key, sha1buf, sizeof(sha1buf), 0);
 
-    response_.set_status_and_content(status_type::switching_protocols);
+    response_.set_status_and_content(status_type::switching_protocols, "");
 
     response_.add_header("Upgrade", "WebSocket");
     response_.add_header("Connection", "Upgrade");

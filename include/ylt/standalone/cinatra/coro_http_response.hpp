@@ -54,7 +54,7 @@ class coro_http_response {
     has_set_content_ = true;
   }
   void set_status_and_content(
-      status_type status, std::string content = "",
+      status_type status, std::string content,
       content_encoding encoding = content_encoding::none,
       std::string_view client_encoding_type = "") {
     set_status_and_content_view(status, std::move(content), encoding, false,
@@ -220,8 +220,10 @@ class coro_http_response {
       resp_str.append(TRANSFER_ENCODING_SV);
     }
     else {
-      if (!content_.empty()) {
-        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
+      if (!content_.empty() || !content_view_.empty()) {
+        size_t content_size =
+            content_.empty() ? content_view_.size() : content_.size();
+        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_size);
         resp_str.append(CONTENT_LENGTH_SV);
         resp_str.append(std::string_view(buf_, std::distance(buf_, ptr)));
         resp_str.append(CRCF);
@@ -385,8 +387,8 @@ class coro_http_response {
   void redirect(const std::string &url, bool is_forever = false) {
     add_header("Location", url);
     is_forever == false
-        ? set_status_and_content(status_type::moved_temporarily)
-        : set_status_and_content(status_type::moved_permanently);
+        ? set_status_and_content(status_type::moved_temporarily, "")
+        : set_status_and_content(status_type::moved_permanently, "");
   }
 
  private:

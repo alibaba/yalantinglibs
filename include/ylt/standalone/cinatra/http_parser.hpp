@@ -47,11 +47,8 @@ class http_parser {
     }
     if (header_len_ < 0) [[unlikely]] {
       CINATRA_LOG_WARNING << "parse http head failed";
-      if (size == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
-        CINATRA_LOG_ERROR << "the field of http head is out of max limit "
-                          << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
-                          << ", you can define macro "
-                             "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
+      if (num_headers_ == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
+        output_error();
       }
     }
     return header_len_;
@@ -75,11 +72,8 @@ class http_parser {
 
     if (header_len_ < 0) [[unlikely]] {
       CINATRA_LOG_WARNING << "parse http head failed";
-      if (size == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
-        CINATRA_LOG_ERROR << "the field of http head is out of max limit "
-                          << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
-                          << ", you can define macro "
-                             "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
+      if (num_headers_ == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
+        output_error();
       }
       return header_len_;
     }
@@ -173,11 +167,6 @@ class http_parser {
     return content_type.substr(pos + 1);
   }
 
-  bool is_req_ranges() const {
-    auto value = this->get_header_value("Range"sv);
-    return !value.empty();
-  }
-
   bool is_resp_ranges() const {
     auto value = this->get_header_value("Accept-Ranges"sv);
     return !value.empty();
@@ -248,11 +237,12 @@ class http_parser {
     }
   }
 
-  std::string_view trim(std::string_view v) {
-    v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
-    v.remove_suffix(
-        (std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
-    return v;
+ private:
+  void output_error() {
+    CINATRA_LOG_ERROR << "the field of http head is out of max limit "
+                      << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
+                      << ", you can define macro "
+                         "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
   }
 
  private:
