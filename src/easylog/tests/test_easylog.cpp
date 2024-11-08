@@ -31,7 +31,6 @@ std::string get_last_line(const std::string& filename) {
       last_line = std::move(temp);
     }
   }
-
   return last_line;
 }
 
