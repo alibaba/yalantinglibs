@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,6 @@
 #define ASYNC_SIMPLE_UTHREAD_COLLECT_H
 
 #include <type_traits>
-
 #include "async_simple/Future.h"
 #include "async_simple/uthread/Async.h"
 #include "async_simple/uthread/Await.h"
@@ -53,65 +52,64 @@ namespace uthread {
 // TODO: Add Range version.
 template <Launch Policy, std::input_iterator Iterator>
 auto collectAll(Iterator first, Iterator last, Executor* ex) {
-  assert(std::distance(first, last) >= 0);
-  static_assert(Policy != Launch::Prompt,
-                "collectAll not support Prompt launch policy");
+    assert(std::distance(first, last) >= 0);
+    static_assert(Policy != Launch::Prompt,
+                  "collectAll not support Prompt launch policy");
 
-  using ValueType =
-      std::invoke_result_t<typename std::iterator_traits<Iterator>::value_type>;
-  constexpr bool IfReturnVoid = std::is_void_v<ValueType>;
-  using ResultType =
-      std::conditional_t<IfReturnVoid, void, std::vector<ValueType>>;
+    using ValueType = std::invoke_result_t<
+        typename std::iterator_traits<Iterator>::value_type>;
+    constexpr bool IfReturnVoid = std::is_void_v<ValueType>;
+    using ResultType =
+        std::conditional_t<IfReturnVoid, void, std::vector<ValueType>>;
 
-  struct Context {
+    struct Context {
 #ifndef NDEBUG
-    std::atomic<std::size_t> tasks;
+        std::atomic<std::size_t> tasks;
 #endif
-    std::conditional_t<IfReturnVoid, bool, ResultType> result;
-    Promise<ResultType> promise;
+        std::conditional_t<IfReturnVoid, bool, ResultType> result;
+        Promise<ResultType> promise;
 
-    Context(std::size_t n, Promise<ResultType>&& pr)
-        :
+        Context(std::size_t n, Promise<ResultType>&& pr)
+            :
 #ifndef NDEBUG
-          tasks(n),
+            tasks(n),
 #endif
-          promise(pr) {
-      if constexpr (!IfReturnVoid)
-        result.resize(n);
-    }
+            promise(pr) {
+            if constexpr (!IfReturnVoid)
+                result.resize(n);
+        }
 
-    ~Context() {
+        ~Context() {
 #ifndef NDEBUG
-      assert(tasks == 0);
+            assert(tasks == 0);
 #endif
-      if constexpr (IfReturnVoid)
-        promise.setValue();
-      else
-        promise.setValue(std::move(result));
-    }
-  };
+            if constexpr (IfReturnVoid)
+                promise.setValue();
+            else
+                promise.setValue(std::move(result));
+        }
+    };
 
-  return await<ResultType>(
-      ex, [first, last, ex](Promise<ResultType>&& pr) mutable {
+    return await<ResultType>(ex, [first, last,
+                                  ex](Promise<ResultType>&& pr) mutable {
         auto n = static_cast<std::size_t>(std::distance(first, last));
         auto context = std::make_shared<Context>(n, std::move(pr));
         for (auto i = 0; first != last; ++i, ++first) {
-          async<Policy>(
-              [context, i, f = std::move(*first)]() mutable {
-                if constexpr (IfReturnVoid) {
-                  f();
-                  (void)i;
-                }
-                else {
-                  context->result[i] = std::move(f());
-                }
+            async<Policy>(
+                [context, i, f = std::move(*first)]() mutable {
+                    if constexpr (IfReturnVoid) {
+                        f();
+                        (void)i;
+                    } else {
+                        context->result[i] = std::move(f());
+                    }
 #ifndef NDEBUG
-                context->tasks.fetch_sub(1u, std::memory_order_acq_rel);
+                    context->tasks.fetch_sub(1u, std::memory_order_acq_rel);
 #endif
-              },
-              ex);
+                },
+                ex);
         }
-      });
+    });
 }
 
 }  // namespace uthread

@@ -42,6 +42,20 @@ TEST_CASE("test severity") {
         easylog::severity_str(easylog::Severity::FATAL));
 }
 
+struct dummy_t {
+  int* data() const {
+    static int val = 42;
+    return &val;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const dummy_t& t);
+};
+
+std::ostream& operator<<(std::ostream& os, const dummy_t& t) {
+  os << t.data();
+  return os;
+}
+
 TEST_CASE("test basic") {
   std::string filename = "easylog.txt";
   std::filesystem::remove(filename);
@@ -65,6 +79,7 @@ TEST_CASE("test basic") {
   ELOG_INFO << "info log";
   easylog::set_min_severity(Severity::DEBUG);
 
+  ELOG_INFO << dummy_t{};
   std::unique_ptr<int> ptr(new int(42));
   ELOG_INFO << ptr.get();
   ELOG_INFO << 42 << " " << 4.5 << 'a' << Severity::DEBUG;
@@ -81,6 +96,7 @@ TEST_CASE("test basic") {
   ELOG_INFO << buf << ", " << str << ", " << sv << ", " << id;
 
 #if __has_include(<fmt/format.h>) || (__has_include(<format>) && !defined(__APPLE__))
+  ELOGFMT(INFO, "Hello");
   ELOGFMT(INFO, "{} {}", 20, 42);
   ELOGFMT(INFO, "it is a long string test {} {}", 42, "fmt");
 #endif

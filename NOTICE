@@ -28,5 +28,5 @@ Distributed under the Boost Software License, Version 1.0. (See accompanying
 file LICENSE_1_0.txt or copy at <http://www.boost.org/LICENSE_1_0.txt>)
 
 ===================================================================
-The reflection of a struct and data format borrow various ideas from zpp_bits and msgpack.
+The reflection of a struct and data format borrow various ideas from zpp_bits, reflect-cpp and msgpack.
 coro_rpc borrow various ideas from rest_rpc.

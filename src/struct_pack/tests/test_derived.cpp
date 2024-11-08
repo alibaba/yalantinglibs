@@ -141,7 +141,7 @@ TEST_CASE("test unique_ptr<Base>") {
   }
 }
 
-TEST_CASE("test unique_ptr<Base> with virtual base") {
+TEST_CASE("test vector<unique_ptr<Base>> with virtual base") {
   using namespace test3;
   static_assert(struct_pack::detail::is_base_class<base>);
   std::vector<std::unique_ptr<base>> vec;
@@ -157,5 +157,65 @@ TEST_CASE("test unique_ptr<Base> with virtual base") {
   CHECK(vec2.size() == vec.size());
   for (std::size_t i = 0; i < vec.size(); ++i) {
     CHECK(vec[i]->get_name() == vec2[i]->get_name());
+  }
+}
+
+TEST_CASE("test unique_ptr<Base> with virtual base") {
+  using namespace test3;
+  std::unique_ptr<base> ptr = std::make_unique<derived4>();
+  auto buffer2 = struct_pack::serialize<std::string>(ptr);
+  auto res2 = struct_pack::deserialize<std::unique_ptr<base>>(buffer2);
+  CHECK(res2);
+  CHECK(res2.value()->get_name() == std::make_unique<derived4>()->get_name());
+}
+
+namespace derived_class_contain_another_derived_class {
+
+struct base {
+  virtual uint32_t get_struct_pack_id() const = 0;
+  virtual std::string get_name() const = 0;
+  static std::unique_ptr<base> deserialize(std::string& serialized);
+  virtual ~base(){};
+};
+
+struct derived1 : public base {
+  int b;
+  virtual uint32_t get_struct_pack_id() const override;
+  std::string get_name() const override { return "derived1"; }
+};
+STRUCT_PACK_REFL(derived1, b);
+
+struct derived2 : public base {
+  std::string c;
+  std::unique_ptr<derived1> child;
+  virtual uint32_t get_struct_pack_id() const override;
+  std::string get_name() const override { return "derived2"; }
+};
+
+STRUCT_PACK_REFL(derived2, c, child);
+
+STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2);
+
+std::unique_ptr<base> base::deserialize(std::string& serialized) {
+  return struct_pack::deserialize_derived_class<base, derived1, derived2>(
+             serialized)
+      .value();
+}
+
+}  // namespace derived_class_contain_another_derived_class
+
+TEST_CASE("test derived class contain by other derived class") {
+  using namespace derived_class_contain_another_derived_class;
+  {
+    auto serialized = struct_pack::serialize<std::string>(derived1{});
+    auto x = base::deserialize(serialized);
+    REQUIRE(x);
+    CHECK(x->get_name() == "derived1");
+  }
+  {
+    auto serialized = struct_pack::serialize<std::string>(derived2{});
+    auto x = base::deserialize(serialized);
+    REQUIRE(x);
+    CHECK(x->get_name() == "derived2");
   }
 }

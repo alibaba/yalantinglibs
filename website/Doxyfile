@@ -5,6 +5,8 @@ INPUT=../include/ylt/struct_pack.hpp \
       ../include/ylt/coro_rpc/coro_rpc_server.hpp \
       ../include/ylt/coro_rpc/coro_rpc_client.hpp \
       docs/en/coro_rpc/coro_rpc_introduction.md \
+      docs/en/coro_rpc/coro_rpc_server.md \
+      docs/en/coro_rpc/coro_rpc_client.md \
       docs/en/struct_pack/struct_pack_intro.md
       
 MARKDOWN_SUPPORT = YES

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #define ASYNC_SIMPLE_CORO_SYNC_AWAIT_H
 
 #include <exception>
-
 #include "async_simple/Common.h"
 #include "async_simple/Executor.h"
 #include "async_simple/Try.h"
@@ -32,28 +31,28 @@ namespace coro {
 // to a deadlock.
 template <typename LazyType>
 inline auto syncAwait(LazyType &&lazy) {
-  auto executor = lazy.getExecutor();
-  if (executor)
-    logicAssert(!executor->currentThreadInExecutor(),
-                "do not sync await in the same executor with Lazy");
+    auto executor = lazy.getExecutor();
+    if (executor)
+        logicAssert(!executor->currentThreadInExecutor(),
+                    "do not sync await in the same executor with Lazy");
 
-  util::Condition cond;
-  using ValueType = typename std::decay_t<LazyType>::ValueType;
+    util::Condition cond;
+    using ValueType = typename std::decay_t<LazyType>::ValueType;
 
-  Try<ValueType> value;
-  std::move(std::forward<LazyType>(lazy))
-      .start([&cond, &value](Try<ValueType> result) {
-        value = std::move(result);
-        cond.release();
-      });
-  cond.acquire();
-  return std::move(value).value();
+    Try<ValueType> value;
+    std::move(std::forward<LazyType>(lazy))
+        .start([&cond, &value](Try<ValueType> result) {
+            value = std::move(result);
+            cond.release();
+        });
+    cond.acquire();
+    return std::move(value).value();
 }
 
 // A simple wrapper to ease the use.
 template <typename LazyType>
 inline auto syncAwait(LazyType &&lazy, Executor *ex) {
-  return syncAwait(std::move(std::forward<LazyType>(lazy)).via(ex));
+    return syncAwait(std::move(std::forward<LazyType>(lazy)).via(ex));
 }
 
 }  // namespace coro

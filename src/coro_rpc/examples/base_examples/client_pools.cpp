@@ -26,6 +26,8 @@
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
+
+#include "ylt/coro_io/io_context_pool.hpp"
 std::string echo(std::string_view sv);
 using namespace coro_rpc;
 using namespace async_simple::coro;
@@ -39,30 +41,40 @@ std::atomic<uint64_t> working_echo = 0;
  * \brief demo for run concurrency clients
  */
 
-Lazy<void> call_echo(coro_io::client_pools<coro_rpc_client> &client_pools,
-                     int cnt) {
+int request_cnt = 10000;
+
+Lazy<std::vector<std::chrono::microseconds>> call_echo(
+    coro_io::client_pools<coro_rpc_client> &client_pools) {
   ++working_echo;
-  for (int i = 0; i < cnt; ++i) {
+  std::vector<std::chrono::microseconds> result;
+  result.reserve(request_cnt);
+  auto tp = std::chrono::steady_clock::now();
+  for (int i = 0; i < request_cnt; ++i) {
     auto res = co_await client_pools.send_request(
         i % 2 ? "localhost:8801" : "127.0.0.1:8801",
         [=](coro_rpc_client &client) -> Lazy<void> {
           auto res = co_await client.call<echo>("Hello world!");
           if (!res.has_value()) {
-            std::cout << "coro_rpc err: \n" << res.error().msg;
+            ELOG_ERROR << "coro_rpc err: \n" << res.error().msg;
             co_return;
           }
           if (res.value() != "Hello world!"sv) {
-            std::cout << "err echo resp: \n" << res.value();
+            ELOG_ERROR << "err echo resp: \n" << res.value();
             co_return;
           }
           ++qps;
           co_return;
         });
     if (!res) {
-      std::cout << "client pool err: connect failed.\n";
+      ELOG_ERROR << "client pool err: connect failed.\n";
+      break;
     }
+    auto old_tp = tp;
+    tp = std::chrono::steady_clock::now();
+    result.push_back(
+        std::chrono::duration_cast<std::chrono::microseconds>(tp - old_tp));
   }
-  --working_echo;
+  co_return std::move(result);
 }
 
 Lazy<void> qps_watcher(coro_io::client_pools<coro_rpc_client> &clients) {
@@ -78,15 +90,32 @@ Lazy<void> qps_watcher(coro_io::client_pools<coro_rpc_client> &clients) {
     cnt = 0;
   }
 }
-
+std::vector<std::chrono::microseconds> result;
+void latency_watcher() {
+  std::sort(result.begin(), result.end());
+  auto arr = {0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99, 0.999, 0.9999, 0.99999, 1.0};
+  for (auto e : arr) {
+    std::cout
+        << (e * 100) << "% request finished in:"
+        << result[std::max<std::size_t>(0, result.size() * e - 1)].count() /
+               1000.0
+        << "ms" << std::endl;
+  }
+}
 int main() {
   auto thread_cnt = std::thread::hardware_concurrency();
   auto &clients = coro_io::g_clients_pool<coro_rpc_client>();
+  auto executor = coro_io::get_global_block_executor();
   for (int i = 0, lim = thread_cnt * 20; i < lim; ++i) {
-    call_echo(clients, 10000).start([](auto &&) {
+    call_echo(clients).start([=](auto &&res) {
+      executor->schedule([res = std::move(res.value())]() mutable {
+        result.insert(result.end(), res.begin(), res.end());
+        --working_echo;
+      });
     });
   }
   syncAwait(qps_watcher(clients));
+  latency_watcher();
   std::cout << "Done!" << std::endl;
   return 0;
 }

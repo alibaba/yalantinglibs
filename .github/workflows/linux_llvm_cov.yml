@@ -4,7 +4,7 @@ on:
   pull_request_target:
     branches:
       - main
-      - fix_coverage
+      - fix_coverage_show
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: |
@@ -20,37 +20,55 @@ jobs:
           sudo apt-get install libssl-dev
           sudo apt-get install llvm
 
+      - name: Install newer Clang
+        run: |
+          sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
       - name: Run Coverage
         run: |
           ls
           cp -r src/coro_rpc/tests/openssl_files .
           ls
           mkdir build && cd build
-          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
-          make -j test_rpc
-          export LLVM_PROFILE_FILE="test_rpc-%m.profraw"
-          ./tests/test_rpc
-          llvm-profdata merge -sparse test_rpc-*.profraw -o test_rpc.profdata
-          llvm-cov show ./tests/test_rpc -instr-profile=test_rpc.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="thirdparty|asio" -show-instantiations=false
+          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DYLT_ENABLE_SSL=ON -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
+          make -j
+          export LLVM_PROFILE_FILE="test_ylt-%m.profraw"
+          cd output
+          cd tests
+          ./coro_io_test 
+          ./coro_rpc_test 
+          ./easylog_test 
+          ./struct_pack_test 
+          ./struct_pack_test_with_optimize
+          ./metric_test 
+          ./struct_pb_test 
+          ./reflection_test
+          ./coro_http_test
+          llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
+          llvm-cov show -object coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test  -object struct_pb_test -object reflection_test -object coro_http_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|src|template_switch" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: llvm-cov
-          path: ${{ github.workspace }}/.coverage_llvm_cov
+          path: ${{github.workspace}}/build/.coverage_llvm_cov
 
       - name: Create Code Coverage Report
-        working-directory: ${{github.workspace}}/build
+        working-directory: ${{github.workspace}}/build/output/tests
         run: |
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report ./tests/test_rpc -instr-profile=test_rpc.profdata -ignore-filename-regex="thirdparty|asio" -show-region-summary=false >> tmp.log
+          llvm-cov report -object coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test -object struct_pb_test -object reflection_test -object coro_http_test -instr-profile=test_ylt.profdata -ignore-filename-regex="thirdparty|src|template_switch" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
         uses: peter-evans/create-or-update-comment@v2
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-file: '${{github.workspace}}/build/tmp.log'
+          body-file: '${{github.workspace}}/build/output/tests/tmp.log'

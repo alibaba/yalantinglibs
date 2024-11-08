@@ -1,7 +1,7 @@
 # coro_rpc简介
 
 
-coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在单机上echo测试qps达到2000万(详情见benchmark部分)
+coro_rpc是用C++20开发的基于无栈协程和编译期反射的高性能的rpc库，在96核cpu的单机上echo测试qps达到2000万(pipeline模式)或450万(ping-pong模式，2000连接)(详情见benchmark部分)
 ，性能远高于grpc和brpc等rpc库。然而高性能不是它的主要特色，coro_rpc的主要特色是易用性，免安装，包含头文件就可以用，几行代码就可以完成一个rpc服务器和客户端。
 
 coro_rpc的设计理念是：以易用性为核心，回归rpc本质，让用户专注于业务逻辑而不是rpc框架细节，几行代码就可以完成rpc开发。
@@ -16,7 +16,7 @@ rpc的本质是什么？rpc的本质就是一个远程函数，除了rpc底层�
 
 ```cpp
 // rpc_service.hpp
-inline std::string echo(std::string str) { return str; }
+inline std::string_view echo(std::string_view str) { return str; }
 ```
 
 2.注册rpc函数和启动server
@@ -24,6 +24,8 @@ inline std::string echo(std::string str) { return str; }
 ```cpp
 #include "rpc_service.hpp"
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
+
+using namespace coro_rpc;
 
 int main() {
 
@@ -46,10 +48,12 @@ rpc_client端
 #include "rpc_service.hpp"
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 
+using namespace coro_rpc;
+using namespace async_simple::coro;
+
 Lazy<void> test_client() {
   coro_rpc_client client;
   co_await client.connect("localhost", /*port =*/"9000");
-
   auto r = co_await client.call<echo>("hello coro_rpc"); //传参数调用rpc函数
   std::cout << r.result.value() << "\n"; //will print "hello coro_rpc"
 }
@@ -64,84 +68,6 @@ client调用rpc函数也同样简单，5，6行代码就可以实现rpc调用了
 
 相信上面的这个简单的例子已经充分展示了coro_rpc的易用性和特点了，也体现了rpc的本质，即用户可以像调用本地函数那样调用远程函数，用户只需要关注rpc函数的业务逻辑即可。
 
-coro_rpc的接口易用性还体现在rpc函数几乎没有任何限制，rpc函数可以拥有任意多个参数，参数的序列化和反序列化由rpc库自动完成，用户无需关心。rpc库支持的参数类型相当广泛详见：[struct_pack的类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)
-
-## rpc函数支持任意参数
-
-```cpp
-// rpc_service.h
-// 客户端只需要包含这个头文件即可，无需把rpc的定义暴露给客户端。
-void hello(){};
-int get_value(int a, int b){return a + b;}
-
-struct person {
-  int id;
-  std::string name;
-  int age;
-};
-person get_person(person p, int id);
-
-struct dummy {
-  std::string echo(std::string str) { return str; }
-};
-
-// rpc_service.cpp
-#include "rpc_service.h"
-
-int get_value(int a, int b){return a + b;}
-
-person get_person(person p, int id) {
-  p.id = id;
-  return p;
-}
-```
-
-server端
-
-```cpp
-#include "rpc_service.h"
-#include <ylt/coro_rpc/coro_rpc_server.hpp>
-
-int main() {
-
-  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-
-  server.register_handler<hello, get_value, get_person>();//注册任意参数类型的普通函数
-
-  dummy d{};
-  server.register_handler<&dummy::echo>(&d); //注册成员函数
-
-  server.start(); // 启动server
-}
-```
-
-client端
-
-```cpp
-# include "rpc_service.h"
-# include <coro_rpc/coro_rpc_client.hpp>
-
-Lazy<void> test_client() {
-  coro_rpc_client client;
-  co_await client.connect("localhost", /*port =*/"9000");
-
-  //RPC调用
-  co_await client.call<hello>();
-  co_await client.call<get_value>(1, 2);
-
-  person p{};
-  co_await client.call<get_person>(p, /*id =*/1);
-
-  auto r = co_await client.call<&dummy::echo>("hello coro_rpc");
-  std::cout << r.result.value() << "\n"; //will print "hello coro_rpc"
-}
-
-int main() {
-  syncAwait(test_client());
-}
-```
-
-这里面get_person函数的参数和返回值都是结构体，通过编译期反射的序列化库[struct_pack](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html)实现自动的序列化和反序列化，用户无感知，省心省力。
 
 # 和grpc、brpc比较易用性
 
@@ -259,93 +185,33 @@ example::EchoService_Stub stub(&channel);
 }
 ```
 
-coro_rpc协程
-
+coro_rpc协程  
+客户端：
 ```cpp
-# include <coro_rpc/coro_rpc_client.hpp>
-
+std::string_view echo(std::string_view);
+#include <coro_rpc/coro_rpc_client.hpp>
 Lazy<void> say_hello(){
   coro_rpc_client client;
-    co_await client.connect("localhost", /*port =*/"9000");
+  co_await client.connect("localhost", /*port =*/"9000");
   while (true){
     auto r = co_await client.call<echo>("hello coro_rpc");
     assert(r.result.value() == "hello coro_rpc");
   }
 }
 ```
+服务端：
+```cpp
+std::string_view echo(std::string_view sv) {
+  return sv;
+}
+void start() {
+  coro_rpc_server server(/*thread num = */10,/* listen port = */9000);
+  server.register_handler<echo>();
+  server.start();
+}
+```
 
 coro_rpc的一大特色就是支持无栈协程，让用户以同步方式编写异步代码，简洁易懂！
-
-# coro_rpc更多特色
-
-## 同时支持实时任务和延时任务
-
-前面展示的例子里没有看到如何将rpc函数的结果response到客户端，因为默认情况下coro_rpc框架会帮助用户自动的将rpc函数的结果自动序列化并发送到客户端，让用户完全无感知，只需要专注于业务逻辑。需要说明的是这种场景下，rpc函数的业务逻辑是在io线程中执行的，这适合对于实时性要求较高的场景下使用，缺点是会阻塞IO线程。如果用户不希望在io线程中去执行业务逻辑，而是放到线程或线程池中去执行并延迟发送消息该怎么做呢？
-
-coro_rpc已经考虑到了这个问题，coro_rpc认为rpc任务分为实时任务和延时的任务，实时任务在io线程中执行完成后立即发送给客户端，实时性最好，延时最低；延时任务则可以放到独立线程中执行，延时处理，在未来某个时刻再将结果发送给客户端；coro_rpc同时支持这两种任务。
-
-将之前实时任务改成延时任务
-
-```cpp
-#include <ylt/coro_rpc/context.hpp>
-
-//实时任务，io线程中实时处理和发送结果
-std::string echo(std::string str) { return str; }
-
-//延时任务，在另外的独立线程中处理并发送结果
-void delay_echo(coro_rpc::context<std::string> conn, std::string str) {
-  std::thread([conn, str]{
-    conn.response_msg(str); //在独立线程中发送rpc结果
-  }).detach();
-}
-```
-
-## 服务端同时支持协程和异步回调
-
-coro_rpc server推荐使用协程去开发，但同时也支持异步回调模式，用户如果不希望使用协程，则可以使用经典的异步回调模式。
-
-基于协程的rpc server
-
-```cpp
-#include <ylt/coro_rpc/coro_rpc_server.hpp>
-std::string hello() { return "hello coro_rpc"; }
-
-int main() {
-  coro_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.register_handler<hello>();
-
-  server.start();
-}
-```
-
-基于异步回调的rpc server
-
-```cpp
-#include <ylt/coro_rpc/async_rpc_server.hpp>
-std::string hello() { return "hello coro_rpc"; }
-
-int main() {
-  async_rpc_server server(/*thread_num =*/10, /*port =*/9000);
-  server.register_handler<hello>();
-  server.start();
-}
-```
-
-rpc调用编译期安全检查
-coro_rpc会在调用的时候对参数的合法性做编译期检查，比如:
-
-```cpp
-inline std::string echo(std::string str) { return str; }
-```
-
-client调用rpc
-
-```cpp
-client.call<echo>(42);//参数不匹配，编译报错
-client.call<echo>();//缺少参数，编译报错
-client.call<echo>("", 0);//多了参数，编译报错
-client.call<echo>("hello, coro_rpc");//参数匹配，ok
-```
 
 # benchmark
 

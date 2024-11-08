@@ -16,6 +16,9 @@
 
 #include <cassert>
 
+#include "ylt/struct_pack/reflection.hpp"
+#include "ylt/struct_pack/type_calculate.hpp"
+
 #define STRUCT_PACK_OPTIMIZE  // add this macro to speed up
                               // serialize/deserialize but it will cost more
                               // time to compile
@@ -26,6 +29,12 @@
 // add this macro to enable support of int128/uint128
 
 #include <ylt/struct_pack.hpp>
+// set global default struct pack config
+namespace struct_pack {
+constexpr sp_config set_default(sp_config*) {
+  return sp_config::DISABLE_TYPE_INFO;
+}
+}  // namespace struct_pack
 
 struct rect {
   int a, b, c, d;
@@ -53,7 +62,7 @@ void serialize_config() {
   // only need 4 bytes
   assert(buffer.size() == 4);
   // deserialize with config
-  auto result =
+  [[maybe_unused]] auto result =
       struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO, rect>(
           buffer);
   assert(result.value() == r);
@@ -66,6 +75,6 @@ void serialize_config_by_ADL() {
   // only need 4 bytes
   assert(buffer.size() == 4);
   // deserialize with config
-  auto result = struct_pack::deserialize<rect>(buffer);
+  [[maybe_unused]] auto result = struct_pack::deserialize<rect>(buffer);
   assert(result.value() == r);
 }

@@ -1,0 +1,24 @@
+name: Bazel-GCC
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v2
+
+
+      - name: Build
+        working-directory: ${{github.workspace}}
+        run: bazel build --config=gcc-cl ...
+
+      - name: Test
+        working-directory: ${{github.workspace}}
+        run: bazel test --config=gcc-cl --test_output=errors ...

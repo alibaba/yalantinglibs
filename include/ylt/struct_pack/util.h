@@ -60,12 +60,6 @@ inline constexpr std::string_view type_string() {
 #endif
 }
 
-#if __cpp_concepts >= 201907L
-constexpr bool is_string_reserve_shrink = requires { std::string{}.reserve(); };
-#else
-constexpr bool is_string_reserve_shrink = true;
-#endif
-
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
@@ -125,10 +119,16 @@ constexpr void STRUCT_PACK_INLINE compile_time_unique(
   }
 }
 
+#ifndef __clang__
+#define struct_pack_has_feature(X) false
+#else
+#define struct_pack_has_feature __has_feature
+#endif
+
 #if __cpp_lib_string_resize_and_overwrite >= 202110L
 template <typename ch>
 inline void resize(std::basic_string<ch> &str, std::size_t sz) {
-  str.resize_and_overwrite(sz, [](ch *, std::size_t sz) {
+  str.resize_and_overwrite(sz, [sz](ch *, std::size_t) {
     return sz;
   });
 }
@@ -177,34 +177,34 @@ template class string_thief<decltype(&std::string::_Mypair),
 
 void string_set_length_hacker(std::string &, std::size_t);
 
-#ifndef __clang__
-#define struct_pack_has_feature(X) false
-#else
-#define struct_pack_has_feature __has_feature
-#endif
-
 template <typename ch>
 inline void resize(std::basic_string<ch> &raw_str, std::size_t sz) {
-  std::string &str = *reinterpret_cast<std::string *>(&raw_str);
+#if defined(_GLIBCXX_USE_CXX11_ABI)
+  constexpr bool is_use_cxx11_abi = _GLIBCXX_USE_CXX11_ABI;
+#else
+  constexpr bool is_use_cxx11_abi = true;
+#endif
+  if constexpr (std::is_same_v<ch, char> == false &&
+                is_use_cxx11_abi == false) {
+    raw_str.resize(sz);
+  }
+  else {
 #if defined(__SANITIZE_ADDRESS__) ||              \
     struct_pack_has_feature(address_sanitizer) || \
     (!defined(NDEBUG) && defined(_MSVC_STL_VERSION))
-  raw_str.resize(sz);
+    raw_str.resize(sz);
 #elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
     defined(_MSVC_STL_VERSION)
-  if constexpr (is_string_reserve_shrink) {
     if (sz > raw_str.capacity()) {
-      str.reserve(sz * sizeof(ch));
+      raw_str.reserve(sz);
     }
-  }
-  else {
-    str.reserve(sz * sizeof(ch));
-  }
-  string_set_length_hacker(str, sz);
-  for (auto i = sz; i < sz + sizeof(ch); ++i) str[i] = '\0';
+    std::string &str = *reinterpret_cast<std::string *>(&raw_str);
+    string_set_length_hacker(str, sz);
+    *(raw_str.data() + sz) = 0;
 #else
-  raw_str.resize(sz);
+    raw_str.resize(sz);
 #endif
+  }
 }
 
 #endif

@@ -20,7 +20,7 @@ struct login_info_t {
   std::string_view content;
   std::vector<std::string> user_list;
 };
-REFLECTION(login_info_t, type, content, user_list);
+YLT_REFL(login_info_t, type, content, user_list);
 
 using logout_info_t = login_info_t;
 
@@ -29,13 +29,13 @@ struct user_info_t {
   std::string_view from;
   std::string_view content;
 };
-REFLECTION(user_info_t, type, from, content);
+YLT_REFL(user_info_t, type, from, content);
 
 struct message_t {
   std::string type;
   std::string_view content;
 };
-REFLECTION(message_t, type, content);
+YLT_REFL(message_t, type, content);
 
 async_simple::coro::Lazy<void> broadcast(auto &conn_map,
                                          std::string &resp_str) {

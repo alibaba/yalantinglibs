@@ -148,8 +148,6 @@ struct struct_pack_sample : public base_sample {
     buffer_.clear();
     struct_pack::serialize_to(buffer_, sample);
 
-    U obj;
-
     uint64_t ns = 0;
     std::string bench_name =
         name() + " deserialize " + get_sample_name(sample_type);
@@ -157,6 +155,7 @@ struct struct_pack_sample : public base_sample {
     {
       ScopedTimer timer(bench_name.data(), ns);
       for (int i = 0; i < ITERATIONS; ++i) {
+        U obj;
         [[maybe_unused]] auto ec = struct_pack::deserialize_to(obj, buffer_);
         no_op((char *)&obj);
         no_op(buffer_);

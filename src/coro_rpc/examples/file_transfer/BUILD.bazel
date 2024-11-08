@@ -1,14 +1,15 @@
+load("//bazel:defs.bzl", "YA_BIN_COPT")
+
 cc_binary(
     name = "file_client",
     srcs =
         [
             "file_client.cpp",
-            "rpc_service.h"
+            "rpc_service.h",
         ],
     copts = [
-        "-std=c++20",
         "-Isrc/coro_rpc/examples/file_transfer",
-    ],
+    ] + YA_BIN_COPT,
     deps = ["//:ylt"],
 )
 
@@ -18,11 +19,10 @@ cc_binary(
         [
             "file_server.cpp",
             "rpc_service.cpp",
-            "rpc_service.h"
+            "rpc_service.h",
         ],
     copts = [
-        "-std=c++20",
         "-Isrc/coro_rpc/examples/file_transfer",
-    ],
+    ] + YA_BIN_COPT,
     deps = ["//:ylt"],
 )

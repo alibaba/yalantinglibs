@@ -17,17 +17,21 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
 
+#include <asio/dispatch.hpp>
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
-#include <ylt/easylog.hpp>
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#endif
 
 namespace coro_io {
 
@@ -48,10 +52,10 @@ class ExecutorWrapper : public async_simple::Executor {
 
   virtual bool schedule(Func func) override {
     if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor_.post(std::move(func));
+      executor_.dispatch(std::move(func));
     }
     else {
-      asio::post(executor_, std::move(func));
+      asio::dispatch(executor_, std::move(func));
     }
 
     return true;
@@ -64,7 +68,7 @@ class ExecutorWrapper : public async_simple::Executor {
       executor.post(std::move(func));
     }
     else {
-      asio::post(executor, std::move(func));
+      asio::dispatch(executor, std::move(func));
     }
     return true;
   }
@@ -72,7 +76,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
   context_t &context() { return executor_.context(); }
 
-  auto get_asio_executor() { return executor_; }
+  auto get_asio_executor() const { return executor_; }
 
   operator ExecutorImpl() { return executor_; }
 
@@ -108,12 +112,14 @@ get_current_executor() {
 class io_context_pool {
  public:
   using executor_type = asio::io_context::executor_type;
-  explicit io_context_pool(std::size_t pool_size) : next_io_context_(0) {
+  explicit io_context_pool(std::size_t pool_size, bool cpu_affinity = false)
+      : next_io_context_(0), cpu_affinity_(cpu_affinity) {
     if (pool_size == 0) {
       pool_size = 1;  // set default value as 1
     }
 
-    easylog::logger<>::instance();
+    total_thread_num_ += pool_size;
+
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context(1));
       work_ptr work(new asio::io_context::work(*io_context));
@@ -141,6 +147,19 @@ class io_context_pool {
             svr->run();
           },
           io_contexts_[i]));
+
+#ifdef __linux__
+      if (cpu_affinity_) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i, &cpuset);
+        int rc = pthread_setaffinity_np(threads.back()->native_handle(),
+                                        sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+          std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+        }
+      }
+#endif
     }
 
     for (std::size_t i = 0; i < threads.size(); ++i) {
@@ -188,6 +207,8 @@ class io_context_pool {
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
+  static size_t get_total_thread_num() { return total_thread_num_; }
+
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
   using work_ptr = std::shared_ptr<asio::io_context::work>;
@@ -199,7 +220,13 @@ class io_context_pool {
   std::promise<void> promise_;
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
+  bool cpu_affinity_ = false;
+  inline static std::atomic<size_t> total_thread_num_ = 0;
 };
+
+inline size_t get_total_thread_num() {
+  return io_context_pool::get_total_thread_num();
+}
 
 class multithread_context_pool {
  public:
@@ -211,7 +238,7 @@ class multithread_context_pool {
   ~multithread_context_pool() { stop(); }
 
   void run() {
-    for (std::size_t i = 0; i < thd_num_; i++) {
+    for (int i = 0; i < thd_num_; i++) {
       thds_.emplace_back([this] {
         ioc_.run();
       });
@@ -248,7 +275,7 @@ template <typename T = io_context_pool>
 inline T &g_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
-  static bool run_helper = [](auto pool) {
+  [[maybe_unused]] static bool run_helper = [](auto pool) {
     std::thread thrd{[pool] {
       pool->run();
     }};
@@ -259,10 +286,22 @@ inline T &g_io_context_pool(
 }
 
 template <typename T = io_context_pool>
+inline std::shared_ptr<T> create_io_context_pool(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  auto pool = std::make_shared<T>(pool_size);
+  std::thread thrd{[pool] {
+    pool->run();
+  }};
+  thrd.detach();
+
+  return pool;
+}
+
+template <typename T = io_context_pool>
 inline T &g_block_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
-  static bool run_helper = [](auto pool) {
+  [[maybe_unused]] static bool run_helper = [](auto pool) {
     std::thread thrd{[pool] {
       pool->run();
     }};

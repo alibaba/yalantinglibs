@@ -100,7 +100,7 @@
 
 // Platform-specific definitions of a numeric thread ID type and an invalid
 // value
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 template <typename thread_id_t>
 struct thread_id_converter {
@@ -109,22 +109,22 @@ struct thread_id_converter {
   static thread_id_hash_t prehash(thread_id_t const& x) { return x; }
 };
 }  // namespace details
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 #if defined(MCDBGQ_USE_RELACY)
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 typedef std::uint32_t thread_id_t;
 static const thread_id_t invalid_thread_id = 0xFFFFFFFFU;
 static const thread_id_t invalid_thread_id2 = 0xFFFFFFFEU;
 static inline thread_id_t thread_id() { return rl::thread_index(); }
 }  // namespace details
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 #elif defined(_WIN32) || defined(__WINDOWS__) || defined(__WIN32__)
 // No sense pulling in windows.h in a header, we'll manually declare the
 // function we use and rely on backwards-compatibility for this not to break
 extern "C" __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(
     void);
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 static_assert(sizeof(unsigned long) == sizeof(std::uint32_t),
               "Expected size of unsigned long to be 32 bits on Windows");
@@ -139,11 +139,11 @@ static inline thread_id_t thread_id() {
   return static_cast<thread_id_t>(::GetCurrentThreadId());
 }
 }  // namespace details
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 #elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__) || \
     (defined(__APPLE__) && TARGET_OS_IPHONE) ||                      \
     defined(MOODYCAMEL_NO_THREAD_LOCAL)
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 static_assert(sizeof(std::thread::id) == 4 || sizeof(std::thread::id) == 8,
               "std::thread::id is expected to be either 4 or 8 bytes");
@@ -199,7 +199,7 @@ struct thread_id_converter<thread_id_t> {
 // Assume C++11 compliant compiler
 #define MOODYCAMEL_THREADLOCAL thread_local
 #endif
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 typedef std::uintptr_t thread_id_t;
 static const thread_id_t invalid_thread_id = 0;  // Address can't be nullptr
@@ -330,7 +330,7 @@ inline thread_id_t thread_id() {
 #endif
 #endif
 
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 #ifndef MOODYCAMEL_ALIGNAS
 // VS2013 doesn't support alignas or alignof, and align() requires a constant
@@ -390,7 +390,7 @@ struct identity {
 #endif
 #endif
 }  // namespace details
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 
 // TSAN can false report races in lock-free code.  To enable TSAN to be used
 // from projects that use this one, we can apply per-function compile-time
@@ -405,7 +405,7 @@ struct identity {
 #endif  // TSAN
 
 // Compiler-specific likely/unlikely hints
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 #if defined(__GNUC__)
 static inline bool(likely)(bool x) { return __builtin_expect((x), true); }
@@ -415,13 +415,13 @@ static inline bool(likely)(bool x) { return x; }
 static inline bool(unlikely)(bool x) { return x; }
 #endif
 }  // namespace details
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 
 #ifdef MOODYCAMEL_QUEUE_INTERNAL_DEBUG
 #include "internal/concurrentqueue_internal_debug.h"
 #endif
 
-namespace moodycamel {
+namespace ylt::detail::moodycamel {
 namespace details {
 template <typename T>
 struct const_numeric_max {
@@ -937,8 +937,8 @@ inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a,
 template <typename T, typename Traits = ConcurrentQueueDefaultTraits>
 class ConcurrentQueue {
  public:
-  typedef ::moodycamel::ProducerToken producer_token_t;
-  typedef ::moodycamel::ConsumerToken consumer_token_t;
+  typedef ::ylt::detail::moodycamel::ProducerToken producer_token_t;
+  typedef ::ylt::detail::moodycamel::ConsumerToken consumer_token_t;
 
   typedef typename Traits::index_t index_t;
   typedef typename Traits::size_t size_t;
@@ -4388,7 +4388,7 @@ inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a,
   a.swap(b);
 }
 
-}  // namespace moodycamel
+}  // namespace ylt::detail::moodycamel
 
 #if defined(_MSC_VER) && (!defined(_HAS_CXX17) || !_HAS_CXX17)
 #pragma warning(pop)

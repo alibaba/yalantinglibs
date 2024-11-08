@@ -219,7 +219,7 @@ concept unique_ptr = requires(Type ptr) {
 
 ## 结构体
 
-struct_pack支持结构体类型。结构体内可以包含最多64个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
+struct_pack支持结构体类型。结构体内可以包含最多255个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
 
 struct_pack的结构体类型可以为：struct/class/std::pair/tuplet::tuple/std::tuple
 

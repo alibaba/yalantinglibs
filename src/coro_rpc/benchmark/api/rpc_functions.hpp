@@ -17,6 +17,7 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <memory>
+#include <string_view>
 #include <thread>
 #include <ylt/coro_io/io_context_pool.hpp>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
@@ -24,20 +25,30 @@
 #include "Monster.h"
 #include "Rect.h"
 #include "ValidateRequest.h"
+#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 inline coro_io::io_context_pool pool(std::thread::hardware_concurrency());
-
-inline std::string echo_4B(const std::string &str) { return str; }
-inline std::string echo_50B(const std::string &str) { return str; }
-inline std::string echo_100B(const std::string &str) { return str; }
-inline std::string echo_500B(const std::string &str) { return str; }
-inline std::string echo_1KB(const std::string &str) { return str; }
-inline std::string echo_5KB(const std::string &str) { return str; }
-inline std::string echo_10KB(const std::string &str) { return str; }
+inline async_simple::coro::Lazy<std::string_view> coroutine_async_echo(
+    std::string_view str) {
+  co_return str;
+}
+inline void callback_async_echo(coro_rpc::context<std::string_view> conn,
+                                std::string_view str) {
+  conn.response_msg(str);
+  return;
+}
+inline std::string_view echo_4B(std::string_view str) { return str; }
+inline std::string_view echo_50B(std::string_view str) { return str; }
+inline std::string_view echo_100B(std::string_view str) { return str; }
+inline std::string_view echo_500B(std::string_view str) { return str; }
+inline std::string_view echo_1KB(std::string_view str) { return str; }
+inline std::string_view echo_5KB(std::string_view str) { return str; }
+inline std::string_view echo_10KB(std::string_view str) { return str; }
 
 inline std::vector<int> array_1K_int(std::vector<int> ar) { return ar; }
 
-inline std::vector<std::string> array_1K_str_4B(std::vector<std::string> ar) {
+inline std::vector<std::string_view> array_1K_str_4B(
+    std::vector<std::string_view> ar) {
   return ar;
 }
 
@@ -63,8 +74,8 @@ inline void heavy_calculate(coro_rpc::context<int> conn, int a) {
                                                 });
   return;
 }
-
-inline std::string download_10KB(int a) { return std::string(10000, 'A'); }
+std::string s(10000, 'A');
+inline std::string_view download_10KB(int a) { return std::string_view{s}; }
 
 inline void long_tail_heavy_calculate(coro_rpc::context<int> conn, int a) {
   static std::atomic<uint64_t> g_index = 0;

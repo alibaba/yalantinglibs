@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// clang-format off
 #pragma once
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,7 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include "ylt/reflection/member_count.hpp"
 
 #if __has_include(<span>)
 #include <span>
@@ -35,6 +37,9 @@
 #include "foreach_macro.h"
 #include "marco.h"
 #include "util.h"
+#include "ylt/reflection/template_switch.hpp"
+#include "ylt/reflection/member_ptr.hpp"
+
 
 #if __cpp_concepts >= 201907L
 #include <concepts>
@@ -189,7 +194,6 @@ constexpr bool can_shrink_to_fit = can_shrink_to_fit_impl<T>::value;
 template <typename T, uint64_t version = 0>
 struct compatible;
 
-// clang-format off
 namespace detail {
 
 #if __cpp_concepts >= 201907L
@@ -585,6 +589,33 @@ template <typename T, typename = void>
   constexpr bool user_defined_config_by_ADL = user_defined_config_by_ADL_impl<T>::value;
 #endif
 
+template<typename T>
+constexpr decltype(auto) delay_sp_config_eval() {
+  if constexpr (sizeof(T)==0) {
+    return (T*)nullptr;
+  }
+  else {
+    return (sp_config*)nullptr;
+  }
+}
+
+#if __cpp_concepts >= 201907L
+  template<typename T>
+  concept has_default_config = std::is_same_v<decltype(set_default(decltype(delay_sp_config_eval<T>()){})),struct_pack::sp_config>;
+#else
+  template <typename T, typename = void>
+  struct has_default_config_impl : std::false_type {};
+
+  template <typename T>
+  struct has_default_config_impl<T, std::void_t<
+    std::enable_if_t<std::is_same_v<decltype(set_default(decltype(delay_sp_config_eval<T>()){})),struct_pack::sp_config>>>>
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool has_default_config = has_default_config_impl<T>::value;
+#endif
+
+
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept user_defined_config = requires {
@@ -711,37 +742,6 @@ struct memory_reader;
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
-  concept expected = requires(Type e) {
-    typename remove_cvref_t<Type>::value_type;
-    typename remove_cvref_t<Type>::error_type;
-    typename remove_cvref_t<Type>::unexpected_type;
-    e.has_value();
-    e.error();
-    requires std::is_same_v<void,
-                            typename remove_cvref_t<Type>::value_type> ||
-        requires(Type e) {
-      e.value();
-    };
-  };
-#else
-  template <typename T, typename = void>
-  struct expected_impl : std::false_type {};
-
-  template <typename T>
-  struct expected_impl<T, std::void_t<
-    typename remove_cvref_t<T>::value_type,
-    typename remove_cvref_t<T>::error_type,
-    typename remove_cvref_t<T>::unexpected_type,
-    decltype(std::declval<T>().has_value()),
-    decltype(std::declval<T>().error())>> 
-      : std::true_type {};
-    //TODO: check e.value()
-  template <typename T>
-  constexpr bool expected = expected_impl<T>::value;
-#endif
-
-#if __cpp_concepts >= 201907L
-  template <typename Type>
   concept unique_ptr = requires(Type ptr) {
     ptr.operator*();
     typename remove_cvref_t<Type>::element_type;
@@ -760,32 +760,6 @@ struct memory_reader;
   template <typename T>
   constexpr bool unique_ptr = unique_ptr_impl<T>::value;
 #endif
-
-
-#if __cpp_concepts >= 201907L
-  template <typename Type>
-  concept optional = !expected<Type> && requires(Type optional) {
-    optional.value();
-    optional.has_value();
-    optional.operator*();
-    typename remove_cvref_t<Type>::value_type;
-  };
-#else
-  template <typename T, typename = void>
-  struct optional_impl : std::false_type {};
-
-  template <typename T>
-  struct optional_impl<T, std::void_t<
-    decltype(std::declval<T>().value()),
-    decltype(std::declval<T>().has_value()),
-    decltype(std::declval<T>().operator*()),
-    typename remove_cvref_t<T>::value_type>> 
-      : std::true_type {};
-
-  template <typename T>
-  constexpr bool optional = !expected<T> && optional_impl<T>::value;
-#endif
-
 
 
 
@@ -874,8 +848,8 @@ struct memory_reader;
         else if constexpr (user_defined_refl<T>) {
           return false;
         }
-        else if constexpr (container<T> || optional<T> || is_variant_v<T> ||
-                          unique_ptr<T> || expected<T> || container_adapter<T>) {
+        else if constexpr (container<T> || ylt::reflection::optional<T> || is_variant_v<T> ||
+                          unique_ptr<T> || ylt::reflection::expected<T> || container_adapter<T>) {
           return false;
         }
         else if constexpr (pair<T>) {
@@ -932,71 +906,6 @@ constexpr bool trivially_copyable_container =
   template <typename Type>
   constexpr inline bool is_trivial_view_v<struct_pack::trivial_view<Type>> = true;
 
-  struct UniversalVectorType {
-    template <typename T>
-    operator std::vector<T>();
-  };
-
-  struct UniversalType {
-    template <typename T>
-    operator T();
-  };
-
-  struct UniversalIntegralType {
-    template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    operator T();
-  };
-
-  struct UniversalNullptrType {
-    operator std::nullptr_t();
-  };
-
-  struct UniversalOptionalType {
-  template <typename U, typename = std::enable_if_t<optional<U>>>
-  operator U();
-  };
-
-  struct UniversalCompatibleType {
-    template <typename U, typename = std::enable_if_t<is_compatible_v<U>>>
-    operator U();
-  };
-
-  template <typename T, typename construct_param_t, typename = void, typename... Args>
-  struct is_constructable_impl : std::false_type {};
-  template <typename T, typename construct_param_t, typename... Args>
-  struct is_constructable_impl<T, construct_param_t,
-  std::void_t<
-    decltype(T{{Args{}}..., {construct_param_t{}}})>, Args...>
-      : std::true_type {};
-
-  template <typename T, typename construct_param_t, typename... Args>
-  constexpr bool is_constructable=is_constructable_impl<T,construct_param_t,void,Args...>::value;
-
-  template <typename T, typename... Args>
-  constexpr std::size_t members_count_impl() {
-    if constexpr (is_constructable<T,UniversalVectorType,Args...>) {
-      return members_count_impl<T, Args..., UniversalVectorType>();
-    }
-    else if constexpr (is_constructable<T,UniversalType,Args...>) {
-      return members_count_impl<T, Args..., UniversalType>();
-    }
-    else if constexpr (is_constructable<T,UniversalOptionalType,Args...>) {
-      return members_count_impl<T, Args..., UniversalOptionalType>();
-    }
-    else if constexpr (is_constructable<T,UniversalIntegralType,Args...>) {
-      return members_count_impl<T, Args..., UniversalIntegralType>();
-    }
-    else if constexpr (is_constructable<T,UniversalNullptrType,Args...>) {
-      return members_count_impl<T, Args..., UniversalNullptrType>();
-    }
-    else if constexpr (is_constructable<T,UniversalCompatibleType,Args...>) {
-      return members_count_impl<T, Args..., UniversalCompatibleType>();
-    }
-    else {
-      return sizeof...(Args);
-    }
-  }
-
   template <typename T>
   constexpr std::size_t members_count() {
     using type = remove_cvref_t<T>;
@@ -1007,11 +916,11 @@ constexpr bool trivially_copyable_container =
       return std::tuple_size<type>::value;
     }
     else {
-      return members_count_impl<type>();
+      return ylt::reflection::members_count_v<type>;
     }
   }
 
-  constexpr static auto MaxVisitMembers = 64;
+  constexpr static auto MaxVisitMembers = 256;
 
   template<typename Object,typename Visitor>
   constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
@@ -1032,143 +941,1723 @@ constexpr bool trivially_copyable_container =
       return visit_members_by_structure_binding(object,visitor);
     }
   }
+  template <typename Object, typename Visitor>
+  constexpr decltype(auto) STRUCT_PACK_INLINE
+  visit_members_by_user_defined_refl(Object &&o, Visitor &&visitor) {
+    using type = remove_cvref_t<decltype(o)>;
+    constexpr auto Count = decltype(STRUCT_PACK_FIELD_COUNT(o))::value;
 
-  template<typename Object,typename Visitor>
-  constexpr decltype(auto) STRUCT_PACK_INLINE visit_members_by_user_defined_refl(Object &&object,
-                                                            Visitor &&visitor) {
-    using type = remove_cvref_t<decltype(object)>;
-    constexpr auto Count = decltype(STRUCT_PACK_FIELD_COUNT(object))::value;
-    
     static_assert(Count <= MaxVisitMembers, "exceed max visit members");
     if constexpr (Count >= 0) {
-      if constexpr (Count==1) {  return visitor(STRUCT_PACK_GET_0(object));
+      if constexpr (Count == 1) {
+        return visitor(_SPG0(o));
       }
-      else if constexpr (Count==2) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object));
+      else if constexpr (Count == 2) {
+        return visitor(_SPG0(o), _SPG1(o));
       }
-      else if constexpr (Count==3) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object));
+      else if constexpr (Count == 3) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o));
       }
-      else if constexpr (Count==4) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object));
+      else if constexpr (Count == 4) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o));
       }
-      else if constexpr (Count==5) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object));
+      else if constexpr (Count == 5) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o));
       }
-      else if constexpr (Count==6) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object));
+      else if constexpr (Count == 6) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o));
       }
-      else if constexpr (Count==7) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object));
+      else if constexpr (Count == 7) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o));
       }
-      else if constexpr (Count==8) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object));
+      else if constexpr (Count == 8) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o));
       }
-      else if constexpr (Count==9) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object));
+      else if constexpr (Count == 9) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o));
       }
-      else if constexpr (Count==10) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object));
+      else if constexpr (Count == 10) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o));
       }
-      else if constexpr (Count==11) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object));
+      else if constexpr (Count == 11) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o));
       }
-      else if constexpr (Count==12) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object));
+      else if constexpr (Count == 12) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o));
       }
-      else if constexpr (Count==13) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object));
+      else if constexpr (Count == 13) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o));
       }
-      else if constexpr (Count==14) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object));
+      else if constexpr (Count == 14) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o));
       }
-      else if constexpr (Count==15) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object));
+      else if constexpr (Count == 15) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o));
       }
-      else if constexpr (Count==16) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object));
+      else if constexpr (Count == 16) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o));
       }
-      else if constexpr (Count==17) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object));
+      else if constexpr (Count == 17) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o));
       }
-      else if constexpr (Count==18) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object));
+      else if constexpr (Count == 18) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o));
       }
-      else if constexpr (Count==19) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object));
+      else if constexpr (Count == 19) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o));
       }
-      else if constexpr (Count==20) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object));
+      else if constexpr (Count == 20) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o));
       }
-      else if constexpr (Count==21) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object));
+      else if constexpr (Count == 21) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o));
       }
-      else if constexpr (Count==22) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object));
+      else if constexpr (Count == 22) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o));
       }
-      else if constexpr (Count==23) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object));
+      else if constexpr (Count == 23) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o));
       }
-      else if constexpr (Count==24) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object));
+      else if constexpr (Count == 24) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o));
       }
-      else if constexpr (Count==25) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object));
+      else if constexpr (Count == 25) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o));
       }
-      else if constexpr (Count==26) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object));
+      else if constexpr (Count == 26) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o));
       }
-      else if constexpr (Count==27) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object));
+      else if constexpr (Count == 27) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o));
       }
-      else if constexpr (Count==28) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object));
+      else if constexpr (Count == 28) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o));
       }
-      else if constexpr (Count==29) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object));
+      else if constexpr (Count == 29) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o));
       }
-      else if constexpr (Count==30) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object));
+      else if constexpr (Count == 30) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o));
       }
-      else if constexpr (Count==31) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object));
+      else if constexpr (Count == 31) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o));
       }
-      else if constexpr (Count==32) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object));
+      else if constexpr (Count == 32) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o));
       }
-      else if constexpr (Count==33) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object));
+      else if constexpr (Count == 33) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o));
       }
-      else if constexpr (Count==34) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object));
+      else if constexpr (Count == 34) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o));
       }
-      else if constexpr (Count==35) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object));
+      else if constexpr (Count == 35) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o));
       }
-      else if constexpr (Count==36) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object));
+      else if constexpr (Count == 36) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o));
       }
-      else if constexpr (Count==37) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object));
+      else if constexpr (Count == 37) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o));
       }
-      else if constexpr (Count==38) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object));
+      else if constexpr (Count == 38) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o));
       }
-      else if constexpr (Count==39) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object));
+      else if constexpr (Count == 39) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o));
       }
-      else if constexpr (Count==40) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object));
+      else if constexpr (Count == 40) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o));
       }
-      else if constexpr (Count==41) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object));
+      else if constexpr (Count == 41) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o));
       }
-      else if constexpr (Count==42) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object));
+      else if constexpr (Count == 42) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o));
       }
-      else if constexpr (Count==43) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object));
+      else if constexpr (Count == 43) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o));
       }
-      else if constexpr (Count==44) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object));
+      else if constexpr (Count == 44) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o), _SPG43(o));
       }
-      else if constexpr (Count==45) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object));
+      else if constexpr (Count == 45) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o), _SPG43(o), _SPG44(o));
       }
-      else if constexpr (Count==46) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object));
+      else if constexpr (Count == 46) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o));
       }
-      else if constexpr (Count==47) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object));
+      else if constexpr (Count == 47) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o));
       }
-      else if constexpr (Count==48) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object));
+      else if constexpr (Count == 48) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o));
       }
-      else if constexpr (Count==49) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object));
+      else if constexpr (Count == 49) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o), _SPG43(o), _SPG44(o),
+                       _SPG45(o), _SPG46(o), _SPG47(o), _SPG48(o));
       }
-      else if constexpr (Count==50) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object));
+      else if constexpr (Count == 50) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o), _SPG43(o), _SPG44(o),
+                       _SPG45(o), _SPG46(o), _SPG47(o), _SPG48(o), _SPG49(o));
       }
-      else if constexpr (Count==51) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object));
+      else if constexpr (Count == 51) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o));
       }
-      else if constexpr (Count==52) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object));
+      else if constexpr (Count == 52) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o));
       }
-      else if constexpr (Count==53) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object));
+      else if constexpr (Count == 53) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o));
       }
-      else if constexpr (Count==54) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object));
+      else if constexpr (Count == 54) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o));
       }
-      else if constexpr (Count==55) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object));
+      else if constexpr (Count == 55) {
+        return visitor(_SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o),
+                       _SPG5(o), _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o),
+                       _SPG10(o), _SPG11(o), _SPG12(o), _SPG13(o), _SPG14(o),
+                       _SPG15(o), _SPG16(o), _SPG17(o), _SPG18(o), _SPG19(o),
+                       _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o), _SPG24(o),
+                       _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+                       _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o),
+                       _SPG35(o), _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o),
+                       _SPG40(o), _SPG41(o), _SPG42(o), _SPG43(o), _SPG44(o),
+                       _SPG45(o), _SPG46(o), _SPG47(o), _SPG48(o), _SPG49(o),
+                       _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o), _SPG54(o));
       }
-      else if constexpr (Count==56) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object));
+      else if constexpr (Count == 56) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o));
       }
-      else if constexpr (Count==57) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object));
+      else if constexpr (Count == 57) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o));
       }
-      else if constexpr (Count==58) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object));
+      else if constexpr (Count == 58) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o));
       }
-      else if constexpr (Count==59) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object));
+      else if constexpr (Count == 59) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o));
       }
-      else if constexpr (Count==60) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object),STRUCT_PACK_GET_59(object));
+      else if constexpr (Count == 60) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o));
       }
-      else if constexpr (Count==61) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object),STRUCT_PACK_GET_59(object),STRUCT_PACK_GET_60(object));
+      else if constexpr (Count == 61) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o));
       }
-      else if constexpr (Count==62) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object),STRUCT_PACK_GET_59(object),STRUCT_PACK_GET_60(object),STRUCT_PACK_GET_61(object));
+      else if constexpr (Count == 62) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o));
       }
-      else if constexpr (Count==63) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object),STRUCT_PACK_GET_59(object),STRUCT_PACK_GET_60(object),STRUCT_PACK_GET_61(object),STRUCT_PACK_GET_62(object));
+      else if constexpr (Count == 63) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o));
       }
-      else if constexpr (Count==64) {  return visitor(STRUCT_PACK_GET_0(object),STRUCT_PACK_GET_1(object),STRUCT_PACK_GET_2(object),STRUCT_PACK_GET_3(object),STRUCT_PACK_GET_4(object),STRUCT_PACK_GET_5(object),STRUCT_PACK_GET_6(object),STRUCT_PACK_GET_7(object),STRUCT_PACK_GET_8(object),STRUCT_PACK_GET_9(object),STRUCT_PACK_GET_10(object),STRUCT_PACK_GET_11(object),STRUCT_PACK_GET_12(object),STRUCT_PACK_GET_13(object),STRUCT_PACK_GET_14(object),STRUCT_PACK_GET_15(object),STRUCT_PACK_GET_16(object),STRUCT_PACK_GET_17(object),STRUCT_PACK_GET_18(object),STRUCT_PACK_GET_19(object),STRUCT_PACK_GET_20(object),STRUCT_PACK_GET_21(object),STRUCT_PACK_GET_22(object),STRUCT_PACK_GET_23(object),STRUCT_PACK_GET_24(object),STRUCT_PACK_GET_25(object),STRUCT_PACK_GET_26(object),STRUCT_PACK_GET_27(object),STRUCT_PACK_GET_28(object),STRUCT_PACK_GET_29(object),STRUCT_PACK_GET_30(object),STRUCT_PACK_GET_31(object),STRUCT_PACK_GET_32(object),STRUCT_PACK_GET_33(object),STRUCT_PACK_GET_34(object),STRUCT_PACK_GET_35(object),STRUCT_PACK_GET_36(object),STRUCT_PACK_GET_37(object),STRUCT_PACK_GET_38(object),STRUCT_PACK_GET_39(object),STRUCT_PACK_GET_40(object),STRUCT_PACK_GET_41(object),STRUCT_PACK_GET_42(object),STRUCT_PACK_GET_43(object),STRUCT_PACK_GET_44(object),STRUCT_PACK_GET_45(object),STRUCT_PACK_GET_46(object),STRUCT_PACK_GET_47(object),STRUCT_PACK_GET_48(object),STRUCT_PACK_GET_49(object),STRUCT_PACK_GET_50(object),STRUCT_PACK_GET_51(object),STRUCT_PACK_GET_52(object),STRUCT_PACK_GET_53(object),STRUCT_PACK_GET_54(object),STRUCT_PACK_GET_55(object),STRUCT_PACK_GET_56(object),STRUCT_PACK_GET_57(object),STRUCT_PACK_GET_58(object),STRUCT_PACK_GET_59(object),STRUCT_PACK_GET_60(object),STRUCT_PACK_GET_61(object),STRUCT_PACK_GET_62(object),STRUCT_PACK_GET_63(object));
-      }      
+      else if constexpr (Count == 64) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o));
+      }
+      else if constexpr (Count == 65) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o));
+      }
+      else if constexpr (Count == 66) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o));
+      }
+      else if constexpr (Count == 67) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o));
+      }
+      else if constexpr (Count == 68) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o));
+      }
+      else if constexpr (Count == 69) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o));
+      }
+      else if constexpr (Count == 70) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o));
+      }
+      else if constexpr (Count == 71) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o));
+      }
+      else if constexpr (Count == 72) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o));
+      }
+      else if constexpr (Count == 73) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o));
+      }
+      else if constexpr (Count == 74) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o));
+      }
+      else if constexpr (Count == 75) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o));
+      }
+      else if constexpr (Count == 76) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o));
+      }
+      else if constexpr (Count == 77) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o));
+      }
+      else if constexpr (Count == 78) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o));
+      }
+      else if constexpr (Count == 79) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o));
+      }
+      else if constexpr (Count == 80) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o));
+      }
+      else if constexpr (Count == 81) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o));
+      }
+      else if constexpr (Count == 82) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o));
+      }
+      else if constexpr (Count == 83) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o));
+      }
+      else if constexpr (Count == 84) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o));
+      }
+      else if constexpr (Count == 85) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o));
+      }
+      else if constexpr (Count == 86) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o));
+      }
+      else if constexpr (Count == 87) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o));
+      }
+      else if constexpr (Count == 88) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o));
+      }
+      else if constexpr (Count == 89) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o));
+      }
+      else if constexpr (Count == 90) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o));
+      }
+      else if constexpr (Count == 91) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o));
+      }
+      else if constexpr (Count == 92) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o));
+      }
+      else if constexpr (Count == 93) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o));
+      }
+      else if constexpr (Count == 94) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o));
+      }
+      else if constexpr (Count == 95) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o));
+      }
+      else if constexpr (Count == 96) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o));
+      }
+      else if constexpr (Count == 97) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o));
+      }
+      else if constexpr (Count == 98) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o));
+      }
+      else if constexpr (Count == 99) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o));
+      }
+      else if constexpr (Count == 100) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o));
+      }
+      else if constexpr (Count == 101) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o));
+      }
+      else if constexpr (Count == 102) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o));
+      }
+      else if constexpr (Count == 103) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o));
+      }
+      else if constexpr (Count == 104) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o));
+      }
+      else if constexpr (Count == 105) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o));
+      }
+      else if constexpr (Count == 106) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o));
+      }
+      else if constexpr (Count == 107) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o));
+      }
+      else if constexpr (Count == 108) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o));
+      }
+      else if constexpr (Count == 109) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o));
+      }
+      else if constexpr (Count == 110) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o));
+      }
+      else if constexpr (Count == 111) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o));
+      }
+      else if constexpr (Count == 112) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o));
+      }
+      else if constexpr (Count == 113) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o));
+      }
+      else if constexpr (Count == 114) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o));
+      }
+      else if constexpr (Count == 115) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o));
+      }
+      else if constexpr (Count == 116) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o));
+      }
+      else if constexpr (Count == 117) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o));
+      }
+      else if constexpr (Count == 118) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o));
+      }
+      else if constexpr (Count == 119) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o));
+      }
+      else if constexpr (Count == 120) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o), _SPG119(o));
+      }
+      else if constexpr (Count == 121) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o), _SPG119(o), _SPG120(o));
+      }
+      else if constexpr (Count == 122) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o), _SPG119(o), _SPG120(o), _SPG121(o));
+      }
+      else if constexpr (Count == 123) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o), _SPG119(o), _SPG120(o), _SPG121(o),
+            _SPG122(o));
+      }
+      else if constexpr (Count == 124) {
+        return visitor(
+            _SPG0(o), _SPG1(o), _SPG2(o), _SPG3(o), _SPG4(o), _SPG5(o),
+            _SPG6(o), _SPG7(o), _SPG8(o), _SPG9(o), _SPG10(o), _SPG11(o),
+            _SPG12(o), _SPG13(o), _SPG14(o), _SPG15(o), _SPG16(o), _SPG17(o),
+            _SPG18(o), _SPG19(o), _SPG20(o), _SPG21(o), _SPG22(o), _SPG23(o),
+            _SPG24(o), _SPG25(o), _SPG26(o), _SPG27(o), _SPG28(o), _SPG29(o),
+            _SPG30(o), _SPG31(o), _SPG32(o), _SPG33(o), _SPG34(o), _SPG35(o),
+            _SPG36(o), _SPG37(o), _SPG38(o), _SPG39(o), _SPG40(o), _SPG41(o),
+            _SPG42(o), _SPG43(o), _SPG44(o), _SPG45(o), _SPG46(o), _SPG47(o),
+            _SPG48(o), _SPG49(o), _SPG50(o), _SPG51(o), _SPG52(o), _SPG53(o),
+            _SPG54(o), _SPG55(o), _SPG56(o), _SPG57(o), _SPG58(o), _SPG59(o),
+            _SPG60(o), _SPG61(o), _SPG62(o), _SPG63(o), _SPG64(o), _SPG65(o),
+            _SPG66(o), _SPG67(o), _SPG68(o), _SPG69(o), _SPG70(o), _SPG71(o),
+            _SPG72(o), _SPG73(o), _SPG74(o), _SPG75(o), _SPG76(o), _SPG77(o),
+            _SPG78(o), _SPG79(o), _SPG80(o), _SPG81(o), _SPG82(o), _SPG83(o),
+            _SPG84(o), _SPG85(o), _SPG86(o), _SPG87(o), _SPG88(o), _SPG89(o),
+            _SPG90(o), _SPG91(o), _SPG92(o), _SPG93(o), _SPG94(o), _SPG95(o),
+            _SPG96(o), _SPG97(o), _SPG98(o), _SPG99(o), _SPG100(o), _SPG101(o),
+            _SPG102(o), _SPG103(o), _SPG104(o), _SPG105(o), _SPG106(o),
+            _SPG107(o), _SPG108(o), _SPG109(o), _SPG110(o), _SPG111(o),
+            _SPG112(o), _SPG113(o), _SPG114(o), _SPG115(o), _SPG116(o),
+            _SPG117(o), _SPG118(o), _SPG119(o), _SPG120(o), _SPG121(o),
+            _SPG122(o), _SPG123(o));
+      }
     }
     else  {
       static_assert(!sizeof(type), "empty struct/class is not allowed!");
@@ -1201,1053 +2690,8 @@ constexpr bool trivially_copyable_container =
     // template <>
     // constexpr size_t struct_pack::members_count<Hello> = 3;
 
-    if constexpr (Count == 0) {
-      return visitor();
-    }
-    else if constexpr (Count == 1) {
-      auto &&[a1] = object;
-      return visitor(a1);
-    }
-    else if constexpr (Count == 2) {
-      auto &&[a1, a2] = object;
-      return visitor(a1, a2);
-    }
-    else if constexpr (Count == 3) {
-      auto &&[a1, a2, a3] = object;
-      return visitor(a1, a2, a3);
-    }
-    else if constexpr (Count == 4) {
-      auto &&[a1, a2, a3, a4] = object;
-      return visitor(a1, a2, a3, a4);
-    }
-    else if constexpr (Count == 5) {
-      auto &&[a1, a2, a3, a4, a5] = object;
-      return visitor(a1, a2, a3, a4, a5);
-    }
-    else if constexpr (Count == 6) {
-      auto &&[a1, a2, a3, a4, a5, a6] = object;
-      return visitor(a1, a2, a3, a4, a5, a6);
-    }
-    else if constexpr (Count == 7) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7);
-    }
-    else if constexpr (Count == 8) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8);
-    }
-    else if constexpr (Count == 9) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-    }
-    else if constexpr (Count == 10) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
-    }
-    else if constexpr (Count == 11) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
-    }
-    else if constexpr (Count == 12) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12);
-    }
-    else if constexpr (Count == 13) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13);
-    }
-    else if constexpr (Count == 14) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14);
-    }
-    else if constexpr (Count == 15) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14,
-              a15] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15);
-    }
-    else if constexpr (Count == 16) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16);
-    }
-    else if constexpr (Count == 17) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17);
-    }
-    else if constexpr (Count == 18) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18);
-    }
-    else if constexpr (Count == 19) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19);
-    }
-    else if constexpr (Count == 20) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20);
-    }
-    else if constexpr (Count == 21) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21);
-    }
-    else if constexpr (Count == 22) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22);
-    }
-    else if constexpr (Count == 23) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23);
-    }
-    else if constexpr (Count == 24) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24);
-    }
-    else if constexpr (Count == 25) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24,
-                     a25);
-    }
-    else if constexpr (Count == 26) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26);
-    }
-    else if constexpr (Count == 27) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27);
-    }
-    else if constexpr (Count == 28) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28);
-    }
-    else if constexpr (Count == 29) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29);
-    }
-    else if constexpr (Count == 30) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30);
-    }
-    else if constexpr (Count == 31) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31);
-    }
-    else if constexpr (Count == 32) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32);
-    }
-    else if constexpr (Count == 33) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33);
-    }
-    else if constexpr (Count == 34) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34);
-    }
-    else if constexpr (Count == 35) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35);
-    }
-    else if constexpr (Count == 36) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36);
-    }
-    else if constexpr (Count == 37) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36,
-                     a37);
-    }
-    else if constexpr (Count == 38) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38);
-    }
-    else if constexpr (Count == 39) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39);
-    }
-    else if constexpr (Count == 40) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40);
-    }
-    else if constexpr (Count == 41) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41);
-    }
-    else if constexpr (Count == 42) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42);
-    }
-    else if constexpr (Count == 43) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43);
-    }
-    else if constexpr (Count == 44) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44);
-    }
-    else if constexpr (Count == 45) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45);
-    }
-    else if constexpr (Count == 46) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46);
-    }
-    else if constexpr (Count == 47) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47);
-    }
-    else if constexpr (Count == 48) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48);
-    }
-    else if constexpr (Count == 49) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48,
-                     a49);
-    }
-    else if constexpr (Count == 50) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50);
-    }
-    else if constexpr (Count == 51) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51);
-    }
-    else if constexpr (Count == 52) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52);
-    }
-    else if constexpr (Count == 53) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53);
-    }
-    else if constexpr (Count == 54) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54] =
-          object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54);
-    }
-    else if constexpr (Count == 55) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55);
-    }
-    else if constexpr (Count == 56) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56);
-    }
-    else if constexpr (Count == 57) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57);
-    }
-    else if constexpr (Count == 58) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58);
-    }
-    else if constexpr (Count == 59) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59);
-    }
-    else if constexpr (Count == 60) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59, a60] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60);
-    }
-    else if constexpr (Count == 61) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59, a60, a61] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60,
-                     a61);
-    }
-    else if constexpr (Count == 62) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59, a60, a61, a62] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61,
-                     a62);
-    }
-    else if constexpr (Count == 63) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59, a60, a61, a62, a63] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61,
-                     a62, a63);
-    }
-    else if constexpr (Count == 64) {
-      auto &&[a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15,
-              a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28,
-              a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41,
-              a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54,
-              a55, a56, a57, a58, a59, a60, a61, a62, a63, a64] = object;
-      return visitor(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                     a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
-                     a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37,
-                     a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49,
-                     a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61,
-                     a62, a63, a64);
-    }
+    return ylt::reflection::visit_members<Object, Visitor, Count>(std::forward<Object>(object), std::forward<Visitor>(visitor));
   }
-// clang-format off
-template <typename Func, typename... Args>
-constexpr decltype(auto) STRUCT_PACK_INLINE template_switch(std::size_t index,
-                                                            Args &&...args) {
-  switch (index) {
-    case 0:
-      return Func::template run<0>(std::forward<Args>(args)...);
-    case 1:
-      return Func::template run<1>(std::forward<Args>(args)...);
-    case 2:
-      return Func::template run<2>(std::forward<Args>(args)...);
-    case 3:
-      return Func::template run<3>(std::forward<Args>(args)...);
-    case 4:
-      return Func::template run<4>(std::forward<Args>(args)...);
-    case 5:
-      return Func::template run<5>(std::forward<Args>(args)...);
-    case 6:
-      return Func::template run<6>(std::forward<Args>(args)...);
-    case 7:
-      return Func::template run<7>(std::forward<Args>(args)...);
-    case 8:
-      return Func::template run<8>(std::forward<Args>(args)...);
-    case 9:
-      return Func::template run<9>(std::forward<Args>(args)...);
-    case 10:
-      return Func::template run<10>(std::forward<Args>(args)...);
-    case 11:
-      return Func::template run<11>(std::forward<Args>(args)...);
-    case 12:
-      return Func::template run<12>(std::forward<Args>(args)...);
-    case 13:
-      return Func::template run<13>(std::forward<Args>(args)...);
-    case 14:
-      return Func::template run<14>(std::forward<Args>(args)...);
-    case 15:
-      return Func::template run<15>(std::forward<Args>(args)...);
-    case 16:
-      return Func::template run<16>(std::forward<Args>(args)...);
-    case 17:
-      return Func::template run<17>(std::forward<Args>(args)...);
-    case 18:
-      return Func::template run<18>(std::forward<Args>(args)...);
-    case 19:
-      return Func::template run<19>(std::forward<Args>(args)...);
-    case 20:
-      return Func::template run<20>(std::forward<Args>(args)...);
-    case 21:
-      return Func::template run<21>(std::forward<Args>(args)...);
-    case 22:
-      return Func::template run<22>(std::forward<Args>(args)...);
-    case 23:
-      return Func::template run<23>(std::forward<Args>(args)...);
-    case 24:
-      return Func::template run<24>(std::forward<Args>(args)...);
-    case 25:
-      return Func::template run<25>(std::forward<Args>(args)...);
-    case 26:
-      return Func::template run<26>(std::forward<Args>(args)...);
-    case 27:
-      return Func::template run<27>(std::forward<Args>(args)...);
-    case 28:
-      return Func::template run<28>(std::forward<Args>(args)...);
-    case 29:
-      return Func::template run<29>(std::forward<Args>(args)...);
-    case 30:
-      return Func::template run<30>(std::forward<Args>(args)...);
-    case 31:
-      return Func::template run<31>(std::forward<Args>(args)...);
-    case 32:
-      return Func::template run<32>(std::forward<Args>(args)...);
-    case 33:
-      return Func::template run<33>(std::forward<Args>(args)...);
-    case 34:
-      return Func::template run<34>(std::forward<Args>(args)...);
-    case 35:
-      return Func::template run<35>(std::forward<Args>(args)...);
-    case 36:
-      return Func::template run<36>(std::forward<Args>(args)...);
-    case 37:
-      return Func::template run<37>(std::forward<Args>(args)...);
-    case 38:
-      return Func::template run<38>(std::forward<Args>(args)...);
-    case 39:
-      return Func::template run<39>(std::forward<Args>(args)...);
-    case 40:
-      return Func::template run<40>(std::forward<Args>(args)...);
-    case 41:
-      return Func::template run<41>(std::forward<Args>(args)...);
-    case 42:
-      return Func::template run<42>(std::forward<Args>(args)...);
-    case 43:
-      return Func::template run<43>(std::forward<Args>(args)...);
-    case 44:
-      return Func::template run<44>(std::forward<Args>(args)...);
-    case 45:
-      return Func::template run<45>(std::forward<Args>(args)...);
-    case 46:
-      return Func::template run<46>(std::forward<Args>(args)...);
-    case 47:
-      return Func::template run<47>(std::forward<Args>(args)...);
-    case 48:
-      return Func::template run<48>(std::forward<Args>(args)...);
-    case 49:
-      return Func::template run<49>(std::forward<Args>(args)...);
-    case 50:
-      return Func::template run<50>(std::forward<Args>(args)...);
-    case 51:
-      return Func::template run<51>(std::forward<Args>(args)...);
-    case 52:
-      return Func::template run<52>(std::forward<Args>(args)...);
-    case 53:
-      return Func::template run<53>(std::forward<Args>(args)...);
-    case 54:
-      return Func::template run<54>(std::forward<Args>(args)...);
-    case 55:
-      return Func::template run<55>(std::forward<Args>(args)...);
-    case 56:
-      return Func::template run<56>(std::forward<Args>(args)...);
-    case 57:
-      return Func::template run<57>(std::forward<Args>(args)...);
-    case 58:
-      return Func::template run<58>(std::forward<Args>(args)...);
-    case 59:
-      return Func::template run<59>(std::forward<Args>(args)...);
-    case 60:
-      return Func::template run<60>(std::forward<Args>(args)...);
-    case 61:
-      return Func::template run<61>(std::forward<Args>(args)...);
-    case 62:
-      return Func::template run<62>(std::forward<Args>(args)...);
-    case 63:
-      return Func::template run<63>(std::forward<Args>(args)...);
-    case 64:
-      return Func::template run<64>(std::forward<Args>(args)...);
-    case 65:
-      return Func::template run<65>(std::forward<Args>(args)...);
-    case 66:
-      return Func::template run<66>(std::forward<Args>(args)...);
-    case 67:
-      return Func::template run<67>(std::forward<Args>(args)...);
-    case 68:
-      return Func::template run<68>(std::forward<Args>(args)...);
-    case 69:
-      return Func::template run<69>(std::forward<Args>(args)...);
-    case 70:
-      return Func::template run<70>(std::forward<Args>(args)...);
-    case 71:
-      return Func::template run<71>(std::forward<Args>(args)...);
-    case 72:
-      return Func::template run<72>(std::forward<Args>(args)...);
-    case 73:
-      return Func::template run<73>(std::forward<Args>(args)...);
-    case 74:
-      return Func::template run<74>(std::forward<Args>(args)...);
-    case 75:
-      return Func::template run<75>(std::forward<Args>(args)...);
-    case 76:
-      return Func::template run<76>(std::forward<Args>(args)...);
-    case 77:
-      return Func::template run<77>(std::forward<Args>(args)...);
-    case 78:
-      return Func::template run<78>(std::forward<Args>(args)...);
-    case 79:
-      return Func::template run<79>(std::forward<Args>(args)...);
-    case 80:
-      return Func::template run<80>(std::forward<Args>(args)...);
-    case 81:
-      return Func::template run<81>(std::forward<Args>(args)...);
-    case 82:
-      return Func::template run<82>(std::forward<Args>(args)...);
-    case 83:
-      return Func::template run<83>(std::forward<Args>(args)...);
-    case 84:
-      return Func::template run<84>(std::forward<Args>(args)...);
-    case 85:
-      return Func::template run<85>(std::forward<Args>(args)...);
-    case 86:
-      return Func::template run<86>(std::forward<Args>(args)...);
-    case 87:
-      return Func::template run<87>(std::forward<Args>(args)...);
-    case 88:
-      return Func::template run<88>(std::forward<Args>(args)...);
-    case 89:
-      return Func::template run<89>(std::forward<Args>(args)...);
-    case 90:
-      return Func::template run<90>(std::forward<Args>(args)...);
-    case 91:
-      return Func::template run<91>(std::forward<Args>(args)...);
-    case 92:
-      return Func::template run<92>(std::forward<Args>(args)...);
-    case 93:
-      return Func::template run<93>(std::forward<Args>(args)...);
-    case 94:
-      return Func::template run<94>(std::forward<Args>(args)...);
-    case 95:
-      return Func::template run<95>(std::forward<Args>(args)...);
-    case 96:
-      return Func::template run<96>(std::forward<Args>(args)...);
-    case 97:
-      return Func::template run<97>(std::forward<Args>(args)...);
-    case 98:
-      return Func::template run<98>(std::forward<Args>(args)...);
-    case 99:
-      return Func::template run<99>(std::forward<Args>(args)...);
-    case 100:
-      return Func::template run<100>(std::forward<Args>(args)...);
-    case 101:
-      return Func::template run<101>(std::forward<Args>(args)...);
-    case 102:
-      return Func::template run<102>(std::forward<Args>(args)...);
-    case 103:
-      return Func::template run<103>(std::forward<Args>(args)...);
-    case 104:
-      return Func::template run<104>(std::forward<Args>(args)...);
-    case 105:
-      return Func::template run<105>(std::forward<Args>(args)...);
-    case 106:
-      return Func::template run<106>(std::forward<Args>(args)...);
-    case 107:
-      return Func::template run<107>(std::forward<Args>(args)...);
-    case 108:
-      return Func::template run<108>(std::forward<Args>(args)...);
-    case 109:
-      return Func::template run<109>(std::forward<Args>(args)...);
-    case 110:
-      return Func::template run<110>(std::forward<Args>(args)...);
-    case 111:
-      return Func::template run<111>(std::forward<Args>(args)...);
-    case 112:
-      return Func::template run<112>(std::forward<Args>(args)...);
-    case 113:
-      return Func::template run<113>(std::forward<Args>(args)...);
-    case 114:
-      return Func::template run<114>(std::forward<Args>(args)...);
-    case 115:
-      return Func::template run<115>(std::forward<Args>(args)...);
-    case 116:
-      return Func::template run<116>(std::forward<Args>(args)...);
-    case 117:
-      return Func::template run<117>(std::forward<Args>(args)...);
-    case 118:
-      return Func::template run<118>(std::forward<Args>(args)...);
-    case 119:
-      return Func::template run<119>(std::forward<Args>(args)...);
-    case 120:
-      return Func::template run<120>(std::forward<Args>(args)...);
-    case 121:
-      return Func::template run<121>(std::forward<Args>(args)...);
-    case 122:
-      return Func::template run<122>(std::forward<Args>(args)...);
-    case 123:
-      return Func::template run<123>(std::forward<Args>(args)...);
-    case 124:
-      return Func::template run<124>(std::forward<Args>(args)...);
-    case 125:
-      return Func::template run<125>(std::forward<Args>(args)...);
-    case 126:
-      return Func::template run<126>(std::forward<Args>(args)...);
-    case 127:
-      return Func::template run<127>(std::forward<Args>(args)...);
-    case 128:
-      return Func::template run<128>(std::forward<Args>(args)...);
-    case 129:
-      return Func::template run<129>(std::forward<Args>(args)...);
-    case 130:
-      return Func::template run<130>(std::forward<Args>(args)...);
-    case 131:
-      return Func::template run<131>(std::forward<Args>(args)...);
-    case 132:
-      return Func::template run<132>(std::forward<Args>(args)...);
-    case 133:
-      return Func::template run<133>(std::forward<Args>(args)...);
-    case 134:
-      return Func::template run<134>(std::forward<Args>(args)...);
-    case 135:
-      return Func::template run<135>(std::forward<Args>(args)...);
-    case 136:
-      return Func::template run<136>(std::forward<Args>(args)...);
-    case 137:
-      return Func::template run<137>(std::forward<Args>(args)...);
-    case 138:
-      return Func::template run<138>(std::forward<Args>(args)...);
-    case 139:
-      return Func::template run<139>(std::forward<Args>(args)...);
-    case 140:
-      return Func::template run<140>(std::forward<Args>(args)...);
-    case 141:
-      return Func::template run<141>(std::forward<Args>(args)...);
-    case 142:
-      return Func::template run<142>(std::forward<Args>(args)...);
-    case 143:
-      return Func::template run<143>(std::forward<Args>(args)...);
-    case 144:
-      return Func::template run<144>(std::forward<Args>(args)...);
-    case 145:
-      return Func::template run<145>(std::forward<Args>(args)...);
-    case 146:
-      return Func::template run<146>(std::forward<Args>(args)...);
-    case 147:
-      return Func::template run<147>(std::forward<Args>(args)...);
-    case 148:
-      return Func::template run<148>(std::forward<Args>(args)...);
-    case 149:
-      return Func::template run<149>(std::forward<Args>(args)...);
-    case 150:
-      return Func::template run<150>(std::forward<Args>(args)...);
-    case 151:
-      return Func::template run<151>(std::forward<Args>(args)...);
-    case 152:
-      return Func::template run<152>(std::forward<Args>(args)...);
-    case 153:
-      return Func::template run<153>(std::forward<Args>(args)...);
-    case 154:
-      return Func::template run<154>(std::forward<Args>(args)...);
-    case 155:
-      return Func::template run<155>(std::forward<Args>(args)...);
-    case 156:
-      return Func::template run<156>(std::forward<Args>(args)...);
-    case 157:
-      return Func::template run<157>(std::forward<Args>(args)...);
-    case 158:
-      return Func::template run<158>(std::forward<Args>(args)...);
-    case 159:
-      return Func::template run<159>(std::forward<Args>(args)...);
-    case 160:
-      return Func::template run<160>(std::forward<Args>(args)...);
-    case 161:
-      return Func::template run<161>(std::forward<Args>(args)...);
-    case 162:
-      return Func::template run<162>(std::forward<Args>(args)...);
-    case 163:
-      return Func::template run<163>(std::forward<Args>(args)...);
-    case 164:
-      return Func::template run<164>(std::forward<Args>(args)...);
-    case 165:
-      return Func::template run<165>(std::forward<Args>(args)...);
-    case 166:
-      return Func::template run<166>(std::forward<Args>(args)...);
-    case 167:
-      return Func::template run<167>(std::forward<Args>(args)...);
-    case 168:
-      return Func::template run<168>(std::forward<Args>(args)...);
-    case 169:
-      return Func::template run<169>(std::forward<Args>(args)...);
-    case 170:
-      return Func::template run<170>(std::forward<Args>(args)...);
-    case 171:
-      return Func::template run<171>(std::forward<Args>(args)...);
-    case 172:
-      return Func::template run<172>(std::forward<Args>(args)...);
-    case 173:
-      return Func::template run<173>(std::forward<Args>(args)...);
-    case 174:
-      return Func::template run<174>(std::forward<Args>(args)...);
-    case 175:
-      return Func::template run<175>(std::forward<Args>(args)...);
-    case 176:
-      return Func::template run<176>(std::forward<Args>(args)...);
-    case 177:
-      return Func::template run<177>(std::forward<Args>(args)...);
-    case 178:
-      return Func::template run<178>(std::forward<Args>(args)...);
-    case 179:
-      return Func::template run<179>(std::forward<Args>(args)...);
-    case 180:
-      return Func::template run<180>(std::forward<Args>(args)...);
-    case 181:
-      return Func::template run<181>(std::forward<Args>(args)...);
-    case 182:
-      return Func::template run<182>(std::forward<Args>(args)...);
-    case 183:
-      return Func::template run<183>(std::forward<Args>(args)...);
-    case 184:
-      return Func::template run<184>(std::forward<Args>(args)...);
-    case 185:
-      return Func::template run<185>(std::forward<Args>(args)...);
-    case 186:
-      return Func::template run<186>(std::forward<Args>(args)...);
-    case 187:
-      return Func::template run<187>(std::forward<Args>(args)...);
-    case 188:
-      return Func::template run<188>(std::forward<Args>(args)...);
-    case 189:
-      return Func::template run<189>(std::forward<Args>(args)...);
-    case 190:
-      return Func::template run<190>(std::forward<Args>(args)...);
-    case 191:
-      return Func::template run<191>(std::forward<Args>(args)...);
-    case 192:
-      return Func::template run<192>(std::forward<Args>(args)...);
-    case 193:
-      return Func::template run<193>(std::forward<Args>(args)...);
-    case 194:
-      return Func::template run<194>(std::forward<Args>(args)...);
-    case 195:
-      return Func::template run<195>(std::forward<Args>(args)...);
-    case 196:
-      return Func::template run<196>(std::forward<Args>(args)...);
-    case 197:
-      return Func::template run<197>(std::forward<Args>(args)...);
-    case 198:
-      return Func::template run<198>(std::forward<Args>(args)...);
-    case 199:
-      return Func::template run<199>(std::forward<Args>(args)...);
-    case 200:
-      return Func::template run<200>(std::forward<Args>(args)...);
-    case 201:
-      return Func::template run<201>(std::forward<Args>(args)...);
-    case 202:
-      return Func::template run<202>(std::forward<Args>(args)...);
-    case 203:
-      return Func::template run<203>(std::forward<Args>(args)...);
-    case 204:
-      return Func::template run<204>(std::forward<Args>(args)...);
-    case 205:
-      return Func::template run<205>(std::forward<Args>(args)...);
-    case 206:
-      return Func::template run<206>(std::forward<Args>(args)...);
-    case 207:
-      return Func::template run<207>(std::forward<Args>(args)...);
-    case 208:
-      return Func::template run<208>(std::forward<Args>(args)...);
-    case 209:
-      return Func::template run<209>(std::forward<Args>(args)...);
-    case 210:
-      return Func::template run<210>(std::forward<Args>(args)...);
-    case 211:
-      return Func::template run<211>(std::forward<Args>(args)...);
-    case 212:
-      return Func::template run<212>(std::forward<Args>(args)...);
-    case 213:
-      return Func::template run<213>(std::forward<Args>(args)...);
-    case 214:
-      return Func::template run<214>(std::forward<Args>(args)...);
-    case 215:
-      return Func::template run<215>(std::forward<Args>(args)...);
-    case 216:
-      return Func::template run<216>(std::forward<Args>(args)...);
-    case 217:
-      return Func::template run<217>(std::forward<Args>(args)...);
-    case 218:
-      return Func::template run<218>(std::forward<Args>(args)...);
-    case 219:
-      return Func::template run<219>(std::forward<Args>(args)...);
-    case 220:
-      return Func::template run<220>(std::forward<Args>(args)...);
-    case 221:
-      return Func::template run<221>(std::forward<Args>(args)...);
-    case 222:
-      return Func::template run<222>(std::forward<Args>(args)...);
-    case 223:
-      return Func::template run<223>(std::forward<Args>(args)...);
-    case 224:
-      return Func::template run<224>(std::forward<Args>(args)...);
-    case 225:
-      return Func::template run<225>(std::forward<Args>(args)...);
-    case 226:
-      return Func::template run<226>(std::forward<Args>(args)...);
-    case 227:
-      return Func::template run<227>(std::forward<Args>(args)...);
-    case 228:
-      return Func::template run<228>(std::forward<Args>(args)...);
-    case 229:
-      return Func::template run<229>(std::forward<Args>(args)...);
-    case 230:
-      return Func::template run<230>(std::forward<Args>(args)...);
-    case 231:
-      return Func::template run<231>(std::forward<Args>(args)...);
-    case 232:
-      return Func::template run<232>(std::forward<Args>(args)...);
-    case 233:
-      return Func::template run<233>(std::forward<Args>(args)...);
-    case 234:
-      return Func::template run<234>(std::forward<Args>(args)...);
-    case 235:
-      return Func::template run<235>(std::forward<Args>(args)...);
-    case 236:
-      return Func::template run<236>(std::forward<Args>(args)...);
-    case 237:
-      return Func::template run<237>(std::forward<Args>(args)...);
-    case 238:
-      return Func::template run<238>(std::forward<Args>(args)...);
-    case 239:
-      return Func::template run<239>(std::forward<Args>(args)...);
-    case 240:
-      return Func::template run<240>(std::forward<Args>(args)...);
-    case 241:
-      return Func::template run<241>(std::forward<Args>(args)...);
-    case 242:
-      return Func::template run<242>(std::forward<Args>(args)...);
-    case 243:
-      return Func::template run<243>(std::forward<Args>(args)...);
-    case 244:
-      return Func::template run<244>(std::forward<Args>(args)...);
-    case 245:
-      return Func::template run<245>(std::forward<Args>(args)...);
-    case 246:
-      return Func::template run<246>(std::forward<Args>(args)...);
-    case 247:
-      return Func::template run<247>(std::forward<Args>(args)...);
-    case 248:
-      return Func::template run<248>(std::forward<Args>(args)...);
-    case 249:
-      return Func::template run<249>(std::forward<Args>(args)...);
-    case 250:
-      return Func::template run<250>(std::forward<Args>(args)...);
-    case 251:
-      return Func::template run<251>(std::forward<Args>(args)...);
-    case 252:
-      return Func::template run<252>(std::forward<Args>(args)...);
-    case 253:
-      return Func::template run<253>(std::forward<Args>(args)...);
-    case 254:
-      return Func::template run<254>(std::forward<Args>(args)...);
-    case 255:
-      return Func::template run<255>(std::forward<Args>(args)...);
-    default:
-      unreachable();
-      // index shouldn't bigger than 256
-  }
-}  // namespace detail
 }  // namespace detail
 #if __cpp_concepts >= 201907L
 
@@ -2271,23 +2715,22 @@ constexpr bool checkable_reader_t = reader_t<T> &&checkable_reader_t_impl<T>::va
 #endif
 }  // namespace struct_pack
 
-// clang-format off
 
 
 #define STRUCT_PACK_RETURN_ELEMENT(Idx, X) \
 if constexpr (Idx == I) {\
     return c.X;\
-}\
+}
 
-#define STRUCT_PACK_GET_INDEX(Idx, Type) \
-inline auto& STRUCT_PACK_GET_##Idx(Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+#define STRUCT_PACK_GET_INDEX(Idx, Type)                                       \
+  inline auto &_SPG##Idx(Type &c) {                                            \
+    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - 1 - Idx>(c); \
+  }
 
-#define STRUCT_PACK_GET_INDEX_CONST(Idx, Type) \
-inline const auto& STRUCT_PACK_GET_##Idx(const Type& c) {\
-    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>()-1-Idx>(c);\
-}\
+#define STRUCT_PACK_GET_INDEX_CONST(Idx, Type)                                 \
+  inline const auto &_SPG##Idx(const Type &c) {                                \
+    return STRUCT_PACK_GET<STRUCT_PACK_FIELD_COUNT_IMPL<Type>() - 1 - Idx>(c); \
+  }
 
 #define STRUCT_PACK_REFL(Type,...) \
 inline Type& STRUCT_PACK_REFL_FLAG(Type& t) {return t;} \

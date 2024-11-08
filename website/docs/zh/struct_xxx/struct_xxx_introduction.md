@@ -13,7 +13,7 @@ include_directories(include/ylt/thirdparty)
 ```
 
 写代码的时候包含对应的头文件即可：
-```c++
+```cpp
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
 ```
@@ -23,19 +23,19 @@ include_directories(include/ylt/thirdparty)
 gcc9+、clang11+、msvc2019+
 
 # json 序列化/反序列化
-序列化需要先定义一个可反射的对象，通过REFLECTION 可以轻松定义一个可反射对象。
+序列化需要先定义一个可反射的对象，通过YLT_REFL 可以轻松定义一个可反射对象。
 
-```c++
+```cpp
 struct person
 {
     std::string_view name;
     int age;
 };
-REFLECTION(person, name, age); // 通过这个宏定义元数据让person 成为一个可反射对象
+YLT_REFL(person, name, age); // 通过这个宏定义元数据让person 成为一个可反射对象
 ```
-通过REFLECTION 宏定义元数据之后就可以一行代码实现json 的序列化与反序列化了。
+通过YLT_REFL 宏定义元数据之后就可以一行代码实现json 的序列化与反序列化了。
 
-```c++
+```cpp
 person p = { "tom", 28 };
 
 std::string ss;
@@ -54,7 +54,7 @@ assert(p1.name == "tom");
 ## json 的dom 解析
 json 解析也提供了dom 解析接口，使用parse 接口时，不需要定义json 对应的结构体。
 
-```c++
+```cpp
 std::string_view str = R"(false)";
 struct_json::jvalue val;
 struct_json::parse(val, str.begin(), str.end());
@@ -73,12 +73,12 @@ CHECK(!b);
 # 最佳实践
 ## 零拷贝的反序列化
 通过零拷贝的反序列化，可以完全消除内存分配的开销。
-```c++
+```cpp
 struct some_obj {
     std::string_view name;
     struct_json::numeric_str age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test_view(){
     std::string_view str = "{\"name\":\"tom\", \"age\":20}";
@@ -109,12 +109,12 @@ void test_view(){
 # xml 序列化/反序列化
 和json 类似，先定义xml 数据对应的结构体，再通过to_xml/from_xml 实现序列化和反序列化。
 
-```c++
+```cpp
 struct some_obj {
     std::string_view name;
     int age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test() {
     person p = {"admin", 20};
@@ -134,12 +134,12 @@ void test() {
 ```
 
 ## pretty 格式化xml
-```c++
+```cpp
 struct person {
     std::string_view name;
     int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void test_pretty() {
     person p{"tom", 20};
@@ -162,16 +162,16 @@ to_xml 模式输出的xml 字符串在一行，如果希望pretty 输出则传tr
 
 ## xml 属性解析
 
-```c++
+```cpp
 struct book_t {
   std::string title;
   std::string author;
 };
-REFLECTION(book_t, title, author);
+YLT_REFL(book_t, title, author);
 struct library {
   struct_xml::xml_attr_t<book_t> book;
 };
-REFLECTION(library, book);
+YLT_REFL(library, book);
 TEST_CASE("test library with attr") {
   auto validator = [](library lib) {
     CHECK(lib.book.attr()["id"] == "1234");
@@ -205,12 +205,12 @@ TEST_CASE("test library with attr") {
 
 # 字段别名
 一般情况下序列化/反序列化要求定义的结构体字段和被解析字符串如xml 字符串中的标签名称一一对应，比如下面的例子：
-```c++
+```cpp
 struct some_obj {
     std::string_view name;
     int age;
 };
-REFLECTION(some_obj, name, age);
+YLT_REFL(some_obj, name, age);
 
 void test() {
     std::string_view xml = R"(
@@ -228,7 +228,7 @@ xml 标签name 和 age 对应的就是结构体some_obj::name, some_obj::age，�
 
 有时候这个约束对于一些已经存在的结构体可能存在一些不便之处，已有的结构体字段名可能和xml 标签名字不相同，这时候可以通过字段别名来保证正确解析。
 
-```c++
+```cpp
 std::string xml_str = R"(
 <?xml version="1.0" encoding="utf-8"?>
 <rootnode version="1.0" type="example">
@@ -245,7 +245,14 @@ public:
     person() = default;
     person(std::shared_ptr<std::string> id, std::unique_ptr<std::string> name) : id_(id), name_(std::move(name)) {}
 
-    REFLECTION_ALIAS(person, "rootnode", FLDALIAS(&person::id_, "id"), FLDALIAS(&person::name_, "name"));
+    static constexpr auto get_alias_field_names(person*) {
+      return std::array{field_alias_t{"id", 0}, field_alias_t{"name", 1}};
+    }
+    static constexpr std::string_view get_alias_struct_name(person*) {
+      return "rootnode";
+    }
+
+    YLT_REFL(person, id_, name_);
 
     void parse_xml() {
         struct_xml::from_xml(*this, xml_str);
@@ -255,24 +262,24 @@ public:
     }
 }
 ```
-REFLECTION_ALIAS 中需要填写结构体的别名和字段的别名，通过别名将标签和结构体字段关联起来就可以保证正确的解析了。
+get_alias_field_names 函数中需要填写结构体的别名，get_alias_struct_name 函数中填写字段的别名，别名字段的索引需要和YLT_REFL宏定义的字段顺序一致，通过别名将标签和结构体字段关联起来就可以保证正确的解析了。
 
 这个例子同时也展示了序列化和反序列化智能指针。
 
 # 如何处理私有字段
-如果类里面有私有字段，在外面定义REFLECTION 宏会出错，因为无法访问私有字段，这时候把宏定义到类里面即可，但要保证宏是public的。
-```c++
+如果类里面有私有字段，在外面定义YLT_REFL 宏会出错，因为无法访问私有字段，这时候把宏定义到类里面即可，但要保证宏是public的。
+```cpp
 class person {
     std::string name;
     int age;
 public:
-    REFLECTION(person, name, age);
+    YLT_REFL(person, name, age);
 };
 ```
 
 # yaml 序列化/反序列化
 和json，xml 类似：
-```c++
+```cpp
 enum class enum_status {
   start,
   stop,
@@ -285,10 +292,10 @@ struct plain_type_t {
   std::optional<float> num;
   std::optional<int> price;
 };
-REFLECTION(plain_type_t, isok, status, c, hasprice, num, price);
+YLT_REFL(plain_type_t, isok, status, c, hasprice, num, price);
 ```
 
-```c++
+```cpp
 // deserialization the structure from the string
 std::string str = R"(
 isok: false
@@ -310,13 +317,13 @@ std::cout << ss << "\n";
 # 如何将enum 作为字符串处理
 一般情况下enum 将按照int 去处理，如果希望将enum 按照字符串名称去处理，则需要定义enum_value来做适配。
 
-```c++
+```cpp
 enum class Status { STOP = 10, START };
 struct enum_t {
     Status a;
     Status b;
 };
-REFLECTION(enum_t, a, b);
+YLT_REFL(enum_t, a, b);
 
 namespace iguana {
     template <> struct enum_value<Status> {

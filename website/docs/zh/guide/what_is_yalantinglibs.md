@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">yaLanTingLibs</h1>
-<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http 和 async_simple </h6>
+<h6 align="center">C++20基础工具库集合，包括struct_pack, struct_json, struct_xml, struct_pb, easylog, coro_rpc, coro_http, metric 和 async_simple </h6>
 </p>
 <p align="center">
 <img alt="license" src="https://img.shields.io/github/license/alibaba/async_simple?style=flat-square">
@@ -10,7 +10,7 @@
 
 [English Version](../../en/guide/what_is_yalantinglibs.md)
 
-yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http 和 async_simple, 目前我们正在开发并添加更多的新功能。
+yaLanTingLibs 是一个现代C++基础工具库的集合, 现在它包括 struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http, metric, reflection 和 async_simple, 目前我们正在开发并添加更多的新功能。
 
 yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C++基础工具库, 帮助用户构建高性能的现代C++应用。
 
@@ -97,9 +97,10 @@ cmake --build .
 - 手动编译:
 
 1. 将 `include/`加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
-2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过Cmake 选项 -DINSTALL_INDEPENDENT_THIRDPARTY=ON 安装了第三方依赖，可跳过该步骤)
-3. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++`编译器时需要添加选项 `-fcoroutines`。
-4. 全部搞定. 更多细节请参考 `example/cmakelist.txt`.
+2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
+3. 将 `include/ylt/standalone` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
+4. 通过选项`-std=c++20`(g++/clang++) or `/std:c++20`(msvc)启用C++20标准。（序列化库和日志库至少需要c++17，网络库与协程至少需要C++20）
+5. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++10`编译器需要添加选项 `-fcoroutines`。
 
 - 更多细节:
 如需查看更多细节, 除了`example/cmakelist.txt`，你还可以参考 [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
@@ -114,7 +115,7 @@ coro是一个高度易用, head-only，基于协程的C++20高性能rpc框架库
 
 [简介](https://alibaba.github.io/yalantinglibs/zh/coro_rpc/coro_rpc_introduction.html)  
 
-[API](https://alibaba.github.io/yalantinglibs/cn/html/group__coro__rpc.html)
+[API](https://alibaba.github.io/yalantinglibs/doxygen_cn/html/group__coro__rpc.html)
 
 [Purecpp 演讲稿](https://alibaba.github.io/yalantinglibs/resource/coro_rpc_introduction_purecpp_talk.pdf).
 
@@ -210,7 +211,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 int main() {
   person p{.name = "tom", .age = 20};
@@ -234,7 +235,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -310,23 +311,22 @@ int main() {
 ### websocket
 ```cpp
 async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << "web socket close " << reason << std::endl;
-  });
-  
-  client.on_ws_msg([](resp_data data) {
-    std::cout << data.resp_body << std::endl;
-  });
-
   // connect to your websocket server.
   bool r = co_await client.async_connect("ws://example.com/ws");
   if (!r) {
     co_return;
   }
 
-  co_await client.async_send_ws("hello websocket");
-  co_await client.async_send_ws("test again", /*need_mask = */ false);
-  co_await client.async_send_ws_close("ws close reason");
+  co_await client.write_websocket("hello websocket");
+  auto data = co_await client.read_websocket();
+  CHECK(data.resp_body == "hello websocket");
+  co_await client.write_websocket("test again");
+  data = co_await client.read_websocket();
+  CHECK(data.resp_body == "test again");
+  co_await client.write_websocket("ws close");
+  data = co_await client.read_websocket();
+  CHECK(data.net_err == asio::error::eof);
+  CHECK(data.resp_body == "ws close");
 }
 ```
 
@@ -364,93 +364,85 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 
 # 其他
 
-## CMAKE 选项
+## 配置选项
 
-以下这些Cmake选项只适用于yalantinglibs自身的开发和安装。他们不会对你的项目造成影响，因为yalantinglibs是head-only的。
+yalantinglibs工程自身支持如下配置项，如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。
 
-### 安装选项
+|工程选项|默认值|描述|
+|----------|------------|------|
+|YLT_ENABLE_SSL|OFF|为rpc/http启用可选的ssl支持|
+|YLT_ENABLE_PMR|OFF|启用pmr优化|
+|YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
+|YLT_ENABLE_FILE_IO_URING|OFF|启用io_uring优化|
+|YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|struct_pack启用对不跨平台的特殊类型的支持（如wstring, in128_t）|
+|YLT_ENABLE_STRUCT_PACK_OPTIMIZE|OFF|struct_pack启用激进的模板展开优化（会花费更多编译时间）|
+
+## 安装选项
+
+默认情况下，ylt会把第三方依赖和子库直接安装到安装目录下。
+
+如果你不想让ylt安装第三方依赖，你可以使用选项：`-DINSTALL_THIRDPARTY=OFF`。
+
+如果你想让ylt将第三方依赖和子库安装到`ylt/thirdparty` 和`ylt/standalone`下，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=OFF` 和`-DINSTALL_INDEPENDENT_STANDALONE=OFF`.
 
 |选项|默认值|
 |----------|------------|
 |INSTALL_THIRDPARTY|ON|
-|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
+|INSTALL_STANDALONE|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_STANDALONE|ON|
 
-### ylt 开发选项
+## 开发选项
+
+以下这些Cmake选项只适用于yalantinglibs自身的开发。它们不会对你的项目造成影响，因为yalantinglibs是head-only的。
 
 |选项|默认值|
 |----------|------------|
 |BUILD_EXAMPLES|ON|
 |BUILD_BENCHMARK|ON|
 |BUILD_UNIT_TESTS|ON|
-|BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK 等)|ON|
+|BUILD_*(BUILD_CORO_RPC, BUILD_STRUCT_PACK等)|ON|
 |COVERAGE_TEST|OFF|
 |GENERATE_BENCHMARK_DATA|ON|
 |CORO_RPC_USE_OTHER_RPC|ON|
 
-### ylt 配置项
-
-你可能也想在你的工程里启用这些配置项。你可以参考这些[cmake 代码](https://github.com/alibaba/yalantinglibs/tree/main/cmake/config.cmake)。
-
-|选项|默认值|
-|----------|------------|
-|ENABLE_SSL|OFF|
-|ENABLE_PMR|OFF|
-|ENABLE_IO_URING|OFF|
-|ENABLE_FILE_IO_URING|OFF|
-|ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|
-|ENABLE_STRUCT_PACK_OPTIMIZE|OFF|
-
-## 第三方依赖
-
-默认情况下，ylt会把第三方依赖安装到`ylt/thirdparty`目录下，你需要将它添加到头文件包含路径中。
-
-如果你不想让ylt安装第三方依赖，你可以使用选项：`-DINSTALL_THIRDPARTY=OFF`。
-
-如果你想让ylt将第三方依赖直接独立安装到系统默认的包含路径中，你可以开启选项：`-DINSTALL_INDEPENDENT_THIRDPARTY=ON`。
+## 第三方依赖清单
 
 以下是我们使用的第三方依赖（async_simple虽然也是ylt的一部分，但其首先开源，故计为一个独立的第三方依赖）
 
-### coro_io
+### coro_io/coro_rpc/coro_http
+
+这些依赖会被默认安装，可以通过安装选项来控制。
 
 - [asio](https://think-async.com/Asio)
 - [async_simple](https://github.com/alibaba/async_simple)
 - [openssl](https://www.openssl.org/) (optional)
-
-### coro_rpc
-
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [openssl](https://www.openssl.org/) (optional)
-
-### coro_http
-
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [cinatra](https://github.com/qicosmos/cinatra)
 
 ### easylog
 
 无依赖。
 
-### struct_pack
+### struct_pack, struct_json, struct_xml, struct_yaml
 
 无依赖。
 
-### struct_json
+### struct_pb
 
-- [iguana](https://github.com/qicosmos/iguana)
+无依赖。
 
-### struct_pb (optional)
+### metric
 
-- [protobuf](https://protobuf.dev/)
+无依赖。
 
-### struct_xml
+### reflection
 
-- [iguana](https://github.com/qicosmos/iguana)
+无依赖
 
-### struct_yaml
+## 独立子仓库
 
-- [iguana](https://github.com/qicosmos/iguana)
+coro_http 由独立子仓库实现： [cinatra](https://github.com/qicosmos/cinatra)
+
+struct_json、struct_xml、struct_yaml 由独立子仓库实现： [iguana](https://github.com/qicosmos/iguana)
 
 ## Benchmark
 

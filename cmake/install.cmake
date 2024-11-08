@@ -1,7 +1,11 @@
-message(STATUS "-------------INSTALL SETTING-------------")
+message(STATUS "-------------YLT INSTALL SETTING------------")
 option(INSTALL_THIRDPARTY "Install thirdparty" ON)
+option(INSTALL_STANDALONE "Install standalone" ON)
 message(STATUS "INSTALL_THIRDPARTY: " ${INSTALL_THIRDPARTY})
+
+message(STATUS "INSTALL_STANDALONE: " ${INSTALL_STANDALONE})
 option(INSTALL_INDEPENDENT_THIRDPARTY "Install independent thirdparty" ON)
+option(INSTALL_INDEPENDENT_STANDALONE "Install independent standalone" ON)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
@@ -18,6 +22,7 @@ target_include_directories(yalantinglibs INTERFACE
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include/ylt/thirdparty>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include/ylt/standalone>
 )
 install(TARGETS yalantinglibs
        EXPORT yalantinglibsTargets
@@ -25,13 +30,26 @@ install(TARGETS yalantinglibs
        ARCHIVE DESTINATION lib
        RUNTIME DESTINATION bin
        )
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/yalantinglibsConfig.cmake"
+       "include(\$\{CMAKE_CURRENT_LIST_DIR\}/yalantinglibsConfigImpl.cmake)\n"
+       "include(\$\{CMAKE_CURRENT_LIST_DIR\}/config.cmake)\n"
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/yalantinglibsConfig.cmake"
+        DESTINATION ${ConfigPackageLocation})
+
+install(FILES "${yaLanTingLibs_SOURCE_DIR}/cmake/config.cmake"
+        DESTINATION ${ConfigPackageLocation}
+        )
+
 install(EXPORT yalantinglibsTargets
-       FILE yalantinglibsConfig.cmake
+       FILE yalantinglibsConfigImpl.cmake
        NAMESPACE yalantinglibs::
        DESTINATION ${ConfigPackageLocation}
        )
 
-install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty" EXCLUDE)
+install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/" DESTINATION include REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/thirdparty" EXCLUDE REGEX "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone" EXCLUDE)
 
 if (INSTALL_THIRDPARTY)
         message(STATUS "INSTALL_INDEPENDENT_THIRDPARTY: " ${INSTALL_INDEPENDENT_THIRDPARTY})
@@ -44,3 +62,14 @@ if (INSTALL_THIRDPARTY)
                 )
         endif()
 endif()
+if(INSTALL_STANDALONE)
+        message(STATUS "INSTALL_INDEPENDENT_STANDALONE: " ${INSTALL_INDEPENDENT_STANDALONE})
+        if (INSTALL_INDEPENDENT_STANDALONE)        
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone/" DESTINATION include)
+        else()
+                install(DIRECTORY "${yaLanTingLibs_SOURCE_DIR}/include/ylt/standalone/" DESTINATION include/ylt/standalone)
+                target_include_directories(yalantinglibs INTERFACE
+                $<INSTALL_INTERFACE:include/ylt/standalone>)
+        endif()
+endif()
+message(STATUS "--------------------------------------------")
