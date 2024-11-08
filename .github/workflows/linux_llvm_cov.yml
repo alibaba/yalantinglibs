@@ -52,8 +52,16 @@ jobs:
           llvm-cov show -object coro_io_test -object coro_rpc_test -object easylog_test -object struct_pack_test -object struct_pack_test_with_optimize -object metric_test  -object struct_pb_test -object reflection_test -object coro_http_test -instr-profile=test_ylt.profdata -format=html -output-dir=../../.coverage_llvm_cov -ignore-filename-regex="thirdparty|src|template_switch" -show-instantiations=false
           echo "Done!"
 
+
+      - name: List files in the repository
+        run: |
+          echo "workspace"
+          ls ${{ github.workspace }}
+          echo "workspace/build"
+          ls ${{ github.workspace }}/build
+
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: llvm-cov
           path: ${{github.workspace}}/build/.coverage_llvm_cov
@@ -68,7 +76,7 @@ jobs:
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
-        uses: peter-evans/create-or-update-comment@v2
+        uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-file: '${{github.workspace}}/build/output/tests/tmp.log'
