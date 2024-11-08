@@ -96,14 +96,49 @@ struct_pack::err_code sp_deserialize_to(Reader& reader, array2D& ar) {
 // struct_pack::errc sp_deserialize_to_with_skip(Reader& reader, array2D& ar);
 }  // namespace my_name_space
 
+struct fwrite_stream {
+  FILE* file;
+  bool write(const char* data, std::size_t sz) {
+    return fwrite(data, sz, 1, file) == 1;
+  }
+  fwrite_stream(const char* file_name) : file(fopen(file_name, "wb")) {}
+  ~fwrite_stream() { fclose(file); }
+};
+
+struct fread_stream {
+  FILE* file;
+  bool read(char* data, std::size_t sz) {
+    return fread(data, sz, 1, file) == 1;
+  }
+  bool ignore(std::size_t sz) { return fseek(file, sz, SEEK_CUR) == 0; }
+  std::size_t tellg() {
+    // if you worry about ftell performance, just use an variable to record it.
+    return ftell(file);
+  }
+  fread_stream(const char* file_name) : file(fopen(file_name, "rb")) {}
+  ~fread_stream() { fclose(file); }
+};
+
 void user_defined_serialization() {
   std::vector<my_name_space::array2D> ar;
   ar.emplace_back(11, 22);
   ar.emplace_back(114, 514);
   ar[0](1, 6) = 3.14;
   ar[1](87, 111) = 2.71;
-  auto buffer = struct_pack::serialize(ar);
-  auto result = struct_pack::deserialize<decltype(ar)>(buffer);
-  assert(result.has_value());
-  assert(ar == result);
+  {
+    auto buffer = struct_pack::serialize(ar);
+    auto result = struct_pack::deserialize<decltype(ar)>(buffer);
+    assert(result.has_value());
+    assert(ar == result);
+  }
+  {
+    {
+      fwrite_stream out("1.tmp");
+      struct_pack::serialize_to(out, ar);
+    }
+    fread_stream in("1.tmp");
+    auto result = struct_pack::deserialize<decltype(ar)>(in);
+    assert(result.has_value());
+    assert(ar == result);
+  }
 }

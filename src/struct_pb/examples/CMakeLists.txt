@@ -4,11 +4,11 @@ if("${yaLanTingLibs_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
 else()
   # else find installed yalantinglibs
     cmake_minimum_required(VERSION 3.15)
-    project(coro_rpc_examples)
+    project(struct_pb_examples)
     if(NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE "Release")
     endif()
-    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
   # if you have install ylt  
@@ -17,11 +17,8 @@ else()
   # else 
   # include_directories(include)
   # include_directories(include/ylt/thirdparty)
-    include(struct_pb_helper.cmake)
 endif()
 
-find_package(Protobuf QUIET)
-if (Protobuf_FOUND)
-    add_executable(struct_pb_tutorial tutorial.cpp)
-    target_protos_struct_pb(struct_pb_tutorial PRIVATE addressbook.proto)
-endif()
+add_executable(struct_pb_examples
+        main.cpp
+        )

@@ -14,5 +14,4 @@
  * limitations under the License.
  */
 #pragma once
-
 #include "impl/protocol/coro_rpc_protocol.hpp"

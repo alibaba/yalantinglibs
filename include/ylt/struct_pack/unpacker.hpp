@@ -48,16 +48,16 @@ struct memory_reader {
   constexpr memory_reader(const char *beg, const char *end) noexcept
       : now(beg), end(end) {}
   bool read(char *target, size_t len) {
-    if SP_UNLIKELY (end - now < len) {
+    if SP_UNLIKELY (static_cast<size_t>(end - now) < len) {
       return false;
     }
     memcpy(target, now, len);
     now += len;
     return true;
   }
-  bool check(size_t len) { return end - now >= len; }
+  bool check(size_t len) { return static_cast<size_t>(end - now) >= len; }
   const char *read_view(size_t len) {
-    if SP_UNLIKELY (end - now < len) {
+    if SP_UNLIKELY (static_cast<size_t>(end - now) < len) {
       return nullptr;
     }
     auto ret = now;
@@ -65,7 +65,7 @@ struct memory_reader {
     return ret;
   }
   bool ignore(size_t len) {
-    if SP_UNLIKELY (end - now < len) {
+    if SP_UNLIKELY (static_cast<size_t>(end - now) < len) {
       return false;
     }
     now += len;
@@ -482,10 +482,7 @@ class unpacker {
 
   STRUCT_PACK_INLINE std::pair<struct_pack::err_code, std::uint64_t>
   deserialize_compatible(unsigned compatible_sz_len) {
-    constexpr std::size_t sz[] = {0, 2, 4, 8};
-    auto len_sz = sz[compatible_sz_len];
     std::size_t data_len = 0;
-    bool result;
     switch (compatible_sz_len) {
       case 1:
         if SP_LIKELY (low_bytes_read_wrapper<2>(reader_, data_len)) {
@@ -564,7 +561,7 @@ class unpacker {
     }
     else {
       if constexpr (is_MD5_reader_wrapper<Reader>) {
-        reader_.read_head((char *)&current_types_code);
+        current_types_code = reader_.read_head();
         if SP_LIKELY (current_types_code % 2 == 0)  // unexist metainfo
         {
           size_type_ = 0;
@@ -837,12 +834,13 @@ class unpacker {
             return errc::invalid_buffer;
           }
           else {
-            return template_switch<deserialize_one_derived_class_helper<
-                derived_class_set_t<typename type::element_type>,
-                std::integral_constant<std::size_t, size_type>,
-                std::integral_constant<std::uint64_t, version>,
-                std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
-                                                                 item);
+            return ylt::reflection::template_switch<
+                deserialize_one_derived_class_helper<
+                    derived_class_set_t<typename type::element_type>,
+                    std::integral_constant<std::size_t, size_type>,
+                    std::integral_constant<std::uint64_t, version>,
+                    std::integral_constant<std::uint64_t, NotSkip>>>(
+                index, this, item);
           }
         }
         else {
@@ -875,7 +873,6 @@ class unpacker {
       }
       else if constexpr (container<type>) {
         std::size_t size = 0;
-        bool result{};
         if constexpr (size_type == 1) {
           if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_, size)) {
             return struct_pack::errc::no_buffer_space;
@@ -908,7 +905,7 @@ class unpacker {
                 }
               }
               else {
-                std::uint64_t sz;
+                std::uint64_t sz{};
                 if SP_UNLIKELY (!low_bytes_read_wrapper<size_type>(reader_,
                                                                    sz)) {
                   return struct_pack::errc::no_buffer_space;
@@ -1016,7 +1013,7 @@ class unpacker {
                 return errc::no_buffer_space;
               }
             }
-            std::size_t mem_sz = size * sizeof(value_type);
+            [[maybe_unused]] std::size_t mem_sz = size * sizeof(value_type);
             if constexpr (NotSkip) {
               if constexpr (string_view<type> || dynamic_span<type>) {
                 static_assert(
@@ -1036,7 +1033,7 @@ class unpacker {
                   }
                   resize(item, size);
                   if constexpr (is_little_endian_copyable<sizeof(value_type)>) {
-                    auto ec =
+                    [[maybe_unused]] auto ec =
                         read_bytes_array(reader_, (char *)item.data(), mem_sz);
                     assert(ec == true);
                   }
@@ -1134,14 +1131,15 @@ class unpacker {
             },
             item);
       }
-      else if constexpr (optional<type> || expected<type>) {
+      else if constexpr (ylt::reflection::optional<type> ||
+                         ylt::reflection::expected<type>) {
         bool has_value{};
         if SP_UNLIKELY (!read_wrapper<sizeof(bool)>(reader_,
                                                     (char *)&has_value)) {
           return struct_pack::errc::no_buffer_space;
         }
         if SP_UNLIKELY (!has_value) {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             item = typename type::unexpected_type{typename type::error_type{}};
             deserialize_one<size_type, version, NotSkip>(item.error());
           }
@@ -1150,7 +1148,7 @@ class unpacker {
           }
         }
         else {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             if constexpr (!std::is_same_v<typename type::value_type, void>)
               deserialize_one<size_type, version, NotSkip>(item.value());
           }
@@ -1169,7 +1167,7 @@ class unpacker {
           return struct_pack::errc::invalid_buffer;
         }
         else {
-          template_switch<variant_construct_helper<
+          ylt::reflection::template_switch<variant_construct_helper<
               std::integral_constant<std::size_t, size_type>,
               std::integral_constant<std::uint64_t, version>,
               std::integral_constant<bool, NotSkip>>>(index, *this, item);
@@ -1217,7 +1215,7 @@ class unpacker {
                 item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
                   constexpr uint64_t tag =
                       get_parent_tag<type>();  // to pass msvc with c++17
-                  return deserialize_fast_varint<tag, NotSkip>(items...);
+                  return this->deserialize_fast_varint<tag, NotSkip>(items...);
                 });
             if SP_UNLIKELY (code) {
               return code;
@@ -1227,7 +1225,7 @@ class unpacker {
               item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
                 constexpr uint64_t tag =
                     get_parent_tag<type>();  // to pass msvc with c++17
-                return deserialize_many<size_type, version, NotSkip, tag>(
+                return this->deserialize_many<size_type, version, NotSkip, tag>(
                     items...);
               });
         }
@@ -1270,12 +1268,13 @@ class unpacker {
           bool ok{};
           auto index = search_type_by_md5<typename type::element_type>(id, ok);
           assert(ok);
-          return template_switch<deserialize_one_derived_class_helper<
-              derived_class_set_t<typename type::element_type>,
-              std::integral_constant<std::size_t, size_type>,
-              std::integral_constant<std::uint64_t, version>,
-              std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
-                                                               item);
+          return ylt::reflection::template_switch<
+              deserialize_one_derived_class_helper<
+                  derived_class_set_t<typename type::element_type>,
+                  std::integral_constant<std::size_t, size_type>,
+                  std::integral_constant<std::uint64_t, version>,
+                  std::integral_constant<std::uint64_t, NotSkip>>>(index, this,
+                                                                   item);
         }
         else {
           deserialize_one<size_type, version, NotSkip>(*item);
@@ -1340,15 +1339,16 @@ class unpacker {
             },
             item);
       }
-      else if constexpr (optional<type> || expected<type>) {
+      else if constexpr (ylt::reflection::optional<type> ||
+                         ylt::reflection::expected<type>) {
         bool has_value = item.has_value();
         if (!has_value) {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             deserialize_one<size_type, version, NotSkip>(item.error());
           }
         }
         else {
-          if constexpr (expected<type>) {
+          if constexpr (ylt::reflection::expected<type>) {
             if constexpr (!std::is_same_v<typename type::value_type, void>)
               deserialize_one<size_type, version, NotSkip>(item.value());
           }
@@ -1431,13 +1431,7 @@ struct MD5_reader_wrapper : public Reader {
     is_failed =
         !read_wrapper<sizeof(head_chars)>(*(Reader *)this, (char *)&head_chars);
   }
-  bool read_head(char *target) {
-    if SP_UNLIKELY (is_failed) {
-      return false;
-    }
-    memcpy(target, &head_chars, sizeof(head_chars));
-    return true;
-  }
+  uint32_t read_head() { return head_chars; }
   Reader &&release_reader() { return std::move(*(Reader *)this); }
   bool is_failed;
   uint32_t get_md5() { return head_chars & 0xFFFFFFFE; }
@@ -1461,7 +1455,7 @@ deserialize_derived_class(std::unique_ptr<BaseClass> &base, Reader &reader) {
   if (result == MD5s.end() || result->md5 != md5_pair.md5) {
     return struct_pack::errc::invalid_buffer;
   }
-  auto ret = template_switch<
+  auto ret = ylt::reflection::template_switch<
       deserialize_derived_class_helper<std::tuple<DerivedClasses...>>>(
       result->index, base, unpack);
   reader = std::move(wrapper.release_reader());

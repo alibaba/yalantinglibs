@@ -50,11 +50,27 @@ Also, note that if structure A nests structure B, the configuration for A will n
 For example：
 ```cpp
 struct rect {
-  var_int a, b, c, d;
+  int a, b, c, d;
 };
 ```
 
+## global config
+
+`sp_config::default` is default global config, you can also use other config value by following codes:
+
+```cpp
+namespace struct_pack {
+  //default global config
+  constexpr sp_config set_default(sp_config*){ return sp_config::DISABLE_ALL_META_INFO; }
+}
+static_assert(struct_pack::get_needed_size(rect{}).size()==16);
+```
+
+You can have different config value in different code unit(*.cpp file).
+
 ### config by class static member
+
+This config takes precedence over global config.
 
 Just add a constexpr static member named `struct_pack_config` to the class
 

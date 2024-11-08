@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <variant>
 #include <ylt/easylog.hpp>
 #include <ylt/struct_pack.hpp>
@@ -61,7 +62,7 @@ struct coro_rpc_protocol {
     uint32_t seq_num;        //!< sequence number
     uint32_t function_id;    //!< rpc function ID
     uint32_t length;         //!< length of RPC body
-    uint32_t attach_length;  //!< reserved field
+    uint32_t attach_length;  //!< attachment length
   };
 
   struct resp_header {
@@ -71,7 +72,7 @@ struct coro_rpc_protocol {
     uint8_t msg_type;        //!< message type
     uint32_t seq_num;        //!< sequence number
     uint32_t length;         //!< length of RPC body
-    uint32_t attach_length;  //!< reserved field
+    uint32_t attach_length;  //!< attachment length
   };
 
   using supported_serialize_protocols = std::variant<struct_pack_protocol>;
@@ -133,8 +134,7 @@ struct coro_rpc_protocol {
                                       const req_header& req_header,
                                       std::size_t attachment_len,
                                       coro_rpc::errc rpc_err_code = {},
-                                      std::string_view err_msg = {},
-                                      bool is_user_defined_error = false) {
+                                      std::string_view err_msg = {}) {
     std::string err_msg_buf;
     std::string header_buf;
     header_buf.resize(RESP_HEAD_LEN);
@@ -150,7 +150,6 @@ struct coro_rpc_protocol {
         err_msg_buf =
             "attachment larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
-        is_user_defined_error = false;
       }
     else if (rpc_result.size() > UINT32_MAX)
       AS_UNLIKELY {
@@ -160,12 +159,11 @@ struct coro_rpc_protocol {
         err_msg_buf =
             "body larger than 4G:" + std::to_string(attachment_len) + "B";
         err_msg = err_msg_buf;
-        is_user_defined_error = false;
       }
     if (rpc_err_code != coro_rpc::errc{})
       AS_UNLIKELY {
         rpc_result.clear();
-        if (is_user_defined_error) {
+        if (static_cast<uint16_t>(rpc_err_code) > UINT8_MAX) {
           struct_pack::serialize_to(
               rpc_result,
               std::pair{static_cast<uint16_t>(rpc_err_code), err_msg});
@@ -186,12 +184,6 @@ struct coro_rpc_protocol {
    * The `rpc_error` struct holds the error code `code` and error message
    * `msg`.
    */
-  struct rpc_error {
-    coro_rpc::err_code code;  //!< error code
-    std::string msg;          //!< error message
-    uint16_t& val() { return *(uint16_t*)&(code.ec); }
-    const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
-  };
 
   // internal variable
   constexpr static inline int8_t magic_number = 21;
@@ -203,10 +195,40 @@ struct coro_rpc_protocol {
   static_assert(RESP_HEAD_LEN == 16);
 };
 
-STRUCT_PACK_REFL(coro_rpc_protocol::rpc_error, val(), msg);
+template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+uint64_t get_request_id(
+    const typename rpc_protocol::req_header& header) noexcept {
+  if constexpr (std::is_same_v<rpc_protocol,
+                               coro_rpc::protocol::coro_rpc_protocol>) {
+    return header.seq_num;
+  }
+  else {
+    return 0;
+  }
+}
 }  // namespace protocol
 template <typename return_msg_type>
 using context = coro_rpc::context_base<return_msg_type,
                                        coro_rpc::protocol::coro_rpc_protocol>;
-using rpc_error = protocol::coro_rpc_protocol::rpc_error;
+
+template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context_in_coro() {
+  auto* ctx = co_await async_simple::coro::LazyLocals{};
+  assert(ctx != nullptr);
+  co_return (context_info_t<rpc_protocol>*) ctx;
+}
+
+namespace detail {
+template <typename rpc_protocol>
+context_info_t<rpc_protocol>*& set_context() {
+  thread_local static context_info_t<rpc_protocol>* ctx;
+  return ctx;
+}
+}  // namespace detail
+
+template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
+context_info_t<rpc_protocol>* get_context() {
+  return detail::set_context<rpc_protocol>();
+}
+
 }  // namespace coro_rpc

@@ -145,6 +145,7 @@ class appender {
     auto [ptr, ec] = std::to_chars(buf + 1, buf + 21, tid);
     buf[22] = ']';
     buf[23] = ' ';
+    last_tid = tid;
     last_len = ptr - buf;
     buf[last_len++] = ']';
     buf[last_len++] = ' ';
@@ -401,7 +402,7 @@ class appender {
 
   std::mutex que_mtx_;
 
-  moodycamel::ConcurrentQueue<record_t> queue_;
+  ylt::detail::moodycamel::ConcurrentQueue<record_t> queue_;
   std::thread write_thd_;
   std::condition_variable cnd_;
   std::atomic<bool> stop_ = false;

@@ -54,3 +54,6 @@ node_modules
 bazel-*
 !BUILD.bazel
 cdb.json
+
+# website
+website/docs/zh/*/images/

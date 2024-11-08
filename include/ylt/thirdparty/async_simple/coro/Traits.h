@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 #include <exception>
 #include <utility>
-
 #include "async_simple/Common.h"
 
 namespace async_simple {
@@ -29,12 +28,12 @@ namespace detail {
 
 template <class T>
 concept HasCoAwaitMethod = requires(T&& awaitable) {
-  std::forward<T>(awaitable).coAwait(nullptr);
+    std::forward<T>(awaitable).coAwait(nullptr);
 };
 
 template <class T>
 concept HasMemberCoAwaitOperator = requires(T&& awaitable) {
-  std::forward<T>(awaitable).operator co_await();
+    std::forward<T>(awaitable).operator co_await();
 };
 
 #ifdef _MSC_VER
@@ -53,18 +52,18 @@ concept HasGlobalCoAwaitOperator = HasGlobalCoAwaitOperatorHelp<T>::value;
 #else
 template <class T>
 concept HasGlobalCoAwaitOperator = requires(T&& awaitable) {
-  operator co_await(std::forward<T>(awaitable));
+    operator co_await(std::forward<T>(awaitable));
 };
 #endif
 
 template <typename Awaitable>
 auto getAwaiter(Awaitable&& awaitable) {
-  if constexpr (HasMemberCoAwaitOperator<Awaitable>)
-    return std::forward<Awaitable>(awaitable).operator co_await();
-  else if constexpr (HasGlobalCoAwaitOperator<Awaitable>)
-    return operator co_await(std::forward<Awaitable>(awaitable));
-  else
-    return std::forward<Awaitable>(awaitable);
+    if constexpr (HasMemberCoAwaitOperator<Awaitable>)
+        return std::forward<Awaitable>(awaitable).operator co_await();
+    else if constexpr (HasGlobalCoAwaitOperator<Awaitable>)
+        return operator co_await(std::forward<Awaitable>(awaitable));
+    else
+        return std::forward<Awaitable>(awaitable);
 }
 
 }  // namespace detail

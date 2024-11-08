@@ -10,19 +10,19 @@ struct address_t {
   std::string_view state;
   std::string_view country;
 };
-REFLECTION(address_t, street, city, state, country);
+YLT_REFL(address_t, street, city, state, country);
 struct contact_t {
   std::string_view type;
   std::string_view value;
 };
-REFLECTION(contact_t, type, value);
+YLT_REFL(contact_t, type, value);
 struct person_t {
   std::string_view name;
   int age;
   address_t address;
   std::vector<contact_t> contacts;
 };
-REFLECTION(person_t, name, age, address, contacts);
+YLT_REFL(person_t, name, age, address, contacts);
 
 std::ostream &operator<<(std::ostream &os, person_t p) {
   os << "name: " << p.name << "\tage: " << p.age << std::endl;
@@ -74,7 +74,7 @@ class some_object {
   some_object(int i, std::string str) : id(i), name(str) {}
   int get_id() const { return id; }
   std::string get_name() const { return name; }
-  REFLECTION(some_object, id, name);
+  YLT_REFL(some_object, id, name);
 };
 
 void test_inner_object() {

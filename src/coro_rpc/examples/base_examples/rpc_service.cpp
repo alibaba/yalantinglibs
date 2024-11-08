@@ -17,98 +17,128 @@
 
 #include <chrono>
 #include <cstdint>
+#include <system_error>
 #include <thread>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/easylog.hpp>
 
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/Sleep.h"
+#include "ylt/coro_io/client_pool.hpp"
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
+#include "ylt/coro_rpc/impl/expected.hpp"
+#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 using namespace coro_rpc;
+using namespace async_simple::coro;
+using namespace std::chrono_literals;
 
-std::string hello_world() {
-  ELOGV(INFO, "call helloworld");
-  return "hello_world";
+std::string_view echo(std::string_view data) {
+  ELOGV(INFO, "call echo");
+  return data;
 }
 
-int A_add_B(int a, int b) {
-  ELOGV(INFO, "call A+B");
-  return a + b;
-}
-
-void echo_with_attachment(coro_rpc::context<void> conn) {
-  ELOGV(INFO, "call echo_with_attachment");
-  std::string str = conn.release_request_attachment();
-  conn.set_response_attachment(std::move(str));
-  conn.response_msg();
-}
-
-void echo_with_attachment2(coro_rpc::context<void> conn) {
-  ELOGV(INFO, "call echo_with_attachment2");
-  std::string_view str = conn.get_request_attachment();
-  // The live time of attachment is same as coro_rpc::context
-  conn.set_response_attachment([str, conn] {
-    return str;
+void async_echo_by_callback(
+    coro_rpc::context<std::string_view /*rpc response data here*/> conn,
+    std::string_view /*rpc request data here*/ data) {
+  ELOGV(INFO, "call async_echo_by_callback");
+  /* rpc function runs in global io thread pool */
+  coro_io::get_global_block_executor()->schedule([conn, data]() mutable {
+    /* send work to global non-io thread pool */
+    std::this_thread::sleep_for(1s);
+    conn.response_msg(data); /*response here*/
   });
-  conn.response_msg();
 }
 
-std::string echo(std::string_view sv) { return std::string{sv}; }
-
-async_simple::coro::Lazy<std::string> coro_echo(std::string_view sv) {
-  ELOGV(INFO, "call coro_echo");
-  co_await coro_io::sleep_for(std::chrono::milliseconds(100));
-  ELOGV(INFO, "after sleep for a while");
-  co_return std::string{sv};
+Lazy<std::string_view> async_echo_by_coroutine(std::string_view sv) {
+  ELOGV(INFO, "call async_echo_by_coroutine");
+  co_await coro_io::sleep_for(1s);  // sleeping
+  co_return sv;
 }
 
-void hello_with_delay(context</*response type:*/ std::string> conn,
-                      std::string hello) {
-  ELOGV(INFO, "call HelloServer hello_with_delay");
-  // create a new thread
-  std::thread([conn = std::move(conn), hello = std::move(hello)]() mutable {
-    // do some heavy work in this thread that won't block the io-thread,
-    std::cout << "running heavy work..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds{1});
-    // Remember response before connection destruction! Or the connect will
-    // be closed.
-    conn.response_msg(hello);
-  }).detach();
+Lazy<void> get_ctx_info() {
+  ELOGV(INFO, "call get_ctx_info");
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
+  /*in callback rpc function, you can get ctx from coro_rpc::context*/
+  /*in normal rpc function, you can get ctx by  coro_rpc::get_context() */
+  if (ctx->has_closed()) {
+    throw std::runtime_error("connection is close!");
+  }
+  ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
+        ctx->get_connection_id(), ctx->get_request_id());
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
+        << ctx->get_local_endpoint();
+  std::string sv{ctx->get_request_attachment()};
+  auto str = ctx->release_request_attachment();
+  if (sv != str) {
+    ctx->close();
+    throw rpc_error{coro_rpc::errc::io_error, "attachment error!"};
+    co_return;
+  }
+  ctx->set_response_attachment(std::move(str));
+  co_await coro_io::sleep_for(514ms, coro_io::get_global_executor());
+  ELOGV(INFO, "response in another executor");
+  co_return;
+  co_return;
 }
 
-async_simple::coro::Lazy<std::string> nested_echo(std::string_view sv) {
+void echo_with_attachment() {
+  ELOGV(INFO, "call echo_with_attachment");
+  auto ctx = coro_rpc::get_context();
+  ctx->set_response_attachment(
+      ctx->get_request_attachment()); /*zero-copy by string_view*/
+}
+
+Lazy<std::string_view> nested_echo(std::string_view sv) {
   ELOGV(INFO, "start nested echo");
-  coro_rpc::coro_rpc_client client(co_await coro_io::get_current_executor());
-  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8802");
-  assert(!ec);
+  /*get a client_pool of global*/
+  auto client_pool =
+      coro_io::g_clients_pool<coro_rpc::coro_rpc_client>().at("127.0.0.1:8802");
+  assert(client_pool != nullptr);
   ELOGV(INFO, "connect another server");
-  auto ret = co_await client.call<echo>(sv);
-  assert(ret.value() == sv);
-  ELOGV(INFO, "get echo result from another server");
-  co_return std::string{sv};
+  auto ret = co_await client_pool->send_request(
+      [sv](coro_rpc_client &client)
+          -> Lazy<coro_rpc::rpc_result<std::string_view>> {
+        co_return co_await client.call<echo>(sv);
+      });
+  co_return ret.value().value();
 }
 
-std::string HelloService::hello() {
+std::string_view HelloService::hello() {
   ELOGV(INFO, "call HelloServer::hello");
   return "HelloService::hello";
 }
 
-void HelloService::hello_with_delay(
-    coro_rpc::context</*response type:*/ std::string> conn, std::string hello) {
-  ELOGV(INFO, "call HelloServer::hello_with_delay");
-  std::thread([conn = std::move(conn), hello = std::move(hello)]() mutable {
-    conn.response_msg("HelloService::hello_with_delay");
-  }).detach();
-  return;
-}
-
-void return_error(coro_rpc::context<std::string> conn) {
+void return_error_by_context(coro_rpc::context<void> conn) {
   conn.response_error(coro_rpc::err_code{404}, "404 Not Found.");
 }
-void rpc_with_state_by_tag(coro_rpc::context<std::string> conn) {
-  if (!conn.tag().has_value()) {
-    conn.tag() = uint64_t{0};
+
+void return_error_by_exception() {
+  throw coro_rpc::rpc_error{coro_rpc::errc{404}, "rpc not found."};
+}
+
+Lazy<std::string> rpc_with_state_by_tag() {
+  auto *ctx = co_await coro_rpc::get_context_in_coro();
+  if (!ctx->tag().has_value()) {
+    ctx->tag() = std::uint64_t{0};
   }
-  auto &cnter = std::any_cast<uint64_t &>(conn.tag());
+  auto &cnter = std::any_cast<uint64_t &>(ctx->tag());
   ELOGV(INFO, "call count: %d", ++cnter);
-  conn.response_msg(std::to_string(cnter));
+  co_return std::to_string(cnter);
+}
+std::string_view rpc_with_complete_handler() {
+  std::string s;
+  s.reserve(sizeof(std::string));
+  s = "Hello";
+  std::string_view result = s;
+  auto *ctx = coro_rpc::get_context();
+  ctx->set_complete_handler(
+      [s = std::move(s)](const std::error_code &ec, std::size_t len) {
+        std::cout << "RPC result write to socket, msg: " << ec.message()
+                  << " length:" << len << std::endl;
+      });
+  return result;
 }

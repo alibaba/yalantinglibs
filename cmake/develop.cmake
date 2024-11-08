@@ -1,4 +1,4 @@
-message(STATUS "-------------DEVELOP SETTING-------------")
+message(STATUS "-------------YLT DEVELOP SETTING------------")
 # extra
 option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "BUILD_EXAMPLES: ${BUILD_EXAMPLES}")
@@ -36,6 +36,7 @@ message(STATUS "CORO_RPC_USE_OTHER_RPC: ${CORO_RPC_USE_OTHER_RPC}")
 
 # Enable address sanitizer
 option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" ON)
+
 if(ENABLE_SANITIZER AND NOT MSVC)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         check_asan(HAS_ASAN)
@@ -65,3 +66,4 @@ if(ENABLE_WARNING)
                             -Wfatal-errors)
     endif()
 endif()
+message(STATUS "--------------------------------------------")

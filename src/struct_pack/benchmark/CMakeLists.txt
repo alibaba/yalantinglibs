@@ -15,19 +15,6 @@ if (Protobuf_FOUND)
     target_link_libraries(struct_pack_benchmark PRIVATE protobuf::libprotobuf)
 
     target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
-    if (BUILD_STRUCT_PB)
-        protobuf_generate_struct_pb(STRUCT_PACK_BENCHMARK_PROTO_SRCS2
-                STRUCT_PACK_BENCHMARK_PROTO_HDRS2
-                data_def.proto
-                OPTION "namespace=struct_pb_sample"
-                )  
-        target_sources(struct_pack_benchmark PRIVATE
-                ${STRUCT_PACK_BENCHMARK_PROTO_SRCS2}
-                ${STRUCT_PACK_BENCHMARK_PROTO_HDRS2}
-                )
-        target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_STRUCT_PB)
-    endif()
-    target_compile_definitions(struct_pack_benchmark PRIVATE HAVE_PROTOBUF)
 endif ()
 
 target_compile_definitions(struct_pack_benchmark PRIVATE MSGPACK_NO_BOOST)

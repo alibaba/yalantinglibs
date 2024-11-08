@@ -56,9 +56,26 @@ struct rect {
 };
 ```
 
+### 全局配置
+
+`sp_config::default`是默认情况下的全局配置,你也可以自定义默认的全局配置。
+
+```cpp
+
+namespace struct_pack {
+  //设置全局默认配置
+  constexpr sp_config set_default(sp_config*){ return sp_config::DISABLE_ALL_META_INFO; }
+}
+static_assert(struct_pack::get_needed_size(rect{}).size()==16);
+```
+
+你可以在不同的代码单元（*.cpp文件）中声明不同的默认配置值。
+
 ### 通过类静态成员配置
 
-在类中添加一个constexpr static的成员struct_pack_config即可
+在类中添加一个constexpr static的成员struct_pack_config即可。
+
+该配置的优先级高于全局配置。
 
 ```cpp
 struct rect {

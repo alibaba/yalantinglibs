@@ -44,10 +44,6 @@ add_executable(coro_rpc_example_use_rest_rpc_protocol
   server/rpc_service.cpp
 )
 
-if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  target_link_libraries(coro_rpc_example_use_rest_rpc_protocol PRIVATE -lstdc++fs)
-endif()
-
 target_compile_definitions(coro_rpc_example_use_rest_rpc_protocol PRIVATE HAVE_MSGPACK)
 target_compile_definitions(coro_rpc_example_use_rest_rpc_protocol PRIVATE MSGPACK_NO_BOOST)
 

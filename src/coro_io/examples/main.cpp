@@ -50,8 +50,7 @@ void test_read_file() {
   });
 
   coro_io::coro_file file{};
-  async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::read_only));
+  file.open(filename, std::ios::in);
   bool r = file.is_open();
   if (!file.is_open()) {
     return;
@@ -86,8 +85,7 @@ void test_write_and_read_file() {
   });
 
   coro_io::coro_file file{ioc.get_executor()};
-  async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::create_write));
+  file.open(filename, std::ios::trunc | std::ios::out);
 
   bool r = file.is_open();
   if (!file.is_open()) {
@@ -96,22 +94,19 @@ void test_write_and_read_file() {
 
   std::string str = "test async write";
 
-  auto ec =
-      async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
+  auto [ec, size] = async_simple::coro::syncAwait(file.async_write(str));
   if (ec) {
     std::cout << ec.message() << "\n";
   }
 
   std::string str1 = "another test async write";
-  ec =
-      async_simple::coro::syncAwait(file.async_write(str1.data(), str1.size()));
+  std::tie(ec, size) = async_simple::coro::syncAwait(file.async_write(str1));
   if (ec) {
     std::cout << ec.message() << "\n";
   }
 
   coro_io::coro_file file1{ioc.get_executor()};
-  async_simple::coro::syncAwait(
-      file1.async_open(filename, coro_io::flags::read_only));
+  file1.open(filename, std::ios::in);
 
   r = file1.is_open();
   if (!file1.is_open()) {
@@ -140,7 +135,7 @@ void test_read_with_pool() {
   create_temp_file("test1.txt", 1024);
 
   coro_io::coro_file file{};
-  async_simple::coro::syncAwait(file.async_open(filename));
+  file.open(filename, std::ios::in);
 
   bool r = file.is_open();
   if (!file.is_open()) {
@@ -163,15 +158,13 @@ void test_read_with_pool() {
 
   std::string str = "test async write";
   coro_io::coro_file file1{};
-  async_simple::coro::syncAwait(
-      file1.async_open(filename, coro_io::flags::create_write));
+  file1.open(filename, std::ios::trunc | std::ios::out);
 
   r = file1.is_open();
   if (!file1.is_open()) {
     return;
   }
-  auto ec =
-      async_simple::coro::syncAwait(file1.async_write(str.data(), str.size()));
+  auto [ec, size] = async_simple::coro::syncAwait(file1.async_write(str));
   if (ec) {
     std::cout << ec.message() << "\n";
   }
@@ -182,8 +175,7 @@ void test_write_with_pool() {
   create_temp_file("test1.txt", 10);
 
   coro_io::coro_file file{};
-  async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::create_write));
+  file.open(filename, std::ios::out | std::ios::app);
 
   bool r = file.is_open();
   if (!file.is_open()) {
@@ -192,10 +184,14 @@ void test_write_with_pool() {
 
   std::string str = "test async write";
 
-  auto ec =
-      async_simple::coro::syncAwait(file.async_write(str.data(), str.size()));
+  auto [ec, size] = async_simple::coro::syncAwait(file.async_write(str));
   if (ec) {
     std::cout << ec.message() << "\n";
+  }
+
+  auto& stream = file.get_stream_file();
+  if (stream.is_open()) {
+    stream.flush();
   }
 
   std::cout << std::filesystem::file_size(filename) << "\n";
