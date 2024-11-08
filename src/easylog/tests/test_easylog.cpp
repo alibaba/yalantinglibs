@@ -71,7 +71,7 @@ TEST_CASE("test basic") {
   ELOG_INFO << std::chrono::system_clock::now();
 
   easylog::set_console(false);
-  ELOG_INFO << "no console test";
+  ELOG_INFO << "no console";
   easylog::set_console(true);
 
   easylog::set_min_severity(Severity::WARN);
