@@ -8,7 +8,7 @@ struct Owner_t {
   std::string_view ID;
   std::string_view DisplayName;
 };
-REFLECTION(Owner_t, ID, DisplayName);
+YLT_REFL(Owner_t, ID, DisplayName);
 
 struct Contents_t {
   std::string_view Key;
@@ -19,8 +19,7 @@ struct Contents_t {
   std::string_view StorageClass;
   Owner_t Owner;
 };
-REFLECTION(Contents_t, Key, LastModified, ETag, Type, Size, StorageClass,
-           Owner);
+YLT_REFL(Contents_t, Key, LastModified, ETag, Type, Size, StorageClass, Owner);
 
 struct ListBucketResult {
   std::string_view Name;
@@ -32,8 +31,8 @@ struct ListBucketResult {
   std::vector<Contents_t> Contents;
   //  std::unordered_map<std::string, std::string> __attr;
 };
-REFLECTION(ListBucketResult, Name, Prefix, Marker, MaxKeys, Delimiter,
-           IsTruncated, Contents);
+YLT_REFL(ListBucketResult, Name, Prefix, Marker, MaxKeys, Delimiter,
+         IsTruncated, Contents);
 
 std::string xml_str = R"(
 <?xml version="1.0" encoding="UTF-8"?>
@@ -109,11 +108,11 @@ struct book_t {
   std::string title;
   std::string author;
 };
-REFLECTION(book_t, title, author);
+YLT_REFL(book_t, title, author);
 struct library {
   iguana::xml_attr_t<book_t> book;
 };
-REFLECTION(library, book);
+YLT_REFL(library, book);
 
 void attribute() {
   std::string str = R"(
@@ -147,7 +146,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string_view xml = R"(
@@ -199,7 +198,7 @@ struct person2 {
   std::string name;
   int age;
 };
-REFLECTION(person2, name, age);
+YLT_REFL(person2, name, age);
 REQUIRED(person2, name, age);
 
 void required_field() {
@@ -240,7 +239,7 @@ class some_object {
   some_object(int i, std::string str) : id(i), name(str) {}
   int get_id() const { return id; }
   std::string get_name() const { return name; }
-  REFLECTION(some_object, id, name);
+  YLT_REFL(some_object, id, name);
 };
 
 void test_inner_object() {
@@ -268,7 +267,7 @@ struct shared_object {
   std::shared_ptr<int> c;
   std::vector<std::shared_ptr<int>> d;
 };
-REFLECTION(shared_object, vec, b, c, d);
+YLT_REFL(shared_object, vec, b, c, d);
 
 void test_sp() {
   auto vec = std::make_shared<std::vector<std::shared_ptr<int>>>();
@@ -290,17 +289,28 @@ struct next_obj_t {
   int x;
   int y;
 };
-REFLECTION_ALIAS(next_obj_t, "next", FLDALIAS(&next_obj_t::x, "w"),
-                 FLDALIAS(&next_obj_t::y, "h"));
+YLT_REFL(next_obj_t, x, y);
+
+constexpr std::string_view get_alias_struct_name(next_obj_t *) {
+  return "next";
+}
+constexpr auto get_alias_field_names(next_obj_t *) {
+  using namespace ylt::reflection;
+  return std::array{field_alias_t{"w", 0}, field_alias_t{"h", 1}};
+}
 
 struct out_object {
   std::unique_ptr<int> id;
   std::string_view name;
   next_obj_t obj;
-  REFLECTION_ALIAS(out_object, "qi", FLDALIAS(&out_object::id, "i"),
-                   FLDALIAS(&out_object::name, "na"),
-                   FLDALIAS(&out_object::obj, "obj"));
 };
+YLT_REFL(out_object, id, name, obj);
+
+constexpr std::string_view get_alias_struct_name(out_object *) { return "qi"; }
+constexpr auto get_alias_field_names(out_object *) {
+  using namespace ylt::reflection;
+  return std::array{field_alias_t{"i", 0}, field_alias_t{"na", 1}};
+}
 
 void test_alias() {
   out_object m{std::make_unique<int>(20), "tom", {21, 42}};

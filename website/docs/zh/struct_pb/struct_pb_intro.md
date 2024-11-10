@@ -1,31 +1,117 @@
-# struct_pb Introduction
+# struct_pb 简介
 
-## Motivation
-Protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. So many programs use protobuf as their serialization library. It is convienient for our customers to use `struct_pack` if we (`struct_pack`) can compatible with protobuf binary format. That is why we create `struct_pb`.
+struct_pb 是基于C++17/C++20 开发的高性能、易用、header only的protobuf格式序列化/反序列化库。
 
-## Background
-In this section, we introduce the [protocol buffer wire format](https://developers.google.com/protocol-buffers/docs/encoding),  which defines the details of how protobuf message is sent on the wire and how much space it consumes on disk.
-### Message Structure
-A protocol buffer message is a series of key-value pairs. The binary version of a message just uses the field's number as the key -- the name and declared type for each field can only be determined on the decoding end by referencing the message type's definition.
-![](images/pb_format.jpeg)
+## 动机
+不再依赖proto文件去定义dsl message，而是通过C++ 结构体去定义需要序列化/反序列化的对象；因为没有protoc文件所以也不再依赖protoc去生成代码。通过C++17/C++20去实现可以做很多性能优化，从而获得更好的性能，比如可以支持反序列化时对字符串的零拷贝、尽可能内联和编译期计算以及字符串非memset的resize等。
 
+## 例子
+
+### 定义结构体
 ```cpp
-Tag = (field_number << 3) | wire_type
+#include <ylt/struct_pb.hpp>
+
+struct person {
+  int id;
+  std::string name;
+  int age;
+};
+#if __cplusplus < 202002L
+YLT_REFL(person, id, name, age);
+#endif
 ```
 
+如果使用C++20标准，结构体为aggregate类型，且编译器版本为gcc11+, clang13+ 则不需要定义额外的宏YLT_REFL。
 
+### 序列化
+```cpp
+int main() {
+  person p{1, "tom", 22};
+  std::string str;
+  struct_pb::to_pb(p, str);
 
-### Base 128 Varints
-Variable-width integers, or _varints_, are at the core of the wire format. They allow encoding unsigned 64-bit integers using anywhere between one and ten bytes, with small values using fewer bytes.
+  person p1;
+  struct_pb::from_pb(p1, str);
+  assert(p.age == p1.age);
+  assert(p.name == p1.name);
+  assert(p.id == p1.id);
+}
+```
+上面的这个结构体如果对应到protobuf的proto文件则是:
+```
+message my_struct {
+  int32 id = 1;
+  string name = 2;
+  int32 age = 3;
+}
+```
 
-## Design
-![](images/struct_pb_overview.jpeg)
+## 动态反射
+特性：
+- 根据对象名称创建实例；
+- 获取对象的所有字段名；
+- 根据对象实例和字段名获取或设置字段的值
 
-## Type Mapping
-proto3 first,
-see also [Protocol Buffers Language Guide (proto3)](https://developers.google.com/protocol-buffers/docs/proto3#scalar)
+### 根据名称创建对象
+```cpp
+struct my_struct {
+  int x;
+  bool y;
+  iguana::fixed64_t z;
+};
+YLT_REFL(my_struct, x, y, z);
 
-### Overview
+struct nest1 : public iguana::base_imple<nest1> {
+  nest1() = default;
+  nest1(std::string s, my_struct t, int d)
+      : name(std::move(s)), value(t), var(d) {}
+  std::string name;
+  my_struct value;
+  int var;
+};
+YLT_REFL(nest1, name, value, var);
+```
+
+```cpp
+std::shared_ptr<base> t = iguana::create_instance("nest1");
+```
+根据对象nest1创建了实例，返回的是基类指针。
+
+“根据对象名称创建实例” 要求对象必须从iguana::base_impl 派生，如果没有派生则创建实例会抛异常。
+
+### 根据名称设置字段的值
+```cpp
+  auto t = iguana::create_instance("nest1");
+
+  std::vector<std::string_view> fields_name = t->get_fields_name();
+  CHECK(fields_name == std::vector<std::string_view>{"name", "value", "var"});
+
+  my_struct mt{2, true, {42}};
+  t->set_field_value("value", mt);
+  t->set_field_value("name", std::string("test"));
+  t->set_field_value("var", 41);
+  nest1 *st = dynamic_cast<nest1 *>(t.get());
+  auto p = *st;
+  std::cout << p.name << "\n";
+  auto &r0 = t->get_field_value<std::string>("name");
+  CHECK(r0 == "test");
+  auto &r = t->get_field_value<int>("var");
+  CHECK(r == 41);
+  auto &r1 = t->get_field_value<my_struct>("value");
+  CHECK(r1.x == 2);
+```
+“根据对象实例和字段名获取或设置字段的值” 如果字段名不存在则会抛异常；如果设置的值类型和结构体字段类型不相同则会抛异常；需要类型完全一样，不允许隐式转换。比如字段类型是double，但是设置字段的值类型是int也会抛异常，必须显式传double；如果字段类型是std::string, 设置值类型是const char * 同样会报错；如果字段类型是int32_t, 设置值类型是uint_8也会抛异常，因为类型不相同。
+
+设置字段值时也可以显式指定字段类型：
+```cpp
+t->set_field_value<std::string>("name", "test");
+```
+这种方式则不要求设置值的类型和字段类型完全一样，只要能赋值成功即可。如果显式指定的字段类型不是实际的字段类型时也会抛异常。
+
+## benchmark 
+在benchmark monster场景下，struct_pb 性能比protobuf 更好，序列化速度是protobuf的2.4倍，反序列化是protobuf的3.4倍。详情可以自行运行struct_pack 中的benchmark复现结果。
+
+## struct_pb 和 protobuf 类型映射
 Scalar Value Types with no modifier (a.k.a **singular**) -> T
 
 Scalar Value Types with **optional** -> `std::optional <T>`
@@ -38,33 +124,9 @@ any message type -> `std::optional <T>`
 
 enum -> enum class
 
-oneof -> `std::variant <std::monostate, ...>`
+oneof -> `std::variant <...>`
 
-
-Note:
-
-- singular.
-  You cannot determine whether it was parsed from the wire. It will be serialized to the wire unless it is the default value. see also [Field Presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md).
-- optional.
-  You can check to see if the value was explicitly set.
-- repeat.
-  In proto3, repeated fields of scalar numeric types use packed encoding by default.
-- map.
-  The key of map can be any integral or string type except enum.
-  The value of map can be any type except another map.
-- enum.
-  Every enum definition must contain a constant that maps to zero as its first element.
-  Enumerator constants must be in the range of a 32-bit integer.
-  During deserialization, unrecognized enum values will be preserved in the message
-- oneof.
-  If you set an oneof field to the default value (such as setting an int32 oneof field to 0), the "case" of that oneof field will be set, and the value will be serialized on the wire.
-- default value
-    - For numeric types, the default is 0.
-    - For enums, the default is the zero-valued enumerator.
-    - For strings, bytes, and repeated fields, the default is the zero-length value.
-    - For messages, the default is the language-specific null value.
-
-### Basic
+### 映射表
 | .proto Type | struct_pb Type                    | pb native C++ type | Notes                              |
 |-------------|-----------------------------------|--------------------|------------------------------------|
 | double      | double                            | double             | 8 bytes                            |
@@ -73,98 +135,22 @@ Note:
 | int64       | int64                             | int64              |                                    |
 | uint32      | uint32                            | uint32             |                                    |
 | uint64      | uint64                            | uint64             |                                    |
-| sint32      | int32                             | int32              | ZigZag + variable-length encoding. |
-| sint64      | int64                             | int64              |                                    |
-| fixed32     | uint32                            | uint32             | 4 bytes                            |
-| fixed64     | uint64                            | uint64             | 8 bytes                            |
-| sfixed32    | int32                             | int32              | 4 bytes,$2^{28}$                   |
-| sfixed64    | int64                             | int64              | 8 bytes,$2^{56}$                   |
+| sint32      | sint32_t                             | int32              | ZigZag + variable-length encoding. |
+| sint64      | sint6_t                             | int64              |                                    |
+| fixed32     | fixed32_t                            | uint32             | 4 bytes                            |
+| fixed64     | fixed64_t                            | uint64             | 8 bytes                            |
+| sfixed32    | sfixed32_t                             | int32              | 4 bytes,$2^{28}$                   |
+| sfixed64    | sfixed64_t                             | int64              | 8 bytes,$2^{56}$                   |
 | bool        | bool                              | bool               |                                    |
 | string      | std::string                       | string             | $len < 2^{32}$                     |
 | bytes       | std::string                       | string             |                                    |
-| enum        | enum class: int {}                | enum: int {}       |                                    |
-| oneof       | std::variant<std::monostate, ...> |                    |                                    |
+| enum        | enum class: int {}/enum                | enum: int {}       |                                    |
+| oneof       | std::variant<...> |                    |                                    |
 
-Note:
+## 约束
+- 目前还只支持proto3，不支持proto2；
+- 还没支持unkonwn字段；
 
-- for enum, we use `enum class` instead of `enum`
-- for oneof, we use `std::variant` with first template argument `std::monostate`
-
-## File Mapping
-each `xxx.proto`file generates corresponding `xxx.struct_pb.h` and `xxx.struct_pb.cc`
-all dependencies will convert to include corresponding headers.
-```
-syntax = "proto3";
-
-import "foo.proto";
-
-message Bar {
-    Foo f = 2;
-}
-```
-mapping to cpp
-```cpp
-#include "foo.struct_pb.h"
-struct Bar {
-std::unique_ptr<Foo> f;
-};
-
-```
-## protoc Plugin
-```bash
-protoc --plugin=path/to/protoc-gen-structpb --structpb_out=$OUT_PATH xxx.proto
-```
-e.g.
-```shell
-protoc --plugin=/tmp/protoc-gen-structpb --structpb_out=. conformance.proto
-```
-## TODO
-
--[ ] using value instead of `std::unique_ptr` when no circle dependencies
-
-for example, we convert the message `SearchResponse` to c++ struct `SearchResponse_v1`
-```
-message SearchResponse {
-  Result result = 1;
-}
-
-message Result {
-  string url = 1;
-}
-```
-
-```cpp
-struct SearchResponse_v1 {
-    std::unique_ptr<Result> result;
-};
-```
-
-we can optimize the pointer overhead if we can convert the message `SearchResponse` to c++ struct `SearchResponse_v2`
-```cpp
-struct SearchResponse_v2 {
-    Result result;
-};
-```
-
-
-## Compatibility
-see also
-
-- [Language Guide (proto3) -- Updating A Message Type](https://developers.google.com/protocol-buffers/docs/proto3#updating)
-- [oneof compatibility](https://developers.google.com/protocol-buffers/docs/proto3#backwards-compatibility_issues)
-## Limitation
-
-- SGROUP(deprecated) and EGROUP(deprecated) are not support
-- Reflection not support
-- proto2 extension not support
-
-## Acknowledge
-
-- [Embedded Proto](https://embeddedproto.com/): an easy to use C++ Protocol Buffer implementation specifically suited for microcontrollers
-- [protobuf-c](https://github.com/protobuf-c/protobuf-c): Protocol Buffers implementation in C
-- [protozero](https://github.com/mapbox/protozero): Minimalist protocol buffer decoder and encoder in C++
-- [protopuf](https://github.com/PragmaTwice/protopuf): A little, highly templated, and protobuf-compatible serialization/deserialization header-only library written in C++20
-
-## Reference
-
-- [Protocol Buffers Compiler Plugins](https://developers.google.com/protocol-buffers/docs/reference/other#plugins)
+## roadmap
+- 支持proto2；
+- 支持unkonwn字段；

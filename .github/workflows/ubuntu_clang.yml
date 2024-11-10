@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: sudo apt-get install openssl libssl-dev
@@ -33,6 +33,8 @@ jobs:
 
       - name: Install newer Clang
         run: |
+          sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
           wget https://apt.llvm.org/llvm.sh
           chmod +x ./llvm.sh
           sudo ./llvm.sh 17
@@ -65,7 +67,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: |
@@ -77,6 +79,8 @@ jobs:
 
       - name: Install newer Clang
         run: |
+          sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
           wget https://apt.llvm.org/llvm.sh
           chmod +x ./llvm.sh
           sudo ./llvm.sh 17
@@ -94,7 +98,7 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DYLT_ENABLE_SSL=${{matrix.ssl}} \
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17\
-                -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_STRUCT_PB=ON -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
@@ -113,13 +117,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install liburing
         run: sudo apt-get install liburing-dev
 
       - name: Install newer Clang
         run: |
+          sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
           wget https://apt.llvm.org/llvm.sh
           chmod +x ./llvm.sh
           sudo ./llvm.sh 17
@@ -140,7 +146,7 @@ jobs:
                 -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} \
                 -DYLT_ENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17\
-                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
@@ -158,12 +164,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: Install clang-6
+      - name: Install clang-7
         run:  sudo apt-get install clang-7 clang++-7 
 
       - name: ccache
@@ -176,8 +182,7 @@ jobs:
           CXX=clang++-7 CC=clang-7 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
-                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-                -DENABLE_CPP_20=OFF
+                -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} 

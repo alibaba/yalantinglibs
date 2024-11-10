@@ -17,11 +17,12 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
 
+#include <asio/dispatch.hpp>
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -51,10 +52,10 @@ class ExecutorWrapper : public async_simple::Executor {
 
   virtual bool schedule(Func func) override {
     if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor_.post(std::move(func));
+      executor_.dispatch(std::move(func));
     }
     else {
-      asio::post(executor_, std::move(func));
+      asio::dispatch(executor_, std::move(func));
     }
 
     return true;
@@ -67,7 +68,7 @@ class ExecutorWrapper : public async_simple::Executor {
       executor.post(std::move(func));
     }
     else {
-      asio::post(executor, std::move(func));
+      asio::dispatch(executor, std::move(func));
     }
     return true;
   }
@@ -75,7 +76,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
   context_t &context() { return executor_.context(); }
 
-  auto get_asio_executor() { return executor_; }
+  auto get_asio_executor() const { return executor_; }
 
   operator ExecutorImpl() { return executor_; }
 
@@ -117,6 +118,8 @@ class io_context_pool {
       pool_size = 1;  // set default value as 1
     }
 
+    total_thread_num_ += pool_size;
+
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context(1));
       work_ptr work(new asio::io_context::work(*io_context));
@@ -150,8 +153,11 @@ class io_context_pool {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
-        pthread_setaffinity_np(threads.back()->native_handle(),
-                               sizeof(cpu_set_t), &cpuset);
+        int rc = pthread_setaffinity_np(threads.back()->native_handle(),
+                                        sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+          std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+        }
       }
 #endif
     }
@@ -201,6 +207,8 @@ class io_context_pool {
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
+  static size_t get_total_thread_num() { return total_thread_num_; }
+
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
   using work_ptr = std::shared_ptr<asio::io_context::work>;
@@ -213,7 +221,12 @@ class io_context_pool {
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
   bool cpu_affinity_ = false;
+  inline static std::atomic<size_t> total_thread_num_ = 0;
 };
+
+inline size_t get_total_thread_num() {
+  return io_context_pool::get_total_thread_num();
+}
 
 class multithread_context_pool {
  public:
@@ -270,6 +283,18 @@ inline T &g_io_context_pool(
     return true;
   }(_g_io_context_pool);
   return *_g_io_context_pool;
+}
+
+template <typename T = io_context_pool>
+inline std::shared_ptr<T> create_io_context_pool(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  auto pool = std::make_shared<T>(pool_size);
+  std::thread thrd{[pool] {
+    pool->run();
+  }};
+  thrd.detach();
+
+  return pool;
 }
 
 template <typename T = io_context_pool>

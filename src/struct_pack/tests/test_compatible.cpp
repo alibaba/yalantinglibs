@@ -3,6 +3,7 @@
 
 #include "doctest.h"
 #include "test_struct.hpp"
+#include "ylt/struct_pack/compatible.hpp"
 #include "ylt/struct_pack/endian_wrapper.hpp"
 
 using namespace struct_pack;
@@ -1307,4 +1308,15 @@ TEST_CASE("test nested trival_serialzable_obj_with_compatible") {
     CHECK(result.has_value());
     CHECK(test_equal(result.value(), a_v1));
   }
+}
+
+struct only_compatible {
+  struct_pack::compatible<int> hi;
+};
+TEST_CASE("test only_compatible") {
+  only_compatible o{0};
+  auto buffer = struct_pack::serialize(o);
+  auto result = struct_pack::deserialize<only_compatible>(buffer);
+  CHECK(result.has_value());
+  CHECK(result->hi == o.hi);
 }

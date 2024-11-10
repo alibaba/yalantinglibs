@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,31 +17,50 @@
 #define ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
 
 #include "async_simple/Future.h"
+#include "async_simple/coro/Lazy.h"
 #include "async_simple/experimental/coroutine.h"
+
+#include <type_traits>
 
 namespace async_simple {
 
+namespace coro::detail {
 template <typename T>
-auto operator co_await(Future<T>&& future) {
-  struct FutureAwaiter {
+struct FutureAwaiter {
     Future<T> future_;
 
     bool await_ready() { return future_.hasResult(); }
-    void await_suspend(coro::CoroHandle<> continuation) {
-      future_.setContinuation([continuation](Try<T>&& t) mutable {
-        continuation.resume();
-      });
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> continuation) {
+        static_assert(std::is_base_of_v<LazyPromiseBase, PromiseType>,
+                      "FutureAwaiter is only allowed to be called by Lazy");
+        Executor* ex = continuation.promise()._executor;
+        Executor::Context ctx = Executor::NULLCTX;
+        if (ex != nullptr) {
+            ctx = ex->checkout();
+        }
+        future_.setContinuation([continuation, ex, ctx](Try<T>&& t) mutable {
+            if (ex != nullptr) {
+                ex->checkin(continuation, ctx);
+            } else {
+                continuation.resume();
+            }
+        });
     }
     auto await_resume() { return std::move(future_.value()); }
-  };
+};
+}  // namespace coro::detail
 
-  return FutureAwaiter{std::move(future)};
+template <typename T>
+auto operator co_await(Future<T>&& future) {
+    return coro::detail::FutureAwaiter<T>{std::move(future)};
 }
 
 template <typename T>
-[[deprecated("Require an rvalue future.")]] auto operator co_await(
-    T&& future) requires IsFuture<std::decay_t<T>>::value {
-  return std::move(operator co_await(std::move(future)));
+[[deprecated("Require an rvalue future.")]]
+auto operator co_await(T&& future) requires IsFuture<std::decay_t<T>>::value {
+    return std::move(operator co_await(std::move(future)));
 }
 
 }  // namespace async_simple

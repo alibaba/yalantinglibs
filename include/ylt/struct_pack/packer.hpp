@@ -283,7 +283,7 @@ class packer {
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
             write_wrapper<sizeof(uint32_t)>(writer_, (char *)&id);
-            template_switch<serialize_one_derived_class_helper<
+            ylt::reflection::template_switch<serialize_one_derived_class_helper<
                 derived_class_set_t<typename type::element_type>,
                 std::integral_constant<std::size_t, size_type>,
                 std::integral_constant<std::uint64_t, version>>>(index, this,
@@ -361,7 +361,6 @@ class packer {
         if constexpr (trivially_copyable_container<type> &&
                       is_little_endian_copyable<sizeof(
                           typename type::value_type)>) {
-          using value_type = typename type::value_type;
           write_bytes_array(writer_, (char *)item.data(),
                             item.size() * sizeof(typename type::value_type));
           return;
@@ -384,7 +383,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (optional<type>) {
+      else if constexpr (ylt::reflection::optional<type>) {
         bool has_value = item.has_value();
         write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
@@ -402,7 +401,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (expected<type>) {
+      else if constexpr (ylt::reflection::expected<type>) {
         bool has_value = item.has_value();
         write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
         if (has_value) {
@@ -441,13 +440,13 @@ class packer {
                 item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
                   constexpr uint64_t tag =
                       get_parent_tag<type>();  // to pass msvc with c++17
-                  serialize_fast_varint<tag>(items...);
+                  this->serialize_fast_varint<tag>(items...);
                 });
           }
           visit_members(item, [this](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
             constexpr uint64_t tag =
                 get_parent_tag<type>();  // to pass msvc with c++17
-            serialize_many<size_type, version, tag>(items...);
+            this->serialize_many<size_type, version, tag>(items...);
           });
         }
       }
@@ -472,7 +471,7 @@ class packer {
             auto index = search_type_by_md5<typename type::element_type>(
                 item->get_struct_pack_id(), is_ok);
             assert(is_ok);
-            template_switch<serialize_one_derived_class_helper<
+            ylt::reflection::template_switch<serialize_one_derived_class_helper<
                 derived_class_set_t<typename type::element_type>,
                 std::integral_constant<std::size_t, size_type>,
                 std::integral_constant<std::uint64_t, version>>>(index, this,
@@ -501,7 +500,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (optional<type>) {
+      else if constexpr (ylt::reflection::optional<type>) {
         if (item.has_value()) {
           serialize_one<size_type, version>(*item);
         }
@@ -513,7 +512,7 @@ class packer {
             },
             item);
       }
-      else if constexpr (expected<type>) {
+      else if constexpr (ylt::reflection::expected<type>) {
         if (item.has_value()) {
           if constexpr (!std::is_same_v<typename type::value_type, void>)
             serialize_one<size_type, version>(item.value());

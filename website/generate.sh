@@ -16,7 +16,6 @@ mkdir dist
 # Commands without errors : copy images from english to chinese dir
 set +e # Disable -e option temporarily
 cp -r docs/en/coro_rpc/images docs/zh/coro_rpc
-cp -r docs/en/guide/images docs/zh/guide
 cp -r docs/en/struct_pack/images docs/zh/struct_pack
 cp -r docs/en/struct_pb/images docs/zh/struct_pb
 set -e # Re-enable -e option

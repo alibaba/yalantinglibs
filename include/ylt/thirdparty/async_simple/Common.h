@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,20 @@
 #endif  // __SANITIZE_ADDRESS__
 #endif  // __GNUC__
 
+#if defined(__alibaba_clang__) && \
+    __has_cpp_attribute(ACC::coro_only_destroy_when_complete)
+#define CORO_ONLY_DESTROY_WHEN_DONE [[ACC::coro_only_destroy_when_complete]]
+#else
+#define CORO_ONLY_DESTROY_WHEN_DONE
+#endif
+
+#if defined(__alibaba_clang__) && \
+    __has_cpp_attribute(ACC::elideable_after_await)
+#define ELIDEABLE_AFTER_AWAIT [[ACC::elideable_after_await]]
+#else
+#define ELIDEABLE_AFTER_AWAIT
+#endif
+
 namespace async_simple {
 // Different from assert, logicAssert is meaningful in
 // release mode. logicAssert should be used in case that
@@ -52,9 +66,9 @@ namespace async_simple {
 // a bug in the library. If logicAssert fails, it means
 // there is a bug in the user code.
 inline void logicAssert(bool x, const char* errorMsg) {
-  if (x)
-    AS_LIKELY { return; }
-  throw std::logic_error(errorMsg);
+    if (x)
+        AS_LIKELY { return; }
+    throw std::logic_error(errorMsg);
 }
 
 }  // namespace async_simple

@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: sudo apt-get install openssl libssl-dev
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: |
@@ -80,7 +80,7 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DYLT_ENABLE_SSL=${{matrix.ssl}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_STRUCT_PB=ON -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
@@ -98,7 +98,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install liburing
         run: sudo apt-get install liburing-dev
@@ -118,7 +118,7 @@ jobs:
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DYLT_ENABLE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_PB=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
+                -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
@@ -135,7 +135,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
@@ -151,7 +151,6 @@ jobs:
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DUSE_CCACHE=${{env.ccache}} \
-                -DENABLE_CPP_20=OFF\
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}

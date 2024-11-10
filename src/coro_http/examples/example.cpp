@@ -17,6 +17,7 @@
 
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
+#include "ylt/coro_io/coro_io.hpp"
 
 using namespace std::chrono_literals;
 using namespace coro_http;
@@ -76,14 +77,14 @@ async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
   create_file(filename, 1010);
 
   coro_io::coro_file file{};
-  co_await file.async_open(filename, coro_io::flags::read_only);
+  file.open(filename, std::ios::in);
 
   std::string buf;
   detail::resize(buf, 100);
 
   auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
     auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
-    co_return read_result{buf, file.eof(), ec};
+    co_return read_result{{buf.data(), size}, file.eof(), ec};
   };
 
   auto result = co_await client.async_upload_chunked(
@@ -183,9 +184,8 @@ async_simple::coro::Lazy<void> use_websocket() {
               result.type == ws_frame_type::WS_BINARY_FRAME) {
             std::cout << result.data << "\n";
           }
-
-          if (result.type == ws_frame_type::WS_PING_FRAME ||
-              result.type == ws_frame_type::WS_PONG_FRAME) {
+          else if (result.type == ws_frame_type::WS_PING_FRAME ||
+                   result.type == ws_frame_type::WS_PONG_FRAME) {
             // ping pong frame just need to continue, no need echo anything,
             // because framework has reply ping/pong msg to client
             // automatically.
@@ -206,29 +206,19 @@ async_simple::coro::Lazy<void> use_websocket() {
   std::this_thread::sleep_for(300ms);  // wait for server start
 
   coro_http_client client{};
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << reason << "\n";
-    assert(reason == "normal close");
-  });
-  client.on_ws_msg([](resp_data data) {
-    if (data.net_err) {
-      std::cout << data.net_err.message() << "\n";
-      return;
-    }
-    assert(data.resp_body == "hello websocket" ||
-           data.resp_body == "test again");
-  });
-
-  bool r = co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
-  if (!r) {
+  auto r = co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+  if (r.net_err) {
     co_return;
   }
 
-  auto result =
-      co_await client.async_send_ws("hello websocket");  // mask as default.
+  auto result = co_await client.write_websocket("hello websocket");
   assert(!result.net_err);
-  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  auto data = co_await client.read_websocket();
+  assert(data.resp_body == "hello websocket");
+  result = co_await client.write_websocket("test again");
   assert(!result.net_err);
+  data = co_await client.read_websocket();
+  assert(data.resp_body == "test again");
 }
 
 async_simple::coro::Lazy<void> static_file_server() {
@@ -300,10 +290,62 @@ struct person_t {
   }
 };
 
+void url_queries() {
+  {
+    http_parser parser{};
+    parser.parse_query("=");
+    parser.parse_query("&a");
+    parser.parse_query("&b=");
+    parser.parse_query("&c=&d");
+    parser.parse_query("&e=&f=1");
+    parser.parse_query("&g=1&h=1");
+    auto map = parser.queries();
+    assert(map["a"].empty());
+    assert(map["b"].empty());
+    assert(map["c"].empty());
+    assert(map["d"].empty());
+    assert(map["e"].empty());
+    assert(map["f"] == "1");
+    assert(map["g"] == "1" && map["h"] == "1");
+  }
+  {
+    http_parser parser{};
+    parser.parse_query("test");
+    parser.parse_query("test1=");
+    parser.parse_query("test2=&");
+    parser.parse_query("test3&");
+    parser.parse_query("test4&a");
+    parser.parse_query("test5&b=2");
+    parser.parse_query("test6=1&c=2");
+    parser.parse_query("test7=1&d");
+    parser.parse_query("test8=1&e=");
+    parser.parse_query("test9=1&f");
+    parser.parse_query("test10=1&g=10&h&i=3&j");
+    auto map = parser.queries();
+    assert(map["test"].empty());
+    assert(map.size() == 21);
+  }
+}
+
 async_simple::coro::Lazy<void> basic_usage() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
       "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/queries", [](coro_http_request &req, coro_http_response &resp) {
+        auto map = req.get_queries();
+        assert(map["test"] == "");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/queries2", [](coro_http_request &req, coro_http_response &resp) {
+        auto map = req.get_queries();
+        assert(map["test"] == "");
+        assert(map["a"] == "42");
         resp.set_status_and_content(status_type::ok, "ok");
       });
 
@@ -328,6 +370,11 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   server.set_http_handler<POST, PUT>(
       "/post", [](coro_http_request &req, coro_http_response &resp) {
+        assert(resp.get_conn()->remote_address().find("127.0.0.1") !=
+               std::string::npos);
+        assert(resp.get_conn()->remote_address().find("127.0.0.1") !=
+               std::string::npos);
+        assert(resp.get_conn()->local_address() == "127.0.0.1:9001");
         auto req_body = req.get_body();
         resp.set_status_and_content(status_type::ok, std::string{req_body});
       });
@@ -358,6 +405,22 @@ async_simple::coro::Lazy<void> basic_usage() {
         response.set_status_and_content(status_type::ok, "ok");
       });
 
+  server.set_http_handler<POST>(
+      "/view",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content_view(status_type::ok,
+                                         req.get_body());  // no copy
+        co_await resp.get_conn()->reply();
+      });
+  server.set_default_handler(
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "default response");
+        co_return;
+      });
+
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 
@@ -372,6 +435,9 @@ async_simple::coro::Lazy<void> basic_usage() {
     std::cout << key << ": " << val << "\n";
   }
 
+  co_await client.async_get("/queries?test");
+  co_await client.async_get("/queries2?test&a=42");
+
   result = co_await client.async_get("/coro");
   assert(result.status == 200);
 
@@ -379,6 +445,11 @@ async_simple::coro::Lazy<void> basic_usage() {
   assert(result.status == 200);
 
   result = co_await client.async_post("/post", "post string",
+                                      req_content_type::string);
+  assert(result.status == 200);
+  assert(result.resp_body == "post string");
+
+  result = co_await client.async_post("/view", "post string",
                                       req_content_type::string);
   assert(result.status == 200);
   assert(result.resp_body == "post string");
@@ -395,6 +466,10 @@ async_simple::coro::Lazy<void> basic_usage() {
       "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
   assert(result.status == 200);
 
+  result = co_await client.async_get("/not_exist");
+  assert(result.status == 200);
+  assert(result.resp_body == "default response");
+
   // make sure you have install openssl and enable CINATRA_ENABLE_SSL
 #ifdef CINATRA_ENABLE_SSL
   coro_http_client client2{};
@@ -404,6 +479,17 @@ async_simple::coro::Lazy<void> basic_usage() {
   coro_http_client client3{};
   co_await client3.connect("https://www.baidu.com");
   result = co_await client3.async_get("/");
+  assert(result.status == 200);
+
+  coro_http_client client4{};
+  client4.set_ssl_schema(true);
+  result = client4.get("www.baidu.com");
+  assert(result.status == 200);
+
+  coro_http_client client5{};
+  client5.set_ssl_schema(true);
+  co_await client5.connect("www.baidu.com");
+  result = co_await client5.async_get("/");
   assert(result.status == 200);
 #endif
 }
@@ -483,21 +569,21 @@ void http_proxy() {
 
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
-      "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::WRR, {10, 5, 5});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::RR);
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
-      "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   coro_http_server proxy_all(2, 8093);
   proxy_all.set_http_proxy_handler(
-      "/all", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
@@ -507,45 +593,44 @@ void http_proxy() {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client_rr;
-  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web1");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web2");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web3");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web1");
-  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/");
   assert(resp_rr.resp_body == "web2");
-  resp_rr = client_rr.post("http://127.0.0.1:8091/rr", "test content",
+  resp_rr = client_rr.post("http://127.0.0.1:8091/", "test content",
                            req_content_type::text);
   assert(resp_rr.resp_body == "web3");
 
   coro_http_client client_wrr;
-  resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp_data resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web1");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web1");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web2");
-  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  resp = client_wrr.get("http://127.0.0.1:8090/");
   assert(resp.resp_body == "web3");
 
   coro_http_client client_random;
-  resp_data resp_random = client_random.get("http://127.0.0.1:8092/random");
+  resp_data resp_random = client_random.get("http://127.0.0.1:8092/");
   std::cout << resp_random.resp_body << "\n";
   assert(!resp_random.resp_body.empty());
 
   coro_http_client client_all;
-  resp_random = client_all.post("http://127.0.0.1:8093/all", "test content",
+  resp_random = client_all.post("http://127.0.0.1:8093/", "test content",
                                 req_content_type::text);
   std::cout << resp_random.resp_body << "\n";
   assert(!resp_random.resp_body.empty());
 }
 
 void coro_channel() {
-  auto ctx = coro_io::get_global_block_executor()->get_asio_executor();
-  asio::experimental::channel<void(std::error_code, int)> ch(ctx, 10000);
+  auto ch = coro_io::create_channel<int>(10000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   assert(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
@@ -554,17 +639,18 @@ void coro_channel() {
   std::error_code err;
   int val;
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   assert(!err);
   assert(val == 41);
 
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   assert(!err);
   assert(val == 42);
 }
 
 int main() {
+  url_queries();
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
   async_simple::coro::syncAwait(static_file_server());

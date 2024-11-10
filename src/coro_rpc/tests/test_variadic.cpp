@@ -31,7 +31,7 @@ TEST_CASE("test varadic param") {
       std::thread::hardware_concurrency(), 8808);
   server->register_handler<test_func>();
   auto res = server->async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
@@ -55,6 +55,5 @@ TEST_CASE("test varadic param") {
   CHECK(ret);
   if (ret) {
     CHECK(ret == "1145142.000000Hello coro_rpc!hellohiwhat");
-    std::cout << ret.value() << std::endl;
   }
 }

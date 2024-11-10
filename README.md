@@ -115,8 +115,8 @@ include(FetchContent)
 
 FetchContent_Declare(
     yalantinglibs
-    GIT_REPOSITORY https://github.com/JYLeeLYJ/yalantinglibs.git
-    GIT_TAG feat/fetch # optional ( default master / main )
+    GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
+    GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
     GIT_SHALLOW 1 # optional ( --depth=1 )
 )
 
@@ -129,11 +129,11 @@ target_compile_features(main PRIVATE cxx_std_20)
 
 ### Compile Manually:
 
-1. Add `include/` directory to include path(skip it if you have install ylt into system default path).
-2. Add `include/ylt/thirdparty` to include path(skip it if you have install thirdparty independency by  the cmake option -DINSTALL_INDEPENDENT_THIRDPARTY=ON).
-3. Enable `c++20` standard by option `-std=c++20`(g++/clang++) or `/std:c++20`(msvc)
-3. If you use any header with `coro_` prefix, add link option `-pthread` in linux and add option `-fcoroutines` when you use g++.
-4. That's all. We could find other options in `example/cmakelist.txt`.
+1. Add `include/` directory to include path(skip it if you have install ylt into default include path).
+2. Add `include/ylt/thirdparty` to include path(skip it if you have install ylt by cmake).
+3. Add `include/ylt/standalone` to include path(skip it if you have install ylt by cmake).
+4. Enable `c++20` standard by option `-std=c++20`(g++/clang++) or `/std:c++20`(msvc)
+5. If you use any header with `coro_` prefix, add link option `-pthread` in linux, add option `-fcoroutines` when you use g++10.
 
 ### More Details:
 For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/blob/main/CMakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
@@ -250,7 +250,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 int main() {
   person p{.name = "tom", .age = 20};
@@ -274,7 +274,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -308,7 +308,7 @@ struct person {
   std::string name;
   int age;
 };
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 void basic_usage() {
     // serialization the structure to the string
@@ -329,12 +329,39 @@ void basic_usage() {
 
 ## coro_http
 
-coro_http is a C++20 coroutine http(https) client, include: get/post, websocket, multipart file upload, chunked and ranges download etc.
+coro_http is a C++20 coroutine http(https) library, include server and client, functions: get/post, websocket, multipart file upload, chunked and ranges download etc. [more examples](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_http/examples/example.cpp)
 
 ### get/post
-```c++
+```cpp
+#include "ylt/coro_http/coro_http_server.hpp"
 #include "ylt/coro_http/coro_http_client.hpp"
 using namespace coro_http;
+
+async_simple::coro::Lazy<void> basic_usage() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+  server.aync_start(); // aync_start() don't block, sync_start() will block.
+  std::this_thread::sleep_for(300ms);  // wait for server start
+
+  coro_http_client client{};
+  auto result = co_await client.async_get("http://127.0.0.1:9001/get");
+  assert(result.status == 200);
+  assert(result.resp_body == "ok");
+  for (auto [key, val] : result.resp_headers) {
+    std::cout << key << ": " << val << "\n";
+  }
+}
 
 async_simple::coro::Lazy<void> get_post(coro_http_client &client) {
   std::string uri = "http://www.example.com";
@@ -352,30 +379,29 @@ int main() {
 ```
 
 ### websocket
-```c++
+```cpp
 async_simple::coro::Lazy<void> websocket(coro_http_client &client) {
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << "web socket close " << reason << std::endl;
-  });
-  
-  client.on_ws_msg([](resp_data data) {
-    std::cout << data.resp_body << std::endl;
-  });
-
   // connect to your websocket server.
   bool r = co_await client.async_connect("ws://example.com/ws");
   if (!r) {
     co_return;
   }
 
-  co_await client.async_send_ws("hello websocket");
-  co_await client.async_send_ws("test again", /*need_mask = */ false);
-  co_await client.async_send_ws_close("ws close reason");
+  co_await client.write_websocket("hello websocket");
+  auto data = co_await client.read_websocket();
+  CHECK(data.resp_body == "hello websocket");
+  co_await client.write_websocket("test again");
+  data = co_await client.read_websocket();
+  CHECK(data.resp_body == "test again");
+  co_await client.write_websocket("ws close");
+  data = co_await client.read_websocket();
+  CHECK(data.net_err == asio::error::eof);
+  CHECK(data.resp_body == "ws close");
 }
 ```
 
 ### upload/download
-```c++
+```cpp
 async_simple::coro::Lazy<void> upload_files(coro_http_client &client) {
   std::string uri = "http://example.com";
   
@@ -423,17 +449,22 @@ These option maybe useful for your project. You can enable it in your project if
 |YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE|OFF|enable unportable type(like wstring, int128_t) for struct_pack|
 |YLT_ENABLE_STRUCT_PACK_OPTIMIZE|OFF|optimize struct_pack by radical template unwinding(will cost more compile time)|
 
-## thirdparty installation option
+## installation option
 
-In default, yalantinglibs will install thirdparty librarys in `ylt/thirdparty`. You need add it to include path when compile.
+In default, yalantinglibs will install thirdparty librarys and standalone sublibrarires in your install path independently.
 
-If you don't want to install the thirdparty librarys, you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
-If you want to install the thirdparty independently (direct install it in system include path so that you don't need add `ylt/thirdparty` to include path), you can use turn on cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=ON`.
+If you don't want to install the thirdparty librarys(you need install it manually), you can turn off cmake option `-DINSTALL_THIRDPARTY=OFF`.
+
+If you want to install the thirdparty dependently. (install thirdparty librarys and standalone sublibrarires in `ylt/thirdparty` and `ylt/standalone` ), you can use turn off cmake option `-DINSTALL_INDEPENDENT_THIRDPARTY=OFF` and `-DINSTALL_INDEPENDENT_STANDALONE=OFF`.
 
 |option|default value|
 |----------|------------|
 |INSTALL_THIRDPARTY|ON|
-|INSTALL_INDEPENDENT_THIRDPARTY|OFF|
+|INSTALL_STANDALONE|ON|
+|INSTALL_INDEPENDENT_THIRDPARTY|ON|
+|INSTALL_INDEPENDENT_STANDALONE|ON|
+
+Those options only work in installation.
 
 ## develop option
 
@@ -454,39 +485,35 @@ These CMake options is used for yalantinglibs developing/installing itself. They
 
 Here are the thirdparty libraries we used(Although async_simple is a part of ylt, it open source first, so we import it as a independence thirdparty library).
 
-### coro_io
+### coro_io/coro_rpc/coro_http
+
+Those dependency will by install by default. you can control it by cmake option.
 
 - [asio](https://think-async.com/Asio)
 - [async_simple](https://github.com/alibaba/async_simple)
 - [openssl](https://www.openssl.org/) (optional)
 
-### coro_rpc
 
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [openssl](https://www.openssl.org/) (optional)
 
-### coro_http
-
-- [asio](https://think-async.com/Asio)
-- [async_simple](https://github.com/alibaba/async_simple)
-- [cinatra](https://github.com/qicosmos/cinatra)
 
 ### easylog
 
 No dependency.
 
-### struct_pack
+### struct_pack, struct_json, struct_xml, struct_yaml
 
 No dependency.
 
-### struct_pb (optional)
+### struct_pb
 
-- [protobuf](https://protobuf.dev/)
+No dependency.
 
-### struct_json、struct_xml、struct_yaml
 
-- [iguana](https://github.com/qicosmos/iguana)
+## Standalone sublibraries
+
+coro_http is implemented by a standalone sublibrary [cinatra](https://github.com/qicosmos/cinatra)
+
+struct_json、struct_xml、struct_yaml are implemented by a standalone sublibrary [iguana](https://github.com/qicosmos/iguana)
 
 ## Benchmark
 

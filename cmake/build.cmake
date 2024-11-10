@@ -5,11 +5,32 @@ foreach(i ${CMAKE_CXX_COMPILE_FEATURES})
     if (i STREQUAL cxx_std_20)
         set(has_cxx_std_20 TRUE)
     endif()
+    if (i STREQUAL cxx_std_17)
+        set(has_cxx_std_17 TRUE)
+    endif()
 endforeach()
 if (has_cxx_std_20)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+            set(has_cxx_std_20 FALSE)
+        endif()
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10)
+            set(has_cxx_std_20 FALSE)
+        endif()
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.30)
+            set(has_cxx_std_20 FALSE)
+        endif()
+    endif()
+endif()
+
+if (has_cxx_std_20)
     option(ENABLE_CPP_20 "Enable CPP 20" ON)
-else ()
+elseif (has_cxx_std_17)
     option(ENABLE_CPP_20 "Enable CPP 20" OFF)
+else()
+    message(FATAL_ERROR "Compiler ${CMAKE_CXX_COMPILER} has no C++17 support.")
 endif()
 if (ENABLE_CPP_20)  
     set(CMAKE_CXX_STANDARD 20)
@@ -39,14 +60,16 @@ else()
  message(STATUS "ENDIAN: LITTLE")
 endif()
 
-# force use lld if your compiler is clang
-
 # When using coro_rpc_client to send request, only remote function declarations are required.
 # In the examples, RPC function declaration and definition are divided.
 # However, clang + ld(gold linker) + '-g' will report 'undefined reference to xxx'.
 # So you can use lld when compiler is clang by this code:
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-add_link_options(-fuse-ld=lld)    
+    check_lld(has_lld)
+    if (has_lld)
+        add_link_options(-fuse-ld=lld)    
+    endif()
 endif()
 
 # ccache

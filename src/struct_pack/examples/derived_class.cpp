@@ -68,7 +68,7 @@ void virtual_base_class_example(void) {
       struct_pack::deserialize<std::vector<std::unique_ptr<base>>>(ret);
   assert(result.has_value());   // check deserialize ok
   assert(result->size() == 3);  // check vector size
-  for (int i = 0; i < result->size(); ++i) {
+  for (size_t i = 0; i < result->size(); ++i) {
     assert(checker[i] == result.value()[i]->hello());  // check type
   }
 }
@@ -123,7 +123,7 @@ void base_class_example(void) {
       struct_pack::deserialize<std::vector<std::unique_ptr<base>>>(ret);
   assert(result.has_value());
   assert(result->size() == 4);  // check vector size
-  for (int i = 0; i < result->size(); ++i) {
+  for (size_t i = 0; i < result->size(); ++i) {
     assert(checker[i] == result.value()[i]->hello());  // check type
   }
 }

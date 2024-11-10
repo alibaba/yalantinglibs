@@ -16,6 +16,7 @@ cc_library(
         "include",
         "include/ylt",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     linkopts = ["-lpthread"],
@@ -33,6 +34,7 @@ cc_test(
     includes = [
         "include",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     deps = [":ylt"],
@@ -47,6 +49,7 @@ cc_binary(
     includes = [
         "include",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     deps = [":ylt"],
@@ -60,6 +63,7 @@ cc_binary(
         "include",
         "include/ylt",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     linkopts = ["-lpthread"],
@@ -67,13 +71,14 @@ cc_binary(
 )
 
 cc_binary(
-    name = "coro_http_channel",
-    srcs = ["src/coro_http/examples/channel.cpp"],
+    name = "coro_http_load_blancer",
+    srcs = ["src/coro_http/examples/load_blancer.cpp"],
     copts = YA_BIN_COPT,
     includes = [
         "include",
         "include/ylt",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     linkopts = ["-lpthread"],
@@ -88,6 +93,7 @@ cc_binary(
         "include",
         "include/ylt",
         "include/ylt/thirdparty",
+        "include/ylt/standalone",
         "src/include",
     ],
     linkopts = ["-lpthread"],

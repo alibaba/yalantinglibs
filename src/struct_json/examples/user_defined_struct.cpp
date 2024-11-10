@@ -1,9 +1,8 @@
 #include <ylt/struct_json/json_reader.h>
 #include <ylt/struct_json/json_writer.h>
 
+#include <iostream>
 #include <string>
-
-#include "iguana/json_writer.hpp"
 
 namespace my_space {
 struct my_struct {
@@ -12,6 +11,8 @@ struct my_struct {
     return x == o.x && y == o.y && z == o.z;
   }
 };
+
+void ylt_custom_reflect(my_struct*) {}
 
 template <bool Is_writing_escape, typename Stream>
 inline void to_json_impl(Stream& s, const my_struct& t) {
@@ -33,7 +34,7 @@ struct nest {
   }
 };
 
-REFLECTION(nest, name, value);
+YLT_REFL(nest, name, value);
 
 void example1() {
   my_space::my_struct v{1, 2, 3}, v2;
