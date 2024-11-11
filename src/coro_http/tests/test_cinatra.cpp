@@ -1758,6 +1758,7 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
 
   {
     coro_http_client client{};
+    client.set_req_timeout(1s);
     auto r = async_simple::coro::syncAwait(
         client.async_get("http://www.baidu.com/><"));
     CHECK(r.net_err);
