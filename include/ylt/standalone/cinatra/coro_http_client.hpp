@@ -144,11 +144,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string proxy_auth_token;
     bool enable_tcp_no_delay;
 #ifdef CINATRA_ENABLE_SSL
-    bool use_ssl = false;
-    std::string base_path;
-    std::string cert_file;
-    int verify_mode;
-    std::string domain;
+    bool use_ssl =
+        false;  // if set use_ssl true, cinatra will add https automaticlly.
 #endif
   };
 
