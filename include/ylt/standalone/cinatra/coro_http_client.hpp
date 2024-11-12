@@ -1142,7 +1142,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     else {
       while (true) {
         auto result = co_await source();
-        std::cout << result.buf.size() << std::endl;
         if (std::tie(ec, size) = co_await async_write(asio::buffer(
                 result.buf.data(),
                 std::min<std::size_t>(content_length, result.buf.size())));
@@ -2239,16 +2238,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       data_ptr = asio::buffer_cast<const char *>(read_buf.data());
-      if (is_close_frame) {
-        if (payload_len >= 2) {
-          payload_len -= 2;
-          data_ptr += sizeof(uint16_t);
-        }
-      }
-
 #ifdef CINATRA_ENABLE_GZIP
-      if (!is_close_frame && is_server_support_ws_deflate_ &&
-          enable_ws_deflate_) {
+      if (is_server_support_ws_deflate_ && enable_ws_deflate_) {
         inflate_str_.clear();
         if (!cinatra::gzip_codec::inflate({data_ptr, payload_len},
                                           inflate_str_)) {
@@ -2257,17 +2248,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data.net_err = std::make_error_code(std::errc::protocol_error);
           co_return data;
         }
-        data.status = 200;
-        data.resp_body = {inflate_str_.data(), inflate_str_.size()};
+        data_ptr = inflate_str_.data();
+        payload_len = inflate_str_.length();
       }
-      else {
 #endif
+      if (is_close_frame) {
+        if (payload_len >= 2) {
+          payload_len -= 2;
+          data_ptr += sizeof(uint16_t);
+        }
+      }
+      data.status = 200;
+      data.resp_body = {data_ptr, payload_len};
 
-        data.status = 200;
-        data.resp_body = {data_ptr, payload_len};
-#ifdef CINATRA_ENABLE_GZIP
-      }
-#endif
       read_buf.consume(read_buf.size());
 
       if (is_close_frame) {
