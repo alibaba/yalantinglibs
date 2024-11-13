@@ -414,6 +414,37 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   CHECK(s == sum);
 }
 
+TEST_CASE("test config") {
+  coro_http_client client{};
+  coro_http_client::config conf{};
+  conf.sec_key = "s//GYHa/XO7Hd2F2eOGfyA==";
+  conf.proxy_host = "http://example.com";
+  conf.proxy_host = "9090";
+  conf.max_single_part_size = 1024 * 1024;
+  conf.proxy_auth_username = "cinatra";
+  conf.proxy_auth_token = "cinatra";
+  conf.proxy_auth_passwd = "cinatra";
+  conf.enable_tcp_no_delay = true;
+  client.init_config(conf);
+
+  std::unordered_map<std::string, std::string> req_headers{{"test", "ok"}};
+  client.set_headers(req_headers);
+  const auto &headers = client.get_headers();
+  CHECK(req_headers == headers);
+
+  auto &executor = client.get_executor();
+  auto name = executor.name();
+  CHECK(!name.empty());
+
+  const auto &c = client.get_config();
+  CHECK(c.enable_tcp_no_delay == conf.enable_tcp_no_delay);
+  CHECK(c.max_single_part_size == 1024 * 1024);
+
+  auto ret = async_simple::coro::syncAwait(client.connect("http://##test.com"));
+  CHECK(ret.status != 200);
+  CHECK(ret.net_err.value() == (int)std::errc::protocol_error);
+}
+
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
@@ -921,7 +952,7 @@ TEST_CASE("test request with out buffer") {
   std::string str;
   str.resize(10);
   std::string url = "http://127.0.0.1:8090/test";
-  std::string url1 = "http://127.0.0.1:8090/test";
+  std::string url1 = "http://127.0.0.1:8090/test1";
 
   {
     coro_http_client client;
@@ -945,6 +976,8 @@ TEST_CASE("test request with out buffer") {
     std::cout << result.resp_body << "\n";
     CHECK(result.status == 200);
     CHECK(!client.is_body_in_out_buf());
+    auto s = client.release_buf();
+    CHECK(s == "it is a test string, more than 10 bytes");
   }
 
   {
@@ -1680,6 +1713,29 @@ TEST_CASE("test coro_http_client chunked upload and download") {
         });
 
     server.async_start();
+    {
+      coro_http_client client{};
+      std::string uri = "http://###127.0.0.1:8090/chunked_upload";
+      std::string filename = "test_chunked_upload.txt";
+      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status != 200);
+
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      filename = "no_such.txt";
+      auto lazy1 = client.async_upload_chunked(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy1);
+      CHECK(result.status != 200);
+
+      std::shared_ptr<std::ifstream> file = nullptr;
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy2 = client.async_upload_chunked(uri, http_method::PUT, file);
+      result = async_simple::coro::syncAwait(lazy2);
+      CHECK(result.status != 200);
+
+      auto code = async_simple::coro::syncAwait(client.handle_shake());
+      CHECK(code);
+    }
     auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
     for (auto size : sizes) {
       std::string filename = "test_chunked_upload.txt";
@@ -1758,6 +1814,7 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
 
   {
     coro_http_client client{};
+    client.set_req_timeout(1s);
     auto r = async_simple::coro::syncAwait(
         client.async_get("http://www.baidu.com/><"));
     CHECK(r.net_err);
@@ -1948,6 +2005,16 @@ TEST_CASE("test coro http proxy request") {
   result = async_simple::coro::syncAwait(client.async_get(uri));
   if (!result.net_err)
     CHECK(result.status >= 200);
+
+  client.set_proxy("106.14.255.124", "80");
+  uri = "http://www.baidu.com:443";
+  result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(result.status != 200);
+
+  client.set_proxy("106.14.255.124", "80");
+  uri = "http://www.baidu.com:12345";
+  result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(result.status != 200);
 }
 
 TEST_CASE("test coro http proxy request with port") {

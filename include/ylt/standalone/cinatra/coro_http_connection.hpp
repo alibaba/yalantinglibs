@@ -718,28 +718,19 @@ class coro_http_connection
           case cinatra::ws_frame_type::WS_TEXT_FRAME:
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
 #ifdef CINATRA_ENABLE_GZIP
-            if (is_client_ws_compressed_) {
-              inflate_str_.clear();
-              if (!cinatra::gzip_codec::inflate(
-                      {payload.data(), payload.size()}, inflate_str_)) {
-                CINATRA_LOG_ERROR << "uncompuress data error";
-                result.ec = std::make_error_code(std::errc::protocol_error);
-                break;
-              }
-              result.eof = true;
-              result.data = {inflate_str_.data(), inflate_str_.size()};
+            if (!gzip_compress(payload, result)) {
               break;
             }
-            else {
 #endif
-              result.eof = true;
-              result.data = {payload.data(), payload.size()};
-              break;
-#ifdef CINATRA_ENABLE_GZIP
-            }
-#endif
+            result.eof = true;
+            result.data = {payload.data(), payload.size()};
           } break;
           case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
+#ifdef CINATRA_ENABLE_GZIP
+            if (!gzip_compress(payload, result)) {
+              break;
+            }
+#endif
             close_frame close_frame =
                 ws_.parse_close_payload(payload.data(), payload.size());
             result.eof = true;
@@ -789,6 +780,22 @@ class coro_http_connection
 
     co_return result;
   }
+
+#ifdef CINATRA_ENABLE_GZIP
+  bool gzip_compress(std::span<char> &payload, websocket_result &result) {
+    if (is_client_ws_compressed_) {
+      inflate_str_.clear();
+      if (!cinatra::gzip_codec::inflate({payload.data(), payload.size()},
+                                        inflate_str_)) {
+        CINATRA_LOG_ERROR << "uncompuress data error";
+        result.ec = std::make_error_code(std::errc::protocol_error);
+        return false;
+      }
+      payload = inflate_str_;
+    }
+    return true;
+  }
+#endif
 
   auto &tcp_socket() { return socket_; }
 
