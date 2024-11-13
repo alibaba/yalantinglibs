@@ -1538,6 +1538,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         // all be http
         proxy_request_uri_.append("http://")
             .append(u.get_host())
+            .append(":")
             .append(u.get_port());
       }
       proxy_request_uri_.append(u.get_path());
@@ -2103,11 +2104,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             .append(CRCF);
       }
 
-      std::error_code ec;
-      if (!std::filesystem::exists(part.filename, ec)) {
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
-      }
       part_content_head.append(CRCF);
     }
     else {
