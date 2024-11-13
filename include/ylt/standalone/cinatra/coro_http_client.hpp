@@ -416,8 +416,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                 resp_data &data,
                                                 bool eof = true) {
     auto header = ws.encode_frame(msg, op, eof, true);
-    std::vector<asio::const_buffer> buffers{asio::buffer(header),
-                                            asio::buffer(msg)};
+    std::vector<asio::const_buffer> buffers{
+        asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
     auto [ec, sz] = co_await async_write(buffers);
     if (ec) {
@@ -990,7 +990,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (!req_headers_.empty()) {
         req_headers_.clear();
       }
-      handle_result(data, ec, is_keep_alive);
     });
 
     auto [ok, u] = handle_uri(data, uri);
@@ -1005,6 +1004,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             std::make_error_code(std::errc::no_such_file_or_directory), 404};
       }
     }
+    else if constexpr (std::is_same_v<Source, std::string> ||
+                       std::is_same_v<Source, std::string_view>) {
+      if (!std::filesystem::exists(source)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+
     // get the content_length
     if (content_length < 0) {
       if constexpr (is_stream_file) {
@@ -1148,17 +1155,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       S uri, http_method method, Source source,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    req_context<> ctx{content_type};
-    resp_data data{};
     std::error_code ec{};
     size_t size = 0;
     bool is_keep_alive = true;
+    req_context<> ctx{content_type};
+    resp_data data{};
 
     std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
       }
-      handle_result(data, ec, is_keep_alive);
     });
 
     if (!resp_chunk_str_.empty()) {
