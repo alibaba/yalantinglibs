@@ -130,7 +130,7 @@ struct read_result {
   std::error_code err;
 };
 
-enum class upload_type_t { with_length, chunked };
+enum class upload_type_t { with_length, chunked, multipart };
 
 class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
@@ -645,96 +645,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     coro_http_client *self;
   };
 
-  async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
-    std::shared_ptr<int> guard(nullptr, [this](auto) {
-      req_headers_.clear();
-      form_data_.clear();
-    });
-    if (form_data_.empty()) {
-      CINATRA_LOG_WARNING << "no multipart";
-      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                          404};
-    }
-
-    req_context<> ctx{req_content_type::multipart, "", ""};
-    resp_data data{};
-    auto [ok, u] = handle_uri(data, uri);
-    if (!ok) {
-      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
-    }
-
-    size_t content_len = multipart_content_len();
-
-    add_header("Content-Length", std::to_string(content_len));
-
-    std::string header_str = build_request_header(u, http_method::POST, ctx);
-
-    std::error_code ec{};
-    size_t size = 0;
-
-    if (socket_->has_closed_) {
-      if (bool r = co_await reconnect(data, u); !r) {
-        co_return data;
-      }
-    }
-
-    auto time_out_guard =
-        timer_guard(this, req_timeout_duration_, "request timer");
-    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (inject_write_failed == ClientInjectAction::write_failed) {
-      ec = std::make_error_code(std::errc::not_connected);
-    }
-#endif
-    if (ec) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      inject_write_failed = ClientInjectAction::none;
-#endif
-      CINATRA_LOG_DEBUG << ec.message();
-      co_return resp_data{ec, 404};
-    }
-
-    for (auto &[key, part] : form_data_) {
-      data = co_await send_single_part(key, part);
-
-      if (data.net_err) {
-        if (socket_->is_timeout_) {
-          data.net_err = std::make_error_code(std::errc::timed_out);
-        }
-        co_return data;
-      }
-    }
-
-    std::string last_part;
-    last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
-    if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
-        ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
-      co_return resp_data{ec, 404};
-    }
-
-    bool is_keep_alive = true;
-    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
-                                http_method::POST);
-    if (socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
-    }
-    handle_result(data, ec, is_keep_alive);
-    co_return data;
-  }
-
-  async_simple::coro::Lazy<resp_data> async_upload_multipart(
-      std::string uri, std::string name, std::string filename) {
-    if (!add_file_part(std::move(name), std::move(filename))) {
-      CINATRA_LOG_WARNING << "open file failed or duplicate test names";
-      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                          404};
-    }
-    co_return co_await async_upload_multipart(std::move(uri));
-  }
-
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                      std::string filename,
                                                      std::string range = "") {
@@ -983,6 +893,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
   }
 
+  void handle_upload_header_with_multipart() {
+    size_t content_len = multipart_content_len();
+    add_header("Content-Length", std::to_string(content_len));
+  }
+
   void handle_upload_header_with_chunked(
       std::unordered_map<std::string, std::string> headers) {
     if (!resp_chunk_str_.empty()) {
@@ -1037,6 +952,27 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       headers.emplace("Content-Length", std::string_view(buf, ptr - buf));
     }
     return content_length;
+  }
+
+  async_simple::coro::Lazy<void> send_fstream_with_multipart(
+      std::error_code &ec) {
+    resp_data data{};
+    for (auto &[key, part] : form_data_) {
+      data = co_await send_single_part(key, part);
+
+      if (data.net_err) {
+        ec = data.net_err;
+        co_return;
+      }
+    }
+
+    std::string last_part;
+    size_t size = 0;
+    last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
+    if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
+        ec) {
+      co_return;
+    }
   }
 
   template <typename Source>
@@ -1169,9 +1105,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
 
-    check_source(data, source);
-    if (data.status != 0) {
-      co_return data;
+    if constexpr (upload_type != upload_type_t::multipart) {
+      check_source(data, source);
+      if (data.status != 0) {
+        co_return data;
+      }
     }
 
     if constexpr (upload_type == upload_type_t::with_length) {
@@ -1183,6 +1121,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     else if constexpr (upload_type == upload_type_t::chunked) {
       handle_upload_header_with_chunked(headers);
+    }
+    else if constexpr (upload_type != upload_type_t::multipart) {
+      handle_upload_header_with_multipart();
     }
 
     std::string header_str =
@@ -1211,6 +1152,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       else if constexpr (upload_type == upload_type_t::chunked) {
         co_await send_fstream_with_chunked(source, ec);
       }
+    }
+    else if constexpr (std::is_enum_v<Source>) {  // only for multipart
+      co_await send_fstream_with_multipart(ec);
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
                        std::is_same_v<Source, std::string_view>) {
@@ -1294,6 +1238,29 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return co_await async_upload_impl<upload_type_t::chunked>(
         std::move(uri), method, std::move(source), content_type,
         std::move(headers));
+  }
+
+  // send multipart data, should call add_file_part or add_str_part firstly.
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
+    if (form_data_.empty()) {
+      CINATRA_LOG_WARNING << "no multipart";
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
+    }
+
+    co_return co_await async_upload_impl<upload_type_t::multipart>(
+        std::move(uri), http_method::POST, upload_type_t::multipart,
+        req_content_type::multipart);
+  }
+
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(
+      std::string uri, std::string name, std::string filename) {
+    if (!add_file_part(std::move(name), std::move(filename))) {
+      CINATRA_LOG_WARNING << "open file failed or duplicate test names";
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
+    }
+    co_return co_await async_upload_multipart(std::move(uri));
   }
 
   template <typename S, typename String>
@@ -1563,7 +1530,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   std::string build_request_header(
       const uri_t &u, http_method method, const auto &ctx,
-      bool is_chunked = false,
+      bool already_has_len = false,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str(method_name(method));
 
@@ -1644,7 +1611,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       should_add_len = false;
     }
 
-    if (is_chunked) {
+    if (already_has_len) {
       should_add_len = false;
     }
 
