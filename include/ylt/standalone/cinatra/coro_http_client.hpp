@@ -2226,9 +2226,22 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_failed(AsioBuffer &&buffer) {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+#endif
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (write_failed_foever_) {
+      return async_write_failed(buffer);
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_write(*socket_->ssl_stream_, buffer);

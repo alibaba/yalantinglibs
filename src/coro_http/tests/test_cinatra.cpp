@@ -1946,6 +1946,8 @@ TEST_CASE("test coro_http_client request timeout") {
 TEST_CASE("test inject failed") {
   coro_http_client client{};
   client.write_failed_foever_ = true;
+  auto ret = client.get("http://baidu.com");
+  CHECK(ret.status != 200);
 }
 #endif
 
