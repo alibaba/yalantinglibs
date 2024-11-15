@@ -2355,6 +2355,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool stop_bench_ = false;
   size_t total_len_ = 0;
 #endif
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+ public:
+  bool write_failed_foever_ = false;
+#endif
 };
 
 }  // namespace cinatra

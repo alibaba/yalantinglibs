@@ -445,6 +445,12 @@ TEST_CASE("test config") {
   CHECK(ret.net_err.value() == (int)std::errc::protocol_error);
 }
 
+TEST_CASE("test request https without init_ssl") {
+  coro_http_client client{};
+  auto ret = client.get("https://baidu.com");
+  CHECK(ret.status != 200);
+}
+
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
@@ -1937,7 +1943,10 @@ TEST_CASE("test coro_http_client request timeout") {
 }
 
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-TEST_CASE("test inject failed") {}
+TEST_CASE("test inject failed") {
+  coro_http_client client{};
+  client.write_failed_foever_ = true;
+}
 #endif
 
 TEST_CASE("test coro http proxy request") {
