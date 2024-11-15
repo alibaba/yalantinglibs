@@ -1106,7 +1106,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     else if constexpr (upload_type == upload_type_t::chunked) {
       handle_upload_header_with_chunked(headers);
     }
-    else if constexpr (upload_type != upload_type_t::multipart) {
+    else if constexpr (upload_type == upload_type_t::multipart) {
       handle_upload_header_with_multipart();
     }
 
