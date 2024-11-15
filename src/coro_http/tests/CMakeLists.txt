@@ -40,6 +40,8 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
         ${CMAKE_BINARY_DIR}/output/openssl_files)
 
+add_definitions(-DINJECT_FOR_HTTP_CLIENT_TEST)
+
 add_test(NAME coro_http_test COMMAND coro_http_test)
 # target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 if (YLT_ENABLE_SSL)

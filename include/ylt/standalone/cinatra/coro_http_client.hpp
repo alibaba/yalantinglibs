@@ -46,22 +46,6 @@ template <typename T, typename U>
 class client_pool;
 }
 namespace cinatra {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-enum class ClientInjectAction {
-  none,
-  response_error,
-  header_error,
-  chunk_error,
-  write_failed,
-  read_failed,
-};
-inline ClientInjectAction inject_response_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_header_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
-inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
-#endif
-
 template <class, class = void>
 struct is_stream : std::false_type {};
 
@@ -1633,15 +1617,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (inject_response_valid == ClientInjectAction::response_error) {
-      parse_ret = -1;
-    }
-#endif
     if (parse_ret < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      inject_response_valid = ClientInjectAction::none;
-#endif
       return std::make_error_code(std::errc::protocol_error);
     }
     head_buf_.consume(header_size);  // header size
@@ -1664,15 +1640,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       ec = handle_header(data, parser_, size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_header_valid == ClientInjectAction::header_error) {
-        ec = std::make_error_code(std::errc::protocol_error);
-      }
-#endif
       if (ec) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_header_valid = ClientInjectAction::none;
-#endif
         break;
       }
 
@@ -1945,16 +1913,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_read_failed == ClientInjectAction::read_failed) {
-        ec = std::make_error_code(std::errc::not_connected);
-      }
-      if (ec) {
-        inject_read_failed = ClientInjectAction::none;
-        break;
-      }
-#endif
-
       size_t buf_size = chunked_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr =
@@ -1962,15 +1920,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       chunked_buf_.consume(size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_chunk_valid == ClientInjectAction::chunk_error) {
-        chunk_size = -1;
-      }
-#endif
       if (chunk_size < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_chunk_valid = ClientInjectAction::none;
-#endif
         CINATRA_LOG_DEBUG << "bad chunked size";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);

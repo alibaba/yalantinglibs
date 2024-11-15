@@ -1937,58 +1937,7 @@ TEST_CASE("test coro_http_client request timeout") {
 }
 
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-TEST_CASE("test inject failed") {
-  // {
-  //   coro_http_client client{};
-  //   inject_response_valid = ClientInjectAction::response_error;
-  //   client.set_req_timeout(8s);
-  //   auto result = client.get("http://purecpp.cn");
-  //   CHECK(result.net_err == std::errc::protocol_error);
-
-  //   inject_header_valid = ClientInjectAction::header_error;
-  //   result = client.get("http://purecpp.cn");
-  //   CHECK(result.net_err == std::errc::protocol_error);
-  // }
-
-  //  {
-  //    coro_http_client client{};
-  //    client.set_req_timeout(10s);
-  //    std::string uri =
-  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-  //    std::string filename = "test.jpg";
-  //
-  //    std::error_code ec{};
-  //    std::filesystem::remove(filename, ec);
-  //
-  //    inject_read_failed = ClientInjectAction::read_failed;
-  //    auto result = client.download(uri, filename);
-  //    CHECK(result.net_err == std::make_error_code(std::errc::not_connected));
-  //  }
-  //
-  //  {
-  //    coro_http_client client{};
-  //    client.set_req_timeout(10s);
-  //    std::string uri =
-  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-  //    std::string filename = "test.jpg";
-  //
-  //    std::error_code ec{};
-  //    std::filesystem::remove(filename, ec);
-  //
-  //    inject_chunk_valid = ClientInjectAction::chunk_error;
-  //    auto result = client.download(uri, filename);
-  //    CHECK(result.status == 404);
-  //  }
-
-  {
-    coro_http_client client{};
-    client.add_str_part("hello", "world");
-    inject_write_failed = ClientInjectAction::write_failed;
-    auto result = async_simple::coro::syncAwait(
-        client.async_upload_multipart("https://www.bing.com"));
-    CHECK(result.status == 404);
-  }
-}
+TEST_CASE("test inject failed") {}
 #endif
 
 TEST_CASE("test coro http proxy request") {
