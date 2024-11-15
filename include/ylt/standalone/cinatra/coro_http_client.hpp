@@ -1301,50 +1301,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         u.path = uri;
       }
       if (socket_->has_closed_) {
-        host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
-        port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-        if (ec = co_await coro_io::async_connect(&executor_wrapper_,
-                                                 socket_->impl_, host_, port_);
-            ec) {
-          break;
-        }
-
-        if (socket_->is_timeout_) {
-          data.net_err = std::make_error_code(std::errc::timed_out);
+        data = co_await connect(u);
+        if (data.status != 0) {
           co_return data;
         }
-
-        if (enable_tcp_no_delay_) {
-          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
-          if (ec) {
-            break;
-          }
-        }
-
-        if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-          if (!has_init_ssl_) {
-            size_t pos = u.host.find("www.");
-            std::string host;
-            if (pos != std::string_view::npos) {
-              host = std::string{u.host.substr(pos + 4)};
-            }
-            else {
-              host = std::string{u.host};
-            }
-            bool r = init_ssl(asio::ssl::verify_none, "", host);
-            if (!r) {
-              data.net_err = std::make_error_code(std::errc::invalid_argument);
-              co_return data;
-            }
-          }
-#endif
-          if (ec = co_await handle_shake(); ec) {
-            break;
-          }
-        }
-        socket_->has_closed_ = false;
       }
 
       std::vector<asio::const_buffer> vec;
@@ -1982,6 +1942,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+        if (!has_init_ssl_) {
+          size_t pos = u.host.find("www.");
+          std::string host;
+          if (pos != std::string_view::npos) {
+            host = std::string{u.host.substr(pos + 4)};
+          }
+          else {
+            host = std::string{u.host};
+          }
+          bool r = init_ssl(asio::ssl::verify_none, "", host);
+          if (!r) {
+            data.net_err = std::make_error_code(std::errc::invalid_argument);
+            co_return data;
+          }
+        }
+#endif
         if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
         }

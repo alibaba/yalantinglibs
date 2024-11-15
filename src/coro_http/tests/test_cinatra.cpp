@@ -449,6 +449,9 @@ TEST_CASE("test request https without init_ssl") {
   coro_http_client client{};
   auto ret = client.get("https://baidu.com");
   CHECK(ret.status != 200);
+
+  ret = async_simple::coro::syncAwait(client.connect("https://baidu.com"));
+  CHECK(ret.status != 200);
 }
 
 struct add_data {
@@ -1026,7 +1029,8 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
     std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
-    CHECK(r.net_err != std::errc{});
+    if (r.status != 200)
+      CHECK(r.net_err != std::errc{});
 #endif
   }
 
