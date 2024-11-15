@@ -1949,8 +1949,18 @@ TEST_CASE("test coro_http_client request timeout") {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
 TEST_CASE("test inject failed") {
   coro_http_client client{};
-  client.write_failed_foever_ = true;
+  client.write_failed_forever_ = true;
   auto ret = client.get("http://baidu.com");
+  CHECK(ret.status != 200);
+  client.write_failed_forever_ = false;
+
+  client.connect_timeout_forever_ = true;
+  ret = async_simple::coro::syncAwait(client.connect("http://baidu.com"));
+  CHECK(ret.status != 200);
+
+  client.add_str_part("hello", "world");
+  ret = async_simple::coro::syncAwait(
+      client.async_upload_multipart("http://baidu.com"));
   CHECK(ret.status != 200);
 }
 #endif

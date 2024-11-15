@@ -1928,6 +1928,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return resp_data{ec, 404};
       }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (connect_timeout_forever_) {
+        socket_->is_timeout_ = true;
+      }
+#endif
       if (socket_->is_timeout_) {
         auto ec = std::make_error_code(std::errc::timed_out);
         co_return resp_data{ec, 404};
@@ -2215,7 +2220,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (write_failed_foever_) {
+    if (write_failed_forever_) {
       return async_write_failed(buffer);
     }
 #endif
@@ -2347,7 +2352,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
  public:
-  bool write_failed_foever_ = false;
+  bool write_failed_forever_ = false;
+  bool connect_timeout_forever_ = false;
 #endif
 };
 
