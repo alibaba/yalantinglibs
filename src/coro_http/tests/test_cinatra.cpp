@@ -1001,6 +1001,20 @@ TEST_CASE("test request with out buffer") {
     CHECK(result.resp_body == sv);
     CHECK(client.is_body_in_out_buf());
   }
+
+  {
+    detail::resize(str, 1024 * 64);
+    coro_http_client client;
+    std::string dest = "http://www.baidu.com";
+    auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    bool ok = result.status == 200 || result.status == 301;
+    CHECK(ok);
+    std::string_view sv(str.data(), result.resp_body.size());
+    CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
+  }
 }
 
 TEST_CASE("test pass path not entire uri") {
