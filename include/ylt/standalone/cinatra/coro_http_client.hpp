@@ -1964,8 +1964,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           }
           bool r = init_ssl(asio::ssl::verify_none, "", host);
           if (!r) {
-            data.net_err = std::make_error_code(std::errc::invalid_argument);
-            co_return data;
+            co_return resp_data{
+                std::make_error_code(std::errc::invalid_argument), 404};
           }
         }
 #endif
