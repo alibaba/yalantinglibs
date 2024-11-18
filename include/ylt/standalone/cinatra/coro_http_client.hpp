@@ -413,14 +413,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
 #ifdef CINATRA_ENABLE_GZIP
-  void gzip_decompress(std::string_view source, std::string &dest_buf,
-                       std::span<char> &span, resp_data &data) {
+  void gzip_compress(std::string_view source, std::string &dest_buf,
+                     std::span<char> &span, resp_data &data) {
     if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
       if (cinatra::gzip_codec::deflate(source, dest_buf)) {
         span = dest_buf;
       }
       else {
-        CINATRA_LOG_ERROR << "compuress data error, data: " << source;
+        CINATRA_LOG_ERROR << "compress data error, data: " << source;
         data.net_err = std::make_error_code(std::errc::protocol_error);
         data.status = 404;
       }
@@ -448,7 +448,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       span = {source.data(), source.size()};
 #ifdef CINATRA_ENABLE_GZIP
       std::string dest_buf;
-      gzip_decompress({source.data(), source.size()}, dest_buf, span, data);
+      gzip_compress({source.data(), source.size()}, dest_buf, span, data);
 #endif
       co_await write_ws_frame(span, ws, op, data);
     }
@@ -458,8 +458,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         span = {result.buf.data(), result.buf.size()};
 #ifdef CINATRA_ENABLE_GZIP
         std::string dest_buf;
-        gzip_decompress({result.buf.data(), result.buf.size()}, dest_buf, span,
-                        data);
+        gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
+                      data);
 #endif
         co_await write_ws_frame(span, ws, op, data, result.eof);
 
