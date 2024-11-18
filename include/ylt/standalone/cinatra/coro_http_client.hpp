@@ -740,11 +740,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     detail::resize(file_data, (std::min)(max_single_part_size_, length));
     coro_io::coro_file file{};
     file.open(source, std::ios::in);
-    file.seek(offset, std::ios::cur);
     if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
     }
+    file.seek(offset, std::ios::cur);
     std::size_t size;
     while (length > 0) {
       if (std::tie(ec, size) = co_await file.async_read(

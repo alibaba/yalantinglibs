@@ -1698,6 +1698,14 @@ TEST_CASE("test coro_http_client upload") {
       test_upload_by_stream(filename, offset, r_size, true);
     }
   }
+  {
+    filename = "some_test_file.txt";
+    bool r = create_file(filename, 10);
+    CHECK(r);
+    test_upload_by_file_path(filename, 20, SIZE_MAX, true);
+    std::error_code ec{};
+    fs::remove(filename, ec);
+  }
 }
 
 TEST_CASE("test coro_http_client chunked upload and download") {
