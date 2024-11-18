@@ -445,6 +445,7 @@ TEST_CASE("test config") {
   CHECK(ret.net_err.value() == (int)std::errc::protocol_error);
 }
 
+#ifndef CINATRA_ENABLE_SSL
 TEST_CASE("test request https without init_ssl") {
   coro_http_client client{};
   auto ret = client.get("https://baidu.com");
@@ -453,6 +454,7 @@ TEST_CASE("test request https without init_ssl") {
   ret = async_simple::coro::syncAwait(client.connect("https://baidu.com"));
   CHECK(ret.status != 200);
 }
+#endif
 
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
