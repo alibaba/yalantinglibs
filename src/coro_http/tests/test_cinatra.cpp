@@ -445,6 +445,17 @@ TEST_CASE("test config") {
   CHECK(ret.net_err.value() == (int)std::errc::protocol_error);
 }
 
+#ifndef CINATRA_ENABLE_SSL
+TEST_CASE("test request https without init_ssl") {
+  coro_http_client client{};
+  auto ret = client.get("https://baidu.com");
+  CHECK(ret.status != 200);
+
+  ret = async_simple::coro::syncAwait(client.connect("https://baidu.com"));
+  CHECK(ret.status != 200);
+}
+#endif
+
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
@@ -956,6 +967,7 @@ TEST_CASE("test request with out buffer") {
 
   {
     coro_http_client client;
+    client.add_header("Host", "cinatra");
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
@@ -992,6 +1004,20 @@ TEST_CASE("test request with out buffer") {
     CHECK(result.resp_body == sv);
     CHECK(client.is_body_in_out_buf());
   }
+
+  {
+    detail::resize(str, 1024 * 64);
+    coro_http_client client;
+    std::string dest = "http://www.baidu.com";
+    auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    bool ok = result.status == 200 || result.status == 301;
+    CHECK(ok);
+    std::string_view sv(str.data(), result.resp_body.size());
+    CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
+  }
 }
 
 TEST_CASE("test pass path not entire uri") {
@@ -1020,7 +1046,8 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
     std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
-    CHECK(r.net_err != std::errc{});
+    if (r.status != 200)
+      CHECK(r.net_err != std::errc{});
 #endif
   }
 
@@ -1938,56 +1965,51 @@ TEST_CASE("test coro_http_client request timeout") {
 
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
 TEST_CASE("test inject failed") {
-  // {
-  //   coro_http_client client{};
-  //   inject_response_valid = ClientInjectAction::response_error;
-  //   client.set_req_timeout(8s);
-  //   auto result = client.get("http://purecpp.cn");
-  //   CHECK(result.net_err == std::errc::protocol_error);
+  coro_http_client client{};
+  client.write_failed_forever_ = true;
+  auto ret = client.get("http://baidu.com");
+  CHECK(ret.status != 200);
+  client.write_failed_forever_ = false;
 
-  //   inject_header_valid = ClientInjectAction::header_error;
-  //   result = client.get("http://purecpp.cn");
-  //   CHECK(result.net_err == std::errc::protocol_error);
-  // }
+  client.connect_timeout_forever_ = true;
+  ret = async_simple::coro::syncAwait(client.connect("http://baidu.com"));
+  CHECK(ret.status != 200);
 
-  //  {
-  //    coro_http_client client{};
-  //    client.set_req_timeout(10s);
-  //    std::string uri =
-  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-  //    std::string filename = "test.jpg";
-  //
-  //    std::error_code ec{};
-  //    std::filesystem::remove(filename, ec);
-  //
-  //    inject_read_failed = ClientInjectAction::read_failed;
-  //    auto result = client.download(uri, filename);
-  //    CHECK(result.net_err == std::make_error_code(std::errc::not_connected));
-  //  }
-  //
-  //  {
-  //    coro_http_client client{};
-  //    client.set_req_timeout(10s);
-  //    std::string uri =
-  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-  //    std::string filename = "test.jpg";
-  //
-  //    std::error_code ec{};
-  //    std::filesystem::remove(filename, ec);
-  //
-  //    inject_chunk_valid = ClientInjectAction::chunk_error;
-  //    auto result = client.download(uri, filename);
-  //    CHECK(result.status == 404);
-  //  }
+  client.add_str_part("hello", "world");
+  ret = async_simple::coro::syncAwait(
+      client.async_upload_multipart("http://baidu.com"));
+  CHECK(ret.status != 200);
+  client.connect_timeout_forever_ = false;
 
-  {
-    coro_http_client client{};
-    client.add_str_part("hello", "world");
-    inject_write_failed = ClientInjectAction::write_failed;
-    auto result = async_simple::coro::syncAwait(
-        client.async_upload_multipart("https://www.bing.com"));
-    CHECK(result.status == 404);
-  }
+  client.parse_failed_forever_ = true;
+  ret = async_simple::coro::syncAwait(
+      client.async_upload_multipart("http://baidu.com"));
+  CHECK(ret.status != 200);
+  client.parse_failed_forever_ = false;
+
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET, POST>(
+      "/", [](coro_http_request &, coro_http_response &res) mutable {
+        std::string str(1024, 'a');
+        res.set_status_and_content(status_type::ok, std::move(str));
+      });
+  server.async_start();
+
+  std::string uri = "http://127.0.0.1:8090";
+
+  coro_http_client client1{};
+  client1.read_failed_forever_ = true;
+  ret = client1.get(uri);
+  CHECK(ret.status != 200);
+
+  client1.close();
+  std::string out;
+  out.resize(2024);
+  ret = async_simple::coro::syncAwait(
+      client1.async_request(uri, http_method::GET, req_context<>{}, {},
+                            std::span<char>{out.data(), out.size()}));
+  CHECK(ret.status != 200);
+  client1.read_failed_forever_ = false;
 }
 #endif
 

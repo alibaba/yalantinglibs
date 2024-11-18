@@ -46,22 +46,6 @@ template <typename T, typename U>
 class client_pool;
 }
 namespace cinatra {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-enum class ClientInjectAction {
-  none,
-  response_error,
-  header_error,
-  chunk_error,
-  write_failed,
-  read_failed,
-};
-inline ClientInjectAction inject_response_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_header_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
-inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
-#endif
-
 template <class, class = void>
 struct is_stream : std::false_type {};
 
@@ -1122,7 +1106,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     else if constexpr (upload_type == upload_type_t::chunked) {
       handle_upload_header_with_chunked(headers);
     }
-    else if constexpr (upload_type != upload_type_t::multipart) {
+    else if constexpr (upload_type == upload_type_t::multipart) {
       handle_upload_header_with_multipart();
     }
 
@@ -1317,50 +1301,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         u.path = uri;
       }
       if (socket_->has_closed_) {
-        host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
-        port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-        if (ec = co_await coro_io::async_connect(&executor_wrapper_,
-                                                 socket_->impl_, host_, port_);
-            ec) {
-          break;
-        }
-
-        if (socket_->is_timeout_) {
-          data.net_err = std::make_error_code(std::errc::timed_out);
+        data = co_await connect(u);
+        if (data.status != 0) {
           co_return data;
         }
-
-        if (enable_tcp_no_delay_) {
-          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
-          if (ec) {
-            break;
-          }
-        }
-
-        if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-          if (!has_init_ssl_) {
-            size_t pos = u.host.find("www.");
-            std::string host;
-            if (pos != std::string_view::npos) {
-              host = std::string{u.host.substr(pos + 4)};
-            }
-            else {
-              host = std::string{u.host};
-            }
-            bool r = init_ssl(asio::ssl::verify_none, "", host);
-            if (!r) {
-              data.net_err = std::make_error_code(std::errc::invalid_argument);
-              co_return data;
-            }
-          }
-#endif
-          if (ec = co_await handle_shake(); ec) {
-            break;
-          }
-        }
-        socket_->has_closed_ = false;
       }
 
       std::vector<asio::const_buffer> vec;
@@ -1634,14 +1578,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (inject_response_valid == ClientInjectAction::response_error) {
+    if (parse_failed_forever_) {
       parse_ret = -1;
     }
 #endif
     if (parse_ret < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      inject_response_valid = ClientInjectAction::none;
-#endif
       return std::make_error_code(std::errc::protocol_error);
     }
     head_buf_.consume(header_size);  // header size
@@ -1664,15 +1605,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       ec = handle_header(data, parser_, size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_header_valid == ClientInjectAction::header_error) {
-        ec = std::make_error_code(std::errc::protocol_error);
-      }
-#endif
       if (ec) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_header_valid = ClientInjectAction::none;
-#endif
         break;
       }
 
@@ -1945,16 +1878,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_read_failed == ClientInjectAction::read_failed) {
-        ec = std::make_error_code(std::errc::not_connected);
-      }
-      if (ec) {
-        inject_read_failed = ClientInjectAction::none;
-        break;
-      }
-#endif
-
       size_t buf_size = chunked_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr =
@@ -1962,15 +1885,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       chunked_buf_.consume(size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_chunk_valid == ClientInjectAction::chunk_error) {
-        chunk_size = -1;
-      }
-#endif
       if (chunk_size < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_chunk_valid = ClientInjectAction::none;
-#endif
         CINATRA_LOG_DEBUG << "bad chunked size";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
@@ -2018,6 +1933,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return resp_data{ec, 404};
       }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (connect_timeout_forever_) {
+        socket_->is_timeout_ = true;
+      }
+#endif
       if (socket_->is_timeout_) {
         auto ec = std::make_error_code(std::errc::timed_out);
         co_return resp_data{ec, 404};
@@ -2032,6 +1952,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+        if (!has_init_ssl_) {
+          size_t pos = u.host.find("www.");
+          std::string host;
+          if (pos != std::string_view::npos) {
+            host = std::string{u.host.substr(pos + 4)};
+          }
+          else {
+            host = std::string{u.host};
+          }
+          bool r = init_ssl(asio::ssl::verify_none, "", host);
+          if (!r) {
+            co_return resp_data{
+                std::make_error_code(std::errc::invalid_argument), 404};
+          }
+        }
+#endif
         if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
         }
@@ -2264,6 +2201,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_read(*socket_->ssl_stream_, buffer, size_to_read);
@@ -2276,9 +2218,26 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_read_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+#endif
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (write_failed_forever_) {
+      return async_write_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_write(*socket_->ssl_stream_, buffer);
@@ -2404,6 +2363,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef BENCHMARK_TEST
   bool stop_bench_ = false;
   size_t total_len_ = 0;
+#endif
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+ public:
+  bool write_failed_forever_ = false;
+  bool connect_timeout_forever_ = false;
+  bool parse_failed_forever_ = false;
+  bool read_failed_forever_ = false;
 #endif
 };
 
