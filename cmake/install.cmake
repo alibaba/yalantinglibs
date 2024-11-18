@@ -18,6 +18,8 @@ set(ConfigPackageLocation lib/cmake/yalantinglibs)
 add_library(yalantinglibs INTERFACE)
 add_library(yalantinglibs::yalantinglibs ALIAS yalantinglibs)
 
+target_compile_features(yalantinglibs INTERFACE cxx_std_20)
+
 target_include_directories(yalantinglibs INTERFACE 
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../include>
