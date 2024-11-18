@@ -1996,20 +1996,53 @@ TEST_CASE("test inject failed") {
   server.async_start();
 
   std::string uri = "http://127.0.0.1:8090";
+  {
+    coro_http_client client1{};
+    client1.read_failed_forever_ = true;
+    ret = client1.get(uri);
+    CHECK(ret.status != 200);
 
-  coro_http_client client1{};
-  client1.read_failed_forever_ = true;
-  ret = client1.get(uri);
-  CHECK(ret.status != 200);
+    client1.close();
+    std::string out;
+    out.resize(2024);
+    ret = async_simple::coro::syncAwait(
+        client1.async_request(uri, http_method::GET, req_context<>{}, {},
+                              std::span<char>{out.data(), out.size()}));
+    CHECK(ret.status != 200);
+    client1.read_failed_forever_ = false;
+  }
 
-  client1.close();
-  std::string out;
-  out.resize(2024);
-  ret = async_simple::coro::syncAwait(
-      client1.async_request(uri, http_method::GET, req_context<>{}, {},
-                            std::span<char>{out.data(), out.size()}));
-  CHECK(ret.status != 200);
-  client1.read_failed_forever_ = false;
+  {
+    coro_http_client client1{};
+    client1.add_str_part("hello", "test");
+    client1.write_failed_forever_ = true;
+    client1.write_header_timeout_ = true;
+    ret = async_simple::coro::syncAwait(
+        client1.async_upload_multipart("http://baidu.com"));
+    CHECK(ret.status != 200);
+    client1.write_failed_forever_ = false;
+    client1.write_header_timeout_ = false;
+  }
+
+  {
+    coro_http_client client1{};
+    client1.add_str_part("hello", "test");
+    client1.write_failed_forever_ = true;
+    client1.write_payload_timeout_ = true;
+    ret = async_simple::coro::syncAwait(
+        client1.async_upload_multipart("http://baidu.com"));
+    CHECK(ret.status != 200);
+  }
+
+  {
+    coro_http_client client1{};
+    client1.add_str_part("hello", "test");
+    client1.read_failed_forever_ = true;
+    client1.read_timeout_ = true;
+    ret = async_simple::coro::syncAwait(
+        client1.async_upload_multipart("http://baidu.com"));
+    CHECK(ret.status != 200);
+  }
 }
 #endif
 

@@ -1065,6 +1065,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return true;
   }
 
+  void handle_upload_timeout_error(std::error_code &ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (write_header_timeout_ || write_payload_timeout_ || read_timeout_) {
+      socket_->is_timeout_ = true;
+    }
+#endif
+    if (socket_->is_timeout_) {
+      ec = std::make_error_code(std::errc::timed_out);
+    }
+  }
+
   template <upload_type_t upload_type, typename S, typename Source>
   async_simple::coro::Lazy<resp_data> async_upload_impl(
       S uri, http_method method, Source source /* file */,
@@ -1122,9 +1133,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
+      handle_upload_timeout_error(ec);
       co_return resp_data{ec, 404};
     }
 
@@ -1184,16 +1193,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
     if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
+      handle_upload_timeout_error(ec);
       co_return resp_data{ec, 404};
     }
 
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
-    if (ec && socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
+    if (ec) {
+      handle_upload_timeout_error(ec);
     }
     handle_result(data, ec, is_keep_alive);
     co_return data;
@@ -2253,6 +2260,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_read_until(*socket_->ssl_stream_, buffer, delim);
@@ -2370,6 +2382,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool connect_timeout_forever_ = false;
   bool parse_failed_forever_ = false;
   bool read_failed_forever_ = false;
+  bool write_header_timeout_ = false;
+  bool write_payload_timeout_ = false;
+  bool read_timeout_ = false;
 #endif
 };
 
