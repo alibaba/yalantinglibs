@@ -1577,6 +1577,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (parse_failed_forever_) {
+      parse_ret = -1;
+    }
+#endif
     if (parse_ret < 0) {
       return std::make_error_code(std::errc::protocol_error);
     }
@@ -2354,6 +2359,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
   bool write_failed_forever_ = false;
   bool connect_timeout_forever_ = false;
+  bool parse_failed_forever_ = false;
 #endif
 };
 

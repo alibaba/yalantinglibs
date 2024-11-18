@@ -965,6 +965,7 @@ TEST_CASE("test request with out buffer") {
 
   {
     coro_http_client client;
+    client.add_header("Host", "cinatra");
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
@@ -1976,6 +1977,13 @@ TEST_CASE("test inject failed") {
   ret = async_simple::coro::syncAwait(
       client.async_upload_multipart("http://baidu.com"));
   CHECK(ret.status != 200);
+  client.connect_timeout_forever_ = false;
+
+  client.parse_failed_forever_ = true;
+  ret = async_simple::coro::syncAwait(
+      client.async_upload_multipart("http://baidu.com"));
+  CHECK(ret.status != 200);
+  client.parse_failed_forever_ = false;
 }
 #endif
 
