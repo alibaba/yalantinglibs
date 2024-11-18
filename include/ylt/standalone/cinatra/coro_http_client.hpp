@@ -2201,6 +2201,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_read(*socket_->ssl_stream_, buffer, size_to_read);
@@ -2214,9 +2219,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-  template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-  async_write_failed(AsioBuffer &&buffer) {
+  async_write_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_read_failed() {
     co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
   }
 #endif
@@ -2226,7 +2235,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       AsioBuffer &&buffer) {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (write_failed_forever_) {
-      return async_write_failed(buffer);
+      return async_write_failed();
     }
 #endif
 #ifdef CINATRA_ENABLE_SSL
@@ -2360,6 +2369,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool write_failed_forever_ = false;
   bool connect_timeout_forever_ = false;
   bool parse_failed_forever_ = false;
+  bool read_failed_forever_ = false;
 #endif
 };
 

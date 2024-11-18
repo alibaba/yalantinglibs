@@ -1984,6 +1984,30 @@ TEST_CASE("test inject failed") {
       client.async_upload_multipart("http://baidu.com"));
   CHECK(ret.status != 200);
   client.parse_failed_forever_ = false;
+
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET, POST>(
+      "/", [](coro_http_request &, coro_http_response &res) mutable {
+        std::string str(1024, 'a');
+        res.set_status_and_content(status_type::ok, std::move(str));
+      });
+  server.async_start();
+
+  std::string uri = "http://127.0.0.1:8090";
+
+  coro_http_client client1{};
+  client1.read_failed_forever_ = true;
+  ret = client1.get(uri);
+  CHECK(ret.status != 200);
+
+  client1.close();
+  std::string out;
+  out.resize(2024);
+  ret = async_simple::coro::syncAwait(
+      client1.async_request(uri, http_method::GET, req_context<>{}, {},
+                            std::span<char>{out.data(), out.size()}));
+  CHECK(ret.status != 200);
+  client1.read_failed_forever_ = false;
 }
 #endif
 
