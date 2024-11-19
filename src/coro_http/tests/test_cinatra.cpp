@@ -1473,10 +1473,60 @@ TEST_CASE("test coro_http_client multipart upload") {
 }
 
 #ifdef CINATRA_ENABLE_SSL
-void test_ssl_upload() {
+TEST_CASE("test ssl upload") {
+  coro_http_server server(1, 8091);
+#ifdef CINATRA_ENABLE_SSL
+  server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
+                  "test");
+#endif
+  server.set_http_handler<cinatra::PUT>(
+      "/upload",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        std::string_view filename = req.get_header_value("filename");
+        uint64_t sz;
+        auto oldpath = fs::current_path().append(filename);
+        std::string newpath = fs::current_path()
+                                  .append("server_" + std::string{filename})
+                                  .string();
+        std::ofstream file(newpath, std::ios::binary);
+        CHECK(file.is_open());
+        file.write(req.get_body().data(), req.get_body().size());
+        file.flush();
+        file.close();
+
+        size_t offset = 0;
+        std::string offset_s = std::string{req.get_header_value("offset")};
+        if (!offset_s.empty()) {
+          offset = stoull(offset_s);
+        }
+
+        std::string filesize = std::string{req.get_header_value("filesize")};
+
+        if (!filesize.empty()) {
+          sz = stoull(filesize);
+        }
+        else {
+          sz = std::filesystem::file_size(oldpath);
+          sz -= offset;
+        }
+
+        CHECK(!filename.empty());
+        CHECK(sz == std::filesystem::file_size(newpath));
+        std::ifstream ifs(oldpath);
+        ifs.seekg(offset, std::ios::cur);
+        std::string str;
+        str.resize(sz);
+        ifs.read(str.data(), sz);
+        CHECK(str == req.get_body());
+        resp.set_status_and_content(status_type::ok, std::string(filename));
+        co_return;
+      });
+  server.async_start();
+
   std::string filename = "test_ssl_upload.txt";
   create_file(filename, 10);
-  std::string uri = "https://127.0.0.1:8090/upload";
+  std::string uri = "https://127.0.0.1:8091/upload";
 
   {
     coro_http_client client{};
@@ -1488,10 +1538,18 @@ void test_ssl_upload() {
     CHECK(result.status == 200);
   }
 
-  cinatra::coro_http_server server(1, 9002);
-  server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
-                  "test");
-  server.set_http_handler<cinatra::GET, cinatra::PUT>(
+  {
+    coro_http_client client{};
+    client.add_header("filename", filename);
+    auto lazy = client.async_upload(uri, http_method::PUT, filename);
+    auto result = async_simple::coro::syncAwait(lazy);
+    CHECK(result.status == 200);
+  }
+
+  cinatra::coro_http_server server1(1, 9002);
+  server1.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
+                   "test");
+  server1.set_http_handler<cinatra::GET, cinatra::PUT>(
       "/chunked",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
@@ -1516,29 +1574,13 @@ void test_ssl_upload() {
         resp.set_format_type(format_type::chunked);
         resp.set_status_and_content(status_type::ok, "chunked ok");
       });
-  server.async_start();
-
-  {
-    coro_http_client client{};
-    client.add_header("filename", filename);
-    auto lazy = client.async_upload(uri, http_method::PUT, filename);
-    auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status == 200);
-  }
+  server1.async_start();
 
   uri = "https://127.0.0.1:9002/chunked";
   {
     coro_http_client client{};
     bool r = client.init_ssl();
     CHECK(r);
-    client.add_header("filename", filename);
-    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-    auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status == 200);
-  }
-
-  {
-    coro_http_client client{};
     client.add_header("filename", filename);
     auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
     auto result = async_simple::coro::syncAwait(lazy);
@@ -1625,10 +1667,6 @@ TEST_CASE("test coro_http_client upload") {
     }
   };
   coro_http_server server(1, 8090);
-#ifdef CINATRA_ENABLE_SSL
-  server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
-                  "test");
-#endif
   server.set_http_handler<cinatra::PUT>(
       "/upload",
       [](coro_http_request &req,
@@ -1673,9 +1711,6 @@ TEST_CASE("test coro_http_client upload") {
         co_return;
       });
   server.async_start();
-#ifdef CINATRA_ENABLE_SSL
-  test_ssl_upload();
-#endif
   std::string filename = "test_upload.txt";
   // upload without size
   {
