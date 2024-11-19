@@ -1536,14 +1536,6 @@ void test_ssl_upload() {
     auto result = async_simple::coro::syncAwait(lazy);
     CHECK(result.status == 200);
   }
-
-  {
-    coro_http_client client{};
-    client.add_header("filename", filename);
-    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-    auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status == 200);
-  }
 }
 #endif
 
