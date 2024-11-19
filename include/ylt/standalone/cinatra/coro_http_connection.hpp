@@ -681,6 +681,18 @@ class coro_http_connection
         head_buf_.consume(head_buf_.size());
         std::span<char> payload{};
         auto payload_length = ws_.payload_length();
+
+        if (max_part_size_ != 0 && payload_length > max_part_size_) {
+          std::string close_reason = "message_too_big";
+          std::string close_msg = ws_.format_close_payload(
+              close_code::too_big, close_reason.data(), close_reason.size());
+          co_await write_websocket(close_msg, opcode::close);
+          close();
+          result.ec = std::error_code(asio::error::message_size,
+                                      asio::error::get_system_category());
+          break;
+        }
+
         if (payload_length > 0) {
           detail::resize(body_, payload_length);
           auto [ec, read_sz] =
@@ -691,15 +703,6 @@ class coro_http_connection
             break;
           }
           payload = body_;
-        }
-
-        if (max_part_size_ != 0 && payload_length > max_part_size_) {
-          std::string close_reason = "message_too_big";
-          std::string close_msg = ws_.format_close_payload(
-              close_code::too_big, close_reason.data(), close_reason.size());
-          co_await write_websocket(close_msg, opcode::close);
-          close();
-          break;
         }
 
         ws_frame_type type = ws_.parse_payload(payload);
