@@ -25,7 +25,6 @@ class multipart_reader_t {
 
     part_head_t result{};
     std::error_code ec{};
-    size_t last_size = chunked_buf_.size();
     size_t size;
 
     auto get_part_name = [](std::string_view data, std::string_view name,

@@ -59,7 +59,7 @@ TEST_CASE("test for gzip") {
     std::string uri = "http://127.0.0.1:8090/gzip";
     client.add_header("Content-Encoding", "gzip");
     auto result = async_simple::coro::syncAwait(client.async_get(uri));
-    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    // auto content = get_header_value(result.resp_headers, "Content-Encoding");
     CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
     CHECK(result.resp_body == "hello world");
   }
@@ -69,7 +69,7 @@ TEST_CASE("test for gzip") {
     std::string uri = "http://127.0.0.1:8090/deflate";
     client.add_header("Content-Encoding", "deflate");
     auto result = async_simple::coro::syncAwait(client.async_get(uri));
-    auto content = get_header_value(result.resp_headers, "Content-Encoding");
+    // auto content = get_header_value(result.resp_headers, "Content-Encoding");
     CHECK(get_header_value(result.resp_headers, "Content-Encoding") ==
           "deflate");
     CHECK(result.resp_body == "hello world");
@@ -96,7 +96,7 @@ TEST_CASE("test encoding type") {
     if (encoding_type ==
         content_encoding::gzip) {  // only post request have this field
       std::string decode_str;
-      bool r = gzip_codec::uncompress(req.get_body(), decode_str);
+      gzip_codec::uncompress(req.get_body(), decode_str);
       CHECK(decode_str == "Hello World");
     }
     resp.set_status_and_content(status_type::ok, "ok", content_encoding::gzip,
@@ -1889,7 +1889,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       CHECK(code);
     }
     auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
-    for (auto size : sizes) {
+    for ([[maybe_unused]] auto size : sizes) {
       std::string filename = "test_chunked_upload.txt";
       std::error_code ec{};
       fs::remove(filename, ec);
@@ -1984,8 +1984,8 @@ TEST_CASE("test coro_http_client async_get") {
 
   auto r1 =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(!r1.net_err);
+  CHECK(r1.status == 200);
 }
 
 TEST_CASE("test basic http request") {
