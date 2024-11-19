@@ -1215,7 +1215,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       int64_t content_length = -1 /*upload size*/,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    co_return co_await async_upload_impl<upload_type_t::with_length>(
+    return async_upload_impl<upload_type_t::with_length>(
         std::move(uri), method, std::move(source), content_type,
         std::move(headers), offset, content_length);
   }
@@ -1226,7 +1226,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       S uri, http_method method, Source source,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    co_return co_await async_upload_impl<upload_type_t::chunked>(
+    return async_upload_impl<upload_type_t::chunked>(
         std::move(uri), method, std::move(source), content_type,
         std::move(headers));
   }
