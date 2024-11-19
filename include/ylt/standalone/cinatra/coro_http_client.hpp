@@ -883,7 +883,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   void handle_upload_header_with_chunked(
-      std::unordered_map<std::string, std::string> headers) {
+      std::unordered_map<std::string, std::string> &headers) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
@@ -899,7 +899,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename Source>
   int64_t handle_upload_header_with_length(
       resp_data &data, Source &source,
-      std::unordered_map<std::string, std::string> headers, uint64_t offset,
+      std::unordered_map<std::string, std::string> &headers, uint64_t offset,
       int64_t content_length) {
     if (content_length < 0) {
       if constexpr (is_stream_ptr_v<Source>) {
