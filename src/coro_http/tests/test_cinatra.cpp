@@ -286,6 +286,7 @@ TEST_CASE("test ssl client") {
     coro_http_client client{};
     client.enable_auto_redirect(true);
     bool ok = client.init_ssl();
+    client.reset();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -1475,10 +1476,8 @@ TEST_CASE("test coro_http_client multipart upload") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl upload") {
   coro_http_server server(1, 8091);
-#ifdef CINATRA_ENABLE_SSL
   server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
                   "test");
-#endif
   server.set_http_handler<cinatra::PUT>(
       "/upload",
       [](coro_http_request &req,
@@ -1532,6 +1531,8 @@ TEST_CASE("test ssl upload") {
     coro_http_client client{};
     bool r = client.init_ssl();
     CHECK(r);
+    r = client.init_ssl();
+    CHECK(r);
     client.add_header("filename", filename);
     auto lazy = client.async_upload(uri, http_method::PUT, filename);
     auto result = async_simple::coro::syncAwait(lazy);
@@ -1581,10 +1582,35 @@ TEST_CASE("test ssl upload") {
     coro_http_client client{};
     bool r = client.init_ssl();
     CHECK(r);
+    std::string_view file = "test_ssl_upload.txt";
+    client.add_header("filename", filename);
+    auto lazy = client.async_upload_chunked(uri, http_method::PUT, file);
+    auto result = async_simple::coro::syncAwait(lazy);
+    CHECK(result.status == 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.enable_sni_hostname(true);
+    bool r = client.init_ssl();
+    CHECK(r);
+    std::unordered_map<std::string, std::string> headers;
+    headers.emplace("filename", filename);
+    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename,
+                                            req_content_type::none, headers);
+    auto result = async_simple::coro::syncAwait(lazy);
+    CHECK(result.status == 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.write_failed_forever_ = true;
+    bool r = client.init_ssl();
+    CHECK(r);
     client.add_header("filename", filename);
     auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
     auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status == 200);
+    CHECK(result.status != 200);
   }
 }
 #endif
@@ -2167,6 +2193,16 @@ TEST_CASE("test inject failed") {
     ret = async_simple::coro::syncAwait(
         client1.async_upload_multipart("http://baidu.com"));
     CHECK(ret.status != 200);
+  }
+
+  {
+    coro_http_client client1{};
+    client1.write_failed_forever_ = true;
+    ret = async_simple::coro::syncAwait(client1.connect("http://baidu.com"));
+    if (!ret.net_err) {
+      ret = async_simple::coro::syncAwait(client1.write_websocket("test"));
+      CHECK(ret.status != 200);
+    }
   }
 }
 #endif
