@@ -1111,7 +1111,7 @@ TEST_CASE("check connecton timeout") {
 }
 
 TEST_CASE("test websocket with different message size") {
-  cinatra::coro_http_server server(1, 9003);
+  cinatra::coro_http_server server(1, 9008);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo1",
       [](cinatra::coro_http_request &req,
@@ -1142,7 +1142,7 @@ TEST_CASE("test websocket with different message size") {
 
   auto lazy = [](std::string str) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    auto ret = co_await client.connect("ws://127.0.0.1:9003/ws_echo1");
+    auto ret = co_await client.connect("ws://127.0.0.1:9008/ws_echo1");
     if (ret.status != 101) {
       std::cout << ret.net_err.message() << "\n";
     }
