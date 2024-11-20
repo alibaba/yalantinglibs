@@ -1201,11 +1201,11 @@ TEST_CASE("test ssl server") {
 #endif
 
 TEST_CASE("test http download server") {
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(1, 9006);
   std::string filename = "test_download.txt";
   create_file(filename, 1010);
 
-  // curl http://127.0.0.1:9001/download/test_download.txt will download
+  // curl http://127.0.0.1:9006/download/test_download.txt will download
   // test_download.txt file
   server.set_transfer_chunked_size(100);
   server.set_static_res_dir("download", "");
@@ -1215,7 +1215,7 @@ TEST_CASE("test http download server") {
   {
     coro_http_client client{};
     auto result = async_simple::coro::syncAwait(client.async_download(
-        "http://127.0.0.1:9001/download/test_download.txt", "download.txt"));
+        "http://127.0.0.1:9006/download/test_download.txt", "download.txt"));
 
     CHECK(result.status == 200);
     std::string download_file = fs::absolute("download.txt").string();
@@ -1229,7 +1229,7 @@ TEST_CASE("test http download server") {
   {
     coro_http_client client{};
     auto result = async_simple::coro::syncAwait(client.async_download(
-        "http://127.0.0.1:9001/download/test_download.txt", "download1.txt",
+        "http://127.0.0.1:9006/download/test_download.txt", "download1.txt",
         "0-"));
 
     CHECK(result.status == 200);
