@@ -4,7 +4,13 @@
 #include <string>
 #include <vector>
 
-enum class struct_token_type { pod, proto_string, message, null_type };
+enum class struct_token_type {
+  pod,
+  proto_string,
+  message,
+  enum_type,
+  null_type
+};
 
 enum class lable_type {
   lable_optional,
@@ -57,10 +63,13 @@ class struct_tokenizer {
         else if (token.type_name == "enum") {
           const google::protobuf::EnumDescriptor* enum_desc =
               field->enum_type();
-          token.type_name = "enum " + enum_desc->name();
+          token.type_name = enum_desc->name();
+          token.type = struct_token_type::enum_type;
         }
         else {
           token.type = struct_token_type::pod;
+          if (token.type_name.find("int") != std::string::npos)
+            token.type_name += "_t";
         }
       }
 

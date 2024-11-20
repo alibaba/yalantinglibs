@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(Protobuf REQUIRED)
 include_directories(${PROTOBUF_INCLUDE_DIR})
- include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(SOURCE_FILE proto_to_struct.cpp)
 
