@@ -73,7 +73,6 @@ class summary_impl {
     fltInt16 |= (fltInt32 >> 15) & 0xff;
 
     auto i = fltInt16 >> (8 - frac_bit);
-    auto j = decode_impl(i);
     return i;
   }
 

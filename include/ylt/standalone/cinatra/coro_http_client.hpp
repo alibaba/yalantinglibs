@@ -46,22 +46,6 @@ template <typename T, typename U>
 class client_pool;
 }
 namespace cinatra {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-enum class ClientInjectAction {
-  none,
-  response_error,
-  header_error,
-  chunk_error,
-  write_failed,
-  read_failed,
-};
-inline ClientInjectAction inject_response_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_header_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
-inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
-inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
-#endif
-
 template <class, class = void>
 struct is_stream : std::false_type {};
 
@@ -129,6 +113,8 @@ struct read_result {
   bool eof;
   std::error_code err;
 };
+
+enum class upload_type_t { with_length, chunked, multipart };
 
 class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
@@ -416,8 +402,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                 resp_data &data,
                                                 bool eof = true) {
     auto header = ws.encode_frame(msg, op, eof, true);
-    std::vector<asio::const_buffer> buffers{asio::buffer(header),
-                                            asio::buffer(msg)};
+    std::vector<asio::const_buffer> buffers{
+        asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
     auto [ec, sz] = co_await async_write(buffers);
     if (ec) {
@@ -427,14 +413,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
 #ifdef CINATRA_ENABLE_GZIP
-  void gzip_decompress(std::string_view source, std::string &dest_buf,
-                       std::span<char> &span, resp_data &data) {
+  void gzip_compress(std::string_view source, std::string &dest_buf,
+                     std::span<char> &span, resp_data &data) {
     if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
       if (cinatra::gzip_codec::deflate(source, dest_buf)) {
         span = dest_buf;
       }
       else {
-        CINATRA_LOG_ERROR << "compuress data error, data: " << source;
+        CINATRA_LOG_ERROR << "compress data error, data: " << source;
         data.net_err = std::make_error_code(std::errc::protocol_error);
         data.status = 404;
       }
@@ -462,7 +448,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       span = {source.data(), source.size()};
 #ifdef CINATRA_ENABLE_GZIP
       std::string dest_buf;
-      gzip_decompress({source.data(), source.size()}, dest_buf, span, data);
+      gzip_compress({source.data(), source.size()}, dest_buf, span, data);
 #endif
       co_await write_ws_frame(span, ws, op, data);
     }
@@ -472,8 +458,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         span = {result.buf.data(), result.buf.size()};
 #ifdef CINATRA_ENABLE_GZIP
         std::string dest_buf;
-        gzip_decompress({result.buf.data(), result.buf.size()}, dest_buf, span,
-                        data);
+        gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
+                      data);
 #endif
         co_await write_ws_frame(span, ws, op, data, result.eof);
 
@@ -643,104 +629,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     coro_http_client *self;
   };
 
-  async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
-    std::shared_ptr<int> guard(nullptr, [this](auto) {
-      req_headers_.clear();
-      form_data_.clear();
-    });
-    if (form_data_.empty()) {
-      CINATRA_LOG_WARNING << "no multipart";
-      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                          404};
-    }
-
-    req_context<> ctx{req_content_type::multipart, "", ""};
-    resp_data data{};
-    auto [ok, u] = handle_uri(data, uri);
-    if (!ok) {
-      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
-    }
-
-    size_t content_len = multipart_content_len();
-
-    add_header("Content-Length", std::to_string(content_len));
-
-    std::string header_str = build_request_header(u, http_method::POST, ctx);
-
-    std::error_code ec{};
-    size_t size = 0;
-
-    if (socket_->has_closed_) {
-      {
-        auto time_out_guard =
-            timer_guard(this, conn_timeout_duration_, "connect timer");
-        data = co_await connect(u);
-      }
-      if (socket_->is_timeout_) {
-        co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
-      }
-      if (data.net_err) {
-        co_return data;
-      }
-    }
-
-    auto time_out_guard =
-        timer_guard(this, req_timeout_duration_, "request timer");
-    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (inject_write_failed == ClientInjectAction::write_failed) {
-      ec = std::make_error_code(std::errc::not_connected);
-    }
-#endif
-    if (ec) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      inject_write_failed = ClientInjectAction::none;
-#endif
-      CINATRA_LOG_DEBUG << ec.message();
-      co_return resp_data{ec, 404};
-    }
-
-    for (auto &[key, part] : form_data_) {
-      data = co_await send_single_part(key, part);
-
-      if (data.net_err) {
-        if (socket_->is_timeout_) {
-          data.net_err = std::make_error_code(std::errc::timed_out);
-        }
-        co_return data;
-      }
-    }
-
-    std::string last_part;
-    last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
-    if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
-        ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
-      co_return resp_data{ec, 404};
-    }
-
-    bool is_keep_alive = true;
-    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
-                                http_method::POST);
-    if (socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
-    }
-    handle_result(data, ec, is_keep_alive);
-    co_return data;
-  }
-
-  async_simple::coro::Lazy<resp_data> async_upload_multipart(
-      std::string uri, std::string name, std::string filename) {
-    if (!add_file_part(std::move(name), std::move(filename))) {
-      CINATRA_LOG_WARNING << "open file failed or duplicate test names";
-      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                          404};
-    }
-    co_return co_await async_upload_multipart(std::move(uri));
-  }
-
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                      std::string filename,
                                                      std::string range = "") {
@@ -818,7 +706,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string_view get_port() { return port_; }
 
  private:
-  async_simple::coro::Lazy<void> send_file_chunked_with_copy(
+  async_simple::coro::Lazy<void> send_file_copy_with_chunked(
       std::string_view source, std::error_code &ec) {
     std::string file_data;
     detail::resize(file_data, max_single_part_size_);
@@ -842,7 +730,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
   }
 
-  async_simple::coro::Lazy<void> send_file_no_chunked_with_copy(
+  async_simple::coro::Lazy<void> send_file_copy_with_length(
       std::string_view source, std::error_code &ec, std::size_t length,
       std::size_t offset) {
     if (length <= 0) {
@@ -852,11 +740,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     detail::resize(file_data, (std::min)(max_single_part_size_, length));
     coro_io::coro_file file{};
     file.open(source, std::ios::in);
-    file.seek(offset, std::ios::cur);
     if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
     }
+    file.seek(offset, std::ios::cur);
     std::size_t size;
     while (length > 0) {
       if (std::tie(ec, size) = co_await file.async_read(
@@ -888,7 +776,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
   };
-  async_simple::coro::Lazy<void> send_file_without_copy(
+  async_simple::coro::Lazy<void> send_file_no_copy_with_length(
       const std::filesystem::path &source, std::error_code &ec,
       std::size_t length, std::size_t offset) {
     fd_guard guard(source.c_str());
@@ -908,7 +796,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return;
     }
   }
-  async_simple::coro::Lazy<void> send_file_without_copy_chunked(
+  async_simple::coro::Lazy<void> send_file_no_copy_with_chunked(
       const std::filesystem::path &source, std::error_code &ec) {
     fd_guard guard(source.c_str());
     if (guard.fd < 0) [[unlikely]] {
@@ -972,42 +860,49 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return remaining_bytes;
   }
 
- public:
-  template <typename S, typename Source>
-  async_simple::coro::Lazy<resp_data> async_upload(
-      S uri, http_method method, Source source /* file */,
-      uint64_t offset = 0 /*file offset*/,
-      int64_t content_length = -1 /*upload size*/,
-      req_content_type content_type = req_content_type::text,
-      std::unordered_map<std::string, std::string> headers = {}) {
-    std::error_code ec{};
-    size_t size = 0;
-    bool is_keep_alive = true;
-    req_context<> ctx{content_type};
-    resp_data data{};
-
-    std::shared_ptr<void> guard(nullptr, [&, this](auto) {
-      if (!req_headers_.empty()) {
-        req_headers_.clear();
-      }
-      handle_result(data, ec, is_keep_alive);
-    });
-
-    auto [ok, u] = handle_uri(data, uri);
-    if (!ok) {
-      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
-    }
-
-    constexpr bool is_stream_file = is_stream_ptr_v<Source>;
-    if constexpr (is_stream_file) {
+  template <typename Source>
+  void check_source(resp_data &data, Source &source) {
+    if constexpr (is_stream_ptr_v<Source>) {
       if (!source) {
-        co_return resp_data{
+        data = resp_data{
             std::make_error_code(std::errc::no_such_file_or_directory), 404};
       }
     }
-    // get the content_length
+    else if constexpr (std::is_same_v<Source, std::string> ||
+                       std::is_same_v<Source, std::string_view>) {
+      if (!std::filesystem::exists(source)) {
+        data = resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+  }
+
+  void handle_upload_header_with_multipart() {
+    size_t content_len = multipart_content_len();
+    add_header("Content-Length", std::to_string(content_len));
+  }
+
+  void handle_upload_header_with_chunked(
+      std::unordered_map<std::string, std::string> &headers) {
+    if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.clear();
+    }
+
+    if (headers.empty()) {
+      add_header("Transfer-Encoding", "chunked");
+    }
+    else {
+      headers.emplace("Transfer-Encoding", "chunked");
+    }
+  }
+
+  template <typename Source>
+  int64_t handle_upload_header_with_length(
+      resp_data &data, Source &source,
+      std::unordered_map<std::string, std::string> &headers, uint64_t offset,
+      int64_t content_length) {
     if (content_length < 0) {
-      if constexpr (is_stream_file) {
+      if constexpr (is_stream_ptr_v<Source>) {
         content_length = getRemainingBytes(*source);
       }
       else if constexpr (std::is_same_v<Source, std::string> ||
@@ -1018,14 +913,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         CINATRA_LOG_ERROR
             << "user should set content-length before calling async_upload "
                "when source is user-defined function.";
-        co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                            404};
+        data =
+            resp_data{std::make_error_code(std::errc::invalid_argument), 404};
+        return content_length;
       }
       content_length -= offset;
       if (content_length < 0) {
         CINATRA_LOG_ERROR << "the offset is larger than the end of file";
-        co_return resp_data{std::make_error_code(std::errc::invalid_argument),
-                            404};
+        data =
+            resp_data{std::make_error_code(std::errc::invalid_argument), 404};
+        return content_length;
       }
     }
 
@@ -1038,172 +935,197 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     else {
       headers.emplace("Content-Length", std::string_view(buf, ptr - buf));
     }
-
-    std::string header_str =
-        build_request_header(u, method, ctx, true, std::move(headers));
-
-    if (socket_->has_closed_) {
-      {
-        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-        data = co_await connect(u);
-      }
-      if (socket_->is_timeout_) {
-        co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
-      }
-      if (data.net_err) {
-        co_return data;
-      }
-    }
-
-    auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
-    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-    if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
-      co_return resp_data{ec, 404};
-    }
-
-    if constexpr (is_stream_file) {
-      source->seekg(offset, std::ios::cur);
-      std::string file_data;
-      detail::resize(file_data, std::min<std::size_t>(max_single_part_size_,
-                                                      content_length));
-      while (content_length > 0 && !source->eof()) {
-        size_t rd_size =
-            source
-                ->read(file_data.data(),
-                       std::min<size_t>(content_length, file_data.size()))
-                .gcount();
-        if (std::tie(ec, size) =
-                co_await async_write(asio::buffer(file_data.data(), rd_size));
-            ec) {
-          break;
-        }
-        content_length -= rd_size;
-      }
-      if (!ec && content_length > 0) {
-        // bad request, file is smaller than content-length
-        ec = std::make_error_code(std::errc::invalid_argument);
-      }
-    }
-    else if constexpr (std::is_same_v<Source, std::string> ||
-                       std::is_same_v<Source, std::string_view>) {
-#ifdef __linux__
-#ifdef CINATRA_ENABLE_SSL
-      if (!has_init_ssl_) {
-#endif
-        co_await send_file_without_copy(std::filesystem::path{source}, ec,
-                                        content_length, offset);
-#ifdef CINATRA_ENABLE_SSL
-      }
-      else {
-        co_await send_file_no_chunked_with_copy(source, ec, content_length,
-                                                offset);
-      }
-#endif
-#else
-      co_await send_file_no_chunked_with_copy(source, ec, content_length,
-                                              offset);
-#endif
-    }
-    else {
-      while (true) {
-        auto result = co_await source();
-        if (std::tie(ec, size) = co_await async_write(asio::buffer(
-                result.buf.data(),
-                std::min<std::size_t>(content_length, result.buf.size())));
-            ec) {
-          break;
-        }
-        content_length -= size;
-        if (content_length <= 0) {
-          break;
-        }
-        else if (result.eof) [[unlikely]] {
-          // bad request, file is smaller than content-length
-          ec = std::make_error_code(std::errc::invalid_argument);
-          break;
-        }
-      }
-    }
-    if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
-      co_return resp_data{ec, 404};
-    }
-
-    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
-                                http_method::POST);
-    if (ec && socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
-    }
-    handle_result(data, ec, is_keep_alive);
-    co_return data;
+    return content_length;
   }
 
-  template <typename S, typename Source>
-  async_simple::coro::Lazy<resp_data> async_upload_chunked(
-      S uri, http_method method, Source source,
-      req_content_type content_type = req_content_type::text,
-      std::unordered_map<std::string, std::string> headers = {}) {
-    req_context<> ctx{content_type};
+  async_simple::coro::Lazy<void> send_fstream_with_multipart(
+      std::error_code &ec) {
     resp_data data{};
+    for (auto &[key, part] : form_data_) {
+      data = co_await send_single_part(key, part);
+
+      if (data.net_err) {
+        ec = data.net_err;
+        co_return;
+      }
+    }
+
+    std::string last_part;
+    size_t size = 0;
+    last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
+    if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
+        ec) {
+      co_return;
+    }
+  }
+
+  template <typename Source>
+  async_simple::coro::Lazy<void> send_fstream_with_chunked(
+      Source &source, std::error_code &ec) {
+    size_t size = 0;
+    std::string file_data;
+    detail::resize(file_data, max_single_part_size_);
+    while (!source->eof()) {
+      size_t rd_size =
+          source->read(file_data.data(), file_data.size()).gcount();
+      std::vector<asio::const_buffer> bufs;
+      std::string size_str;
+      cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
+                                  source->eof());
+      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+        break;
+      }
+    }
+  }
+
+  template <typename Source>
+  async_simple::coro::Lazy<void> send_fstream_with_length(
+      Source &source, std::error_code &ec, uint64_t offset,
+      int64_t content_length) {
+    size_t size = 0;
+    source->seekg(offset, std::ios::cur);
+    std::string file_data;
+    detail::resize(file_data, std::min<std::size_t>(max_single_part_size_,
+                                                    content_length));
+    while (content_length > 0 && !source->eof()) {
+      size_t rd_size =
+          source
+              ->read(file_data.data(),
+                     std::min<size_t>(content_length, file_data.size()))
+              .gcount();
+      if (std::tie(ec, size) =
+              co_await async_write(asio::buffer(file_data.data(), rd_size));
+          ec) {
+        break;
+      }
+      content_length -= rd_size;
+    }
+    if (!ec && content_length > 0) {
+      // bad request, file is smaller than content-length
+      ec = std::make_error_code(std::errc::invalid_argument);
+    }
+  }
+
+  template <typename Source>
+  async_simple::coro::Lazy<void> send_sink_with_chunked(Source &source,
+                                                        std::error_code &ec) {
+    size_t size = 0;
+    while (true) {
+      auto result = co_await source();
+      std::vector<asio::const_buffer> bufs;
+      std::string size_str;
+      cinatra::to_chunked_buffers(
+          bufs, size_str, {result.buf.data(), result.buf.size()}, result.eof);
+      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+        break;
+      }
+      if (result.eof) {
+        break;
+      }
+    }
+  }
+
+  template <typename Source>
+  async_simple::coro::Lazy<void> send_sink_with_length(Source &source,
+                                                       std::error_code &ec,
+                                                       int64_t content_length) {
+    size_t size = 0;
+    while (true) {
+      auto result = co_await source();
+      if (std::tie(ec, size) = co_await async_write(asio::buffer(
+              result.buf.data(),
+              std::min<std::size_t>(content_length, result.buf.size())));
+          ec) {
+        break;
+      }
+      content_length -= size;
+      if (content_length <= 0) {
+        break;
+      }
+      else if (result.eof) [[unlikely]] {
+        // bad request, file is smaller than content-length
+        ec = std::make_error_code(std::errc::invalid_argument);
+        break;
+      }
+    }
+  }
+
+  async_simple::coro::Lazy<bool> reconnect(resp_data &data, uri_t u) {
+    {
+      auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
+      data = co_await connect(u);
+    }
+    if (socket_->is_timeout_) {
+      data = resp_data{std::make_error_code(std::errc::timed_out), 404};
+    }
+    if (data.net_err) {
+      co_return false;
+    }
+
+    co_return true;
+  }
+
+  void handle_upload_timeout_error(std::error_code &ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (write_header_timeout_ || write_payload_timeout_ || read_timeout_) {
+      socket_->is_timeout_ = true;
+    }
+#endif
+    if (socket_->is_timeout_) {
+      ec = std::make_error_code(std::errc::timed_out);
+    }
+  }
+
+  template <upload_type_t upload_type, typename S, typename Source>
+  async_simple::coro::Lazy<resp_data> async_upload_impl(
+      S uri, http_method method, Source source /* file */,
+      req_content_type content_type = req_content_type::text,
+      std::unordered_map<std::string, std::string> headers = {},
+      uint64_t offset = 0 /*file offset*/,
+      int64_t content_length = -1 /*upload size*/) {
     std::error_code ec{};
     size_t size = 0;
     bool is_keep_alive = true;
+    req_context<> ctx{content_type};
+    resp_data data{};
 
     std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
       }
-      handle_result(data, ec, is_keep_alive);
     });
-
-    if (!resp_chunk_str_.empty()) {
-      resp_chunk_str_.clear();
-    }
 
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
       co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
 
-    constexpr bool is_stream_file = is_stream_ptr_v<Source>;
-    if constexpr (is_stream_file) {
-      if (!source) {
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
-      }
-    }
-    else if constexpr (std::is_same_v<Source, std::string> ||
-                       std::is_same_v<Source, std::string_view>) {
-      if (!std::filesystem::exists(source)) {
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+    if constexpr (upload_type != upload_type_t::multipart) {
+      check_source(data, source);
+      if (data.status != 0) {
+        co_return data;
       }
     }
 
-    if (headers.empty()) {
-      add_header("Transfer-Encoding", "chunked");
+    if constexpr (upload_type == upload_type_t::with_length) {
+      content_length = handle_upload_header_with_length(data, source, headers,
+                                                        offset, content_length);
+      if (data.status != 0) {
+        co_return data;
+      }
     }
-    else {
-      headers.emplace("Transfer-Encoding", "chunked");
+    else if constexpr (upload_type == upload_type_t::chunked) {
+      handle_upload_header_with_chunked(headers);
+    }
+    else if constexpr (upload_type == upload_type_t::multipart) {
+      handle_upload_header_with_multipart();
     }
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
 
     if (socket_->has_closed_) {
-      {
-        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-        data = co_await connect(u);
-      }
-      if (socket_->is_timeout_) {
-        co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
-      }
-      if (data.net_err) {
+      if (bool r = co_await reconnect(data, u); !r) {
         co_return data;
       }
     }
@@ -1211,26 +1133,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
+      handle_upload_timeout_error(ec);
       co_return resp_data{ec, 404};
     }
 
+    constexpr bool is_stream_file = is_stream_ptr_v<Source>;
     if constexpr (is_stream_file) {
-      std::string file_data;
-      detail::resize(file_data, max_single_part_size_);
-      while (!source->eof()) {
-        size_t rd_size =
-            source->read(file_data.data(), file_data.size()).gcount();
-        std::vector<asio::const_buffer> bufs;
-        std::string size_str;
-        cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
-                                    source->eof());
-        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
-          break;
-        }
+      if constexpr (upload_type == upload_type_t::with_length) {
+        co_await send_fstream_with_length(source, ec, offset, content_length);
       }
+      else if constexpr (upload_type == upload_type_t::chunked) {
+        co_await send_fstream_with_chunked(source, ec);
+      }
+    }
+    else if constexpr (std::is_enum_v<Source>) {  // only for multipart
+      co_await send_fstream_with_multipart(ec);
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
                        std::is_same_v<Source, std::string_view>) {
@@ -1238,47 +1155,103 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_SSL
       if (!has_init_ssl_) {
 #endif
-        co_await send_file_without_copy_chunked(std::filesystem::path{source},
-                                                ec);
+        if constexpr (upload_type == upload_type_t::with_length) {
+          co_await send_file_no_copy_with_length(std::filesystem::path{source},
+                                                 ec, content_length, offset);
+        }
+        else if constexpr (upload_type == upload_type_t::chunked) {
+          co_await send_file_no_copy_with_chunked(std::filesystem::path{source},
+                                                  ec);
+        }
 #ifdef CINATRA_ENABLE_SSL
       }
       else {
-        co_await send_file_chunked_with_copy(source, ec);
+        if constexpr (upload_type == upload_type_t::with_length) {
+          co_await send_file_copy_with_length(source, ec, content_length,
+                                              offset);
+        }
+        else if constexpr (upload_type == upload_type_t::chunked) {
+          co_await send_file_copy_with_chunked(source, ec);
+        }
       }
 #endif
 #else
-      co_await send_file_chunked_with_copy(source, ec);
+      if constexpr (upload_type == upload_type_t::with_length) {
+        co_await send_file_copy_with_length(source, ec, content_length, offset);
+      }
+      else if constexpr (upload_type == upload_type_t::chunked) {
+        co_await send_file_copy_with_chunked(source, ec);
+      }
 #endif
     }
     else {
-      while (true) {
-        auto result = co_await source();
-        std::vector<asio::const_buffer> bufs;
-        std::string size_str;
-        cinatra::to_chunked_buffers(
-            bufs, size_str, {result.buf.data(), result.buf.size()}, result.eof);
-        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
-          break;
-        }
-        if (result.eof) {
-          break;
-        }
+      if constexpr (upload_type == upload_type_t::with_length) {
+        co_await send_sink_with_length(source, ec, content_length);
+      }
+      else if constexpr (upload_type == upload_type_t::chunked) {
+        co_await send_sink_with_chunked(source, ec);
       }
     }
     if (ec) {
-      if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
-      }
+      handle_upload_timeout_error(ec);
       co_return resp_data{ec, 404};
     }
 
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
-    if (ec && socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
+    if (ec) {
+      handle_upload_timeout_error(ec);
     }
     handle_result(data, ec, is_keep_alive);
     co_return data;
+  }
+
+ public:
+  // send file with length
+  template <typename S, typename Source>
+  async_simple::coro::Lazy<resp_data> async_upload(
+      S uri, http_method method, Source source /* file */,
+      uint64_t offset = 0 /*file offset*/,
+      int64_t content_length = -1 /*upload size*/,
+      req_content_type content_type = req_content_type::text,
+      std::unordered_map<std::string, std::string> headers = {}) {
+    return async_upload_impl<upload_type_t::with_length>(
+        std::move(uri), method, std::move(source), content_type,
+        std::move(headers), offset, content_length);
+  }
+
+  // send file with chunked
+  template <typename S, typename Source>
+  async_simple::coro::Lazy<resp_data> async_upload_chunked(
+      S uri, http_method method, Source source,
+      req_content_type content_type = req_content_type::text,
+      std::unordered_map<std::string, std::string> headers = {}) {
+    return async_upload_impl<upload_type_t::chunked>(
+        std::move(uri), method, std::move(source), content_type,
+        std::move(headers));
+  }
+
+  // send multipart data, should call add_file_part or add_str_part firstly.
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
+    if (form_data_.empty()) {
+      CINATRA_LOG_WARNING << "no multipart";
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
+    }
+
+    co_return co_await async_upload_impl<upload_type_t::multipart>(
+        std::move(uri), http_method::POST, upload_type_t::multipart,
+        req_content_type::multipart);
+  }
+
+  async_simple::coro::Lazy<resp_data> async_upload_multipart(
+      std::string uri, std::string name, std::string filename) {
+    if (!add_file_part(std::move(name), std::move(filename))) {
+      CINATRA_LOG_WARNING << "open file failed or duplicate test names";
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
+    }
+    co_return co_await async_upload_multipart(std::move(uri));
   }
 
   template <typename S, typename String>
@@ -1335,50 +1308,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         u.path = uri;
       }
       if (socket_->has_closed_) {
-        host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
-        port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-        if (ec = co_await coro_io::async_connect(&executor_wrapper_,
-                                                 socket_->impl_, host_, port_);
-            ec) {
-          break;
-        }
-
-        if (socket_->is_timeout_) {
-          data.net_err = std::make_error_code(std::errc::timed_out);
+        data = co_await connect(u);
+        if (data.status != 0) {
           co_return data;
         }
-
-        if (enable_tcp_no_delay_) {
-          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
-          if (ec) {
-            break;
-          }
-        }
-
-        if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-          if (!has_init_ssl_) {
-            size_t pos = u.host.find("www.");
-            std::string host;
-            if (pos != std::string_view::npos) {
-              host = std::string{u.host.substr(pos + 4)};
-            }
-            else {
-              host = std::string{u.host};
-            }
-            bool r = init_ssl(asio::ssl::verify_none, "", host);
-            if (!r) {
-              data.net_err = std::make_error_code(std::errc::invalid_argument);
-              co_return data;
-            }
-          }
-#endif
-          if (ec = co_await handle_shake(); ec) {
-            break;
-          }
-        }
-        socket_->has_closed_ = false;
       }
 
       std::vector<asio::const_buffer> vec;
@@ -1548,7 +1481,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   std::string build_request_header(
       const uri_t &u, http_method method, const auto &ctx,
-      bool is_chunked = false,
+      bool already_has_len = false,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str(method_name(method));
 
@@ -1629,7 +1562,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       should_add_len = false;
     }
 
-    if (is_chunked) {
+    if (already_has_len) {
       should_add_len = false;
     }
 
@@ -1652,14 +1585,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
-    if (inject_response_valid == ClientInjectAction::response_error) {
+    if (parse_failed_forever_) {
       parse_ret = -1;
     }
 #endif
     if (parse_ret < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      inject_response_valid = ClientInjectAction::none;
-#endif
       return std::make_error_code(std::errc::protocol_error);
     }
     head_buf_.consume(header_size);  // header size
@@ -1682,15 +1612,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       ec = handle_header(data, parser_, size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_header_valid == ClientInjectAction::header_error) {
-        ec = std::make_error_code(std::errc::protocol_error);
-      }
-#endif
       if (ec) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_header_valid = ClientInjectAction::none;
-#endif
         break;
       }
 
@@ -1963,16 +1885,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_read_failed == ClientInjectAction::read_failed) {
-        ec = std::make_error_code(std::errc::not_connected);
-      }
-      if (ec) {
-        inject_read_failed = ClientInjectAction::none;
-        break;
-      }
-#endif
-
       size_t buf_size = chunked_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr =
@@ -1980,15 +1892,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       chunked_buf_.consume(size);
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-      if (inject_chunk_valid == ClientInjectAction::chunk_error) {
-        chunk_size = -1;
-      }
-#endif
       if (chunk_size < 0) {
-#ifdef INJECT_FOR_HTTP_CLIENT_TEST
-        inject_chunk_valid = ClientInjectAction::none;
-#endif
         CINATRA_LOG_DEBUG << "bad chunked size";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
@@ -2036,6 +1940,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return resp_data{ec, 404};
       }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (connect_timeout_forever_) {
+        socket_->is_timeout_ = true;
+      }
+#endif
       if (socket_->is_timeout_) {
         auto ec = std::make_error_code(std::errc::timed_out);
         co_return resp_data{ec, 404};
@@ -2050,6 +1959,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+        if (!has_init_ssl_) {
+          size_t pos = u.host.find("www.");
+          std::string host;
+          if (pos != std::string_view::npos) {
+            host = std::string{u.host.substr(pos + 4)};
+          }
+          else {
+            host = std::string{u.host};
+          }
+          bool r = init_ssl(asio::ssl::verify_none, "", host);
+          if (!r) {
+            co_return resp_data{
+                std::make_error_code(std::errc::invalid_argument), 404};
+          }
+        }
+#endif
         if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
         }
@@ -2282,6 +2208,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_read(*socket_->ssl_stream_, buffer, size_to_read);
@@ -2294,9 +2225,26 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_read_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+#endif
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (write_failed_forever_) {
+      return async_write_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_write(*socket_->ssl_stream_, buffer);
@@ -2312,6 +2260,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
       return coro_io::async_read_until(*socket_->ssl_stream_, buffer, delim);
@@ -2422,6 +2375,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef BENCHMARK_TEST
   bool stop_bench_ = false;
   size_t total_len_ = 0;
+#endif
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+ public:
+  bool write_failed_forever_ = false;
+  bool connect_timeout_forever_ = false;
+  bool parse_failed_forever_ = false;
+  bool read_failed_forever_ = false;
+  bool write_header_timeout_ = false;
+  bool write_payload_timeout_ = false;
+  bool read_timeout_ = false;
 #endif
 };
 

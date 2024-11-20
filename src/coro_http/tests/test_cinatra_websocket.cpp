@@ -61,7 +61,7 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
     co_return;
   }
 
-  auto result = co_await client.write_websocket("hello websocket");
+  co_await client.write_websocket("hello websocket");
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == "hello websocket");
   co_await client.write_websocket("test again");
@@ -81,7 +81,7 @@ async_simple::coro::Lazy<void> test_gzip_websocket(coro_http_client &client) {
   }
 
   std::string str = "hello websocket";
-  auto result = co_await client.write_websocket(str.data(), str.size());
+  co_await client.write_websocket(str.data(), str.size());
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == "hello websocket");
 

@@ -177,7 +177,7 @@ inline bool inflate(std::string_view str_src, std::string &str_dest) {
       // generated output
       if (err == Z_STREAM_END) {
         // Finish up
-        int kerr = ::inflateEnd(&zs);
+        [[maybe_unused]] int kerr = ::inflateEnd(&zs);
 
         // Got a good result, set the size to the amount unzipped in this call
         // (including all recursive calls)
@@ -202,7 +202,7 @@ inline bool inflate(std::string_view str_src, std::string &str_dest) {
         str_dest.append((const char *)bytes_out,
                         OUTPUT_BUF_SIZE - zs.avail_out);
 
-        int kerr = ::inflateEnd(&zs);
+        [[maybe_unused]] int kerr = ::inflateEnd(&zs);
 
         break;
       }
@@ -252,7 +252,7 @@ inline bool deflate(std::string_view str_src, std::string &str_dest) {
       // generated output
       if (err == Z_STREAM_END) {
         // Finish up
-        int kerr = ::deflateEnd(&zs);
+        [[maybe_unused]] int kerr = ::deflateEnd(&zs);
 
         // Got a good result, set the size to the amount unzipped in this call
         // (including all recursive calls)
@@ -277,7 +277,7 @@ inline bool deflate(std::string_view str_src, std::string &str_dest) {
         str_dest.append((const char *)bytes_out,
                         OUTPUT_BUF_SIZE - zs.avail_out);
 
-        int kerr = ::deflateEnd(&zs);
+        [[maybe_unused]] int kerr = ::deflateEnd(&zs);
 
         break;
       }

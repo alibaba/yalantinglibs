@@ -233,44 +233,6 @@ static const char *findchar_fast(const char *buf, const char *buf_end,
   return buf;
 }
 
-static const char *findchar_nonprintable_fast(const char *buf,
-                                              const char *buf_end, int *found) {
-#ifdef CINATRA_ARM_OPT
-  *found = 0;
-
-  const size_t block_size = sizeof(uint8x16_t) - 1;
-  const char *const end =
-      (size_t)(buf_end - buf) >= block_size ? buf_end - block_size : buf;
-
-  for (; buf < end; buf += sizeof(uint8x16_t)) {
-    uint8x16_t v = vld1q_u8((const uint8_t *)buf);
-
-    v = vorrq_u8(vcltq_u8(v, vmovq_n_u8('\041')),
-                 vceqq_u8(v, vmovq_n_u8('\177')));
-
-    /* Pack the comparison result into 64 bits. */
-    const uint8x8_t rv = vshrn_n_u16(vreinterpretq_u16_u8(v), 4);
-    uint64_t offset = vget_lane_u64(vreinterpret_u64_u8(rv), 0);
-
-    if (offset) {
-      *found = 1;
-      __asm__("rbit %x0, %x0" : "+r"(offset));
-      static_assert(sizeof(unsigned long long) == sizeof(uint64_t),
-                    "Need the number of leading 0-bits in uint64_t.");
-      /* offset uses 4 bits per byte of input. */
-      buf += __builtin_clzll(offset) / 4;
-      break;
-    }
-  }
-
-  return buf;
-#else
-  static const char ALIGNED(16) ranges2[16] = "\000\040\177\177";
-
-  return findchar_fast(buf, buf_end, ranges2, 4, found);
-#endif
-}
-
 static const char *get_token_to_eol(const char *buf, const char *buf_end,
                                     const char **token, size_t *token_len,
                                     int *ret) {
