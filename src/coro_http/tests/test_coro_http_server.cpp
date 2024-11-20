@@ -1440,7 +1440,7 @@ TEST_CASE("test reverse proxy") {
         std::invalid_argument);
   }
 
-  cinatra::coro_http_server web_one(1, 9001);
+  cinatra::coro_http_server web_one(1, 9004);
 
   web_one.set_http_handler<cinatra::GET, cinatra::POST>(
       "/",
@@ -1479,21 +1479,21 @@ TEST_CASE("test reverse proxy") {
 
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::RR, {}, log_t{});
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   coro_http_server proxy_all(2, 8093);
   proxy_all.set_http_proxy_handler(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
@@ -1540,7 +1540,12 @@ TEST_CASE("test reverse proxy") {
 }
 
 TEST_CASE("test reverse proxy websocket") {
-  coro_http_server server(1, 9001);
+  {
+    coro_http_server proxy_server(1, 9005);
+    CHECK_THROWS_AS(proxy_server.set_websocket_proxy_handler("/ws_echo", {}),
+                    std::invalid_argument);
+  }
+  coro_http_server server(1, 9005);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",
       [](coro_http_request &req,
@@ -1563,7 +1568,7 @@ TEST_CASE("test reverse proxy websocket") {
 
   coro_http_server proxy_server(1, 9002);
   proxy_server.set_websocket_proxy_handler("/ws_echo",
-                                           {"ws://127.0.0.1:9001/ws_echo"});
+                                           {"ws://127.0.0.1:9005/ws_echo"});
   proxy_server.async_start();
   std::this_thread::sleep_for(200ms);
 
