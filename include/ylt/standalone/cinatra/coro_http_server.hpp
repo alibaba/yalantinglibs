@@ -604,7 +604,7 @@ class coro_http_server {
 
  private:
   std::error_code listen() {
-    CINATRA_LOG_INFO << "begin to listen";
+    CINATRA_LOG_INFO << "begin to listen " << port_;
     using asio::ip::tcp;
     asio::error_code ec;
 
