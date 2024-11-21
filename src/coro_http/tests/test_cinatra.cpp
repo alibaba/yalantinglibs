@@ -1330,6 +1330,7 @@ TEST_CASE("test ranges download") {
   create_file("test_range.txt", 64);
   coro_http_server server(1, 8090);
   server.set_static_res_dir("", "./");
+  server.set_static_res_dir("", "./www");
   server.async_start();
 
   coro_http_client client{};

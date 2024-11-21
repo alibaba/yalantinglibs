@@ -277,25 +277,29 @@ class coro_http_server {
               break;
             }
 
-            co_await load_blancer->send_request(
-                [&req, result](
-                    coro_http_client &client,
-                    std::string_view host) -> async_simple::coro::Lazy<void> {
+            auto ret = co_await load_blancer->send_request(
+                [&req, result](coro_http_client &client, std::string_view host)
+                    -> async_simple::coro::Lazy<std::error_code> {
                   auto r =
                       co_await client.write_websocket(std::string(result.data));
                   if (r.net_err) {
-                    co_return;
+                    co_return r.net_err;
                   }
                   auto data = co_await client.read_websocket();
                   if (data.net_err) {
-                    co_return;
+                    co_return data.net_err;
                   }
                   auto ec = co_await req.get_conn()->write_websocket(
                       std::string(result.data));
                   if (ec) {
-                    co_return;
+                    co_return ec;
                   }
+                  co_return std::error_code{};
                 });
+            if (!ret.has_value()) {
+              req.get_conn()->close();
+              break;
+            }
           }
         },
         std::forward<Aspects>(aspects)...);
