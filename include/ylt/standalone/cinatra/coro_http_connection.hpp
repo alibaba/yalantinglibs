@@ -141,6 +141,9 @@ class coro_http_connection
       if (head_len <= 0) {
         cinatra_metric_conf::server_failed_req_inc();
         CINATRA_LOG_ERROR << "parse http header error";
+        response_.set_status_and_content(status_type::bad_request,
+                                         "invalid http protocol");
+        co_await reply();
         close();
         break;
       }
@@ -358,36 +361,43 @@ class coro_http_connection
 
             while (true) {
               size_t left_size = head_buf_.size();
-              auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-              std::string_view left_content{data_ptr, left_size};
+              auto next_data_ptr =
+                  asio::buffer_cast<const char *>(head_buf_.data());
+              std::string_view left_content{next_data_ptr, left_size};
               size_t pos = left_content.find(TWO_CRCF);
               if (pos == std::string_view::npos) {
                 break;
               }
               http_parser parser;
-              int head_len = parser.parse_request(data_ptr, size, 0);
+              int head_len = parser.parse_request(next_data_ptr, left_size, 0);
               if (head_len <= 0) {
                 CINATRA_LOG_ERROR << "parse http header error";
+                response_.set_status_and_content(status_type::bad_request,
+                                                 "invalid http protocol");
+                co_await reply();
                 close();
                 break;
               }
 
               head_buf_.consume(pos + TWO_CRCF.length());
 
-              std::string_view key = {
-                  parser_.method().data(),
-                  parser_.method().length() + 1 + parser_.url().length()};
+              std::string_view next_key = {
+                  parser.method().data(),
+                  parser.method().length() + 1 + parser.url().length()};
 
               coro_http_request req(parser, this);
               coro_http_response resp(this);
               resp.need_date_head(response_.need_date());
-              if (auto handler = router_.get_handler(key); handler) {
+              if (auto handler = router_.get_handler(next_key); handler) {
                 router_.route(handler, req, resp, key);
               }
               else {
-                if (auto coro_handler = router_.get_coro_handler(key);
+                if (auto coro_handler = router_.get_coro_handler(next_key);
                     coro_handler) {
                   co_await router_.route_coro(coro_handler, req, resp, key);
+                }
+                else {
+                  resp.set_status(status_type::not_found);
                 }
               }
 
