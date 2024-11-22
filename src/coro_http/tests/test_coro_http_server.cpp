@@ -448,6 +448,8 @@ TEST_CASE("get post") {
         CHECK(req.get_conn()->local_address() == "127.0.0.1:9001");
         CHECK(req.get_conn()->remote_address().find("127.0.0.1:") !=
               std::string::npos);
+        CHECK(req.get_conn()->remote_address().find("127.0.0.1:") !=
+              std::string::npos);
         resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
@@ -472,6 +474,9 @@ TEST_CASE("get post") {
       "/close", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_keepalive(false);
         resp.set_status_and_content(cinatra::status_type::ok, "hello");
+        resp.get_conn()->close();
+        auto s = req.get_conn()->local_address();
+        CHECK(s.empty());
       });
 
   server.async_start();
@@ -507,7 +512,7 @@ TEST_CASE("get post") {
 
   client.add_header("Connection", "close");
   result = client.get("http://127.0.0.1:9001/close");
-  CHECK(result.status == 200);
+  CHECK(result.status != 200);
 
   server.stop();
 }
