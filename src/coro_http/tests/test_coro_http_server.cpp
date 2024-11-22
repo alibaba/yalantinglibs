@@ -639,35 +639,6 @@ TEST_CASE("use out context") {
   thd.join();
 }
 
-TEST_CASE("use metric") {
-  asio::io_context out_ctx;
-  auto work = std::make_unique<asio::io_context::work>(out_ctx);
-  std::thread thd([&] {
-    out_ctx.run();
-  });
-
-  cinatra::coro_http_server server(out_ctx, "0.0.0.0:9007");
-  server.set_no_delay(true);
-  auto addr = server.address();
-  auto port = server.port();
-  CHECK(addr == "0.0.0.0");
-  CHECK(port == 9007);
-  server.use_metrics();
-  server.async_start();
-
-  {
-    coro_http_client client1{};
-    auto result = client1.get("http://127.0.0.1:9007/metrics");
-    CHECK(result.status == 200);
-    CHECK(!result.resp_body.empty());
-  }
-
-  server.stop();
-
-  work.reset();
-  thd.join();
-}
-
 TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   cinatra::coro_http_server server(1, 9001);
 

@@ -1386,14 +1386,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     char buf[1024];
+    std::error_code ec{};
+    size_t size{};
 #ifdef CINATRA_ENABLE_SSL
     if (has_init_ssl_) {
-      auto [ec, size] = co_await coro_io::async_read_some(
+      std::tie(ec, size) = co_await coro_io::async_read_some(
           *socket_->ssl_stream_, asio::buffer(buf, 1024));
     }
     else {
 #endif
-      auto [ec, size] = co_await coro_io::async_read_some(
+      std::tie(ec, size) = co_await coro_io::async_read_some(
           socket_->impl_, asio::buffer(buf, 1024));
 #ifdef CINATRA_ENABLE_SSL
     }
