@@ -655,6 +655,7 @@ class coro_http_connection
 
         switch (type) {
           case cinatra::ws_frame_type::WS_ERROR_FRAME:
+            close();
             result.ec = std::make_error_code(std::errc::protocol_error);
             break;
           case cinatra::ws_frame_type::WS_OPENING_FRAME:
@@ -736,7 +737,7 @@ class coro_http_connection
       inflate_str_.clear();
       if (!cinatra::gzip_codec::inflate({payload.data(), payload.size()},
                                         inflate_str_)) {
-        CINATRA_LOG_ERROR << "uncompuress data error";
+        CINATRA_LOG_ERROR << "compress data error";
         result.ec = std::make_error_code(std::errc::protocol_error);
         return false;
       }
