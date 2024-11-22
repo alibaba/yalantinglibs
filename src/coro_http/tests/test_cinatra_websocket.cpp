@@ -146,8 +146,7 @@ TEST_CASE("test websocket") {
       std::string send_str = "test";
       websocket ws{};
       // error frame
-      auto header = ws.encode_ws_header(
-          send_str.size(), (opcode)std::numeric_limits<uint8_t>::max(), true);
+      auto header = ws.encode_ws_header(send_str.size(), (opcode)15, true);
       co_await client.async_write_raw(header);
       co_await client.async_write_raw(send_str);
       auto data = co_await client.read_websocket();
