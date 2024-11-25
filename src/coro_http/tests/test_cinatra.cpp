@@ -646,6 +646,146 @@ TEST_CASE("test response") {
   CHECK(result.resp_body.empty());
 }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+TEST_CASE("test pipeline") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET, POST>(
+      "/test", [](coro_http_request &req, coro_http_response &res) {
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<GET, POST>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &res) -> async_simple::coro::Lazy<void> {
+        res.set_status_and_content(status_type::ok, "hello coro");
+        co_return;
+      });
+  server.async_start();
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET /test HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::GET));
+    CHECK(!result.resp_body.empty());
+    ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET /test HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\nGET /test "
+        "HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+    result = async_simple::coro::syncAwait(
+        client.async_read_raw(http_method::GET, true));
+    CHECK(!result.resp_body.empty());
+    auto data = result.resp_body;
+    http_parser parser{};
+    int r = parser.parse_response(data.data(), data.size(), 0);
+    if (r) {
+      std::string_view body(data.data() + r, parser.body_len());
+      CHECK(body == "hello world");
+      CHECK(data.size() > parser.total_len());
+    }
+  }
+
+  {
+    http_parser p1{};
+    std::string str = "GET /coro1 HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\n";
+    int ret = p1.parse_request(str.data(), str.size(), 0);
+
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET /coro HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\nGET /test "
+        "HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\nGET /coro1 HTTP/1.1\r\nHost: "
+        "127.0.0.1:8090\r\n\r\nGET /coro HTTP/1.1\r\nHost: "
+        "127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+    auto result = async_simple::coro::syncAwait(
+        client.async_read_raw(http_method::GET, true));
+    http_parser parser{};
+    int r = parser.parse_response(result.resp_body.data(),
+                                  result.resp_body.size(), 0);
+    CHECK(parser.status() == 200);
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET /test HTTP/1.1\r\nHost: 127.0.0.1:8090\r\nContent-Type: "
+        "multipart/form-data\r\n\r\nGET /test HTTP/1.1\r\nHost: "
+        "127.0.0.1:8090\r\nContent-Type: multipart/form-data\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::GET));
+    http_parser parser{};
+    int r = parser.parse_response(result.resp_body.data(),
+                                  result.resp_body.size(), 0);
+    CHECK(parser.status() != 200);
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "POST /test HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\nGET /test "
+        "HTTP/1.1\r\nHost: "
+        "127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::POST));
+    http_parser parser{};
+    int r = parser.parse_response(result.resp_body.data(),
+                                  result.resp_body.size(), 0);
+    CHECK(parser.status() != 200);
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\nGET /test "
+        "HTTP/1.1\r\nHost: "
+        "127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::GET));
+    http_parser parser{};
+    int r = parser.parse_response(result.resp_body.data(),
+                                  result.resp_body.size(), 0);
+    CHECK(parser.status() != 200);
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(
+        client.async_write_raw("GET /test HTTP/1.1\r\nHost: "
+                               "127.0.0.1:8090\r\n\r\nGET HTTP/1.1\r\nHost: "
+                               "127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::GET));
+    http_parser parser{};
+    int r = parser.parse_response(result.resp_body.data(),
+                                  result.resp_body.size(), 0);
+    CHECK(parser.status() != 200);
+  }
+}
+#endif
+
 async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
   for (int i = 0; i < count; i++) {
     co_await coro_io::async_send(ch, i);
@@ -1329,7 +1469,8 @@ TEST_CASE("test multiple ranges download") {
 TEST_CASE("test ranges download") {
   create_file("test_range.txt", 64);
   coro_http_server server(1, 8090);
-  server.set_static_res_dir("", "");
+  server.set_static_res_dir("", "./");
+  server.set_static_res_dir("", "./www");
   server.async_start();
 
   coro_http_client client{};

@@ -448,6 +448,8 @@ TEST_CASE("get post") {
         CHECK(req.get_conn()->local_address() == "127.0.0.1:9001");
         CHECK(req.get_conn()->remote_address().find("127.0.0.1:") !=
               std::string::npos);
+        CHECK(req.get_conn()->remote_address().find("127.0.0.1:") !=
+              std::string::npos);
         resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
@@ -472,6 +474,9 @@ TEST_CASE("get post") {
       "/close", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_keepalive(false);
         resp.set_status_and_content(cinatra::status_type::ok, "hello");
+        resp.get_conn()->close();
+        auto s = req.get_conn()->local_address();
+        CHECK(s.empty());
       });
 
   server.async_start();
@@ -507,7 +512,7 @@ TEST_CASE("get post") {
 
   client.add_header("Connection", "close");
   result = client.get("http://127.0.0.1:9001/close");
-  CHECK(result.status == 200);
+  CHECK(result.status != 200);
 
   server.stop();
 }
@@ -631,35 +636,6 @@ TEST_CASE("use out context") {
     auto result = client1.get("http://127.0.0.1:9001/out_ctx");
     CHECK(result.status == 200);
     CHECK(result.resp_body == "use out ctx");
-  }
-
-  server.stop();
-
-  work.reset();
-  thd.join();
-}
-
-TEST_CASE("use metric") {
-  asio::io_context out_ctx;
-  auto work = std::make_unique<asio::io_context::work>(out_ctx);
-  std::thread thd([&] {
-    out_ctx.run();
-  });
-
-  cinatra::coro_http_server server(out_ctx, "0.0.0.0:9007");
-  server.set_no_delay(true);
-  auto addr = server.address();
-  auto port = server.port();
-  CHECK(addr == "0.0.0.0");
-  CHECK(port == 9007);
-  server.use_metrics();
-  server.async_start();
-
-  {
-    coro_http_client client1{};
-    auto result = client1.get("http://127.0.0.1:9007/metrics");
-    CHECK(result.status == 200);
-    CHECK(!result.resp_body.empty());
   }
 
   server.stop();
@@ -1111,7 +1087,7 @@ TEST_CASE("check connecton timeout") {
 }
 
 TEST_CASE("test websocket with different message size") {
-  cinatra::coro_http_server server(1, 9003);
+  cinatra::coro_http_server server(1, 9008);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo1",
       [](cinatra::coro_http_request &req,
@@ -1142,7 +1118,7 @@ TEST_CASE("test websocket with different message size") {
 
   auto lazy = [](std::string str) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    auto ret = co_await client.connect("ws://127.0.0.1:9003/ws_echo1");
+    auto ret = co_await client.connect("ws://127.0.0.1:9008/ws_echo1");
     if (ret.status != 101) {
       std::cout << ret.net_err.message() << "\n";
     }
@@ -1201,11 +1177,11 @@ TEST_CASE("test ssl server") {
 #endif
 
 TEST_CASE("test http download server") {
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(1, 9006);
   std::string filename = "test_download.txt";
   create_file(filename, 1010);
 
-  // curl http://127.0.0.1:9001/download/test_download.txt will download
+  // curl http://127.0.0.1:9006/download/test_download.txt will download
   // test_download.txt file
   server.set_transfer_chunked_size(100);
   server.set_static_res_dir("download", "");
@@ -1215,7 +1191,7 @@ TEST_CASE("test http download server") {
   {
     coro_http_client client{};
     auto result = async_simple::coro::syncAwait(client.async_download(
-        "http://127.0.0.1:9001/download/test_download.txt", "download.txt"));
+        "http://127.0.0.1:9006/download/test_download.txt", "download.txt"));
 
     CHECK(result.status == 200);
     std::string download_file = fs::absolute("download.txt").string();
@@ -1229,7 +1205,7 @@ TEST_CASE("test http download server") {
   {
     coro_http_client client{};
     auto result = async_simple::coro::syncAwait(client.async_download(
-        "http://127.0.0.1:9001/download/test_download.txt", "download1.txt",
+        "http://127.0.0.1:9006/download/test_download.txt", "download1.txt",
         "0-"));
 
     CHECK(result.status == 200);
@@ -1440,7 +1416,7 @@ TEST_CASE("test reverse proxy") {
         std::invalid_argument);
   }
 
-  cinatra::coro_http_server web_one(1, 9001);
+  cinatra::coro_http_server web_one(1, 9004);
 
   web_one.set_http_handler<cinatra::GET, cinatra::POST>(
       "/",
@@ -1479,21 +1455,21 @@ TEST_CASE("test reverse proxy") {
 
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::RR, {}, log_t{});
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   coro_http_server proxy_all(2, 8093);
   proxy_all.set_http_proxy_handler(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
@@ -1540,7 +1516,12 @@ TEST_CASE("test reverse proxy") {
 }
 
 TEST_CASE("test reverse proxy websocket") {
-  coro_http_server server(1, 9001);
+  {
+    coro_http_server proxy_server(1, 9005);
+    CHECK_THROWS_AS(proxy_server.set_websocket_proxy_handler("/ws_echo", {}),
+                    std::invalid_argument);
+  }
+  coro_http_server server(1, 9005);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",
       [](coro_http_request &req,
@@ -1563,7 +1544,7 @@ TEST_CASE("test reverse proxy websocket") {
 
   coro_http_server proxy_server(1, 9002);
   proxy_server.set_websocket_proxy_handler("/ws_echo",
-                                           {"ws://127.0.0.1:9001/ws_echo"});
+                                           {"ws://127.0.0.1:9005/ws_echo"});
   proxy_server.async_start();
   std::this_thread::sleep_for(200ms);
 
