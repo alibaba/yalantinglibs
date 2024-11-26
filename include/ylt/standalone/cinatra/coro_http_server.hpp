@@ -868,7 +868,7 @@ class coro_http_server {
   size_t erase_if(std::span<T> &sp, Pred p) {
     auto it = std::remove_if(sp.begin(), sp.end(), p);
     size_t count = sp.end() - it;
-    sp = std::span<T>(sp.begin(), it);
+    sp = std::span<T>(sp.data(), sp.data() + count);
     return count;
   }
 
