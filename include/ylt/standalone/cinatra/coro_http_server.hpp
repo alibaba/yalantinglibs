@@ -314,6 +314,12 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
+
+  void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
+#endif
+
   template <typename... Aspects>
   void set_static_res_dir(std::string_view uri_suffix = "",
                           std::string file_path = "www", Aspects &&...aspects) {
@@ -457,13 +463,7 @@ class coro_http_server {
                 if (ranges.size() == 1) {
                   // single part
                   auto [start, end] = ranges[0];
-                  bool ok = in_file.seek(start, std::ios::beg);
-                  if (!ok) {
-                    resp.set_status_and_content(status_type::bad_request,
-                                                "invalid range");
-                    co_await resp.get_conn()->reply();
-                    co_return;
-                  }
+                  in_file.seek(start, std::ios::beg);
                   size_t part_size = end + 1 - start;
                   int status = (part_size == file_size) ? 200 : 206;
                   std::string content_range = "Content-Range: bytes ";
@@ -486,7 +486,7 @@ class coro_http_server {
                                             part_size);
                 }
                 else {
-                  // multipart ranges
+                  // multiple ranges
                   resp.set_delay(true);
                   std::string file_size_str = std::to_string(file_size);
                   size_t content_len = 0;
@@ -690,6 +690,15 @@ class coro_http_server {
         conn->set_default_handler(default_handler_);
       }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (write_failed_forever_) {
+        conn->set_write_failed_forever(write_failed_forever_);
+      }
+      if (read_failed_forever_) {
+        conn->set_read_failed_forever(read_failed_forever_);
+      }
+#endif
+
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
         conn->init_ssl(cert_file_, key_file_, passwd_);
@@ -855,6 +864,43 @@ class coro_http_server {
     co_return true;
   }
 
+  template <class T, class Pred>
+  size_t erase_if(std::span<T> &sp, Pred p) {
+    auto it = std::remove_if(sp.begin(), sp.end(), p);
+    size_t count = sp.end() - it;
+    sp = std::span<T>(sp.data(), sp.data() + count);
+    return count;
+  }
+
+  int remove_result_headers(resp_data &result, std::string_view value) {
+    bool r = false;
+    return erase_if(result.resp_headers, [&](http_header &header) {
+      if (r) {
+        return false;
+      }
+
+      r = (header.value.find(value) != std::string_view::npos);
+
+      return r;
+    });
+  }
+
+  void handle_response_header(resp_data &result, std::string &length) {
+    int r = remove_result_headers(result, "chunked");
+    if (r == 0) {
+      r = remove_result_headers(result, "multipart/form-data");
+      if (r) {
+        length = std::to_string(result.resp_body.size());
+        for (auto &[key, val] : result.resp_headers) {
+          if (key == "Content-Length") {
+            val = length;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string_view host,
                                        coro_http_request &req,
@@ -880,6 +926,8 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
+    std::string length;
+    handle_response_header(result, length);
     response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
@@ -953,6 +1001,10 @@ class coro_http_server {
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  bool write_failed_forever_ = false;
+  bool read_failed_forever_ = false;
+#endif
 };
 
 using http_server = coro_http_server;

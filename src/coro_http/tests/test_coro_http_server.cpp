@@ -210,7 +210,27 @@ TEST_CASE("test multiple download") {
           co_return;
         }
 
-        std::vector<std::string> vec{"hello", " world", " ok"};
+        std::vector<std::string> vec{"hello", " world", " chunked"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
+              !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_multipart();
+      });
+  server.set_http_handler<GET>(
+      "/multipart",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " multipart"};
 
         for (auto &str : vec) {
           if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
@@ -227,7 +247,10 @@ TEST_CASE("test multiple download") {
   coro_http_client client{};
   auto result = client.get("http://127.0.0.1:9001/");
   CHECK(result.status == 200);
-  CHECK(result.resp_body == "hello world ok");
+  CHECK(result.resp_body == "hello world chunked");
+  result = client.get("http://127.0.0.1:9001/multipart");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world multipart");
 }
 
 TEST_CASE("test range download") {
@@ -865,7 +888,7 @@ TEST_CASE("test websocket with chunked") {
 }
 
 TEST_CASE("test websocket") {
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(1, 8003);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",
       [](coro_http_request &req,
@@ -918,7 +941,7 @@ TEST_CASE("test websocket") {
 
   auto lazy = []() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    auto ret = co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+    auto ret = co_await client.connect("ws://127.0.0.1:8003/ws_echo");
     if (ret.status != 101) {
       std::cout << ret.net_err.message() << "\n";
     }
@@ -1513,6 +1536,74 @@ TEST_CASE("test reverse proxy") {
                                 req_content_type::text);
   std::cout << resp_random.resp_body << "\n";
   CHECK(!resp_random.resp_body.empty());
+}
+
+TEST_CASE("test reverse proxy download") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test_chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_format_type(format_type::chunked);
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " ok"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_chunked(str); !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_chunked();
+      });
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<GET>(
+      "/test_multipart",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " multipart"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
+              !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_multipart();
+      });
+  server.async_start();
+
+  coro_http_server proxy_rr(2, 8001);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/([^]+)", {"127.0.0.1:9001"}, coro_io::load_blance_algorithm::RR);
+  proxy_rr.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:8001/test");
+  CHECK(result.resp_body == "hello world");
+
+  result = client.get("http://127.0.0.1:8001/test_chunked");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world ok");
+
+  coro_http_client client1{};
+  result = client1.get("http://127.0.0.1:8001/test_multipart");
+  std::cout << result.net_err.message() << std::endl;
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world multipart");
 }
 
 TEST_CASE("test reverse proxy websocket") {
