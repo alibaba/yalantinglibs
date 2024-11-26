@@ -443,6 +443,12 @@ class coro_http_connection
     default_handler_ = handler;
   }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
+
+  void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
+#endif
+
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
     buffers.push_back(asio::buffer(message));
@@ -762,9 +768,26 @@ class coro_http_connection
     response_.set_shrink_to_fit(r);
   }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_read_failed() {
+    co_return std::make_pair(std::make_error_code(std::errc::io_error), 0);
+  }
+#endif
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+    if (read_failed_forever_) {
+      return async_read_failed();
+    }
+#endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
@@ -781,6 +804,11 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+    if (write_failed_forever_) {
+      return async_write_failed();
+    }
+#endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
@@ -947,5 +975,9 @@ class coro_http_connection
       default_handler_ = nullptr;
   std::string chunk_size_str_;
   std::string remote_addr_;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  bool write_failed_forever_ = false;
+  bool read_failed_forever_ = false;
+#endif
 };
 }  // namespace cinatra
