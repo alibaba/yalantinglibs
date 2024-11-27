@@ -89,7 +89,13 @@ template <typename T>
 constexpr inline bool array_v = is_array<std::remove_cvref_t<T>>::value;
 
 template <typename Type>
-constexpr inline bool fixed_array_v = c_array_v<Type> || array_v<Type>;
+constexpr inline bool fixed_array_v = c_array_v<Type> ||
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+                                      is_span<Type>::value ||
+#endif
+#endif
+                                      array_v<Type>;
 
 template <typename T>
 constexpr inline bool string_view_v =
