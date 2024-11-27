@@ -41,6 +41,24 @@ void test_inner_object() {
   iguana::from_json(obj1, str);
   assert(obj1.get_id() == 20);
   assert(obj1.get_name() == "tom");
+
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+  {
+    std::vector<int> v{1, 2};
+    std::span<int> span(v.data(), v.data() + 2);
+    std::string str;
+    iguana::to_json(span, str);
+
+    std::vector<int> v1;
+    v1.resize(2);
+    std::span<int> span1(v1.data(), v1.data() + 2);
+
+    iguana::from_json(span1, str);
+    assert(v == v1);
+  }
+#endif
+#endif
 }
 
 struct person1 {
@@ -63,6 +81,7 @@ void use_smart_pointer() {
 }
 
 void test_escape_serialize() {
+#ifdef __linux__
   person p{"老\t人", 20};
   std::string ss;
   struct_json::to_json(p, ss);
@@ -70,6 +89,7 @@ void test_escape_serialize() {
   person p1;
   struct_json::from_json(p1, ss);
   assert(p1.name == p.name);
+#endif
 }
 
 int main() {

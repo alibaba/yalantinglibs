@@ -25,6 +25,9 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 template <typename U, typename It, std::enable_if_t<smart_ptr_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 
+template <typename U, typename It, std::enable_if_t<variant_v<U>, int> = 0>
+IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
+
 template <typename U, typename It,
           std::enable_if_t<ylt_refletable_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
@@ -262,10 +265,22 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   }
 }
 
+template <typename T>
+constexpr size_t get_array_size(const T &t) {
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+  if constexpr (is_span<T>::value)
+    return t.size();
+  else
+#endif
+#endif
+    return sizeof(T) / sizeof(decltype(std::declval<T>()[0]));
+}
+
 template <typename U, typename It, std::enable_if_t<fixed_array_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   using T = std::remove_reference_t<U>;
-  constexpr auto n = sizeof(T) / sizeof(decltype(std::declval<T>()[0]));
+  size_t n = get_array_size(value);
   skip_ws(it, end);
 
   if constexpr (std::is_same_v<char, std::remove_reference_t<
@@ -546,7 +561,7 @@ IGUANA_INLINE void from_json_variant(U &value, It &it, It &end,
   end = temp_end;
 }
 
-template <typename U, typename It, std::enable_if_t<variant_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<variant_v<U>, int>>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   from_json_variant(value, it, end,
                     std::make_index_sequence<
