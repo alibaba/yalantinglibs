@@ -287,6 +287,14 @@ TEST_CASE("test dynamic counter") {
   dynamic_gauge_t g2("test_g2", "", {"url", "code"});
   g2.inc({"/", "200"});
   CHECK(g2.value({"/", "200"}) == 1);
+
+  auto count = g2.label_value_count();
+  g2.remove_label_value({{"url", "/"}, {"code", "200"}, {"method", "GET"}});
+  auto count1 = g2.label_value_count();
+  CHECK(count == count1);
+  g2.remove_label_value({{"url1", "/"}, {"code1", "200"}});
+  count1 = g2.label_value_count();
+  CHECK(count == count1);
 }
 
 TEST_CASE("test static counter") {
@@ -1756,6 +1764,30 @@ TEST_CASE("test metric manager clean expired label") {
   c->inc({"/index"});
   size_t count = c->label_value_count();
   CHECK(count == 1);
+}
+
+TEST_CASE("test remove label value") {
+  dynamic_counter_t counter("test", "",
+                            std::array<std::string, 2>{"url", "code"});
+  counter.inc({"/", "200"});
+  counter.inc({"/", "400"});
+  counter.inc({"/index", "200"});
+  counter.inc({"/test", "404"});
+  CHECK(counter.has_label_name("url"));
+  CHECK(counter.has_label_name(std::vector<std::string>{"url", "code"}));
+
+  CHECK(counter.has_label_value("/"));
+  CHECK(counter.has_label_value("/index"));
+  CHECK(counter.has_label_value("/test"));
+
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/"}));
+  bool r = counter.has_label_value(std::vector<std::string>{"/index"});
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/index"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/test"}));
+
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/", "test"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/", "200", "test"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{}));
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
