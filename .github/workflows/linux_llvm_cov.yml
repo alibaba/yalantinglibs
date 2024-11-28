@@ -62,7 +62,6 @@ jobs:
         uses: ./.github/actions/coverage
         with:
           reset-commit-id: ${{ needs.prerequisites.outputs.id }}
-    if: ${{ github.event_name == 'pull_request' }}
 
   cov-test:
     needs: prerequisites
@@ -102,4 +101,3 @@ jobs:
                 exit 1
             fi
         shell: bash
-        if: ${{ github.event_name == 'pull_request' }}
