@@ -87,6 +87,11 @@ jobs:
       - cov-test
     runs-on: ubuntu-22.04
     steps:
+      - name: 'Create comment'
+        run: |
+          content=$(echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts \`base-ylt-cov-report\`(base commit coverage report) and \`ylt-cov-report\`(current pull request coverage report)")
+          curl -L -X POST "https://api.github.com/repos/${{github.repository}}/issues/${{github.event.pull_request.number}}/comments" -H "Authorization: Bearer ${{github.token}}" -H 'Content-Type: application/json' -d "{\"body\": \"$content}\""
+        shell: bash
       - name: 'Compare data'
         run: |
             sudo apt install -y bc
