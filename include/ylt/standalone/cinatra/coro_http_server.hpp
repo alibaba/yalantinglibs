@@ -11,7 +11,6 @@
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/load_blancer.hpp"
-#include "ylt/metric/system_metric.hpp"
 
 namespace cinatra {
 enum class file_resp_format_type {
@@ -182,29 +181,6 @@ class coro_http_server {
     }
   }
 
-  void use_metrics(bool enable_json = false,
-                   std::string url_path = "/metrics") {
-    init_metrics();
-    using root = ylt::metric::metric_collector_t<
-        ylt::metric::default_static_metric_manager,
-        ylt::metric::system_metric_manager>;
-    set_http_handler<http_method::GET>(
-        url_path,
-        [enable_json](coro_http_request &req, coro_http_response &res) {
-          std::string str;
-#ifdef CINATRA_ENABLE_METRIC_JSON
-          if (enable_json) {
-            str = root::serialize_to_json();
-            res.set_content_type<resp_content_type::json>();
-          }
-          else
-#endif
-            str = root::serialize();
-
-          res.set_status_and_content(status_type::ok, std::move(str));
-        });
-  }
-
   template <http_method... method, typename... Aspects>
   void set_http_proxy_handler(std::string url_path,
                               std::vector<std::string_view> hosts,
@@ -277,25 +253,29 @@ class coro_http_server {
               break;
             }
 
-            co_await load_blancer->send_request(
-                [&req, result](
-                    coro_http_client &client,
-                    std::string_view host) -> async_simple::coro::Lazy<void> {
+            auto ret = co_await load_blancer->send_request(
+                [&req, result](coro_http_client &client, std::string_view host)
+                    -> async_simple::coro::Lazy<std::error_code> {
                   auto r =
                       co_await client.write_websocket(std::string(result.data));
                   if (r.net_err) {
-                    co_return;
+                    co_return r.net_err;
                   }
                   auto data = co_await client.read_websocket();
                   if (data.net_err) {
-                    co_return;
+                    co_return data.net_err;
                   }
                   auto ec = co_await req.get_conn()->write_websocket(
                       std::string(result.data));
                   if (ec) {
-                    co_return;
+                    co_return ec;
                   }
+                  co_return std::error_code{};
                 });
+            if (!ret.has_value()) {
+              req.get_conn()->close();
+              break;
+            }
           }
         },
         std::forward<Aspects>(aspects)...);
@@ -334,6 +314,12 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
+
+  void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
+#endif
+
   template <typename... Aspects>
   void set_static_res_dir(std::string_view uri_suffix = "",
                           std::string file_path = "www", Aspects &&...aspects) {
@@ -351,7 +337,14 @@ class coro_http_server {
     }
 
     if (!file_path.empty()) {
-      static_dir_ = std::filesystem::path(file_path).make_preferred().string();
+      file_path = std::filesystem::path(file_path).filename().string();
+      if (file_path.empty()) {
+        static_dir_ = fs::absolute(fs::current_path().string()).string();
+      }
+      else {
+        static_dir_ =
+            std::filesystem::path(file_path).make_preferred().string();
+      }
     }
     else {
       static_dir_ = fs::absolute(fs::current_path().string()).string();
@@ -470,13 +463,7 @@ class coro_http_server {
                 if (ranges.size() == 1) {
                   // single part
                   auto [start, end] = ranges[0];
-                  bool ok = in_file.seek(start, std::ios::beg);
-                  if (!ok) {
-                    resp.set_status_and_content(status_type::bad_request,
-                                                "invalid range");
-                    co_await resp.get_conn()->reply();
-                    co_return;
-                  }
+                  in_file.seek(start, std::ios::beg);
                   size_t part_size = end + 1 - start;
                   int status = (part_size == file_size) ? 200 : 206;
                   std::string content_range = "Content-Range: bytes ";
@@ -499,7 +486,7 @@ class coro_http_server {
                                             part_size);
                 }
                 else {
-                  // multipart ranges
+                  // multiple ranges
                   resp.set_delay(true);
                   std::string file_size_str = std::to_string(file_size);
                   size_t content_len = 0;
@@ -703,6 +690,15 @@ class coro_http_server {
         conn->set_default_handler(default_handler_);
       }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (write_failed_forever_) {
+        conn->set_write_failed_forever(write_failed_forever_);
+      }
+      if (read_failed_forever_) {
+        conn->set_read_failed_forever(read_failed_forever_);
+      }
+#endif
+
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
         conn->init_ssl(cert_file_, key_file_, passwd_);
@@ -868,6 +864,43 @@ class coro_http_server {
     co_return true;
   }
 
+  template <class T, class Pred>
+  size_t erase_if(std::span<T> &sp, Pred p) {
+    auto it = std::remove_if(sp.begin(), sp.end(), p);
+    size_t count = sp.end() - it;
+    sp = std::span<T>(sp.data(), sp.data() + count);
+    return count;
+  }
+
+  int remove_result_headers(resp_data &result, std::string_view value) {
+    bool r = false;
+    return erase_if(result.resp_headers, [&](http_header &header) {
+      if (r) {
+        return false;
+      }
+
+      r = (header.value.find(value) != std::string_view::npos);
+
+      return r;
+    });
+  }
+
+  void handle_response_header(resp_data &result, std::string &length) {
+    int r = remove_result_headers(result, "chunked");
+    if (r == 0) {
+      r = remove_result_headers(result, "multipart/form-data");
+      if (r) {
+        length = std::to_string(result.resp_body.size());
+        for (auto &[key, val] : result.resp_headers) {
+          if (key == "Content-Length") {
+            val = length;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string_view host,
                                        coro_http_request &req,
@@ -893,6 +926,8 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
+    std::string length;
+    handle_response_header(result, length);
     response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
@@ -923,32 +958,6 @@ class coro_http_server {
     }
 
     address_ = std::move(address);
-  }
-
- private:
-  void init_metrics() {
-    using namespace ylt::metric;
-
-    cinatra_metric_conf::enable_metric = true;
-    default_static_metric_manager::instance().create_metric_static<counter_t>(
-        cinatra_metric_conf::server_total_req, "");
-    default_static_metric_manager::instance().create_metric_static<counter_t>(
-        cinatra_metric_conf::server_failed_req, "");
-    default_static_metric_manager::instance().create_metric_static<counter_t>(
-        cinatra_metric_conf::server_total_recv_bytes, "");
-    default_static_metric_manager::instance().create_metric_static<counter_t>(
-        cinatra_metric_conf::server_total_send_bytes, "");
-    default_static_metric_manager::instance().create_metric_static<gauge_t>(
-        cinatra_metric_conf::server_total_fd, "");
-    default_static_metric_manager::instance().create_metric_static<histogram_t>(
-        cinatra_metric_conf::server_req_latency, "",
-        std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-    default_static_metric_manager::instance().create_metric_static<histogram_t>(
-        cinatra_metric_conf::server_read_latency, "",
-        std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
-#if defined(__GNUC__)
-    ylt::metric::start_system_metric();
-#endif
   }
 
  private:
@@ -992,6 +1001,10 @@ class coro_http_server {
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  bool write_failed_forever_ = false;
+  bool read_failed_forever_ = false;
+#endif
 };
 
 using http_server = coro_http_server;

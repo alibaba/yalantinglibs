@@ -14,6 +14,12 @@
 #include <variant>
 #include <vector>
 
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+#include <span>
+#endif
+#endif
+
 #include "iguana/define.h"
 
 namespace iguana {
@@ -39,6 +45,16 @@ struct is_stdstring : is_template_instant_of<std::basic_string, T> {};
 
 template <typename T>
 struct is_tuple : is_template_instant_of<std::tuple, T> {};
+
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+template <typename>
+struct is_span : std::false_type {};
+
+template <typename T, size_t Extent>
+struct is_span<std::span<T, Extent>> : std::true_type {};
+#endif
+#endif
 
 template <class T>
 struct is_sequence_container

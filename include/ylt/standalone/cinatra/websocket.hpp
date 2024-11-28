@@ -118,7 +118,7 @@ class websocket {
       return ws_frame_type::WS_PING_FRAME;
     if (msg_opcode_ == 0xA)
       return ws_frame_type::WS_PONG_FRAME;
-    return ws_frame_type::WS_BINARY_FRAME;
+    return ws_frame_type::WS_ERROR_FRAME;
   }
 
   std::string_view encode_ws_header(size_t size, opcode op, bool eof,

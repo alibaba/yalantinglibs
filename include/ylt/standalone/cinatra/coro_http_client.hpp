@@ -1372,6 +1372,40 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+  async_simple::coro::Lazy<std::error_code> async_write_raw(
+      std::string_view data) {
+    auto [ec, _] = co_await async_write(asio::buffer(data));
+    co_return ec;
+  }
+
+  async_simple::coro::Lazy<resp_data> async_read_raw(
+      http_method method, bool clear_buffer = false) {
+    if (clear_buffer) {
+      body_.clear();
+    }
+
+    char buf[1024];
+    std::error_code ec{};
+    size_t size{};
+#ifdef CINATRA_ENABLE_SSL
+    if (has_init_ssl_) {
+      std::tie(ec, size) = co_await coro_io::async_read_some(
+          *socket_->ssl_stream_, asio::buffer(buf, 1024));
+    }
+    else {
+#endif
+      std::tie(ec, size) = co_await coro_io::async_read_some(
+          socket_->impl_, asio::buffer(buf, 1024));
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
+    body_.append(buf, size);
+
+    co_return resp_data{ec, {}, {}, body_};
+  }
+#endif
+
   inline void set_proxy(const std::string &host, const std::string &port) {
     proxy_host_ = host;
     proxy_port_ = port;
