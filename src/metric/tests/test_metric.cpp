@@ -999,6 +999,20 @@ TEST_CASE("test remove metric and serialize metrics") {
   count = metric_mgr::instance().metric_count();
   CHECK(count == 1);
 
+  metric_mgr::instance().remove_metric(std::vector<std::string>{});
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
+  std::shared_ptr<dynamic_metric> ptr = nullptr;
+  metric_mgr::instance().remove_metric(ptr);
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
+  metric_mgr::instance().remove_metric(
+      std::vector<std::shared_ptr<dynamic_metric>>{});
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
   metric_mgr::instance().remove_metric("test_counter2");
   count = metric_mgr::instance().metric_count();
   CHECK(count == 0);
