@@ -106,17 +106,6 @@ runs:
         name: ${{ steps.get-cov-report.outputs.report }}
         path: ${{ steps.get-cov-report.outputs.path }}
 
-    - name: 'Create code coverage report and comment'
-      run: |
-        if [ -n "${{ inputs.reset-commit-id }}" ];then
-          title="Base Code Coverage Report"
-        else
-          title="Current PR Code Coverage Report"
-        fi
-        content=$(echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts \`${{ steps.get-cov-report.outputs.report }}\`")
-        curl -L -X POST "https://api.github.com/repos/${{github.repository}}/issues/${{github.event.pull_request.number}}/comments" -H "Authorization: Bearer ${{github.token}}" -H 'Content-Type: application/json' -d "{\"body\": \"${title}\\n$content}\""
-      shell: bash
-
     - name: 'Checkout source code'
       uses: actions/checkout@v4
       if: ${{ inputs.reset-commit-id }} != ""

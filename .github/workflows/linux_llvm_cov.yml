@@ -22,7 +22,7 @@
 name: Ubuntu 22.04 (llvm cov)
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
       - fix_coverage_show
@@ -44,7 +44,6 @@ jobs:
           base_commit_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} | jq -r .base.sha)
           echo "::set-output name=id::$base_commit_id"
         shell: bash
-        if: ${{ github.event_name == 'pull_request' }}
 
   base-cov-test:
     needs: prerequisites
@@ -63,7 +62,6 @@ jobs:
         uses: ./.github/actions/coverage
         with:
           reset-commit-id: ${{ needs.prerequisites.outputs.id }}
-    if: ${{ github.event_name == 'pull_request' }}
 
   cov-test:
     needs: prerequisites
@@ -89,6 +87,11 @@ jobs:
       - cov-test
     runs-on: ubuntu-22.04
     steps:
+      - name: 'Create comment'
+        run: |
+          content=$(echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts \`base-ylt-cov-report\`(base commit coverage report) and \`ylt-cov-report\`(current pull request coverage report)")
+          curl -L -X POST "https://api.github.com/repos/${{github.repository}}/issues/${{github.event.pull_request.number}}/comments" -H "Authorization: Bearer ${{github.token}}" -H 'Content-Type: application/json' -d "{\"body\": \"$content}\""
+        shell: bash
       - name: 'Compare data'
         run: |
             sudo apt install -y bc
@@ -103,4 +106,3 @@ jobs:
                 exit 1
             fi
         shell: bash
-        if: ${{ github.event_name == 'pull_request' }}
