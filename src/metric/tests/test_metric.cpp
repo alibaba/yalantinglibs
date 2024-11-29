@@ -237,6 +237,50 @@ TEST_CASE("test metric manager") {
   CHECK(v8.size() == 1);
 }
 
+struct remove_tag {};
+
+TEST_CASE("test metric manager remove") {
+  auto dc = std::make_shared<dynamic_counter_t>(
+      std::string("test3"), std::string(""),
+      std::array<std::string, 2>{"url", "code"});
+  dc->inc(std::array<std::string, 2>{"/", "200"});
+  dynamic_metric_manager<remove_tag>::instance().register_metric(dc);
+  auto& inst_d = dynamic_metric_manager<remove_tag>::instance();
+  std::map<std::string, std::string> map{
+      {"url", "/"}, {"code", "200"}, {"method", "GET"}};
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_metric_by_label(map);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map1{{"url", "/test"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map1);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map2{{"url", "/"}, {"code", "400"}};
+  inst_d.remove_metric_by_label(map2);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map3{{"url1", "/"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map3);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map4{{"url", "/"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map4);
+  CHECK(inst_d.metric_count() == 0);
+
+  inst_d.register_metric(dc);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map5{{"url", "/get"}};
+  inst_d.remove_metric_by_label(map5);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map6{{"url1", "/"}};
+  inst_d.remove_metric_by_label(map6);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map7{{"url", "/"}};
+  inst_d.remove_metric_by_label(map7);
+  CHECK(inst_d.metric_count() == 0);
+}
+
 TEST_CASE("test dynamic counter") {
   basic_dynamic_counter<int64_t, 2> c("test", "", {"url", "code"});
   c.inc({"/", "200"});
