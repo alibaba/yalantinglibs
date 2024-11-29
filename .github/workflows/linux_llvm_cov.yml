@@ -22,10 +22,12 @@
 name: Ubuntu 22.04 (llvm cov)
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
       - fix_coverage_show
+
+permissions: write-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,9 +36,15 @@ concurrency:
 jobs:
   prerequisites:
     runs-on: ubuntu-22.04
+    permissions: write-all
     outputs:
       id: ${{ steps.get-base-commit.outputs.id }}
     steps:
+      - name: 'Create comment'
+        run: |
+          content=$(echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts \`base-ylt-cov-report\`(base commit coverage report) and \`ylt-cov-report\`(current pull request coverage report)")
+          curl -L -X POST "https://api.github.com/repos/${{github.repository}}/issues/${{github.event.pull_request.number}}/comments" -H "Authorization: Bearer ${{secrets.PAT}}" -H 'Content-Type: application/json' -d "{\"body\": \"$content}\""
+        shell: bash
       - name: 'Get Base Commit id'
         id: get-base-commit
         run: |
@@ -48,10 +56,6 @@ jobs:
   base-cov-test:
     needs: prerequisites
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     outputs:
       data: ${{ steps.base-cov.outputs.data }}
     steps:
@@ -66,10 +70,6 @@ jobs:
   cov-test:
     needs: prerequisites
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     outputs:
       data: ${{ steps.cov.outputs.data }}
     steps:
