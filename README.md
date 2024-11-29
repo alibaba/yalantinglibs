@@ -43,9 +43,18 @@ You can also use cmake option `-DENABLE_CPP_20=ON` or `-DENABLE_CPP_20=OFF` to c
 
 ## Install & Compile
 
-Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
+### By Vcpkg
 
-### Install
+1. Install [vcpkg](https://github.com/microsoft/vcpkg)
+2. run `./vcpkg install yalantinglibs`
+3. If you use cmake, add those codes:
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+### Manually Install
+
+Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
 
 1. clone repo
 
