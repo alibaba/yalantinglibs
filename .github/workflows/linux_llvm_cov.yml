@@ -22,7 +22,7 @@
 name: Ubuntu 22.04 (llvm cov)
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
       - fix_coverage_show
@@ -34,6 +34,7 @@ concurrency:
 jobs:
   prerequisites:
     runs-on: ubuntu-22.04
+    permissions: write-all
     outputs:
       id: ${{ steps.get-base-commit.outputs.id }}
     steps:
@@ -44,14 +45,21 @@ jobs:
           base_commit_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} | jq -r .base.sha)
           echo "::set-output name=id::$base_commit_id"
         shell: bash
+      - name: 'Store Message'
+        run: |
+          mkdir -p ./msg
+          echo "action_id=${{github.run_id}}" >> ./msg/action_msg
+          echo "pr_id=${{github.event.pull_request.number}}" >> ./msg/action_msg
+        shell: bash
+      - name: 'Upload Action Message'
+        uses: actions/upload-artifact@v4
+        with:
+          name: action_msg
+          path: msg/
 
   base-cov-test:
     needs: prerequisites
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     outputs:
       data: ${{ steps.base-cov.outputs.data }}
     steps:
@@ -66,10 +74,6 @@ jobs:
   cov-test:
     needs: prerequisites
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     outputs:
       data: ${{ steps.cov.outputs.data }}
     steps:
@@ -87,11 +91,6 @@ jobs:
       - cov-test
     runs-on: ubuntu-22.04
     steps:
-      - name: 'Create comment'
-        run: |
-          content=$(echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts \`base-ylt-cov-report\`(base commit coverage report) and \`ylt-cov-report\`(current pull request coverage report)")
-          curl -L -X POST "https://api.github.com/repos/${{github.repository}}/issues/${{github.event.pull_request.number}}/comments" -H "Authorization: Bearer ${{github.token}}" -H 'Content-Type: application/json' -d "{\"body\": \"$content}\""
-        shell: bash
       - name: 'Compare data'
         run: |
             sudo apt install -y bc
