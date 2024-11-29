@@ -109,6 +109,9 @@ TEST_CASE("test metric manager") {
   auto v2 = inst_s.get_metric_by_name("test1");
   CHECK(v2 != nullptr);
 
+  v2 = inst_s.get_metric_by_name("test111");
+  CHECK(v2 == nullptr);
+
   c->inc();
   g->inc();
 
@@ -1023,6 +1026,11 @@ TEST_CASE("test register metric") {
       default_static_metric_manager::instance().get_metric_static<gauge_t>(
           "get_guage_count");
   CHECK(m1->as<gauge_t>()->value() == 1);
+
+  auto m2 =
+      default_static_metric_manager::instance().get_metric_static<counter_t>(
+          "not_exist");
+  CHECK(m2 == nullptr);
 }
 
 template <size_t id>
