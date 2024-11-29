@@ -255,6 +255,24 @@ TEST_CASE("test metric manager remove") {
   inst_d.remove_metric_by_label(map);
   CHECK(inst_d.metric_count() == 1);
 
+  std::vector<std::shared_ptr<metric_t>> filtered_metrics;
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.empty());
+
+  options.label_regex = ".*counter.*";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.empty());
+
+  options.label_regex = "url";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.size() == 1);
+  filtered_metrics.clear();
+  options.label_regex = "code";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.size() == 1);
+
   std::map<std::string, std::string> map1{{"url", "/test"}, {"code", "200"}};
   inst_d.remove_metric_by_label(map1);
   CHECK(inst_d.metric_count() == 1);
@@ -1131,6 +1149,19 @@ TEST_CASE("test filter metrics static") {
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
+  }
+
+  {
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::vector<std::shared_ptr<metric_t>> vec{};
+    auto s = manager_helper::serialize_to_json(vec);
+    CHECK(s.empty());
+    auto c = std::make_shared<counter_t>(std::string("get_count"),
+                                         std::string("get counter"));
+    vec.push_back(c);
+    s = manager_helper::serialize_to_json(vec);
+    CHECK(s.empty());
+#endif
   }
 
   // don't filter
