@@ -45,6 +45,18 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 
 ## 安装&编译
 
+### 通过包管理器安装
+
+1. 下载[vcpkg](https://github.com/microsoft/vcpkg)
+2. 执行命令：`./vcpkg install yalantinglibs`
+3. 如果你使用cmake，向脚本里添加如下内容：   
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+### 手动安装
+
 Yalantinglibs 是一个head-only的库，这意味着你可以简单粗暴的直接将`./include/ylt`拷贝走。但是更推荐的做法还是用Cmake安装。
 
 - 克隆仓库
