@@ -140,6 +140,9 @@ class manager_helper {
   static void filter_by_label_name(
       std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
       std::shared_ptr<metric_t> m, const metric_filter_options& options) {
+    if (!options.label_regex) {
+      return;
+    }
     const auto& labels_name = m->labels_name();
     for (auto& label_name : labels_name) {
       if (std::regex_match(label_name, *options.label_regex)) {

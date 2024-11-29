@@ -25,6 +25,9 @@ class map_lock_t {
       return nullptr;
     }
     auto it = map_->find(key);
+    if (it == map_->end()) {
+      return nullptr;
+    }
     return it->second;
   }
 

@@ -180,6 +180,7 @@ class basic_dynamic_counter
 
     // }
     // else {
+    size_t count = 0;
     std::vector<std::string_view> vec;
     for (auto &lb_name : labels_name) {
       if (auto i = labels.find(lb_name); i != labels.end()) {
@@ -187,9 +188,10 @@ class basic_dynamic_counter
       }
       else {
         vec.push_back("");
+        count++;
       }
     }
-    if (vec.empty()) {
+    if (count == labels_name.size()) {
       return;
     }
     Base::erase_if([&](auto &pair) {
@@ -238,6 +240,10 @@ class basic_dynamic_counter
   bool has_label_value(const std::vector<std::string> &label_value) override {
     std::array<std::string, N> arr{};
     size_t size = (std::min)((size_t)N, label_value.size());
+    if (label_value.size() > N) {
+      return false;
+    }
+
     for (size_t i = 0; i < size; i++) {
       arr[i] = label_value[i];
     }
