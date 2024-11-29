@@ -467,6 +467,39 @@ TEST_CASE("test no label") {
     for (auto& e : result) {
       CHECK(e == 100);
     }
+
+    double sum{};
+    result = summary->get_rates(sum);
+    CHECK(sum == 100);
+
+    uint64_t count{};
+    result = summary->get_rates(count);
+    CHECK(count == 1);
+  }
+
+  {
+    std::map<std::string, std::string> customMap = {};
+    auto summary = std::make_shared<summary_t>(
+        "test", "help", std::vector{0.95, 0.5, 0.99, 0.9}, customMap);
+    summary->observe(100);
+    auto result = summary->get_rates();
+    for (auto& e : result) {
+      CHECK(e == 100);
+    }
+  }
+  {
+    std::map<std::string, std::string> customMap = {};
+    auto summary = std::make_shared<summary_t>(
+        "test", "help", std::vector<double>{}, customMap);
+    std::string str;
+    summary->serialize(str);
+    CHECK(str.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    summary->serialize_to_json(str_json);
+    CHECK(str_json.empty());
+#endif
   }
   auto g_counter = g_pair.second;
   g_counter->inc();
@@ -1368,6 +1401,18 @@ TEST_CASE("test summary with dynamic labels") {
   summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
+
+  {
+    basic_dynamic_summary<2> summary{"test_summary",
+                                     "summary help",
+                                     {0.9, 0.5, 0.95, 0.99},
+                                     {"method", "url"}};
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string json_str1;
+    summary.serialize_to_json(json_str1);
+    CHECK(json_str1.empty());
+#endif
+  }
 }
 
 TEST_CASE("test summary with static labels") {
