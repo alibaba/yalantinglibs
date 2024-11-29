@@ -1457,6 +1457,15 @@ TEST_CASE("test serialize with emptry metrics") {
       std::array<std::string, 1>{"method"});
   h1->serialize(s1);
   CHECK(s1.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  h1->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  h1->observe({"GET"}, 0);
+  h1->serialize(s1);
+  CHECK(s1.empty());
 #ifdef CINATRA_ENABLE_METRIC_JSON
   h1->serialize_to_json(s1);
   CHECK(s1.empty());
@@ -1514,6 +1523,14 @@ TEST_CASE("test serialize with emptry metrics") {
   {
     std::string str;
     h1->observe({"POST"}, 1);
+    bool r = h1->has_label_value("POST");
+    CHECK(r);
+    r = h1->has_label_value("HEAD");
+    CHECK(!r);
+    r = h1->has_label_value(std::vector<std::string>{"POST"});
+    CHECK(r);
+    r = h1->has_label_value(std::vector<std::string>{"HEAD"});
+    CHECK(!r);
     h1->serialize(str);
     CHECK(!str.empty());
     str.clear();

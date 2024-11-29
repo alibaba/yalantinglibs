@@ -242,10 +242,6 @@ class basic_dynamic_histogram : public dynamic_metric {
         value_str.append("\n");
       }
 
-      if (value_str.empty()) {
-        return;
-      }
-
       str.append(value_str);
 
       str.append(name_);
@@ -261,6 +257,9 @@ class basic_dynamic_histogram : public dynamic_metric {
       str.append("} ");
       str.append(std::to_string(count));
       str.append("\n");
+    }
+    if (value_str.empty()) {
+      str.clear();
     }
   }
 
