@@ -532,8 +532,24 @@ TEST_CASE("test no label") {
     CHECK(g.value() == 10);
   }
   {
+    metric_t m{};
+    auto name = m.metric_name();
+    CHECK(name == "unknown");
+
+    m.clean_expired_label();
+
+    std::string str;
+    m.serialize(str);
+    CHECK(str.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    m.serialize_to_json(str);
+    CHECK(str.empty());
+#endif
+  }
+  {
     counter_t c("get_count", "get counter");
     CHECK(c.metric_type() == MetricType::Counter);
+    CHECK(c.help() == "get counter");
     CHECK(c.labels_name().empty());
     c.inc();
     CHECK(c.value() == 1);
@@ -561,6 +577,21 @@ TEST_CASE("test with atomic") {
   CHECK(c.value() == 3);
   c.update(10);
   CHECK(c.value() == 10);
+
+  bool r = c.has_label_value("GET");
+  CHECK(r);
+  r = c.has_label_value("POST");
+  CHECK(!r);
+
+  r = c.has_label_value(std::vector<std::string>{"GET", "/"});
+  CHECK(r);
+  r = c.has_label_value(std::vector<std::string>{"GET"});
+  CHECK(!r);
+
+  c.remove_label_value(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  r = c.has_label_value(std::vector<std::string>{"GET", "/"});
+  CHECK(r);
 
   gauge_t g(
       "get_qps", "get qps",

@@ -91,8 +91,6 @@ class metric_t {
 
   MetricType metric_type() { return type_; }
 
-  auto get_created_time() { return metric_created_time_; }
-
   std::string_view metric_name() {
     switch (type_) {
       case MetricType::Counter:
@@ -196,14 +194,8 @@ inline std::chrono::seconds ylt_label_max_age{0};
 inline std::chrono::seconds ylt_label_check_expire_duration{60};
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
-inline int64_t ylt_label_capacity = 20000000;
-
 inline void set_metric_capacity(int64_t max_count) {
   ylt_metric_capacity = max_count;
-}
-
-inline void set_label_capacity(int64_t max_label_count) {
-  ylt_label_capacity = max_label_count;
 }
 
 inline void set_label_max_age(
