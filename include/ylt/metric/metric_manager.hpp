@@ -37,9 +37,6 @@ class manager_helper {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   static std::string serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
-    if (metrics.empty()) {
-      return "";
-    }
     std::string str;
     str.append("[");
     for (auto& m : metrics) {
@@ -50,7 +47,10 @@ class manager_helper {
     }
 
     if (str.size() == 1) {
-      return "";
+      str.append("]");
+    }
+    else {
+      str.back() = ']';
     }
 
     str.back() = ']';

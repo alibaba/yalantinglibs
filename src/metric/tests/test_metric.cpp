@@ -1155,12 +1155,12 @@ TEST_CASE("test filter metrics static") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::vector<std::shared_ptr<metric_t>> vec{};
     auto s = manager_helper::serialize_to_json(vec);
-    CHECK(s.empty());
+    CHECK(s == "[]");
     auto c = std::make_shared<counter_t>(std::string("get_count"),
                                          std::string("get counter"));
     vec.push_back(c);
     s = manager_helper::serialize_to_json(vec);
-    CHECK(s.empty());
+    CHECK(s == "[]");
 #endif
   }
 
