@@ -198,22 +198,26 @@ void hello() {}
 
 TEST_CASE("test server down") {
   async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
-    coro_rpc::coro_rpc_server server1(1, 58801);
+    coro_rpc::coro_rpc_server server1(1, 0);
     server1.register_handler<hello>();
     auto res = server1.async_start();
     REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
-    coro_rpc::coro_rpc_server server2(1, 58802);
+    auto port1 = server1.port();
+    coro_rpc::coro_rpc_server server2(1, 0);
     server2.register_handler<hello>();
     auto res2 = server2.async_start();
     REQUIRE_MESSAGE(!res2.hasResult(), "server start failed");
-    auto hosts =
-        std::vector<std::string_view>{"127.0.0.1:58801", "127.0.0.1:58802"};
+
+    auto port2 = server2.port();
+    auto hosts = std::vector<std::string>{"127.0.0.1:" + std::to_string(port1),
+                                          "127.0.0.1:" + std::to_string(port2)};
+    auto host_view = std::vector<std::string_view>{hosts[0], hosts[1]};
     auto config = coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config{
         .connect_retry_count = 0,
         .reconnect_wait_time = std::chrono::milliseconds{0},
         .host_alive_detect_duration = std::chrono::milliseconds{500}};
     auto load_blancer =
-        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(hosts,
+        coro_io::load_blancer<coro_rpc::coro_rpc_client>::create(host_view,
                                                                  {config});
 
     for (int i = 0; i < 100; ++i) {
@@ -259,7 +263,7 @@ TEST_CASE("test server down") {
       }
     }
 
-    coro_rpc::coro_rpc_server server3(1, 58801);
+    coro_rpc::coro_rpc_server server3(1, port1);
     server3.register_handler<hello>();
     auto res3 = server3.async_start();
     REQUIRE_MESSAGE(!res3.hasResult(), "server start failed");
@@ -276,7 +280,7 @@ TEST_CASE("test server down") {
         CHECK(res.has_value());
       }
     }
-    coro_rpc::coro_rpc_server server4(1, 58802);
+    coro_rpc::coro_rpc_server server4(1, port2);
     server4.register_handler<hello>();
     auto res4 = server4.async_start();
     REQUIRE_MESSAGE(!res4.hasResult(), "server start failed");
