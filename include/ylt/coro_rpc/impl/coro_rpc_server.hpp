@@ -89,8 +89,7 @@ class coro_rpc_server_base {
     init_address(std::move(address));
   }
 
-  coro_rpc_server_base(size_t thread_num = std::thread::hardware_concurrency(),
-                       std::string address = "0.0.0.0:9001",
+  coro_rpc_server_base(size_t thread_num, std::string address,
                        std::chrono::steady_clock::duration
                            conn_timeout_duration = std::chrono::seconds(0),
                        bool is_enable_tcp_no_delay = true)
@@ -102,7 +101,7 @@ class coro_rpc_server_base {
     init_address(std::move(address));
   }
 
-  coro_rpc_server_base(const server_config &config = server_config{})
+  coro_rpc_server_base(const server_config &config)
       : pool_(config.thread_num),
         acceptor_(pool_.get_executor()->get_asio_executor()),
         port_(config.port),
