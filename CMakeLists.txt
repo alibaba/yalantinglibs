@@ -32,4 +32,3 @@ else ()
         # add project config, such as enable_ssl.
         include(cmake/config.cmake)
 endif()
-
