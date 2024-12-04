@@ -667,8 +667,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool is_body_in_out_buf() const { return !out_buf_.empty(); }
 
   void reset() {
-    if (!has_closed())
+    if (!has_closed()) {
       close_socket(*socket_);
+    }
 
     socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
     if (!socket_->impl_.is_open()) {
@@ -689,6 +690,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       socket_->ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, *ssl_ctx_);
+      has_init_ssl_ = false;
     }
 #endif
 #ifdef BENCHMARK_TEST
