@@ -43,6 +43,7 @@ class struct_tokenizer {
     for (int j = 0; j < descriptor->field_count(); ++j) {
       struct_token token = {};
       const google::protobuf::FieldDescriptor* field = descriptor->field(j);
+
       token.var_name = field->name();
       if (field->type() == google::protobuf::FieldDescriptor::TYPE_MESSAGE) {
         token.type_name = field->message_type()->name();
