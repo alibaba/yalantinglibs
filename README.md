@@ -554,3 +554,4 @@ DingTalk group id: 645010455
 yaLanTingLibs is distributed under the Apache License (Version 2.0)
 This product contains various third-party components under other open-source licenses.
 See the [NOTICE file](https://github.com/alibaba/yalantinglibs/blob/main/NOTICE) for more information.
+
