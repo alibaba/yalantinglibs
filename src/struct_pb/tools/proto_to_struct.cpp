@@ -49,6 +49,8 @@ class struct_code_generator : public google::protobuf::compiler::CodeGenerator {
 
     auto output = context->Open(filename);
 
+    std::string package_name = file->package();
+
     bool enable_optional = false;
     bool enable_inherit = false;
 
@@ -65,9 +67,20 @@ class struct_code_generator : public google::protobuf::compiler::CodeGenerator {
 
     std::vector<struct_tokenizer> proto_module_info;
     std::vector<struct_enum> proto_enum_info;
+
     for (int i = 0; i < file->message_type_count(); ++i) {
       // struct name
       const google::protobuf::Descriptor* descriptor = file->message_type(i);
+
+      for (int k = 0; k < descriptor->nested_type_count(); ++k) {
+        struct_tokenizer tokenizer_nested;
+        tokenizer_nested.clear();
+
+        const google::protobuf::Descriptor* nested_type =
+            descriptor->nested_type(k);
+        tokenizer_nested.tokenizer(nested_type);
+        proto_module_info.emplace_back(tokenizer_nested);
+      }
 
       struct_enum enum_token;
       enum_token.clear();
@@ -80,7 +93,7 @@ class struct_code_generator : public google::protobuf::compiler::CodeGenerator {
       proto_module_info.emplace_back(tokenizer);
     }
 
-    std::string struct_header = code_generate_header();
+    std::string struct_header = code_generate_header(package_name);
     write_to_output(zero_copy_output, (const void*)struct_header.c_str(),
                     struct_header.size());
 
@@ -122,6 +135,10 @@ class struct_code_generator : public google::protobuf::compiler::CodeGenerator {
       write_to_output(zero_copy_output, (const void*)struct_macro_str.c_str(),
                       struct_macro_str.size());
     }
+    std::string namespace_last_part = "";
+    namespace_last_part = code_generate_last_part();
+    write_to_output(zero_copy_output, (const void*)namespace_last_part.c_str(),
+                    namespace_last_part.size());
 
     delete zero_copy_output;
     return true;

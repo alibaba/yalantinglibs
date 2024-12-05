@@ -5,8 +5,12 @@
 
 char parameter_value[27] = "abcdefghijklmnopqrstuvwxyz";
 
-std::string code_generate_header() {
+std::string code_generate_header(const std::string &package_name) {
   std::string result = "#pragma once\n#include <ylt/struct_pb.hpp>\n\n";
+
+  result.append("namespace ");
+  result.append(package_name);
+  result.append(" {\n\n");
   return result;
 }
 
@@ -264,3 +268,5 @@ std::string code_generate_enum(const struct_enum &enum_inst) {
   }
   return result;
 }
+
+std::string code_generate_last_part() { return "}"; }
