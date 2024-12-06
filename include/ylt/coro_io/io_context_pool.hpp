@@ -17,8 +17,8 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
 
+#include <asio/dispatch.hpp>
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
 #include <future>
@@ -52,10 +52,10 @@ class ExecutorWrapper : public async_simple::Executor {
 
   virtual bool schedule(Func func) override {
     if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor_.post(std::move(func));
+      executor_.dispatch(std::move(func));
     }
     else {
-      asio::post(executor_, std::move(func));
+      asio::dispatch(executor_, std::move(func));
     }
 
     return true;
@@ -68,7 +68,7 @@ class ExecutorWrapper : public async_simple::Executor {
       executor.post(std::move(func));
     }
     else {
-      asio::post(executor, std::move(func));
+      asio::dispatch(executor, std::move(func));
     }
     return true;
   }
