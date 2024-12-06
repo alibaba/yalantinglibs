@@ -161,7 +161,9 @@ class coro_rpc_client {
                                                  "client has been closed"};
   struct config {
     uint64_t client_id = get_global_client_id();
-    std::chrono::milliseconds timeout_duration =
+    std::chrono::milliseconds connect_timeout_duration =
+        std::chrono::milliseconds{30000};
+    std::chrono::milliseconds request_timeout_duration =
         std::chrono::milliseconds{30000};
     std::string host;
     std::string port;
@@ -233,7 +235,7 @@ class coro_rpc_client {
    */
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
@@ -243,15 +245,16 @@ class coro_rpc_client {
     }
     config_.host = std::move(host);
     config_.port = std::move(port);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+    config_.connect_timeout_duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            connect_timeout_duration);
     auto ret = co_await connect_impl();
     connect_mutex_.unlock();
     co_return std::move(ret);
   }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto pos = endpoint.find(':');
     auto lock_ok = connect_mutex_.tryLock();
@@ -262,8 +265,9 @@ class coro_rpc_client {
     }
     config_.host = endpoint.substr(0, pos);
     config_.port = endpoint.substr(pos + 1);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+    config_.connect_timeout_duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            connect_timeout_duration);
     auto ret = co_await connect_impl();
     connect_mutex_.unlock();
     co_return std::move(ret);
@@ -410,7 +414,8 @@ class coro_rpc_client {
 
     ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
           config_.port.data());
-    timeout(*this->timer_, config_.timeout_duration, "connect timer canceled")
+    timeout(*this->timer_, config_.connect_timeout_duration,
+            "connect timer canceled")
         .start([](auto &&) {
         });
 
