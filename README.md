@@ -82,6 +82,9 @@ bazel build ylt # Please make sure bazel in you bin path.
 bazel build coro_http_example # Or replace in anyone you want to build and test.
 # Actually you might take it in other project in prefix @com_alibaba_yalangtinglibs, like
 bazel build @com_alibaba_yalangtinglibs://ylt
+
+bazel version > 7
+bazel build ylt --enable_bzlmod
 ```
 
 You can see the test/example/benchmark executable file in `./build/output/`.
