@@ -401,7 +401,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                 websocket ws, opcode op,
                                                 resp_data &data,
                                                 bool eof = true) {
-    auto header = ws.encode_frame(msg, op, eof, true);
+    auto header = ws.encode_frame(msg, op, eof, enable_ws_deflate_);
     std::vector<asio::const_buffer> buffers{
         asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
@@ -448,9 +448,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       span = {source.data(), source.size()};
 #ifdef CINATRA_ENABLE_GZIP
       std::string dest_buf;
-      gzip_compress({source.data(), source.size()}, dest_buf, span, data);
+      if (enable_ws_deflate_) {
+        gzip_compress({source.data(), source.size()}, dest_buf, span, data);
+      }
 #endif
-      co_await write_ws_frame(span, ws, op, data);
+      co_await write_ws_frame(span, ws, op, data, true);
     }
     else {
       while (true) {
@@ -458,8 +460,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         span = {result.buf.data(), result.buf.size()};
 #ifdef CINATRA_ENABLE_GZIP
         std::string dest_buf;
-        gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
-                      data);
+        if (enable_ws_deflate_) {
+          gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
+                        data);
+        }
 #endif
         co_await write_ws_frame(span, ws, op, data, result.eof);
 
@@ -613,7 +617,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         : self(self) {
       self->socket_->is_timeout_ = false;
 
-      if (self->enable_timeout_) {
+      if (self->enable_timeout_ && duration.count() >= 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });
@@ -1968,6 +1972,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
     if (socket_->has_closed_) {
+      socket_->is_timeout_ = false;
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (auto ec = co_await coro_io::async_connect(
@@ -2397,8 +2402,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool should_reset_ = false;
   config config_;
 
-#ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
+#ifdef CINATRA_ENABLE_GZIP
   bool is_server_support_ws_deflate_ = false;
   std::string inflate_str_;
 #endif
