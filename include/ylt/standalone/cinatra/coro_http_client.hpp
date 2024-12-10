@@ -617,7 +617,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         : self(self) {
       self->socket_->is_timeout_ = false;
 
-      if (self->enable_timeout_) {
+      if (self->enable_timeout_ && duration.count() >= 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });
@@ -1972,6 +1972,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
     if (socket_->has_closed_) {
+      socket_->is_timeout_ = false;
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (auto ec = co_await coro_io::async_connect(
