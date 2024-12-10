@@ -368,6 +368,39 @@ TEST_CASE("test ssl client") {
 }
 #endif
 
+TEST_CASE("test invalid http body size") {
+  coro_http_server server(1, 9001);
+  server.set_max_http_body_size(10);
+  server.set_http_handler<GET, POST>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok,
+                                    "ok, it is a long test string!");
+      });
+
+  server.async_start();
+
+  std::string uri = "http://127.0.0.1:9001/get";
+  {
+    coro_http_client client{};
+    auto result =
+        client.post(uri, "it is a long test string!", req_content_type::text);
+    CHECK(result.status != 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.set_max_http_body_size(10);
+    auto result = client.post(uri, "test", req_content_type::text);
+    CHECK(result.status != 200);
+    CHECK(result.net_err == std::errc::invalid_argument);
+  }
+  {
+    coro_http_client client{};
+    auto result = client.post(uri, "test", req_content_type::text);
+    CHECK(result.status == 200);
+  }
+}
+
 bool create_file(std::string_view filename, size_t file_size = 1024) {
   std::ofstream out(filename.data(), std::ios::binary);
   if (!out.is_open()) {
