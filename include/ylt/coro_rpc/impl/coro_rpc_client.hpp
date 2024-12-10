@@ -161,14 +161,14 @@ class coro_rpc_client {
                                                  "client has been closed"};
   struct config {
     uint64_t client_id = get_global_client_id();
-    std::chrono::milliseconds timeout_duration =
-        std::chrono::milliseconds{30000};
-    std::string host;
-    std::string port;
+    std::optional<std::chrono::milliseconds> connect_timeout_duration;
+    std::optional<std::chrono::milliseconds> request_timeout_duration;
+    std::string host{};
+    std::string port{};
     bool enable_tcp_no_delay = true;
 #ifdef YLT_ENABLE_SSL
-    std::filesystem::path ssl_cert_path;
-    std::string ssl_domain;
+    std::filesystem::path ssl_cert_path{};
+    std::string ssl_domain{};
 #endif
   };
 
@@ -203,6 +203,8 @@ class coro_rpc_client {
 
   const config &get_config() const { return config_; }
 
+  config &get_config() { return config_; }
+
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
 #ifdef YLT_ENABLE_SSL
@@ -228,12 +230,12 @@ class coro_rpc_client {
    *
    * @param host server address
    * @param port server port
-   * @param timeout_duration RPC call timeout
+   * @param connect_timeout_duration RPC call timeout seconds
    * @return error code
    */
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
@@ -241,44 +243,32 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-    config_.host = std::move(host);
-    config_.port = std::move(port);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+
+    if (config_.host.empty()) {
+      config_.host = std::move(host);
+    }
+    if (config_.port.empty()) {
+      config_.port = std::move(port);
+    }
+    if (!config_.connect_timeout_duration) {
+      config_.connect_timeout_duration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              connect_timeout_duration);
+    }
+
     auto ret = co_await connect_impl();
     connect_mutex_.unlock();
     co_return std::move(ret);
   }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto pos = endpoint.find(':');
-    auto lock_ok = connect_mutex_.tryLock();
-    if (!lock_ok) {
-      co_await connect_mutex_.coScopedLock();
-      co_return err_code{};
-      // do nothing, someone has reconnect the client
-    }
-    config_.host = endpoint.substr(0, pos);
-    config_.port = endpoint.substr(pos + 1);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
-    auto ret = co_await connect_impl();
-    connect_mutex_.unlock();
-    co_return std::move(ret);
-  }
+    std::string host(endpoint.substr(0, pos));
+    std::string port(endpoint.substr(pos + 1));
 
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect() {
-    auto lock_ok = connect_mutex_.tryLock();
-    if (!lock_ok) {
-      co_await connect_mutex_.coScopedLock();
-      co_return err_code{};
-      // do nothing, someone has reconnect the client
-    }
-    auto ret = co_await connect_impl();
-    connect_mutex_.unlock();
-    co_return std::move(ret);
+    return connect(std::move(host), std::move(port), connect_timeout_duration);
   }
 
 #ifdef YLT_ENABLE_SSL
@@ -323,11 +313,12 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
-  call_for(auto duration, Args &&...args) {
+  call_for(auto request_timeout_duration, Args &&...args) {
     using return_type = decltype(get_return_type<func>());
     auto async_result =
         co_await co_await send_request_for_with_attachment<func, Args...>(
-            duration, req_attachment_, std::forward<Args>(args)...);
+            request_timeout_duration, req_attachment_,
+            std::forward<Args>(args)...);
     req_attachment_ = {};
     if (async_result) {
       control_->resp_buffer_ = async_result->release_buffer();
@@ -410,9 +401,12 @@ class coro_rpc_client {
 
     ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
           config_.port.data());
-    timeout(*this->timer_, config_.timeout_duration, "connect timer canceled")
-        .start([](auto &&) {
-        });
+    auto conn_timeout_dur = *config_.connect_timeout_duration;
+    if (conn_timeout_dur.count() >= 0) {
+      timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
+          .start([](auto &&) {
+          });
+    }
 
     std::error_code ec = co_await coro_io::async_connect(
         &control_->executor_, control_->socket_, config_.host, config_.port);
@@ -747,7 +741,7 @@ class coro_rpc_client {
  private:
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      auto duration, uint32_t &id, coro_io::period_timer &timer,
+      auto request_timeout_duration, uint32_t &id, coro_io::period_timer &timer,
       std::string_view attachment, Args &&...args) {
     using R = decltype(get_return_type<func>());
 
@@ -766,9 +760,10 @@ class coro_rpc_client {
 
     static_check<func, Args...>();
 
-    if (duration.count() > 0) {
-      timeout(timer, duration, "rpc call timer canceled").start([](auto &&) {
-      });
+    if (request_timeout_duration.count() >= 0) {
+      timeout(timer, request_timeout_duration, "rpc call timer canceled")
+          .start([](auto &&) {
+          });
     }
 
 #ifdef YLT_ENABLE_SSL
@@ -965,16 +960,20 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
-  send_request_for_with_attachment(auto time_out_duration,
+  send_request_for_with_attachment(auto request_timeout_duration,
                                    std::string_view request_attachment,
                                    Args &&...args) {
     using rpc_return_t = decltype(get_return_type<func>());
     recving_guard guard(control_.get());
     uint32_t id;
+    if (!config_.request_timeout_duration) {
+      config_.request_timeout_duration = request_timeout_duration;
+    }
+
     auto timer = std::make_unique<coro_io::period_timer>(
         control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
-        time_out_duration, id, *timer, request_attachment,
+        *config_.request_timeout_duration, id, *timer, request_attachment,
         std::forward<Args>(args)...);
     auto &control = *control_;
     if (!result) {
