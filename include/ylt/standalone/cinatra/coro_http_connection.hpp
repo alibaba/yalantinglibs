@@ -131,13 +131,24 @@ class coro_http_connection
         break;
       }
 
+      if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
+          [[unlikely]] {
+        CINATRA_LOG_ERROR << "invalid http content length: "
+                          << parser_.body_len();
+        response_.set_status_and_content(status_type::bad_request,
+                                         "invalid http content length");
+        co_await reply();
+        close();
+        break;
+      }
+
       head_buf_.consume(size);
       keep_alive_ = check_keep_alive();
 
       auto type = request_.get_content_type();
 
       if (type != content_type::chunked && type != content_type::multipart) {
-        size_t body_len = parser_.body_len();
+        size_t body_len = (size_t)parser_.body_len();
         if (body_len == 0) {
           if (parser_.method() == "GET"sv) {
             if (request_.is_upgrade()) {
@@ -441,6 +452,10 @@ class coro_http_connection
       std::function<async_simple::coro::Lazy<void>(
           coro_http_request &, coro_http_response &)> &handler) {
     default_handler_ = handler;
+  }
+
+  void set_max_http_body_size(int64_t max_size) {
+    max_http_body_len_ = max_size;
   }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
@@ -975,6 +990,7 @@ class coro_http_connection
       default_handler_ = nullptr;
   std::string chunk_size_str_;
   std::string remote_addr_;
+  int64_t max_http_body_len_ = 0;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;

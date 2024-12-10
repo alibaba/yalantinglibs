@@ -279,6 +279,8 @@ inline std::unordered_map<std::string, std::string> g_content_type_map = {
 struct NonSSL {};
 struct SSL {};
 
+inline constexpr int64_t MAX_HTTP_BODY_SIZE = 4294967296;  // 4GB
+
 enum class time_format {
   http_format,
   utc_format,
