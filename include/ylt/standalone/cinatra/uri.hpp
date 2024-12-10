@@ -28,6 +28,7 @@ class uri_t {
       case '$':
       case '&':
       case '\'':
+      case '|':
       case '(':
       case ')':
       case '*':
