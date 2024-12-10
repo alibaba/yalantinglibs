@@ -20,7 +20,6 @@ build:windows --cxxopt="/std:c++20"
 # This workaround is needed to prevent Bazel from compiling the same file twice (once PIC and once not).
 build:linux --force_pic
 build:macos --force_pic
-build:clang-cl --compiler=clang-cl
 build:msvc-cl --compiler=msvc-cl
 # `LC_ALL` and `LANG` is needed for cpp worker tests, because they will call "ray start".
 # If we don't add them, python's `click` library will raise an error.
@@ -49,4 +48,5 @@ build:clang-cl --host_copt="-Wno-microsoft-unqualified-friend"
 build:msvc-cl --per_file_copt="external/boost/libs/regex/src/wc_regex_traits\\.cpp@-wd4244"
 build --http_timeout_scaling=5.0
 build --verbose_failures
+build --incompatible_enable_cc_toolchain_resolution
 

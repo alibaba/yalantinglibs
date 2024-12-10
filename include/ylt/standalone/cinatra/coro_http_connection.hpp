@@ -597,7 +597,7 @@ class coro_http_connection
     std::string dest_buf;
     if (is_client_ws_compressed_ && msg.size() > 0) {
       if (!cinatra::gzip_codec::deflate(msg, dest_buf)) {
-        CINATRA_LOG_ERROR << "compuress data error, data: " << msg;
+        CINATRA_LOG_ERROR << "compress data error, data: " << msg;
         co_return std::make_error_code(std::errc::protocol_error);
       }
 

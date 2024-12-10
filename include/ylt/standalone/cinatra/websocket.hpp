@@ -126,11 +126,11 @@ class websocket {
                                     bool is_client = true) {
     frame_header hdr{};
     hdr.fin = eof;
-    hdr.rsv1 = 0;
+    hdr.rsv2 = 0;
     if (need_compression)
-      hdr.rsv2 = 1;
+      hdr.rsv1 = 1;
     else
-      hdr.rsv2 = 0;
+      hdr.rsv1 = 0;
     hdr.rsv3 = 0;
     hdr.opcode = static_cast<uint8_t>(op);
     hdr.mask = is_client;
