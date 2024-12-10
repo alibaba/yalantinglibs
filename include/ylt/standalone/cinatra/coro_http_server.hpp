@@ -1006,7 +1006,7 @@ class coro_http_server {
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;
-  int64_t max_http_body_len_ = MAX_HTTP_BODY_SIZE;  // 20G
+  int64_t max_http_body_len_ = MAX_HTTP_BODY_SIZE;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
