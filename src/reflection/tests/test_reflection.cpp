@@ -313,6 +313,16 @@ TEST_CASE("test macros") {
   constexpr size_t size = members_count_v<dummy_t>;
   static_assert(size == 3);
 
+  constexpr auto idx = index_of<&simple2::age>();
+  static_assert(idx == 3);
+  constexpr auto idx2 = index_of<&simple2::id>();
+  static_assert(idx2 == 1);
+
+  auto i = index_of(&simple::id);
+  CHECK(i == 1);
+  i = index_of(&simple::age);
+  CHECK(i == 3);
+
   auto ref_tp = object_to_tuple(t);
   auto& c = std::get<0>(ref_tp);
   c = 10;
@@ -366,11 +376,11 @@ TEST_CASE("test macros") {
   auto& var1 = get<"str">(t);
   CHECK(var1 == "hello reflection");
 
-  constexpr size_t idx = index_of<simple2, "str">();
-  CHECK(idx == 2);
+  constexpr size_t i3 = index_of<simple2, "str">();
+  CHECK(i3 == 2);
 
-  constexpr size_t idx2 = index_of<simple2, "no_such">();
-  CHECK(idx2 == 4);
+  constexpr size_t i4 = index_of<simple2, "no_such">();
+  CHECK(i4 == 4);
 #endif
 
   constexpr std::string_view name1 = name_of<simple2, 2>();
