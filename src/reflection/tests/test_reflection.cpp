@@ -178,6 +178,11 @@ TEST_CASE("test member value") {
   constexpr std::string_view name2 = name_of<simple>(2);
   CHECK(name2 == "str");
 
+  auto i = index_of(&simple::id);
+  CHECK(i == 1);
+  i = index_of(&simple::age);
+  CHECK(i == 3);
+
 #if __cplusplus >= 202002L
   constexpr size_t idx = index_of<simple, "str">();
   CHECK(idx == 2);

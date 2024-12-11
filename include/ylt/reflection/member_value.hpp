@@ -176,6 +176,12 @@ inline size_t index_of(T& t, Field& value) {
   return std::distance(offset_arr.begin(), it);
 }
 
+inline size_t index_of(auto member) {
+  using T = typename member_traits<decltype(member)>::owner_type;
+  static auto& t = internal::get_fake_object<T>();
+  return index_of(t, t.*member);
+}
+
 template <typename T, typename Field>
 inline constexpr std::string_view name_of(T& t, Field& value) {
   size_t index = index_of(t, value);
