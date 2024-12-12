@@ -327,7 +327,8 @@ class coro_rpc_server_base {
 
     asio::ip::tcp::resolver::iterator it_end;
     if (ec || it == it_end) {
-      ELOG_ERROR << "resolve address " << address_ << " error: " << ec.message();
+      ELOG_ERROR << "resolve address " << address_
+                 << " error: " << ec.message();
       return coro_rpc::errc::bad_address;
     }
 
@@ -352,7 +353,8 @@ class coro_rpc_server_base {
 #endif
     acceptor_.listen(asio::socket_base::max_listen_connections, ec);
     if (ec) {
-      ELOG_ERROR << "port " << port_.load() << " listen error: " << ec.message();
+      ELOG_ERROR << "port " << port_.load()
+                 << " listen error: " << ec.message();
       acceptor_.cancel(ec);
       acceptor_.close(ec);
       return coro_rpc::errc::listen_error;
@@ -360,7 +362,8 @@ class coro_rpc_server_base {
 
     auto end_point = acceptor_.local_endpoint(ec);
     if (ec) {
-      ELOG_ERROR << "get local endpoint port " << port_.load() << " error: " << ec.message();
+      ELOG_ERROR << "get local endpoint port " << port_.load()
+                 << " error: " << ec.message();
       return coro_rpc::errc::address_in_used;
     }
     port_ = end_point.port();
