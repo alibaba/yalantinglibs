@@ -145,7 +145,7 @@ struct coro_rpc_protocol {
     resp_head.attach_length = attachment_len;
     if (attachment_len > UINT32_MAX)
       AS_UNLIKELY {
-        ELOGV(ERROR, "attachment larger than 4G:%d", attachment_len);
+        ELOG_ERROR << "attachment larger than 4G: " << attachment_len;
         rpc_err_code = coro_rpc::errc::message_too_large;
         err_msg_buf =
             "attachment larger than 4G:" + std::to_string(attachment_len) + "B";
@@ -154,7 +154,7 @@ struct coro_rpc_protocol {
     else if (rpc_result.size() > UINT32_MAX)
       AS_UNLIKELY {
         auto sz = rpc_result.size();
-        ELOGV(ERROR, "body larger than 4G:%d", sz);
+        ELOG_ERROR << "body larger than 4G: " << sz;
         rpc_err_code = coro_rpc::errc::message_too_large;
         err_msg_buf =
             "body larger than 4G:" + std::to_string(attachment_len) + "B";
@@ -215,7 +215,7 @@ template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context_in_coro() {
   auto* ctx = co_await async_simple::coro::LazyLocals{};
   assert(ctx != nullptr);
-  co_return (context_info_t<rpc_protocol>*) ctx;
+  co_return(context_info_t<rpc_protocol>*) ctx;
 }
 
 namespace detail {

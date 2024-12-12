@@ -117,7 +117,7 @@ class coro_rpc_server_base {
   }
 
   ~coro_rpc_server_base() {
-    ELOGV(INFO, "coro_rpc_server will quit");
+    ELOG_INFO << "coro_rpc_server will quit";
     stop();
   }
 
@@ -152,10 +152,10 @@ class coro_rpc_server_base {
       std::unique_lock lock(start_mtx_);
       if (flag_ != stat::init) {
         if (flag_ == stat::started) {
-          ELOGV(INFO, "start again");
+          ELOG_INFO << "start again";
         }
         else if (flag_ == stat::stop) {
-          ELOGV(INFO, "has stoped");
+          ELOG_INFO << "has stoped";
         }
         return make_error_future(
             coro_rpc::err_code{coro_rpc::errc::server_has_ran});
@@ -205,7 +205,7 @@ class coro_rpc_server_base {
       return;
     }
 
-    ELOGV(INFO, "begin to stop coro_rpc_server, conn size %d", conns_.size());
+    ELOG_INFO << "begin to stop coro_rpc_server, conn size " << conns_.size();
 
     if (flag_ == stat::started) {
       close_acceptor();
@@ -220,15 +220,15 @@ class coro_rpc_server_base {
         conns_.clear();
       }
 
-      ELOGV(INFO, "wait for server's thread-pool finish all work.");
+      ELOG_INFO << "wait for server's thread-pool finish all work.";
       pool_.stop();
-      ELOGV(INFO, "server's thread-pool finished.");
+      ELOG_INFO << "server's thread-pool finished.";
     }
     if (thd_.joinable()) {
       thd_.join();
     }
 
-    ELOGV(INFO, "stop coro_rpc_server ok");
+    ELOG_INFO << "stop coro_rpc_server ok.";
     flag_ = stat::stop;
   }
 
@@ -318,7 +318,7 @@ class coro_rpc_server_base {
 
  private:
   coro_rpc::err_code listen() {
-    ELOGV(INFO, "begin to listen");
+    ELOG_INFO << "begin to listen";
     using asio::ip::tcp;
     asio::error_code ec;
     asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
@@ -327,15 +327,14 @@ class coro_rpc_server_base {
 
     asio::ip::tcp::resolver::iterator it_end;
     if (ec || it == it_end) {
-      ELOGV(ERROR, "resolve address %s error : %s", address_.data(),
-            ec.message().data());
+      ELOG_ERROR << "resolve address " << address_ << " error: " << ec.message();
       return coro_rpc::errc::bad_address;
     }
 
     auto endpoint = it->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
-      ELOGV(ERROR, "open failed, error : %s", ec.message().data());
+      ELOG_ERROR << "open failed, error: " << ec.message();
       return coro_rpc::errc::open_error;
     }
 #ifdef __GNUC__
@@ -343,8 +342,7 @@ class coro_rpc_server_base {
 #endif
     acceptor_.bind(endpoint, ec);
     if (ec) {
-      ELOGV(ERROR, "bind port %d error : %s", port_.load(),
-            ec.message().data());
+      ELOG_ERROR << "bind port " << port_.load() << " error: " << ec.message();
       acceptor_.cancel(ec);
       acceptor_.close(ec);
       return coro_rpc::errc::address_in_used;
@@ -354,8 +352,7 @@ class coro_rpc_server_base {
 #endif
     acceptor_.listen(asio::socket_base::max_listen_connections, ec);
     if (ec) {
-      ELOGV(ERROR, "port %d listen error : %s", port_.load(),
-            ec.message().data());
+      ELOG_ERROR << "port " << port_.load() << " listen error: " << ec.message();
       acceptor_.cancel(ec);
       acceptor_.close(ec);
       return coro_rpc::errc::listen_error;
@@ -363,13 +360,12 @@ class coro_rpc_server_base {
 
     auto end_point = acceptor_.local_endpoint(ec);
     if (ec) {
-      ELOGV(ERROR, "get local endpoint port %d error : %s", port_.load(),
-            ec.message().data());
+      ELOG_ERROR << "get local endpoint port " << port_.load() << " error: " << ec.message();
       return coro_rpc::errc::address_in_used;
     }
     port_ = end_point.port();
 
-    ELOGV(INFO, "listen port %d successfully", port_.load());
+    ELOG_INFO << "listen port " << port_.load() << " successfully";
     return {};
   }
 
@@ -389,7 +385,7 @@ class coro_rpc_server_base {
       }
 #endif
       if (error) {
-        ELOGV(INFO, "accept failed, error: %s", error.message().data());
+        ELOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
           acceptor_close_waiter_.set_value();
@@ -399,7 +395,7 @@ class coro_rpc_server_base {
       }
 
       int64_t conn_id = ++conn_id_;
-      ELOGV(INFO, "new client conn_id %d coming", conn_id);
+      ELOG_INFO << "new client conn_id " << conn_id << " coming";
       if (is_enable_tcp_no_delay_) {
         socket.set_option(asio::ip::tcp::no_delay(true), error);
       }
