@@ -344,13 +344,13 @@ class coro_rpc_client {
   uint32_t get_client_id() const { return config_.client_id; }
 
   void close() {
-    // ELOGV(INFO, "client_id %d close", config_.client_id);
+    // ELOG_INFO << "client_id " << config_.client_id << " close";
     close_socket(control_);
   }
 
   bool set_req_attachment(std::string_view attachment) {
     if (attachment.size() > UINT32_MAX) {
-      ELOGV(ERROR, "too large rpc attachment");
+      ELOG_ERROR << "too large rpc attachment";
       return false;
     }
     req_attachment_ = attachment;
@@ -399,8 +399,8 @@ class coro_rpc_client {
 #endif
     control_->has_closed_ = false;
 
-    ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
-          config_.port.data());
+    ELOG_INFO << "client_id " << config_.client_id << " begin to connect "
+              << config_.port;
     auto conn_timeout_dur = *config_.connect_timeout_duration;
     if (conn_timeout_dur.count() >= 0) {
       timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
@@ -421,7 +421,7 @@ class coro_rpc_client {
     }
 
     if (control_->is_timeout_) {
-      ELOGV(WARN, "client_id %d connect timeout", config_.client_id);
+      ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;
     }
     if (config_.enable_tcp_no_delay == true) {
@@ -434,8 +434,8 @@ class coro_rpc_client {
       auto shake_ec = co_await coro_io::async_handshake(
           control_->ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
-        ELOGV(WARN, "client_id %d handshake failed: %s", config_.client_id,
-              shake_ec.message().data());
+        ELOG_WARN << "client_id " << config_.client_id
+                  << " handshake failed: " << shake_ec.message();
         co_return errc::not_connected;
       }
     }
@@ -447,16 +447,15 @@ class coro_rpc_client {
   [[nodiscard]] bool init_ssl_impl() {
     try {
       ssl_init_ret_ = false;
-      ELOGV(INFO, "init ssl: %s", config_.ssl_domain.data());
+      ELOG_INFO << "init ssl: " << config_.ssl_domain;
       auto &cert_file = config_.ssl_cert_path;
-      ELOGV(INFO, "current path %s",
-            std::filesystem::current_path().string().data());
+      ELOG_INFO << "current path: " << std::filesystem::current_path().string();
       if (file_exists(cert_file)) {
-        ELOGV(INFO, "load %s", cert_file.string().data());
+        ELOG_INFO << "load " << cert_file.string();
         ssl_ctx_.load_verify_file(cert_file);
       }
       else {
-        ELOGV(INFO, "no certificate file %s", cert_file.string().data());
+        ELOG_INFO << "no certificate file " << cert_file.string();
         return ssl_init_ret_;
       }
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
@@ -467,7 +466,7 @@ class coro_rpc_client {
               control_->socket_, ssl_ctx_);
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      ELOGV(ERROR, "init ssl failed: %s", e.what());
+      ELOG_ERROR << "init ssl failed: " << e.what();
     }
     return ssl_init_ret_;
   }
@@ -573,7 +572,7 @@ class coro_rpc_client {
 #endif
       auto sz = buffer.size() - coro_rpc_protocol::REQ_HEAD_LEN;
       if (sz > UINT32_MAX) {
-        ELOGV(ERROR, "too large rpc body");
+        ELOG_ERROR << "too large rpc body";
         return {};
       }
       header.length = sz;
@@ -620,7 +619,7 @@ class coro_rpc_client {
     }
     has_error = true;
     // deserialize failed.
-    ELOGV(WARNING, "deserilaize rpc result failed");
+    ELOG_WARN << "deserilaize rpc result failed";
     err = {errc::invalid_rpc_result, "failed to deserialize rpc return value"};
     return rpc_result<T>{unexpect_t{}, std::move(err)};
   }
@@ -747,7 +746,7 @@ class coro_rpc_client {
 
     if (control_->has_closed_)
       AS_UNLIKELY {
-        ELOGV(ERROR, "client has been closed, please re-connect");
+        ELOG_ERROR << "client has been closed, please re-connect";
         co_return rpc_error{errc::io_error,
                             "client has been closed, please re-connect"};
       }
@@ -1040,7 +1039,7 @@ class coro_rpc_client {
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOGV(INFO, "client_id %d close socket", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " close socket";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1049,7 +1048,7 @@ class coro_rpc_client {
       ret = co_await coro_io::async_write(
           socket,
           asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN - 1));
-      ELOGV(INFO, "client_id %d close socket", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " close socket";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1057,7 +1056,7 @@ class coro_rpc_client {
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOGV(INFO, "client_id %d shutdown", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " shutdown";
       control_->socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1105,8 +1104,8 @@ class coro_rpc_client {
 #endif
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::client_close_socket_after_send_payload) {
-      ELOGV(INFO, "client_id %d client_close_socket_after_send_payload",
-            config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id
+                << " client_close_socket_after_send_payload";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
