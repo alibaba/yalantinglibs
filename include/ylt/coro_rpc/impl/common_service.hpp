@@ -80,36 +80,36 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     auto key_file = fs::path(conf.base_path).append(conf.key_file);
     auto dh_file = fs::path(conf.base_path).append(conf.dh_file);
 
-    ELOGV(INFO, "current path %s", fs::current_path().string().data());
+    ELOG_INFO << "current path " << fs::current_path().string();
     if (file_exists(cert_file)) {
-      ELOGV(INFO, "load %s", cert_file.string().data());
+      ELOG_INFO << "load " << cert_file.string();
       context.use_certificate_chain_file(cert_file);
     }
     else {
-      ELOGV(ERROR, "no certificate file %s", cert_file.string().data());
+      ELOG_ERROR << "no certificate file " << cert_file.string();
       return false;
     }
 
     if (file_exists(key_file)) {
-      ELOGV(INFO, "load %s", key_file.string().data());
+      ELOG_INFO << "load " << key_file.string();
       context.use_private_key_file(key_file, asio::ssl::context::pem);
     }
     else {
-      ELOGV(ERROR, "no private key file %s", key_file.string().data());
+      ELOG_ERROR << "no private file " << key_file.string();
       return false;
     }
 
     if (file_exists(dh_file)) {
-      ELOGV(INFO, "load %s", dh_file.string().data());
+      ELOG_INFO << "load " << dh_file.string();
       context.use_tmp_dh_file(dh_file);
     }
     else {
-      ELOGV(INFO, "no temp dh file %s", dh_file.string().data());
+      ELOG_INFO << "no temp dh file " << dh_file.string();
     }
 
     return true;
   } catch (std::exception &e) {
-    ELOGV(INFO, "%s", e.what());
+    ELOG_INFO << e.what();
     return false;
   }
 }
