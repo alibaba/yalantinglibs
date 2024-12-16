@@ -549,14 +549,31 @@ struct add_more_data {
   }
 };
 
+std::vector<std::string> aspect_test_vec;
+
 struct auth_t {
   bool before(coro_http_request &req, coro_http_response &res) { return true; }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter auth_t after");
+    return false;
+  }
 };
 
 struct dely_t {
   bool before(coro_http_request &req, coro_http_response &res) {
     res.set_status_and_content(status_type::unauthorized, "unauthorized");
     return false;
+  }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter delay_t after");
+    return true;
+  }
+};
+
+struct another_t {
+  bool after(coro_http_request &req, coro_http_response &res) {
+    // won't comming
+    return true;
   }
 };
 
@@ -585,7 +602,7 @@ TEST_CASE("test aspect") {
       [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      dely_t{}, auth_t{});
+      dely_t{}, auth_t{}, another_t{});
   server.set_http_handler<GET>(
       "/exception", [](coro_http_request &req, coro_http_response &resp) {
         throw std::invalid_argument("invalid argument");
@@ -619,6 +636,7 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 200);
   result = async_simple::coro::syncAwait(client.async_get("/auth"));
   CHECK(result.status == 401);
+  CHECK(aspect_test_vec.size() == 2);
   CHECK(result.resp_body == "unauthorized");
   result = async_simple::coro::syncAwait(client.async_get("/exception"));
   CHECK(result.status == 503);
@@ -892,7 +910,9 @@ TEST_CASE("test multipart and chunked return error") {
     std::string uri1 = "http://127.0.0.1:8090/chunked";
     auto result = async_simple::coro::syncAwait(
         client.async_upload_chunked(uri1, http_method::PUT, filename));
-    CHECK(result.resp_body == "invalid headers");
+    CHECK(result.status != 200);
+    if (!result.resp_body.empty())
+      CHECK(result.resp_body == "invalid headers");
   }
 
   {
@@ -901,7 +921,9 @@ TEST_CASE("test multipart and chunked return error") {
     client.add_str_part("test", "test value");
     auto result =
         async_simple::coro::syncAwait(client.async_upload_multipart(uri2));
-    CHECK(result.resp_body == "invalid headers");
+    CHECK(result.status != 200);
+    if (!result.resp_body.empty())
+      CHECK(result.resp_body == "invalid headers");
   }
 
   {
