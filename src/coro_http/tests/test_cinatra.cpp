@@ -549,14 +549,31 @@ struct add_more_data {
   }
 };
 
+std::vector<std::string> aspect_test_vec;
+
 struct auth_t {
   bool before(coro_http_request &req, coro_http_response &res) { return true; }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter auth_t after");
+    return false;
+  }
 };
 
 struct dely_t {
   bool before(coro_http_request &req, coro_http_response &res) {
     res.set_status_and_content(status_type::unauthorized, "unauthorized");
     return false;
+  }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter delay_t after");
+    return true;
+  }
+};
+
+struct another_t {
+  bool after(coro_http_request &req, coro_http_response &res) {
+    // won't comming
+    return true;
   }
 };
 
@@ -585,7 +602,7 @@ TEST_CASE("test aspect") {
       [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      dely_t{}, auth_t{});
+      dely_t{}, auth_t{}, another_t{});
   server.set_http_handler<GET>(
       "/exception", [](coro_http_request &req, coro_http_response &resp) {
         throw std::invalid_argument("invalid argument");
@@ -619,6 +636,7 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 200);
   result = async_simple::coro::syncAwait(client.async_get("/auth"));
   CHECK(result.status == 401);
+  CHECK(aspect_test_vec.size() == 2);
   CHECK(result.resp_body == "unauthorized");
   result = async_simple::coro::syncAwait(client.async_get("/exception"));
   CHECK(result.status == 503);
@@ -729,6 +747,9 @@ TEST_CASE("test pipeline") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET, POST>(
       "/test", [](coro_http_request &req, coro_http_response &res) {
+        if (req.get_content_type() == content_type::multipart) {
+          return;
+        }
         res.set_status_and_content(status_type::ok, "hello world");
       });
   server.set_http_handler<GET, POST>(
@@ -863,6 +884,58 @@ TEST_CASE("test pipeline") {
   }
 }
 #endif
+
+TEST_CASE("test multipart and chunked return error") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/multipart",
+      [](request &req, response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::bad_request,
+                                    "invalid headers");
+        co_return;
+      });
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/chunked",
+      [](request &req, response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::bad_request,
+                                    "invalid headers");
+        co_return;
+      });
+  server.async_start();
+
+  std::string filename = "small_test_file.txt";
+  create_file(filename, 10);
+  {
+    coro_http_client client{};
+    std::string uri1 = "http://127.0.0.1:8090/chunked";
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload_chunked(uri1, http_method::PUT, filename));
+    CHECK(result.status != 200);
+    if (!result.resp_body.empty())
+      CHECK(result.resp_body == "invalid headers");
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri2 = "http://127.0.0.1:8090/multipart";
+    client.add_str_part("test", "test value");
+    auto result =
+        async_simple::coro::syncAwait(client.async_upload_multipart(uri2));
+    CHECK(result.status != 200);
+    if (!result.resp_body.empty())
+      CHECK(result.resp_body == "invalid headers");
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri1 = "http://127.0.0.1:8090/no_such";
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload_chunked(uri1, http_method::PUT, filename));
+    CHECK(result.status != 200);
+  }
+  std::error_code ec;
+  fs::remove(filename, ec);
+}
 
 async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
   for (int i = 0; i < count; i++) {
@@ -3073,6 +3146,8 @@ TEST_CASE("test session") {
         session_id_check_login = session->get_session_id();
         bool login = session->get_data<bool>("login").value_or(false);
         CHECK(login == true);
+        auto &all = session->get_all_data();
+        CHECK(all.size() > 0);
         res.set_status(status_type::ok);
       });
   server.set_http_handler<GET>(

@@ -62,6 +62,8 @@ class session {
     return std::nullopt;
   }
 
+  const auto &get_all_data() const { return data_; }
+
   const std::string &get_session_id() {
     std::unique_lock<std::mutex> lock(mtx_);
     return session_id_;

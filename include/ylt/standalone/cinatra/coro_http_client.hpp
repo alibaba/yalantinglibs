@@ -370,6 +370,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<resp_data> read_websocket() {
+    auto time_out_guard =
+        timer_guard(this, req_timeout_duration_, "websocket timer");
     co_return co_await async_read_ws();
   }
 
@@ -2141,6 +2143,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (auto [ec, _] = co_await async_read_ws(
               sock, read_buf, ws.left_header_len(), has_init_ssl);
           ec) {
+        if (socket_->is_timeout_) {
+          co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
+        }
         data.net_err = ec;
         data.status = 404;
 

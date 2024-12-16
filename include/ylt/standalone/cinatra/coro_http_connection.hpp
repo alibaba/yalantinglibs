@@ -295,8 +295,9 @@ class coro_http_connection
                   }
                 }
                 // not found
-                if (!is_matched_regex_router)
+                if (!is_matched_regex_router) {
                   response_.set_status(status_type::not_found);
+                }
               }
             }
           }
@@ -305,10 +306,12 @@ class coro_http_connection
 
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
-          if (type == content_type::multipart) {
-            response_.set_status_and_content(
-                status_type::not_implemented,
-                "mutipart handler not implemented or incorrect implemented");
+          if (type == content_type::multipart ||
+              type == content_type::chunked) {
+            if (response_.content().empty())
+              response_.set_status_and_content(
+                  status_type::not_implemented,
+                  "mutipart handler not implemented or incorrect implemented");
             co_await reply();
             close();
             CINATRA_LOG_ERROR
@@ -404,10 +407,6 @@ class coro_http_connection
     if (multi_buf_) {
       if (need_to_bufffer) {
         response_.to_buffers(buffers_, chunk_size_str_);
-      }
-      int64_t send_size = 0;
-      for (auto &buf : buffers_) {
-        send_size += buf.size();
       }
       std::tie(ec, size) = co_await async_write(buffers_);
     }
