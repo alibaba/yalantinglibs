@@ -158,6 +158,7 @@ class load_blancer {
     this->config_ = std::move(o.config_);
     this->lb_worker = std::move(o.lb_worker);
     this->client_pools_ = std::move(o.client_pools_);
+    return *this;
   }
   load_blancer(const load_blancer& o) = delete;
   load_blancer& operator=(const load_blancer& o) = delete;
