@@ -190,7 +190,7 @@ class basic_dynamic_histogram : public dynamic_metric {
 
   void clean_expired_label() override {
     sum_->clean_expired_label();
-    for (auto m : bucket_counts_) {
+    for (auto &m : bucket_counts_) {
       m->clean_expired_label();
     }
   }
