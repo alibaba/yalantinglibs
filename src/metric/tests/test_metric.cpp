@@ -1946,14 +1946,22 @@ TEST_CASE("test metric manager clean expired label") {
   auto& inst = dynamic_metric_manager<test_tag>::instance();
   auto pair = inst.create_metric_dynamic<dynamic_counter_1t>(
       std::string("some_counter"), "", std::array<std::string, 1>{"url"});
+  auto summary = std::make_shared<basic_dynamic_summary<2>>(
+      std::string("test_summary"), std::string("summary help"),
+      std::vector<double>{0.5, 0.9, 0.95, 0.99},
+      std::array<std::string, 2>{"method", "url"});
+  inst.register_metric(summary);
   auto c = pair.second;
   c->inc({"/"});
   c->inc({"/test"});
+  summary->observe({"GET", "test"}, 10);
   CHECK(c->label_value_count() == 2);
   std::this_thread::sleep_for(std::chrono::seconds(2));
   c->inc({"/index"});
   size_t count = c->label_value_count();
   CHECK(count == 1);
+  auto ct1 = summary->label_value_count();
+  CHECK(ct1 == 0);
 }
 
 TEST_CASE("test remove label value") {
