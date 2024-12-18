@@ -138,9 +138,11 @@ class summary_t : public static_metric {
 
 template <size_t N>
 class basic_dynamic_summary
-    : public dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N> {
+    : public dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>,
+                                 N> {
  private:
-  using Base = dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N>;
+  using Base =
+      dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N>;
 
  public:
   basic_dynamic_summary(

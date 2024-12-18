@@ -14,7 +14,7 @@ namespace ylt::metric::detail {
 
 template <typename uint_type, std::size_t frac_bit = 6>
 class summary_impl {
-  static_assert(sizeof(uint_type)>=4);
+  static_assert(sizeof(uint_type) >= 4);
   static_assert(std::is_unsigned_v<uint_type>);
   constexpr static uint32_t decode_impl(uint16_t float16_value) {
     float16_value <<= (8 - frac_bit);
@@ -60,7 +60,7 @@ class summary_impl {
   static constexpr float float16_max = (1ull << 63) * 2.0f;  // 2^64
 
   static uint16_t encode(float flt) {
-    static_assert(sizeof(float)==4);
+    static_assert(sizeof(float) == 4);
     uint32_t& fltInt32 = *(uint32_t*)&flt;
     if (std::abs(flt) >= float16_max || std::isnan(flt)) {
       flt = (fltInt32 & 0x8000'0000) ? (-float16_max) : (float16_max);
@@ -310,6 +310,9 @@ class summary_impl {
         e = 1;
       }
       auto target_count = std::min<double>(e * count, count);
+      if (e == 0) {
+        target_count = std::min(uint64_t{1}, count);
+      }
       while (true) {
         if (target_count <= count_now) [[unlikely]] {
           result.push_back(v);
