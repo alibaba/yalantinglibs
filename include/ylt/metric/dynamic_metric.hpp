@@ -92,6 +92,15 @@ class dynamic_metric_impl : public dynamic_metric {
     return map_.template copy<std::shared_ptr<metric_pair>>();
   }
 
+  void clean_expired_label() override {
+    erase_if([now = std::chrono::steady_clock::now()](auto& pair) mutable {
+      bool r = std::chrono::duration_cast<std::chrono::seconds>(
+                   now - pair.second->get_created_time())
+                   .count() >= ylt_label_max_age.count();
+      return r;
+    });
+  }
+
  protected:
   template <typename Key, typename... Args>
   std::pair<std::shared_ptr<metric_pair>, bool> try_emplace(Key&& key,
@@ -107,14 +116,7 @@ class dynamic_metric_impl : public dynamic_metric {
         },
         std::forward<Key>(key), std::forward<Args>(args)...);
   }
-  void clean_expired_label() override {
-    erase_if([now = std::chrono::steady_clock::now()](auto& pair) mutable {
-      bool r = std::chrono::duration_cast<std::chrono::seconds>(
-                   now - pair.second->get_created_time())
-                   .count() >= ylt_label_max_age.count();
-      return r;
-    });
-  }
+
   std::shared_ptr<metric_pair> find(std::span<const std::string, N> key) const {
     return map_.find(key);
   }

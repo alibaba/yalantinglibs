@@ -188,6 +188,13 @@ class basic_dynamic_histogram : public dynamic_metric {
     bucket_counts_[bucket_index]->inc(labels_value);
   }
 
+  void clean_expired_label() override {
+    sum_->clean_expired_label();
+    for (auto &m : bucket_counts_) {
+      m->clean_expired_label();
+    }
+  }
+
   auto get_bucket_counts() { return bucket_counts_; }
 
   bool has_label_value(const std::string &label_val) override {
@@ -201,6 +208,8 @@ class basic_dynamic_histogram : public dynamic_metric {
   bool has_label_value(const std::vector<std::string> &label_value) override {
     return sum_->has_label_value(label_value);
   }
+
+  size_t label_value_count() const { return sum_->label_value_count(); }
 
   void serialize(std::string &str) override {
     auto value_map = sum_->copy();
