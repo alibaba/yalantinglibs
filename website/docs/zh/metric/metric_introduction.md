@@ -1,6 +1,13 @@
 # metric 介绍
 metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。yalantinglibs提供了一系列高性能且线程安全的统计工具。
 
+metric 包括4种指标类型：
+- couter：只会增加的指标；
+- gauge：可以增加或减少的指标，它派生于counter；
+- histogram：直方图，初始化的时候需要设置桶(bucket)；
+- summary：分位数指标，初始化的时候需要设置桶和误差；
+
+
 ## Counter 计数器类型
 Counter是一个累计类型的数据指标，它代表单调递增的计数器，其值只能在重新启动时增加或重置为 0。例如，您可以使用计数器来表示已响应的请求数，已完成或出错的任务数。
 
@@ -71,11 +78,7 @@ prometheus_tsdb_wal_fsync_duration_seconds_count 216
 ```
 
 # 概述
-metric 包括4种指标类型：
-- couter：只会增加的指标；
-- gauge：可以增加或减少的指标，它派生于counter；
-- histogram：直方图，初始化的时候需要设置桶(bucket)；
-- summary：分位数指标，初始化的时候需要设置桶和误差；
+
 
 # label
 
@@ -453,7 +456,11 @@ std::vector<std::shared_ptr<counter_t>> get_bucket_counts();
 // 序列化
 void serialize(std::string& str);
 ```
-## 例子
+
+
+## 例子   
+
+
 ```cpp
   histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
   h.observe(23);
@@ -548,7 +555,7 @@ summary每次写入的数据会被映射到一个14位的浮点数中，其指�
 
 ### 大量重复数字导致的误差
 
-为节省内存空间，summary内部的每个桶仅能存储一个32位数字，因此，在一个过期时间周期内同一个数字被插入超过2^32次后，为了避免溢出，新的数字会被插入到与该数字临近的桶（相差约1%）中，这可能导致一定误差。
+为节省内存空间，dynamic summary内部的每个桶仅能存储一个32位数字，因此，在一个过期时间周期内同一个数字被插入超过2^32次后，为了避免溢出，新的数字会被插入到与该数字临近的桶（相差约1%）中，这可能导致一定误差。非daynamic的summary 不会有这个问题，因为他内部使用的是64位，不可能出现溢出。
 
 ### 过期时间误差
 
