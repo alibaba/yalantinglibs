@@ -445,6 +445,11 @@ class coro_http_connection
     return remote_addr_;
   }
 
+  size_t available() {
+    std::error_code ec{};
+    return socket_.available(ec);
+  }
+
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
   void set_default_handler(

@@ -277,10 +277,12 @@ TEST_CASE("test send after server stop") {
 
 TEST_CASE("test read write in different threads") {
   cinatra::coro_http_server server(1, 8090);
+  size_t count = 0;
+  std::promise<void> promise;
   server.set_http_handler<cinatra::GET>(
       "/",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         CHECK(req.get_content_type() == content_type::websocket);
         websocket_result result{};
         while (true) {
@@ -288,7 +290,11 @@ TEST_CASE("test read write in different threads") {
           if (result.ec) {
             break;
           }
-
+          count++;
+          if (count == 100) {
+            promise.set_value();
+            break;
+          }
           auto ec = co_await req.get_conn()->write_websocket(result.data);
           if (ec) {
             break;
@@ -326,7 +332,7 @@ TEST_CASE("test read write in different threads") {
 
   async_simple::coro::syncAwait(lazy());
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  promise.get_future().wait_for(std::chrono::seconds(2));
 
   server.stop();
 }

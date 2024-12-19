@@ -759,6 +759,11 @@ TEST_CASE("test pipeline") {
         res.set_status_and_content(status_type::ok, "hello coro");
         co_return;
       });
+  server.set_http_handler<GET, POST>(
+      "/test_available", [](coro_http_request &req, coro_http_response &res) {
+        std::string str(1400, 'a');
+        res.set_status_and_content(status_type::ok, std::move(str));
+      });
   server.async_start();
 
   {
@@ -881,6 +886,20 @@ TEST_CASE("test pipeline") {
     int r = parser.parse_response(result.resp_body.data(),
                                   result.resp_body.size(), 0);
     CHECK(parser.status() != 200);
+  }
+
+  {
+    coro_http_client client{};
+    std::string uri = "http://127.0.0.1:9001";
+    async_simple::coro::syncAwait(client.connect(uri));
+    auto ec = async_simple::coro::syncAwait(client.async_write_raw(
+        "GET /test_available HTTP/1.1\r\nHost: 127.0.0.1:8090\r\n\r\n"));
+    CHECK(!ec);
+
+    auto result =
+        async_simple::coro::syncAwait(client.async_read_raw(http_method::GET));
+    auto sz = client.available();
+    CHECK(sz > 0);
   }
 }
 #endif
