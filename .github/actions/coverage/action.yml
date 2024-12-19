@@ -92,7 +92,7 @@ runs:
         else
           report=ylt-cov-report
         fi
-        llvm-cov show $(find . -maxdepth 1 -type f -executable | awk '{print "-object " $0}' | xargs) -instr-profile=test_ylt.profdata -format=html -output-dir=$report -ignore-filename-regex='thirdparty|src|template_switch|concurrentqueue|dragonbox_to_chars.hpp|dragonbox.hpp|expected.hpp|' -show-instantiations=false
+        llvm-cov show $(find . -maxdepth 1 -type f -executable | awk '{print "-object " $0}' | xargs) -instr-profile=test_ylt.profdata -format=html -output-dir=$report -ignore-filename-regex='thirdparty|src|template_switch|concurrentqueue|dragonbox_to_chars|dragonbox|expected|' -show-instantiations=false
         echo "path=build/output/tests/$report" >> $GITHUB_OUTPUT
         cov_data=$(grep -w '<pre>Totals</pre>' $report/index.html | awk -F 'Totals' '{print $NF}' | cut -d ')' -f 2 | awk -F '>' '{print $NF}' | awk -F '%' '{print $1}')
         echo "coverage data: $cov_data"
