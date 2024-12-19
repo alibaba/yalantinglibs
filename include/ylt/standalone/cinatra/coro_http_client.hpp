@@ -369,6 +369,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     max_http_body_len_ = max_size;
   }
 
+  size_t available() {
+    std::error_code ec{};
+    return socket_->impl_.available(ec);
+  }
+
   async_simple::coro::Lazy<resp_data> read_websocket() {
     auto time_out_guard =
         timer_guard(this, req_timeout_duration_, "websocket timer");
