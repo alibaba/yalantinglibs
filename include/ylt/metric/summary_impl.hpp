@@ -7,12 +7,15 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace ylt::metric::detail {
 
-template <std::size_t frac_bit = 6>
+template <typename uint_type, std::size_t frac_bit = 6>
 class summary_impl {
+  static_assert(sizeof(uint_type) >= 4);
+  static_assert(std::is_unsigned_v<uint_type>);
   constexpr static uint32_t decode_impl(uint16_t float16_value) {
     float16_value <<= (8 - frac_bit);
     uint32_t sign = float16_value >> 15;
@@ -57,7 +60,8 @@ class summary_impl {
   static constexpr float float16_max = (1ull << 63) * 2.0f;  // 2^64
 
   static uint16_t encode(float flt) {
-    unsigned int& fltInt32 = *(unsigned int*)&flt;
+    static_assert(sizeof(float) == 4);
+    uint32_t& fltInt32 = *(uint32_t*)&flt;
     if (std::abs(flt) >= float16_max || std::isnan(flt)) {
       flt = (fltInt32 & 0x8000'0000) ? (-float16_max) : (float16_max);
     }
@@ -88,9 +92,9 @@ class summary_impl {
 
   struct data_t {
     static constexpr size_t piece_size = bucket_size / piece_cnt;
-    using piece_t = std::array<std::atomic<uint32_t>, piece_size>;
+    using piece_t = std::array<std::atomic<uint_type>, piece_size>;
 
-    std::atomic<uint32_t>& operator[](std::size_t index) {
+    std::atomic<uint_type>& operator[](std::size_t index) {
       piece_t* piece = arr[index / piece_size];
       if (piece == nullptr) {
         auto ptr = new piece_t{};
@@ -122,7 +126,7 @@ class summary_impl {
     }
     template <bool inc_order>
     void stat_impl(uint64_t& count,
-                   std::vector<std::pair<int16_t, uint32_t>>& result, int i) {
+                   std::vector<std::pair<int16_t, uint_type>>& result, int i) {
       auto piece = arr[i].load(std::memory_order_relaxed);
       if (piece) {
         if constexpr (inc_order) {
@@ -146,7 +150,7 @@ class summary_impl {
       }
     }
     void stat(uint64_t& count,
-              std::vector<std::pair<int16_t, uint32_t>>& result) {
+              std::vector<std::pair<int16_t, uint_type>>& result) {
       for (int i = piece_cnt - 1; i >= piece_cnt / 2; --i) {
         stat_impl<false>(count, result, i);
       }
@@ -182,36 +186,38 @@ class summary_impl {
   static inline const unsigned long ms_count =
       std::chrono::steady_clock::duration{std::chrono::milliseconds{1}}.count();
 
-  constexpr static unsigned int near_uint32_max = 4290000000U;
+  constexpr static uint32_t near_uint32_max = 4290000000U;
 
   void increase(data_t& arr, uint16_t pos) {
-    if (arr[pos].fetch_add(1, std::memory_order::relaxed) >
-        near_uint32_max) /*no overflow*/ [[likely]] {
-      arr[pos].fetch_sub(1, std::memory_order::relaxed);
-      int upper = (pos < bucket_size / 2) ? (bucket_size / 2) : (bucket_size);
-      int lower = (pos < bucket_size / 2) ? (0) : (bucket_size / 2);
-      for (int delta = 1, lim = (std::max)(upper - pos, pos - lower + 1);
-           delta < lim; ++delta) {
-        if (pos + delta < upper) {
-          if (arr[pos + delta].fetch_add(1, std::memory_order::relaxed) <=
-              near_uint32_max) {
-            break;
+    auto res = arr[pos].fetch_add(1, std::memory_order::relaxed);
+    if constexpr (std::is_same_v<uint_type, uint32_t>) {
+      if (res > near_uint32_max) /*no overflow*/ [[likely]] {
+        arr[pos].fetch_sub(1, std::memory_order::relaxed);
+        int upper = (pos < bucket_size / 2) ? (bucket_size / 2) : (bucket_size);
+        int lower = (pos < bucket_size / 2) ? (0) : (bucket_size / 2);
+        for (int delta = 1, lim = (std::max)(upper - pos, pos - lower + 1);
+             delta < lim; ++delta) {
+          if (pos + delta < upper) {
+            if (arr[pos + delta].fetch_add(1, std::memory_order::relaxed) <=
+                near_uint32_max) {
+              break;
+            }
+            arr[pos + delta].fetch_sub(1, std::memory_order::relaxed);
           }
-          arr[pos + delta].fetch_sub(1, std::memory_order::relaxed);
-        }
-        if (pos - delta >= lower) {
-          if (arr[pos - delta].fetch_add(1, std::memory_order::relaxed) <=
-              near_uint32_max) {
-            break;
+          if (pos - delta >= lower) {
+            if (arr[pos - delta].fetch_add(1, std::memory_order::relaxed) <=
+                near_uint32_max) {
+              break;
+            }
+            arr[pos - delta].fetch_sub(1, std::memory_order::relaxed);
           }
-          arr[pos - delta].fetch_sub(1, std::memory_order::relaxed);
         }
       }
     }
   }
 
   struct data_copy_t {
-    std::vector<std::pair<int16_t, uint32_t>> arr[2];
+    std::vector<std::pair<int16_t, uint_type>> arr[2];
     int index[2] = {}, smaller_one;
     void init() {
       if (arr[0][0] <= arr[1][0]) {
@@ -231,7 +237,7 @@ class summary_impl {
       }
     }
     int16_t value() { return arr[smaller_one][index[smaller_one]].first; }
-    uint32_t count() { return arr[smaller_one][index[smaller_one]].second; }
+    uint_type count() { return arr[smaller_one][index[smaller_one]].second; }
   };
 
  public:
@@ -304,6 +310,9 @@ class summary_impl {
         e = 1;
       }
       auto target_count = std::min<double>(e * count, count);
+      if (e == 0) {
+        target_count = std::min(uint64_t{1}, count);
+      }
       while (true) {
         if (target_count <= count_now) [[unlikely]] {
           result.push_back(v);
