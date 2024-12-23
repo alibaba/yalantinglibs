@@ -689,6 +689,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                           404};
     }
 
+    out_buf_ = {};
+
     req_context<> ctx{req_content_type::multipart, "", ""};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
@@ -1021,6 +1023,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     req_context<> ctx{content_type};
     resp_data data{};
 
+    out_buf_ = {};
+
     std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
@@ -1189,6 +1193,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::error_code ec{};
     size_t size = 0;
     bool is_keep_alive = true;
+
+    out_buf_ = {};
 
     std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
