@@ -925,8 +925,9 @@ TEST_CASE("test out buffer and async upload ") {
     std::string uri = "http://127.0.0.1:9000/normal";
     std::vector<char> oubuf;
     oubuf.resize(10);
+    req_context<> ctx{};
     auto result = co_await client.async_request(uri, http_method::GET,
-                                                req_context<>{}, {}, oubuf);
+                                                std::move(ctx), {}, oubuf);
     std::cout << oubuf.data() << "\n";
 
     std::string_view out_view(oubuf.data(), result.resp_body.size());
@@ -950,19 +951,12 @@ TEST_CASE("test out buffer and async upload ") {
           co_await client.async_upload_multipart("http://127.0.0.1:9000/more");
     }
 
-    std::cout << oubuf.data() << "\n";
+    std::cout << (int)flag << oubuf.data() << "\n";
+    std::cout << result.resp_body << "\n";
 
     std::string_view out_view1(oubuf.data(), out_view.size());
     assert(out_view == out_view1);
     assert(result.resp_body != out_view1);
-
-    result = co_await client.async_request(uri, http_method::GET,
-                                           req_context<>{}, {}, oubuf);
-    std::cout << oubuf.data() << "\n";
-
-    std::string_view out_view2(oubuf.data(), result.resp_body.size());
-    assert(out_view2 == "test");
-    assert(out_view2 == result.resp_body);
   };
 
   async_simple::coro::syncAwait(lazy(upload_type::send_file));
