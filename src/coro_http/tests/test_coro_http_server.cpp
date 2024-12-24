@@ -751,13 +751,15 @@ TEST_CASE("chunked request") {
 
         while (true) {
           result = co_await req.get_conn()->read_chunked();
+          auto size = req.get_conn()->available();
           if (result.ec) {
             co_return;
           }
           if (result.eof) {
+            CHECK(size == 0);
             break;
           }
-
+          CHECK(size >= 0);
           content.append(result.data);
         }
 
