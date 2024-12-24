@@ -1106,6 +1106,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     req_context<> ctx{content_type};
     resp_data data{};
 
+    out_buf_ = {};
+
     std::shared_ptr<void> guard(nullptr, [&, this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
