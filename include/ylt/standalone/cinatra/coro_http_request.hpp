@@ -248,6 +248,10 @@ class coro_http_request {
     (aspect_data_.push_back(std::move(args)), ...);
   }
 
+  void set_user_data(std::any data) { user_data_ = std::move(data); }
+
+  std::any get_user_data() { return user_data_; }
+
   std::vector<std::string> &get_aspect_data() { return aspect_data_; }
 
   std::unordered_map<std::string_view, std::string_view> get_cookies(
@@ -288,6 +292,9 @@ class coro_http_request {
     if (!aspect_data_.empty()) {
       aspect_data_.clear();
     }
+    if (user_data_.has_value()) {
+      user_data_.reset();
+    }
   }
 
   std::unordered_map<std::string, std::string> params_;
@@ -300,5 +307,6 @@ class coro_http_request {
   bool is_websocket_ = false;
   std::vector<std::string> aspect_data_;
   std::string cached_session_id_;
+  std::any user_data_;
 };
 }  // namespace cinatra
