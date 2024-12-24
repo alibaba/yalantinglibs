@@ -456,10 +456,11 @@ class dynamic_metric_manager {
  private:
   void clean_label_expired() {
     executor_ = coro_io::create_io_context_pool(1);
+    auto sp = executor_;
     timer_ = std::make_shared<coro_io::period_timer>(executor_->get_executor());
     check_label_expired(timer_)
         .via(executor_->get_executor())
-        .start([](auto&&) {
+        .start([sp](auto&&) {
         });
   }
 
