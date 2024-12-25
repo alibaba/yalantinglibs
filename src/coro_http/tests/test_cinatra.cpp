@@ -538,6 +538,8 @@ TEST_CASE("test request https without init_ssl") {
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
+    auto val = std::make_shared<int>(42);
+    req.set_user_data(val);
     return true;
   }
 };
@@ -545,6 +547,13 @@ struct add_data {
 struct add_more_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data(std::vector<std::string>{"test", "aspect"});
+    auto user_data = req.get_user_data();
+    CHECK(user_data.has_value());
+    auto val = std::any_cast<std::shared_ptr<int>>(user_data);
+    CHECK(*val == 42);
+    auto data = req.get_user_data();
+    val = std::any_cast<std::shared_ptr<int>>(data);
+    *val = 43;
     return true;
   }
 };
@@ -561,6 +570,8 @@ struct auth_t {
 
 struct dely_t {
   bool before(coro_http_request &req, coro_http_response &res) {
+    auto user_data = req.get_user_data();
+    CHECK(!user_data.has_value());
     res.set_status_and_content(status_type::unauthorized, "unauthorized");
     return false;
   }
@@ -594,9 +605,13 @@ TEST_CASE("test aspect") {
         CHECK(val[0] == "test");
         CHECK(val[1] == "aspect");
         CHECK(!req.is_upgrade());
+        auto user_data = req.get_user_data();
+        CHECK(user_data.has_value());
+        auto val1 = std::any_cast<std::shared_ptr<int>>(user_data);
+        CHECK(*val1 == 43);
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      add_more_data{});
+      add_data{}, add_more_data{});
   server.set_http_handler<GET>(
       "/auth",
       [](coro_http_request &req, coro_http_response &resp) {

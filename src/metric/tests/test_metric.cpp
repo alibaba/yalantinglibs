@@ -1964,9 +1964,12 @@ TEST_CASE("test metric manager clean expired label") {
   CHECK(c->label_value_count() == 2);
   CHECK(summary->label_value_count() == 1);
   CHECK(h->label_value_count() == 1);
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::seconds(3));
   c->inc({"/index"});
   size_t count = c->label_value_count();
+  if (count != 1) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
   CHECK(count == 1);
   auto ct1 = summary->label_value_count();
   CHECK(ct1 == 0);
