@@ -349,6 +349,37 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   CHECK(s == sum);
 }
 
+TEST_CASE("test config") {
+  coro_http_client client{};
+  coro_http_client::config conf{};
+  conf.sec_key = "s//GYHa/XO7Hd2F2eOGfyA==";
+  conf.proxy_host = "http://example.com";
+  conf.proxy_host = "9090";
+  conf.max_single_part_size = 1024 * 1024;
+  conf.proxy_auth_username = "cinatra";
+  conf.proxy_auth_token = "cinatra";
+  conf.proxy_auth_passwd = "cinatra";
+  conf.enable_tcp_no_delay = true;
+  client.init_config(conf);
+
+  std::unordered_map<std::string, std::string> req_headers{{"test", "ok"}};
+  client.set_headers(req_headers);
+  const auto &headers = client.get_headers();
+  CHECK(req_headers == headers);
+
+  auto &executor = client.get_executor();
+  auto name = executor.name();
+  CHECK(!name.empty());
+
+  const auto &c = client.get_config();
+  CHECK(c.enable_tcp_no_delay == conf.enable_tcp_no_delay);
+  CHECK(c.max_single_part_size == 1024 * 1024);
+
+  auto ret = async_simple::coro::syncAwait(client.connect("http://##test.com"));
+  CHECK(ret.status != 200);
+  CHECK(ret.net_err.value() == (int)std::errc::protocol_error);
+}
+
 async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
   for (int i = 0; i < count; i++) {
     co_await coro_io::async_send(ch, i);
@@ -669,10 +700,11 @@ TEST_CASE("test request with out buffer") {
   std::string str;
   str.resize(10);
   std::string url = "http://127.0.0.1:8090/test";
-  std::string url1 = "http://127.0.0.1:8090/test";
+  std::string url1 = "http://127.0.0.1:8090/test1";
 
   {
     coro_http_client client;
+    client.add_header("Host", "cinatra");
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
@@ -693,6 +725,8 @@ TEST_CASE("test request with out buffer") {
     std::cout << result.resp_body << "\n";
     CHECK(result.status == 200);
     CHECK(!client.is_body_in_out_buf());
+    auto s = client.release_buf();
+    CHECK(s == "it is a test string, more than 10 bytes");
   }
 
   {
@@ -705,6 +739,22 @@ TEST_CASE("test request with out buffer") {
     CHECK(ok);
     std::string_view sv(str.data(), result.resp_body.size());
     CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
+  }
+
+  {
+    detail::resize(str, 1024 * 64);
+    coro_http_client client;
+    client.set_conn_timeout(3s);
+    client.set_req_timeout(5s);
+    std::string dest = "http://www.baidu.com";
+    auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    bool ok = result.status == 200 || result.status == 301;
+    CHECK(ok);
+    std::string_view sv(str.data(), result.resp_body.size());
+    //    CHECK(result.resp_body == sv);
     CHECK(client.is_body_in_out_buf());
   }
 }
