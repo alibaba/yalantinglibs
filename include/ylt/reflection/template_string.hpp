@@ -31,18 +31,11 @@ constexpr std::string_view get_raw_name() {
 template <typename T>
 inline constexpr std::string_view type_string() {
   constexpr std::string_view sample = get_raw_name<int>();
-  constexpr size_t pos = sample.find("int");
+  constexpr size_t prefix_length = sample.find("int");
+  constexpr size_t suffix_length = sample.size() - prefix_length - 3;
+
   constexpr std::string_view str = get_raw_name<T>();
-  constexpr auto next1 = str.rfind(sample[pos + 3]);
-#if defined(_MSC_VER)
-  constexpr std::size_t npos = str.find_first_of(" ", pos);
-  if constexpr (npos != std::string_view::npos)
-    return str.substr(npos + 1, next1 - npos - 1);
-  else
-    return str.substr(pos, next1 - pos);
-#else
-  return str.substr(pos, next1 - pos);
-#endif
+  return str.substr(prefix_length, str.size() - prefix_length - suffix_length);
 }
 
 template <auto T>
