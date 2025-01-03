@@ -1655,8 +1655,43 @@ TEST_CASE("test coro_http_client chunked upload and download") {
         });
 
     server.async_start();
+    {
+      coro_http_client client{};
+      std::string uri = "http://###127.0.0.1:8090/chunked_upload";
+      std::string filename = "test_chunked_upload.txt";
+      auto lazy = client.async_upload(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status != 200);
+
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      filename = "no_such.txt";
+      auto lazy1 = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy1);
+      CHECK(result.status != 200);
+
+      std::shared_ptr<std::ifstream> file = nullptr;
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy2 = client.async_upload(uri, http_method::PUT, file);
+      result = async_simple::coro::syncAwait(lazy2);
+      CHECK(result.status != 200);
+
+      auto code = async_simple::coro::syncAwait(client.handle_shake());
+      CHECK(code);
+
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      filename = "test_chunked_upload.txt";
+      client.set_conn_timeout(1ms);
+      auto lazy3 = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy3);
+      CHECK(result.status != 200);
+      client.set_conn_timeout(500ms);
+      client.set_req_timeout(1ms);
+      auto lazy4 = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy4);
+      CHECK(result.status != 200);
+    }
     auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
-    for (auto size : sizes) {
+    for ([[maybe_unused]] auto size : sizes) {
       std::string filename = "test_chunked_upload.txt";
       std::error_code ec{};
       fs::remove(filename, ec);
