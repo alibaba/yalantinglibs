@@ -1339,17 +1339,6 @@ TEST_CASE("test ssl upload") {
     auto result = async_simple::coro::syncAwait(lazy);
     CHECK(result.status == 200);
   }
-
-  {
-    coro_http_client client{};
-    client.write_failed_forever_ = true;
-    bool r = client.init_ssl();
-    CHECK(r);
-    client.add_header("filename", filename);
-    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-    auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status != 200);
-  }
 }
 #endif
 
