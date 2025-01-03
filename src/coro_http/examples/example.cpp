@@ -689,8 +689,9 @@ void test_outbuf() {
     std::string uri = "http://127.0.0.1:9000/normal";
     std::vector<char> oubuf;
     oubuf.resize(10);
+    req_context<> ctx{};
     auto result = co_await client.async_request(uri, http_method::GET,
-                                                req_context<>{}, {}, oubuf);
+                                                std::move(ctx), {}, oubuf);
     std::cout << oubuf.data() << "\n";
 
     std::string_view out_view(oubuf.data(), result.resp_body.size());

@@ -1044,6 +1044,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             std::make_error_code(std::errc::no_such_file_or_directory), 404};
       }
     }
+    else if constexpr (std::is_same_v<Source, std::string> ||
+                       std::is_same_v<Source, std::string_view>) {
+      std::error_code ignore;
+      if (!std::filesystem::exists(source, ignore)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+
     // get the content_length
     if (content_length < 0) {
       if constexpr (is_stream_file) {
