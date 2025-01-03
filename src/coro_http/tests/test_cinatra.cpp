@@ -183,6 +183,16 @@ TEST_CASE("test ssl client") {
   }
   {
     coro_http_client client{};
+    auto ret = client.get("https://baidu.com");
+    client.reset();
+    ret = client.get("https://cn.bing.com");
+    std::cout << ret.status << std::endl;
+    client.reset();
+    ret = client.get("https://baidu.com");
+    std::cout << ret.status << std::endl;
+  }
+  {
+    coro_http_client client{};
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
   }
@@ -221,6 +231,7 @@ TEST_CASE("test ssl client") {
     coro_http_client client{};
     client.enable_auto_redirect(true);
     bool ok = client.init_ssl();
+    client.reset();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -918,6 +929,32 @@ TEST_CASE("test head put and some other request") {
       "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
 
   CHECK(result.status == 200);
+}
+
+TEST_CASE("test coro_http_client connect/request timeout") {
+  {
+#if !defined(_MSC_VER)
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
+    if (r.status != 200)
+      CHECK(r.net_err != std::errc{});
+#endif
+  }
+
+  {
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 10s,
+                                           .req_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.message() << "\n";
+    CHECK(r.net_err != std::errc{});
+  }
 }
 
 TEST_CASE("test upload file") {
