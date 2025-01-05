@@ -481,26 +481,42 @@ TEST_CASE("test type_string") {
   CHECK(type_string<volatile int>() == "volatile int");
   CHECK(type_string<int&>() == "int&");
   CHECK(type_string<int&&>() == "int&&");
+  CHECK(type_string<int*>() == "int*");
   CHECK(type_string<const int&>() == "const int&");
   CHECK(type_string<const int&&>() == "const int&&");
+  CHECK(type_string<const int*>() == "const int*");
   CHECK(type_string<test_type_string::struct_test>() == "test_type_string::struct_test");
   CHECK(type_string<test_type_string::struct_test&>() == "test_type_string::struct_test&");
   CHECK(type_string<test_type_string::struct_test&&>() == "test_type_string::struct_test&&");
+  CHECK(type_string<test_type_string::struct_test*>() == "test_type_string::struct_test*");
   CHECK(type_string<const test_type_string::struct_test>() == "const test_type_string::struct_test");
   CHECK(type_string<const test_type_string::struct_test&>() == "const test_type_string::struct_test&");
   CHECK(type_string<const test_type_string::struct_test&&>() == "const test_type_string::struct_test&&");
+  CHECK(type_string<const test_type_string::struct_test*>() == "const test_type_string::struct_test*");
   CHECK(type_string<test_type_string::class_test>() == "test_type_string::class_test");
   CHECK(type_string<test_type_string::class_test&>() == "test_type_string::class_test&");
   CHECK(type_string<test_type_string::class_test&&>() == "test_type_string::class_test&&");
+  CHECK(type_string<test_type_string::class_test*>() == "test_type_string::class_test*");
   CHECK(type_string<const test_type_string::class_test>() == "const test_type_string::class_test");
   CHECK(type_string<const test_type_string::class_test&>() == "const test_type_string::class_test&");
   CHECK(type_string<const test_type_string::class_test&&>() == "const test_type_string::class_test&&");
+  CHECK(type_string<const test_type_string::class_test*>() == "const test_type_string::class_test*");
   CHECK(type_string<test_type_string::union_test>() == "test_type_string::union_test");
   CHECK(type_string<test_type_string::union_test&>() == "test_type_string::union_test&");
   CHECK(type_string<test_type_string::union_test&&>() == "test_type_string::union_test&&");
+  CHECK(type_string<test_type_string::union_test*>() == "test_type_string::union_test*");
   CHECK(type_string<const test_type_string::union_test>() == "const test_type_string::union_test");
   CHECK(type_string<const test_type_string::union_test&>() == "const test_type_string::union_test&");
   CHECK(type_string<const test_type_string::union_test&&>() == "const test_type_string::union_test&&");
+  CHECK(type_string<const test_type_string::union_test*>() == "const test_type_string::union_test*");
+  CHECK(type_string<std::string>() == "std::basic_string<char>");
+  CHECK(type_string<std::string&>() == "std::basic_string<char>&");
+  CHECK(type_string<std::string&&>() == "std::basic_string<char>&&");
+  CHECK(type_string<std::string*>() == "std::basic_string<char>*");
+  CHECK(type_string<const std::string>() == "const std::basic_string<char>");
+  CHECK(type_string<const std::string&>() == "const std::basic_string<char>&");
+  CHECK(type_string<const std::string&&>() == "const std::basic_string<char>&&");
+  CHECK(type_string<const std::string*>() == "const std::basic_string<char>*");
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
