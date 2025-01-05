@@ -4,6 +4,7 @@
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
+#include "ylt/util/meta_string.hpp"
 
 namespace ylt::reflection {
 
@@ -29,13 +30,28 @@ constexpr std::string_view get_raw_name() {
 }
 
 template <typename T>
-inline constexpr std::string_view type_string() {
+inline constexpr auto type_string() {
   constexpr std::string_view sample = get_raw_name<int>();
   constexpr size_t prefix_length = sample.find("int");
   constexpr size_t suffix_length = sample.size() - prefix_length - 3;
 
-  constexpr std::string_view str = get_raw_name<T>();
-  return str.substr(prefix_length, str.size() - prefix_length - suffix_length);
+  constexpr std::string_view raw_str = get_raw_name<T>();
+  constexpr std::string_view str = raw_str.substr(
+      prefix_length, raw_str.size() - prefix_length - suffix_length);
+
+  constexpr refvalue::meta_string name{
+      std::span<const char, str.size()>{str.data(), str.size()}};
+#if defined(__clang__)
+  constexpr auto name_no_blank = refvalue::replace_v<name, " &", "&">;
+  return name_no_blank;
+#elif defined(_MSC_VER)
+  constexpr auto name_no_struct = refvalue::remove_v<name, "struct ">;
+  constexpr auto name_no_class = refvalue::remove_v<name_no_struct, "class ">;
+  constexpr auto name_no_union = refvalue::remove_v<name_no_class, "union ">;
+  return name_no_union;
+#else
+  return name;
+#endif
 }
 
 template <auto T>

@@ -318,5 +318,50 @@ struct remove {
 
 template <meta_string S, meta_string Removal>
 inline constexpr auto&& remove_v = remove<S, Removal>::value;
+
+template <meta_string S, meta_string Old, meta_string New>
+struct replace {
+  static constexpr std::string_view view{S};
+  static constexpr auto value = []() {
+    constexpr auto input_size = S.size();
+    constexpr auto old_size = Old.size();
+    constexpr auto new_size = New.size();
+
+    constexpr auto result_size = []() -> size_t {
+      size_t old_count = 0;
+      for (std::size_t i = 0; i + old_size <= input_size;) {
+        if (view.substr(i, old_size) == Old) {
+          i += old_size;
+          old_count++;
+        }
+        else {
+          i++;
+        }
+      }
+      return input_size + (new_size - old_size) * old_count;
+    }();
+
+    std::array<char, result_size> result{};
+    std::size_t write_pos = 0;
+    std::size_t i = 0;
+    while (i + old_size <= input_size) {
+      if (view.substr(i, old_size) == Old) {
+        std::copy(New.begin(), New.end(), result.begin() + write_pos);
+        i += old_size;
+        write_pos += new_size;
+      }
+      else {
+        result[write_pos++] = view[i++];
+      }
+    }
+    while (write_pos < result_size) {
+      result[write_pos++] = view[i++];
+    }
+    return meta_string{std::span<const char, result_size>{result.data(), result.size()}};
+  }();
+};
+
+template <meta_string S, meta_string Old, meta_string New>
+inline constexpr auto&& replace_v = replace<S, Old, New>::value;
 #endif
 }  // namespace refvalue
