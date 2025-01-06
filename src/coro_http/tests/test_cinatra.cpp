@@ -1653,8 +1653,28 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           CHECK(sz == std::filesystem::file_size(newpath));
           resp.set_status_and_content(status_type::ok, std::string(filename));
         });
-
+    server.set_http_handler<cinatra::PUT>(
+        "/upload_stream", [](coro_http_request &req, coro_http_response &resp) {
+          std::cout << "body size: " << req.get_body().size() << "\n";
+          resp.set_status_and_content(status_type::ok, "upload ok");
+        });
     server.async_start();
+    {
+      coro_http_client client{};
+      create_file("stream_file.txt", 20);
+      auto stream_file =
+          std::make_shared<std::ifstream>("stream_file.txt", std::ios::binary);
+      std::string uri = "http://127.0.0.1:8090/upload_stream";
+      auto result = async_simple::coro::syncAwait(
+          client.async_upload(uri, http_method::PUT, stream_file));
+      CHECK(result.status == 200);
+      stream_file =
+          std::make_shared<std::ifstream>("stream_file.txt", std::ios::binary);
+      result = async_simple::coro::syncAwait(
+          client.async_upload(uri, http_method::PUT, stream_file, 0, 100));
+      CHECK(result.status != 200);
+      fs::remove("stream_file.txt");
+    }
     {
       coro_http_client client{};
       std::string uri = "http://###127.0.0.1:8090/chunked_upload";
@@ -1677,15 +1697,18 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
       auto code = async_simple::coro::syncAwait(client.handle_shake());
       CHECK(code);
-
-      uri = "http://127.0.0.1:8090/chunked_upload";
-      filename = "test_chunked_upload.txt";
-      client.set_conn_timeout(1ms);
+    }
+    {
+      std::string uri = "http://127.0.0.1:8090/upload_stream";
+      std::string filename = "test_chunked_upload.txt";
+      coro_http_client client{};
+      client.set_conn_timeout(0ms);
       auto lazy3 = client.async_upload(uri, http_method::PUT, filename);
-      result = async_simple::coro::syncAwait(lazy3);
+      auto result = async_simple::coro::syncAwait(lazy3);
       CHECK(result.status != 200);
+      client.reset();
       client.set_conn_timeout(500ms);
-      client.set_req_timeout(1ms);
+      client.set_req_timeout(0ms);
       auto lazy4 = client.async_upload(uri, http_method::PUT, filename);
       result = async_simple::coro::syncAwait(lazy4);
       CHECK(result.status != 200);
