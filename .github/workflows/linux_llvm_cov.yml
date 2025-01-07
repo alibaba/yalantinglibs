@@ -27,7 +27,7 @@ on:
       - main
       - fix_coverage_show
       - 0.3.8.1
-      - tests_for_0381
+      - tests_for_0382
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
