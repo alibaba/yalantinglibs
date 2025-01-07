@@ -26,8 +26,7 @@ on:
     branches:
       - main
       - fix_coverage_show
-      - 0.3.8.1
-      - tests_for_0382
+      - 0.3.8.2
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
