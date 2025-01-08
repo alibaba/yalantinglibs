@@ -90,10 +90,13 @@ class basic_static_counter : public static_metric {
   virtual ~basic_static_counter() { g_user_metric_count--; }
 
   void inc(value_type val = 1) {
-    if (val <= 0) {
+    if (val < 0) {
       return;
     }
 
+    if (!has_change_) [[unlikely]] {
+      has_change_ = true;
+    }
 #ifdef __APPLE__
     if constexpr (std::is_floating_point_v<value_type>) {
       mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
@@ -129,12 +132,12 @@ class basic_static_counter : public static_metric {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    if (default_label_value_.value() == 0) {
+    auto value = default_label_value_.value();
+    if (value == 0 && !has_change_) {
       return;
     }
 
     json_counter_t counter{name_, help_, std::string(metric_name())};
-    auto value = default_label_value_.value();
     counter.metrics.push_back({static_labels_, value});
     iguana::to_json(counter, str);
   }

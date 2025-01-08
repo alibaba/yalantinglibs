@@ -15,26 +15,56 @@ struct metrc_tag {};
 struct test_tag {};
 
 TEST_CASE("serialize zero") {
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(0);
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+    str.clear();
+    gauge_t g("test1", "");
+    g.dec(0);
+    g.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(2);
+    c.update(0);  // now zero
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+    str.clear();
+    gauge_t g("test1", "");
+    g.inc(2);
+    g.dec(2);  // now zero
+    g.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
   counter_t c("test", "");
   gauge_t g("test1", "");
   std::string str;
-  c.serialize(str);
+  c.serialize_to_json(str);
   CHECK(str.empty());
-  g.serialize(str);
+  g.serialize_to_json(str);
   CHECK(str.empty());
   c.inc();
-  c.serialize(str);
+  c.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
   g.inc();
-  g.serialize(str);
-  CHECK(!str.empty());
-  c.update(0);
-  c.serialize(str);
+  g.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
+  c.update(0);
+  c.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+  // dec to zero
   g.dec();
-  g.serialize(str);
+  g.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
 
