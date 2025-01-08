@@ -42,9 +42,8 @@ inline constexpr auto type_string() {
   constexpr refvalue::meta_string name{
       std::span<const char, str.size()>{str.data(), str.size()}};
 #if defined(__clang__)
-  constexpr auto name_ref = refvalue::replace_v<name, " &", "&">;
-  constexpr auto name_pointer = refvalue::replace_v<name_ref, " *", "*">;
-  return name_pointer;
+  constexpr auto name_no_blank = refvalue::replace_v<name, " &", "&">;
+  return name_no_blank;
 #elif defined(_MSC_VER)
   constexpr auto name_no_struct = refvalue::remove_v<name, "struct ">;
   constexpr auto name_no_class = refvalue::remove_v<name_no_struct, "class ">;
