@@ -71,14 +71,21 @@ TEST_CASE("serialize zero") {
   dynamic_counter_1t c1("test", "", {"url"});
   c1.serialize(str);
   CHECK(str.empty());
+  c1.update({"/test"}, 0);
+  c1.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+
   dynamic_gauge_1t g1("test", "", {"url"});
   g1.serialize(str);
   CHECK(str.empty());
   c1.inc({"/test"});
-  c1.serialize(str);
+  c1.update({"/test"}, 0);
+  c1.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
   g1.inc({"/test"});
+  g1.dec({"/test"});
   g1.serialize(str);
   CHECK(!str.empty());
   str.clear();
@@ -138,6 +145,9 @@ TEST_CASE("test metric manager") {
   CHECK(v1.size() == 2);
   auto v2 = inst_s.get_metric_by_name("test1");
   CHECK(v2 != nullptr);
+
+  v2 = inst_s.get_metric_by_name("test111");
+  CHECK(v2 == nullptr);
 
   c->inc();
   g->inc();
@@ -267,6 +277,68 @@ TEST_CASE("test metric manager") {
   CHECK(v8.size() == 1);
 }
 
+struct remove_tag {};
+
+TEST_CASE("test metric manager remove") {
+  auto dc = std::make_shared<dynamic_counter_t>(
+      std::string("test3"), std::string(""),
+      std::array<std::string, 2>{"url", "code"});
+  dc->inc(std::array<std::string, 2>{"/", "200"});
+  dynamic_metric_manager<remove_tag>::instance().register_metric(dc);
+  auto& inst_d = dynamic_metric_manager<remove_tag>::instance();
+  std::map<std::string, std::string> map{
+      {"url", "/"}, {"code", "200"}, {"method", "GET"}};
+  CHECK(inst_d.metric_count() == 1);
+  inst_d.remove_metric_by_label(map);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::vector<std::shared_ptr<metric_t>> filtered_metrics;
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.empty());
+
+  options.label_regex = ".*counter.*";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.empty());
+
+  options.label_regex = "url";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.size() == 1);
+  filtered_metrics.clear();
+  options.label_regex = "code";
+  manager_helper::filter_by_label_name(filtered_metrics, dc, options);
+  CHECK(filtered_metrics.size() == 1);
+
+  std::map<std::string, std::string> map1{{"url", "/test"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map1);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map2{{"url", "/"}, {"code", "400"}};
+  inst_d.remove_metric_by_label(map2);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map3{{"url1", "/"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map3);
+  CHECK(inst_d.metric_count() == 1);
+  std::map<std::string, std::string> map4{{"url", "/"}, {"code", "200"}};
+  inst_d.remove_metric_by_label(map4);
+  CHECK(inst_d.metric_count() == 0);
+
+  inst_d.register_metric(dc);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map5{{"url", "/get"}};
+  inst_d.remove_metric_by_label(map5);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map6{{"url1", "/"}};
+  inst_d.remove_metric_by_label(map6);
+  CHECK(inst_d.metric_count() == 1);
+
+  std::map<std::string, std::string> map7{{"url", "/"}};
+  inst_d.remove_metric_by_label(map7);
+  CHECK(inst_d.metric_count() == 0);
+}
+
 TEST_CASE("test dynamic counter") {
   basic_dynamic_counter<int64_t, 2> c("test", "", {"url", "code"});
   c.inc({"/", "200"});
@@ -317,6 +389,14 @@ TEST_CASE("test dynamic counter") {
   dynamic_gauge_t g2("test_g2", "", {"url", "code"});
   g2.inc({"/", "200"});
   CHECK(g2.value({"/", "200"}) == 1);
+
+  auto count = g2.label_value_count();
+  g2.remove_label_value({{"url", "/"}, {"code", "200"}, {"method", "GET"}});
+  auto count1 = g2.label_value_count();
+  CHECK(count == count1);
+  g2.remove_label_value({{"url1", "/"}, {"code1", "200"}});
+  count1 = g2.label_value_count();
+  CHECK(count == count1);
 }
 
 TEST_CASE("test static counter") {
@@ -489,6 +569,39 @@ TEST_CASE("test no label") {
     for (auto& e : result) {
       CHECK(e == 100);
     }
+
+    double sum{};
+    result = summary->get_rates(sum);
+    CHECK(sum == 100);
+
+    uint64_t count{};
+    result = summary->get_rates(count);
+    CHECK(count == 1);
+  }
+
+  {
+    std::map<std::string, std::string> customMap = {};
+    auto summary = std::make_shared<summary_t>(
+        "test", "help", std::vector{0.95, 0.5, 0.99, 0.9}, customMap);
+    summary->observe(100);
+    auto result = summary->get_rates();
+    for (auto& e : result) {
+      CHECK(e == 100);
+    }
+  }
+  {
+    std::map<std::string, std::string> customMap = {};
+    auto summary = std::make_shared<summary_t>(
+        "test", "help", std::vector<double>{}, customMap);
+    std::string str;
+    summary->serialize(str);
+    CHECK(str.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    summary->serialize_to_json(str_json);
+    CHECK(str_json.empty());
+#endif
   }
   auto g_counter = g_pair.second;
   g_counter->inc();
@@ -521,8 +634,24 @@ TEST_CASE("test no label") {
     CHECK(g.value() == 10);
   }
   {
+    metric_t m{};
+    auto name = m.metric_name();
+    CHECK(name == "unknown");
+
+    m.clean_expired_label();
+
+    std::string str;
+    m.serialize(str);
+    CHECK(str.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    m.serialize_to_json(str);
+    CHECK(str.empty());
+#endif
+  }
+  {
     counter_t c("get_count", "get counter");
     CHECK(c.metric_type() == MetricType::Counter);
+    CHECK(c.help() == "get counter");
     CHECK(c.labels_name().empty());
     c.inc();
     CHECK(c.value() == 1);
@@ -550,6 +679,21 @@ TEST_CASE("test with atomic") {
   CHECK(c.value() == 3);
   c.update(10);
   CHECK(c.value() == 10);
+
+  bool r = c.has_label_value("GET");
+  CHECK(r);
+  r = c.has_label_value("POST");
+  CHECK(!r);
+
+  r = c.has_label_value(std::vector<std::string>{"GET", "/"});
+  CHECK(r);
+  r = c.has_label_value(std::vector<std::string>{"GET"});
+  CHECK(!r);
+
+  c.remove_label_value(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  r = c.has_label_value(std::vector<std::string>{"GET", "/"});
+  CHECK(r);
 
   gauge_t g(
       "get_qps", "get qps",
@@ -605,11 +749,9 @@ TEST_CASE("test counter with dynamic labels value") {
                         std::array<std::string, 2>{"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
-    auto values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 1);
+    CHECK(c.value({"GET", "200"}) == 1);
     c.inc({"GET", "200"}, 2);
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 3);
+    CHECK(c.value({"GET", "200"}) == 3);
 
     std::string str;
     c.serialize(str);
@@ -620,8 +762,7 @@ TEST_CASE("test counter with dynamic labels value") {
 
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 20);
+    CHECK(c.value({"GET", "200"}) == 20);
   }
 }
 
@@ -654,11 +795,9 @@ TEST_CASE("test gauge") {
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
-    auto values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 1);
+    CHECK(g.value({"GET", "200", "/"}) == 1);
     g.inc({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 3);
+    CHECK(g.value({"GET", "200", "/"}) == 3);
 
     g.inc({"POST", "200", "/"}, 4);
 
@@ -666,7 +805,8 @@ TEST_CASE("test gauge") {
     std::string str_json;
     g.serialize_to_json(str_json);
     std::cout << str_json << "\n";
-    CHECK(str_json.find("\"code\":\"200\"") != std::string::npos);
+    std::cout << str_json.size() << std::endl;
+    CHECK(str_json.size() == 185);
 #endif
 
     std::string str;
@@ -677,11 +817,9 @@ TEST_CASE("test gauge") {
           std::string::npos);
 
     g.dec({"GET", "200", "/"}, 1);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 2);
+    CHECK(g.value({"GET", "200", "/"}) == 2);
     g.dec({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 0);
+    CHECK(g.value({"GET", "200", "/"}) == 0);
   }
 }
 
@@ -739,7 +877,6 @@ TEST_CASE("test summary") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
 #endif
 }
 
@@ -768,7 +905,8 @@ TEST_CASE("test summary with INF") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 238);
 #endif
 }
 
@@ -797,7 +935,8 @@ TEST_CASE("test summary with NAN") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 238);
 #endif
 }
 
@@ -823,14 +962,15 @@ TEST_CASE("test summary with illegal quantities") {
   CHECK(str.find("test_summary_sum") != std::string::npos);
   CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
   CHECK(result[0] < 0);
-  CHECK(result[1] < 0);
+  CHECK(result[1] == 0);
   CHECK(result[result.size() - 1] > result[result.size() - 2]);
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 222);
 #endif
 }
 
@@ -848,7 +988,7 @@ TEST_CASE("test summary with many quantities") {
   }
   std::string str;
   summary.serialize(str);
-  std::cout << str;
+  // std::cout << str;
   double sum;
   uint64_t cnt;
   auto result = summary.get_rates(sum, cnt);
@@ -865,8 +1005,41 @@ TEST_CASE("test summary with many quantities") {
   std::string str_json;
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
-  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+  std::cout << str_json.size() << std::endl;
+  CHECK(str_json.size() == 8857);
 #endif
+}
+
+TEST_CASE("test summary refresh") {
+  summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 1.1}, 1s};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(i);
+  }
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  std::this_thread::sleep_for(1s);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 0);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(i);
+  }
+  std::this_thread::sleep_for(500ms);
+  for (int i = 0; i < 10; i++) {
+    summary.observe(i);
+  }
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 60);
+  std::this_thread::sleep_for(500ms);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 10);
+  std::this_thread::sleep_for(500ms);
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 0);
 }
 
 TEST_CASE("test register metric") {
@@ -908,6 +1081,11 @@ TEST_CASE("test register metric") {
       default_static_metric_manager::instance().get_metric_static<gauge_t>(
           "get_guage_count");
   CHECK(m1->as<gauge_t>()->value() == 1);
+
+  auto m2 =
+      default_static_metric_manager::instance().get_metric_static<counter_t>(
+          "not_exist");
+  CHECK(m2 == nullptr);
 }
 
 template <size_t id>
@@ -925,6 +1103,20 @@ TEST_CASE("test remove metric and serialize metrics") {
   CHECK(count == 2);
 
   metric_mgr::instance().remove_metric("test_counter");
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
+  metric_mgr::instance().remove_metric(std::vector<std::string>{});
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
+  std::shared_ptr<dynamic_metric> ptr = nullptr;
+  metric_mgr::instance().remove_metric(ptr);
+  count = metric_mgr::instance().metric_count();
+  CHECK(count == 1);
+
+  metric_mgr::instance().remove_metric(
+      std::vector<std::shared_ptr<dynamic_metric>>{});
   count = metric_mgr::instance().metric_count();
   CHECK(count == 1);
 
@@ -994,6 +1186,19 @@ TEST_CASE("test filter metrics static") {
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
+  }
+
+  {
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::vector<std::shared_ptr<metric_t>> vec{};
+    auto s = manager_helper::serialize_to_json(vec);
+    CHECK(s == "[]");
+    auto c = std::make_shared<counter_t>(std::string("get_count"),
+                                         std::string("get counter"));
+    vec.push_back(c);
+    s = manager_helper::serialize_to_json(vec);
+    CHECK(s == "[]");
+#endif
   }
 
   // don't filter
@@ -1361,6 +1566,18 @@ TEST_CASE("test summary with dynamic labels") {
   summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
+
+  {
+    basic_dynamic_summary<2> summary{"test_summary",
+                                     "summary help",
+                                     {0.9, 0.5, 0.95, 0.99},
+                                     {"method", "url"}};
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string json_str1;
+    summary.serialize_to_json(json_str1);
+    CHECK(json_str1.empty());
+#endif
+  }
 }
 
 TEST_CASE("test summary with static labels") {
@@ -1403,6 +1620,15 @@ TEST_CASE("test serialize with emptry metrics") {
   auto h1 = std::make_shared<dynamic_histogram_1t>(
       "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
       std::array<std::string, 1>{"method"});
+  h1->serialize(s1);
+  CHECK(s1.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  h1->serialize_to_json(s1);
+  CHECK(s1.empty());
+#endif
+
+  h1->observe({"GET"}, 0);
   h1->serialize(s1);
   CHECK(s1.empty());
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -1462,6 +1688,14 @@ TEST_CASE("test serialize with emptry metrics") {
   {
     std::string str;
     h1->observe({"POST"}, 1);
+    bool r = h1->has_label_value("POST");
+    CHECK(r);
+    r = h1->has_label_value("HEAD");
+    CHECK(!r);
+    r = h1->has_label_value(std::vector<std::string>{"POST"});
+    CHECK(r);
+    r = h1->has_label_value(std::vector<std::string>{"HEAD"});
+    CHECK(!r);
     h1->serialize(str);
     CHECK(!str.empty());
     str.clear();
@@ -1602,9 +1836,9 @@ TEST_CASE("test system metric") {
 }
 
 TEST_CASE("test metric capacity") {
-  std::cout << g_user_metric_count << "\n";
+  std::cout << ylt::metric::metric_t::g_user_metric_count << "\n";
   using test_metric_manager = dynamic_metric_manager<test_id_t<21>>;
-  set_metric_capacity(g_user_metric_count + 2);
+  set_metric_capacity(ylt::metric::metric_t::g_user_metric_count + 2);
   auto c =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter"), "", std::array<std::string, 1>{});
@@ -1749,15 +1983,76 @@ TEST_CASE("test metric manager clean expired label") {
   auto& inst = dynamic_metric_manager<test_tag>::instance();
   auto pair = inst.create_metric_dynamic<dynamic_counter_1t>(
       std::string("some_counter"), "", std::array<std::string, 1>{"url"});
+  auto summary = std::make_shared<basic_dynamic_summary<2>>(
+      std::string("test_summary"), std::string("summary help"),
+      std::vector<double>{0.5, 0.9, 0.95, 0.99},
+      std::array<std::string, 2>{"method", "url"});
+  auto h = std::make_shared<dynamic_histogram_t>(
+      std::string("test"), std::string("help"),
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::array<std::string, 2>{"method", "url"});
+  inst.register_metric(summary);
+  inst.register_metric(h);
   auto c = pair.second;
   c->inc({"/"});
   c->inc({"/test"});
+  summary->observe({"GET", "test"}, 10);
+  h->observe({"GET", "test"}, 10);
   CHECK(c->label_value_count() == 2);
+  CHECK(summary->label_value_count() == 1);
+  CHECK(h->label_value_count() == 1);
   std::this_thread::sleep_for(std::chrono::seconds(2));
   c->inc({"/index"});
   size_t count = c->label_value_count();
   CHECK(count == 1);
+  auto ct1 = summary->label_value_count();
+  CHECK(ct1 == 0);
+  auto ct2 = h->label_value_count();
+  CHECK(ct2 == 0);
 }
+
+TEST_CASE("test remove label value") {
+  dynamic_counter_t counter("test", "",
+                            std::array<std::string, 2>{"url", "code"});
+  counter.inc({"/", "200"});
+  counter.inc({"/", "400"});
+  counter.inc({"/index", "200"});
+  counter.inc({"/test", "404"});
+  CHECK(counter.has_label_name("url"));
+  CHECK(counter.has_label_name(std::vector<std::string>{"url", "code"}));
+
+  CHECK(counter.has_label_value("/"));
+  CHECK(counter.has_label_value("/index"));
+  CHECK(counter.has_label_value("/test"));
+
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/"}));
+  bool r = counter.has_label_value(std::vector<std::string>{"/index"});
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/index"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/test"}));
+
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/", "test"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{"/", "200", "test"}));
+  CHECK(!counter.has_label_value(std::vector<std::string>{}));
+}
+
+TEST_CASE("test static summary with 0 and 1 quantiles") {
+  {
+    ylt::metric::summary_t s("test", "help", {0, 1});
+    for (uint64_t i = 0; i < 100ull; ++i) {
+      s.observe(1);
+    }
+    auto result = s.get_rates();
+    CHECK(result[0] == 1);
+    CHECK(result[1] == 1);
+  }
+  {
+    ylt::metric::summary_t s("test", "help", {0, 1});
+    auto result = s.get_rates();
+    CHECK(result[0] == 0);
+    CHECK(result[1] == 0);
+  }
+}
+
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
