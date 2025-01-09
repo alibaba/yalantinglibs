@@ -27,7 +27,16 @@ TEST_CASE("serialize zero") {
     g.serialize_to_json(str);
     CHECK(!str.empty());
   }
-
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(-1);
+    c.serialize_to_json(str);
+    CHECK(str.empty());
+    c.inc(0);
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
   {
     std::string str;
     counter_t c("test", "");
@@ -178,6 +187,7 @@ TEST_CASE("test metric manager") {
   auto dc = std::make_shared<dynamic_counter_t>(
       std::string("test3"), std::string(""),
       std::array<std::string, 2>{"url", "code"});
+  dc->remove_label_value({{"url", "/"}, {"code", "200"}});
   dynamic_metric_manager<metrc_tag>::instance().register_metric(dc);
   auto& inst_d = dynamic_metric_manager<metrc_tag>::instance();
   auto pair1 = inst_d.create_metric_dynamic<dynamic_counter_t>(
@@ -2052,7 +2062,6 @@ TEST_CASE("test static summary with 0 and 1 quantiles") {
     CHECK(result[1] == 0);
   }
 }
-
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
