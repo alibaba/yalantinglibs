@@ -99,3 +99,124 @@ TEST_CASE("http_parser test") {
   ret = parser.parse_response(part_resp.data(), part_resp.size(), 0);
   CHECK(ret < 0);
 }
+
+std::string_view req_str =
+    "R(GET /wp-content/uploads/2010/03/hello-kitty-darth-vader-pink.jpg "
+    "HTTP/1.1\r\n"
+    "Content-Type: application/octet-stream"
+    "Host: cinatra\r\n"
+    "\r\n)";
+
+std::string_view req_str1 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: cinatra\r\n"
+    "\r\n)";
+
+std::string_view req_str2 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "\r\n)";
+
+std::string_view req_str3 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    "Sec-WebSocket-Extensions: permessage-deflate\r\n"
+    "\r\n)";
+
+std::string_view req_str4 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    "Content-Encoding: gzip\r\n"
+    "\r\n)";
+
+std::string_view req_str5 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    "Content-Encoding: deflate\r\n"
+    "\r\n)";
+
+std::string_view req_str6 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    "Content-Encoding: br\r\n"
+    "\r\n)";
+
+std::string_view req_str7 =
+    "R(GET /ws "
+    "HTTP/1.1\r\n"
+    "Connection: upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    "Content-Encoding: cinatra\r\n"
+    "\r\n)";
+
+TEST_CASE("http_request test") {
+  http_parser parser{};
+  int ret = parser.parse_request(req_str.data(), req_str.size(), 0);
+  CHECK(ret);
+  coro_http_request req(parser, nullptr);
+  CHECK(parser.msg().empty());
+  CHECK(!req.is_req_ranges());
+  CHECK(!req.is_resp_ranges());
+
+  std::string str = " test ";
+  auto trim = parser.trim(str);
+  CHECK(trim == "test");
+
+  CHECK(req.get_accept_encoding().empty());
+  CHECK(req.get_content_type() == content_type::octet_stream);
+  CHECK(req.get_boundary().empty());
+
+  req.set_aspect_data(std::string("test"));
+  CHECK(req.get_aspect_data().size() == 1);
+  req.set_aspect_data(std::vector<std::string>{"test", "aspect"});
+  CHECK(req.get_aspect_data().size() == 2);
+  CHECK(!req.is_support_compressed());
+  CHECK(!req.is_upgrade());
+
+  parser = {};
+  parser.parse_request(req_str2.data(), req_str2.size(), 0);
+  CHECK(!req.is_upgrade());
+
+  parser = {};
+  parser.parse_request(req_str3.data(), req_str3.size(), 0);
+  CHECK(req.is_upgrade());
+  CHECK(req.is_support_compressed());
+  CHECK(req.get_encoding_type() == content_encoding::none);
+
+  parser = {};
+  parser.parse_request(req_str4.data(), req_str4.size(), 0);
+  CHECK(req.is_upgrade());
+  CHECK(req.get_encoding_type() == content_encoding::gzip);
+
+  parser = {};
+  parser.parse_request(req_str5.data(), req_str5.size(), 0);
+  CHECK(req.is_upgrade());
+  CHECK(req.get_encoding_type() == content_encoding::deflate);
+
+  parser = {};
+  parser.parse_request(req_str6.data(), req_str6.size(), 0);
+  CHECK(req.is_upgrade());
+  CHECK(req.get_encoding_type() == content_encoding::br);
+
+  parser = {};
+  parser.parse_request(req_str7.data(), req_str7.size(), 0);
+  CHECK(req.is_upgrade());
+  CHECK(req.get_encoding_type() == content_encoding::none);
+}
