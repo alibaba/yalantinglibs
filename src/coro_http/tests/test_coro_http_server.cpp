@@ -537,6 +537,14 @@ struct check_t {
   }
 };
 
+struct check_t1 {
+  bool before(coro_http_request &, coro_http_response &resp) {
+    std::cout << "check1 before" << std::endl;
+    resp.set_status_and_content(status_type::bad_request, "check failed");
+    return false;
+  }
+};
+
 struct get_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello", "world");
@@ -571,8 +579,13 @@ TEST_CASE("test aspects") {
         co_return;
       },
       get_data{});
+  server.set_http_handler<GET, POST>(
+      "/check1",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      check_t1{}, log_t{});
   server.async_start();
-  std::this_thread::sleep_for(300ms);
 
   coro_http_client client{};
   auto result = client.get("http://127.0.0.1:9001/");
@@ -600,6 +613,9 @@ TEST_CASE("test aspects") {
 
   result = client.get("http://127.0.0.1:9001/aspect");
   CHECK(result.status == 200);
+
+  result = client.get("http://127.0.0.1:9001/check1");
+  CHECK(result.status == 400);
 }
 
 TEST_CASE("use out context") {
@@ -660,9 +676,32 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         throw std::invalid_argument("invalid arguments");
         resp.set_status_and_content(status_type::ok, "ok");
       });
+  server.set_http_handler<cinatra::GET>(
+      "/coro_throw",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_boundary().empty());
+        throw std::invalid_argument("invalid arguments");
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/throw1", [](coro_http_request &req, coro_http_response &resp) {
+        CHECK(req.get_boundary().empty());
+        throw 1;
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/coro_throw1",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_boundary().empty());
+        throw 1;
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   resp_data result;
   coro_http_client client1{};
@@ -677,6 +716,15 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   CHECK(result.resp_body == "form-urlencode");
 
   result = client1.get("http://127.0.0.1:9001/throw");
+  CHECK(result.status == 503);
+
+  result = client1.get("http://127.0.0.1:9001/coro_throw");
+  CHECK(result.status == 503);
+
+  result = client1.get("http://127.0.0.1:9001/throw1");
+  CHECK(result.status == 503);
+
+  result = client1.get("http://127.0.0.1:9001/coro_throw1");
   CHECK(result.status == 503);
 
   server.stop();
@@ -1218,13 +1266,19 @@ TEST_CASE("test restful api") {
         CHECK(req.matches_.str(2) == "200");
         response.set_status_and_content(status_type::ok, "number regex ok");
       });
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test4/{}", [](coro_http_request &req, coro_http_response &response) {
+        CHECK(req.matches_.str(1) == "100");
+        response.set_status_and_content(status_type::ok, "number regex ok");
+      });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   coro_http_client client;
-  client.get("http://127.0.0.1:9001/test2/name/test3/test");
-  client.get("http://127.0.0.1:9001/numbers/100/test/200");
+  auto result = client.get("http://127.0.0.1:9001/test2/name/test3/test");
+  result = client.get("http://127.0.0.1:9001/numbers/100/test/200");
+  result = client.get("http://127.0.0.1:9001/test4/100");
+  CHECK(result.status == 200);
 }
 
 TEST_CASE("test radix tree restful api") {
