@@ -21,6 +21,16 @@ jobs:
         chmod +x ./llvm.sh
         sudo ./llvm.sh 17
 
+    - name: Install RDMA tools
+      run: |
+        sudo apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core perftest iproute2
+    
+    - name: Setup SoftRoCE
+      run: |
+        export IF_NAME=$(ip -o -4 route show to default | awk '{print $5}')
+        sudo modprobe -v rdma_rxe
+        sudo rdma link add rxe0 type rxe netdev $IF_NAME
+
     - name: Configure
       run: |
         cmake -B ${{github.workspace}}/build \
