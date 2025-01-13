@@ -72,6 +72,21 @@ void test_escape_serialize() {
   assert(p1.name == p.name);
 }
 
+struct test_optstr_reader_null {
+  std::optional<std::string> name;
+};
+YLT_REFL(test_optstr_reader_null, name);
+void test_optional() {
+  test_optstr_reader_null v;
+  v.name = "name";  // optional<string> begin with 'n'
+  std::string json;
+  iguana::to_json(v, json);
+
+  test_optstr_reader_null v1;
+  iguana::from_json(v1, json);
+  assert(v.name == v1.name);
+}
+
 int main() {
   person p{"tom", 20};
   std::string str;
@@ -95,4 +110,5 @@ int main() {
   use_smart_pointer();
   test_escape_serialize();
   test_user_defined_struct();
+  test_optional();
 }
