@@ -1281,6 +1281,50 @@ TEST_CASE("test restful api") {
   CHECK(result.status == 200);
 }
 
+TEST_CASE("test response") {
+  coro_http_response resp(nullptr);
+  resp.set_status_and_content(status_type::ok, "ok");
+  CHECK(resp.content() == "ok");
+  CHECK(resp.content_size() == 2);
+  CHECK(resp.need_date());
+  resp.need_date_head(false);
+  CHECK(!resp.need_date());
+
+  std::string str;
+  resp.build_resp_str(str);
+  CHECK(!str.empty());
+  CHECK(str.find("200") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  resp.set_status_and_content(status_type::ok);
+  std::vector<http_header> v{{"hello", "world"}};
+  resp.add_header_span(v);
+  resp.build_resp_str(str);
+  CHECK(str.find("200") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  resp.set_keepalive(true);
+  resp.build_resp_str(str);
+  CHECK(str.find("501") != std::string::npos);
+  resp.set_format_type(format_type::chunked);
+  resp.build_resp_str(str);
+  CHECK(str.find("501") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  std::string out = "hello";
+  resp.set_status_and_content_view(status_type::ok, out);
+  resp.build_resp_str(str);
+  CHECK(str.find("200") != std::string::npos);
+
+  std::vector<asio::const_buffer> buffers;
+  resp.set_content_type<4>();
+  resp.build_resp_head(buffers);
+  CHECK(buffers.size() == 13);
+}
+
 TEST_CASE("test radix tree restful api") {
   cinatra::coro_http_server server(1, 9001);
 
