@@ -220,3 +220,53 @@ TEST_CASE("http_request test") {
   CHECK(req.is_upgrade());
   CHECK(req.get_encoding_type() == content_encoding::none);
 }
+
+TEST_CASE("uri test") {
+  std::string uri = "https://example.com?name=tom";
+  uri_t u;
+  bool r = u.parse_from(uri.data());
+  CHECK(r);
+  CHECK(u.get_port() == "443");
+  context c{u, http_method::GET};
+  context c1{u, http_method::GET, "test"};
+  CHECK(u.get_query() == "name=tom");
+
+  uri = "https://example.com:521?name=tom";
+  r = u.parse_from(uri.data());
+  CHECK(r);
+  CHECK(u.get_port() == "521");
+
+  uri = "#https://example.com?name=tom";
+  r = u.parse_from(uri.data());
+  CHECK(!r);
+
+  uri = "https##://example.com?name=tom";
+  r = u.parse_from(uri.data());
+  CHECK(!r);
+
+  uri = "https://^example.com?name=tom";
+  r = u.parse_from(uri.data());
+  CHECK(!r);
+
+  uri = "https://example.com?^name=tom";
+  r = u.parse_from(uri.data());
+  CHECK(!r);
+
+  uri = "http://username:password@example.com";
+  r = u.parse_from(uri.data());
+  CHECK(r);
+  CHECK(u.uinfo == "username:password");
+
+  uri = "http://example.com/data.csv#row=4";
+  r = u.parse_from(uri.data());
+  CHECK(r);
+  CHECK(u.fragment == "row=4");
+
+  uri = "https://example.com?name=tom$";
+  r = u.parse_from(uri.data());
+  CHECK(r);
+
+  uri = "https://example.com?name=tom!";
+  r = u.parse_from(uri.data());
+  CHECK(r);
+}
