@@ -262,6 +262,7 @@ struct many_members {
   int a127;
   std::string b127;
   int a128;
+  int a129;
 #endif
 };
 struct many_members2 : public many_members {};
@@ -274,13 +275,13 @@ STRUCT_PACK_REFL(many_members2, a1, b1, a2, b2, a3, b3, a4, b4, a5, b5, a6, b6,
                  a38, b38, a39, b39, a40, b40, a41, b41, a42, b42, a43, b43,
                  a44, b44, a45, b45, a46, b46, a47, b47, a48, b48, a49, b49,
                  a50, b50, a51, b51, a52, b52, a53, b53, a54, b54, a55, b55,
-                 a56, b56, a57, b57, a58, b58, a59, b59, a60, b60);
+                 a56, b56, a57, b57, a58, b58, a59, b59, a60, b60, a61, b61);
 TEST_CASE("test many members") {
-  int size = 384;
+  int size = 385;
 
 #ifdef _MSC_VER
   size = 188;
 #endif
   CHECK(struct_pack::get_type_literal<many_members>().size() == size);
-  CHECK(struct_pack::get_type_literal<many_members2>().size() == 182);
+  CHECK(struct_pack::get_type_literal<many_members2>().size() == 185);
 }

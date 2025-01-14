@@ -219,13 +219,13 @@ concept unique_ptr = requires(Type ptr) {
 
 ## 结构体
 
-struct_pack支持结构体类型。结构体内可以包含最多255个字段，并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
+struct_pack支持结构体类型。默认支持最多256个字段，也可以扩展支持更多字段（见struct_pack提示章节），并允许结构体嵌套。结构体中的任何成员都必须是struct_pack的合法类型。
 
 struct_pack的结构体类型可以为：struct/class/std::pair/tuplet::tuple/std::tuple
 
 ### 平凡结构体
 
-假如一个结构体类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，并且该类型未使用`STRUCT_PACK_REFL`宏注册，则该结构体被视为平凡结构体类型。
+假如一个结构体类型是`struct/class/std::pair/tuplet::tuple`，且其所有的成员字段都是平凡字段，并且该类型未使用`YLT_REFL`宏注册，则该结构体被视为平凡结构体类型。
 
 平凡字段是下面几种类型中的一种：
 1. 基本类型
@@ -259,7 +259,7 @@ void test() {
 }
 ```
 
-需要注意的是，通过`STRUCT_PACK_REFL`宏注册的类型一定不是平凡结构体。
+需要注意的是，通过`YLT_REFL`宏注册的类型一定不是平凡结构体。
 例如：
 ```cpp
 struct foo {
@@ -268,7 +268,7 @@ struct foo {
 struct bar {
   int a,b,c;
 };
-STRUCT_PACK_REFL(bar,a,b,c);
+YLT_REFL(bar,a,b,c);
 static_assert(struct_pack::get_type_code<foo>()!=struct_pack::get_type_code<bar>());
 ```
 

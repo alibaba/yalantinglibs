@@ -14,7 +14,7 @@ struct base {
   int a = 1;
   virtual ~base(){};
 };
-STRUCT_PACK_REFL(base, a);
+YLT_REFL(base, a);
 
 struct derived1 : public base {
   virtual uint32_t get_struct_pack_id() const;
@@ -24,28 +24,28 @@ struct derived1 : public base {
   int b = 2;
 };
 
-STRUCT_PACK_REFL(derived1, a, b);
+YLT_REFL(derived1, a, b);
 struct derived2 : public base {
   virtual uint32_t get_struct_pack_id() const;
   virtual std::string get_name() const { return base::get_name() + c; }
   std::string c = "Hello";
 };
 
-STRUCT_PACK_REFL(derived2, a, c);
+YLT_REFL(derived2, a, c);
 struct derived3 : public base {
   virtual uint32_t get_struct_pack_id() const;
   virtual std::string get_name() const { return base::get_name() + d; }
   std::string d = "Oh no";
   static constexpr std::size_t struct_pack_id = 0;
 };
-STRUCT_PACK_REFL(derived3, a, d);
+YLT_REFL(derived3, a, d);
 struct derived4 : public derived3 {
   virtual uint32_t get_struct_pack_id() const;
   virtual std::string get_name() const { return derived3::get_name() + e; }
   std::string e = "!";
 };
 
-STRUCT_PACK_REFL(derived4, a, d, e);
+YLT_REFL(derived4, a, d, e);
 
 STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2, derived3, derived4);
 }  // namespace test2
@@ -68,14 +68,14 @@ struct derived1 : public base {
   int b = 2;
 };
 
-STRUCT_PACK_REFL(derived1, a, b);
+YLT_REFL(derived1, a, b);
 struct derived2 : public base {
   virtual uint32_t get_struct_pack_id() const;
   virtual std::string get_name() const { return base::get_name() + c; }
   std::string c = "Hello";
 };
 
-STRUCT_PACK_REFL(derived2, a, c);
+YLT_REFL(derived2, a, c);
 struct derived3 : public base {
   virtual uint32_t get_struct_pack_id() const;
   virtual std::string get_name() const { return base::get_name() + d; }
@@ -83,7 +83,7 @@ struct derived3 : public base {
   static constexpr std::size_t struct_pack_id = 0;
 };
 
-STRUCT_PACK_REFL(derived3, a, d);
+YLT_REFL(derived3, a, d);
 
 struct derived4 : public derived3 {
   virtual uint32_t get_struct_pack_id() const;
@@ -91,7 +91,7 @@ struct derived4 : public derived3 {
   std::string e = "!";
 };
 
-STRUCT_PACK_REFL(derived4, a, d, e);
+YLT_REFL(derived4, a, d, e);
 
 STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2, derived3, derived4);
 

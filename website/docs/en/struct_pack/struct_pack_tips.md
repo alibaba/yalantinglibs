@@ -110,4 +110,24 @@ Currently we do not allow the `DISABLE_ALL_META_INFO` configuration to be enable
 
 1. The type to serialize should be legal struct_pack type.。See document：[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)。
 2. struct_pack support update protocol by add struct_pack::compatible field, which is forward backward compatibility. User should make sure the version number is increment for each update. It's not allow to delete/modify exist field. See : [document](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html#%E5%85%BC%E5%AE%B9%E7%B1%BB%E5%9E%8B)
+3. Using the `YLT_REFL` macro, a maximum of 256(in msvc 124) fields are supported by default. Without using macros, the number of struct members should not exceed 256.
 
+## How to Extend the Limit on Struct Fields
+
+Some users might need to handle structs with hundreds of fields, which may exceed the supported range of yalantinglibs. Due to compile-time and compiler constraints, the number of fields supported by default is limited. Below, we introduce how to modify the source code to increase the field limit.
+
+### Without Using Macros
+
+The default limit is 256 fields. If you need to extend this limit, please modify the file `member_macro.hpp`. At the top of this header file, there is a python script; you can change the number 256 in the code to the number of fields you need. Then run the script, and overwrite the `member_macro.hpp` with the generated C++ code.
+
+### Using the `YLT_REFL` Macro
+
+The default limit is 256 fields (124 fields for MSVC by default). The following issues need to be noted:
+
+#### Compiler Constraints
+
+If you are using the MSVC compiler, you need to use the parameter `/Zc:preprocessor` instead of `/Zc:preprocessor-`. Otherwise, we can only support up to 124 fields for reflection under MSVC.
+
+#### Modifying the `arg_list_macro_gen.hpp` File
+
+At the top of this header file, there is a python script; you can change the field limit in the script to the number of fields you need. Then run the script, and overwrite the `arg_list_macro_gen.hpp` with the generated code.
