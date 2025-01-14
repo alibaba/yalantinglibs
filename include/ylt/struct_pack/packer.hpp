@@ -418,7 +418,7 @@ class packer {
             static_assert(
                 std::is_aggregate_v<remove_cvref_t<type>>,
                 "struct_pack only support aggregated type, or you should "
-                "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+                "add macro YLT_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value &&
                       is_little_endian_copyable<sizeof(type)>) {
           write_wrapper<sizeof(type)>(writer_, (char *)&item);

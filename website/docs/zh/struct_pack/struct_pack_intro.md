@@ -180,7 +180,7 @@ struct rect {
 
 ### 用户自定义反射
 
-有时候用户需要支持非聚合的结构体，或者自定义各字段序列化的顺序，这些可以通过宏函数`STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`来支持。
+有时候用户需要支持非聚合的结构体，或者自定义各字段序列化的顺序，这些可以通过宏函数`YLT_REFL(typename, fieldname1, fieldname2 ...)`来支持。
 
 ```cpp
 namespace test {
@@ -197,16 +197,16 @@ class person : std::vector<int> {
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
 };
-STRUCT_PACK_REFL(person, name, age);
+YLT_REFL(person, name, age);
 }
 ```
 
-`STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`填入的第一个参数是需要反射的类型名，随后是若干个字段名，代表反射信息的各个字段。
+`YLT_REFL(typename, fieldname1, fieldname2 ...)`填入的第一个参数是需要反射的类型名，随后是若干个字段名，代表反射信息的各个字段。
 该宏必须定义在反射的类型所在的命名空间中。
 如果该类型不具有默认构造函数，则无法使用函数`struct_pack::deserialize`,不过你依然可以使用`struct_pack::deserialize_to`来实现反序列化。
 它使得struct_pack可以支持那些非聚合的结构体类型，允许用户自定义构造函数，继承其他类型，添加不序列化的字段等等。
 
-有时，用户需要序列化/反序列化那些private字段，这可以通过函数`STRUCT_PACK_FRIEND_DECL(typenmae)`;来支持。
+有时，用户需要序列化/反序列化那些private字段，此时我们只需要在结构体内定义宏`YLT_REFL(typename, fieldname1, fieldname2 ...)`就行了。
 ```cpp
 namespace example2 {
 class person {
@@ -220,15 +220,14 @@ class person {
   }
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
+  YLT_REFL(person, age, name);
 };
-STRUCT_PACK_REFL(person, age, name);
 }  // namespace example2
 ```
 
-该宏必须声明在结构体内部，其原理是将struct_pack与反射有关的函数注册为友元函数。
+该宏必须声明在结构体内部，其原理是在类内生成反射相关的静态函数。
 
-用户甚至可以在`STRUCT_PACK_REFL`中注册成员函数，这极大的扩展了struct_pack的灵活性。
+用户甚至可以在`YLT_REFL`中，将返回左值引用的成员函数注册为结构体的字段，这极大的扩展了struct_pack的灵活性。
 
 ```cpp
 namespace example3 {
@@ -249,7 +248,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+YLT_REFL(person, age(), name());
 }  // namespace example3
 
 注册的成员函数必须返回一个引用，并且该函数具有常量和非常量的重载。
@@ -498,17 +497,17 @@ struct obj1 : public base {
   virtual uint32_t get_struct_pack_id()
       const override;  // 必须在派生类中声明该函数。
 };
-STRUCT_PACK_REFL(obj1, ID, name);
+YLT_REFL(obj1, ID, name);
 struct obj2 : public base {
   std::array<float, 5> data;
   virtual uint32_t get_struct_pack_id() const override;
 };
-STRUCT_PACK_REFL(obj2, ID, data);
+YLT_REFL(obj2, ID, data);
 struct obj3 : public obj1 {
   int age;
   virtual uint32_t get_struct_pack_id() const override;
 };
-STRUCT_PACK_REFL(obj3, ID, name, age);
+YLT_REFL(obj3, ID, name, age);
 
 STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
 // 声明基类和派生类之间的继承关系。
@@ -551,12 +550,12 @@ struct obj1 {
   std::string name;
   virtual uint32_t get_struct_pack_id() const;
 };
-STRUCT_PACK_REFL(obj1, name);
+YLT_REFL(obj1, name);
 struct obj2 : public obj1 {
   virtual uint32_t get_struct_pack_id() const override;
   constexpr static std::size_t struct_pack_id = 114514;
 };
-STRUCT_PACK_REFL(obj2, name);
+YLT_REFL(obj2, name);
 ```
 
 当添加了该字段/函数后，struct_pack会在类型字符串中加上该ID，从而保证两个类型之间具有不同的类型哈希值，从而解决ID冲突/哈希冲突。

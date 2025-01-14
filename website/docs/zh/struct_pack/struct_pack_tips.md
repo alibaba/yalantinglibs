@@ -110,8 +110,29 @@ auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,rect>(
 当同时配置了两者时，模板参数的优先级高于ADL。      
 目前我们不允许在具有compatible字段的情况下启用`DISABLE_ALL_META_INFO`配置。
 
-##  类型约束
+## 类型约束
 
 1. 序列化的类型必须是struct_pack类型系统中的合法类型。详见：struct_pack的类型系统。See document：[struct_pack 类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)。
 2. struct_pack允许新增struct_pack::compatible字段，并保证其前向/后向的兼容性，只要每次协议变更时填入的版本号大于上一次的版本号即可。如果删除/修改了已有字段，则无法保证兼容性。详见[文档](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html#%E5%85%BC%E5%AE%B9%E7%B1%BB%E5%9E%8B)
+3. 使用YLT_REFL宏，默认最多支持注册256(msvc 默认124)个字段。不使用宏，结构体成员不应超过256个。
+
+## 如何扩展结构体字段上限
+
+有些用户需要处理一些结构体包含上百个字段的极端情况，此时字段数目可能会超过yalantinglibs支持的范围。受编译时间和编译器限制，默认支持的字段数目受限。下面我们介绍如何通过修改源码来增加字段的上限。
+
+### 不使用宏的情况
+
+默认上限为256个字段，如果需要扩展字段上限，请修改文件`member_macro.hpp`，该头文件最上面有一份python代码，你可以将代码中的256改成你需要的字段数目。然后运行代码，将生成好的C++代码覆盖到member_macro.hpp中。
+
+### 使用YLT_REFL宏的情况
+
+默认上限为256个字段（MSVC默认为124个字段），我们需要注意以下问题：
+
+#### 编译器限制
+
+如果您使用的是MSVC编译器，需要使用参数`/Zc:preprocessor` 而不是 `/Zc:preprocessor-`。否则MSVC下我们最多支持反射124个字段。
+
+#### 修改arg_list_macro_gen.hpp文件
+
+该头文件最上面有一份python代码，你可以将代码中的字段上限改成你需要的字段数目。然后运行代码，将生成好的代码覆盖到arg_list_macro_gen.hpp中。
 

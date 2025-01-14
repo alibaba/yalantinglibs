@@ -38,19 +38,19 @@ struct obj1 : public base {
                        // class
   std::string_view hello() override { return "obj1"; }
 };
-STRUCT_PACK_REFL(obj1, ID, name);
+YLT_REFL(obj1, ID, name);
 struct obj2 : public base {
   std::array<float, 5> data;
   virtual uint32_t get_struct_pack_id() const override;
   std::string_view hello() override { return "obj2"; }
 };
-STRUCT_PACK_REFL(obj2, ID, data);
+YLT_REFL(obj2, ID, data);
 struct obj3 : public obj1 {
   int age;
   virtual uint32_t get_struct_pack_id() const override;
   std::string_view hello() override { return "obj3"; }
 };
-STRUCT_PACK_REFL(obj3, ID, name, age);
+YLT_REFL(obj3, ID, name, age);
 // the declartion for derived relation for struct_pack
 STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
 // the implement for derived relation for struct_pack
@@ -87,25 +87,25 @@ struct base {
   virtual ~base(){};
   virtual std::string_view hello() { return "base"; }
 };
-STRUCT_PACK_REFL(base, ID);
+YLT_REFL(base, ID);
 struct obj1 : public base {
   std::string name;
   virtual uint32_t get_struct_pack_id() const override;
   std::string_view hello() override { return "obj1"; }
 };
-STRUCT_PACK_REFL(obj1, ID, name);
+YLT_REFL(obj1, ID, name);
 struct obj2 : public base {
   std::array<float, 5> data;
   virtual uint32_t get_struct_pack_id() const override;
   std::string_view hello() override { return "obj2"; }
 };
-STRUCT_PACK_REFL(obj2, ID, data);
+YLT_REFL(obj2, ID, data);
 struct obj3 : public obj1 {
   virtual uint32_t get_struct_pack_id() const override;
   static constexpr uint64_t struct_pack_id = 114514;
   std::string_view hello() override { return "obj3"; }
 };
-STRUCT_PACK_REFL(obj3, ID, name);
+YLT_REFL(obj3, ID, name);
 STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
 STRUCT_PACK_DERIVED_IMPL(base, obj1, obj2, obj3);
 }  // namespace base_class

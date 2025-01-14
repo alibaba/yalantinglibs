@@ -216,7 +216,7 @@ The class needs to provide: `size()`,`flip()`,`set()`,`reset()`,`count()`,and th
 
 ## Struct 
 
-`struct_pack` supports `struct` type. Up to **255** fields are supported and nested fields are supported too. All members
+`struct_pack` supports `struct` type. Up to **256** fields are supported(We can also extend it, see document of "struct pack tips") and nested fields are supported too. All members
 should be of valid `struct_pack` type. 
 
 struct type could be `struct/class/std::tuple/tuplet::tuple/std::pair`
@@ -224,7 +224,7 @@ struct type could be `struct/class/std::tuple/tuplet::tuple/std::pair`
 
 ### trivial struct
 
-If there is a struct/class/std::pair/tuplet::tuple, and all the field of this type is a trivial type, and the type isn't registed by macro `STRUCT_PACK_REFL`, then this type is a trivial struct in struct_pack.
+If there is a struct/class/std::pair/tuplet::tuple, and all the field of this type is a trivial type, and the type isn't registed by macro `YLT_REFL`, then this type is a trivial struct in struct_pack.
 
 A trivial type is :
 1. fundamental type.
@@ -258,7 +258,7 @@ void test() {
 }
 ```
 
-Remeber, the type registed by macro `STRUCT_PACK_REFL` is not trivial struct.  
+Remeber, the type registed by macro `YLT_REFL` is not trivial struct.  
 For example:
 ```cpp
 struct foo {
@@ -267,7 +267,7 @@ struct foo {
 struct bar {
   int a,b,c;
 };
-STRUCT_PACK_REFL(bar,a,b,c);
+YLT_REFL(bar,a,b,c);
 static_assert(struct_pack::get_type_code<foo>()!=struct_pack::get_type_code<bar>());
 ```
 
