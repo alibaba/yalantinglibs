@@ -110,7 +110,7 @@ Currently we do not allow the `DISABLE_ALL_META_INFO` configuration to be enable
 
 1. The type to serialize should be legal struct_pack type.。See document：[struct_pack type system](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html)。
 2. struct_pack support update protocol by add struct_pack::compatible field, which is forward backward compatibility. User should make sure the version number is increment for each update. It's not allow to delete/modify exist field. See : [document](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_type_system.html#%E5%85%BC%E5%AE%B9%E7%B1%BB%E5%9E%8B)
-3. Using the `YLT_REFL` macro, a maximum of 124 fields are supported by default. Without using macros, the number of struct members should not exceed 256.
+3. Using the `YLT_REFL` macro, a maximum of 256(in msvc 124) fields are supported by default. Without using macros, the number of struct members should not exceed 256.
 
 ## How to Extend the Limit on Struct Fields
 

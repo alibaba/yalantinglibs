@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "ylt/reflection/internal/arg_list_macro.hpp"
+ 
 #pragma once
+#include "ylt/reflection/internal/arg_list_macro.hpp"
 // clang-format off
 
 #define STRUCT_PACK_CONCAT_(l, r) l ## r

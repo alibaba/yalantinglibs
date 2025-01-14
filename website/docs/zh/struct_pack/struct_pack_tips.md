@@ -114,7 +114,7 @@ auto result = struct_pack::deserialize<struct_pack::DISABLE_ALL_META_INFO,rect>(
 
 1. 序列化的类型必须是struct_pack类型系统中的合法类型。详见：struct_pack的类型系统。See document：[struct_pack 类型系统](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html)。
 2. struct_pack允许新增struct_pack::compatible字段，并保证其前向/后向的兼容性，只要每次协议变更时填入的版本号大于上一次的版本号即可。如果删除/修改了已有字段，则无法保证兼容性。详见[文档](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_type_system.html#%E5%85%BC%E5%AE%B9%E7%B1%BB%E5%9E%8B)
-3. 使用YLT_REFL宏，默认最多支持注册124个字段。不使用宏，结构体成员不应超过256个。
+3. 使用YLT_REFL宏，默认最多支持注册256(msvc 默认124)个字段。不使用宏，结构体成员不应超过256个。
 
 ## 如何扩展结构体字段上限
 
