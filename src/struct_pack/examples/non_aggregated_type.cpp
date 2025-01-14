@@ -27,7 +27,7 @@
 #include <ylt/struct_pack.hpp>
 
 // 1. make sure your type has a default constructor
-// 2. add marco STRUCT_PACK_REFL(Type, field1, field2...) in the same namespace
+// 2. add marco YLT_REFL(Type, field1, field2...) in the same namespace
 namespace example {
 class person : std::vector<int> {
  private:
@@ -43,7 +43,7 @@ class person : std::vector<int> {
   person(int age, const std::string& name) : age(age), name(name) {}
 };
 
-STRUCT_PACK_REFL(person, age, name);
+YLT_REFL(person, age, name);
 }  // namespace example
 
 // 3. if you want to use private field, add friend declartion marco
@@ -60,9 +60,8 @@ class person {
   }
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
+  YLT_REFL(person, age, name);
 };
-STRUCT_PACK_REFL(person, age, name);
 }  // namespace example2
 
 // 4. you can also add function which return class member reference as
@@ -86,7 +85,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+YLT_REFL(person, age(), name());
 }  // namespace example3
 
 // 5. Remember, the STURCT_PACK_REFL marco disable the trivial_serialize
@@ -95,7 +94,7 @@ namespace example4 {
 struct point {
   int x, y, z;
 };
-STRUCT_PACK_REFL(point, x, y, z);
+YLT_REFL(point, x, y, z);
 struct point2 {
   int x, y, z;
 };

@@ -175,7 +175,7 @@ assert(nested2==nested1);
 
 ### custom reflection
 
-Sometimes user need support non-aggregated type, or adjust the order of each field, which can be supported by macro function `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)`.
+Sometimes user need support non-aggregated type, or adjust the order of each field, which can be supported by macro function `YLT_REFL(typename, fieldname1, fieldname2 ...)`.
 
 ```cpp
 namespace test {
@@ -192,15 +192,15 @@ class person : std::vector<int> {
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
 };
-STRUCT_PACK_REFL(person, name, age);
+YLT_REFL(person, name, age);
 }
 
-The first argument of `STRUCT_PACK_REFL(typename, fieldname1, fieldname2 ...)` is the name of the type reflected, the others are the field names.
+The first argument of `YLT_REFL(typename, fieldname1, fieldname2 ...)` is the name of the type reflected, the others are the field names.
 The macro must be defined in the same namespace of the reflected type.
 The macro allow struct_pack support non-aggregated type, allow user define constructor, derived from other type or add some field which don't serialize.
 ```
 
-Sometimes, user want to serialize/deserialize some private fields, which can be supported by macro function `STRUCT_PACK_FRIEND_DECL(typename)`.
+Sometimes, user want to serialize/deserialize some private fields, which can be supported by define macro function `YLT_REFL(typename, members...)` inside of structure.
 ```cpp
 namespace example2 {
 class person {
@@ -214,15 +214,17 @@ class person {
   }
   person() = default;
   person(int age, const std::string& name) : age(age), name(name) {}
-  STRUCT_PACK_FRIEND_DECL(person);
+  YLT_REFL(person, age, name);
 };
-STRUCT_PACK_REFL(person, age, name);
+
 }  // namespace example2
 ```
 
-This macro must declared inside the struct, it regist struct_pack reflection function as friend function.
+This macro must declared inside the struct, it regist struct_pack reflection function as static member function.
 
-User can even register member function in macro function `STRUCT_PACK_REFL`, which greatly expands the flexibility of struct_pack.
+
+
+User can even register member function which return left-reference as structure members, which greatly expands the flexibility of struct_pack.
 
 
 ```cpp
@@ -244,7 +246,7 @@ class person {
   std::string& name() { return name_; };
   const std::string& name() const { return name_; };
 };
-STRUCT_PACK_REFL(person, age(), name());
+YLT_REFL(person, age(), name());
 }  // namespace example3
 ```
 The member function registed must return a reference, and this function must have a const version overload & non-const overload.
@@ -472,17 +474,17 @@ struct obj1 : public base {
       const override;  // user must declare this virtual function in derived
                        // class
 };
-STRUCT_PACK_REFL(obj1, ID, name);
+YLT_REFL(obj1, ID, name);
 struct obj2 : public base {
   std::array<float, 5> data;
   virtual uint32_t get_struct_pack_id() const override;
 };
-STRUCT_PACK_REFL(obj2, ID, data);
+YLT_REFL(obj2, ID, data);
 struct obj3 : public obj1 {
   int age;
   virtual uint32_t get_struct_pack_id() const override;
 };
-STRUCT_PACK_REFL(obj3, ID, name, age);
+YLT_REFL(obj3, ID, name, age);
 
 STRUCT_PACK_DERIVED_DECL(base, obj1, obj2, obj3);
 // declare the relationship bewteen base class and derived class.
@@ -526,12 +528,12 @@ struct obj1 {
   std::string name;
   virtual uint32_t get_struct_pack_id() const;
 };
-STRUCT_PACK_REFL(obj1, name);
+YLT_REFL(obj1, name);
 struct obj2 : public obj1 {
   virtual uint32_t get_struct_pack_id() const override;
   constexpr static std::size_t struct_pack_id = 114514;
 };
-STRUCT_PACK_REFL(obj2, name);
+YLT_REFL(obj2, name);
 ```
 
 When this field/function is added, struct_pack adds this ID to the type string, thus ensuring that the two types have different hash values, thus resolving ID conflicts/hash conflicts.

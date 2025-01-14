@@ -157,4 +157,4 @@ struct person_with_refl {
   std::string name;
   int age;
 };
-STRUCT_PACK_REFL(person_with_refl, name, age);
+YLT_REFL(person_with_refl, name, age);
