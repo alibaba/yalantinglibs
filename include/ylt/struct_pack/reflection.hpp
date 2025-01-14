@@ -563,7 +563,7 @@ template <typename T, typename = void>
   concept user_defined_refl = ylt::reflection::is_out_ylt_refl_v<Type> || ylt::reflection::is_inner_ylt_refl_v<Type>;
 #else
   template <typename T>
-  constexpr bool user_defined_refl = ylt::reflection::is_out_ylt_refl_v<Type> || ylt::reflection::is_inner_ylt_refl_v<Type>;
+  constexpr bool user_defined_refl = ylt::reflection::is_out_ylt_refl_v<T> || ylt::reflection::is_inner_ylt_refl_v<T>;
 #endif
 
 #if __cpp_concepts >= 201907L
