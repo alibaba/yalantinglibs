@@ -13,18 +13,20 @@ struct object_tuple_view_helper {
     static_assert(
         sizeof(T) < 0,
         "\n\nThis error occurs for one of two reasons:\n\n"
-        "1) You have created a struct with more than 100 fields, which is "
+        "1) You have created a struct with more than 256 fields, which is "
         "unsupported. \n\n"
-        "2) Your struct is not an aggregate type.\n\n");
+        "2) Your struct is not an aggregate type. You can make it aggregated, "
+        "or defined a YLT_REFL macro. \n\n");
   }
 
   static constexpr auto tuple_view(T&) {
     static_assert(
         sizeof(T) < 0,
         "\n\nThis error occurs for one of two reasons:\n\n"
-        "1) You have created a struct with more than 100 fields, which is "
+        "1) You have created a struct with more than 256 fields, which is "
         "unsupported. \n\n"
-        "2) Your struct is not an aggregate type.\n\n");
+        "2) Your struct is not an aggregate type. You can make it aggregated, "
+        "or defined a YLT_REFL macro. \n\n");
   }
 
   template <typename Visitor>
@@ -32,9 +34,10 @@ struct object_tuple_view_helper {
     static_assert(
         sizeof(T) < 0,
         "\n\nThis error occurs for one of two reasons:\n\n"
-        "1) You have created a struct with more than 100 fields, which is "
+        "1) You have created a struct with more than 256 fields, which is "
         "unsupported. \n\n"
-        "2) Your struct is not an aggregate type.\n\n");
+        "2) Your struct is not an aggregate type. You can make it aggregated, "
+        "or defined a YLT_REFL macro. \n\n");
   }
 };
 
@@ -81,7 +84,7 @@ inline constexpr remove_cvref_t<T>& get_fake_object() noexcept {
   }
 
 // such file is generate macro file
-#include "member_macro.hpp"
+#include "internal/generate/member_macro.hpp"
 
 template <class T>
 inline constexpr auto tuple_view(T&& t) {

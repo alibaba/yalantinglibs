@@ -115,6 +115,6 @@ struct rpc_error {
   const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
   constexpr operator bool() const noexcept { return code; }
 };
-STRUCT_PACK_REFL(rpc_error, val(), msg);
+YLT_REFL(rpc_error, val(), msg);
 
 };  // namespace coro_rpc

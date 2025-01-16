@@ -261,34 +261,6 @@ class uri_t {
   std::string get_query() const { return std::string(query); }
 };
 
-inline std::string url_encode(const std::string &str) {
-  std::string new_str = "";
-  char c;
-  int ic;
-  const char *chars = str.c_str();
-  char buf_hex[10];
-  size_t len = strlen(chars);
-
-  for (size_t i = 0; i < len; i++) {
-    c = chars[i];
-    ic = c;
-    // uncomment this if you want to encode spaces with +
-    /*if (c==' ') new_str += '+';
-    else */
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
-      new_str += c;
-    else {
-      sprintf(buf_hex, "%X", c);
-      if (ic < 16)
-        new_str += "%0";
-      else
-        new_str += "%";
-      new_str += buf_hex;
-    }
-  }
-  return new_str;
-}
-
 struct context {
   std::string host;
   std::string port;

@@ -148,7 +148,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
       if constexpr (!user_defined_refl<type>)
         static_assert(std::is_aggregate_v<remove_cvref_t<type>>,
                       "struct_pack only support aggregated type, or you should "
-                      "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+                      "add macro YLT_REFL(Type,field1,field2...)");
     }
     if constexpr (is_trivial_serializable<type>::value) {
       ret.total = sizeof(type);

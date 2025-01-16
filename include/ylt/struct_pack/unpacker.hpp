@@ -451,7 +451,7 @@ class unpacker {
       if constexpr (!user_defined_refl<T>)
         static_assert(std::is_aggregate_v<remove_cvref_t<T>>,
                       "struct_pack only support aggregated type, or you should "
-                      "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+                      "add macro YLT_REFL(Type,field1,field2...)");
       err_code = visit_members(t, [&](auto &&...items) CONSTEXPR_INLINE_LAMBDA {
         static_assert(I < sizeof...(items), "out of range");
         return for_each<size_type, version, I>(field, items...);
@@ -1179,7 +1179,7 @@ class unpacker {
             static_assert(
                 std::is_aggregate_v<remove_cvref_t<type>>,
                 "struct_pack only support aggregated type, or you should "
-                "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+                "add macro YLT_REFL(Type,field1,field2...)");
         if constexpr (is_trivial_serializable<type>::value &&
                       is_little_endian_copyable<sizeof(type)>) {
           if constexpr (NotSkip) {
