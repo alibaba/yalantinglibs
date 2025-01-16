@@ -495,15 +495,15 @@ TEST_CASE("test type_string") {
 
 #if defined(_MSC_VER) && !defined(__clang__)
   CHECK(type_string<test_type_string::struct_test>() ==
-        "struct test_type_string::struct_test");
+        "test_type_string::struct_test");
   CHECK(type_string<const test_type_string::struct_test>() ==
         "const struct test_type_string::struct_test");
   CHECK(type_string<test_type_string::class_test>() ==
-        "class test_type_string::class_test");
+        "test_type_string::class_test");
   CHECK(type_string<const test_type_string::class_test>() ==
         "const class test_type_string::class_test");
   CHECK(type_string<test_type_string::union_test>() ==
-        "union test_type_string::union_test");
+        "test_type_string::union_test");
   CHECK(type_string<const test_type_string::union_test>() ==
         "const union test_type_string::union_test");
 #else

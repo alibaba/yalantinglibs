@@ -124,7 +124,7 @@ class coro_http_server {
 
     // close current connections.
     {
-      std::scoped_lock lock(conn_mtx_);
+      std::scoped_lock lock(*conn_mtx_);
       for (auto &conn : connections_) {
         conn.second->close(false);
       }
@@ -586,7 +586,7 @@ class coro_http_server {
   }
 
   size_t connection_count() {
-    std::scoped_lock lock(conn_mtx_);
+    std::scoped_lock lock(*conn_mtx_);
     return connections_.size();
   }
 
@@ -709,17 +709,20 @@ class coro_http_server {
         conn->init_ssl(cert_file_, key_file_, passwd_);
       }
 #endif
-
+      std::weak_ptr<std::mutex> weak(conn_mtx_);
       conn->set_quit_callback(
-          [this](const uint64_t &id) {
-            std::scoped_lock lock(conn_mtx_);
-            if (!connections_.empty())
-              connections_.erase(id);
+          [this, weak](const uint64_t &id) {
+            auto mtx = weak.lock();
+            if (mtx) {
+              std::scoped_lock lock(*mtx);
+              if (!connections_.empty())
+                connections_.erase(id);
+            }
           },
           conn_id);
 
       {
-        std::scoped_lock lock(conn_mtx_);
+        std::scoped_lock lock(*conn_mtx_);
         connections_.emplace(conn_id, conn);
       }
 
@@ -759,7 +762,7 @@ class coro_http_server {
     std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>> conns;
 
     {
-      std::scoped_lock lock(conn_mtx_);
+      std::scoped_lock lock(*conn_mtx_);
       for (auto it = connections_.begin();
            it != connections_.end();)  // no "++"!
       {
@@ -980,7 +983,7 @@ class coro_http_server {
   uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
-  std::mutex conn_mtx_;
+  std::shared_ptr<std::mutex> conn_mtx_ = std::make_shared<std::mutex>();
   std::chrono::steady_clock::duration check_duration_ =
       std::chrono::seconds(15);
   std::chrono::steady_clock::duration timeout_duration_{};
