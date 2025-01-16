@@ -1580,7 +1580,7 @@ TEST_CASE("test reverse proxy") {
 
   coro_http_client client_random;
   resp_data resp_random = client_random.get("http://127.0.0.1:8092/");
-  std::cout << resp_random.resp_body << "\n";
+  std::cout << resp_random.net_err.message() << "\n";
   CHECK(!resp_random.resp_body.empty());
 
   coro_http_client client_all;
