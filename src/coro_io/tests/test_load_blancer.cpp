@@ -230,15 +230,22 @@ TEST_CASE("test server down") {
           });
       CHECK(res.has_value());
     }
+
     server1.stop();
+    ELOG_INFO << "server1 stop";
     for (int i = 0; i < 100; ++i) {
       auto res = co_await load_blancer.send_request(
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
-            co_await client.call<hello>();
-            if (i > 0)
+            if (i > 0 && host != hosts[1]) {
+              std::cout << "SHIT:" << i << std::endl;
+            }
+            auto res = co_await client.call<hello>();
+            if (i > 0) {
+              CHECK(res.has_value());
               CHECK(host == hosts[1]);
+            }
             co_return;
           });
       if (i > 2)

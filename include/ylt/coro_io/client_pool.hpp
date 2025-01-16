@@ -71,9 +71,12 @@ class client_pool : public std::enable_shared_from_this<
       co_return;
     }
     while (true) {
+      auto self_ptr=self.get();
       clients.reselect();
       self = nullptr;
+      ELOG_TRACE << "start Sleep, now sleep time: " << sleep_time.count()<<"this="<<(void*)self_ptr;
       co_await coro_io::sleep_for(sleep_time);
+      ELOG_TRACE << "end Sleep, this="<<(void*)self_ptr << sleep_time.count();
       if ((self = self_weak.lock()) == nullptr) {
         break;
       }
@@ -86,6 +89,9 @@ class client_pool : public std::enable_shared_from_this<
                    << self->host_name_
                    << "}, now client cnt: " << clients.size();
         if (is_all_cleared != 0) [[unlikely]] {
+          ELOG_TRACE << "start Yield of pool{"
+            << self->host_name_
+            << "}";
           try {
             co_await async_simple::coro::Yield{};
           } catch (std::exception& e) {
@@ -257,9 +263,8 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .via(coro_io::get_global_executor())
-            .start([](auto&&) {
-            });
+            .directlyStart([](auto&&) {
+            },coro_io::get_global_executor());
       }
     }
   }

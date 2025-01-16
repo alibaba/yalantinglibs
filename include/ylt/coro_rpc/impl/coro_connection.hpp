@@ -122,6 +122,17 @@ context_info_t<rpc_protocol> *&set_context();
 
 class coro_connection : public std::enable_shared_from_this<coro_connection> {
  public:
+  template <typename rpc_protocol_t>
+  struct connection_lazy_ctx : public async_simple::coro::LazyLocalBase {
+    inline static char tag;
+    // init LazyLocalBase by unique address
+    connection_lazy_ctx(std::shared_ptr<context_info_t<rpc_protocol_t>> info)
+        : LazyLocalBase(&tag), info_(std::move(info)) {}
+    static bool classof(const LazyLocalBase *base) {
+      return base->getTypeTag() == &tag;
+    }
+    std::shared_ptr<context_info_t<rpc_protocol_t>> info_;
+  };
   /*!
    *
    * @param io_context
@@ -276,26 +287,30 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         auto coro_handler = router.get_coro_handler(key);
         set_rpc_return_by_callback();
         router.route_coro(coro_handler, payload, serialize_proto.value(), key)
-            .via(executor_)
-            .setLazyLocal((void *)context_info.get())
-            .start([context_info](auto &&result) mutable {
-              std::pair<coro_rpc::err_code, std::string> &ret = result.value();
-              if (ret.first)
-                AS_UNLIKELY {
-                  ELOGI << "rpc error in function:"
-                        << context_info->get_rpc_function_name()
-                        << ". error code:" << ret.first.ec
-                        << ". message : " << ret.second;
-                }
-              auto executor = context_info->conn_->get_executor();
-              executor->schedule([context_info = std::move(context_info),
-                                  ret = std::move(ret)]() mutable {
-                context_info->conn_->template direct_response_msg<rpc_protocol>(
-                    ret.first, ret.second, context_info->req_head_,
-                    std::move(context_info->resp_attachment_),
-                    std::move(context_info->complete_handler_));
-              });
-            });
+            .template setLazyLocal<connection_lazy_ctx<rpc_protocol>>(
+                context_info)
+            .directlyStart(
+                [context_info](auto &&result) mutable {
+                  std::pair<coro_rpc::err_code, std::string> &ret =
+                      result.value();
+                  if (ret.first)
+                    AS_UNLIKELY {
+                      ELOGI << "rpc error in function:"
+                            << context_info->get_rpc_function_name()
+                            << ". error code:" << ret.first.ec
+                            << ". message : " << ret.second;
+                    }
+                  auto executor = context_info->conn_->get_executor();
+                  executor->schedule([context_info = std::move(context_info),
+                                      ret = std::move(ret)]() mutable {
+                    context_info->conn_
+                        ->template direct_response_msg<rpc_protocol>(
+                            ret.first, ret.second, context_info->req_head_,
+                            std::move(context_info->resp_attachment_),
+                            std::move(context_info->complete_handler_));
+                  });
+                },
+                executor_);
       }
       else {
         coro_rpc::detail::set_context<rpc_protocol>() = context_info.get();

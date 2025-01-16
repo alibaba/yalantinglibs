@@ -16,8 +16,12 @@
 #ifndef ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 #define ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 
+#ifndef ASYNC_SIMPLE_USE_MODULES
+#include <mutex>
 #include <thread>
 #include "async_simple/coro/Lazy.h"
+
+#endif  // ASYNC_SIMPLE_USE_MODULES
 
 namespace async_simple {
 namespace coro {
@@ -31,7 +35,7 @@ public:
         return !_locked.exchange(true, std::memory_order_acquire);
     }
 
-    Lazy<> coLock() noexcept {
+    Lazy<> coLock() {
         auto counter = _spinCount;
         while (!tryLock()) {
             while (_locked.load(std::memory_order_relaxed)) {
@@ -58,7 +62,7 @@ public:
 
     void unlock() noexcept { _locked.store(false, std::memory_order_release); }
 
-    Lazy<std::unique_lock<SpinLock>> coScopedLock() noexcept {
+    Lazy<std::unique_lock<SpinLock>> coScopedLock() {
         co_await coLock();
         co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
     }

@@ -429,66 +429,6 @@ async_simple::coro::Lazy<std::pair<
   });
 }
 
-template <typename T>
-inline decltype(auto) select_impl(T &pair) {
-  using Func = std::tuple_element_t<1, std::remove_cvref_t<T>>;
-  using ValueType =
-      typename std::tuple_element_t<0, std::remove_cvref_t<T>>::ValueType;
-  using return_type = std::invoke_result_t<Func, async_simple::Try<ValueType>>;
-
-  auto &callback = std::get<1>(pair);
-  if constexpr (coro_io::is_lazy_v<return_type>) {
-    auto executor = std::get<0>(pair).getExecutor();
-    return std::make_pair(
-        std::move(std::get<0>(pair)),
-        [executor, callback = std::move(callback)](auto &&val) {
-          if (executor) {
-            callback(std::move(val)).via(executor).start([](auto &&) {
-            });
-          }
-          else {
-            callback(std::move(val)).start([](auto &&) {
-            });
-          }
-        });
-  }
-  else {
-    return pair;
-  }
-}
-
-template <typename... T>
-inline auto select(T &&...args) {
-  return async_simple::coro::collectAny(select_impl(args)...);
-}
-
-template <typename T, typename Callback>
-inline auto select(std::vector<T> vec, Callback callback) {
-  if constexpr (coro_io::is_lazy_v<Callback>) {
-    std::vector<async_simple::Executor *> executors;
-    for (auto &lazy : vec) {
-      executors.push_back(lazy.getExecutor());
-    }
-
-    return async_simple::coro::collectAny(
-        std::move(vec),
-        [executors, callback = std::move(callback)](size_t index, auto &&val) {
-          auto executor = executors[index];
-          if (executor) {
-            callback(index, std::move(val)).via(executor).start([](auto &&) {
-            });
-          }
-          else {
-            callback(index, std::move(val)).start([](auto &&) {
-            });
-          }
-        });
-  }
-  else {
-    return async_simple::coro::collectAny(std::move(vec), std::move(callback));
-  }
-}
-
 template <typename Socket, typename AsioBuffer>
 std::pair<asio::error_code, size_t> read_some(Socket &sock,
                                               AsioBuffer &&buffer) {
