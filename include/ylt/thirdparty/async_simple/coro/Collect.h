@@ -190,7 +190,9 @@ struct CollectAnyAwaiter {
                         _result = std::make_unique<ResultType>();
                         _result->_idx = i;
                         _result->_value = std::move(result);
-                        local->getSlot()->signal()->emit(_SignalType);
+                        if (auto ptr = local->getSlot(); ptr) {
+                            ptr->signal()->emit(_SignalType);
+                        }
                         c.resume();
                     }
                 });
@@ -291,7 +293,9 @@ struct CollectAnyVariadicAwaiter {
                         if (count > std::tuple_size<InputType>() + 1) {
                             _result = std::make_unique<ResultType>(
                                 std::in_place_index_t<index>(), std::move(res));
-                            local->getSlot()->signal()->emit(_SignalType);
+                            if (auto ptr = local->getSlot(); ptr) {
+                                ptr->signal()->emit(_SignalType);
+                            }
                             c.resume();
                         }
                     });
@@ -398,9 +402,11 @@ struct CollectAllAwaiter {
                     _output[i] = std::move(result);
                     std::size_t oldCount;
                     auto size = _input.size();
+                    auto signal = _signal;
+                    auto signalType = _SignalType;
                     auto awaitingCoro = _event.down(oldCount, 1);
                     if (oldCount == size) {
-                        local->getSlot()->signal()->emit(_SignalType);
+                        signal->emit(signalType);
                     }
                     if (awaitingCoro) {
                         awaitingCoro.resume();
@@ -573,11 +579,12 @@ struct CollectAllVariadicAwaiter {
                 auto func = [&, local = std::move(local)]() mutable {
                     lazy.start([&, local = std::move(local), this](auto&& res) {
                         result = std::move(res);
-
                         std::size_t oldCount;
+                        auto signal = _signal;
+                        auto signalType = _SignalType;
                         auto awaitingCoro = _event.down(oldCount, 1);
                         if (oldCount == sizeof...(Ts)) {
-                            local->getSlot()->signal()->emit(_SignalType);
+                            signal->emit(signalType);
                         }
                         if (awaitingCoro) {
                             awaitingCoro.resume();
