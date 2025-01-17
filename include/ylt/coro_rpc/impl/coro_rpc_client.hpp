@@ -715,15 +715,14 @@ class coro_rpc_client {
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
       return;
     }
-    asio::dispatch(control->executor_.get_asio_executor(),
-                   [control]() {
-                     assert(&control->executor_.get_asio_executor().context() ==
-                            &control->socket_.get_executor().context());
-                    control->has_closed_ = true;
-                    asio::error_code ec;
-                    control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-                    control->socket_.close(ec);
-                   });
+    asio::dispatch(control->executor_.get_asio_executor(), [control]() {
+      assert(&control->executor_.get_asio_executor().context() ==
+             &control->socket_.get_executor().context());
+      control->has_closed_ = true;
+      asio::error_code ec;
+      control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+      control->socket_.close(ec);
+    });
     return;
   }
 
@@ -733,17 +732,18 @@ class coro_rpc_client {
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
       co_return;
     }
-    co_await coro_io::post([control]() {
-                     assert(&control->executor_.get_asio_executor().context() ==
-                            &control->socket_.get_executor().context());
-                    control->has_closed_ = true;
-                    asio::error_code ec;
-                    control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-                    control->socket_.close(ec);
-                   },&control->executor_);
+    co_await coro_io::post(
+        [control = control.get()]() {
+          assert(&control->executor_.get_asio_executor().context() ==
+                 &control->socket_.get_executor().context());
+          control->has_closed_ = true;
+          asio::error_code ec;
+          control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+          control->socket_.close(ec);
+        },
+        &control->executor_);
     co_return;
   }
-
 
 #ifdef UNIT_TEST_INJECT
  public:
