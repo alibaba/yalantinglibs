@@ -49,8 +49,6 @@ TEST_CASE("test wss client") {
   auto data = async_simple::coro::syncAwait(client.read_websocket());
   CHECK(data.resp_body == "hello");
 
-  client.close();
-
   server.stop();
 }
 #endif
@@ -440,6 +438,5 @@ TEST_CASE("test websocket permessage defalte") {
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   server.stop();
-  client.close();
 }
 #endif

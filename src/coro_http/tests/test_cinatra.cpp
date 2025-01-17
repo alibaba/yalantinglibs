@@ -1743,8 +1743,6 @@ TEST_CASE("test upload file") {
       "http//badurl.com", "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
-  client.close();
-
   server.stop();
 }
 
@@ -2681,7 +2679,7 @@ TEST_CASE("test inject failed") {
     ret = client1.get(uri);
     CHECK(ret.status != 200);
 
-    client1.close();
+    client1.reset();
     std::string out;
     out.resize(2024);
     ret = async_simple::coro::syncAwait(
