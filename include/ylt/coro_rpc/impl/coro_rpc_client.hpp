@@ -730,6 +730,8 @@ class coro_rpc_client {
     auto future = p->getFuture();
     asio::dispatch(control->executor_.get_asio_executor(),
                    [control, p = std::move(p)]() {
+                     assert(&control->executor_.get_asio_executor().context() ==
+                            &control->socket_.get_executor().context());
                      p->setValue(close_socket(std::move(control)));
                    });
     future.wait();
@@ -741,15 +743,8 @@ class coro_rpc_client {
       return {};
   }
 
-  static async_simple::coro::Lazy<bool> check_work_in_io_context(
-      std::shared_ptr<coro_rpc_client::control_t> &control) {
-    auto executor = co_await coro_io::get_current_executor();
-    co_return executor == control->executor_;
-  }
   static std::error_code close_socket(
       std::shared_ptr<coro_rpc_client::control_t> control) {
-    assert(*coro_io::get_current() ==
-           &control->socket_.get_executor().context());
     control->has_closed_ = true;
     bool expected = false;
     asio::error_code ec;
