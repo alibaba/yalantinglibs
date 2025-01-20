@@ -62,9 +62,9 @@ public:
 
     void unlock() noexcept { _locked.store(false, std::memory_order_release); }
 
-    Lazy<std::unique_lock<SpinLock>> coScopedLock() {
-        co_await coLock();
-        co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
+    [[nodiscard]] Lazy<std::unique_lock<SpinLock>> coScopedLock() {
+      co_await coLock();
+      co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
     }
 
 private:
