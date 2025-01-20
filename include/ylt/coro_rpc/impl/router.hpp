@@ -103,7 +103,7 @@ class router {
   template <auto func, typename Self>
   void regist_one_handler(Self *self) {
     if (self == nullptr)
-      AS_UNLIKELY { ELOGV(CRITICAL, "null connection!"); }
+      AS_UNLIKELY { ELOG_CRITICAL << "null connection!"; }
 
     route_key key{};
 
@@ -128,7 +128,7 @@ class router {
   template <auto func, typename Self>
   void regist_one_handler_impl(Self *self, const route_key &key) {
     if (self == nullptr)
-      AS_UNLIKELY { ELOGV(CRITICAL, "null connection!"); }
+      AS_UNLIKELY { ELOG_CRITICAL << "null connection!"; }
 
     constexpr auto name = get_func_name<func>();
     using return_type = util::function_return_type_t<decltype(func)>;
@@ -143,7 +143,7 @@ class router {
             return std::visit(visitor, protocols);
           });
       if (!it.second) {
-        ELOGV(CRITICAL, "duplication function %s register!", name.data());
+        ELOG_CRITICAL << "duplication function " << name << " registered!";
       }
     }
     else {
@@ -161,7 +161,7 @@ class router {
                 protocols);
           });
       if (!it.second) {
-        ELOGV(CRITICAL, "duplication function %s register!", name.data());
+        ELOG_CRITICAL << "duplication function " << name << " registered!";
       }
     }
 
@@ -197,7 +197,7 @@ class router {
             return std::visit(visitor, protocols);
           });
       if (!it.second) {
-        ELOGV(CRITICAL, "duplication function %s register!", name.data());
+        ELOG_CRITICAL << "duplication function " << name << " registered!";
       }
     }
     else {
@@ -214,7 +214,7 @@ class router {
                 protocols);
           });
       if (!it.second) {
-        ELOGV(CRITICAL, "duplication function %s register!", name.data());
+        ELOG_CRITICAL << "duplication function " << name << " registered!";
       }
     }
     id2name_.emplace(key, name);
@@ -244,8 +244,7 @@ class router {
       AS_LIKELY {
         try {
 #ifndef NDEBUG
-          ELOGV(INFO, "route function name: %s", get_name(route_key).data());
-
+          ELOG_INFO << "route function name: " << get_name(route_key);
 #endif
           // clang-format off
           co_return co_await (*handler)(data, protocols);
@@ -274,7 +273,7 @@ class router {
       AS_LIKELY {
         try {
 #ifndef NDEBUG
-          ELOGV(INFO, "route function name: %s", get_name(route_key).data());
+          ELOG_INFO << "route function name: " << get_name(route_key);
 #endif
           return (*handler)(data, context_info, protocols);
         } catch (coro_rpc::rpc_error& err) {

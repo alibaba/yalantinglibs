@@ -47,13 +47,13 @@ class context_base {
     auto old_flag = self_->status_.exchange(context_status::start_response);
     if (old_flag != context_status::init)
       AS_UNLIKELY {
-        ELOGV(ERROR, "response message more than one time");
+        ELOG_ERROR << "response message more than one time";
         return false;
       }
 
     if (self_->has_closed())
       AS_UNLIKELY {
-        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        ELOG_DEBUG << "response_msg failed: connection has been closed";
         return false;
       }
     return true;

@@ -66,6 +66,7 @@ class coro_http_router {
           if (ok) {
             co_await handler(req, resp);
           }
+          ok = true;
           (do_after(asps, req, resp, ok), ...);
         };
       }
@@ -113,6 +114,7 @@ class coro_http_router {
           if (ok) {
             handler(req, resp);
           }
+          ok = true;
           (do_after(asps, req, resp, ok), ...);
         };
       }
@@ -155,19 +157,16 @@ class coro_http_router {
       }
       ok = aspect.before(req, resp);
     }
-    else {
-      ok = true;
-    }
   }
 
   template <typename T>
   void do_after(T& aspect, coro_http_request& req, coro_http_response& resp,
                 bool& ok) {
     if constexpr (has_after_v<T>) {
+      if (!ok) {
+        return;
+      }
       ok = aspect.after(req, resp);
-    }
-    else {
-      ok = true;
     }
   }
 

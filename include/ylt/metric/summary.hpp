@@ -6,7 +6,7 @@
 #include <mutex>
 
 #include "counter.hpp"
-#include "metric.hpp"
+#include "dynamic_metric.hpp"
 #include "summary_impl.hpp"
 #if __has_include("ylt/util/concurrentqueue.h")
 #include "ylt/util/concurrentqueue.h"
@@ -17,32 +17,33 @@
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_summary_metric_t {
-  std::map<std::string, std::string> labels;
-  std::map<double, double> quantiles;
-  int64_t count;
+  std::vector<std::string_view> labels;
+  std::vector<float> quantiles_value;
+  uint64_t count;
   double sum;
 };
-YLT_REFL(json_summary_metric_t, labels, quantiles, count, sum);
+YLT_REFL(json_summary_metric_t, labels, quantiles_value, count, sum);
 struct json_summary_t {
-  std::string name;
-  std::string help;
-  std::string type;
+  std::string_view name;
+  std::string_view help;
+  std::string_view type;
+  const std::vector<std::string>& labels_name;
+  const std::vector<double>& quantiles_key;
   std::vector<json_summary_metric_t> metrics;
 };
-YLT_REFL(json_summary_t, name, help, type, metrics);
+YLT_REFL(json_summary_t, name, help, type, labels_name, quantiles_key, metrics);
 #endif
 
 class summary_t : public static_metric {
  public:
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
-            std::chrono::seconds max_age = std::chrono::seconds{60})
+            std::chrono::seconds max_age = std::chrono::seconds{0})
       : static_metric(MetricType::Summary, std::move(name), std::move(help)),
         quantiles_(std::move(quantiles)),
         impl_(quantiles_,
               std::chrono::duration_cast<std::chrono::seconds>(max_age)) {
     if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
       std::sort(quantiles_.begin(), quantiles_.end());
-    g_user_metric_count++;
   }
 
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
@@ -55,7 +56,6 @@ class summary_t : public static_metric {
               std::chrono::duration_cast<std::chrono::seconds>(max_age)) {
     if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
       std::sort(quantiles_.begin(), quantiles_.end());
-    g_user_metric_count++;
   }
 
   void observe(float value) { impl_.insert(value); }
@@ -116,122 +116,104 @@ class summary_t : public static_metric {
       return;
     }
 
-    double sum = 0;
-    uint64_t count = 0;
-    auto rates = get_rates(sum, count);
-    if (count == 0) {
-      return;
-    }
-
-    json_summary_t summary{name_, help_, std::string(metric_name())};
-
+    json_summary_t summary{name_, help_, metric_name(), labels_name(),
+                           quantiles_};
     json_summary_metric_t metric;
 
-    for (size_t i = 0; i < quantiles_.size(); i++) {
-      for (size_t i = 0; i < labels_name_.size(); i++) {
-        metric.labels[labels_name_[i]] = labels_value_[i];
-      }
-      metric.quantiles.emplace(quantiles_[i], rates[i]);
+    metric.quantiles_value = get_rates(metric.sum, metric.count);
+    if (metric.count == 0) {
+      return;
     }
-
-    metric.sum = sum;
-    metric.count = count;
-
+    metric.labels.reserve(labels_value_.size());
+    for (auto& e : labels_value_) metric.labels.emplace_back(e);
     summary.metrics.push_back(std::move(metric));
-
     iguana::to_json(summary, str);
   }
 #endif
 
  private:
   std::vector<double> quantiles_;
-  ylt::metric::detail::summary_impl<> impl_;
+  ylt::metric::detail::summary_impl<uint64_t> impl_;
 };
 
 template <size_t N>
-class basic_dynamic_summary : public dynamic_metric {
+class basic_dynamic_summary
+    : public dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>,
+                                 N> {
  private:
-  auto visit(const std::array<std::string, N>& labels_value) {
-    decltype(label_quantile_values_.begin()) iter;
-    bool has_inserted;
-    {
-      std::lock_guard guard(mutex_);
-      std::tie(iter, has_inserted) =
-          label_quantile_values_.try_emplace(labels_value, nullptr);
-      if (has_inserted) {
-        iter->second = std::make_unique<detail::summary_impl<>>(quantiles_);
-      }
-    }
-    return iter;
-  }
+  using Base =
+      dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N>;
 
  public:
   basic_dynamic_summary(
       std::string name, std::string help, std::vector<double> quantiles,
       std::array<std::string, N> labels_name,
       std::chrono::milliseconds max_age = std::chrono::seconds{60})
-      : dynamic_metric(MetricType::Summary, std::move(name), std::move(help),
-                       std::move(labels_name)),
+      : Base(MetricType::Summary, std::move(name), std::move(help),
+             std::move(labels_name)),
         quantiles_(std::move(quantiles)),
         max_age_(max_age) {
     if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
       std::sort(quantiles_.begin(), quantiles_.end());
-    g_user_metric_count++;
   }
 
   void observe(const std::array<std::string, N>& labels_value, float value) {
-    visit(labels_value)->second->insert(value);
+    Base::try_emplace(labels_value, quantiles_).first->value.insert(value);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value) {
     double sum;
     uint64_t count;
-    return visit(labels_value)->second->get_rates(sum, count);
+    return Base::try_emplace(labels_value, quantiles_)
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                uint64_t& count) {
     double sum;
-    return visit(labels_value)->second->get_rates(sum, count);
+    return Base::try_emplace(labels_value, quantiles_)
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum) {
     uint64_t count;
-    return visit(labels_value)->second->get_rates(sum, count);
+    return Base::try_emplace(labels_value, quantiles_)
+        .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum, uint64_t& count) {
-    return visit(labels_value)->second->stat(sum, count);
+    return Base::try_emplace(labels_value, quantiles_)
+        .first->value.stat(sum, count);
   }
 
   virtual void serialize(std::string& str) override {
     double sum = 0;
     uint64_t count = 0;
-    std::lock_guard guard(mutex_);
-    // TODO: copy pointer to avoid big lock
-    for (auto& [labels_value, summary_value] : label_quantile_values_) {
-      auto rates = summary_value->stat(sum, count);
+    auto map = Base::copy();
+    for (auto& e : map) {
+      auto& labels_value = e->label;
+      auto& summary_value = e->value;
+      auto rates = summary_value.stat(sum, count);
       for (size_t i = 0; i < quantiles_.size(); i++) {
-        str.append(name_);
+        str.append(Base::name_);
         str.append("{");
-        build_label_string(str, labels_name_, labels_value);
+        Base::build_label_string(str, Base::labels_name_, labels_value);
         str.append(",");
         str.append("quantile=\"");
         str.append(std::to_string(quantiles_[i])).append("\"} ");
         str.append(std::to_string(rates[i])).append("\n");
       }
-
-      str.append(name_).append("_sum ");
+      str.append(Base::name_).append("_sum ");
       str.append("{");
-      build_label_string(str, labels_name_, labels_value);
+      Base::build_label_string(str, Base::labels_name_, labels_value);
       str.append("} ");
       str.append(std::to_string(sum)).append("\n");
 
-      str.append(name_).append("_count ");
+      str.append(Base::name_).append("_count ");
       str.append("{");
-      build_label_string(str, labels_name_, labels_value);
+      Base::build_label_string(str, Base::labels_name_, labels_value);
       str.append("} ");
       str.append(std::to_string((uint64_t)count)).append("\n");
     }
@@ -239,37 +221,36 @@ class basic_dynamic_summary : public dynamic_metric {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   virtual void serialize_to_json(std::string& str) override {
-    json_summary_t summary{name_, help_, std::string(metric_name())};
-    {
-      std::lock_guard guard(mutex_);
-      for (auto& [labels_value, summary_value] : label_quantile_values_) {
-        json_summary_metric_t metric;
-        double sum = 0;
-        uint64_t count = 0;
-        auto rates = summary_value->stat(sum, count);
-        metric.count = count;
-        metric.sum = sum;
-        for (size_t i = 0; i < quantiles_.size(); i++) {
-          for (size_t i = 0; i < labels_value.size(); i++) {
-            metric.labels[labels_name_[i]] = labels_value[i];
-          }
-          metric.quantiles.emplace(quantiles_[i], rates[i]);
-        }
-        summary.metrics.push_back(std::move(metric));
-      }
+    auto map = Base::copy();
+    if (map.empty()) {
+      return;
+    }
+    json_summary_t summary{Base::name_, Base::help_, Base::metric_name(),
+                           Base::labels_name(), quantiles_};
+    summary.metrics.reserve(map.size());
+    for (size_t i = 0; i < map.size(); ++i) {
+      auto& labels_value = map[i]->label;
+      auto& summary_value = map[i]->value;
+      double sum = 0;
+      uint64_t count = 0;
+      auto rates = summary_value.stat(sum, count);
+      if (count == 0)
+        continue;
+      summary.metrics.emplace_back();
+      json_summary_metric_t& metric = summary.metrics.back();
+      metric.count = count;
+      metric.sum = sum;
+      metric.quantiles_value = std::move(rates);
+      metric.labels.reserve(labels_value.size());
+      for (auto& e : labels_value) metric.labels.emplace_back(e);
     }
     iguana::to_json(summary, str);
   }
 #endif
 
  private:
-  using hashtable_t = dynamic_metric_hash_map<
-      std::array<std::string, N>,
-      std::unique_ptr<ylt::metric::detail::summary_impl<>>>;
-  std::mutex mutex_;
   std::vector<double> quantiles_;
   std::chrono::milliseconds max_age_;
-  hashtable_t label_quantile_values_;
 };
 
 using dynamic_summary_1 = basic_dynamic_summary<1>;

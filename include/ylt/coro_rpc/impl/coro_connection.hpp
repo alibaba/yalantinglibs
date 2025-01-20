@@ -146,8 +146,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   ~coro_connection() {
     if (!has_closed_) {
 #ifdef UNIT_TEST_INJECT
-      ELOGV(INFO, "~async_connection conn_id %d, client_id %d", conn_id_,
-            client_id_);
+      ELOG_INFO << "~async_connection conn_id " << conn_id_ << ", client_id "
+                << client_id_;
 #endif
       close();
     }
@@ -167,18 +167,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
-      ELOGV(INFO, "begin to handshake conn_id %d", conn_id_);
+      ELOG_INFO << "begin to handshake conn_id " << conn_id_;
       reset_timer();
       auto shake_ec = co_await coro_io::async_handshake(
           ssl_stream_, asio::ssl::stream_base::server);
       cancel_timer();
       if (shake_ec) {
-        ELOGV(ERROR, "handshake failed: %s conn_id %d",
-              shake_ec.message().data(), conn_id_);
+        ELOG_ERROR << "handshake failed: " << shake_ec.message() << " conn_id  "
+                   << conn_id_;
         close();
       }
       else {
-        ELOGV(INFO, "handshake ok conn_id %d", conn_id_);
+        ELOG_INFO << "handshake ok conn_id " << conn_id_;
         co_await start_impl<rpc_protocol>(router, *ssl_stream_);
       }
     }
@@ -204,22 +204,20 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
       // So, no special handling of eof is required.
       if (ec) {
-        ELOGV(INFO, "connection %d close: %s", conn_id_, ec.message().data());
+        ELOG_INFO << "connection " << conn_id_ << " close: " << ec.message();
         close();
         break;
       }
 
 #ifdef UNIT_TEST_INJECT
       client_id_ = req_head_tmp.seq_num;
-      ELOGV(INFO, "conn_id %d, client_id %d", conn_id_, client_id_);
+      ELOG_INFO << "conn_id " << conn_id_ << " client_id " << client_id_;
 #endif
 
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_read_header) {
-        ELOGV(WARN,
-              "inject action: close_socket_after_read_header, conn_id %d, "
-              "client_id %d",
-              conn_id_, client_id_);
+        ELOG_WARN << "inject action: close_socket_after_read_header, conn_id "
+                  << conn_id_ << ", client_id " << client_id_;
         close();
         break;
       }
@@ -250,7 +248,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       if (!serialize_proto.has_value())
         AS_UNLIKELY {
-          ELOGV(ERROR, "bad serialize protocol type, conn_id %d", conn_id_);
+          ELOG_ERROR << "bad serialize protocol type, conn_id " << conn_id_;
           close();
           break;
         }
@@ -265,8 +263,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       if (ec)
         AS_UNLIKELY {
-          ELOGV(ERROR, "read error: %s, conn_id %d", ec.message().data(),
-                conn_id_);
+          ELOG_ERROR << "read error: " << ec.message() << ", conn_id "
+                     << conn_id_;
           close();
           break;
         }
@@ -317,8 +315,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         }
 #ifdef UNIT_TEST_INJECT
         if (g_action == inject_action::close_socket_after_send_length) {
-          ELOGV(WARN, "inject action: close_socket_after_send_length", conn_id_,
-                client_id_);
+          ELOG_WARN
+              << "inject action: close_socket_after_send_length , conn_id "
+              << conn_id_ << ", client_id " << client_id_;
           std::string header_buf = rpc_protocol::prepare_response(
               resp_buf, req_head, 0, resp_err, "");
           co_await coro_io::async_write(socket, asio::buffer(header_buf));
@@ -326,11 +325,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
           break;
         }
         if (g_action == inject_action::server_send_bad_rpc_result) {
-          ELOGV(
-              WARN,
-              "inject action: server_send_bad_rpc_result conn_id %d, client_id "
-              "%d",
-              conn_id_, client_id_);
+          ELOG_WARN << "inject action: server_send_bad_rpc_result , conn_id "
+                    << conn_id_ << ", client_id " << client_id_;
           resp_buf[0] = resp_buf[0] + 1;
         }
 #endif
@@ -362,8 +358,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     if (resp_err) {
       resp_error_msg = std::move(resp_buf);
       resp_buf = {};
-      ELOGV(WARNING, "rpc route/execute error, error msg: %s",
-            resp_error_msg.data());
+      ELOG_WARN << "rpc route/execute error, error msg: " << resp_error_msg;
     }
     std::string header_buf = rpc_protocol::prepare_response(
         resp_buf, req_head, attachment().length(), resp_err, resp_error_msg);
@@ -460,12 +455,12 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       rpc_conn self) noexcept {
     if (has_closed())
       AS_UNLIKELY {
-        ELOGV(DEBUG, "response_msg failed: connection has been closed");
+        ELOG_DEBUG << "response_msg failed: connection has been closed";
         co_return;
       }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
-      ELOGV(WARN, "inject action: close_socket_after_send_length");
+      ELOG_WARN << "inject action: close_socket_after_send_length";
       body_buf.clear();
     }
 #endif
@@ -488,11 +483,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       auto &msg = write_queue_.front();
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_connection_close_socket) {
-        ELOGV(
-            WARN,
-            "inject action: force_inject_connection_close_socket, conn_id %d, "
-            "client_id %d",
-            conn_id_, client_id_);
+        ELOG_WARN
+            << "inject action: force_inject_connection_close_socket , conn_id "
+            << conn_id_ << ", client_id " << client_id_;
         close();
         co_return;
       }
@@ -535,8 +528,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       if (ret.first)
         AS_UNLIKELY {
-          ELOGV(ERROR, "%s, %s", ret.first.message().data(),
-                "async_write error");
+          ELOG_ERROR << ret.first.message() << ", "
+                     << "async_write error";
           close();
           co_return;
         }
@@ -544,10 +537,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
-      ELOGV(INFO,
-            "inject action: close_socket_after_send_length, conn_id %d, "
-            "client_id %d",
-            conn_id_, client_id_);
+      ELOG_INFO << "inject action: close_socket_after_send_length , conn_id "
+                << conn_id_ << ", client_id " << client_id_;
       // Attention: close ssl stream after read error
       // otherwise, server will crash
       close();
@@ -557,7 +548,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   void close() {
-    ELOGV(TRACE, "connection closed");
+    ELOG_TRACE << "connection closed";
     if (has_closed_) {
       return;
     }
@@ -580,10 +571,10 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         [this, self = shared_from_this()](asio::error_code const &ec) {
           if (!ec) {
 #ifdef UNIT_TEST_INJECT
-            ELOGV(INFO, "close timeout client_id %d conn_id %d", client_id_,
-                  conn_id_);
+            ELOG_INFO << "close timeout client client_id " << client_id_
+                      << ", conn_id " << conn_id_;
 #else
-            ELOGV(INFO, "close timeout client conn_id %d", conn_id_);
+            ELOG_INFO << "close timeout client conn_id " << conn_id_;
 #endif
 
             close();

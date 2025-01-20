@@ -5,14 +5,50 @@
 #include <thread>
 #include <vector>
 
+#include "ylt/metric/metric.hpp"
+
 namespace ylt::metric {
 inline uint32_t get_round_index(uint32_t size) {
   static std::atomic<uint32_t> round = 0;
   static thread_local uint32_t index = round++;
   return index % size;
 }
+
+namespace detail {
+template <typename value_type>
+static value_type inc_impl(std::atomic<value_type> &obj, value_type value) {
+  if constexpr (!requires {
+                  std::atomic<value_type>{}.fetch_add(value_type{});
+                }) {
+    value_type v = obj.load(std::memory_order::relaxed);
+    while (!std::atomic_compare_exchange_weak(&obj, &v, v + value))
+      ;
+    return v;
+  }
+  else {
+    return obj.fetch_add(value, std::memory_order::relaxed);
+  }
+}
+template <typename value_type>
+static value_type dec_impl(std::atomic<value_type> &obj, value_type value) {
+  if constexpr (!requires {
+                  std::atomic<value_type>{}.fetch_add(value_type{});
+                }) {
+    value_type v = obj.load(std::memory_order::relaxed);
+    while (!std::atomic_compare_exchange_weak(&obj, &v, v - value))
+      ;
+    return v;
+  }
+  else {
+    return obj.fetch_sub(value, std::memory_order::relaxed);
+  }
+}
+}  // namespace detail
+
 template <typename value_type>
 class thread_local_value {
+  friend class metric_t;
+
  public:
   thread_local_value(uint32_t dupli_count = std::thread::hardware_concurrency())
       : duplicates_(dupli_count) {}
@@ -56,15 +92,15 @@ class thread_local_value {
     return *this;
   }
 
-  void inc(value_type value = 1) { local_value() += value; }
+  void inc(value_type value = 1) { detail::inc_impl(local_value(), value); }
 
-  void dec(value_type value = 1) { local_value() -= value; }
+  void dec(value_type value = 1) { detail::dec_impl(local_value(), value); }
 
   value_type update(value_type value = 1) {
-    value_type val = get_value(0).exchange(value);
+    value_type val = get_value(0).exchange(value, std::memory_order::relaxed);
     for (size_t i = 1; i < duplicates_.size(); i++) {
       if (duplicates_[i]) {
-        val += duplicates_[i].load()->exchange(0);
+        val += duplicates_[i].load()->exchange(0, std::memory_order::relaxed);
       }
     }
     return val;
@@ -89,7 +125,7 @@ class thread_local_value {
     return *duplicates_[index];
   }
 
-  value_type value() {
+  value_type value() const {
     value_type val = 0;
     for (auto &t : duplicates_) {
       if (t) {
@@ -98,12 +134,6 @@ class thread_local_value {
     }
     return val;
   }
-
-  void set_created_time(std::chrono::system_clock::time_point tm) {
-    created_time_ = tm;
-  }
-
-  auto get_created_time() { return created_time_; }
 
  private:
   std::vector<std::atomic<std::atomic<value_type> *>> duplicates_;

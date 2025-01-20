@@ -220,8 +220,10 @@ class coro_http_response {
       resp_str.append(TRANSFER_ENCODING_SV);
     }
     else {
-      if (!content_.empty()) {
-        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
+      if (!content_.empty() || !content_view_.empty()) {
+        size_t content_size =
+            content_.empty() ? content_view_.size() : content_.size();
+        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_size);
         resp_str.append(CONTENT_LENGTH_SV);
         resp_str.append(std::string_view(buf_, std::distance(buf_, ptr)));
         resp_str.append(CRCF);
@@ -374,6 +376,7 @@ class coro_http_response {
     boundary_.clear();
     has_set_content_ = false;
     cookies_.clear();
+    need_date_ = true;
   }
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }

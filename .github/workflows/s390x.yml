@@ -12,7 +12,7 @@ jobs:
     name: Build Linux on s390x arch and run unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: uraimo/run-on-arch-action@v2
         name: Test
         id: runcmd

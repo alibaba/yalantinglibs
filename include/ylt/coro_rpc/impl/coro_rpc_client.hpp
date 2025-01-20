@@ -161,14 +161,14 @@ class coro_rpc_client {
                                                  "client has been closed"};
   struct config {
     uint64_t client_id = get_global_client_id();
-    std::chrono::milliseconds timeout_duration =
-        std::chrono::milliseconds{30000};
-    std::string host;
-    std::string port;
+    std::optional<std::chrono::milliseconds> connect_timeout_duration;
+    std::optional<std::chrono::milliseconds> request_timeout_duration;
+    std::string host{};
+    std::string port{};
     bool enable_tcp_no_delay = true;
 #ifdef YLT_ENABLE_SSL
-    std::filesystem::path ssl_cert_path;
-    std::string ssl_domain;
+    std::filesystem::path ssl_cert_path{};
+    std::string ssl_domain{};
 #endif
   };
 
@@ -203,6 +203,8 @@ class coro_rpc_client {
 
   const config &get_config() const { return config_; }
 
+  config &get_config() { return config_; }
+
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
 #ifdef YLT_ENABLE_SSL
@@ -228,12 +230,12 @@ class coro_rpc_client {
    *
    * @param host server address
    * @param port server port
-   * @param timeout_duration RPC call timeout
+   * @param connect_timeout_duration RPC call timeout seconds
    * @return error code
    */
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
@@ -241,44 +243,32 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-    config_.host = std::move(host);
-    config_.port = std::move(port);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
+
+    if (config_.host.empty()) {
+      config_.host = std::move(host);
+    }
+    if (config_.port.empty()) {
+      config_.port = std::move(port);
+    }
+    if (!config_.connect_timeout_duration) {
+      config_.connect_timeout_duration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              connect_timeout_duration);
+    }
+
     auto ret = co_await connect_impl();
     connect_mutex_.unlock();
     co_return std::move(ret);
   }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
-      std::chrono::steady_clock::duration timeout_duration =
+      std::chrono::steady_clock::duration connect_timeout_duration =
           std::chrono::seconds(30)) {
     auto pos = endpoint.find(':');
-    auto lock_ok = connect_mutex_.tryLock();
-    if (!lock_ok) {
-      co_await connect_mutex_.coScopedLock();
-      co_return err_code{};
-      // do nothing, someone has reconnect the client
-    }
-    config_.host = endpoint.substr(0, pos);
-    config_.port = endpoint.substr(pos + 1);
-    config_.timeout_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout_duration);
-    auto ret = co_await connect_impl();
-    connect_mutex_.unlock();
-    co_return std::move(ret);
-  }
+    std::string host(endpoint.substr(0, pos));
+    std::string port(endpoint.substr(pos + 1));
 
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect() {
-    auto lock_ok = connect_mutex_.tryLock();
-    if (!lock_ok) {
-      co_await connect_mutex_.coScopedLock();
-      co_return err_code{};
-      // do nothing, someone has reconnect the client
-    }
-    auto ret = co_await connect_impl();
-    connect_mutex_.unlock();
-    co_return std::move(ret);
+    return connect(std::move(host), std::move(port), connect_timeout_duration);
   }
 
 #ifdef YLT_ENABLE_SSL
@@ -323,11 +313,12 @@ class coro_rpc_client {
    */
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
-  call_for(auto duration, Args &&...args) {
+  call_for(auto request_timeout_duration, Args &&...args) {
     using return_type = decltype(get_return_type<func>());
     auto async_result =
         co_await co_await send_request_for_with_attachment<func, Args...>(
-            duration, req_attachment_, std::forward<Args>(args)...);
+            request_timeout_duration, req_attachment_,
+            std::forward<Args>(args)...);
     req_attachment_ = {};
     if (async_result) {
       control_->resp_buffer_ = async_result->release_buffer();
@@ -353,13 +344,13 @@ class coro_rpc_client {
   uint32_t get_client_id() const { return config_.client_id; }
 
   void close() {
-    // ELOGV(INFO, "client_id %d close", config_.client_id);
+    // ELOG_INFO << "client_id " << config_.client_id << " close";
     close_socket(control_);
   }
 
   bool set_req_attachment(std::string_view attachment) {
     if (attachment.size() > UINT32_MAX) {
-      ELOGV(ERROR, "too large rpc attachment");
+      ELOG_ERROR << "too large rpc attachment";
       return false;
     }
     req_attachment_ = attachment;
@@ -408,11 +399,14 @@ class coro_rpc_client {
 #endif
     control_->has_closed_ = false;
 
-    ELOGV(INFO, "client_id %d begin to connect %s", config_.client_id,
-          config_.port.data());
-    timeout(*this->timer_, config_.timeout_duration, "connect timer canceled")
-        .start([](auto &&) {
-        });
+    ELOG_INFO << "client_id " << config_.client_id << " begin to connect "
+              << config_.port;
+    auto conn_timeout_dur = *config_.connect_timeout_duration;
+    if (conn_timeout_dur.count() >= 0) {
+      timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
+          .start([](auto &&) {
+          });
+    }
 
     std::error_code ec = co_await coro_io::async_connect(
         &control_->executor_, control_->socket_, config_.host, config_.port);
@@ -427,7 +421,7 @@ class coro_rpc_client {
     }
 
     if (control_->is_timeout_) {
-      ELOGV(WARN, "client_id %d connect timeout", config_.client_id);
+      ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;
     }
     if (config_.enable_tcp_no_delay == true) {
@@ -440,8 +434,8 @@ class coro_rpc_client {
       auto shake_ec = co_await coro_io::async_handshake(
           control_->ssl_stream_, asio::ssl::stream_base::client);
       if (shake_ec) {
-        ELOGV(WARN, "client_id %d handshake failed: %s", config_.client_id,
-              shake_ec.message().data());
+        ELOG_WARN << "client_id " << config_.client_id
+                  << " handshake failed: " << shake_ec.message();
         co_return errc::not_connected;
       }
     }
@@ -453,16 +447,15 @@ class coro_rpc_client {
   [[nodiscard]] bool init_ssl_impl() {
     try {
       ssl_init_ret_ = false;
-      ELOGV(INFO, "init ssl: %s", config_.ssl_domain.data());
+      ELOG_INFO << "init ssl: " << config_.ssl_domain;
       auto &cert_file = config_.ssl_cert_path;
-      ELOGV(INFO, "current path %s",
-            std::filesystem::current_path().string().data());
+      ELOG_INFO << "current path: " << std::filesystem::current_path().string();
       if (file_exists(cert_file)) {
-        ELOGV(INFO, "load %s", cert_file.string().data());
+        ELOG_INFO << "load " << cert_file.string();
         ssl_ctx_.load_verify_file(cert_file);
       }
       else {
-        ELOGV(INFO, "no certificate file %s", cert_file.string().data());
+        ELOG_INFO << "no certificate file " << cert_file.string();
         return ssl_init_ret_;
       }
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
@@ -473,7 +466,7 @@ class coro_rpc_client {
               control_->socket_, ssl_ctx_);
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      ELOGV(ERROR, "init ssl failed: %s", e.what());
+      ELOG_ERROR << "init ssl failed: " << e.what();
     }
     return ssl_init_ret_;
   }
@@ -579,7 +572,7 @@ class coro_rpc_client {
 #endif
       auto sz = buffer.size() - coro_rpc_protocol::REQ_HEAD_LEN;
       if (sz > UINT32_MAX) {
-        ELOGV(ERROR, "too large rpc body");
+        ELOG_ERROR << "too large rpc body";
         return {};
       }
       header.length = sz;
@@ -626,7 +619,7 @@ class coro_rpc_client {
     }
     has_error = true;
     // deserialize failed.
-    ELOGV(WARNING, "deserilaize rpc result failed");
+    ELOG_WARN << "deserilaize rpc result failed";
     err = {errc::invalid_rpc_result, "failed to deserialize rpc return value"};
     return rpc_result<T>{unexpect_t{}, std::move(err)};
   }
@@ -747,13 +740,13 @@ class coro_rpc_client {
  private:
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      auto duration, uint32_t &id, coro_io::period_timer &timer,
+      auto request_timeout_duration, uint32_t &id, coro_io::period_timer &timer,
       std::string_view attachment, Args &&...args) {
     using R = decltype(get_return_type<func>());
 
     if (control_->has_closed_)
       AS_UNLIKELY {
-        ELOGV(ERROR, "client has been closed, please re-connect");
+        ELOG_ERROR << "client has been closed, please re-connect";
         co_return rpc_error{errc::io_error,
                             "client has been closed, please re-connect"};
       }
@@ -766,9 +759,10 @@ class coro_rpc_client {
 
     static_check<func, Args...>();
 
-    if (duration.count() > 0) {
-      timeout(timer, duration, "rpc call timer canceled").start([](auto &&) {
-      });
+    if (request_timeout_duration.count() >= 0) {
+      timeout(timer, request_timeout_duration, "rpc call timer canceled")
+          .start([](auto &&) {
+          });
     }
 
 #ifdef YLT_ENABLE_SSL
@@ -965,16 +959,20 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
-  send_request_for_with_attachment(auto time_out_duration,
+  send_request_for_with_attachment(auto request_timeout_duration,
                                    std::string_view request_attachment,
                                    Args &&...args) {
     using rpc_return_t = decltype(get_return_type<func>());
     recving_guard guard(control_.get());
     uint32_t id;
+    if (!config_.request_timeout_duration) {
+      config_.request_timeout_duration = request_timeout_duration;
+    }
+
     auto timer = std::make_unique<coro_io::period_timer>(
         control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
-        time_out_duration, id, *timer, request_attachment,
+        *config_.request_timeout_duration, id, *timer, request_attachment,
         std::forward<Args>(args)...);
     auto &control = *control_;
     if (!result) {
@@ -1041,7 +1039,7 @@ class coro_rpc_client {
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOGV(INFO, "client_id %d close socket", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " close socket";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1050,7 +1048,7 @@ class coro_rpc_client {
       ret = co_await coro_io::async_write(
           socket,
           asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN - 1));
-      ELOGV(INFO, "client_id %d close socket", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " close socket";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1058,7 +1056,7 @@ class coro_rpc_client {
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOGV(INFO, "client_id %d shutdown", config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id << " shutdown";
       control_->socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1106,8 +1104,8 @@ class coro_rpc_client {
 #endif
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::client_close_socket_after_send_payload) {
-      ELOGV(INFO, "client_id %d client_close_socket_after_send_payload",
-            config_.client_id);
+      ELOG_INFO << "client_id " << config_.client_id
+                << " client_close_socket_after_send_payload";
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }

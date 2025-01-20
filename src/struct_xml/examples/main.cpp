@@ -326,7 +326,23 @@ void test_alias() {
   assert(m1.obj.y == 42);
 }
 
+struct test_optstr_reader_null {
+  std::optional<std::string> name;
+};
+YLT_REFL(test_optstr_reader_null, name);
+void test_optional() {
+  test_optstr_reader_null v;
+  v.name = "name";  // optional<string> begin with 'n'
+  std::string xml;
+  iguana::to_xml(v, xml);
+
+  test_optstr_reader_null v1;
+  iguana::from_xml(v1, xml);
+  assert(v.name == v1.name);
+}
+
 int main() {
+  test_optional();
   test_alias();
   test_sp();
   basic_usage();

@@ -480,14 +480,76 @@ TEST_CASE("testing client with shutdown") {
   g_action = {};
 }
 TEST_CASE("testing client timeout") {
-  // SUBCASE("connect, 0ms timeout") {
-  //   coro_rpc_client client;
-  //   auto ret = client.connect("127.0.0.1", "8801", 0ms);
-  //   auto val = syncAwait(ret);
+  coro_rpc_server server(2, 8801);
+  server.register_handler<hello, client_hello>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
 
-  //   CHECK_MESSAGE(val == std::errc::timed_out,
-  //   make_error_code(val).message());
-  // }
+  SUBCASE("connect, 0ms connect timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = 0ms;
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        1000ms);  // this arg won't update config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    if (val) {
+      CHECK_MESSAGE(val == coro_rpc::errc::timed_out, val.message());
+    }
+  }
+  SUBCASE("connect, -1ms never timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = -1ms;  // less than 0, no timeout
+                                             // checking.
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        1000ms);  // this arg won't update config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+  }
+
+  SUBCASE("connect, 0ms request timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = 1000ms;
+    config.request_timeout_duration = 0ms;
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        0ms);  // 0ms won't cover config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+    auto result = syncAwait(client.call<hello>());
+
+    if (result.has_value()) {
+      std::cout << result.value() << std::endl;
+    }
+    else {
+      CHECK_MESSAGE(result.error().code == coro_rpc::errc::timed_out,
+                    result.error().msg);
+    }
+  }
+  SUBCASE("connect, -1ms never request timeout") {
+    coro_rpc_client client;
+    client.get_config().request_timeout_duration =
+        -1ms;  // less than 0, never timeout.
+    auto ret = client.connect("127.0.0.1", "8801");
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+    auto result = syncAwait(client.call<hello>());
+
+    CHECK(result.has_value());
+  }
   SUBCASE("connect, ip timeout") {
     g_action = {};
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
