@@ -17,10 +17,11 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
 
-#include <asio/dispatch.hpp>
 #include <asio/io_context.hpp>
+#include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
+#include <cstdint>
 #include <future>
 #include <iostream>
 #include <memory>
@@ -28,6 +29,8 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+
+#include "asio/dispatch.hpp"
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
@@ -51,25 +54,25 @@ class ExecutorWrapper : public async_simple::Executor {
   using context_t = std::remove_cvref_t<decltype(executor_.context())>;
 
   virtual bool schedule(Func func) override {
-    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor_.dispatch(std::move(func));
+    asio::post(executor_, std::move(func));
+    return true;
+  }
+
+  virtual bool schedule(Func func, uint64_t hint) override {
+    if (hint >=
+        static_cast<uint64_t>(async_simple::Executor::Priority::YIELD)) {
+      asio::post(executor_, std::move(func));
     }
     else {
       asio::dispatch(executor_, std::move(func));
     }
-
     return true;
   }
 
   virtual bool checkin(Func func, void *ctx) override {
     using context_t = std::remove_cvref_t<decltype(executor_.context())>;
     auto &executor = *(context_t *)ctx;
-    if constexpr (requires(ExecutorImpl e) { e.post(std::move(func)); }) {
-      executor.post(std::move(func));
-    }
-    else {
-      asio::dispatch(executor, std::move(func));
-    }
+    asio::post(executor, std::move(func));
     return true;
   }
   virtual void *checkout() override { return &executor_.context(); }
@@ -93,6 +96,14 @@ class ExecutorWrapper : public async_simple::Executor {
 
  private:
   void schedule(Func func, Duration dur) override {
+    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
+    auto tm = timer.get();
+    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
+      fn();
+    });
+  }
+  void schedule(Func func, Duration dur, uint64_t hint,
+                async_simple::Slot *slot = nullptr) override {
     auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
     auto tm = timer.get();
     tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {

@@ -16,11 +16,14 @@
 #ifndef ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
 #define ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
 
+#ifndef ASYNC_SIMPLE_USE_MODULES
 #include "async_simple/Future.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/experimental/coroutine.h"
 
 #include <type_traits>
+
+#endif  // ASYNC_SIMPLE_USE_MODULES
 
 namespace async_simple {
 
@@ -32,7 +35,7 @@ struct FutureAwaiter {
     bool await_ready() { return future_.hasResult(); }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> continuation) {
+    void await_suspend(CoroHandle<PromiseType> continuation) {
         static_assert(std::is_base_of_v<LazyPromiseBase, PromiseType>,
                       "FutureAwaiter is only allowed to be called by Lazy");
         Executor* ex = continuation.promise()._executor;
@@ -48,7 +51,10 @@ struct FutureAwaiter {
             }
         });
     }
-    auto await_resume() { return std::move(future_.value()); }
+    auto await_resume() {
+        if constexpr (!std::is_same_v<T, void>)
+            return std::move(future_.value());
+    }
 };
 }  // namespace coro::detail
 

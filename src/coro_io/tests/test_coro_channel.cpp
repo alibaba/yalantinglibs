@@ -44,20 +44,15 @@ async_simple::coro::Lazy<void> test_select_channel() {
   co_await async_send(ch2, 42);
 
   std::array<int, 2> arr{41, 42};
-  int val;
 
-  size_t index =
-      co_await select(std::pair{async_receive(ch1),
-                                [&val](auto value) {
-                                  auto [ec, r] = value.value();
-                                  val = r;
-                                }},
-                      std::pair{async_receive(ch2), [&val](auto value) {
-                                  auto [ec, r] = value.value();
-                                  val = r;
-                                }});
+  auto result = co_await collectAny(async_receive(ch1), async_receive(ch2));
+  int val = std::visit(
+      [&val](auto& v) {
+        return static_cast<int>(v.value().second);
+      },
+      result);
 
-  CHECK(val == arr[index]);
+  CHECK(val == arr[result.index()]);
 
   co_await async_send(ch1, 41);
   co_await async_send(ch2, 42);
@@ -66,62 +61,17 @@ async_simple::coro::Lazy<void> test_select_channel() {
   vec.push_back(async_receive(ch1));
   vec.push_back(async_receive(ch2));
 
-  index = co_await select(std::move(vec), [&](size_t i, auto result) {
-    val = result.value().second;
-  });
-  CHECK(val == arr[index]);
+  auto result2 = co_await collectAny(std::move(vec));
+  val = result2.value().second;
+  CHECK(val == arr[result2.index()]);
 
   period_timer timer1(coro_io::get_global_executor());
   timer1.expires_after(100ms);
   period_timer timer2(coro_io::get_global_executor());
   timer2.expires_after(200ms);
+  auto val1 = co_await collectAny(timer1.async_await(), timer2.async_await());
 
-  int val1;
-  index = co_await select(std::pair{timer1.async_await(),
-                                    [&](auto val) {
-                                      CHECK(val.value());
-                                      val1 = 0;
-                                    }},
-                          std::pair{timer2.async_await(), [&](auto val) {
-                                      CHECK(val.value());
-                                      val1 = 0;
-                                    }});
-  CHECK(index == val1);
-
-  int val2;
-  index = co_await select(std::pair{coro_io::post([] {
-                                    }),
-                                    [&](auto) {
-                                      std::cout << "post1\n";
-                                      val2 = 0;
-                                    }},
-                          std::pair{coro_io::post([] {
-                                    }),
-                                    [&](auto) {
-                                      std::cout << "post2\n";
-                                      val2 = 1;
-                                    }});
-  CHECK(index == val2);
-
-  co_await async_send(ch1, 43);
-  auto lazy = coro_io::post([] {
-  });
-
-  int val3 = -1;
-  index = co_await select(std::pair{async_receive(ch1),
-                                    [&](auto result) {
-                                      val3 = result.value().second;
-                                    }},
-                          std::pair{std::move(lazy), [&](auto) {
-                                      val3 = 0;
-                                    }});
-
-  if (index == 0) {
-    CHECK(val3 == 43);
-  }
-  else if (index == 1) {
-    CHECK(val3 == 0);
-  }
+  CHECK(val1.index() == 0);
 }
 
 void callback_lazy() {
@@ -135,29 +85,19 @@ void callback_lazy() {
     co_return 42;
   };
 
-  auto collectAnyLazy = [](auto&&... args) mutable -> Lazy<size_t> {
-    co_return co_await collectAny(std::move(args)...);
-  };
-
-  syncAwait(
-      collectAnyLazy(std::pair{test1(), [&](auto&& val) mutable -> Lazy<void> {
-                                 CHECK(val.value() == 42);
-                                 int r = co_await test0();
-                                 int result = r + val.value();
-                                 CHECK(result == 83);
-                               }}));
-
   std::vector<Lazy<int>> input;
   input.push_back(test1());
 
-  auto index = syncAwait(collectAnyLazy(
-      std::move(input), [&test0](size_t index, auto val) mutable -> Lazy<void> {
-        CHECK(val.value() == 42);
-        int r = co_await test0();
-        int result = r + val.value();
-        CHECK(result == 83);
-      }));
-  CHECK(index == 0);
+  syncAwait([&](std::vector<Lazy<int>> input) -> Lazy<void> {
+    auto result = co_await collectAny(std::move(input));
+    CHECK(result.index() == 0);
+    CHECK(result.value() == 42);
+    int r = co_await test0();
+    int r2 = r + result.value();
+    CHECK(r2 == 83);
+    co_return;
+  }(std::move(input)));
+
 #endif
 }
 

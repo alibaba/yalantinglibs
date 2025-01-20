@@ -80,6 +80,7 @@ class client_queue {
     if (size_[index]) {
       std::size_t result =
           queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
+
       size_[index] -= result;
       return result;
     }

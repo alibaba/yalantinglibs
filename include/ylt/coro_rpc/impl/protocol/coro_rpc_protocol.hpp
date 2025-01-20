@@ -213,9 +213,10 @@ using context = coro_rpc::context_base<return_msg_type,
 
 template <typename rpc_protocol = coro_rpc::protocol::coro_rpc_protocol>
 async_simple::coro::Lazy<context_info_t<rpc_protocol>*> get_context_in_coro() {
-  auto* ctx = co_await async_simple::coro::LazyLocals{};
+  auto* ctx = co_await async_simple::coro::CurrentLazyLocals<
+      coro_connection::connection_lazy_ctx<rpc_protocol>>{};
   assert(ctx != nullptr);
-  co_return (context_info_t<rpc_protocol>*) ctx;
+  co_return ctx->info_.get();
 }
 
 namespace detail {

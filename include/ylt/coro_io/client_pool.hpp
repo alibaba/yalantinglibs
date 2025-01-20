@@ -257,9 +257,8 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .via(coro_io::get_global_executor())
-            .start([](auto&&) {
-            });
+            .directlyStart([](auto&&) {
+            },coro_io::get_global_executor());
       }
     }
   }

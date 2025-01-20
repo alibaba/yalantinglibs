@@ -345,7 +345,7 @@ class coro_rpc_client {
 
   void close() {
     // ELOG_INFO << "client_id " << config_.client_id << " close";
-    close_socket(control_);
+    close_socket_async(control_);
   }
 
   bool set_req_attachment(std::string_view attachment) {
@@ -375,18 +375,19 @@ class coro_rpc_client {
     bool value = false;
   };
 
-  void reset() {
-    close_socket(control_);
+  async_simple::coro::Lazy<void> reset() {
+    co_await close_socket(control_);
     control_->socket_ =
         asio::ip::tcp::socket(control_->executor_.get_asio_executor());
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
+    co_return;
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
 
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect_impl() {
     if (should_reset_) {
-      reset();
+      co_await reset();
     }
     else {
       should_reset_ = true;
@@ -413,16 +414,14 @@ class coro_rpc_client {
     std::error_code err_code;
     timer_->cancel(err_code);
 
-    if (ec) {
-      if (control_->is_timeout_) {
-        co_return errc::timed_out;
-      }
-      co_return errc::not_connected;
-    }
-
     if (control_->is_timeout_) {
       ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;
+    }
+    else if (ec) {
+      ELOG_WARN << "client_id " << config_.client_id
+                << " failed:" << ec.message();
+      co_return errc::not_connected;
     }
     if (config_.enable_tcp_no_delay == true) {
       control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
@@ -482,7 +481,7 @@ class coro_rpc_client {
     }
     if (auto self = socket_watcher.lock()) {
       self->is_timeout_ = is_timeout;
-      close_socket(self);
+      close_socket_async(self);
       co_return true;
     }
     co_return false;
@@ -710,18 +709,40 @@ class coro_rpc_client {
           executor_(executor) {}
   };
 
-  static void close_socket(
+  static void close_socket_async(
       std::shared_ptr<coro_rpc_client::control_t> control) {
     bool expected = false;
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
       return;
     }
-    control->executor_.schedule([control]() {
-      asio::error_code ignored_ec;
-      control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both,
-                                ignored_ec);
-      control->socket_.close(ignored_ec);
+    asio::dispatch(control->executor_.get_asio_executor(), [control]() {
+      assert(&control->executor_.get_asio_executor().context() ==
+             &control->socket_.get_executor().context());
+      control->has_closed_ = true;
+      asio::error_code ec;
+      control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+      control->socket_.close(ec);
     });
+    return;
+  }
+
+  static async_simple::coro::Lazy<void> close_socket(
+      std::shared_ptr<coro_rpc_client::control_t> control) {
+    bool expected = false;
+    if (!control->has_closed_.compare_exchange_strong(expected, true)) {
+      co_return;
+    }
+    co_await coro_io::post(
+        [control = control.get()]() {
+          assert(&control->executor_.get_asio_executor().context() ==
+                 &control->socket_.get_executor().context());
+          control->has_closed_ = true;
+          asio::error_code ec;
+          control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+          control->socket_.close(ec);
+        },
+        &control->executor_);
+    co_return;
   }
 
 #ifdef UNIT_TEST_INJECT
@@ -861,7 +882,7 @@ class coro_rpc_client {
         break;
       }
     } while (true);
-    close_socket(controller);
+    close_socket_async(controller);
     send_err_response(controller.get(), ret.first);
     co_return;
   }
@@ -891,7 +912,7 @@ class coro_rpc_client {
         handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_, has_error);
     if (has_error) {
       if (auto w = watcher.lock(); w) {
-        close_socket(std::move(w));
+        close_socket_async(std::move(w));
       }
     }
     if (result) {
