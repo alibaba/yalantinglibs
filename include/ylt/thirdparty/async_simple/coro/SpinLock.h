@@ -16,7 +16,6 @@
 #ifndef ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 #define ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 
-#include <atomic>
 #ifndef ASYNC_SIMPLE_USE_MODULES
 #include <mutex>
 #include <thread>
