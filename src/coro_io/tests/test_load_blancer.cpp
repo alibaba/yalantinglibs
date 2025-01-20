@@ -238,9 +238,6 @@ TEST_CASE("test server down") {
           [&i, &hosts](
               coro_rpc::coro_rpc_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
-            if (i > 0 && host != hosts[1]) {
-              std::cout << "SHIT:" << i << std::endl;
-            }
             auto res = co_await client.call<hello>();
             if (i > 0) {
               CHECK(res.has_value());
