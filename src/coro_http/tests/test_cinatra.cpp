@@ -645,6 +645,7 @@ async_simple::coro::Lazy<void> test_collect_all() {
   for (int i = 0; i < 2; ++i) {
     auto client = std::make_shared<coro_http_client>();
     client->set_conn_timeout(2s);
+    client->set_req_timeout(2s);
     v.push_back(client);
     futures.push_back(client->async_get("http://www.baidu.com/"));
   }
