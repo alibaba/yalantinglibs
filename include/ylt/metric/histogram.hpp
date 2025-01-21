@@ -6,7 +6,8 @@
 #include <vector>
 
 #include "counter.hpp"
-#include "metric.hpp"
+#include "dynamic_metric.hpp"
+#include "gauge.hpp"
 
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -140,8 +141,6 @@ class basic_static_histogram : public static_metric {
 
  private:
   void init_bucket_counter(size_t dupli_count, size_t bucket_size) {
-    g_user_metric_count++;
-
     for (size_t i = 0; i < bucket_size + 1; i++) {
       bucket_counts_.push_back(
           std::make_shared<counter_t>("", "", dupli_count));
@@ -167,18 +166,15 @@ class basic_dynamic_histogram : public dynamic_metric {
  public:
   basic_dynamic_histogram(std::string name, std::string help,
                           std::vector<double> buckets,
-                          std::array<std::string, N> labels_name,
-                          size_t dupli_count = 2)
+                          std::array<std::string, N> labels_name)
       : bucket_boundaries_(buckets),
         dynamic_metric(MetricType::Histogram, name, help, labels_name),
         sum_(std::make_shared<basic_dynamic_gauge<value_type, N>>(
-            name, help, labels_name, dupli_count)) {
-    g_user_metric_count++;
-
+            name, help, labels_name)) {
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(
-          std::make_shared<basic_dynamic_counter<value_type, N>>(
-              name, help, labels_name, dupli_count));
+          std::make_shared<basic_dynamic_counter<value_type, N>>(name, help,
+                                                                 labels_name));
     }
   }
 
@@ -190,6 +186,13 @@ class basic_dynamic_histogram : public dynamic_metric {
                                        bucket_boundaries_.end(), value)));
     sum_->inc(labels_value, value);
     bucket_counts_[bucket_index]->inc(labels_value);
+  }
+
+  void clean_expired_label() override {
+    sum_->clean_expired_label();
+    for (auto &m : bucket_counts_) {
+      m->clean_expired_label();
+    }
   }
 
   auto get_bucket_counts() { return bucket_counts_; }
@@ -206,8 +209,10 @@ class basic_dynamic_histogram : public dynamic_metric {
     return sum_->has_label_value(label_value);
   }
 
+  size_t label_value_count() const { return sum_->label_value_count(); }
+
   void serialize(std::string &str) override {
-    auto value_map = sum_->value_map();
+    auto value_map = sum_->copy();
     if (value_map.empty()) {
       return;
     }
@@ -216,8 +221,10 @@ class basic_dynamic_histogram : public dynamic_metric {
 
     std::string value_str;
     auto bucket_counts = get_bucket_counts();
-    for (auto &[labels_value, value] : value_map) {
-      if (value.value() == 0) {
+    for (auto &e : value_map) {
+      auto &labels_value = e->label;
+      auto &value = e->value;
+      if (value == 0) {
         continue;
       }
 
@@ -244,10 +251,6 @@ class basic_dynamic_histogram : public dynamic_metric {
         value_str.append("\n");
       }
 
-      if (value_str.empty()) {
-        return;
-      }
-
       str.append(value_str);
 
       str.append(name_);
@@ -255,7 +258,7 @@ class basic_dynamic_histogram : public dynamic_metric {
       build_label_string(str, sum_->labels_name(), labels_value);
       str.append("} ");
 
-      str.append(std::to_string(value.value()));
+      str.append(std::to_string(value));
       str.append("\n");
 
       str.append(name_).append("_count{");
@@ -264,11 +267,14 @@ class basic_dynamic_histogram : public dynamic_metric {
       str.append(std::to_string(count));
       str.append("\n");
     }
+    if (value_str.empty()) {
+      str.clear();
+    }
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    auto value_map = sum_->value_map();
+    auto value_map = sum_->copy();
     if (value_map.empty()) {
       return;
     }
@@ -276,8 +282,10 @@ class basic_dynamic_histogram : public dynamic_metric {
     json_histogram_t hist{name_, help_, std::string(metric_name())};
     auto bucket_counts = get_bucket_counts();
 
-    for (auto &[labels_value, value] : value_map) {
-      if (value.value() == 0) {
+    for (auto &e : value_map) {
+      auto &labels_value = e->label;
+      auto &value = e->value;
+      if (value == 0) {
         continue;
       }
 

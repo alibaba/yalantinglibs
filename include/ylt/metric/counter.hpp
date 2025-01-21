@@ -1,11 +1,13 @@
 #pragma once
+
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <chrono>
+#include <memory>
+#include <thread>
 #include <variant>
 
-#include "metric.hpp"
+#include "dynamic_metric.hpp"
 #include "thread_local_value.hpp"
 
 namespace ylt::metric {
@@ -13,97 +15,49 @@ enum class op_type_t { INC, DEC, SET };
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_counter_metric_t {
-  std::map<std::string, std::string> labels;
+  std::vector<std::string_view> labels;
   std::variant<int64_t, double> value;
 };
 YLT_REFL(json_counter_metric_t, labels, value);
 struct json_counter_t {
-  std::string name;
-  std::string help;
-  std::string type;
+  std::string_view name;
+  std::string_view help;
+  std::string_view type;
+  std::vector<std::string_view> labels_name;
   std::vector<json_counter_metric_t> metrics;
 };
-YLT_REFL(json_counter_t, name, help, type, metrics);
+YLT_REFL(json_counter_t, name, help, type, labels_name, metrics);
 #endif
-
-template <typename T, typename value_type>
-inline void set_value(T &label_val, value_type value, op_type_t type) {
-  switch (type) {
-    case op_type_t::INC: {
-#ifdef __APPLE__
-      if constexpr (std::is_floating_point_v<value_type>) {
-        mac_os_atomic_fetch_add(&label_val, value);
-      }
-      else {
-        label_val += value;
-      }
-#else
-      label_val += value;
-#endif
-    } break;
-    case op_type_t::DEC:
-#ifdef __APPLE__
-      if constexpr (std::is_floating_point_v<value_type>) {
-        mac_os_atomic_fetch_sub(&label_val, value);
-      }
-      else {
-        label_val -= value;
-      }
-#else
-      label_val -= value;
-#endif
-      break;
-    case op_type_t::SET:
-      label_val = value;
-      break;
-  }
-}
 
 template <typename value_type>
 class basic_static_counter : public static_metric {
  public:
   // static counter, no labels, only contains an atomic value.
   basic_static_counter(std::string name, std::string help,
-                       size_t dupli_count = 2)
-      : static_metric(MetricType::Counter, std::move(name), std::move(help)) {
-    init_thread_local(dupli_count);
-  }
+                       uint32_t dupli_count = (std::min)(
+                           128u, std::thread::hardware_concurrency()))
+      : static_metric(MetricType::Counter, std::move(name), std::move(help)),
+        dupli_count_((std::max)(1u, dupli_count)),
+        default_label_value_(dupli_count_) {}
 
   // static counter, contains a static labels with atomic value.
   basic_static_counter(std::string name, std::string help,
                        std::map<std::string, std::string> labels,
-                       uint32_t dupli_count = 2)
+                       uint32_t dupli_count = (std::min)(
+                           128u, std::thread::hardware_concurrency()))
       : static_metric(MetricType::Counter, std::move(name), std::move(help),
-                      std::move(labels)) {
-    init_thread_local(dupli_count);
-  }
-
-  void init_thread_local(uint32_t dupli_count) {
-    if (dupli_count > 0) {
-      dupli_count_ = dupli_count;
-      default_label_value_ = {dupli_count};
-    }
-
-    g_user_metric_count++;
-  }
-
-  virtual ~basic_static_counter() { g_user_metric_count--; }
+                      std::move(labels)),
+        dupli_count_((std::max)(1u, dupli_count)),
+        default_label_value_(dupli_count_) {}
 
   void inc(value_type val = 1) {
-    if (val <= 0) {
+    if (val < 0) {
       return;
     }
-
-#ifdef __APPLE__
-    if constexpr (std::is_floating_point_v<value_type>) {
-      mac_os_atomic_fetch_add(&default_label_value_.local_value(), val);
+    if (!has_change_) [[unlikely]] {
+      has_change_ = true;
     }
-    else {
-      default_label_value_.inc(val);
-    }
-#else
     default_label_value_.inc(val);
-#endif
   }
 
   value_type update(value_type value) {
@@ -123,23 +77,33 @@ class basic_static_counter : public static_metric {
       return;
     }
 
-    serialize_head(str);
+    metric_t::serialize_head(str);
     serialize_default_label(str, value);
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    if (default_label_value_.value() == 0) {
+    auto value = default_label_value_.value();
+    if (value == 0 && !has_change_) {
       return;
     }
 
-    json_counter_t counter{name_, help_, std::string(metric_name())};
-    auto value = default_label_value_.value();
-    counter.metrics.push_back({static_labels_, value});
+    json_counter_t counter{name_, help_, metric_name()};
+
+    counter.labels_name.reserve(static_labels_.size());
+    for (auto &[k, _] : static_labels_) {
+      counter.labels_name.emplace_back(k);
+    }
+    counter.metrics.resize(1);
+    counter.metrics[0].labels.reserve(static_labels_.size());
+    for (auto &[k, _] : static_labels_) {
+      counter.metrics[0].labels.emplace_back(k);
+    }
+    counter.metrics[0].value = value;
     iguana::to_json(counter, str);
   }
 #endif
-
+ private:
  protected:
   void serialize_default_label(std::string &str, value_type value) {
     str.append(name_);
@@ -165,159 +129,48 @@ class basic_static_counter : public static_metric {
     str.pop_back();
   }
 
-  thread_local_value<value_type> default_label_value_;
-  uint32_t dupli_count_ = 2;
   bool has_change_ = false;
-};
-
-template <typename Key>
-struct array_hash {
-  size_t operator()(const Key &arr) const {
-    unsigned int seed = 131;
-    unsigned int hash = 0;
-
-    for (const auto &str : arr) {
-      for (auto ch : str) {
-        hash = hash * seed + ch;
-      }
-    }
-
-    return (hash & 0x7FFFFFFF);
-  }
+  uint32_t dupli_count_;
+  thread_local_value<value_type> default_label_value_;
 };
 
 using counter_t = basic_static_counter<int64_t>;
 using counter_d = basic_static_counter<double>;
 
-template <typename Key, typename T>
-using dynamic_metric_hash_map = std::unordered_map<Key, T, array_hash<Key>>;
-
 template <typename value_type, uint8_t N>
-class basic_dynamic_counter : public dynamic_metric {
+class basic_dynamic_counter
+    : public dynamic_metric_impl<std::atomic<value_type>, N> {
+  using Base = dynamic_metric_impl<std::atomic<value_type>, N>;
+
  public:
   // dynamic labels value
   basic_dynamic_counter(std::string name, std::string help,
-                        std::array<std::string, N> labels_name,
-                        size_t dupli_count = 2)
-      : dynamic_metric(MetricType::Counter, std::move(name), std::move(help),
-                       std::move(labels_name)),
-        dupli_count_(dupli_count) {
-    g_user_metric_count++;
+                        std::array<std::string, N> labels_name)
+      : Base(MetricType::Counter, std::move(name), std::move(help),
+             std::move(labels_name)) {}
+  using label_key_type = const std::array<std::string, N> &;
+  void inc(label_key_type labels_value, value_type value = 1) {
+    detail::inc_impl(Base::try_emplace(labels_value).first->value, value);
   }
 
-  virtual ~basic_dynamic_counter() { g_user_metric_count--; }
-
-  void inc(const std::array<std::string, N> &labels_value,
-           value_type value = 1) {
-    if (value == 0) {
-      return;
-    }
-
-    std::unique_lock lock(mtx_);
-    if (value_map_.size() > ylt_label_capacity) {
-      return;
-    }
-    auto [it, r] = value_map_.try_emplace(
-        labels_value, thread_local_value<value_type>(dupli_count_));
-    lock.unlock();
-    if (r) {
-      g_user_metric_label_count->local_value()++;
-      if (ylt_label_max_age.count()) {
-        it->second.set_created_time(std::chrono::system_clock::now());
-      }
-    }
-    set_value(it->second.local_value(), value, op_type_t::INC);
+  value_type update(label_key_type labels_value, value_type value) {
+    return Base::try_emplace(labels_value)
+        .first->value.exchange(value, std::memory_order::relaxed);
   }
 
-  value_type update(const std::array<std::string, N> &labels_value,
-                    value_type value) {
-    std::unique_lock lock(mtx_);
-    if (value_map_.size() > ylt_label_capacity) {
+  value_type value(label_key_type labels_value) {
+    if (auto ptr = Base::find(labels_value); ptr != nullptr) {
+      return ptr->value.load(std::memory_order::relaxed);
+    }
+    else {
       return value_type{};
     }
-    if (!has_change_) [[unlikely]]
-      has_change_ = true;
-    auto [it, r] = value_map_.try_emplace(
-        labels_value, thread_local_value<value_type>(dupli_count_));
-    lock.unlock();
-    if (r) {
-      g_user_metric_label_count->local_value()++;
-      if (ylt_label_max_age.count()) {
-        it->second.set_created_time(std::chrono::system_clock::now());
-      }
-    }
-    return it->second.update(value);
-  }
-
-  value_type value(const std::array<std::string, N> &labels_value) {
-    std::lock_guard lock(mtx_);
-    if (auto it = value_map_.find(labels_value); it != value_map_.end()) {
-      return it->second.value();
-    }
-
-    return value_type{};
-  }
-
-  value_type reset() {
-    value_type val = {};
-
-    std::lock_guard lock(mtx_);
-    for (auto &[key, t] : value_map_) {
-      val += t.reset();
-    }
-
-    return val;
-  }
-
-  dynamic_metric_hash_map<std::array<std::string, N>,
-                          thread_local_value<value_type>>
-  value_map() {
-    [[maybe_unused]] bool has_change = false;
-    return value_map(has_change);
-  }
-
-  dynamic_metric_hash_map<std::array<std::string, N>,
-                          thread_local_value<value_type>>
-  value_map(bool &has_change) {
-    dynamic_metric_hash_map<std::array<std::string, N>,
-                            thread_local_value<value_type>>
-        map;
-    {
-      std::lock_guard lock(mtx_);
-      map = value_map_;
-      has_change = has_change_;
-    }
-
-    return map;
-  }
-
-  size_t label_value_count() override {
-    std::lock_guard lock(mtx_);
-    return value_map_.size();
-  }
-
-  void clean_expired_label() override {
-    if (ylt_label_max_age.count() == 0) {
-      return;
-    }
-
-    auto now = std::chrono::system_clock::now();
-    std::lock_guard lock(mtx_);
-    std::erase_if(value_map_, [&now](auto &pair) mutable {
-      bool r = std::chrono::duration_cast<std::chrono::seconds>(
-                   now - pair.second.get_created_time())
-                   .count() >= ylt_label_max_age.count();
-      return r;
-    });
   }
 
   void remove_label_value(
       const std::map<std::string, std::string> &labels) override {
-    {
-      std::lock_guard lock(mtx_);
-      if (value_map_.empty()) {
-        return;
-      }
+    if (Base::empty()) {
+      return;
     }
 
     const auto &labels_name = this->labels_name();
@@ -325,51 +178,43 @@ class basic_dynamic_counter : public dynamic_metric {
       return;
     }
 
-    if (labels.size() == labels_name.size()) {
-      std::vector<std::string> label_value;
-      for (auto &lb_name : labels_name) {
-        if (auto i = labels.find(lb_name); i != labels.end()) {
-          label_value.push_back(i->second);
-        }
-      }
+    // if (labels.size() == labels_name.size()) {  // TODO: speed up for this
+    // case
 
-      std::lock_guard lock(mtx_);
-      std::erase_if(value_map_, [&, this](auto &pair) {
-        return equal(label_value, pair.first);
-      });
+    // }
+    // else {
+    size_t count = 0;
+    std::vector<std::string_view> vec;
+    for (auto &lb_name : labels_name) {
+      if (auto i = labels.find(lb_name); i != labels.end()) {
+        vec.push_back(i->second);
+      }
+      else {
+        vec.push_back("");
+        count++;
+      }
+    }
+    if (count == labels_name.size()) {
       return;
     }
-    else {
-      std::vector<std::string> vec;
-      for (auto &lb_name : labels_name) {
-        if (auto i = labels.find(lb_name); i != labels.end()) {
-          vec.push_back(i->second);
-        }
-        else {
-          vec.push_back("");
-        }
-      }
-      if (vec.empty()) {
-        return;
-      }
-
-      std::lock_guard lock(mtx_);
-      std::erase_if(value_map_, [&](auto &pair) {
-        auto &[arr, _] = pair;
+    Base::erase_if([&](auto &pair) {
+      auto &[arr, _] = pair;
+      if constexpr (N > 0) {
         for (size_t i = 0; i < vec.size(); i++) {
           if (!vec[i].empty() && vec[i] != arr[i]) {
             return false;
           }
         }
-        return true;
-      });
-    }
+      }
+      return true;
+    });
+    //}
   }
 
   bool has_label_value(const std::string &value) override {
-    [[maybe_unused]] bool has_change = false;
-    auto map = value_map(has_change);
-    for (auto &[label_value, _] : map) {
+    auto map = Base::copy();
+    for (auto &e : map) {
+      auto &label_value = e->label;
       if (auto it = std::find(label_value.begin(), label_value.end(), value);
           it != label_value.end()) {
         return true;
@@ -380,9 +225,9 @@ class basic_dynamic_counter : public dynamic_metric {
   }
 
   bool has_label_value(const std::regex &regex) override {
-    [[maybe_unused]] bool has_change = false;
-    auto map = value_map(has_change);
-    for (auto &[label_value, _] : map) {
+    auto map = Base::copy();
+    for (auto &e : map) {
+      auto &label_value = e->label;
       if (auto it = std::find_if(label_value.begin(), label_value.end(),
                                  [&](auto &val) {
                                    return std::regex_match(val, regex);
@@ -398,51 +243,53 @@ class basic_dynamic_counter : public dynamic_metric {
   bool has_label_value(const std::vector<std::string> &label_value) override {
     std::array<std::string, N> arr{};
     size_t size = (std::min)((size_t)N, label_value.size());
+    if (label_value.size() > N) {
+      return false;
+    }
+
     for (size_t i = 0; i < size; i++) {
       arr[i] = label_value[i];
     }
-    std::lock_guard lock(mtx_);
-    return value_map_.contains(arr);
+    return Base::find(arr) != nullptr;
   }
 
   void serialize(std::string &str) override {
-    bool has_change = false;
-    auto map = value_map(has_change);
+    auto map = Base::copy();
     if (map.empty()) {
       return;
     }
 
     std::string value_str;
-    serialize_map(map, value_str, has_change);
+    serialize_map(map, value_str);
     if (!value_str.empty()) {
-      serialize_head(str);
+      Base::serialize_head(str);
       str.append(value_str);
     }
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
-    std::string s;
-    bool has_change = false;
-    auto map = value_map(has_change);
-    json_counter_t counter{name_, help_, std::string(metric_name())};
-    to_json(counter, map, str, has_change);
+    auto map = Base::copy();
+    json_counter_t counter{Base::name_, Base::help_, Base::metric_name()};
+    counter.labels_name.reserve(Base::labels_name().size());
+    for (auto &e : Base::labels_name()) {
+      counter.labels_name.emplace_back(e);
+    }
+    to_json(counter, map, str);
   }
 
   template <typename T>
-  void to_json(json_counter_t &counter, T &map, std::string &str,
-               bool has_change) {
-    for (auto &[k, v] : map) {
-      auto val = v.value();
-      if (val == 0 && !has_change) {
-        continue;
-      }
+  void to_json(json_counter_t &counter, T &map, std::string &str) {
+    for (auto &e : map) {
+      auto &k = e->label;
+      auto &val = e->value;
       json_counter_metric_t metric;
       size_t index = 0;
+      metric.labels.reserve(k.size());
       for (auto &label_value : k) {
-        metric.labels.emplace(labels_name_[index++], label_value);
+        metric.labels.emplace_back(label_value);
       }
-      metric.value = (int64_t)val;
+      metric.value = val.load(std::memory_order::relaxed);
       counter.metrics.push_back(std::move(metric));
     }
     if (!counter.metrics.empty()) {
@@ -453,19 +300,17 @@ class basic_dynamic_counter : public dynamic_metric {
 
  protected:
   template <typename T>
-  void serialize_map(T &value_map, std::string &str, bool has_change) {
-    for (auto &[labels_value, value] : value_map) {
-      auto val = value.value();
-      if (val == 0 && !has_change) {
-        continue;
-      }
-      str.append(name_);
-      if (labels_name_.empty()) {
+  void serialize_map(T &value_map, std::string &str) {
+    for (auto &e : value_map) {
+      auto &labels_value = e->label;
+      auto val = e->value.load(std::memory_order::relaxed);
+      str.append(Base::name_);
+      if (Base::labels_name_.empty()) {
         str.append(" ");
       }
       else {
         str.append("{");
-        build_string(str, labels_name_, labels_value);
+        build_string(str, Base::labels_name_, labels_value);
         str.append("} ");
       }
 
@@ -490,13 +335,6 @@ class basic_dynamic_counter : public dynamic_metric {
     }
     str.pop_back();
   }
-
-  std::mutex mtx_;
-  dynamic_metric_hash_map<std::array<std::string, N>,
-                          thread_local_value<value_type>>
-      value_map_;
-  size_t dupli_count_ = 2;
-  bool has_change_ = false;
 };
 
 using dynamic_counter_1t = basic_dynamic_counter<int64_t, 1>;
