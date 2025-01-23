@@ -114,7 +114,9 @@ class callback_awaitor_base {
     void set_value(std::error_code ec, Args &&arg) const {
       if constexpr (!std::is_same_v<Arg, std::error_code>) {
         std::get<0>(obj->arg_) = std::move(ec);
-        std::get<1>(obj->arg_) = std::move(arg);
+        if constexpr (requires { std::get<1>(obj->arg_) = std::move(arg); }) {
+          std::get<1>(obj->arg_) = std::move(arg);
+        }
       }
       else {
         obj->arg_ = std::move(ec);
