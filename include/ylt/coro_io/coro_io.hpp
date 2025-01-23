@@ -110,10 +110,11 @@ class callback_awaitor_base {
       set_value(std::forward<Args>(args)...);
       resume();
     }
-    template <typename... Args>
-    void set_value(std::error_code ec, Args &&...args) const {
+    template <typename Args>
+    void set_value(std::error_code ec, Args &&arg) const {
       if constexpr (!std::is_same_v<Arg, std::error_code>) {
-        obj->arg_ = {std::move(ec), std::forward<Args>(args)...};
+        std::get<0>(obj->arg_) = std::move(ec);
+        std::get<1>(obj->arg_) = std::move(arg);
       }
       else {
         obj->arg_ = std::move(ec);
@@ -240,13 +241,13 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
               [&obj, weak_lock = std::weak_ptr{lock}](
                   async_simple::SignalType signalType,
                   async_simple::Signal *signal) {
-                  if (auto ptr = weak_lock.lock(); ptr) {
-                    bool expected = false;
-                    if (!ptr->compare_exchange_strong(
-                            expected, true, std::memory_order_release)) {
-                      detail::cancel(obj);
-                    }
+                if (auto ptr = weak_lock.lock(); ptr) {
+                  bool expected = false;
+                  if (!ptr->compare_exchange_strong(
+                          expected, true, std::memory_order_release)) {
+                    detail::cancel(obj);
                   }
+                }
               });
           if (hasCanceled) {
             asio::dispatch(executor, [handler]() {
