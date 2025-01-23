@@ -279,9 +279,9 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
+async_read_some(Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&,buffer](auto &&cb) {
         socket.async_read_some(buffer, std::move(cb));
       },
       socket);
@@ -289,9 +289,9 @@ async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-async_read_at(uint64_t offset, Socket &socket, AsioBuffer &&buffer) noexcept {
+async_read_at(uint64_t offset, Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&socket,buffer,offset](auto &&cb) {
         asio::async_read_at(socket, offset, buffer, std::move(cb));
       },
       socket);
@@ -299,9 +299,9 @@ async_read_at(uint64_t offset, Socket &socket, AsioBuffer &&buffer) noexcept {
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-    Socket &socket, AsioBuffer &&buffer) noexcept {
+    Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&socket,buffer](auto &&cb) {
         asio::async_read(socket, buffer, std::move(cb));
       },
       socket);
@@ -311,7 +311,7 @@ template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &buffer, size_t size_to_read) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&,size_to_read](auto &&cb) {
         asio::async_read(socket, buffer, asio::transfer_exactly(size_to_read),
                          std::move(cb));
       },
@@ -331,9 +331,9 @@ async_read_until(Socket &socket, AsioBuffer &buffer,
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
-    Socket &socket, AsioBuffer &&buffer) noexcept {
+    Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&,buffer](auto &&cb) {
         asio::async_write(socket, buffer, std::move(cb));
       },
       socket);
@@ -341,9 +341,9 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
+async_write_some(Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&](auto &&cb) {
+      [&,buffer](auto &&cb) {
         socket.async_write_some(buffer, std::move(cb));
       },
       socket);
@@ -351,9 +351,9 @@ async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-async_write_at(uint64_t offset, Socket &socket, AsioBuffer &&buffer) noexcept {
+async_write_at(uint64_t offset, Socket &socket, AsioBuffer buffer) noexcept {
   return async_io<std::pair<std::error_code, size_t>>(
-      [&, offset](auto &&cb) {
+      [&, offset,buffer](auto &&cb) {
         asio::async_write_at(socket, offset, buffer, std::move(cb));
       },
       socket);
