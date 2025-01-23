@@ -111,12 +111,19 @@ class callback_awaitor_base {
       resume();
     }
     template <typename... Args>
-    void set_value(Args &&...args) const {
-      if constexpr (!std::is_void_v<Arg>) {
-        obj->arg_ = {std::forward<Args>(args)...};
+    void set_value(std::error_code ec, Args &&...args) const {
+      if constexpr (!std::is_same_v<Arg, std::error_code>) {
+        obj->arg_ = {std::move(ec), std::forward<Args>(args)...};
+      }
+      else {
+        obj->arg_ = std::move(ec);
       }
     }
-    void set_value(std::error_code &&ec) const {
+    template <typename Args>
+    void set_value(Args &&args) const {
+      obj->arg_ = std::move(args);
+    }
+    void set_value(std::error_code ec) const {
       if constexpr (std::is_same_v<Arg, std::error_code>) {
         obj->arg_ = std::move(ec);
       }

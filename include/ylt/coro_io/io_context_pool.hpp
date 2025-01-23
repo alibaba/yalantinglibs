@@ -105,17 +105,35 @@ class ExecutorWrapper : public async_simple::Executor {
   }
   void schedule(Func func, Duration dur, uint64_t hint,
                 async_simple::Slot *slot = nullptr) override {
-    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
-    timer->async_wait([fn = std::move(func), timer](const auto &ec) {
-      fn();
-    });
-    if (!async_simple::signalHelper{async_simple::SignalType::Terminate}
-             .tryEmplace(slot, [timer](auto signalType, auto *signal) mutable {
-               asio::dispatch(timer->get_executor(), [timer]() {
-                 timer->cancel();
-               });
-             })) {
-      timer->cancel();
+    auto timer =
+        std::make_shared<std::pair<asio::steady_timer, std::atomic<bool>>>(
+            asio::steady_timer{executor_, dur}, false);
+    if (!slot) {
+      timer->first.async_wait([fn = std::move(func), timer](const auto &ec) {
+        fn();
+      });
+    }
+    else {
+      if (!async_simple::signalHelper{async_simple::SignalType::Terminate}
+               .tryEmplace(
+                   slot, [timer](auto signalType, auto *signal) mutable {
+                     if (bool expected = false;
+                         !timer->second.compare_exchange_strong(
+                             expected, true, std::memory_order_release)) {
+                       timer->first.cancel();
+                     }
+                   })) {
+        asio::dispatch(timer->first.get_executor(), func);
+      }
+      else {
+        timer->first.async_wait([fn = std::move(func), timer](const auto &ec) {
+          fn();
+        });
+        if (bool expected = false; !timer->second.compare_exchange_strong(
+                expected, true, std::memory_order_release)) {
+          timer->first.cancel();
+        }
+      }
     }
   }
 };
