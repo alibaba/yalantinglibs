@@ -625,10 +625,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   struct timer_guard {
     timer_guard(coro_http_client *self,
                 std::chrono::steady_clock::duration duration, std::string msg)
-        : self(self) {
+        : self(self), dur_(duration) {
       self->socket_->is_timeout_ = false;
 
-      if (self->enable_timeout_ && duration.count() >= 0) {
+      if (duration.count() >= 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });
@@ -636,12 +636,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       return;
     }
     ~timer_guard() {
-      if (self->enable_timeout_ && self->socket_->is_timeout_ == false) {
+      if (dur_.count() > 0 && self->socket_->is_timeout_ == false) {
         std::error_code ignore_ec;
         self->timer_.cancel(ignore_ec);
       }
     }
     coro_http_client *self;
+    std::chrono::steady_clock::duration dur_;
   };
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
@@ -1457,12 +1458,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   void set_conn_timeout(std::chrono::steady_clock::duration timeout_duration) {
-    enable_timeout_ = true;
     conn_timeout_duration_ = timeout_duration;
   }
 
   void set_req_timeout(std::chrono::steady_clock::duration timeout_duration) {
-    enable_timeout_ = true;
     req_timeout_duration_ = timeout_duration;
   }
 
