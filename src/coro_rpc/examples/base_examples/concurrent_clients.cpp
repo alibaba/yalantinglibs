@@ -67,7 +67,7 @@ Lazy<std::vector<std::chrono::microseconds>> send(int id, int cnt) {
       ELOG_ERROR << "coro_rpc err: \n" << res_.error().msg;
       continue;
     }
-    ++qps;
+    qps.fetch_add(1, std::memory_order_relaxed);
     auto old_tp = tp;
     tp = std::chrono::steady_clock::now();
     result.push_back(
@@ -113,7 +113,7 @@ int main() {
     syncAwait(clients.back()->connect("localhost:8801"));
   }
   for (int i = 0, lim = thread_cnt; i < lim; ++i) {
-    send(i, 20000).via(&clients[i]->get_executor()).start([](auto&& res) {
+    send(i, 100000).via(&clients[i]->get_executor()).start([](auto&& res) {
       finish_executor->schedule([res = std::move(res.value())] {
         result.insert(result.end(), res.begin(), res.end());
       });

@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "asio/dispatch.hpp"
+#include "async_simple/Signal.h"
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
@@ -104,11 +105,18 @@ class ExecutorWrapper : public async_simple::Executor {
   }
   void schedule(Func func, Duration dur, uint64_t hint,
                 async_simple::Slot *slot = nullptr) override {
-    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
-    auto tm = timer.get();
-    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
+    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
+    timer->async_wait([fn = std::move(func), timer](const auto &ec) {
       fn();
     });
+    if (!async_simple::signalHelper{async_simple::SignalType::Terminate}
+             .tryEmplace(slot, [timer](auto signalType, auto *signal) mutable {
+               asio::dispatch(timer->get_executor(), [timer]() {
+                 timer->cancel();
+               });
+             })) {
+      timer->cancel();
+    }
   }
 };
 

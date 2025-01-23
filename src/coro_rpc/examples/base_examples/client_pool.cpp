@@ -42,7 +42,7 @@
 std::string echo(std::string_view sv);
 
 constexpr unsigned thread_cnt = 1920;
-constexpr auto request_cnt = 1000;
+constexpr auto request_cnt = 100000;
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_view_literals;
@@ -112,7 +112,7 @@ void latency_watcher() {
 }
 int main() {
   auto executor = coro_io::get_global_block_executor();
-  for (int i = 0, lim = thread_cnt * 10; i < lim; ++i) {
+  for (int i = 0, lim = thread_cnt; i < lim; ++i) {
     coro_io::get_global_executor()->schedule([=]() {
       send().start([executor](auto&& res) {
         executor->schedule([res = std::move(res.value())]() mutable {

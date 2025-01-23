@@ -76,6 +76,7 @@ async_simple::coro::Lazy<bool> event(
     works.emplace_back(backer(pool, op).via(coro_io::get_global_executor()));
   }
   auto res = co_await collectAll(std::move(works));
+  std::cout << "HI" << std::endl;
   for (auto &e : res) {
     if (!e.value()) {
       co_return false;
