@@ -10,6 +10,10 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef SUMMARY_DEBUG_STABLE_TEST
+#include "ylt/easylog.hpp"
+#endif
+
 namespace ylt::metric::detail {
 
 template <typename uint_type, std::size_t frac_bit = 6>
