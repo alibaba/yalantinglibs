@@ -246,7 +246,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
                 if (auto ptr = weak_lock.lock(); ptr) {
                   bool expected = false;
                   if (!ptr->compare_exchange_strong(
-                          expected, true, std::memory_order_release)) {
+                          expected, true, std::memory_order_acq_rel)) {
                     detail::cancel(obj);
                   }
                 }
@@ -266,7 +266,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
             });
             bool expected = false;
             if (!lock->compare_exchange_strong(expected, true,
-                                               std::memory_order_release)) {
+                                               std::memory_order_acq_rel)) {
               detail::cancel(obj);
             }
             lock = nullptr;
