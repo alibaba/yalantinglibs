@@ -125,33 +125,32 @@ async_simple::coro::Lazy<void> test_cancel2(coro_io::io_context_pool& io_pool,
   }
 }
 TEST_CASE("test multithread cancellation") {
-  // easylog::logger<>::instance().set_min_severity(easylog::Severity::INFO);
   coro_io::io_context_pool io_pool(101);
-  ELOG_TRACE << "test multithread cancellation";
+  ELOG_WARN << "test multithread cancellation";
   std::thread thd{[&]() {
-    ELOG_TRACE << "start thread pool";
+    ELOG_WARN << "start thread pool";
     io_pool.run();
   }};
   auto test = [&](coro_io::ExecutorWrapper<>* e) {
     for (int sleep_twice = 0; sleep_twice <= 1; ++sleep_twice) {
-      ELOG_TRACE << "slow work canceled(reverse) test";
+      ELOG_WARN << "slow work canceled(reverse) test";
       for (int i = 0; i < 100; ++i) {
         async_simple::coro::syncAwait(
             test_cancel(io_pool, 10000s, e, sleep_twice, false, true));
       }
-      ELOG_TRACE << "slow work canceled test";
+      ELOG_WARN << "slow work canceled test";
       for (int i = 0; i < 100; ++i) {
         async_simple::coro::syncAwait(
             test_cancel(io_pool, 10000s, e, sleep_twice));
       }
-      ELOG_TRACE << "work finished in 0s test";
+      ELOG_WARN << "work finished in 0s test";
       for (int i = 0; i < 100; ++i)
         async_simple::coro::syncAwait(test_cancel(io_pool, 0s, e, sleep_twice));
-      ELOG_TRACE << "work finished in same time test";
+      ELOG_WARN << "work finished in same time test";
       for (int i = 0; i < 20; ++i)
         async_simple::coro::syncAwait(
             test_cancel(io_pool, 100ms, e, sleep_twice, true));
-      ELOG_TRACE << "work finished in same short time test";
+      ELOG_WARN << "work finished in same short time test";
       for (int i = 0; i < 100; ++i)
         async_simple::coro::syncAwait(
             test_cancel(io_pool, 1ms, e, sleep_twice, true));
