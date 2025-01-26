@@ -216,15 +216,16 @@ void cancel(T &io_object) {
     io_object.lowest_layer().cancel();
   }
 }
+constexpr int no_cancel_flag = 0;
+constexpr int could_cancel_flag = 1;
+constexpr int start_cancel_flag = 2;
+constexpr int finish_cancel_flag = 3;
 }  // namespace detail
 
 template <typename ret_type, typename IO_func, typename io_object>
 inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
                                                    io_object &obj) noexcept {
-  constexpr int no_cancel_flag = 0;
-  constexpr int could_cancel_flag = 1;
-  constexpr int start_cancel_flag = 2;
-  constexpr int finish_cancel_flag = 3;
+
   callback_awaitor<ret_type> awaitor;
   auto slot = co_await async_simple::coro::CurrentSlot{};
   if (!slot) {
@@ -246,14 +247,14 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
           async_simple::SignalType::Terminate,
           [&obj, lock](async_simple::SignalType signalType,
                        async_simple::Signal *signal) {
-            int expected = no_cancel_flag;
-            if (!lock->compare_exchange_strong(expected, could_cancel_flag,
+            int expected = detail::no_cancel_flag;
+            if (!lock->compare_exchange_strong(expected, detail::could_cancel_flag,
                                                std::memory_order_acq_rel)) {
-              if (expected == could_cancel_flag) {
-                if (lock->compare_exchange_strong(expected, start_cancel_flag,
+              if (expected == detail::could_cancel_flag) {
+                if (lock->compare_exchange_strong(expected, detail::start_cancel_flag,
                                                   std::memory_order_release)) {
-                  obj.cancel();
-                  lock->store(finish_cancel_flag, std::memory_order_release);
+                  detail::cancel(obj);
+                  lock->store(detail::finish_cancel_flag, std::memory_order_release);
                 }
               }
             }
@@ -271,36 +272,36 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
           handler.set_value(std::forward<decltype(args)>(args)...);
           handler.resume();
         });
-        int expected = no_cancel_flag;
-        if (!lock->compare_exchange_strong(expected, could_cancel_flag,
+        int expected = detail::no_cancel_flag;
+        if (!lock->compare_exchange_strong(expected, detail::could_cancel_flag,
                                            std::memory_order_acq_rel)) {
-          if (expected == could_cancel_flag) {
-            if (lock->compare_exchange_strong(expected, start_cancel_flag,
+          if (expected == detail::could_cancel_flag) {
+            if (lock->compare_exchange_strong(expected, detail::start_cancel_flag,
                                               std::memory_order_release)) {
-              obj.cancel();
-              lock->store(finish_cancel_flag, std::memory_order_release);
+              detail::cancel(obj);
+              lock->store(detail::finish_cancel_flag, std::memory_order_release);
             }
           }
         }
       }
     });
     if (!hasCanceled) {
-      int expected = no_cancel_flag;
-      if (!lock->compare_exchange_strong(expected, finish_cancel_flag,
+      int expected = detail::no_cancel_flag;
+      if (!lock->compare_exchange_strong(expected, detail::finish_cancel_flag,
                                          std::memory_order_acq_rel)) {
-        if (expected != finish_cancel_flag) {
+        if (expected != detail::finish_cancel_flag) {
           do {
-            if (expected == could_cancel_flag) {
-              if (lock->compare_exchange_strong(expected, finish_cancel_flag,
+            if (expected == detail::could_cancel_flag) {
+              if (lock->compare_exchange_strong(expected, detail::finish_cancel_flag,
                                                 std::memory_order_acq_rel) ||
-                  expected == finish_cancel_flag) {
+                  expected == detail::finish_cancel_flag) {
                 break;
               }
             }
             // flag is start_cancel_flag now.
             // wait cancel finish to make sure io object's life-time
             for (;
-                 lock->load(std::memory_order_acquire) == start_cancel_flag;) {
+                 lock->load(std::memory_order_acquire) == detail::start_cancel_flag;) {
               co_await coro_io::post(
                   []() {
                   },
