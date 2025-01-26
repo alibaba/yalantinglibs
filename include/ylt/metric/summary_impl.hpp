@@ -10,6 +10,10 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef SUMMARY_DEBUG_STABLE_TEST
+#include "ylt/easylog.hpp"
+#endif
+
 namespace ylt::metric::detail {
 
 template <typename uint_type, std::size_t frac_bit = 6>
@@ -331,13 +335,23 @@ class summary_impl {
       data_copy.inc();
     }
     return result;
-  }
+  };
+#ifdef SUMMARY_DEBUG_STABLE_TEST
+  static inline constexpr size_t ms_per_second = 1;
+#else
+  static inline constexpr size_t ms_per_second = 1000;
+#endif
 
   summary_impl(std::vector<double>& rate,
                std::chrono::seconds refresh_time = std::chrono::seconds{0})
       : rate_(rate),
-        refresh_time_(refresh_time.count() * 1000 / 2),
-        tp_(std::chrono::steady_clock::now().time_since_epoch().count()){};
+        refresh_time_(refresh_time.count() * ms_per_second / 2),
+        tp_(std::chrono::steady_clock::now().time_since_epoch().count()) {
+#ifdef SUMMARY_DEBUG_STABLE_TEST
+    ELOG_WARN << "summary max_age is ms now! dont use it in production! It's "
+                 "just for test";
+#endif
+  };
 
   ~summary_impl() {
     for (auto& data : data_) {

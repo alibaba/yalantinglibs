@@ -25,7 +25,7 @@ struct bench_clock_t {
   std::chrono::steady_clock::time_point start_;
 };
 
-template <typename IMPL, typename WRITE_OP>
+template <bool need_latch = true, typename IMPL, typename WRITE_OP>
 void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
                       std::chrono::seconds duration) {
   ylt::metric::summary_t lantency_summary(
@@ -41,40 +41,46 @@ void bench_mixed_impl(IMPL& impl, WRITE_OP&& op, size_t thd_num,
       auto dur = clock.duration<std::chrono::microseconds>();
       while (!stop && dur < duration + 1s) {
         op();
-        auto new_dur = clock.duration<std::chrono::microseconds>();
-        lantency_summary.observe((new_dur - dur).count() / 1000.0f);
-        dur = new_dur;
+        if constexpr (need_latch) {
+          auto new_dur = clock.duration<std::chrono::microseconds>();
+          lantency_summary.observe((new_dur - dur).count() / 1000.0f);
+          dur = new_dur;
+        }
       }
     }));
   }
   std::string s;
-
+  std::size_t tot = 0;
   bench_clock_t clock2;
   int64_t serialze_cnt = 0;
   do {
     s.clear();
     impl.serialize(s);
+    tot += s.size();
     ++serialze_cnt;
   } while (clock2.duration() < duration);
   auto total_ms = clock.duration();
   stop = true;
-  if constexpr (requires { impl.size(); }) {
-    std::cout << "size:" << impl.size() << "\n";
+  if constexpr (need_latch) {
+    if constexpr (requires { impl.size(); }) {
+      std::cout << "size:" << impl.size() << "\n";
+    }
+    std::cout << "serialize bytes total:" << tot << std::endl;
+    std::cout << "run " << total_ms.count() << "ms\n";
+    uint64_t cnt;
+    double sum;
+    auto result = lantency_summary.get_rates(sum, cnt);
+    auto seconds = total_ms.count() / 1000.0;
+    auto qps = 1.0 * cnt / seconds;
+    std::cout << "write thd num: " << thd_num << ", write qps: " << (int64_t)qps
+              << "\n";
+    std::cout << "serialize qps:" << 1000.0 * serialze_cnt / total_ms.count()
+              << ", str size=" << s.size() << "\n";
+    s = "";
+    lantency_summary.serialize(s);
+    std::cout << s;
   }
 
-  std::cout << "run " << total_ms.count() << "ms\n";
-  uint64_t cnt;
-  double sum;
-  auto result = lantency_summary.get_rates(sum, cnt);
-  auto seconds = total_ms.count() / 1000.0;
-  auto qps = 1.0 * cnt / seconds;
-  std::cout << "write thd num: " << thd_num << ", write qps: " << (int64_t)qps
-            << "\n";
-  std::cout << "serialize qps:" << 1000.0 * serialze_cnt / total_ms.count()
-            << ", str size=" << s.size() << "\n";
-  s = "";
-  lantency_summary.serialize(s);
-  std::cout << s;
   for (auto& thd : vec) {
     thd.join();
   }
@@ -227,7 +233,7 @@ inline void bench_dynamic_summary_serialize(size_t COUNT,
       COUNT, to_json);
 }
 
-template <typename IMPL, typename OP>
+template <bool need_output = true, typename IMPL, typename OP>
 void bench_write_impl(IMPL& impl, OP&& op, size_t thd_num,
                       std::chrono::seconds duration) {
   std::atomic<bool> stop = false;
@@ -247,13 +253,16 @@ void bench_write_impl(IMPL& impl, OP&& op, size_t thd_num,
   }
   std::this_thread::sleep_for(duration);
   stop = true;
-  std::cout << "run " << clock.duration().count() << "ms\n";
+  auto tm = clock.duration().count();
   double qps = 0;
   for (auto& thd : vec) {
     qps += thd.get();
   }
-  qps /= (clock.duration().count() / 1000.0);
-  std::cout << "thd num: " << thd_num << ", qps: " << (int64_t)qps << "\n";
+  if constexpr (need_output) {
+    std::cout << "run " << clock.duration().count() << "ms\n";
+    qps /= (clock.duration().count() / 1000.0);
+    std::cout << "thd num: " << thd_num << ", qps: " << (int64_t)qps << "\n";
+  }
 }
 
 inline void bench_static_counter_write(size_t thd_num,
