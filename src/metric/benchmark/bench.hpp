@@ -134,8 +134,7 @@ inline void bench_dynamic_counter_mixed_with_delete(
                                           {"a", "b"});
   bench_mixed_impl(
       counter,
-      [&, i = 0]() mutable {
-        ++i;
+      [&]() mutable {
         std::array<std::string, 2> label = {
             "123e4567-e89b-12d3-a456-426614174000",
             std::to_string(get_random(max_cnt))};
@@ -153,8 +152,7 @@ inline void bench_dynamic_counter_mixed(size_t thd_num,
                                           {"a", "b"});
   bench_mixed_impl(
       counter,
-      [&, i = 0]() mutable {
-        ++i;
+      [&]() mutable {
         counter.inc({"123e4567-e89b-12d3-a456-426614174000",
                      std::to_string(get_random(max_cnt))},
                     1);

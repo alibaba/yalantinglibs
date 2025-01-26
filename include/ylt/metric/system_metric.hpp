@@ -381,13 +381,14 @@ inline void start_stat(std::weak_ptr<coro_io::period_timer> weak) {
     return;
   }
 
+  ylt_stat();
+
   timer->expires_after(std::chrono::seconds(1));
   timer->async_wait([timer](std::error_code ec) {
     if (ec) {
       return;
     }
 
-    ylt_stat();
     start_stat(timer);
   });
 }
