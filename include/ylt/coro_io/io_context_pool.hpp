@@ -119,7 +119,7 @@ class ExecutorWrapper : public async_simple::Executor {
                    slot, [timer](auto signalType, auto *signal) mutable {
                      if (bool expected = false;
                          !timer->second.compare_exchange_strong(
-                             expected, true, std::memory_order_release)) {
+                             expected, true, std::memory_order_acq_rel)) {
                        timer->first.cancel();
                      }
                    })) {
@@ -130,7 +130,7 @@ class ExecutorWrapper : public async_simple::Executor {
           fn();
         });
         if (bool expected = false; !timer->second.compare_exchange_strong(
-                expected, true, std::memory_order_release)) {
+                expected, true, std::memory_order_acq_rel)) {
           timer->first.cancel();
         }
       }

@@ -276,7 +276,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
       auto weak_lock = std::weak_ptr{lock};
       lock = nullptr;
       // wait cancel finish to make sure io object's life-time
-      for (; weak_lock.lock();) {
+      for (; !weak_lock.expired();) {
         co_await coro_io::post(
             []() {
             },
