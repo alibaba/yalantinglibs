@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "asio/dispatch.hpp"
+#include "async_simple/Signal.h"
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
@@ -104,11 +105,36 @@ class ExecutorWrapper : public async_simple::Executor {
   }
   void schedule(Func func, Duration dur, uint64_t hint,
                 async_simple::Slot *slot = nullptr) override {
-    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
-    auto tm = timer.get();
-    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
-      fn();
-    });
+    auto timer =
+        std::make_shared<std::pair<asio::steady_timer, std::atomic<bool>>>(
+            asio::steady_timer{executor_, dur}, false);
+    if (!slot) {
+      timer->first.async_wait([fn = std::move(func), timer](const auto &ec) {
+        fn();
+      });
+    }
+    else {
+      if (!async_simple::signalHelper{async_simple::SignalType::Terminate}
+               .tryEmplace(
+                   slot, [timer](auto signalType, auto *signal) mutable {
+                     if (bool expected = false;
+                         !timer->second.compare_exchange_strong(
+                             expected, true, std::memory_order_acq_rel)) {
+                       timer->first.cancel();
+                     }
+                   })) {
+        asio::dispatch(timer->first.get_executor(), func);
+      }
+      else {
+        timer->first.async_wait([fn = std::move(func), timer](const auto &ec) {
+          fn();
+        });
+        if (bool expected = false; !timer->second.compare_exchange_strong(
+                expected, true, std::memory_order_acq_rel)) {
+          timer->first.cancel();
+        }
+      }
+    }
   }
 };
 

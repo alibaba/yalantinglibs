@@ -3,7 +3,11 @@
 #include <array>
 #include <chrono>
 #include <iostream>
+#include <memory>
+#include <system_error>
 #include <ylt/coro_io/coro_io.hpp>
+
+#include "async_simple/coro/Lazy.h"
 using namespace std::chrono_literals;
 
 #ifndef __clang__
@@ -34,18 +38,28 @@ async_simple::coro::Lazy<void> test_channel() {
   CHECK(val == 42);
 }
 
+async_simple::coro::Lazy<std::pair<std::error_code, int>> async_receive_wrapper(
+    std::shared_ptr<coro_io::channel<int>> ch) {
+  co_return co_await async_receive(*ch);
+}
+
+async_simple::coro::Lazy<void> wait_wrapper(
+    std::shared_ptr<coro_io::period_timer> t) {
+  co_await t->async_await();
+}
 async_simple::coro::Lazy<void> test_select_channel() {
   using namespace coro_io;
   using namespace async_simple::coro;
-  auto ch1 = coro_io::create_channel<int>(1000);
-  auto ch2 = coro_io::create_channel<int>(1000);
+  auto ch1 = coro_io::create_shared_channel<int>(1000);
+  auto ch2 = coro_io::create_shared_channel<int>(1000);
 
-  co_await async_send(ch1, 41);
-  co_await async_send(ch2, 42);
+  co_await async_send(*ch1, 41);
+  co_await async_send(*ch2, 42);
 
   std::array<int, 2> arr{41, 42};
 
-  auto result = co_await collectAny(async_receive(ch1), async_receive(ch2));
+  auto result = co_await collectAny(async_receive_wrapper(ch1),
+                                    async_receive_wrapper(ch2));
   int val = std::visit(
       [&val](auto& v) {
         return static_cast<int>(v.value().second);
@@ -54,22 +68,22 @@ async_simple::coro::Lazy<void> test_select_channel() {
 
   CHECK(val == arr[result.index()]);
 
-  co_await async_send(ch1, 41);
-  co_await async_send(ch2, 42);
+  co_await async_send(*ch1, 41);
+  co_await async_send(*ch2, 42);
 
   std::vector<Lazy<std::pair<std::error_code, int>>> vec;
-  vec.push_back(async_receive(ch1));
-  vec.push_back(async_receive(ch2));
+  vec.push_back(async_receive_wrapper(ch1));
+  vec.push_back(async_receive_wrapper(ch2));
 
   auto result2 = co_await collectAny(std::move(vec));
   val = result2.value().second;
   CHECK(val == arr[result2.index()]);
 
-  period_timer timer1(coro_io::get_global_executor());
-  timer1.expires_after(100ms);
-  period_timer timer2(coro_io::get_global_executor());
-  timer2.expires_after(200ms);
-  auto val1 = co_await collectAny(timer1.async_await(), timer2.async_await());
+  auto timer1 = std::make_shared<period_timer>(coro_io::get_global_executor());
+  timer1->expires_after(100ms);
+  auto timer2 = std::make_shared<period_timer>(coro_io::get_global_executor());
+  timer2->expires_after(200ms);
+  auto val1 = co_await collectAny(wait_wrapper(timer1), wait_wrapper(timer2));
 
   CHECK(val1.index() == 0);
 }

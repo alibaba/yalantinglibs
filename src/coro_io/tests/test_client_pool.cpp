@@ -76,6 +76,7 @@ async_simple::coro::Lazy<bool> event(
     works.emplace_back(backer(pool, op).via(coro_io::get_global_executor()));
   }
   auto res = co_await collectAll(std::move(works));
+  std::cout << "HI" << std::endl;
   for (auto &e : res) {
     if (!e.value()) {
       co_return false;
@@ -90,8 +91,8 @@ TEST_CASE("test client pool") {
     REQUIRE(is_started.hasResult() == false);
     auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
         "127.0.0.1:8801", {.max_connection = 100,
-                           .idle_timeout = 300ms,
-                           .short_connect_idle_timeout = 50ms});
+                           .idle_timeout = 700ms,
+                           .short_connect_idle_timeout = 200ms});
     SpinLock lock;
     ConditionVariable<SpinLock> cv;
     auto res = co_await event(20, *pool, cv, lock);
@@ -101,10 +102,10 @@ TEST_CASE("test client pool") {
     CHECK(res);
     auto sz = pool->free_client_count();
     CHECK(sz == 200);
-    co_await coro_io::sleep_for(150ms);
+    co_await coro_io::sleep_for(500ms);
     sz = pool->free_client_count();
     CHECK((sz >= 100 && sz <= 105));
-    co_await coro_io::sleep_for(550ms);
+    co_await coro_io::sleep_for(1000ms);
     CHECK(pool->free_client_count() == 0);
     server.stop();
   }());

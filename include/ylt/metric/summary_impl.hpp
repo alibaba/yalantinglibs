@@ -135,6 +135,8 @@ class summary_impl {
       if (piece) {
         if constexpr (inc_order) {
           for (int j = 0; j < piece->size(); ++j) {
+            // tsan check data race here is expected. stat dont need to be very
+            // strict. we allow old value.
             auto value = (*piece)[j].load(std::memory_order_relaxed);
             if (value) {
               result.emplace_back(get_ordered_index(i * piece_size + j), value);
