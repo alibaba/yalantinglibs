@@ -58,8 +58,8 @@ class basic_static_counter : public static_metric {
   }
 
   value_type update(value_type value) {
-    if (!has_change_) [[unlikely]] {
-      has_change_ = true;
+    if (!has_change_.load(std::memory_order::relaxed)) [[unlikely]] {
+      has_change_.store(true, std::memory_order::relaxed);
     }
     return default_label_value_.update(value);
   }
@@ -70,7 +70,7 @@ class basic_static_counter : public static_metric {
 
   void serialize(std::string &str) override {
     auto value = default_label_value_.value();
-    if (value == 0 && !has_change_) {
+    if (value == 0 && !has_change_.load(std::memory_order::relaxed)) {
       return;
     }
 
@@ -81,7 +81,7 @@ class basic_static_counter : public static_metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
     auto value = default_label_value_.value();
-    if (value == 0 && !has_change_) {
+    if (value == 0 && !has_change_.load(std::memory_order::relaxed)) {
       return;
     }
 
@@ -126,7 +126,7 @@ class basic_static_counter : public static_metric {
     str.pop_back();
   }
 
-  bool has_change_ = false;
+  std::atomic<bool> has_change_ = false;
   uint32_t dupli_count_;
   thread_local_value<value_type> default_label_value_;
 };

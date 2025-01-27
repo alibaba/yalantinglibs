@@ -131,7 +131,7 @@ class summary_impl {
     template <bool inc_order>
     void stat_impl(uint64_t& count,
                    std::vector<std::pair<int16_t, uint_type>>& result, int i) {
-      auto piece = arr[i].load(std::memory_order_relaxed);
+      auto piece = arr[i].load(std::memory_order_acquire);
       if (piece) {
         if constexpr (inc_order) {
           for (int j = 0; j < piece->size(); ++j) {
