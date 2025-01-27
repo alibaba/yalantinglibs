@@ -205,12 +205,13 @@ class coro_rpc_server_base {
       return;
     }
 
-    ELOG_INFO << "begin to stop coro_rpc_server, conn size " << conns_.size();
+    ELOG_INFO << "begin to stop coro_rpc_server";
 
     if (flag_ == stat::started) {
       close_acceptor();
       {
         std::unique_lock lock(conns_mtx_);
+        ELOG_INFO << "total connection count: " << conns_.size();
         for (auto &conn : conns_) {
           if (!conn.second->has_closed()) {
             conn.second->async_close();
