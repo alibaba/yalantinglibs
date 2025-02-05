@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <mutex>
 namespace cinatra {
 struct null_logger_t {
   template <typename T>
@@ -14,6 +15,8 @@ struct cout_logger_t {
     return *this;
   }
   ~cout_logger_t() { std::cout << std::endl; }
+  std::unique_lock<std::mutex> lock_ = std::unique_lock{mtx_};
+  inline static std::mutex mtx_;
 };
 struct cerr_logger_t {
   template <typename T>
@@ -22,6 +25,8 @@ struct cerr_logger_t {
     return *this;
   }
   ~cerr_logger_t() { std::cerr << std::endl; }
+  std::unique_lock<std::mutex> lock_ = std::unique_lock{mtx_};
+  inline static std::mutex mtx_;
 };
 
 constexpr inline cinatra::null_logger_t NULL_LOGGER;
