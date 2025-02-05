@@ -60,8 +60,14 @@ class session_manager {
   }
 
   void start_check_session_timer() {
-    check_session_timer_.expires_after(check_session_duration_);
-    check_session_timer_.async_wait([this](auto ec) {
+    std::weak_ptr<asio::steady_timer> timer = check_session_timer_;
+    check_session_timer_->expires_after(check_session_duration_);
+    check_session_timer_->async_wait([this, timer](auto ec) {
+      auto ptr = timer.lock();
+      if (ptr == nullptr) {
+        return;
+      }
+
       if (ec || stop_timer_) {
         return;
       }
@@ -76,16 +82,12 @@ class session_manager {
     start_check_session_timer();
   }
 
-  void stop_timer() {
-    stop_timer_ = true;
-    std::error_code ec;
-    check_session_timer_.cancel(ec);
-  }
+  void stop_timer() { stop_timer_ = true; }
 
  private:
   session_manager()
-      : check_session_timer_(
-            coro_io::get_global_executor()->get_asio_executor()) {
+      : check_session_timer_(std::make_shared<asio::steady_timer>(
+            coro_io::get_global_executor()->get_asio_executor())) {
     start_check_session_timer();
   };
   session_manager(const session_manager &) = delete;
@@ -98,9 +100,9 @@ class session_manager {
   // session_timeout_ should be no less than 0
   std::size_t session_timeout_ = 86400;
   std::atomic<bool> stop_timer_ = false;
-  asio::steady_timer check_session_timer_;
-  std::chrono::steady_clock::duration check_session_duration_ =
-      std::chrono::seconds(15);
+  std::shared_ptr<asio::steady_timer> check_session_timer_;
+  std::atomic<std::chrono::steady_clock::duration> check_session_duration_ = {
+      std::chrono::seconds(15)};
 };
 
 }  // namespace cinatra

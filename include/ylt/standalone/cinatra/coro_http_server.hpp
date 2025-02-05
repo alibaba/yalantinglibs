@@ -88,6 +88,7 @@ class coro_http_server {
 
     if (!errc_) {
       if (out_ctx_ == nullptr) {
+        std::lock_guard lock(thd_mtx_);
         thd_ = std::thread([this] {
           pool_->run();
         });
@@ -112,13 +113,14 @@ class coro_http_server {
 
   // only call once, not thread safe.
   void stop() {
-    if (out_ctx_ == nullptr && !thd_.joinable()) {
-      return;
+    {
+      std::lock_guard lock(thd_mtx_);
+      if (out_ctx_ == nullptr && !thd_.joinable()) {
+        return;
+      }
     }
 
     stop_timer_ = true;
-    std::error_code ec;
-    check_timer_.cancel(ec);
 
     close_acceptor();
 
@@ -136,7 +138,11 @@ class coro_http_server {
       pool_->stop();
 
       CINATRA_LOG_INFO << "server's thread-pool finished.";
-      thd_.join();
+      {
+        std::lock_guard lock(thd_mtx_);
+        thd_.join();
+      }
+
       CINATRA_LOG_INFO << "stop coro_http_server ok";
     }
     else {
@@ -977,6 +983,7 @@ class coro_http_server {
   std::error_code errc_ = {};
   asio::ip::tcp::acceptor acceptor_;
   std::thread thd_;
+  std::mutex thd_mtx_;
   std::promise<void> acceptor_close_waiter_;
   bool no_delay_ = true;
 
