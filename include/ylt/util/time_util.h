@@ -424,11 +424,26 @@ inline void to_hour(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 inline void to_min(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 inline void to_sec(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 
+inline std::tm gmtime_safe(std::time_t &timer) {
+  std::tm bt{};
+#if defined(__unix__)
+  gmtime_r(&timer, &bt);
+#elif defined(_MSC_VER)
+  gmtime_s(&bt, &timer);
+#else
+  static std::mutex mtx;
+  std::lock_guard<std::mutex> lock(mtx);
+  bt = *gmtime(&timer);
+#endif
+  return bt;
+}
+
 template <size_t Hour = 8, size_t N>
 inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
                                            std::string_view format) {
   static_assert(N >= 20, "wrong buf");
-  struct tm *loc_time = gmtime(&t);
+  std::tm tm = gmtime_safe(t);
+  std::tm *loc_time = &tm;
 
   char *p = buf;
 

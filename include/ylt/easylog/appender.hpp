@@ -47,6 +47,20 @@ inline void to_int(int num, char *p, int &size) {
     p[--size] = c;
 }
 
+inline std::tm localtime_safe(std::time_t timer) {
+  std::tm bt{};
+#if defined(__unix__)
+  localtime_r(&timer, &bt);
+#elif defined(_MSC_VER)
+  localtime_s(&bt, &timer);
+#else
+  static std::mutex mtx;
+  std::lock_guard<std::mutex> lock(mtx);
+  bt = *std::localtime(&timer);
+#endif
+  return bt;
+}
+
 inline char *get_time_str(const auto &now) {
   static thread_local char buf[33];
   static thread_local std::chrono::seconds last_sec_{};
@@ -63,7 +77,8 @@ inline char *get_time_str(const auto &now) {
 
   last_sec_ = s;
   auto tm = std::chrono::system_clock::to_time_t(now);
-  auto gmt = localtime(&tm);
+  auto ltm = localtime_safe(tm);
+  std::tm *gmt = &ltm;
 
   to_int<3, '.'>(mill_sec, buf, size);
   to_int<2, ':'>(gmt->tm_sec, buf, size);

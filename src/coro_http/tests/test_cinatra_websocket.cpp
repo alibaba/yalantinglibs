@@ -317,7 +317,7 @@ TEST_CASE("test read write in different threads") {
       CHECK(data.resp_body == send_str);
     }
   };
-  another_thread_lazy().via(coro_io::get_global_executor()).start([](auto &&) {
+  another_thread_lazy().start([](auto &&) {
   });
 
   auto lazy = [client, weak, &send_str]() -> async_simple::coro::Lazy<void> {
