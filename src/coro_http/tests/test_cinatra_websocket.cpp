@@ -330,7 +330,7 @@ TEST_CASE("test read write in different threads") {
     }
   };
 
-  async_simple::coro::syncAwait(lazy());
+  async_simple::coro::syncAwait(lazy().via(&client->get_executor()));
 
   promise.get_future().wait_for(std::chrono::seconds(2));
 
