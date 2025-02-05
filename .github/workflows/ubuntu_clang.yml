@@ -101,8 +101,8 @@ jobs:
       - name: Test
         working-directory: ${{github.workspace}}/build
         run: |
-        export TSAN_OPTIONS="halt_on_error=1"
-        ctest -C ${{matrix.mode}} -j 1 -V
+          export TSAN_OPTIONS="halt_on_error=1"
+          ctest -C ${{matrix.mode}} -j 1 -V
 
   ubuntu_clang_for_liburing:
     strategy:
