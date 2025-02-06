@@ -114,6 +114,19 @@ TEST_CASE("testing client") {
     syncAwait(f());
   }
 
+  server.stop();
+
+  coro_rpc_server server2(2, coro_rpc_server_port);
+#ifdef YLT_ENABLE_SSL
+  server2.init_ssl(
+      ssl_configure{"../openssl_files", "server.crt", "server.key"});
+#endif
+  server2.register_handler<hello_timeout>();
+  server2.register_handler<hello>();
+  server2.register_handler<large_arg_fun>();
+  res = server2.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+
   SUBCASE("call rpc timeout") {
     g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
@@ -123,7 +136,6 @@ TEST_CASE("testing client") {
                     ret.error().msg);
       co_return;
     };
-    server.register_handler<hello_timeout>();
     syncAwait(f());
   }
 
@@ -137,7 +149,6 @@ TEST_CASE("testing client") {
       CHECK(ret.value() == std::string("hello"));
       co_return;
     };
-    server.register_handler<hello>();
     syncAwait(f());
   }
 
@@ -152,7 +163,6 @@ TEST_CASE("testing client") {
       CHECK(ret.value() == arg);
       co_return;
     };
-    server.register_handler<large_arg_fun>();
     syncAwait(f());
   }
 
@@ -175,10 +185,9 @@ TEST_CASE("testing client with inject server") {
   server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
+  server.register_handler<hello>();
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
-
-  server.register_handler<hello>();
 
   SUBCASE("server run ok") {
     g_action = {};
@@ -391,14 +400,13 @@ TEST_CASE("testing client with eof") {
 TEST_CASE("testing client with attachment") {
   g_action = {};
   coro_rpc_server server(2, 8801);
+  server.register_handler<echo_with_attachment>();
 
   auto res = server.async_start();
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
-
-  server.register_handler<echo_with_attachment>();
 
   auto ret = client.sync_call<echo_with_attachment>();
   CHECK(ret.has_value());
@@ -417,14 +425,13 @@ TEST_CASE("testing client with attachment") {
 TEST_CASE("testing std::string_view") {
   g_action = {};
   coro_rpc_server server(1, 8801);
+  server.register_handler<test_string_view>();
 
   auto res = server.async_start();
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
-
-  server.register_handler<test_string_view>();
 
   auto ret = client.sync_call<test_string_view>("123");
   CHECK(ret.value() == "123OK");
@@ -439,12 +446,12 @@ TEST_CASE("testing std::string_view") {
 TEST_CASE("testing client with context response user-defined error") {
   g_action = {};
   coro_rpc_server server(2, 8801);
+  server.register_handler<error_with_context, hello>();
   auto res = server.async_start();
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE(!ec);
-  server.register_handler<error_with_context, hello>();
   auto ret = client.sync_call<error_with_context>();
   REQUIRE(!ret.has_value());
   CHECK(ret.error().code == coro_rpc::errc{1004});
@@ -458,12 +465,12 @@ TEST_CASE("testing client with context response user-defined error") {
 TEST_CASE("testing client with shutdown") {
   g_action = {};
   coro_rpc_server server(2, 8801);
+  server.register_handler<hello, client_hello>();
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
-  server.register_handler<hello, client_hello>();
 
   g_action = inject_action::nothing;
   auto ret = client.sync_call<hello>();
