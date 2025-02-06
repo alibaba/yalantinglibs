@@ -13,12 +13,6 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
-#include "cinatra/coro_http_client.hpp"
-#include "cinatra/coro_http_connection.hpp"
-#include "cinatra/coro_http_server.hpp"
-#include "cinatra/define.h"
-#include "cinatra/response_cv.hpp"
-#include "cinatra/utils.hpp"
 #include "doctest.h"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
