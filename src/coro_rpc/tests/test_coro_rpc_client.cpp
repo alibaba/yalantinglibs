@@ -532,7 +532,7 @@ TEST_CASE("testing client timeout") {
     auto result = syncAwait(client.call<hello>().via(&client.get_executor()));
 
     if (result.has_value()) {
-      std::cout << result.value() << std::endl;
+      ELOG_INFO << result.value();
     }
     else {
       CHECK_MESSAGE(result.error().code == coro_rpc::errc::timed_out,

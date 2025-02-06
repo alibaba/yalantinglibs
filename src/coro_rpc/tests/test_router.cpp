@@ -331,12 +331,12 @@ TEST_CASE("testing exceptions") {
   pair = test_route<throw_exception_func>(ctx);
   CHECK(pair.first == coro_rpc::errc::rpc_throw_exception);
   auto r = get_result<throw_exception_func>(pair);
-  std::cout << r.error().msg << "\n";
+  ELOG_INFO << r.error().msg << "\n";
 
   pair = test_route<throw_exception_func1>(ctx);
   CHECK(pair.first == coro_rpc::errc::rpc_throw_exception);
   r = get_result<throw_exception_func>(pair);
-  std::cout << r.error().msg << "\n";
+  ELOG_INFO << r.error().msg << "\n";
 }
 
 TEST_CASE("testing object arguments") {

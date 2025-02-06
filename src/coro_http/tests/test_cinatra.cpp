@@ -294,10 +294,10 @@ TEST_CASE("test ssl client") {
     auto ret = client.get("https://baidu.com");
     client.reset();
     ret = client.get("http://cn.bing.com");
-    std::cout << ret.status << std::endl;
+    CINATRA_LOG_DEBUG << ret.status;
     client.reset();
     ret = client.get("https://baidu.com");
-    std::cout << ret.status << std::endl;
+    CINATRA_LOG_DEBUG << ret.status;
   }
   {
     coro_http_client client{};
@@ -972,7 +972,7 @@ TEST_CASE("test out buffer and async upload ") {
     req_context<> ctx{};
     auto result = co_await client.async_request(uri, http_method::GET,
                                                 std::move(ctx), {}, oubuf);
-    std::cout << oubuf.data() << "\n";
+    CINATRA_LOG_DEBUG << oubuf.data() << "\n";
 
     std::string_view out_view(oubuf.data(), result.resp_body.size());
     assert(out_view == "test");
@@ -995,8 +995,8 @@ TEST_CASE("test out buffer and async upload ") {
           co_await client.async_upload_multipart("http://127.0.0.1:9000/more");
     }
 
-    std::cout << (int)flag << oubuf.data() << "\n";
-    std::cout << result.resp_body << "\n";
+    CINATRA_LOG_DEBUG << (int)flag << oubuf.data() << "\n";
+    CINATRA_LOG_DEBUG << result.resp_body << "\n";
 
     std::string_view out_view1(oubuf.data(), out_view.size());
     assert(out_view == out_view1);
@@ -1069,7 +1069,7 @@ async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
 async_simple::coro::Lazy<void> recieve_data(auto &ch, auto &vec, size_t count) {
   while (true) {
     if (vec.size() == count) {
-      std::cout << std::this_thread::get_id() << "\n";
+      CINATRA_LOG_DEBUG << std::this_thread::get_id() << "\n";
       break;
     }
 
@@ -1293,9 +1293,9 @@ TEST_CASE("test request with out buffer") {
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
-    std::cout << result.status << "\n";
-    std::cout << result.net_err.message() << "\n";
-    std::cout << result.resp_body << "\n";
+    CINATRA_LOG_DEBUG << result.status << "\n";
+    CINATRA_LOG_DEBUG << result.net_err.message() << "\n";
+    CINATRA_LOG_DEBUG << result.resp_body << "\n";
     CHECK(result.status == 200);
     CHECK(!client.is_body_in_out_buf());
   }
@@ -1305,9 +1305,9 @@ TEST_CASE("test request with out buffer") {
     auto ret = client.async_request(url1, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
-    std::cout << result.status << "\n";
-    std::cout << result.net_err.message() << "\n";
-    std::cout << result.resp_body << "\n";
+    CINATRA_LOG_DEBUG << result.status << "\n";
+    CINATRA_LOG_DEBUG << result.net_err.message() << "\n";
+    CINATRA_LOG_DEBUG << result.resp_body << "\n";
     CHECK(result.status == 200);
     CHECK(!client.is_body_in_out_buf());
     auto s = client.release_buf();
@@ -1348,10 +1348,10 @@ TEST_CASE("test pass path not entire uri") {
   coro_http_client client{};
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  std::cout << r.resp_body.size() << "\n";
+  CINATRA_LOG_DEBUG << r.resp_body.size() << "\n";
   auto buf = client.release_buf();
-  std::cout << strlen(buf.data()) << "\n";
-  std::cout << buf << "\n";
+  CINATRA_LOG_DEBUG << strlen(buf.data()) << "\n";
+  CINATRA_LOG_DEBUG << buf << "\n";
   CHECK(r.status >= 200);
 
   r = async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
@@ -1369,7 +1369,8 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     client.init_config(conf);
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-    std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
+    CINATRA_LOG_DEBUG << r.net_err.value() << ", " << r.net_err.message()
+                      << "\n";
     if (r.status != 200)
       CHECK(r.net_err != std::errc{});
 #endif
@@ -1382,7 +1383,7 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     client.init_config(conf);
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-    std::cout << r.net_err.message() << "\n";
+    CINATRA_LOG_DEBUG << r.net_err.message() << "\n";
     CHECK(r.net_err != std::errc{});
   }
 }
@@ -1410,7 +1411,7 @@ TEST_CASE("test coro_http_client async_http_connect") {
       client.async_http_connect("http://www.baidu.com"));
   CHECK(r.status >= 200);
   for (auto [k, v] : r.resp_headers) {
-    std::cout << k << ", " << v << "\n";
+    CINATRA_LOG_DEBUG << k << ", " << v << "\n";
   }
 
   coro_http_client client1{};
@@ -1551,8 +1552,8 @@ TEST_CASE("test upload file") {
             co_return;
           }
 
-          std::cout << part_head.name << "\n";
-          std::cout << part_head.filename << "\n";
+          CINATRA_LOG_DEBUG << part_head.name << "\n";
+          CINATRA_LOG_DEBUG << part_head.filename << "\n";
 
           std::shared_ptr<coro_io::coro_file> file;
           std::string filename;
@@ -1567,7 +1568,7 @@ TEST_CASE("test upload file") {
               filename += extent;
             }
 
-            std::cout << filename << "\n";
+            CINATRA_LOG_DEBUG << filename << "\n";
             file->open(filename, std::ios::trunc | std::ios::out);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
@@ -1591,7 +1592,7 @@ TEST_CASE("test upload file") {
             CHECK(fs::file_size(filename) == 2 * 1024 * 1024);
           }
           else {
-            std::cout << part_body.data << "\n";
+            CINATRA_LOG_DEBUG << part_body.data << "\n";
           }
 
           if (part_body.eof) {
@@ -1842,8 +1843,8 @@ TEST_CASE("test coro_http_client multipart upload") {
             co_return;
           }
 
-          std::cout << part_head.name << "\n";
-          std::cout << part_head.filename << "\n";
+          CINATRA_LOG_DEBUG << part_head.name << "\n";
+          CINATRA_LOG_DEBUG << part_head.filename << "\n";
 
           std::shared_ptr<coro_io::coro_file> file;
           std::string filename;
@@ -1858,7 +1859,7 @@ TEST_CASE("test coro_http_client multipart upload") {
               filename += extent;
             }
 
-            std::cout << filename << "\n";
+            CINATRA_LOG_DEBUG << filename << "\n";
             file->open(filename, std::ios::trunc | std::ios::out);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
@@ -1882,7 +1883,7 @@ TEST_CASE("test coro_http_client multipart upload") {
             CHECK(fs::file_size(filename) == 1024);
           }
           else {
-            std::cout << part_body.data << "\n";
+            CINATRA_LOG_DEBUG << part_body.data << "\n";
           }
 
           if (part_body.eof) {
@@ -2005,8 +2006,8 @@ TEST_CASE("test ssl upload") {
           content.append(result.data);
         }
 
-        std::cout << "content size: " << content.size() << "\n";
-        std::cout << content << "\n";
+        CINATRA_LOG_DEBUG << "content size: " << content.size() << "\n";
+        CINATRA_LOG_DEBUG << content << "\n";
         resp.set_format_type(format_type::chunked);
         resp.set_status_and_content(status_type::ok, "chunked ok");
       });
@@ -2180,7 +2181,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2198,7 +2199,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2216,7 +2217,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2234,7 +2235,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2251,7 +2252,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2268,7 +2269,7 @@ TEST_CASE("test coro_http_client upload") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, size);
       CHECK(r);
@@ -2355,7 +2356,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
-        std::cout << ec << "\n";
+        CINATRA_LOG_DEBUG << ec << "\n";
       }
       bool r = create_file(filename, 1024 * 1024 * 8);
       CHECK(r);
@@ -2539,7 +2540,7 @@ TEST_CASE("test coro_http_client request timeout") {
   client.init_config(conf);
   auto r =
       async_simple::coro::syncAwait(client.connect("http://www.baidu.com"));
-  std::cout << r.net_err.message() << "\n";
+  CINATRA_LOG_DEBUG << r.net_err.message() << "\n";
   if (!r.net_err) {
     r = async_simple::coro::syncAwait(client.async_get("/"));
     if (r.net_err) {
@@ -2810,7 +2811,7 @@ TEST_CASE("test conversion between unix time and gmt time, http format") {
   std::chrono::microseconds time_cost{0};
   std::ifstream file("../../tests/files_for_test_time_parse/http_times.txt");
   if (!file) {
-    std::cout << "open file failed" << std::endl;
+    CINATRA_LOG_DEBUG << "open file failed";
   }
   std::string line;
   while (std::getline(file, line)) {
@@ -2838,17 +2839,17 @@ TEST_CASE("test conversion between unix time and gmt time, http format") {
     }
   }
   file.close();
-  std::cout << double(time_cost.count()) *
-                   std::chrono::microseconds::period::num /
-                   std::chrono::microseconds::period::den
-            << "s" << std::endl;
+  CINATRA_LOG_DEBUG << double(time_cost.count()) *
+                           std::chrono::microseconds::period::num /
+                           std::chrono::microseconds::period::den
+                    << "s";
 }
 
 TEST_CASE("test conversion between unix time and gmt time, utc format") {
   std::chrono::microseconds time_cost{0};
   std::ifstream file("../../tests/files_for_test_time_parse/utc_times.txt");
   if (!file) {
-    std::cout << "open file failed" << std::endl;
+    CINATRA_LOG_DEBUG << "open file failed";
   }
   std::string line;
   while (std::getline(file, line)) {
@@ -2876,10 +2877,10 @@ TEST_CASE("test conversion between unix time and gmt time, utc format") {
     }
   }
   file.close();
-  std::cout << double(time_cost.count()) *
-                   std::chrono::microseconds::period::num /
-                   std::chrono::microseconds::period::den
-            << "s" << std::endl;
+  CINATRA_LOG_DEBUG << double(time_cost.count()) *
+                           std::chrono::microseconds::period::num /
+                           std::chrono::microseconds::period::den
+                    << "s";
 }
 
 TEST_CASE(
@@ -2890,7 +2891,7 @@ TEST_CASE(
       "../../tests/files_for_test_time_parse/"
       "utc_without_punctuation_times.txt");
   if (!file) {
-    std::cout << "open file failed" << std::endl;
+    CINATRA_LOG_DEBUG << "open file failed";
   }
   std::string line;
   while (std::getline(file, line)) {
@@ -2919,10 +2920,10 @@ TEST_CASE(
     }
   }
   file.close();
-  std::cout << double(time_cost.count()) *
-                   std::chrono::microseconds::period::num /
-                   std::chrono::microseconds::period::den
-            << "s" << std::endl;
+  CINATRA_LOG_DEBUG << double(time_cost.count()) *
+                           std::chrono::microseconds::period::num /
+                           std::chrono::microseconds::period::den
+                    << "s";
 }
 #endif
 
@@ -2969,7 +2970,7 @@ TEST_CASE("test get_local_time_str with_month") {
   std::time_t t = std::time(nullptr);
 
   std::string_view result = cinatra::get_local_time_str(buf, t, format);
-  std::cout << "Local time with month: " << result << "\n";
+  CINATRA_LOG_DEBUG << "Local time with month: " << result << "\n";
 
   // Perform a basic check
   CHECK(!result.empty());
