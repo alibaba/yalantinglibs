@@ -8,6 +8,7 @@ set(TEST_SRCS
         test_connection.cpp
         test_function_name.cpp
         test_variadic.cpp
+        test_parallel.cpp
         )
 set(TEST_COMMON
         rpc_api.cpp

@@ -161,8 +161,10 @@ class coro_rpc_client {
                                                  "client has been closed"};
   struct config {
     uint64_t client_id = get_global_client_id();
-    std::optional<std::chrono::milliseconds> connect_timeout_duration;
-    std::optional<std::chrono::milliseconds> request_timeout_duration;
+    std::chrono::milliseconds connect_timeout_duration =
+        std::chrono::seconds{30};
+    std::chrono::milliseconds request_timeout_duration =
+        std::chrono::seconds{30};
     std::string host{};
     std::string port{};
     bool enable_tcp_no_delay = true;
@@ -235,8 +237,7 @@ class coro_rpc_client {
    */
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
-      std::chrono::steady_clock::duration connect_timeout_duration =
-          std::chrono::seconds(30)) {
+      std::chrono::steady_clock::duration connect_timeout_duration) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
       co_await connect_mutex_.coScopedLock();
@@ -250,25 +251,31 @@ class coro_rpc_client {
     if (config_.port.empty()) {
       config_.port = std::move(port);
     }
-    if (!config_.connect_timeout_duration) {
-      config_.connect_timeout_duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              connect_timeout_duration);
-    }
-
-    auto ret = co_await connect_impl();
+    auto ret = co_await connect_impl(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            connect_timeout_duration));
     connect_mutex_.unlock();
     co_return std::move(ret);
   }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view endpoint,
-      std::chrono::steady_clock::duration connect_timeout_duration =
-          std::chrono::seconds(30)) {
+      std::chrono::steady_clock::duration connect_timeout_duration) {
     auto pos = endpoint.find(':');
     std::string host(endpoint.substr(0, pos));
     std::string port(endpoint.substr(pos + 1));
 
     return connect(std::move(host), std::move(port), connect_timeout_duration);
+  }
+
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
+      std::string_view endpoint) {
+    return connect(endpoint, config_.connect_timeout_duration);
+  }
+
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
+      std::string host, std::string port) {
+    return connect(std::move(host), std::move(port),
+                   config_.connect_timeout_duration);
   }
 
 #ifdef YLT_ENABLE_SSL
@@ -296,7 +303,7 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
-    return call_for<func>(std::chrono::seconds(30),
+    return call_for<func>(config_.request_timeout_duration,
                           std::forward<Args>(args)...);
   }
 
@@ -385,7 +392,8 @@ class coro_rpc_client {
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
 
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect_impl() {
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect_impl(
+      std::chrono::milliseconds conn_timeout_dur) {
     if (should_reset_) {
       co_await reset();
     }
@@ -402,7 +410,6 @@ class coro_rpc_client {
 
     ELOG_INFO << "client_id " << config_.client_id << " begin to connect "
               << config_.port;
-    auto conn_timeout_dur = *config_.connect_timeout_duration;
     if (conn_timeout_dur.count() >= 0) {
       timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
           .start([](auto &&) {
@@ -935,8 +942,8 @@ class coro_rpc_client {
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request(Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{30}, {},
-                                                  std::forward<Args>(args)...);
+    return send_request_for_with_attachment<func>(
+        config_.request_timeout_duration, {}, std::forward<Args>(args)...);
   }
 
   template <auto func, typename... Args>
@@ -944,18 +951,18 @@ class coro_rpc_client {
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_with_attachment(std::string_view request_attachment,
                                Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{30},
-                                                  request_attachment,
-                                                  std::forward<Args>(args)...);
+    return send_request_for_with_attachment<func>(
+        config_.request_timeout_duration, request_attachment,
+        std::forward<Args>(args)...);
   }
 
   template <auto func, typename... Args>
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_for(Args &&...args) {
-    return send_request_for_with_attachment<func>(std::chrono::seconds{30},
-                                                  std::string_view{},
-                                                  std::forward<Args>(args)...);
+    return send_request_for_with_attachment<func>(
+        config_.request_timeout_duration, std::string_view{},
+        std::forward<Args>(args)...);
   }
 
   struct recving_guard {
@@ -986,14 +993,11 @@ class coro_rpc_client {
     using rpc_return_t = decltype(get_return_type<func>());
     recving_guard guard(control_.get());
     uint32_t id;
-    if (!config_.request_timeout_duration) {
-      config_.request_timeout_duration = request_timeout_duration;
-    }
 
     auto timer = std::make_unique<coro_io::period_timer>(
         control_->executor_.get_asio_executor());
     auto result = co_await send_request_for_impl<func>(
-        *config_.request_timeout_duration, id, *timer, request_attachment,
+        request_timeout_duration, id, *timer, request_attachment,
         std::forward<Args>(args)...);
     auto &control = *control_;
     if (!result) {
