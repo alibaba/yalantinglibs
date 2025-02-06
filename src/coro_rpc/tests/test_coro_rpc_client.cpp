@@ -369,6 +369,7 @@ TEST_CASE("testing client with ssl server") {
 TEST_CASE("testing client with eof") {
   g_action = {};
   coro_rpc_server server(2, 8801);
+  server.register_handler<hello, client_hello>();
 
   auto res = server.async_start();
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
@@ -376,7 +377,6 @@ TEST_CASE("testing client with eof") {
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
 
-  server.register_handler<hello, client_hello>();
   auto ret = client.sync_call<hello>();
   CHECK(ret.value() == "hello"s);
 
@@ -528,7 +528,8 @@ TEST_CASE("testing client timeout") {
     auto val = syncAwait(ret);
 
     CHECK(!val);
-    auto result = syncAwait(client.call<hello>());
+    // TODO will remove via later for 0ms timeout
+    auto result = syncAwait(client.call<hello>().via(&client.get_executor()));
 
     if (result.has_value()) {
       std::cout << result.value() << std::endl;

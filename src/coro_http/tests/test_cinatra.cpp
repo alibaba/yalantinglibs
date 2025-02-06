@@ -90,7 +90,9 @@ TEST_CASE("test for gzip") {
     if (result.net_err)
       CHECK(!result.net_err);
 
-    result = async_simple::coro::syncAwait(client.async_get("/none"));
+    // TODO will remove via later for 0ms timeout
+    result = async_simple::coro::syncAwait(
+        client.async_get("/none").via(&client.get_executor()));
     if (result.net_err)
       CHECK(result.net_err == std::errc::timed_out);
 
