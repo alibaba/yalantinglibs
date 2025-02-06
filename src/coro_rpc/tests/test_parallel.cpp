@@ -13,6 +13,8 @@
 using namespace async_simple::coro;
 std::string_view echo(std::string_view data) { return data; }
 TEST_CASE("test parall coro_rpc call") {
+  auto s = easylog::logger<>::instance().get_min_severity();
+  easylog::logger<>::instance().set_min_severity(easylog::Severity::WARNING);
   int thread_cnt = 100;
   coro_rpc::coro_rpc_server server(thread_cnt, 9001);
   coro_io::io_context_pool pool(thread_cnt);
@@ -61,9 +63,12 @@ TEST_CASE("test parall coro_rpc call") {
   p2.get_future().wait();
   pool.stop();
   thrd.join();
+  easylog::logger<>::instance().set_min_severity(s);
 };
 
 TEST_CASE("test parall coro_rpc call2") {
+  auto s = easylog::logger<>::instance().get_min_severity();
+  easylog::logger<>::instance().set_min_severity(easylog::Severity::WARNING);
   int thread_cnt = 100;
   coro_rpc::coro_rpc_server server(thread_cnt, 9001);
   coro_io::io_context_pool pool(thread_cnt);
@@ -102,4 +107,5 @@ TEST_CASE("test parall coro_rpc call2") {
   p.get_future().wait();
   pool.stop();
   thrd.join();
+  easylog::logger<>::instance().set_min_severity(s);
 };
