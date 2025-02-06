@@ -216,7 +216,6 @@ struct CoroServerTester : ServerTester {
     REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
                     ret.error().msg);
     CHECK(client->has_closed() == true);
-    server.register_handler<function_not_registered>();
   }
 
   void test_server_start_again() {

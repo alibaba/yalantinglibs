@@ -150,18 +150,18 @@ void test_route_and_check(auto conn, Args &&...args) {
 }
 }  // namespace test_util
 
-void foo(int val) { std::cout << "foo " << val << "\n"; }
+void foo(int val) { ELOG_INFO << "foo " << val << "\n"; }
 void foo1(coro_rpc::context<void> conn, int val) {
-  std::cout << "foo1 " << val << "\n";
+  ELOG_INFO << "foo1 " << val << "\n";
 }
 void foo2(coro_rpc::context<void> conn) {
-  std::cout << "foo2 "
+  ELOG_INFO << "foo2 "
             << "\n";
 }
 
 void bar() {}
 
-void bar3(int val) { std::cout << "bar3 val=" << val << "\n"; }
+void bar3(int val) { ELOG_INFO << "bar3 val=" << val << "\n"; }
 
 using namespace test_util;
 
@@ -175,12 +175,12 @@ struct person {
 };
 
 person get_person(const person &p) {
-  std::cout << "get_person: " << p.id << ", " << p.name << "\n";
+  ELOG_INFO << "get_person: " << p.id << ", " << p.name << "\n";
   return p;
 }
 
 person get_person1(const person &p, int id, std::string name) {
-  std::cout << "get_person1: " << p.id << ", " << p.name << ", " << id << ", "
+  ELOG_INFO << "get_person1: " << p.id << ", " << p.name << ", " << id << ", "
             << name << "\n";
   return p;
 }
@@ -188,7 +188,7 @@ person get_person1(const person &p, int id, std::string name) {
 void not_register_func(int) {}
 
 async_simple::coro::Lazy<void> coro_func() {
-  std::cout << "hello, it's in coro function\n";
+  ELOG_INFO << "hello, it's in coro function";
   co_return;
 }
 
@@ -331,12 +331,12 @@ TEST_CASE("testing exceptions") {
   pair = test_route<throw_exception_func>(ctx);
   CHECK(pair.first == coro_rpc::errc::rpc_throw_exception);
   auto r = get_result<throw_exception_func>(pair);
-  std::cout << r.error().msg << "\n";
+  ELOG_INFO << r.error().msg << "\n";
 
   pair = test_route<throw_exception_func1>(ctx);
   CHECK(pair.first == coro_rpc::errc::rpc_throw_exception);
   r = get_result<throw_exception_func>(pair);
-  std::cout << r.error().msg << "\n";
+  ELOG_INFO << r.error().msg << "\n";
 }
 
 TEST_CASE("testing object arguments") {

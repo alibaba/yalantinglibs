@@ -142,7 +142,7 @@ inline bool open_native_async_file(File &file, Executor &executor,
           static_cast<asio::file_base::flags>(open_flags));
     }
   } catch (std::exception &ex) {
-    std::cout << "line " << __LINE__ << " coro_file open failed" << ex.what()
+    ELOG_INFO << "line " << __LINE__ << " coro_file open failed" << ex.what()
               << "\n";
     return false;
   }
@@ -357,7 +357,7 @@ class basic_seq_coro_file {
         [this, flags, filepath]() mutable {
           frw_seq_file_.open(filepath.data(), flags);
           if (!frw_seq_file_.is_open()) {
-            std::cout << "line " << __LINE__ << " coro_file open failed "
+            ELOG_INFO << "line " << __LINE__ << " coro_file open failed "
                       << filepath << "\n";
             std::cerr << "Error: " << strerror(errno);
             return false;

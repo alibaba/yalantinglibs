@@ -146,7 +146,7 @@ TEST_CASE("test websocket") {
 
     co_await client.write_websocket("hello websocket");
     auto data = co_await client.read_websocket();
-    std::cout << data.net_err.message() << std::endl;
+    CINATRA_LOG_DEBUG << data.net_err.message();
     CHECK(data.net_err == std::errc::timed_out);
   };
 
@@ -170,7 +170,7 @@ TEST_CASE("test websocket") {
       co_await client.async_write_raw(send_str);
       auto data = co_await client.read_websocket();
       CHECK(data.status != 200);
-      std::cout << data.resp_body << std::endl;
+      CINATRA_LOG_DEBUG << data.resp_body;
     };
     async_simple::coro::syncAwait(lazy1());
   }
@@ -396,7 +396,7 @@ TEST_CASE("test websocket permessage defalte") {
           }
 
           if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
-            std::cout << "close frame\n";
+            CINATRA_LOG_DEBUG << "close frame\n";
             break;
           }
 
