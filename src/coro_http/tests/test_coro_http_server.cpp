@@ -655,13 +655,8 @@ TEST_CASE("test aspects") {
 }
 
 TEST_CASE("use out context") {
-  asio::io_context out_ctx;
-  auto work = std::make_unique<asio::io_context::work>(out_ctx);
-  std::thread thd([&] {
-    out_ctx.run();
-  });
-
-  cinatra::coro_http_server server(out_ctx, 9001);
+  auto executor = coro_io::get_global_executor()->get_asio_executor();
+  cinatra::coro_http_server server(executor.context(), 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/out_ctx", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "use out ctx");
@@ -678,9 +673,6 @@ TEST_CASE("use out context") {
   }
 
   server.stop();
-
-  work.reset();
-  thd.join();
 }
 
 TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
