@@ -60,6 +60,7 @@ class session_manager {
   }
 
   void start_check_session_timer() {
+    std::lock_guard lock(timer_mtx_);
     std::weak_ptr<asio::steady_timer> timer = check_session_timer_;
     check_session_timer_->expires_after(check_session_duration_);
     check_session_timer_->async_wait([this, timer](auto ec) {
@@ -79,6 +80,12 @@ class session_manager {
 
   void set_check_session_duration(auto duration) {
     check_session_duration_ = duration;
+    {
+      std::lock_guard lock(timer_mtx_);
+      std::error_code ec;
+      check_session_timer_->cancel(ec);
+    }
+
     start_check_session_timer();
   }
 
@@ -100,6 +107,7 @@ class session_manager {
   // session_timeout_ should be no less than 0
   std::size_t session_timeout_ = 86400;
   std::atomic<bool> stop_timer_ = false;
+  std::mutex timer_mtx_;
   std::shared_ptr<asio::steady_timer> check_session_timer_;
   std::atomic<std::chrono::steady_clock::duration> check_session_duration_ = {
       std::chrono::seconds(15)};

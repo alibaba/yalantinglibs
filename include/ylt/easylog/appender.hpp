@@ -179,7 +179,7 @@ class appender {
 
   template <bool sync = false, bool enable_console = false>
   void write_record(record_t &record) {
-    std::lock_guard guard(get_mutex<sync>());
+    std::unique_lock guard(get_mutex<sync>());
     if constexpr (sync == true) {
       if (max_files_ > 0 && file_size_ > max_file_size_ &&
           static_cast<size_t>(-1) != file_size_) {
@@ -204,6 +204,8 @@ class appender {
     write_file(msg);
 
     if constexpr (enable_console) {
+      guard.unlock();
+      std::unique_lock guard1(get_mutex<true>());
       add_color(record.get_severity());
       std::cout << time_str;
       clean_color(record.get_severity());
@@ -405,7 +407,7 @@ class appender {
   bool has_init_ = false;
   std::string filename_;
 
-  bool enable_console_ = false;
+  std::atomic<bool> enable_console_ = false;
   bool flush_every_time_;
   size_t file_size_ = 0;
   size_t max_file_size_ = 0;

@@ -76,7 +76,7 @@ async_simple::coro::Lazy<bool> event(
     works.emplace_back(backer(pool, op).via(coro_io::get_global_executor()));
   }
   auto res = co_await collectAll(std::move(works));
-  std::cout << "HI" << std::endl;
+  ELOG_INFO << "HI";
   for (auto &e : res) {
     if (!e.value()) {
       co_return false;
@@ -186,7 +186,7 @@ TEST_CASE("test reconnect retry wait time exclude reconnect cost time") {
     CHECK(res);
     CHECK(pool->free_client_count() == 100);
     auto dur = std::chrono::steady_clock::now() - tp;
-    std::cout << dur.count() << std::endl;
+    ELOG_INFO << dur.count();
     CHECK((dur >= 500ms && dur <= 799ms));
     server.stop();
     co_return;
