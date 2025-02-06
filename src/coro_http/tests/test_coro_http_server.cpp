@@ -91,7 +91,7 @@ TEST_CASE("coro_io post") {
     std::rethrow_exception(t4.getException());
   } catch (const std::exception &e) {
     CHECK(e.what() == std::string("e"));
-    std::cout << e.what() << "\n";
+    CINATRA_LOG_DEBUG << e.what() << "\n";
   }
 }
 
@@ -128,13 +128,13 @@ TEST_CASE("coro_server example, will block") {
 
 template <typename View>
 bool create_file(View filename, size_t file_size = 1024) {
-  std::cout << "begin to open file: " << filename << "\n";
+  CINATRA_LOG_DEBUG << "begin to open file: " << filename << "\n";
   std::ofstream out(filename, std::ios::binary);
   if (!out.is_open()) {
-    std::cout << "open file: " << filename << " failed\n";
+    CINATRA_LOG_DEBUG << "open file: " << filename << " failed\n";
     return false;
   }
-  std::cout << "open file: " << filename << " ok\n";
+  CINATRA_LOG_DEBUG << "open file: " << filename << " ok\n";
   std::string str(file_size, 'A');
   out.write(str.data(), str.size());
   return true;
@@ -254,7 +254,7 @@ TEST_CASE("test range download") {
   create_file("中文测试.txt", 64);
   create_file(fs::path(u8"utf8中文.txt").string(), 64);
 #endif
-  std::cout << fs::current_path() << "\n";
+  CINATRA_LOG_DEBUG << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
   server.set_file_resp_format_type(file_resp_format_type::range);
