@@ -80,13 +80,15 @@ TEST_CASE("test for gzip") {
     client.add_header("Content-Encoding", "none");
     client.set_conn_timeout(0ms);
     std::string uri = "http://127.0.0.1:8090/none";
-    auto result = async_simple::coro::syncAwait(client.connect(uri));
+    auto result = async_simple::coro::syncAwait(
+        client.connect(uri).via(&client.get_executor()));
     if (result.net_err)
       CHECK(result.net_err == std::errc::timed_out);
 
     client.set_conn_timeout(-1ms);
     client.set_req_timeout(0ms);
-    result = async_simple::coro::syncAwait(client.connect(uri));
+    result = async_simple::coro::syncAwait(
+        client.connect(uri).via(&client.get_executor()));
     if (result.net_err)
       CHECK(!result.net_err);
 
@@ -108,7 +110,8 @@ TEST_CASE("test for gzip") {
     coro_http_client::config conf{};
     conf.req_timeout_duration = 0ms;
     client.init_config(conf);
-    result = async_simple::coro::syncAwait(client.async_get(uri));
+    result = async_simple::coro::syncAwait(
+        client.async_get(uri).via(&client.get_executor()));
     if (result.net_err)
       CHECK(result.net_err == std::errc::timed_out);
   }
