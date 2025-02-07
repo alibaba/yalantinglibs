@@ -978,9 +978,24 @@ TEST_CASE("test summary refresh") {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
+  std::string str;
+  summary.serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() == 0);
+
+  std::this_thread::sleep_for(1001ms);
+  summary.serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() == 0);
+
   for (int i = 0; i < 50; i++) {
     summary.observe(i);
   }
+
   double sum;
   uint64_t cnt;
   summary.get_rates(sum, cnt);
@@ -1002,7 +1017,11 @@ TEST_CASE("test summary refresh") {
   CHECK(cnt == 10);
   std::this_thread::sleep_for(500ms);
   summary.get_rates(sum, cnt);
-  CHECK(cnt == 0);
+  summary.serialize_to_json(str);
+  CHECK(str.size() > 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() > 0);
 }
 
 TEST_CASE("test register metric") {

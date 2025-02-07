@@ -58,7 +58,10 @@ class summary_t : public static_metric {
       std::sort(quantiles_.begin(), quantiles_.end());
   }
 
-  void observe(float value) { impl_.insert(value); }
+  void observe(float value) {
+    has_refreshed_.store(true, std::memory_order_relaxed);
+    impl_.insert(value);
+  }
 
   std::vector<float> get_rates() {
     uint64_t count;
@@ -85,7 +88,7 @@ class summary_t : public static_metric {
     double sum = 0;
     uint64_t count = 0;
     auto rates = get_rates(sum, count);
-    if (count == 0) {
+    if (count == 0 && !has_refreshed_.load(std::memory_order_relaxed)) {
       return;
     }
     serialize_head(str);
@@ -121,7 +124,7 @@ class summary_t : public static_metric {
     json_summary_metric_t metric;
 
     metric.quantiles_value = get_rates(metric.sum, metric.count);
-    if (metric.count == 0) {
+    if (metric.count == 0 && !has_refreshed_.load(std::memory_order_relaxed)) {
       return;
     }
     metric.labels.reserve(labels_value_.size());
@@ -132,6 +135,7 @@ class summary_t : public static_metric {
 #endif
 
  private:
+  std::atomic<bool> has_refreshed_;
   std::vector<double> quantiles_;
   ylt::metric::detail::summary_impl<uint64_t> impl_;
 };
