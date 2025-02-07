@@ -1025,6 +1025,19 @@ TEST_CASE("test summary refresh") {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
+  std::string str;
+  summary.serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() == 0);
+
+  std::this_thread::sleep_for(1001ms);
+  summary.serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() == 0);
   for (int i = 0; i < 50; i++) {
     summary.observe(i);
   }
@@ -1050,6 +1063,11 @@ TEST_CASE("test summary refresh") {
   std::this_thread::sleep_for(500ms);
   summary.get_rates(sum, cnt);
   CHECK(cnt == 0);
+  summary.serialize_to_json(str);
+  CHECK(str.size() > 0);
+  str = "";
+  summary.serialize(str);
+  CHECK(str.size() > 0);
 }
 
 TEST_CASE("test register metric") {
@@ -2011,7 +2029,7 @@ TEST_CASE("test metric manager clean expired label") {
   CHECK(c->label_value_count() == 2);
   CHECK(summary->label_value_count() == 1);
   CHECK(h->label_value_count() == 1);
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::seconds(3));
   c->inc({"/index"});
   size_t count = c->label_value_count();
   CHECK(count == 1);
