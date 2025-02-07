@@ -498,11 +498,8 @@ TEST_CASE("testing client timeout") {
     config.connect_timeout_duration = 0ms;
     bool r = client.init_config(config);
     CHECK(r);
-    auto ret = client.connect(
-        "127.0.0.1", "8801",
-        1000ms);  // this arg won't update config connect timeout duration.
+    auto ret = client.connect("127.0.0.1", "8801");
     auto val = syncAwait(ret);
-
     if (val) {
       CHECK_MESSAGE(val == coro_rpc::errc::timed_out, val.message());
     }
@@ -515,8 +512,8 @@ TEST_CASE("testing client timeout") {
     bool r = client.init_config(config);
     CHECK(r);
     auto ret = client.connect(
-        "127.0.0.1", "8801",
-        1000ms);  // this arg won't update config connect timeout duration.
+        "127.0.0.1",
+        "8801");  // this arg won't update config connect timeout duration.
     auto val = syncAwait(ret);
 
     CHECK(!val);
@@ -529,12 +526,11 @@ TEST_CASE("testing client timeout") {
     config.request_timeout_duration = 0ms;
     bool r = client.init_config(config);
     CHECK(r);
-    auto ret = client.connect(
-        "127.0.0.1", "8801",
-        0ms);  // 0ms won't cover config connect timeout duration.
+    auto ret = client.connect("127.0.0.1", "8801");
     auto val = syncAwait(ret);
 
     CHECK(!val);
+
     // TODO will remove via later for 0ms timeout
     auto result = syncAwait(client.call<hello>().via(&client.get_executor()));
 
@@ -566,18 +562,6 @@ TEST_CASE("testing client timeout") {
     auto val = syncAwait(ret);
     CHECK_MESSAGE(val == coro_rpc::errc::timed_out, val.message());
   }
-  // SUBCASE("call, 0ms timeout") {
-  //   coro_rpc_server server(2, 8801);
-  //   server.async_start().start([](auto&&) {
-  //   });
-  //   coro_rpc_client client;
-  //   auto ec_lazy = client.connect("127.0.0.1", "8801", 5ms);
-  //   auto ec = syncAwait(ec_lazy);
-  //   assert(ec == std::errc{});
-  //   auto ret = client.call_for<hi>(0ms);
-  //   auto val = syncAwait(ret);
-  //   CHECK_MESSAGE(val.error().code == std::errc::timed_out, val.error().msg);
-  // }
 }
 TEST_CASE("testing client connect err") {
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
