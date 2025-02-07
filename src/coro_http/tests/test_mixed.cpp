@@ -218,3 +218,70 @@ TEST_CASE("test mixed async_request") {
 
   std::filesystem::remove(filename);
 }
+
+std::atomic<int> g_failed_count = 0;
+
+TEST_CASE("test parallel http request") {
+  size_t thd_num = 100;
+  coro_http_server server(thd_num, 9002);
+  std::atomic<int> total = 0;
+  server.set_http_handler<GET>("/", [&](request& req, response& resp) {
+    total++;
+    if (total % 10000 == 0) {
+      resp.set_delay(true);
+      return;
+    }
+    resp.set_status_and_content(status_type::ok, "hello");
+  });
+  server.async_start();
+
+  coro_io::io_context_pool pool(thd_num);
+  std::thread thrd{[&] {
+    pool.run();
+  }};
+
+  size_t client_count = 200;
+  std::vector<std::unique_ptr<coro_http_client>> clients;
+  clients.resize(client_count);
+  std::atomic<int> work_count = 0;
+
+  std::promise<void> p;
+  for (auto& cli : clients) {
+    cli = std::make_unique<coro_http_client>();
+    cli->set_conn_timeout(std::chrono::seconds{1});
+    cli->set_req_timeout(std::chrono::seconds{1});
+
+    cli->connect("http://127.0.0.1:9002/")
+        .via(pool.get_executor())
+        .start([&](auto&&) {
+          [](coro_http_client& cli) -> async_simple::coro::Lazy<void> {
+            for (int i = 0; i < 500; ++i) {
+              if (!cli.has_closed()) {
+                auto result = co_await cli.async_get("/");
+                if (result.status == 200) {
+                  CHECK(result.resp_body == "hello");
+                }
+                else {
+                  g_failed_count++;
+                  CHECK(result.net_err == std::errc::timed_out);
+                  CINATRA_LOG_INFO << result.status << ", "
+                                   << result.net_err.value() << ", "
+                                   << result.net_err.message();
+                }
+              }
+            }
+          }(*cli)
+                                           .start([&](auto&&) {
+                                             auto i = ++work_count;
+                                             if (i == client_count) {
+                                               p.set_value();
+                                             }
+                                           });
+        });
+  }
+
+  p.get_future().wait();
+  pool.stop();
+  thrd.join();
+  CINATRA_LOG_INFO << "failed request: " << g_failed_count;
+}
