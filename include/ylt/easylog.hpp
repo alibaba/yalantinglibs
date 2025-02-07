@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <atomic>
 #include <functional>
 #include <string_view>
 #include <utility>
@@ -75,7 +76,9 @@ class logger {
     enable_console_ = enable_console;
   }
 
-  bool check_severity(Severity severity) { return severity >= min_severity_; }
+  bool check_severity(Severity severity) {
+    return severity >= min_severity_.load(std::memory_order::relaxed);
+  }
 
   void add_appender(std::function<void(std::string_view)> fn) {
     appenders_.emplace_back(std::move(fn));
@@ -85,7 +88,9 @@ class logger {
 
   // set and get
   void set_min_severity(Severity severity) { min_severity_ = severity; }
-  Severity get_min_severity() { return min_severity_; }
+  Severity get_min_severity() {
+    return min_severity_.load(std::memory_order::relaxed);
+  }
 
   void set_console(bool enable) {
     enable_console_ = enable;
@@ -122,7 +127,7 @@ class logger {
     }
   }
 
-  Severity min_severity_ =
+  std::atomic<Severity> min_severity_ =
 #if NDEBUG
       Severity::WARN;
 #else

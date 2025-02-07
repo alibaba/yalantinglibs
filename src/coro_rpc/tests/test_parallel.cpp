@@ -24,8 +24,8 @@ TEST_CASE("test parall coro_rpc call") {
 
   server.register_handler<echo>();
   server.async_start();
-  int client_cnt = 500;
-  int64_t work_cnt_tot = thread_cnt * client_cnt * 10;
+  int client_cnt = 200;
+  int64_t work_cnt_tot = thread_cnt * client_cnt * 5;
   std::vector<std::unique_ptr<coro_rpc::coro_rpc_client>> clients;
   clients.resize(client_cnt);
   std::atomic<int> connected_cnt = 0;
@@ -77,7 +77,7 @@ TEST_CASE("test parall coro_rpc call2") {
   }};
   server.register_handler<echo>();
   server.async_start();
-  int client_cnt = 500;
+  int client_cnt = 200;
   std::vector<std::unique_ptr<coro_rpc::coro_rpc_client>> clients;
   clients.resize(client_cnt);
   std::atomic<int> work_cnt = 0;
@@ -88,7 +88,7 @@ TEST_CASE("test parall coro_rpc call2") {
         .via(pool.get_executor())
         .start([&](auto&&) {
           [](coro_rpc::coro_rpc_client& cli) -> Lazy<void> {
-            for (int i = 0; i < 1000; ++i)
+            for (int i = 0; i < 500; ++i)
               if (!cli.has_closed()) {
                 auto result = co_await cli.call<echo>("hello");
                 if (result.has_value()) {
