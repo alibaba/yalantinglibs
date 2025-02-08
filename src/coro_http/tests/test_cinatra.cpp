@@ -665,6 +665,77 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 503);
 }
 
+TEST_CASE("test client pool") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        // resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<GET>("/test", [&](coro_http_request &req,
+                                            coro_http_response &resp) {
+    resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+    resp.set_status_and_content(status_type::ok, "shutdown");
+  });
+  server.async_start();
+
+  std::string url = "http://127.0.0.1:9001/";
+
+  auto pool = coro_io::client_pool<coro_http_client>::create(url, {100});
+
+  std::atomic<size_t> count = 0;
+  std::promise<void> promise;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              CHECK(data.resp_body == "hello world");
+            })
+        .start([&](auto &&) {
+          count++;
+          if (count == 100) {
+            promise.set_value();
+          }
+        });
+  }
+  promise.get_future().wait();
+
+  CHECK(pool->free_client_count() > 0);
+
+  count = 0;
+  std::atomic<size_t> failed_count = 0;
+  url = "http://127.0.0.1:9001/test";
+  std::promise<void> promise1;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              if (data.status != 200) {
+                failed_count++;
+                CHECK(data.net_err == asio::error::eof);
+              }
+              else {
+                CHECK(data.resp_body == "shutdown");
+              }
+              CINATRA_LOG_INFO << "test result: " << data.status << ", "
+                               << data.resp_body << ", " << data.net_err.value()
+                               << ", " << data.net_err.message();
+            })
+        .start([&](auto &&) {
+          count++;
+          if (count == 100) {
+            promise1.set_value();
+          }
+        });
+  }
+
+  promise1.get_future().wait();
+  CINATRA_LOG_INFO << "failed request: " << failed_count << ", "
+                   << pool->free_client_count();
+  CHECK(failed_count > 0);
+  CHECK(pool->free_client_count() <= 100 - failed_count);
+}
+
 TEST_CASE("test response") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
