@@ -226,8 +226,7 @@ TEST_CASE("test parallel http request") {
   coro_http_server server(thd_num, 9002);
   std::atomic<int> total = 0;
   server.set_http_handler<GET>("/", [&](request& req, response& resp) {
-    total++;
-    if (total % 10000 == 0) {
+    if (total.fetch_add(1) % 10000 == 0) {
       resp.set_delay(true);
       return;
     }
@@ -284,4 +283,5 @@ TEST_CASE("test parallel http request") {
   pool.stop();
   thrd.join();
   CINATRA_LOG_INFO << "failed request: " << g_failed_count;
+  CHECK(g_failed_count >= 10);
 }
