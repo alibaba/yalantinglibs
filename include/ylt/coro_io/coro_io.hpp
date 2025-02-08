@@ -435,6 +435,34 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
   co_return result.first;
 }
 
+template <typename executor_t, typename EndPointSeq>
+inline async_simple::coro::Lazy<
+    std::pair<std::error_code, asio::ip::tcp::endpoint>>
+async_connect(executor_t *executor, asio::ip::tcp::socket &socket,
+              const EndPointSeq &endpoint) noexcept {
+  auto result =
+      co_await async_io<std::pair<std::error_code, asio::ip::tcp::endpoint>>(
+          [&](auto &&cb) {
+            asio::async_connect(socket, endpoint, std::move(cb));
+          },
+          socket);
+  co_return result;
+}
+
+template <typename executor_t>
+inline async_simple::coro::Lazy<
+    std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>
+async_resolve(executor_t *executor, asio::ip::tcp::socket &socket,
+              const std::string &host, const std::string &port) noexcept {
+  asio::ip::tcp::resolver resolver(executor->get_asio_executor());
+  co_return co_await async_io<
+      std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+      [&](auto &&cb) {
+        resolver.async_resolve(host, port, std::move(cb));
+      },
+      resolver);
+}
+
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;

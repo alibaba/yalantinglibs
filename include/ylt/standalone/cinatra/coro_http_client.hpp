@@ -15,9 +15,11 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "asio/dispatch.hpp"
 #include "asio/error.hpp"
+#include "asio/ip/tcp.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
@@ -274,7 +276,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
 
   // only make socket connet(or handshake) to the host
-  async_simple::coro::Lazy<resp_data> connect(std::string uri) {
+  async_simple::coro::Lazy<resp_data> connect(
+      std::string uri, std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
     if (should_reset_) {
       reset();
     }
@@ -335,7 +338,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
         co_return data;
       }
-      data = co_await connect(u);
+      data = co_await connect(u, eps);
     }
     if (socket_->is_timeout_) {
       co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
@@ -1990,17 +1993,44 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return ec;
   }
 
-  async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
+  async_simple::coro::Lazy<resp_data> connect(
+      const uri_t &u, std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
+    std::vector<asio::ip::tcp::endpoint> eps_tmp;
+    if (eps == nullptr) {
+      eps = &eps_tmp;
+    }
     if (socket_->has_closed_) {
       socket_->is_timeout_ = false;
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec = co_await coro_io::async_connect(
-              &executor_wrapper_, socket_->impl_, host_, port_);
+      if (eps->empty()) {
+        CINATRA_LOG_TRACE << "start resolve host: " << host_ << ":" << port_;
+        auto [ec, iter] = co_await coro_io::async_resolve(
+            &executor_wrapper_, socket_->impl_, host_, port_);
+        if (ec) {
+          co_return resp_data{ec, 404};
+        }
+        else {
+          asio::ip::tcp::resolver::iterator end;
+          while (iter != end) {
+            eps->push_back(iter->endpoint());
+            ++iter;
+          }
+          if (eps->empty()) {
+            co_return resp_data{
+                std::make_error_code(std::errc::host_unreachable), 404};
+          }
+        }
+      }
+      CINATRA_LOG_TRACE
+          << "start connect to endpoint lists. total endpoint count:"
+          << eps->size()
+          << ", the first endpoint is: " << (*eps)[0].address().to_string();
+      if (auto [ec, _] = co_await coro_io::async_connect(&executor_wrapper_,
+                                                         socket_->impl_, *eps);
           ec) {
         co_return resp_data{ec, 404};
       }
-
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       if (connect_timeout_forever_) {
         socket_->is_timeout_ = true;
@@ -2043,7 +2073,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       socket_->has_closed_ = false;
     }
-
     co_return resp_data{};
   }
 
