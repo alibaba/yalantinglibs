@@ -275,7 +275,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 #endif
 
-  // only make socket connet(or handshake) to the host
+  /*!
+   * Connect server
+   *
+   * only make socket connet(or handshake) to the host
+   *
+   * @param uri server address
+   * @param eps endpoints of resolve result. if eps is not nullptr and vector is
+   * empty, it will return the endpoints that, else if vector is not empty, it
+   * will use the eps to skill resolve and connect to server directly.
+   * @return resp_data
+   */
   async_simple::coro::Lazy<resp_data> connect(
       std::string uri, std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
     if (should_reset_) {
@@ -2016,9 +2026,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             eps->push_back(iter->endpoint());
             ++iter;
           }
-          if (eps->empty()) {
-            co_return resp_data{
-                std::make_error_code(std::errc::host_unreachable), 404};
+          if (eps->empty()) [[unlikely]] {
+            co_return resp_data{std::make_error_code(std::errc::not_connected),
+                                404};
           }
         }
       }
