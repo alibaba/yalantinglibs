@@ -2035,9 +2035,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       CINATRA_LOG_TRACE
           << "start connect to endpoint lists. total endpoint count:"
           << eps->size()
-          << ", the first endpoint is: " << (*eps)[0].address().to_string();
-      if (auto [ec, _] = co_await coro_io::async_connect(&executor_wrapper_,
-                                                         socket_->impl_, *eps);
+          << ", the first endpoint is: " << (*eps)[0].address().to_string()
+          << std::to_string((*eps)[0].port());
+      std::error_code ec;
+      asio::ip::tcp::endpoint endpoint;
+      if (std::tie(ec, endpoint) = co_await coro_io::async_connect(
+              &executor_wrapper_, socket_->impl_, *eps);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -2047,12 +2050,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 #endif
       if (socket_->is_timeout_) {
-        auto ec = std::make_error_code(std::errc::timed_out);
+        ec = std::make_error_code(std::errc::timed_out);
         co_return resp_data{ec, 404};
       }
 
       if (enable_tcp_no_delay_) {
-        std::error_code ec;
         socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
         if (ec) {
           co_return resp_data{ec, 404};
@@ -2077,11 +2079,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           }
         }
 #endif
-        if (auto ec = co_await handle_shake(); ec) {
+        if (ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
         }
       }
       socket_->has_closed_ = false;
+      CINATRA_LOG_TRACE << "connect to endpoint: "
+                        << endpoint.address().to_string() << ":"
+                        << std::to_string(endpoint.port()) << " successfully";
     }
     co_return resp_data{};
   }

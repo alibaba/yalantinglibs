@@ -15,7 +15,8 @@
 // In other archs, we use std::atomic_shared_ptr as impl
 
 namespace ylt::util {
-#if defined _M_X64 || defined __x86_64__ || defined __amd64
+#if (defined _M_X64 || defined __x86_64__ || defined __amd64) && \
+    defined __GLIBCXX__
 // This implementation is specific to libstdc++, now accepting
 // diffs for other libraries.
 
@@ -589,9 +590,46 @@ class atomic_shared_ptr {
     CountedDetail::template release_shared<T>(p, count);
   }
 };
-#else
+#elif __cpp_lib_atomic_shared_ptr
 template <typename T>
 using atomic_shared_ptr = std::atomic_shared_ptr<T>;
+#else
+#include <shared_mutex>
+template <typename T>
+class atomic_shared_ptr {
+ public:
+  atomic_shared_ptr() noexcept {}
+  explicit atomic_shared_ptr(std::shared_ptr<T> foo) /* noexcept */
+      : atomic_shared_ptr() {
+    store(std::move(foo));
+  }
+  atomic_shared_ptr(const atomic_shared_ptr<T> &) = delete;
+  ~atomic_shared_ptr() { store(std::shared_ptr<T>(nullptr)); }
+  void operator=(std::shared_ptr<T> desired) /* noexcept */ {
+    store(std::move(desired));
+  }
+  void operator=(const atomic_shared_ptr<T> &) = delete;
+  bool is_lock_free() const noexcept { return false; }
+
+  std::shared_ptr<T> load(
+      std::memory_order order = std::memory_order_seq_cst) const noexcept {
+    std::shared_lock lock{m};
+    return ptr;
+  }
+
+  /* implicit */ operator std::shared_ptr<T>() const { return load(); }
+
+  void store(
+      std::shared_ptr<T> n,
+      std::memory_order order = std::memory_order_seq_cst) /* noexcept */ {
+    std::unique_lock lock{m};
+    ptr = std::move(n);
+  }
+
+ private:
+  mutable std::shared_mutex m;
+  std::shared_ptr<T> ptr;
+};
 #endif
 
 }  // namespace ylt::util
