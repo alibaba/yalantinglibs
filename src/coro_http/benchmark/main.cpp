@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdio>
 #include <ylt/coro_http/coro_http_server.hpp>
 #include <ylt/metric.hpp>
@@ -105,12 +106,14 @@ int main(int argc, char** argv) {
   std::string_view data = send_data;
 
   ylt::metric::counter_t req_count("total_request", "");
+  ylt::metric::counter_t latency("latency", "");
 
   auto lazy = [&]() -> async_simple::coro::Lazy<void> {
     for (size_t i = 0; i < conf.max_request_count; i++) {
       co_await pool->send_request(
           [&](coro_http_client& client) -> async_simple::coro::Lazy<void> {
             resp_data result;
+            auto start = std::chrono::system_clock::now();
             if (is_get) {
               req_context<> ctx{};
               result = co_await client.async_request(url, http_method::GET,
@@ -122,6 +125,11 @@ int main(int argc, char** argv) {
               result = co_await client.async_request(url, http_method::POST,
                                                      std::move(ctx));
             }
+            auto end = std::chrono::system_clock::now();
+            auto dur = std::chrono::duration_cast<std::chrono::microseconds>(
+                           end - start)
+                           .count();
+            latency.inc(dur);
             assert(result.status == 200);
             assert(result.resp_body == "Hello, world!");
             req_count.inc();
@@ -135,11 +143,15 @@ int main(int argc, char** argv) {
   }
 
   size_t last = 0;
+  int64_t last_latence = 0;
   while (true) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     auto value = req_count.value();
-    ELOG_INFO << value - last;
+    auto lat = latency.value();
+    ELOG_INFO << "qps: " << value - last
+              << ", latency: " << (lat - last_latence) / value << "us";
     last = value;
+    last_latence = lat;
     if (value == conf.client_concurrency * conf.max_request_count) {
       ELOG_INFO << "benchmark finished";
       break;
