@@ -143,9 +143,11 @@ class client_pool : public std::enable_shared_from_this<
 
     bool ok = client_t::is_ok(result);
     if (dns_cache_update_duration.count() >= 0) {
-      if (!ok ^ (eps_raw_ptr == &eps)) {
-        // use cache and request failed, clear eps
-        // or don't use cache and request ok, update eps
+      if ((!ok &&
+           (eps_raw_ptr != &eps))  // use cache but request failed, clear cache
+          || (ok &&
+              (eps_raw_ptr == &eps)))  // don't have cache request ok, set cache
+      {
         if (self->timepoint_.compare_exchange_strong(
                 old_tp, pre_time_point.time_since_epoch().count(),
                 std::memory_order_release)) {
@@ -398,7 +400,7 @@ class client_pool : public std::enable_shared_from_this<
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
                 << " failed. connection refused.";
-      co_return return_type<T>{tl::unexpect, std::errc::connection_refused};
+      co_return return_type<T>{ylt::unexpect, std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
       co_await op(*client);
@@ -463,7 +465,7 @@ class client_pool : public std::enable_shared_from_this<
     if (!client) {
       ELOG_WARN << "send request to " << endpoint
                 << " failed. connection refused.";
-      co_return return_type_with_host<T>{tl::unexpect,
+      co_return return_type_with_host<T>{ylt::unexpect,
                                          std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type_with_host<T>::value_type,

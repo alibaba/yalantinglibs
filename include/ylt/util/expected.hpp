@@ -34,6 +34,9 @@ using unexpected = tl::unexpected<T>;
 
 using unexpect_t = tl::unexpect_t;
 #endif
+
+static constexpr unexpect_t unexpect;
+
 }  // namespace ylt
 // decrepeted, instead by ylt::expected
 namespace coro_rpc {

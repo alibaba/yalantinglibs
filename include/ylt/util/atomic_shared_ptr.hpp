@@ -590,9 +590,6 @@ class atomic_shared_ptr {
     CountedDetail::template release_shared<T>(p, count);
   }
 };
-#elif __cpp_lib_atomic_shared_ptr
-template <typename T>
-using atomic_shared_ptr = std::atomic_shared_ptr<T>;
 #else
 #include <shared_mutex>
 template <typename T>
