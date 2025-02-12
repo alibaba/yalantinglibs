@@ -409,173 +409,51 @@ async_simple::coro::Lazy<void> recieve_data(auto &ch, auto &vec, size_t count) {
   }
 }
 
-// TEST_CASE("test coro channel with multi thread") {
-//   size_t count = 10000;
-//   auto ch = coro_io::create_channel<int>(count);
-//   send_data(ch, count).via(ch.get_executor()).start([](auto &&) {
-//   });
+TEST_CASE("test reconnect with different headers") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>("/", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value == "test");
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
 
-//   std::vector<int> vec;
-//   std::vector<std::thread> group;
-//   for (int i = 0; i < 10; i++) {
-//     group.emplace_back(std::thread([&]() {
-//       async_simple::coro::syncAwait(
-//           recieve_data(ch, vec, count).via(ch.get_executor()));
-//     }));
-//   }
-//   for (auto &thd : group) {
-//     thd.join();
-//   }
+  server.set_http_handler<GET>("/test", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value.empty());
+    value = req.get_header_value("test");
+    CHECK(value == "ok");
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
 
-//   for (int i = 0; i < count; i++) {
-//     CHECK(vec.at(i) == i);
-//   }
-// }
+  server.set_http_handler<GET>("/test1", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value.empty());
+    value = req.get_header_value("test");
+    CHECK(value.empty());
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
+  server.async_start();
 
-// TEST_CASE("test coro channel") {
-//   {
-//     auto ch = coro_io::create_shared_channel<std::string>(100);
-//     auto ec = async_simple::coro::syncAwait(
-//         coro_io::async_send(*ch, std::string("test")));
-//     CHECK(!ec);
+  coro_http_client client{};
+  client.add_header("hello", "test");
 
-//     std::string val;
-//     std::error_code err;
-//     std::tie(err, val) =
-//         async_simple::coro::syncAwait(coro_io::async_receive(*ch));
-//     CHECK(!err);
-//     CHECK(val == "test");
-//   }
-//   auto ch = coro_io::create_channel<int>(1000);
-//   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
-//   CHECK(!ec);
-//   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
-//   CHECK(!ec);
+  auto ret = client.get("http://127.0.0.1:9001/");
+  CHECK(ret.status == 200);
 
-//   std::error_code err;
-//   int val;
-//   std::tie(err, val) =
-//       async_simple::coro::syncAwait(coro_io::async_receive(ch));
-//   CHECK(!err);
-//   CHECK(val == 41);
+  client.add_header("test", "ok");
+  ret = client.get("http://127.0.0.1:9001/test");
+  CHECK(ret.status == 200);
 
-//   std::tie(err, val) =
-//       async_simple::coro::syncAwait(coro_io::async_receive(ch));
-//   CHECK(!err);
-//   CHECK(val == 42);
-// }
+  ret = client.get("http://127.0.0.1:9001/test1");
+  CHECK(ret.status == 200);
 
-// async_simple::coro::Lazy<void> test_select_channel() {
-//   using namespace coro_io;
-//   using namespace async_simple;
-//   using namespace async_simple::coro;
+  ret = client.get("http://127.0.0.1:9001/test", {{"test", "ok"}});
+  CHECK(ret.status == 200);
 
-//   auto ch1 = coro_io::create_channel<int>(1000);
-//   auto ch2 = coro_io::create_channel<int>(1000);
-
-//   co_await async_send(ch1, 41);
-//   co_await async_send(ch2, 42);
-
-//   std::array<int, 2> arr{41, 42};
-//   int val;
-
-//   size_t index =
-//       co_await select(std::pair{async_receive(ch1),
-//                                 [&val](auto value) {
-//                                   auto [ec, r] = value.value();
-//                                   val = r;
-//                                 }},
-//                       std::pair{async_receive(ch2), [&val](auto value) {
-//                                   auto [ec, r] = value.value();
-//                                   val = r;
-//                                 }});
-
-//   CHECK(val == arr[index]);
-
-//   co_await async_send(ch1, 41);
-//   co_await async_send(ch2, 42);
-
-//   std::vector<Lazy<std::pair<std::error_code, int>>> vec;
-//   vec.push_back(async_receive(ch1));
-//   vec.push_back(async_receive(ch2));
-
-//   index = co_await select(std::move(vec), [&](size_t i, auto result) {
-//     val = result.value().second;
-//   });
-//   CHECK(val == arr[index]);
-
-//   period_timer timer1(coro_io::get_global_executor());
-//   timer1.expires_after(100ms);
-//   period_timer timer2(coro_io::get_global_executor());
-//   timer2.expires_after(200ms);
-
-//   int val1;
-//   index = co_await select(std::pair{timer1.async_await(),
-//                                     [&](auto val) {
-//                                       CHECK(val.value());
-//                                       val1 = 0;
-//                                     }},
-//                           std::pair{timer2.async_await(), [&](auto val) {
-//                                       CHECK(val.value());
-//                                       val1 = 0;
-//                                     }});
-//   CHECK(index == val1);
-
-//   int val2;
-//   index = co_await select(std::pair{coro_io::post([] {
-//                                     }),
-//                                     [&](auto) {
-//                                       std::cout << "post1\n";
-//                                       val2 = 0;
-//                                     }},
-//                           std::pair{coro_io::post([] {
-//                                     }),
-//                                     [&](auto) {
-//                                       std::cout << "post2\n";
-//                                       val2 = 1;
-//                                     }});
-//   CHECK(index == val2);
-
-//   co_await async_send(ch1, 43);
-//   auto lazy = coro_io::post([] {
-//   });
-
-//   int val3 = -1;
-//   index = co_await select(std::pair{async_receive(ch1),
-//                                     [&](auto result) {
-//                                       val3 = result.value().second;
-//                                     }},
-//                           std::pair{std::move(lazy), [&](auto) {
-//                                       val3 = 0;
-//                                     }});
-
-//   if (index == 0) {
-//     CHECK(val3 == 43);
-//   }
-//   else if (index == 1) {
-//     CHECK(val3 == 0);
-//   }
-// }
-
-// TEST_CASE("test select coro channel") {
-//   using namespace coro_io;
-//   async_simple::coro::syncAwait(test_select_channel());
-
-//   auto ch = coro_io::create_channel<int>(1000);
-
-//   async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
-//   async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
-
-//   std::error_code ec;
-//   int val;
-//   std::tie(ec, val) =
-//   async_simple::coro::syncAwait(coro_io::async_receive(ch)); CHECK(val ==
-//   41);
-
-//   std::tie(ec, val) =
-//   async_simple::coro::syncAwait(coro_io::async_receive(ch)); CHECK(val ==
-//   42);
-// }
+  client.reset();
+  ret = client.get("http://127.0.0.1:9001/", {{"hello", "test"}});
+  CHECK(ret.status == 200);
+}
 
 TEST_CASE("test bad address") {
   {
@@ -785,6 +663,77 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 503);
   result = async_simple::coro::syncAwait(client.async_get("/coro_throw"));
   CHECK(result.status == 503);
+}
+
+TEST_CASE("test client pool") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        // resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<GET>("/test", [&](coro_http_request &req,
+                                            coro_http_response &resp) {
+    resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+    resp.set_status_and_content(status_type::ok, "shutdown");
+  });
+  server.async_start();
+
+  std::string url = "http://127.0.0.1:9001/";
+
+  auto pool = coro_io::client_pool<coro_http_client>::create(url, {100});
+
+  std::atomic<size_t> count = 0;
+  std::promise<void> promise;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              CHECK(data.resp_body == "hello world");
+            })
+        .start([&](auto &&) {
+          count++;
+          if (count == 100) {
+            promise.set_value();
+          }
+        });
+  }
+  promise.get_future().wait();
+
+  CHECK(pool->free_client_count() > 0);
+
+  count = 0;
+  std::atomic<size_t> failed_count = 0;
+  url = "http://127.0.0.1:9001/test";
+  std::promise<void> promise1;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              if (data.status != 200) {
+                failed_count++;
+                CHECK(data.net_err == asio::error::eof);
+              }
+              else {
+                CHECK(data.resp_body == "shutdown");
+              }
+              CINATRA_LOG_INFO << "test result: " << data.status << ", "
+                               << data.resp_body << ", " << data.net_err.value()
+                               << ", " << data.net_err.message();
+            })
+        .start([&](auto &&) {
+          count++;
+          if (count == 100) {
+            promise1.set_value();
+          }
+        });
+  }
+
+  promise1.get_future().wait();
+  CINATRA_LOG_INFO << "failed request: " << failed_count << ", "
+                   << pool->free_client_count();
+  CHECK(failed_count > 0);
+  CHECK(pool->free_client_count() <= 100 - failed_count);
 }
 
 TEST_CASE("test response") {
