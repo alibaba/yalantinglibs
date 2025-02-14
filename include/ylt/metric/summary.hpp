@@ -37,7 +37,7 @@ YLT_REFL(json_summary_t, name, help, type, labels_name, quantiles_key, metrics);
 class summary_t : public static_metric {
  public:
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
-            std::chrono::seconds max_age = std::chrono::seconds{0})
+            std::chrono::seconds max_age = std::chrono::seconds{60})
       : static_metric(MetricType::Summary, std::move(name), std::move(help)),
         quantiles_(std::move(quantiles)),
         impl_(quantiles_,
