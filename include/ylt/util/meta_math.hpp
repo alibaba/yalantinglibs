@@ -173,14 +173,6 @@ constexpr void set_number_bit(UnsignedNumber& number, int offset,
            (static_cast<UnsignedNumber>(bit) << offset);
 }
 
-/// <summary>
-/// Computes the result of bitwise left-rotating the value of "number" by "bits"
-/// positions. This operation is also known as a left circular shift.
-/// </summary>
-/// <typeparam name="UnsignedNumber">The unsigned numeric type</typeparam>
-/// <param name="number">The unsigned number</param>
-/// <param name="bits">The bits</param>
-/// <returns>The result</returns>
 /**
  * Computes the result of bitwise left-rotating the value of "number" by "bits"
  * positions. This operation is also known as a left circular shift.

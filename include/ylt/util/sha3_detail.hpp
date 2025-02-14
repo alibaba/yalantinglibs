@@ -320,7 +320,7 @@ constexpr void step_mapping_theta(hash_context<Type>& context) noexcept {
  */
 template <sha3_type Type>
 constexpr void step_mapping_rho(hash_context<Type>& context) noexcept {
-  // For all z such that 0 �� z �� w, let A'[0, 0, z] = A[0, 0, z].
+  // For all z such that 0 ≤ z ≤ w, let A'[0, 0, z] = A[0, 0, z].
   context.intermediate(0, 0) = context.state(0, 0);
 
   // (x, y) = (1, 0)
