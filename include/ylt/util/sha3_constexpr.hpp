@@ -99,7 +99,9 @@ class hash_digest {
  private:
   context_type context_;
 };
+}  // namespace ylt::detail
 
+namespace ylt {
 template <sha3_type Type>
 constexpr auto sha3_digest(std::span<const std::uint8_t> data) noexcept {
   return detail::hash_digest<Type>{}
@@ -131,4 +133,4 @@ constexpr auto sha3_digest(std::string_view data) noexcept {
 
   return digest.finalize();
 }
-}  // namespace ylt::detail
+}  // namespace ylt
