@@ -820,17 +820,18 @@ TEST_CASE("test summary") {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
-  for (int i = 0; i < 50; i++) {
-    summary.observe(distr(gen));
+  for (int i = 1; i <= 100; i++) {
+    summary.observe(i);
   }
   std::string str;
   summary.serialize(str);
   std::cout << str;
   double sum;
   uint64_t cnt;
-  summary.get_rates(sum, cnt);
-  CHECK(cnt == 50);
-  CHECK(sum > 0);
+  auto result = summary.get_rates(sum, cnt);
+  CHECK(cnt == 100);
+  CHECK(sum == 5050);
+  CHECK(result == std::vector<float>{50, 90, 95, 99});
   CHECK(str.find("test_summary") != std::string::npos);
   CHECK(str.find("test_summary_count") != std::string::npos);
   CHECK(str.find("test_summary_sum") != std::string::npos);
@@ -841,6 +842,57 @@ TEST_CASE("test summary") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
 #endif
+  std::cout << str_json << "\n";
+}
+
+template <size_t id>
+struct test_id_t {};
+
+std::string generate_uuid_v4() {
+  std::random_device rd;   // 随机数种子
+  std::mt19937 gen(rd());  // 使用 Mersenne Twister 算法生成随机数
+  std::uniform_int_distribution<> dis(0, 15);   // 生成 0 到 15 的随机数
+  std::uniform_int_distribution<> dis2(8, 11);  // 用于生成变体部分
+
+  std::stringstream ss;
+  int i;
+  for (i = 0; i < 8; i++) {
+    ss << std::hex << dis(gen);
+  }
+  ss << "-";
+  for (i = 0; i < 4; i++) {
+    ss << std::hex << dis(gen);
+  }
+  ss << "-4";  // 版本 4
+  for (i = 0; i < 3; i++) {
+    ss << std::hex << dis(gen);
+  }
+  ss << "-";
+  ss << std::hex << dis2(gen);  // 变体部分
+  for (i = 0; i < 3; i++) {
+    ss << std::hex << dis(gen);
+  }
+  ss << "-";
+  for (i = 0; i < 12; i++) {
+    ss << std::hex << dis(gen);
+  }
+  return ss.str();
+}
+
+TEST_CASE("test summary memory") {
+  basic_dynamic_summary<1> summary{
+      "test_summary", "summary help", {0.5, 0.9, 0.95, 0.99}, {"uuid"}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(1, 1024 * 1024);
+  for (int i = 0; i < 10000; ++i) {
+    auto str = generate_uuid_v4();
+    for (int j = 0; j < 1000; ++j) {
+      summary.observe({str}, dis(gen));
+    }
+  }
+  std::string str;
+  // cin>> str;
 }
 
 TEST_CASE("test summary with INF") {
@@ -1069,9 +1121,6 @@ TEST_CASE("test register metric") {
           "not_exist");
   CHECK(m2 == nullptr);
 }
-
-template <size_t id>
-struct test_id_t {};
 
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = dynamic_metric_manager<test_id_t<1>>;
