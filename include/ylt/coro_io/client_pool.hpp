@@ -49,6 +49,7 @@
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
 #include "ylt/easylog.hpp"
+#include "ylt/util/atomic_shared_ptr.hpp"
 namespace coro_io {
 
 template <typename client_t, typename io_context_pool_t>
@@ -117,13 +118,53 @@ class client_pool : public std::enable_shared_from_this<
   reconnect_impl(std::unique_ptr<client_t>& client,
                  std::shared_ptr<client_pool>& self) {
     auto pre_time_point = std::chrono::steady_clock::now();
-    auto result = co_await client->connect(self->host_name_);
+    auto dns_cache_update_duration =
+        self->pool_config_.dns_cache_update_duration;
+    std::vector<asio::ip::tcp::endpoint>* eps_raw_ptr = nullptr;
+    std::shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_ptr;
+    std::vector<asio::ip::tcp::endpoint> eps;
+    uint64_t old_tp;
+    if (dns_cache_update_duration.count() >= 0) {
+      eps_ptr = self->eps_.load(std::memory_order_acquire);
+      eps_raw_ptr = eps_ptr.get();
+      old_tp = self->timepoint_.load(std::memory_order_acquire);
+      auto old_time_point = std::chrono::steady_clock::time_point{
+          std::chrono::steady_clock::duration{old_tp}};
+
+      // check if no dns cache, or cache outdated
+      if (eps_raw_ptr->empty() || (pre_time_point - old_time_point) >
+                                      dns_cache_update_duration) [[unlikely]] {
+        // start resolve, store result to eps
+        eps_raw_ptr = &eps;
+      }
+      // else, we can used cached eps
+    }
+    auto result = co_await client->connect(self->host_name_, eps_raw_ptr);
+
     bool ok = client_t::is_ok(result);
+    if (dns_cache_update_duration.count() >= 0) {
+      if ((!ok &&
+           (eps_raw_ptr != &eps))  // use cache but request failed, clear cache
+          || (ok &&
+              (eps_raw_ptr == &eps)))  // don't have cache request ok, set cache
+      {
+        if (self->timepoint_.compare_exchange_strong(
+                old_tp, pre_time_point.time_since_epoch().count(),
+                std::memory_order_release)) {
+          auto new_eps_ptr =
+              std::make_shared<std::vector<asio::ip::tcp::endpoint>>(
+                  std::move(eps));
+          self->eps_.store(std::move(new_eps_ptr), std::memory_order_release);
+        }
+      }
+    }
+
     auto post_time_point = std::chrono::steady_clock::now();
     auto cost_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         post_time_point - pre_time_point);
-    ELOG_TRACE << "reconnect client{" << client.get()
-               << "} cost time: " << cost_time / std::chrono::milliseconds{1}
+    ELOG_TRACE << "reconnect client{" << client.get() << "}"
+               << "is success:" << ok
+               << ", cost time: " << cost_time / std::chrono::milliseconds{1}
                << "ms";
     co_return std::pair{ok, cost_time};
   }
@@ -296,15 +337,15 @@ class client_pool : public std::enable_shared_from_this<
   };
   template <typename T>
   using return_type =
-      tl::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                       std::declval<client_t&>()))>::type,
-                   std::errc>;
+      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
+                        std::declval<client_t&>()))>::type,
+                    std::errc>;
 
   template <typename T>
   using return_type_with_host =
-      tl::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                       std::declval<client_t&>(), std::string_view{}))>::type,
-                   std::errc>;
+      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
+                        std::declval<client_t&>(), std::string_view{}))>::type,
+                    std::errc>;
 
  public:
   struct pool_config {
@@ -317,6 +358,7 @@ class client_pool : public std::enable_shared_from_this<
     std::chrono::milliseconds host_alive_detect_duration{
         30000}; /* zero means wont detect */
     typename client_t::config client_config;
+    std::chrono::seconds dns_cache_update_duration{5 * 60};  // 5mins
   };
 
  private:
@@ -336,7 +378,8 @@ class client_pool : public std::enable_shared_from_this<
       : host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection){};
+        free_clients_(pool_config.max_connection),
+        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()){};
 
   client_pool(private_construct_token t, client_pools_t* pools_manager_,
               std::string_view host_name, const pool_config& pool_config,
@@ -345,7 +388,8 @@ class client_pool : public std::enable_shared_from_this<
         host_name_(host_name),
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
-        free_clients_(pool_config.max_connection){};
+        free_clients_(pool_config.max_connection),
+        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()){};
 
   template <typename T>
   async_simple::coro::Lazy<return_type<T>> send_request(
@@ -356,7 +400,7 @@ class client_pool : public std::enable_shared_from_this<
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
                 << " failed. connection refused.";
-      co_return return_type<T>{tl::unexpect, std::errc::connection_refused};
+      co_return return_type<T>{ylt::unexpect, std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
       co_await op(*client);
@@ -399,6 +443,11 @@ class client_pool : public std::enable_shared_from_this<
 
   std::string_view get_host_name() const noexcept { return host_name_; }
 
+  std::shared_ptr<std::vector<asio::ip::tcp::endpoint>> get_remote_endpoints()
+      const noexcept {
+    return eps_.load(std::memory_order_acquire);
+  }
+
  private:
   template <typename, typename>
   friend class client_pools;
@@ -416,7 +465,7 @@ class client_pool : public std::enable_shared_from_this<
     if (!client) {
       ELOG_WARN << "send request to " << endpoint
                 << " failed. connection refused.";
-      co_return return_type_with_host<T>{tl::unexpect,
+      co_return return_type_with_host<T>{ylt::unexpect,
                                          std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type_with_host<T>::value_type,
@@ -446,6 +495,8 @@ class client_pool : public std::enable_shared_from_this<
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
   std::atomic<bool> is_alive_ = true;
+  std::atomic<uint64_t> timepoint_;
+  ylt::util::atomic_shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_;
 };
 
 template <typename client_t,

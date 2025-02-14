@@ -227,17 +227,21 @@ class coro_rpc_client {
   /*!
    * Connect server
    *
-   * If connect hasn't been closed, it will be closed first then connect to
+   * If socket hasn't been closed, it will be closed first then connect to
    * server, else the client will connect to server directly
    *
    * @param host server address
    * @param port server port
    * @param connect_timeout_duration RPC call timeout seconds
+   * @param eps endpoints of resolve result. if eps is not nullptr and vector is
+   * empty, it will return the endpoints that, else if vector is not empty, it
+   * will use the eps to skill resolve and connect to server directly.
    * @return error code
    */
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string host, std::string port,
-      std::chrono::steady_clock::duration connect_timeout_duration) {
+      std::chrono::steady_clock::duration connect_timeout_duration,
+      std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
     auto lock_ok = connect_mutex_.tryLock();
     if (!lock_ok) {
       co_await connect_mutex_.coScopedLock();
@@ -253,29 +257,39 @@ class coro_rpc_client {
     }
     auto ret = co_await connect_impl(
         std::chrono::duration_cast<std::chrono::milliseconds>(
-            connect_timeout_duration));
+            connect_timeout_duration),
+        eps);
     connect_mutex_.unlock();
     co_return std::move(ret);
   }
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
-      std::string_view endpoint,
-      std::chrono::steady_clock::duration connect_timeout_duration) {
-    auto pos = endpoint.find(':');
-    std::string host(endpoint.substr(0, pos));
-    std::string port(endpoint.substr(pos + 1));
+      std::string_view address,
+      std::chrono::steady_clock::duration connect_timeout_duration,
+      std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
+    auto pos = address.find(':');
+    std::string host(address.substr(0, pos));
+    std::string port(address.substr(pos + 1));
 
-    return connect(std::move(host), std::move(port), connect_timeout_duration);
+    return connect(std::move(host), std::move(port), connect_timeout_duration,
+                   eps);
   }
 
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
-      std::string_view endpoint) {
-    return connect(endpoint, config_.connect_timeout_duration);
-  }
-
-  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
-      std::string host, std::string port) {
+      std::string host, std::string port,
+      std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
     return connect(std::move(host), std::move(port),
-                   config_.connect_timeout_duration);
+                   config_.connect_timeout_duration, eps);
+  }
+
+  [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
+      std::string_view address,
+      std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
+    auto pos = address.find(':');
+    std::string host(address.substr(0, pos));
+    std::string port(address.substr(pos + 1));
+
+    return connect(std::move(host), std::move(port),
+                   config_.connect_timeout_duration, eps);
   }
 
 #ifdef YLT_ENABLE_SSL
@@ -393,7 +407,8 @@ class coro_rpc_client {
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
 
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect_impl(
-      std::chrono::milliseconds conn_timeout_dur) {
+      std::chrono::milliseconds conn_timeout_dur,
+      std::vector<asio::ip::tcp::endpoint> *eps) {
     if (should_reset_) {
       co_await reset();
     }
@@ -415,12 +430,35 @@ class coro_rpc_client {
           .start([](auto &&) {
           });
     }
-
-    std::error_code ec = co_await coro_io::async_connect(
-        &control_->executor_, control_->socket_, config_.host, config_.port);
+    std::vector<asio::ip::tcp::endpoint> eps_tmp;
+    if (eps == nullptr) {
+      eps = &eps_tmp;
+    }
+    std::error_code ec;
+    asio::ip::tcp::resolver::iterator iter;
+    if (eps->empty()) {
+      ELOG_TRACE << "start resolve host: " << config_.host << ":"
+                 << config_.port;
+      std::tie(ec, iter) = co_await coro_io::async_resolve(
+          &control_->executor_, control_->socket_, config_.host, config_.port);
+      asio::ip::tcp::resolver::iterator end;
+      while (iter != end) {
+        eps->push_back(iter->endpoint());
+        ++iter;
+      }
+      if (eps->empty()) [[unlikely]] {
+        co_return errc::not_connected;
+      }
+    }
+    ELOG_TRACE << "start connect to endpoint lists. total endpoint count:"
+               << eps->size()
+               << ", the first endpoint is: " << (*eps)[0].address().to_string()
+               << std::to_string((*eps)[0].port());
+    asio::ip::tcp::endpoint endpoint;
+    std::tie(ec, endpoint) = co_await coro_io::async_connect(
+        &control_->executor_, control_->socket_, *eps);
     std::error_code err_code;
     timer_->cancel(err_code);
-
     if (control_->is_timeout_) {
       ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;
@@ -430,6 +468,10 @@ class coro_rpc_client {
                 << " failed:" << ec.message();
       co_return errc::not_connected;
     }
+    ELOG_INFO << "connect successful, the endpoint is: "
+              << endpoint.address().to_string() + ":" +
+                     std::to_string(endpoint.port());
+
     if (config_.enable_tcp_no_delay == true) {
       control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
     }
@@ -1155,6 +1197,7 @@ class coro_rpc_client {
   std::unique_ptr<coro_io::period_timer> timer_;
   std::shared_ptr<control_t> control_;
   std::string_view req_attachment_;
+  std::vector<asio::ip::tcp::endpoint> endpoints_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
 #ifdef YLT_ENABLE_SSL
