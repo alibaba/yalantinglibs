@@ -37,7 +37,7 @@ inline constexpr std::size_t byte_bits =
 
 namespace ylt::detail {
 template <typename Number, typename Callable, std::size_t... Indexes>
-  requires std::is_arithmetic_v<Number>
+requires std::is_arithmetic_v<Number>
 constexpr auto number_move_bits_helper(std::index_sequence<Indexes...>,
                                        bool big_endian,
                                        Callable&& handler) noexcept {
@@ -53,7 +53,7 @@ constexpr auto number_move_bits_helper(std::index_sequence<Indexes...>,
 }
 
 template <bool Left, typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr auto bitwise_rotate_impl(UnsignedNumber number, int bits) noexcept {
   using limits_type = std::numeric_limits<UnsignedNumber>;
   using rotate_impl_type = UnsignedNumber (*)(UnsignedNumber number, int bits);
@@ -106,7 +106,7 @@ inline constexpr auto get_max_v = get_max<Left, Right>::value;
  * @return The result
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr auto log2(UnsignedNumber number) noexcept {
   UnsignedNumber result{};
 
@@ -130,7 +130,7 @@ constexpr auto log2(UnsignedNumber number) noexcept {
  */
 template <typename Number, typename Callable,
           std::size_t TruncateSize = sizeof(Number)>
-  requires std::is_arithmetic_v<Number>
+requires std::is_arithmetic_v<Number>
 constexpr decltype(auto) split_number(
     Number number, Callable&& handler, bool big_endian = true,
     std::integral_constant<std::size_t, TruncateSize> = {}) noexcept {
@@ -152,7 +152,7 @@ constexpr decltype(auto) split_number(
  * @return The bit value
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr std::uint8_t get_number_bit(UnsignedNumber number,
                                       int offset) noexcept {
   return static_cast<std::uint8_t>((number >> offset) & 0x01);
@@ -166,7 +166,7 @@ constexpr std::uint8_t get_number_bit(UnsignedNumber number,
  * @param bit The bit value
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr void set_number_bit(UnsignedNumber& number, int offset,
                               std::uint8_t bit) noexcept {
   number = (number & ~(static_cast<UnsignedNumber>(1) << offset)) |
@@ -190,7 +190,7 @@ constexpr void set_number_bit(UnsignedNumber& number, int offset,
  * @return The result
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr auto rotl(UnsignedNumber number, int bits) noexcept {
   return detail::bitwise_rotate_impl<true>(number, bits);
 }
@@ -204,7 +204,7 @@ constexpr auto rotl(UnsignedNumber number, int bits) noexcept {
  * @return The result
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr auto rotr(UnsignedNumber number, int bits) noexcept {
   return detail::bitwise_rotate_impl<false>(number, bits);
 }
@@ -219,7 +219,7 @@ constexpr auto rotr(UnsignedNumber number, int bits) noexcept {
  * @return The result
  */
 template <typename UnsignedNumber>
-  requires std::is_unsigned_v<UnsignedNumber>
+requires std::is_unsigned_v<UnsignedNumber>
 constexpr auto minus_mod_unsigned(UnsignedNumber minuend,
                                   UnsignedNumber subtrahend,
                                   UnsignedNumber divisor) noexcept {
@@ -243,7 +243,7 @@ constexpr auto minus_mod_unsigned(UnsignedNumber minuend,
  * @return The number
  */
 template <typename Number>
-  requires std::is_arithmetic_v<Number>
+requires std::is_arithmetic_v<Number>
 constexpr auto make_number(const std::array<std::uint8_t, sizeof(Number)>& data,
                            bool big_endian = true) noexcept {
   return detail::number_move_bits_helper<Number>(

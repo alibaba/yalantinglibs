@@ -292,9 +292,8 @@ constexpr void step_mapping_theta(hash_context<Type>& context) noexcept {
   // 0, z] ⊕ A[x, 1, z] ⊕ A[x, 2, z] ⊕ A[x, 3, z] ⊕ A[x, 4, z]. Here a lane
   // (values along z coordinate) is represented as a word (std::uint64_t).
   for (std::size_t x = 0; x < common_factor; x++) {
-    context.tmp[x] = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-      return (context.state(x, Is) ^ ...);
-    }(std::make_index_sequence<common_factor>{});
+    context.tmp[x] = [&]<std::size_t... Is>(std::index_sequence<Is...>) { return (context.state(x, Is) ^ ...); }
+    (std::make_index_sequence<common_factor>{});
   }
 
   // For all pairs (x, z) such that 0 ≤ x < 5 and 0 ≤ z < w, let D[x, z] = C[(x
@@ -330,7 +329,8 @@ constexpr void step_mapping_rho(hash_context<Type>& context) noexcept {
     ((context.intermediate[Is] =
           rotl(context.state[Is], step_mapping_rho_rotation_bits[Is])),
      ...);
-  }(std::make_index_sequence<step_mapping_rho_rotation_bits.size()>{});
+  }
+  (std::make_index_sequence<step_mapping_rho_rotation_bits.size()>{});
 }
 
 /**
@@ -454,7 +454,8 @@ constexpr void sponge_step_6(hash_context<Type>& context) noexcept {
       // little-endian.
       context.state[i] ^= make_number<word_type>(
           {context.block[i * sizeof(word_type) + Is]...}, false);
-    }(std::make_index_sequence<sizeof(word_type)>{});
+    }
+    (std::make_index_sequence<sizeof(word_type)>{});
   }
 
   // f = KECCAK-p[b, nr]
