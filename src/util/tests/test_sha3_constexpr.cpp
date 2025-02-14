@@ -20,6 +20,9 @@ constexpr void test_meta_numeric_conversion() {
   static_assert(to_hexadecimal_meta_string(
                     std::array<std::uint8_t, 4>{0x12, 0x34, 0x60, 0xAB}) ==
                 refvalue::meta_string{"123460AB"});
+
+  static_assert(make_number<std::uint32_t>(std::array<std::uint8_t, 4>{
+                    0x12, 0x34, 0x56, 0x78}) == 0x12345678);
 }
 
 constexpr void test_sha3_constexpr() noexcept {
