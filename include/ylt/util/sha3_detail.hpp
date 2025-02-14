@@ -265,21 +265,22 @@ inline constexpr auto step_mapping_rho_rotation_bits = [] {
  */
 inline constexpr auto step_mapping_tau_rc_table =
     []<std::size_t... Is>(std::index_sequence<Is...>) {
-      constexpr auto func_rc = [](std::size_t round) {
-        // Let RC = 0w.
-        // For j from 0 to l = log2(w), let RC[2 ^ j – 1] = rc(j + 7ir).
-        word_type result = 0;
+    constexpr auto func_rc = [](std::size_t round) {
+      // Let RC = 0w.
+      // For j from 0 to l = log2(w), let RC[2 ^ j – 1] = rc(j + 7ir).
+      word_type result = 0;
 
-        for (std::size_t i = 0; i <= log2_word_bits; i++) {
-          set_number_bit(result, (1 << i) - 1,
-                         step_mapping_helper_rc(i + 7 * round));
-        }
+      for (std::size_t i = 0; i <= log2_word_bits; i++) {
+        set_number_bit(result, (1 << i) - 1,
+                       step_mapping_helper_rc(i + 7 * round));
+      }
 
-        return result;
-      };
+      return result;
+    };
 
       return std::array<word_type, sizeof...(Is)>{func_rc(Is)...};
-    }(std::make_index_sequence<round_size>{});
+    }
+(std::make_index_sequence<round_size>{});
 
 /**
  * A step mapping function named theta(A) defined in Section 3.2.1.
@@ -292,7 +293,9 @@ constexpr void step_mapping_theta(hash_context<Type>& context) noexcept {
   // 0, z] ⊕ A[x, 1, z] ⊕ A[x, 2, z] ⊕ A[x, 3, z] ⊕ A[x, 4, z]. Here a lane
   // (values along z coordinate) is represented as a word (std::uint64_t).
   for (std::size_t x = 0; x < common_factor; x++) {
-    context.tmp[x] = [&]<std::size_t... Is>(std::index_sequence<Is...>) { return (context.state(x, Is) ^ ...); }
+    context.tmp[x] = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+      return (context.state(x, Is) ^ ...);
+    }
     (std::make_index_sequence<common_factor>{});
   }
 

@@ -75,7 +75,8 @@ constexpr auto to_hexadecimal_meta_string(
     std::span<const std::uint8_t, N> data) noexcept {
   return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     return refvalue::meta_string{detail::to_hexadecimal_character(data[Is])...};
-  }(std::make_index_sequence<N>{});
+  }
+  (std::make_index_sequence<N>{});
 }
 
 /**
