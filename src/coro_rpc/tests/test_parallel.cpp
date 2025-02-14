@@ -53,7 +53,7 @@ TEST_CASE("test parall coro_rpc call") {
       }
     }(*clients[i % client_cnt])
                                               .via(pool.get_executor())
-                                              .start([&](auto&&) {
+                                              .start([&, work_cnt_tot](auto&&) {
                                                 auto i = ++work_cnt;
                                                 if (i == work_cnt_tot) {
                                                   p2.set_value();
