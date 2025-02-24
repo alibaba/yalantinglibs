@@ -149,10 +149,10 @@ class basic_dynamic_summary
       dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N>;
 
  public:
-  basic_dynamic_summary(
-      std::string name, std::string help, std::vector<double> quantiles,
-      std::array<std::string, N> labels_name,
-      std::chrono::milliseconds max_age = std::chrono::seconds{60})
+  basic_dynamic_summary(std::string name, std::string help,
+                        std::vector<double> quantiles,
+                        std::array<std::string, N> labels_name,
+                        std::chrono::seconds max_age = std::chrono::seconds{60})
       : Base(MetricType::Summary, std::move(name), std::move(help),
              std::move(labels_name)),
         quantiles_(std::move(quantiles)),
@@ -162,33 +162,35 @@ class basic_dynamic_summary
   }
 
   void observe(const std::array<std::string, N>& labels_value, float value) {
-    Base::try_emplace(labels_value, quantiles_).first->value.insert(value);
+    has_refreshed_.store(true, std::memory_order_relaxed);
+    Base::try_emplace(labels_value, quantiles_, max_age_)
+        .first->value.insert(value);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value) {
     double sum;
     uint64_t count;
-    return Base::try_emplace(labels_value, quantiles_)
+    return Base::try_emplace(labels_value, quantiles_, max_age_)
         .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                uint64_t& count) {
     double sum;
-    return Base::try_emplace(labels_value, quantiles_)
+    return Base::try_emplace(labels_value, quantiles_, max_age_)
         .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum) {
     uint64_t count;
-    return Base::try_emplace(labels_value, quantiles_)
+    return Base::try_emplace(labels_value, quantiles_, max_age_)
         .first->value.get_rates(sum, count);
   }
 
   std::vector<float> get_rates(const std::array<std::string, N>& labels_value,
                                double& sum, uint64_t& count) {
-    return Base::try_emplace(labels_value, quantiles_)
+    return Base::try_emplace(labels_value, quantiles_, max_age_)
         .first->value.stat(sum, count);
   }
 
@@ -238,8 +240,9 @@ class basic_dynamic_summary
       double sum = 0;
       uint64_t count = 0;
       auto rates = summary_value.stat(sum, count);
-      if (count == 0)
+      if (count == 0 && !has_refreshed_.load(std::memory_order_relaxed)) {
         continue;
+      }
       summary.metrics.emplace_back();
       json_summary_metric_t& metric = summary.metrics.back();
       metric.count = count;
@@ -254,7 +257,8 @@ class basic_dynamic_summary
 
  private:
   std::vector<double> quantiles_;
-  std::chrono::milliseconds max_age_;
+  std::chrono::seconds max_age_;
+  std::atomic<bool> has_refreshed_;
 };
 
 using dynamic_summary_1 = basic_dynamic_summary<1>;
