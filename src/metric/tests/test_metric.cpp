@@ -14,6 +14,55 @@ struct metrc_tag {};
 
 struct test_tag {};
 
+TEST_CASE("summary test zero") {
+  std::map<std::string, std::string> customMap = {};
+  summary_t summary{"test_summary",
+                    "summary help",
+                    {0.5, 0.9, 0.95, 0.99},
+                    customMap,
+                    std::chrono::seconds(2)};
+  summary.observe(1);
+  std::string str;
+  summary.serialize_to_json(str);
+
+  basic_dynamic_summary<2> dy_summary(
+      std::string("test_summary"), std::string("summary help"),
+      std::vector<double>{0.5, 0.9, 0.95, 0.99},
+      std::array<std::string, 2>{"method", "url"}, std::chrono::seconds(1));
+  dy_summary.observe({"GET", "test"}, 10);
+  std::string str2;
+  dy_summary.serialize_to_json(str2);
+
+  std::cout << str << "\n";
+  std::cout << str2 << "\n";
+  double sum{};
+  uint64_t count{};
+  summary.get_rates(sum, count);
+  CHECK(sum > 0);
+  CHECK(count > 0);
+  sum = 0;
+  count = 0;
+  dy_summary.get_rates({"GET", "test"}, sum, count);
+  CHECK(sum > 0);
+  CHECK(count > 0);
+
+  std::this_thread::sleep_for(3s);
+
+  str.clear();
+  str2.clear();
+
+  summary.serialize_to_json(str);
+  dy_summary.serialize_to_json(str2);
+
+  std::cout << str << "\n";
+  std::cout << str2 << "\n";
+  sum = 0;
+  count = 0;
+  summary.get_rates(sum, count);
+  CHECK(sum == 0);
+  CHECK(count == 0);
+}
+
 TEST_CASE("serialize zero") {
   {
     std::string str;

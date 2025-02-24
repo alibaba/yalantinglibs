@@ -333,8 +333,7 @@ class summary_impl {
     return result;
   }
 
-  summary_impl(std::vector<double>& rate,
-               std::chrono::seconds refresh_time = std::chrono::seconds{0})
+  summary_impl(std::vector<double>& rate, std::chrono::seconds refresh_time)
       : rate_(rate),
         refresh_time_(refresh_time.count() * 1000 / 2),
         tp_(std::chrono::steady_clock::now().time_since_epoch().count()){};
