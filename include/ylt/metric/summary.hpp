@@ -267,7 +267,6 @@ class basic_dynamic_summary
       for (auto& e : rates) {
         metric.quantiles.emplace(quantiles_[index++], e);
       }
-      summary.metrics.push_back(std::move(metric));
     }
     iguana::to_json(summary, str);
   }

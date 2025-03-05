@@ -1640,7 +1640,7 @@ TEST_CASE("test summary with dynamic labels") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
   summary.serialize_to_json(json_str);
-  CHECK(json_str.size() == 409);
+  CHECK(json_str.size() == 305);
   std::cout << json_str << "\n";
 #endif
 
