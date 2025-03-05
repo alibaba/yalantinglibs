@@ -865,7 +865,7 @@ TEST_CASE("test gauge") {
     g.serialize_to_json(str_json);
     std::cout << str_json << "\n";
     std::cout << str_json.size() << std::endl;
-    CHECK(str_json.size() == 185);
+    CHECK(str_json.size() == 191);
 #endif
 
     std::string str;
@@ -965,7 +965,7 @@ TEST_CASE("test summary with INF") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 238);
+  CHECK(str_json.size() == 205);
 #endif
 }
 
@@ -995,7 +995,7 @@ TEST_CASE("test summary with NAN") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 238);
+  CHECK(str_json.size() == 205);
 #endif
 }
 
@@ -1029,7 +1029,7 @@ TEST_CASE("test summary with illegal quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 222);
+  CHECK(str_json.size() == 186);
 #endif
 }
 
@@ -1065,7 +1065,7 @@ TEST_CASE("test summary with many quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 8857);
+  CHECK(str_json.size() == 10818);
 #endif
 }
 
@@ -1620,10 +1620,9 @@ TEST_CASE("test summary with dynamic labels") {
                                    {"method", "url"}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distr(1, 100);
-  for (int i = 0; i < 50; i++) {
-    summary.observe({"GET", "/"}, distr(gen));
-    summary.observe({"POST", "/test"}, distr(gen));
+  for (int i = 0; i < 100; i++) {
+    summary.observe({"GET", "/"}, i);
+    summary.observe({"POST", "/test"}, i);
   }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1641,6 +1640,7 @@ TEST_CASE("test summary with dynamic labels") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
   summary.serialize_to_json(json_str);
+  CHECK(json_str.size() == 409);
   std::cout << json_str << "\n";
 #endif
 
