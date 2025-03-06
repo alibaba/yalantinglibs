@@ -420,6 +420,28 @@ TEST_CASE("testing client with attachment") {
   ret = client.sync_call<echo_with_attachment>();
   CHECK(ret.has_value());
   CHECK(client.get_resp_attachment() == "");
+
+  char buf[100], short_buf[1];
+
+  client.set_req_attachment("This is attachment.");
+  client.set_resp_attachment_buf(buf);
+  ret = client.sync_call<echo_with_attachment>();
+  assert(client.get_resp_attachment() == "This is attachment.");
+  assert(client.is_resp_attachment_in_external_buf());
+  assert(client.get_resp_attachment().data() == buf);
+
+  client.set_req_attachment("This is attachment.");
+  ret = client.sync_call<echo_with_attachment>();
+  assert(client.get_resp_attachment() == "This is attachment.");
+  assert(!client.is_resp_attachment_in_external_buf());
+  assert(client.get_resp_attachment().data() != buf);
+
+  client.set_req_attachment("This is attachment.");
+  client.set_resp_attachment_buf(short_buf);
+  ret = client.sync_call<echo_with_attachment>();
+  assert(client.get_resp_attachment() == "This is attachment.");
+  assert(!client.is_resp_attachment_in_external_buf());
+  assert(client.get_resp_attachment().data() != short_buf);
 }
 
 TEST_CASE("testing std::string_view") {

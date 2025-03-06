@@ -51,6 +51,14 @@ Lazy<void> show_rpc_call() {
   auto ret_void = co_await client.call<echo_with_attachment>();
   assert(client.get_resp_attachment() == "This is attachment.");
 
+  client.set_req_attachment("This is attachment.");
+  char buf[100];
+  client.set_resp_attachment_buf(buf);
+  ret_void = co_await client.call<echo_with_attachment>();
+  assert(client.get_resp_attachment() == "This is attachment.");
+  assert(client.is_resp_attachment_in_external_buf());
+  assert(client.get_resp_attachment().data() == buf);
+
   ret = co_await client.call<nested_echo>("nested_echo"s);
   assert(ret.value() == "nested_echo"s);
 
