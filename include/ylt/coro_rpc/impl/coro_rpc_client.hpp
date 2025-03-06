@@ -73,7 +73,7 @@ class client_pool;
 
 namespace coro_rpc {
 
-struct rpc_request_config_t {
+struct request_config_t {
   std::optional<std::chrono::milliseconds> request_timeout_duration;
   std::string_view request_attachment;
   std::span<char> resp_attachment_buf;
@@ -102,25 +102,26 @@ struct resp_body {
   std::string read_buf_;
   std::string resp_attachment_buf_;
 };
+namespace detail {
+  struct async_rpc_result_base {
+  private:
+    resp_body buffer_;
+    std::string_view attachment_;
 
-struct async_rpc_result_base {
- private:
-  resp_body buffer_;
-  std::string_view attachment_;
-
- public:
-  async_rpc_result_base() = default;
-  async_rpc_result_base(resp_body &&buffer, std::string_view attachment)
-      : buffer_(std::move(buffer)), attachment_(attachment) {}
-  std::string_view get_attachment() const noexcept { return attachment_; }
-  bool is_attachment_in_external_buf() const noexcept {
-    return buffer_.resp_attachment_buf_.data() == attachment_.data();
-  }
-  resp_body release_buffer() { return std::move(buffer_); }
-};
+  public:
+    async_rpc_result_base() = default;
+    async_rpc_result_base(resp_body &&buffer, std::string_view attachment)
+        : buffer_(std::move(buffer)), attachment_(attachment) {}
+    std::string_view get_attachment() const noexcept { return attachment_; }
+    bool is_attachment_in_external_buf() const noexcept {
+      return buffer_.resp_attachment_buf_.data() == attachment_.data();
+    }
+    resp_body release_buffer() { return std::move(buffer_); }
+  };
+}
 
 template <typename T>
-struct async_rpc_result_value_t : public async_rpc_result_base {
+struct async_rpc_result_value_t : public detail::async_rpc_result_base {
  private:
   T result_;
 
@@ -135,7 +136,7 @@ struct async_rpc_result_value_t : public async_rpc_result_base {
 };
 
 template <>
-struct async_rpc_result_value_t<void> : public async_rpc_result_base {
+struct async_rpc_result_value_t<void> : public detail::async_rpc_result_base {
   using async_rpc_result_base::async_rpc_result_base;
 };
 
@@ -331,7 +332,7 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
-    return call_for<func>(config_.request_timeout_duration,
+    return call<func>(request_config_t{{},req_attachment_,resp_attachment_buffer_},
                           std::forward<Args>(args)...);
   }
 
@@ -349,10 +350,15 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
   call_for(auto request_timeout_duration, Args &&...args) {
+    return call(request_config_t{request_timeout_duration,req_attachment_,resp_attachment_buffer_},std::forward<Args>(args)...);
+  }
+
+  template <auto func, typename... Args>
+  async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>>
+  call(request_config_t config, Args &&...args) {
     using return_type = decltype(get_return_type<func>());
     auto async_result = co_await co_await send_request<func, Args...>(
-        rpc_request_config_t{request_timeout_duration, req_attachment_,
-                             resp_attachment_buffer_},
+        std::move(config),
         std::forward<Args>(args)...);
     req_attachment_ = {};
     resp_attachment_buffer_ = {};
@@ -846,7 +852,7 @@ class coro_rpc_client {
  private:
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      rpc_request_config_t &config, uint32_t &id, coro_io::period_timer &timer,
+      request_config_t &config, uint32_t &id, coro_io::period_timer &timer,
       Args &&...args) {
     using R = decltype(get_return_type<func>());
 
@@ -875,7 +881,8 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
     if (!config_.ssl_cert_path.empty()) {
       assert(control_->ssl_stream_);
-      co_return co_await send_impl<func>(*control_->ssl_stream_, id, attachment,
+      co_return co_await send_impl<func>(*control_->ssl_stream_, id,
+                                         config.request_attachment,
                                          std::forward<Args>(args)...);
     }
     else {
@@ -1029,7 +1036,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request(Args &&...args) {
-    return send_request<func>(rpc_request_config_t{},
+    return send_request<func>(request_config_t{},
                               std::forward<Args>(args)...);
   }
 
@@ -1039,7 +1046,7 @@ class coro_rpc_client {
   send_request_with_attachment(std::string_view request_attachment,
                                Args &&...args) {
     return send_request<func>(
-        rpc_request_config_t{.request_attachment = request_attachment},
+        request_config_t{.request_attachment = request_attachment},
         std::forward<Args>(args)...);
   }
 
@@ -1047,7 +1054,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
   send_request_for(Duration request_timeout_duration, Args &&...args) {
-    return send_request<func>(rpc_request_config_t{request_timeout_duration},
+    return send_request<func>(request_config_t{request_timeout_duration},
                               std::string_view{}, std::forward<Args>(args)...);
   }
 
@@ -1073,7 +1080,7 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<async_simple::coro::Lazy<
       async_rpc_result<decltype(get_return_type<func>())>>>
-  send_request(rpc_request_config_t config, Args &&...args) {
+  send_request(request_config_t config, Args &&...args) {
     using rpc_return_t = decltype(get_return_type<func>());
     recving_guard guard(control_.get());
     uint32_t id;
