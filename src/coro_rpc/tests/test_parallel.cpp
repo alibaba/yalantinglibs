@@ -35,7 +35,7 @@ TEST_CASE("test parall coro_rpc call") {
     cli = std::make_unique<coro_rpc::coro_rpc_client>();
     cli->connect("127.0.0.1", "9001", std::chrono::seconds{5})
         .via(pool.get_executor())
-        .start([&](auto&&) {
+        .start([&, client_cnt](auto&&) {
           if (++connected_cnt == client_cnt) {
             p.set_value();
           }
@@ -53,7 +53,7 @@ TEST_CASE("test parall coro_rpc call") {
       }
     }(*clients[i % client_cnt])
                                               .via(pool.get_executor())
-                                              .start([&](auto&&) {
+                                              .start([&, work_cnt_tot](auto&&) {
                                                 auto i = ++work_cnt;
                                                 if (i == work_cnt_tot) {
                                                   p2.set_value();
@@ -96,7 +96,8 @@ TEST_CASE("test parall coro_rpc call2") {
                 }
               }
           }(*cli)
-                                                    .start([&](auto&&) {
+                                                    .start([&, client_cnt](
+                                                               auto&&) {
                                                       auto i = ++work_cnt;
                                                       if (i == client_cnt) {
                                                         p.set_value();
