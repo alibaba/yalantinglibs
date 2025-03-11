@@ -406,6 +406,34 @@ TEST_CASE("test invalid http body size") {
   }
 }
 
+TEST_CASE("test default handler, loweset priority") {
+  coro_http_server server(2, 8443);
+  server.set_http_handler<HEAD, POST, GET>(
+      "/check/:id", [](request &req, response &resp) {
+        resp.set_status_and_content(status_type::ok, "check ok");
+      });
+  server.set_http_handler<HEAD, POST, GET>(
+      "/test", [](request &req, response &resp) {
+        resp.set_status_and_content(status_type::ok, "test ok");
+      });
+  server.set_default_handler(
+      [](request &req, response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "default");
+        co_return;
+      });
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:8443/check/12");
+  CHECK(result.resp_body == "check ok");
+
+  result = client.get("http://127.0.0.1:8443/test");
+  CHECK(result.resp_body == "test ok");
+
+  result = client.get("http://127.0.0.1:8443/dummy");
+  CHECK(result.resp_body == "default");
+}
+
 bool create_file(std::string_view filename, size_t file_size = 1024) {
   std::ofstream out(filename.data(), std::ios::binary);
   if (!out.is_open()) {
@@ -983,7 +1011,7 @@ TEST_CASE("test out buffer and async upload ") {
 
     auto ss = std::make_shared<std::stringstream>();
     *ss << "hello world";
-
+    client.add_header("Connection", "close");
     if (flag == upload_type::send_file) {
       result = co_await client.async_upload("http://127.0.0.1:9000/more"sv,
                                             http_method::POST, ss);
@@ -1408,7 +1436,7 @@ TEST_CASE("test out io_contex server") {
 
 TEST_CASE("test coro_http_client async_http_connect") {
   coro_http_client client{};
-  cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};
+  cinatra::coro_http_client::config conf{.req_timeout_duration = 3s};
   client.init_config(conf);
   auto r = async_simple::coro::syncAwait(
       client.async_http_connect("http://www.baidu.com"));

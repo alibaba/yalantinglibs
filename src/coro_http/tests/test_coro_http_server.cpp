@@ -990,10 +990,13 @@ TEST_CASE("test websocket") {
     CHECK(data.resp_body == "test_ws");
     co_await client.write_websocket("PING", opcode::ping);
     data = co_await client.read_websocket();
-    CHECK(data.resp_body == "pong");
+    CHECK(data.resp_body == "PING");
+    co_await client.write_websocket("", opcode::ping);
+    data = co_await client.read_websocket();
+    CHECK(data.resp_body == "");
     co_await client.write_websocket("PONG", opcode::pong);
     data = co_await client.read_websocket();
-    CHECK(data.resp_body == "ping");
+    CHECK(data.resp_body == "PONG");
     co_await client.write_websocket_close("normal close");
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "normal close");
