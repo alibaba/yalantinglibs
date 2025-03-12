@@ -240,7 +240,7 @@ All fundamental types(such as signed and unsigned integers, floating-point types
 
 ### fix-sized floating-point types
 
-| type   | length(bytes)) | format                    |
+| type   | length(bytes)  | format                    |
 | ------ | -------------- | ------------------------- |
 | float  | 4              | IEEE 754 single-precision |
 | double | 8              | IEEE 754 double-precision |
@@ -249,7 +249,7 @@ All fundamental types(such as signed and unsigned integers, floating-point types
 ### fix-sized character types
 
 
-| type     | length(bytes))     | format        |
+| type     | length(bytes)      | format        |
 | -------- | ------------------ | ------------- |
 | char8_t  | 1                  | original code |
 | char16_t | 2                  | original code |
@@ -334,11 +334,11 @@ For `std::expected<T,E>` or similar user-defined data, it begins with a boolean 
 
 For example, `std::expected<int,std::errc>{42}` is encoded as:
 
-![](./images/layout/variant.svg)
+![](./images/layout/expected.svg)
 
 and `std::expect<int,std::errc>{std::unexpected{std::errc::no_buffer_space}}` is encoded as bellow:
 
-![](./images/layout/variant_with_error.svg)
+![](./images/layout/expected_with_error.svg)
 
 ### monostate
 
