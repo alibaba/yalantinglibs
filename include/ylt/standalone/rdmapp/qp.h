@@ -3,6 +3,7 @@
 #include <infiniband/verbs.h>
 
 #include <atomic>
+#include <coroutine>
 #include <cstdint>
 #include <exception>
 #include <optional>
