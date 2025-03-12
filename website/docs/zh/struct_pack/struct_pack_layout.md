@@ -210,7 +210,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 ### 定长无符号整数字段
 
 
-| 类型名   | 编码长度（字节) | 编码格式 |
+| 类型名   | 编码长度(字节) | 编码格式 |
 | -------- | --------------- | -------- |
 | uint8_t  | 1               | 原码     |
 | uint16_t | 2               | 原码     |
@@ -221,7 +221,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 
 ### 定长有符号整数字段
 
-| 类型名  | 编码长度（字节) | 编码格式 |
+| 类型名  | 编码长度(字节) | 编码格式 |
 | ------- | --------------- | -------- |
 | int8_t  | 1               | 补码     |
 | int16_t | 2               | 补码     |
@@ -232,7 +232,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 
 ### 定长浮点数字段
 
-| 类型名 | 编码长度（字节) | 编码格式         |
+| 类型名 | 编码长度(字节) | 编码格式         |
 | ------ | --------------- | ---------------- |
 | float  | 4               | IEEE-754(单精度) |
 | double | 8               | IEEE-754(双精度) |
@@ -243,7 +243,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 ### 变长无符号整数字段
 
 
-| 类型名                    | 编码长度（字节) | 编码格式   |
+| 类型名                    | 编码长度(字节) | 编码格式   |
 | ------------------------- | --------------- | ---------- |
 | struct_pack::var_uint32_t | 1-5 (变长)      | varint编码 |
 | struct_pack::var_uint64_t | 1-10  (变长)    | varint编码 |
@@ -254,7 +254,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 ### 变长有符号整数字段
 
 
-| 类型名                   | 编码长度（字节) | 编码格式          |
+| 类型名                   | 编码长度(字节) | 编码格式          |
 | ------------------------ | --------------- | ----------------- |
 | struct_pack::var_int32_t | 1-5   (变长)    | varint+zigzag编码 |
 | struct_pack::var_int64_t | 1-10  (变长)    | varint+zigzag编码 |
@@ -264,7 +264,7 @@ constexpr std::size_t struct_pack::alignment<foo> = 8;
 ### 字符字段
 
 
-| 类型名   | 编码长度（字节) | 编码格式 |
+| 类型名   | 编码长度(字节) | 编码格式 |
 | -------- | --------------- | -------- |
 | char8_t  | 1               | 原码     |
 | char16_t | 2               | 原码     |
@@ -366,11 +366,11 @@ std::map<int,std::string>{{42, "Hello"},{24,"Student"}}
 
 例如，序列化对象包含字段`std::expected<int,std::errc>{42}`，该字段的编码如下图所示：
 
-![](./images/layout/variant.svg)
+![](./images/layout/expected.svg)
 
 例如，序列化对象包含字段`std::expect<int,std::errc>{std::unexpected{std::errc::no_buffer_space}}`，该字段的编码如下图所示：
 
-![](./images/layout/variant_with_error.svg)
+![](./images/layout/expected_with_error.svg)
 
 ### `monostate`字段
 
