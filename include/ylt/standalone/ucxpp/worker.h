@@ -60,7 +60,7 @@ class worker {
    *
    * @return context_ptr The worker's context object
    */
-  context_ptr context_ptr() const { return ctx_; }
+  context_ptr context() const { return ctx_; }
 
   /**
    * @brief Represents a local UCX address.

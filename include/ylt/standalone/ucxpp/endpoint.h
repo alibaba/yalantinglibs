@@ -77,7 +77,7 @@ class endpoint {
    *
    * @return std::shared_ptr<worker> The endpoint's worker
    */
-  worker_ptr worker_ptr() const { return worker_; }
+  worker_ptr worker() const { return worker_; }
 
   /**
    * @brief Print the endpoint's information
@@ -153,8 +153,18 @@ class endpoint {
     friend class send_awaitable;
 
    public:
-    ep_close_awaitable(endpoint *endpoint);
-    bool await_ready() noexcept;
+    ep_close_awaitable(endpoint *endpoint) : endpoint_(endpoint) {}
+
+    bool await_ready() noexcept {
+      auto send_param = build_param();
+      auto request = ::ucp_ep_close_nbx(endpoint_->handle(), &send_param);
+      if (check_request_ready(request)) {
+        return true;
+      }
+      endpoint_->close_request_ = request;
+      return false;
+    }
+
     void await_resume() const {
       check_ucs_status(status_, "operation failed");
       endpoint_->ep_ = nullptr;
@@ -295,7 +305,7 @@ class remote_memory_handle {
    *
    * @return endpoint_ptr The memory region's endpoint object
    */
-  endpoint_ptr endpoint_ptr() const { return endpoint_; }
+  endpoint_ptr endpoint() const { return endpoint_; }
 
   /**
    * @brief Get the native UCX rkey handle

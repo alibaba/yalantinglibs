@@ -3,7 +3,6 @@
 #include <infiniband/verbs.h>
 
 #include <array>
-#include <memory>
 #include <vector>
 
 #include "device.h"
