@@ -42,7 +42,7 @@ class context {
     bool enable_mt_;
 
    public:
-    builder();
+    builder() : features_(0), print_config_(false), enable_mt_(false) {};
     /**
      * @brief Build and return a context object
      *

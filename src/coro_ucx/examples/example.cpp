@@ -6,12 +6,74 @@
 #include <asio/buffer.hpp>
 #include <asio/dispatch.hpp>
 #include <asio/ip/tcp.hpp>
+#include <asio/posix/stream_descriptor.hpp>
 #include <asio/streambuf.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_io/io_context_pool.hpp>
 
 constexpr ucp_tag_t kTestTag = 0xFD709394UL;
 constexpr ucp_tag_t kBellTag = 0xbe11be11UL;
+
+static inline async_simple::coro::Lazy<void> ucx_event_loop(
+    asio::io_context &ctx, ucxpp::worker_ptr worker) {
+  asio::posix::stream_descriptor worker_fd(ctx.get_executor(),
+                                           worker->event_fd());
+  while (!ctx.stopped()) {
+    coro_io::callback_awaitor<std::error_code> awaitor;
+    auto ec = co_await awaitor.await_resume([&worker_fd](auto handler) {
+      worker_fd.async_wait(asio::posix::stream_descriptor::wait_read,
+                           [handler](const auto &ec) mutable {
+                             handler.set_value_then_resume(ec);
+                           });
+    });
+
+    if (ec) {
+      std::cerr << "failed to wait: " << ec.message() << std::endl;
+      co_return;
+    }
+
+    do {
+      while (worker->progress());
+    } while (!worker->arm());
+  }
+}
+
+async_simple::coro::Lazy<ucxpp::endpoint_ptr> recv_ep(
+    ucxpp::worker_ptr worker, asio::ip::tcp::socket &socket) {
+  std::array<uint8_t, sizeof(size_t)> address_length_buf;
+  {
+    auto [ec, size] =
+        co_await coro_io::async_read(socket, asio::buffer(address_length_buf));
+    if (ec) {
+      std::cerr << ec.message() << std::endl;
+      throw std::runtime_error("read address length failed");
+    }
+  }
+
+  size_t address_length = 0;
+  auto p = address_length_buf.data();
+  ucxpp::detail::deserialize(p, address_length);
+
+  std::vector<char> address_buf(address_length);
+  {
+    auto [ec, size] =
+        co_await coro_io::async_read(socket, asio::buffer(address_buf));
+    if (ec) {
+      std::cerr << ec.message() << std::endl;
+      throw std::runtime_error("read address failed");
+    }
+  }
+
+  auto remote_addr = ucxpp::remote_address(std::move(address_buf));
+  co_return new ucxpp::endpoint(worker, remote_addr);
+}
+
+async_simple::coro::Lazy<void> send_ep(
+    ucxpp::worker::local_address const &address,
+    asio::ip::tcp::socket &socket) {
+  auto [ec, size] =
+      co_await coro_io::async_write(socket, asio::buffer(address.serialize()));
+}
 
 async_simple::coro::Lazy<std::pair<uint64_t, ucxpp::remote_memory_handle>>
 receive_mr(ucxpp::endpoint_ptr ep) {
@@ -34,7 +96,7 @@ receive_mr(ucxpp::endpoint_ptr ep) {
                            ucxpp::remote_memory_handle(ep, rkey_buffer.data()));
 }
 
-async_simple::coro::Lazy<void> client(ucxpp::endpoint_ptr ep) {
+async_simple::coro::Lazy<void> ucx_client_handle_ep(ucxpp::endpoint_ptr ep) {
   ep->print();
   char buffer[6];
 
@@ -132,7 +194,7 @@ async_simple::coro::Lazy<void> send_mr(
   co_return;
 }
 
-async_simple::coro::Lazy<void> handle_endpoint(ucxpp::endpoint_ptr ep) {
+async_simple::coro::Lazy<void> ucx_server_handle_ep(ucxpp::endpoint_ptr ep) {
   ep->print();
   char buffer[6] = "Hello";
 
@@ -195,4 +257,183 @@ async_simple::coro::Lazy<void> handle_endpoint(ucxpp::endpoint_ptr ep) {
   co_return;
 }
 
-int main() { return 0; }
+class ucx_ep_client {
+  asio::io_context *ctx_;
+  coro_io::ExecutorWrapper<> executor_;
+  uint16_t port_;
+  std::string address_;
+  std::error_code errc_ = {};
+  asio::ip::tcp::socket socket_;
+  ucxpp::worker_ptr worker_;
+
+ public:
+  ucx_ep_client(asio::io_context &ctx, ucxpp::worker_ptr worker,
+                unsigned short port, std::string address = "0.0.0.0")
+      : ctx_(&ctx),
+        worker_(worker),
+        executor_(ctx.get_executor()),
+        port_(port),
+        address_(address),
+        socket_(ctx) {}
+
+  async_simple::coro::Lazy<void> handle_server_connection(
+      asio::ip::tcp::socket &socket) {
+    co_await send_ep(worker_->get_address(), socket);
+    std::cerr << "send ep success" << std::endl;
+    auto remote_ep = co_await recv_ep(worker_, socket);
+    std::cerr << "recv ep success" << std::endl;
+    co_await ucx_client_handle_ep(remote_ep);
+    delete remote_ep;
+  }
+
+  async_simple::coro::Lazy<void> run() {
+    auto ec = co_await coro_io::async_connect(&executor_, socket_, address_,
+                                              std::to_string(port_));
+    if (ec) {
+      throw std::system_error(ec, "connect failed");
+    }
+    co_await handle_server_connection(socket_);
+  }
+};
+
+class ucx_ep_server {
+  asio::io_context *ctx_;
+  coro_io::ExecutorWrapper<> executor_;
+  uint16_t port_;
+  std::string address_;
+  std::error_code errc_ = {};
+  asio::ip::tcp::acceptor acceptor_;
+  std::promise<void> acceptor_close_waiter_;
+  ucxpp::worker_ptr worker_;
+
+ public:
+  ucx_ep_server(asio::io_context &ctx, ucxpp::worker_ptr worker,
+                unsigned short port, std::string address = "0.0.0.0")
+      : ctx_(&ctx),
+        worker_(worker),
+        executor_(ctx.get_executor()),
+        port_(port),
+        address_(address),
+        acceptor_(ctx) {}
+  std::error_code listen() {
+    asio::error_code ec;
+
+    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
+    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
+    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
+
+    asio::ip::tcp::resolver::iterator it_end;
+    if (ec || it == it_end) {
+      if (ec) {
+        return ec;
+      }
+      return std::make_error_code(std::errc::address_not_available);
+    }
+
+    auto endpoint = it->endpoint();
+    ec = acceptor_.open(endpoint.protocol(), ec);
+
+    if (ec) {
+      return ec;
+    }
+#ifdef __GNUC__
+    ec = acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
+#endif
+    ec = acceptor_.bind(endpoint, ec);
+    if (ec) {
+      std::error_code ignore_ec;
+      ignore_ec = acceptor_.cancel(ignore_ec);
+      ignore_ec = acceptor_.close(ignore_ec);
+      return ec;
+    }
+    ec = acceptor_.listen(asio::socket_base::max_listen_connections, ec);
+    if (ec) {
+      return ec;
+    }
+    auto local_ep = acceptor_.local_endpoint(ec);
+    if (ec) {
+      return ec;
+    }
+    port_ = local_ep.port();
+    std::cerr << "listen success, port: " << port_ << std::endl;
+    return {};
+  }
+
+  async_simple::coro::Lazy<void> handle_client_connection(
+      asio::ip::tcp::socket socket) {
+    auto remote_ep = co_await recv_ep(worker_, socket);
+    std::cerr << "recv ep success" << std::endl;
+    co_await send_ep(worker_->get_address(), socket);
+    std::cerr << "send ep success" << std::endl;
+    co_await ucx_server_handle_ep(remote_ep);
+    delete remote_ep;
+  }
+
+  async_simple::coro::Lazy<> run() {
+    asio::ip::tcp::socket socket(executor_.get_asio_executor());
+    auto ec = co_await coro_io::async_accept(acceptor_, socket);
+    if (ec) {
+      std::cerr << "accept failed: " << ec.message() << std::endl;
+      if (ec == asio::error::operation_aborted ||
+          ec == asio::error::bad_descriptor) {
+        acceptor_close_waiter_.set_value();
+        co_return;
+      }
+    }
+    std::cout << "accpeted connection " << socket.remote_endpoint()
+              << std::endl;
+    co_await handle_client_connection(std::move(socket));
+  }
+
+  async_simple::coro::Lazy<void> loop() {
+    for (;;) {
+      co_await run();
+    }
+  }
+};
+
+int main(int argc, char *argv[]) {
+  // For server run ./example [port]
+  // For client run ./example [ip] [port]
+  auto socket_ctx = std::make_unique<asio::io_context>();
+  auto executor_wrapper =
+      std::make_unique<coro_io::ExecutorWrapper<>>(socket_ctx->get_executor());
+  auto ucx_ctx = ucxpp::context::builder()
+                     .enable_stream()
+                     .enable_tag()
+                     .enable_wakeup()
+                     .enable_rma()
+                     .enable_amo64()
+                     .build();
+  auto worker = std::make_unique<ucxpp::worker>(ucx_ctx);
+
+  ucx_event_loop(*socket_ctx, &*worker).via(&*executor_wrapper).detach();
+
+  if (argc == 2) {
+    std::cout << "server mode, press Control+C to exit" << std::endl;
+    std::string port_str = argv[1];
+    ucx_ep_server server(*socket_ctx, &*worker, std::stoi(port_str));
+    auto ec = server.listen();
+    if (ec) {
+      std::cerr << "listen failed: " << ec.message() << std::endl;
+      return -1;
+    }
+    server.loop().via(&*executor_wrapper).detach();
+    socket_ctx->run();
+  }
+  else if (argc == 3) {
+    std::cout << "client mode, connecting to server" << std::endl;
+    std::string ip = argv[1];
+    std::string port_str = argv[2];
+    ucx_ep_client client(*socket_ctx, &*worker, std::stoi(port_str), ip);
+    // TODO: fix memory leak
+    client.run().via(&*executor_wrapper).detach();
+    socket_ctx->run();
+  }
+  else {
+    std::cerr << "server usage: " << argv[0] << " [port]" << std::endl;
+    std::cerr << "client usage: " << argv[0] << " [ip] [port]" << std::endl;
+  }
+
+  return 0;
+}
