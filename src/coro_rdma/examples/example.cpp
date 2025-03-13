@@ -15,10 +15,7 @@ int main(int argc, char *argv[]) {
   cq->request_notify();
 
   process_rdma_cq(*socket_ctx, &*channel).via(&*executor_wrapper).detach();
-  std::jthread worker_thread([&socket_ctx] {
-    socket_ctx->run();
-  });
-
+  
   if (argc == 2) {
     std::cout << "server mode, press Control+C to exit" << std::endl;
     std::string port_str = argv[1];
@@ -28,7 +25,8 @@ int main(int argc, char *argv[]) {
       std::cerr << "listen failed: " << ec.message() << std::endl;
       return -1;
     }
-    async_simple::coro::syncAwait(server.loop());
+    server.loop().via(&*executor_wrapper).detach();
+    socket_ctx->run();
   }
   else if (argc == 3) {
     std::cout << "client mode, connecting to server" << std::endl;
@@ -36,8 +34,8 @@ int main(int argc, char *argv[]) {
     std::string port_str = argv[2];
     rdma_qp_client client(*socket_ctx, &*pd, &*cq, std::stoi(port_str), ip);
     // TODO: fix memory leak
-    async_simple::coro::syncAwait(client.run());
-    socket_ctx->stop();
+    client.run_and_stop().via(&*executor_wrapper).detach();
+    socket_ctx->run();
   }
   else {
     std::cerr << "server usage: " << argv[0] << " [port]" << std::endl;

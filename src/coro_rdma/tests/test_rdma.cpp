@@ -17,14 +17,11 @@ int main(int argc, char **argv) {
 
   process_rdma_cq(*ctx, &*channel).via(&*executor_wrapper).detach();
 
-  std::thread loop{[&ctx]() {
-    ctx->run();
-  }};
-
   if (pid == 0) {
     ::sleep(1);
     rdma_qp_client client(*ctx, &*pd, &*cq, 12345, "127.0.0.1");
-    async_simple::coro::syncAwait(client.run());
+    client.run_and_stop().via(&*executor_wrapper).detach();
+    ctx->run();
   }
   else {
     rdma_qp_server server(*ctx, &*pd, &*cq, 12345);
@@ -33,12 +30,12 @@ int main(int argc, char **argv) {
       std::cerr << "listen failed: " << ec.message() << std::endl;
     }
     else {
-      async_simple::coro::syncAwait(server.run());
+      server.run_and_stop().via(&*executor_wrapper).detach();
+      ctx->run();
     }
     int status;
     ::wait(&status);
   }
-  channel.reset();
-  ctx->stop();
-  loop.join();
+
+  return 0;
 }

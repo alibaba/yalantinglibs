@@ -281,6 +281,11 @@ class rdma_qp_client {
     }
     co_await handle_server_connection(socket_);
   }
+
+  async_simple::coro::Lazy<void> run_and_stop() {
+    co_await run();
+    ctx_->stop();
+  }
 };
 
 class rdma_qp_server {
@@ -419,6 +424,11 @@ class rdma_qp_server {
     std::cout << "accpeted connection " << socket.remote_endpoint()
               << std::endl;
     co_await handle_client_connection(std::move(socket));
+  }
+
+  async_simple::coro::Lazy<> run_and_stop() {
+    co_await run();
+    ctx_->stop();
   }
 
   async_simple::coro::Lazy<void> loop() {
