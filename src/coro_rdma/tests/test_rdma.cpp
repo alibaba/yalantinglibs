@@ -1,6 +1,11 @@
 #include "../rdma_test_common.hpp"
 int main(int argc, char **argv) {
   int pid = ::fork();
+  if (pid < 0) {
+    ::perror("fork");
+    return -1;
+  }
+
   auto ctx = std::make_unique<asio::io_context>();
   auto executor_wrapper =
       std::make_unique<coro_io::ExecutorWrapper<>>(ctx->get_executor());
