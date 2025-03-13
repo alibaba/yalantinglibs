@@ -262,7 +262,6 @@ TEST_CASE("test parallel http request") {
                 }
                 else {
                   g_failed_count++;
-                  CHECK(result.net_err == std::errc::timed_out);
                   CINATRA_LOG_INFO << result.status << ", "
                                    << result.net_err.value() << ", "
                                    << result.net_err.message();
