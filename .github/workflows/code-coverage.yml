@@ -23,7 +23,7 @@ jobs:
 
     - name: Install RDMA tools
       run: |
-        sudo apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core perftest iproute2
+        sudo apt-get install libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2
     
     - name: Setup SoftRoCE
       run: |

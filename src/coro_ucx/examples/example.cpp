@@ -14,6 +14,8 @@
 constexpr ucp_tag_t kTestTag = 0xFD709394UL;
 constexpr ucp_tag_t kBellTag = 0xbe11be11UL;
 
+static std::atomic<bool> stopped = false;
+
 static inline async_simple::coro::Lazy<void> ucx_event_loop(
     asio::io_context &ctx, ucxpp::worker_ptr worker) {
   asio::posix::stream_descriptor worker_fd(ctx.get_executor(),
@@ -293,6 +295,7 @@ class ucx_ep_client {
       throw std::system_error(ec, "connect failed");
     }
     co_await handle_server_connection(socket_);
+    ctx_->stop();
   }
 };
 
