@@ -262,7 +262,6 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
 
 int main() {
   person p{.name = "tom", .age = 20};
@@ -286,7 +285,6 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -320,7 +318,6 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
 
 void basic_usage() {
     // serialization the structure to the string
