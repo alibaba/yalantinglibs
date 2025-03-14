@@ -71,8 +71,8 @@ cc_binary(
 )
 
 cc_binary(
-    name = "coro_http_load_blancer",
-    srcs = ["src/coro_http/examples/load_blancer.cpp"],
+    name = "coro_http_load_balancer",
+    srcs = ["src/coro_http/examples/load_balancer.cpp"],
     copts = YA_BIN_COPT,
     includes = [
         "include",

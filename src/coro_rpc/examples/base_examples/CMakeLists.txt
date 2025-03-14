@@ -36,7 +36,7 @@ else()
   endif()
 endif()
 
-add_executable(coro_rpc_example_load_blancer load_blancer.cpp)
+add_executable(coro_rpc_example_load_balancer load_balancer.cpp)
 add_executable(coro_rpc_example_client_pool client_pool.cpp)
 add_executable(coro_rpc_example_client_pools client_pools.cpp)
 add_executable(coro_rpc_example_client client.cpp)
@@ -44,7 +44,7 @@ add_executable(coro_rpc_example_concurrent_clients concurrent_clients.cpp)
 add_executable(coro_rpc_example_server server.cpp rpc_service.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-  target_link_libraries(coro_rpc_example_load_blancer wsock32 ws2_32)
+  target_link_libraries(coro_rpc_example_load_balancer wsock32 ws2_32)
   target_link_libraries(coro_rpc_example_client_pool wsock32 ws2_32)
   target_link_libraries(coro_rpc_example_client_pools wsock32 ws2_32)
   target_link_libraries(coro_rpc_example_client wsock32 ws2_32)

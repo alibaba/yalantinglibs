@@ -18,7 +18,7 @@
 #include <ylt/coro_io/coro_file.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_io/io_context_pool.hpp>
-#include <ylt/coro_io/load_blancer.hpp>
+#include <ylt/coro_io/load_balancer.hpp>
 
 #include "async_simple/Executor.h"
 #include "async_simple/Promise.h"
