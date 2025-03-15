@@ -25,33 +25,33 @@
 #include "io_context_pool.hpp"
 namespace coro_io {
 
-enum class load_blance_algorithm {
+enum class load_balance_algorithm {
   RR = 0,  // round-robin
   WRR,     // weight round-robin
   random,
 };
 
 template <typename client_t, typename io_context_pool_t = io_context_pool>
-class load_blancer {
+class load_balancer {
   using client_pool_t = client_pool<client_t, io_context_pool_t>;
   using client_pools_t = client_pools<client_t, io_context_pool_t>;
 
  public:
-  struct load_blancer_config {
+  struct load_balancer_config {
     typename client_pool_t::pool_config pool_config;
-    load_blance_algorithm lba = load_blance_algorithm::RR;
-    ~load_blancer_config(){};
+    load_balance_algorithm lba = load_balance_algorithm::RR;
+    ~load_balancer_config(){};
   };
 
  private:
-  struct RRLoadBlancer {
+  struct RRLoadbalancer {
     std::unique_ptr<std::atomic<uint32_t>> index =
         std::make_unique<std::atomic<uint32_t>>();
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const load_blancer& load_blancer) {
+        const load_balancer& load_balancer) {
       auto i = index->fetch_add(1, std::memory_order_relaxed);
-      co_return load_blancer
-          .client_pools_[i % load_blancer.client_pools_.size()];
+      co_return load_balancer
+          .client_pools_[i % load_balancer.client_pools_.size()];
     }
   };
 
@@ -78,22 +78,22 @@ class load_blancer {
            return Si;
    }
   */
-  struct WRRLoadBlancer {
-    WRRLoadBlancer(const std::vector<int>& weights) : weights_(weights) {
+  struct WRRLoadbalancer {
+    WRRLoadbalancer(const std::vector<int>& weights) : weights_(weights) {
       max_gcd_ = get_max_weight_gcd();
       max_weight_ = get_max_weight();
     }
 
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const load_blancer& load_blancer) {
+        const load_balancer& load_balancer) {
       int selected = select_host_with_weight_round_robin();
       if (selected == -1) {
         selected = 0;
       }
 
       wrr_current_ = selected;
-      co_return load_blancer
-          .client_pools_[selected % load_blancer.client_pools_.size()];
+      co_return load_balancer
+          .client_pools_[selected % load_balancer.client_pools_.size()];
     }
 
    private:
@@ -138,30 +138,30 @@ class load_blancer {
     int weight_current_ = 0;
   };
 
-  struct RandomLoadBlancer {
+  struct RandomLoadbalancer {
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
-        const load_blancer& load_blancer) {
+        const load_balancer& load_balancer) {
       static thread_local std::default_random_engine e(std::time(nullptr));
       std::uniform_int_distribution rnd{std::size_t{0},
-                                        load_blancer.client_pools_.size() - 1};
-      co_return load_blancer.client_pools_[rnd(e)];
+                                        load_balancer.client_pools_.size() - 1};
+      co_return load_balancer.client_pools_[rnd(e)];
     }
   };
-  load_blancer() = default;
+  load_balancer() = default;
 
  public:
-  load_blancer(load_blancer&& o)
+  load_balancer(load_balancer&& o)
       : config_(std::move(o.config_)),
         lb_worker(std::move(o.lb_worker)),
         client_pools_(std::move(o.client_pools_)){};
-  load_blancer& operator=(load_blancer&& o) {
+  load_balancer& operator=(load_balancer&& o) {
     this->config_ = std::move(o.config_);
     this->lb_worker = std::move(o.lb_worker);
     this->client_pools_ = std::move(o.client_pools_);
     return *this;
   }
-  load_blancer(const load_blancer& o) = delete;
-  load_blancer& operator=(const load_blancer& o) = delete;
+  load_balancer(const load_balancer& o) = delete;
+  load_balancer& operator=(const load_balancer& o) = delete;
 
   auto send_request(auto op, typename client_t::config& config)
       -> decltype(std::declval<client_pool_t>().send_request(std::move(op),
@@ -188,19 +188,19 @@ class load_blancer {
     return send_request(std::move(op), config_.pool_config.client_config);
   }
 
-  static load_blancer create(
+  static load_balancer create(
       const std::vector<std::string_view>& hosts,
-      const load_blancer_config& config = {},
+      const load_balancer_config& config = {},
       const std::vector<int>& weights = {},
       client_pools_t& client_pools =
           g_clients_pool<client_t, io_context_pool_t>()) {
-    load_blancer ch;
+    load_balancer ch;
     ch.init(hosts, config, weights, client_pools);
     return ch;
   }
 
   /**
-   * @brief return the load_blancer's hosts size.
+   * @brief return the load_balancer's hosts size.
    *
    * @return std::size_t
    */
@@ -208,7 +208,7 @@ class load_blancer {
 
  private:
   void init(const std::vector<std::string_view>& hosts,
-            const load_blancer_config& config, const std::vector<int>& weights,
+            const load_balancer_config& config, const std::vector<int>& weights,
             client_pools_t& client_pools) {
     config_ = config;
     client_pools_.reserve(hosts.size());
@@ -216,26 +216,26 @@ class load_blancer {
       client_pools_.emplace_back(client_pools.at(host, config.pool_config));
     }
     switch (config_.lba) {
-      case load_blance_algorithm::RR:
-        lb_worker = RRLoadBlancer{};
+      case load_balance_algorithm::RR:
+        lb_worker = RRLoadbalancer{};
         break;
-      case load_blance_algorithm::WRR: {
+      case load_balance_algorithm::WRR: {
         if (hosts.empty() || weights.empty()) {
           throw std::invalid_argument("host/weight list is empty!");
         }
         if (hosts.size() != weights.size()) {
           throw std::invalid_argument("hosts count is not equal with weights!");
         }
-        lb_worker = WRRLoadBlancer(weights);
+        lb_worker = WRRLoadbalancer(weights);
       } break;
-      case load_blance_algorithm::random:
+      case load_balance_algorithm::random:
       default:
-        lb_worker = RandomLoadBlancer{};
+        lb_worker = RandomLoadbalancer{};
     }
     return;
   }
-  load_blancer_config config_;
-  std::variant<RRLoadBlancer, WRRLoadBlancer, RandomLoadBlancer> lb_worker;
+  load_balancer_config config_;
+  std::variant<RRLoadbalancer, WRRLoadbalancer, RandomLoadbalancer> lb_worker;
   std::vector<std::shared_ptr<client_pool_t>> client_pools_;
 };
 

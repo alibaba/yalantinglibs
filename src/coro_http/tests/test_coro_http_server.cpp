@@ -1509,17 +1509,17 @@ TEST_CASE("test reverse proxy") {
       "exception tests: empty hosts, empty weights test or count not equal") {
     cinatra::coro_http_server server(1, 9002);
     CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
-                        "/", {}, coro_io::load_blance_algorithm::WRR, {2, 1}),
+                        "/", {}, coro_io::load_balance_algorithm::WRR, {2, 1}),
                     std::invalid_argument);
 
     CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
                         "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        coro_io::load_blance_algorithm::WRR),
+                        coro_io::load_balance_algorithm::WRR),
                     std::invalid_argument);
 
     CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
                         "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        coro_io::load_blance_algorithm::WRR, {1}),
+                        coro_io::load_balance_algorithm::WRR, {1}),
                     std::invalid_argument);
 
     CHECK_THROWS_AS(
@@ -1567,12 +1567,12 @@ TEST_CASE("test reverse proxy") {
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
       "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
+      coro_io::load_balance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
       "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::RR, {}, log_t{});
+      coro_io::load_balance_algorithm::RR, {}, log_t{});
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
@@ -1676,7 +1676,7 @@ TEST_CASE("test reverse proxy download") {
 
   coro_http_server proxy_rr(2, 8001);
   proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/([^]+)", {"127.0.0.1:9001"}, coro_io::load_blance_algorithm::RR);
+      "/([^]+)", {"127.0.0.1:9001"}, coro_io::load_balance_algorithm::RR);
   proxy_rr.async_start();
 
   coro_http_client client{};

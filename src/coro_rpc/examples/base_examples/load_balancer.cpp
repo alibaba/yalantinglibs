@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "ylt/coro_io/load_blancer.hpp"
+#include "ylt/coro_io/load_balancer.hpp"
 
 #include <async_simple/coro/Collect.h>
 #include <async_simple/coro/Lazy.h>
@@ -48,13 +48,13 @@ std::atomic<uint64_t> working_echo = 0;
 int request_cnt = 10000;
 
 Lazy<std::vector<std::chrono::microseconds>> call_echo(
-    std::shared_ptr<coro_io::load_blancer<coro_rpc_client>> load_blancer) {
+    std::shared_ptr<coro_io::load_balancer<coro_rpc_client>> load_balancer) {
   std::vector<std::chrono::microseconds> result;
   result.reserve(request_cnt);
   auto tp = std::chrono::steady_clock::now();
   ++working_echo;
   for (int i = 0; i < request_cnt; ++i) {
-    auto res = co_await load_blancer->send_request(
+    auto res = co_await load_balancer->send_request(
         [](coro_rpc_client &client, std::string_view hostname) -> Lazy<void> {
           auto res = co_await client.call<echo>("Hello world!");
           if (!res.has_value()) {
@@ -112,7 +112,7 @@ int main() {
   auto hosts =
       std::vector<std::string_view>{"127.0.0.1:8801", "localhost:8801"};
   auto worker_cnt = std::thread::hardware_concurrency() * 20;
-  auto chan = coro_io::load_blancer<coro_rpc_client>::create(
+  auto chan = coro_io::load_balancer<coro_rpc_client>::create(
       hosts, {.pool_config{.max_connection = worker_cnt}});
   auto chan_ptr = std::make_shared<decltype(chan)>(std::move(chan));
   auto executor = coro_io::get_global_block_executor();
