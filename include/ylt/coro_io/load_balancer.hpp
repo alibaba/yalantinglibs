@@ -40,7 +40,7 @@ class load_balancer {
   struct load_balancer_config {
     typename client_pool_t::pool_config pool_config;
     load_balance_algorithm lba = load_balance_algorithm::RR;
-    ~load_balancer_config() {};
+    ~load_balancer_config(){};
   };
 
  private:
@@ -153,7 +153,7 @@ class load_balancer {
   load_balancer(load_balancer&& o)
       : config_(std::move(o.config_)),
         lb_worker(std::move(o.lb_worker)),
-        client_pools_(std::move(o.client_pools_)) {};
+        client_pools_(std::move(o.client_pools_)){};
   load_balancer& operator=(load_balancer&& o) {
     this->config_ = std::move(o.config_);
     this->lb_worker = std::move(o.lb_worker);
