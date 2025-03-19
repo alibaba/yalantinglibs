@@ -132,8 +132,6 @@ class device {
       return "unspecified";
     }();
     auto const gid_str = gid_hex_string(gid_);
-    // RDMAPP_LOG_DEBUG("opened Infiniband device gid=%s lid=%d link_layer=%s",
-    //                  gid_str.c_str(), port_attr_.lid, link_layer);
   }
 
  public:
@@ -257,12 +255,8 @@ class device {
     auto const gid_str = gid_hex_string(gid_);
 
     if (auto rc = ::ibv_close_device(ctx_); rc != 0) [[unlikely]] {
-      // RDMAPP_LOG_ERROR("failed to close device gid=%s lid=%d: %s",
-      //                  gid_str.c_str(), port_attr_.lid, ::strerror(rc));
     }
     else {
-      // RDMAPP_LOG_DEBUG("closed device gid=%s lid=%d", gid_str.c_str(),
-      //                  port_attr_.lid);
     }
   }
 };

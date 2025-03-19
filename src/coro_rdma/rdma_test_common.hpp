@@ -11,17 +11,17 @@
 #include <asio/buffer.hpp>
 #include <asio/dispatch.hpp>
 #include <asio/ip/tcp.hpp>
+#include <asio/posix/stream_descriptor.hpp>
 #include <asio/streambuf.hpp>
 #include <memory>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_io/io_context_pool.hpp>
-
-#include "asio/posix/stream_descriptor.hpp"
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
+#include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 static inline async_simple::coro::Lazy<void> process_rdma_cq(
-    asio::io_context &ctx, rdmapp::comp_channel_ptr channel) {
-  asio::posix::stream_descriptor cq_fd(ctx.get_executor(), channel->fd());
-  while (!ctx.stopped()) {
+    asio::posix::stream_descriptor &cq_fd, rdmapp::comp_channel_ptr channel) {
+  while (cq_fd.is_open()) {
     coro_io::callback_awaitor<std::error_code> awaitor;
     auto ec = co_await awaitor.await_resume([&cq_fd](auto handler) {
       cq_fd.async_wait(asio::posix::stream_descriptor::wait_read,
@@ -31,7 +31,7 @@ static inline async_simple::coro::Lazy<void> process_rdma_cq(
     });
 
     if (ec) {
-      std::cerr << "failed to wait: " << ec.message() << std::endl;
+      ELOG_INFO << "Failed to wait cq: " << ec;
       co_return;
     }
 
@@ -46,18 +46,18 @@ static inline async_simple::coro::Lazy<void> process_rdma_cq(
   }
 }
 
-static inline async_simple::coro::Lazy<void> client_qp_demo_coro(rdmapp::qp_ptr qp) {
+static inline async_simple::coro::Lazy<void> client_qp_demo_coro(
+    rdmapp::qp_ptr qp) {
   char buffer[6];
   auto buffer_mr = std::make_unique<rdmapp::local_mr>(
       qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
 
   /* Send/Recv */
   auto [n, _] = co_await qp->recv(buffer_mr.get());
-  std::cout << "Received " << n << " bytes from server: " << buffer
-            << std::endl;
+  ELOG_INFO << "Received " << n << " bytes from server: " << buffer;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->send(buffer_mr.get());
-  std::cout << "Sent to server: " << buffer << std::endl;
+  ELOG_INFO << "Sent to server: " << buffer;
 
   /* Read/Write */
   char remote_mr_serialized[rdmapp::remote_mr::kSerializedSize];
@@ -65,12 +65,11 @@ static inline async_simple::coro::Lazy<void> client_qp_demo_coro(rdmapp::qp_ptr 
       qp->pd()->reg_mr(&remote_mr_serialized[0], sizeof(remote_mr_serialized)));
   co_await qp->recv(remote_mr_header_buffer.get());
   auto remote_mr = rdmapp::remote_mr::deserialize(remote_mr_serialized);
-  std::cout << "Received mr addr=" << remote_mr.addr()
+  ELOG_INFO << "Received mr addr=" << remote_mr.addr()
             << " length=" << remote_mr.length() << " rkey=" << remote_mr.rkey()
-            << " from server" << std::endl;
+            << " from server";
   auto wc = co_await qp->read(remote_mr, buffer_mr.get());
-  std::cout << "Read " << wc.byte_len << " bytes from server: " << buffer
-            << std::endl;
+  ELOG_INFO << "Read " << wc.byte_len << " bytes from server: " << buffer;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
 
@@ -82,33 +81,33 @@ static inline async_simple::coro::Lazy<void> client_qp_demo_coro(rdmapp::qp_ptr 
   co_await qp->recv(counter_mr_header_mr.get());
   auto remote_counter_mr =
       rdmapp::remote_mr::deserialize(counter_mr_serialized);
-  std::cout << "Received mr addr=" << remote_counter_mr.addr()
+  ELOG_INFO << "Received mr addr=" << remote_counter_mr.addr()
             << " length=" << remote_counter_mr.length()
-            << " rkey=" << remote_counter_mr.rkey() << " from server"
-            << std::endl;
+            << " rkey=" << remote_counter_mr.rkey() << " from server";
   uint64_t counter = 0;
   auto local_counter_mr = std::make_unique<rdmapp::local_mr>(
       qp->pd()->reg_mr(&counter, sizeof(counter)));
   co_await qp->fetch_and_add(remote_counter_mr, local_counter_mr.get(), 1);
-  std::cout << "Fetched and added from server: " << counter << std::endl;
+  ELOG_INFO << "Fetched and added from server: " << counter;
   co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
   co_await qp->compare_and_swap(remote_counter_mr, local_counter_mr.get(), 43,
                                 4422);
-  std::cout << "Compared and swapped from server: " << counter << std::endl;
+  ELOG_INFO << "Compared and swapped from server: " << counter;
   co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
 
   co_return;
 }
 
-static inline async_simple::coro::Lazy<void> server_qp_demo_coro(rdmapp::qp_ptr qp) {
+static inline async_simple::coro::Lazy<void> server_qp_demo_coro(
+    rdmapp::qp_ptr qp) {
   /* Send/Recv */
   char buffer[6] = "hello";
   auto local_mr = std::make_unique<rdmapp::local_mr>(
       qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
   co_await qp->send(local_mr.get());
-  std::cout << "Sent to client: " << buffer << std::endl;
+  ELOG_INFO << "Sent to client: " << buffer;
   co_await qp->recv(local_mr.get());
-  std::cout << "Received from client: " << buffer << std::endl;
+  ELOG_INFO << "Received from client: " << buffer;
 
   /* Read/Write */
   std::copy_n("hello", sizeof(buffer), buffer);
@@ -116,13 +115,12 @@ static inline async_simple::coro::Lazy<void> server_qp_demo_coro(rdmapp::qp_ptr 
   auto local_mr_header_mr = std::make_unique<rdmapp::local_mr>(
       qp->pd()->reg_mr(&local_mr_serialized[0], local_mr_serialized.size()));
   co_await qp->send(local_mr_header_mr.get());
-  std::cout << "Sent mr addr=" << local_mr->addr()
+  ELOG_INFO << "Sent mr addr=" << local_mr->addr()
             << " length=" << local_mr->length() << " rkey=" << local_mr->rkey()
-            << " to client" << std::endl;
+            << " to client";
   auto [_, imm] = co_await qp->recv(local_mr.get());
   assert(imm.has_value());
-  std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
-            << std::endl;
+  ELOG_INFO << "Written by client (imm=" << imm.value() << "): " << buffer;
 
   /* Atomic */
   uint64_t counter = 42;
@@ -133,308 +131,224 @@ static inline async_simple::coro::Lazy<void> server_qp_demo_coro(rdmapp::qp_ptr 
       std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
           &counter_mr_serialized[0], counter_mr_serialized.size()));
   co_await qp->send(&*counter_mr_header_mr);
-  std::cout << "Sent mr addr=" << counter_mr->addr()
+  ELOG_INFO << "Sent mr addr=" << counter_mr->addr()
             << " length=" << counter_mr->length()
-            << " rkey=" << counter_mr->rkey() << " to client" << std::endl;
+            << " rkey=" << counter_mr->rkey() << " to client";
   imm = (co_await qp->recv(local_mr.get())).second;
   assert(imm.has_value());
-  std::cout << "Fetched and added by client: " << counter << std::endl;
+  ELOG_INFO << "Fetched and added by client: " << counter;
   imm = (co_await qp->recv(local_mr.get())).second;
   assert(imm.has_value());
-  std::cout << "Compared and swapped by client: " << counter << std::endl;
+  ELOG_INFO << "Compared and swapped by client: " << counter;
+}
+static inline async_simple::coro::Lazy<void> client_handle_qp(
+    std::unique_ptr<rdmapp::qp> qp) {
+  char buffer[6] = "hello";
+  auto buffer_mr = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
+
+  /* Send/Recv */
+  co_await qp->send(buffer_mr.get());
+  ELOG_INFO << "Sent to server: " << buffer;
+  auto [n, _] = co_await qp->recv(buffer_mr.get());
+  ELOG_INFO << "Received " << n << " bytes from server: " << buffer;
+
+  /* Read/Write */
+  char remote_mr_serialized[rdmapp::remote_mr::kSerializedSize];
+  auto remote_mr_header_buffer = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&remote_mr_serialized[0], sizeof(remote_mr_serialized)));
+  co_await qp->recv(remote_mr_header_buffer.get());
+  auto remote_mr = rdmapp::remote_mr::deserialize(remote_mr_serialized);
+  ELOG_INFO << "Received mr addr=" << remote_mr.addr()
+            << " length=" << remote_mr.length() << " rkey=" << remote_mr.rkey()
+            << " from server";
+  auto wc = co_await qp->read(remote_mr, buffer_mr.get());
+  ELOG_INFO << "Read " << wc.byte_len << " bytes from server: " << buffer;
+  std::copy_n("world", sizeof(buffer), buffer);
+  co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
+
+  /* Atomic Fetch-and-Add (FA)/Compare-and-Swap (CS) */
+  char counter_mr_serialized[rdmapp::remote_mr::kSerializedSize];
+  auto counter_mr_header_mr =
+      std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
+          &counter_mr_serialized[0], sizeof(counter_mr_serialized)));
+  co_await qp->recv(counter_mr_header_mr.get());
+  auto remote_counter_mr =
+      rdmapp::remote_mr::deserialize(counter_mr_serialized);
+  ELOG_INFO << "Received mr addr=" << remote_counter_mr.addr()
+            << " length=" << remote_counter_mr.length()
+            << " rkey=" << remote_counter_mr.rkey() << " from server";
+  uint64_t counter = 0;
+  auto local_counter_mr = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&counter, sizeof(counter)));
+  co_await qp->fetch_and_add(remote_counter_mr, local_counter_mr.get(), 1);
+  ELOG_INFO << "Fetched and added from server: " << counter;
+  co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
+
+  // Synchroize
+  co_await qp->recv(buffer_mr.get());
+
+  co_await qp->compare_and_swap(remote_counter_mr, local_counter_mr.get(), 43,
+                                4422);
+  ELOG_INFO << "Compared and swapped from server: " << counter;
+  co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
+
+  co_return;
 }
 
-static inline async_simple::coro::Lazy<rdmapp::deserialized_qp> recv_qp(
-    asio::ip::tcp::socket &socket) {
-  std::array<uint8_t, rdmapp::deserialized_qp::qp_header::kSerializedSize>
-      header;
-  {
-    auto [ec, size] =
-        co_await coro_io::async_read(socket, asio::buffer(header));
-    if (ec) {
-      std::cerr << ec.message() << std::endl;
-      throw std::runtime_error("read qp header failed");
-    }
+static inline async_simple::coro::Lazy<void> server_handle_qp(
+    std::unique_ptr<rdmapp::qp> qp,
+    std::atomic<size_t> *served_qp_count = nullptr) {
+  /* Send/Recv */
+  char buffer[6];
+  auto local_mr = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
+  co_await qp->recv(local_mr.get());
+  ELOG_INFO << "Received from client: " << buffer;
+  std::copy_n("world", sizeof(buffer), buffer);
+  co_await qp->send(local_mr.get());
+  ELOG_INFO << "Sent to client: " << buffer;
+
+  /* Read/Write */
+  std::copy_n("hello", sizeof(buffer), buffer);
+  auto local_mr_serialized = local_mr->serialize();
+  auto local_mr_header_mr = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&local_mr_serialized[0], local_mr_serialized.size()));
+  co_await qp->send(local_mr_header_mr.get());
+  ELOG_INFO << "Sent mr addr=" << local_mr->addr()
+            << " length=" << local_mr->length() << " rkey=" << local_mr->rkey()
+            << " to client";
+  auto [_, imm] = co_await qp->recv(local_mr.get());
+  assert(imm.has_value());
+  ELOG_INFO << "Written by client (imm=" << imm.value() << "): " << buffer;
+
+  /* Atomic */
+  uint64_t counter = 42;
+  auto counter_mr = std::make_unique<rdmapp::local_mr>(
+      qp->pd()->reg_mr(&counter, sizeof(counter)));
+  auto counter_mr_serialized = counter_mr->serialize();
+  auto counter_mr_header_mr =
+      std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
+          &counter_mr_serialized[0], counter_mr_serialized.size()));
+  co_await qp->send(&*counter_mr_header_mr);
+  ELOG_INFO << "Sent mr addr=" << counter_mr->addr()
+            << " length=" << counter_mr->length()
+            << " rkey=" << counter_mr->rkey() << " to client";
+  imm = (co_await qp->recv(local_mr.get())).second;
+  assert(imm.has_value());
+  ELOG_INFO << "Fetched and added by client: " << counter;
+
+  // Synchronize
+  co_await qp->send(local_mr.get());
+
+  imm = (co_await qp->recv(local_mr.get())).second;
+  assert(imm.has_value());
+  ELOG_INFO << "Compared and swapped by client: " << counter;
+
+  if (served_qp_count) {
+    served_qp_count->fetch_add(1);
   }
-  auto remote_qp = rdmapp::deserialized_qp::deserialize(header.data());
-  auto const remote_gid_str =
-      rdmapp::device::gid_hex_string(remote_qp.header.gid);
-  fprintf(stderr,
-          "received header gid=%s lid=%u qpn=%u psn=%u user_data_size=%u\n",
-          remote_gid_str.c_str(), remote_qp.header.lid, remote_qp.header.qp_num,
-          remote_qp.header.sq_psn, remote_qp.header.user_data_size);
-  if (remote_qp.header.user_data_size > 0) {
-    remote_qp.user_data.resize(remote_qp.header.user_data_size);
-    auto [ec, size] =
-        co_await coro_io::async_read(socket, asio::buffer(remote_qp.user_data));
-    if (ec) {
-      std::cerr << ec.message() << std::endl;
-      throw std::runtime_error("read qp user data failed");
-    }
-  }
-  co_return remote_qp;
 }
 
-static inline async_simple::coro::Lazy<std::error_code> send_qp(asio::ip::tcp::socket &socket,
-                                                  rdmapp::qp const &qp) {
-  auto serialized_qp = qp.serialize();
-  auto [ec, size] =
-      co_await coro_io::async_write(socket, asio::buffer(serialized_qp));
-  co_return ec;
-}
+struct rdma_environment {
+  std::unique_ptr<rdmapp::device> device_;
+  std::unique_ptr<rdmapp::pd> pd_;
+  std::unique_ptr<rdmapp::comp_channel> channel_;
+  std::unique_ptr<rdmapp::cq> cq_;
 
-class rdma_qp_client {
-  asio::io_context *ctx_;
-  coro_io::ExecutorWrapper<> executor_;
-  uint16_t port_;
-  std::string address_;
-  std::error_code errc_ = {};
-  asio::ip::tcp::socket socket_;
-  rdmapp::pd_ptr pd_;
-  rdmapp::cq_ptr cq_;
+  rdma_environment() {
+    device_ = std::make_unique<rdmapp::device>();
 
- public:
-  rdma_qp_client(asio::io_context &ctx, rdmapp::pd_ptr pd, rdmapp::cq_ptr cq,
-                 unsigned short port, std::string address = "0.0.0.0")
-      : ctx_(&ctx),
-        pd_(pd),
-        cq_(cq),
-        executor_(ctx.get_executor()),
-        port_(port),
-        address_(address),
-        socket_(ctx) {}
+    pd_ = std::make_unique<rdmapp::pd>(&*device_);
 
-  async_simple::coro::Lazy<void> handle_qp(rdmapp::qp_ptr qp) {
-    char buffer[6];
-    auto buffer_mr = std::make_unique<rdmapp::local_mr>(
-        qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
+    channel_ = std::make_unique<rdmapp::comp_channel>(&*device_);
+    channel_->set_non_blocking();
 
-    /* Send/Recv */
-    auto [n, _] = co_await qp->recv(buffer_mr.get());
-    std::cout << "Received " << n << " bytes from server: " << buffer
-              << std::endl;
-    std::copy_n("world", sizeof(buffer), buffer);
-    co_await qp->send(buffer_mr.get());
-    std::cout << "Sent to server: " << buffer << std::endl;
-
-    /* Read/Write */
-    char remote_mr_serialized[rdmapp::remote_mr::kSerializedSize];
-    auto remote_mr_header_buffer =
-        std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
-            &remote_mr_serialized[0], sizeof(remote_mr_serialized)));
-    co_await qp->recv(remote_mr_header_buffer.get());
-    auto remote_mr = rdmapp::remote_mr::deserialize(remote_mr_serialized);
-    std::cout << "Received mr addr=" << remote_mr.addr()
-              << " length=" << remote_mr.length()
-              << " rkey=" << remote_mr.rkey() << " from server" << std::endl;
-    auto wc = co_await qp->read(remote_mr, buffer_mr.get());
-    std::cout << "Read " << wc.byte_len << " bytes from server: " << buffer
-              << std::endl;
-    std::copy_n("world", sizeof(buffer), buffer);
-    co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
-
-    /* Atomic Fetch-and-Add (FA)/Compare-and-Swap (CS) */
-    char counter_mr_serialized[rdmapp::remote_mr::kSerializedSize];
-    auto counter_mr_header_mr =
-        std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
-            &counter_mr_serialized[0], sizeof(counter_mr_serialized)));
-    co_await qp->recv(counter_mr_header_mr.get());
-    auto remote_counter_mr =
-        rdmapp::remote_mr::deserialize(counter_mr_serialized);
-    std::cout << "Received mr addr=" << remote_counter_mr.addr()
-              << " length=" << remote_counter_mr.length()
-              << " rkey=" << remote_counter_mr.rkey() << " from server"
-              << std::endl;
-    uint64_t counter = 0;
-    auto local_counter_mr = std::make_unique<rdmapp::local_mr>(
-        qp->pd()->reg_mr(&counter, sizeof(counter)));
-    co_await qp->fetch_and_add(remote_counter_mr, local_counter_mr.get(), 1);
-    std::cout << "Fetched and added from server: " << counter << std::endl;
-    co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
-    co_await qp->compare_and_swap(remote_counter_mr, local_counter_mr.get(), 43,
-                                  4422);
-    std::cout << "Compared and swapped from server: " << counter << std::endl;
-    co_await qp->write_with_imm(remote_mr, buffer_mr.get(), 1);
-
-    co_return;
-  }
-
-  async_simple::coro::Lazy<void> handle_server_connection(
-      asio::ip::tcp::socket &socket) {
-    auto qp = std::make_unique<rdmapp::qp>(pd_, cq_, cq_);
-    co_await send_qp(socket, *qp);
-    std::cerr << "send qp success" << std::endl;
-    auto remote_qp = co_await recv_qp(socket);
-    std::cerr << "recv qp success" << std::endl;
-    qp->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
-            remote_qp.header.sq_psn, remote_qp.header.gid);
-    qp->user_data() = std::move(remote_qp.user_data);
-    qp->rts();
-    co_await handle_qp(qp.get());
-  }
-
-  async_simple::coro::Lazy<void> run() {
-    auto ec = co_await coro_io::async_connect(&executor_, socket_, address_,
-                                              std::to_string(port_));
-    if (ec) {
-      throw std::system_error(ec, "connect failed");
-    }
-    co_await handle_server_connection(socket_);
-  }
-
-  async_simple::coro::Lazy<void> run_and_stop() {
-    co_await run();
-    ctx_->stop();
+    cq_ = std::make_unique<rdmapp::cq>(&*device_, 128, &*channel_);
+    cq_->request_notify();
   }
 };
 
-class rdma_qp_server {
-  asio::io_context *ctx_;
-  coro_io::ExecutorWrapper<> executor_;
-  uint16_t port_;
-  std::string address_;
-  std::error_code errc_ = {};
-  asio::ip::tcp::acceptor acceptor_;
-  std::promise<void> acceptor_close_waiter_;
-  rdmapp::pd_ptr pd_;
-  rdmapp::cq_ptr cq_;
+class coro_rdma_demo_service {
+  coro_io::ExecutorWrapper<> *rdma_executor_;
+  rdma_environment rdma_env_;
+  asio::posix::stream_descriptor cq_fd_;
+
+  void start_rdma_cq_worker() {
+    process_rdma_cq(cq_fd_, &*rdma_env_.channel_).via(rdma_executor_).detach();
+  }
 
  public:
-  rdma_qp_server(asio::io_context &ctx, rdmapp::pd_ptr pd, rdmapp::cq_ptr cq,
-                 unsigned short port, std::string address = "0.0.0.0")
-      : ctx_(&ctx),
-        pd_(pd),
-        cq_(cq),
-        executor_(ctx.get_executor()),
-        port_(port),
-        address_(address),
-        acceptor_(ctx) {}
+  std::atomic<size_t> served_qp_count_ = 0;
 
-  std::error_code listen() {
-    asio::error_code ec;
-
-    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
-    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
-    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
-
-    asio::ip::tcp::resolver::iterator it_end;
-    if (ec || it == it_end) {
-      if (ec) {
-        return ec;
-      }
-      return std::make_error_code(std::errc::address_not_available);
-    }
-
-    auto endpoint = it->endpoint();
-    ec = acceptor_.open(endpoint.protocol(), ec);
-
-    if (ec) {
-      return ec;
-    }
-#ifdef __GNUC__
-    ec = acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
-#endif
-    ec = acceptor_.bind(endpoint, ec);
-    if (ec) {
-      std::error_code ignore_ec;
-      ignore_ec = acceptor_.cancel(ignore_ec);
-      ignore_ec = acceptor_.close(ignore_ec);
-      return ec;
-    }
-    ec = acceptor_.listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-      return ec;
-    }
-    auto local_ep = acceptor_.local_endpoint(ec);
-    if (ec) {
-      return ec;
-    }
-    port_ = local_ep.port();
-    std::cerr << "listen success, port: " << port_ << std::endl;
-    return {};
+  coro_rdma_demo_service(coro_io::ExecutorWrapper<> *executor)
+      : rdma_executor_(executor),
+        cq_fd_(executor->context(), rdma_env_.channel_->fd()) {
+    start_rdma_cq_worker();
   }
 
-  async_simple::coro::Lazy<void> handle_qp(rdmapp::qp_ptr qp) {
-    /* Send/Recv */
-    char buffer[6] = "hello";
-    auto local_mr = std::make_unique<rdmapp::local_mr>(
-        qp->pd()->reg_mr(&buffer[0], sizeof(buffer)));
-    co_await qp->send(local_mr.get());
-    std::cout << "Sent to client: " << buffer << std::endl;
-    co_await qp->recv(local_mr.get());
-    std::cout << "Received from client: " << buffer << std::endl;
-
-    /* Read/Write */
-    std::copy_n("hello", sizeof(buffer), buffer);
-    auto local_mr_serialized = local_mr->serialize();
-    auto local_mr_header_mr = std::make_unique<rdmapp::local_mr>(
-        qp->pd()->reg_mr(&local_mr_serialized[0], local_mr_serialized.size()));
-    co_await qp->send(local_mr_header_mr.get());
-    std::cout << "Sent mr addr=" << local_mr->addr()
-              << " length=" << local_mr->length()
-              << " rkey=" << local_mr->rkey() << " to client" << std::endl;
-    auto [_, imm] = co_await qp->recv(local_mr.get());
-    assert(imm.has_value());
-    std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
-              << std::endl;
-
-    /* Atomic */
-    uint64_t counter = 42;
-    auto counter_mr = std::make_unique<rdmapp::local_mr>(
-        qp->pd()->reg_mr(&counter, sizeof(counter)));
-    auto counter_mr_serialized = counter_mr->serialize();
-    auto counter_mr_header_mr =
-        std::make_unique<rdmapp::local_mr>(qp->pd()->reg_mr(
-            &counter_mr_serialized[0], counter_mr_serialized.size()));
-    co_await qp->send(&*counter_mr_header_mr);
-    std::cout << "Sent mr addr=" << counter_mr->addr()
-              << " length=" << counter_mr->length()
-              << " rkey=" << counter_mr->rkey() << " to client" << std::endl;
-    imm = (co_await qp->recv(local_mr.get())).second;
-    assert(imm.has_value());
-    std::cout << "Fetched and added by client: " << counter << std::endl;
-    imm = (co_await qp->recv(local_mr.get())).second;
-    assert(imm.has_value());
-    std::cout << "Compared and swapped by client: " << counter << std::endl;
+  void stop_rdma_cq_worker() {
+    cq_fd_.cancel();
+    cq_fd_.close();
   }
 
-  async_simple::coro::Lazy<void> handle_client_connection(
-      asio::ip::tcp::socket socket) {
-    auto remote_qp = co_await recv_qp(socket);
-    auto qp = std::make_unique<rdmapp::qp>(
-        remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn,
-        remote_qp.header.gid, pd_, cq_, cq_);
-    std::cerr << "recv qp success" << std::endl;
-    co_await send_qp(socket, *qp);
-    std::cerr << "send qp success" << std::endl;
-    co_await handle_qp(&*qp);
+  async_simple::coro::Lazy<rdmapp::qp::header_info> qp_handshake(
+      rdmapp::qp::header_info remote_qp) {
+    union ibv_gid gid;
+    ::memcpy(&gid, &remote_qp.raw_gid[0], sizeof(union ibv_gid));
+    auto qp = std::make_unique<rdmapp::qp>(remote_qp.lid, remote_qp.qpn,
+                                           remote_qp.psn, gid, &*rdma_env_.pd_,
+                                           &*rdma_env_.cq_, &*rdma_env_.cq_);
+    auto header = qp->header();
+    server_handle_qp(std::move(qp), &served_qp_count_)
+        .via(rdma_executor_)
+        .detach();
+    co_return header;
+  }
+};
+
+class coro_rdma_demo_client {
+  coro_rpc::coro_rpc_client rpc_client_;
+  coro_io::ExecutorWrapper<> *rdma_executor_;
+  rdma_environment rdma_env_;
+  asio::posix::stream_descriptor cq_fd_;
+
+  void start_rdma_cq_worker() {
+    process_rdma_cq(cq_fd_, &*rdma_env_.channel_).via(rdma_executor_).detach();
   }
 
-  async_simple::coro::Lazy<> run() {
-    asio::ip::tcp::socket socket(executor_.get_asio_executor());
-    auto ec = co_await coro_io::async_accept(acceptor_, socket);
+ public:
+  coro_rdma_demo_client()
+      : rdma_executor_(&rpc_client_.get_executor()),
+        cq_fd_(rdma_executor_->context(), rdma_env_.channel_->fd()) {
+    start_rdma_cq_worker();
+  }
+
+  void stop_rdma_cq_worker() {
+    cq_fd_.cancel();
+    cq_fd_.close();
+  }
+
+  async_simple::coro::Lazy<void> run(std::string const &address,
+                                     std::string const &port) {
+    auto ec = co_await rpc_client_.connect(address, port);
     if (ec) {
-      std::cerr << "accept failed: " << ec.message() << std::endl;
-      if (ec == asio::error::operation_aborted ||
-          ec == asio::error::bad_descriptor) {
-        acceptor_close_waiter_.set_value();
-        co_return;
-      }
+      ELOG_ERROR << "connect failed: " << ec.message();
+      co_return;
     }
-    std::cout << "accpeted connection " << socket.remote_endpoint()
-              << std::endl;
-    co_await handle_client_connection(std::move(socket));
-  }
 
-  async_simple::coro::Lazy<> run_and_stop() {
-    co_await run();
-    ctx_->stop();
-  }
+    auto qp = std::make_unique<rdmapp::qp>(&*rdma_env_.pd_, &*rdma_env_.cq_,
+                                           &*rdma_env_.cq_);
+    auto ret = co_await rpc_client_.call<&coro_rdma_demo_service::qp_handshake>(
+        qp->header());
+    auto remote_qp = ret.value();
+    union ibv_gid gid;
+    ::memcpy(&gid, &remote_qp.raw_gid[0], sizeof(union ibv_gid));
+    qp->rtr(remote_qp.lid, remote_qp.qpn, remote_qp.psn, gid);
+    qp->rts();
 
-  async_simple::coro::Lazy<void> loop() {
-    for (;;) {
-      co_await run();
-    }
+    co_await client_handle_qp(std::move(qp));
+    stop_rdma_cq_worker();
   }
 };
 

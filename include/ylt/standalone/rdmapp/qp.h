@@ -101,9 +101,6 @@ class qp {
     qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
     check_ptr(qp_, "failed to create qp");
     sq_psn_ = get_next_sq_psn();
-    // RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u",
-    //                  reinterpret_cast<void *>(qp_), pd_->device()->lid(),
-    //                  qp_->qp_num, sq_psn_);
   }
 
   /**
@@ -125,7 +122,6 @@ class qp {
                                    IBV_QP_ACCESS_FLAGS | IBV_QP_PKEY_INDEX),
                "failed to transition qp to init state");
     } catch (const std::exception &e) {
-      // RDMAPP_LOG_ERROR("%s", e.what());
       qp_ = nullptr;
       destroy();
       throw;
@@ -138,11 +134,8 @@ class qp {
     }
 
     if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) [[unlikely]] {
-      // RDMAPP_LOG_ERROR("failed to destroy qp %p: %s",
-      //                  reinterpret_cast<void *>(qp_), strerror(errno));
     }
     else {
-      // RDMAPP_LOG_TRACE("destroyed qp %p", reinterpret_cast<void *>(qp_));
     }
   }
 
@@ -482,9 +475,6 @@ class qp {
    */
   void post_send(struct ibv_send_wr const &send_wr,
                  struct ibv_send_wr *&bad_send_wr) {
-    // RDMAPP_LOG_TRACE("post send wr_id=%p addr=%p",
-    //                  reinterpret_cast<void *>(send_wr.wr_id),
-    //                  reinterpret_cast<void *>(send_wr.sg_list->addr));
     check_rc(::ibv_post_send(qp_, const_cast<struct ibv_send_wr *>(&send_wr),
                              &bad_send_wr),
              "failed to post send");
@@ -610,6 +600,23 @@ class qp {
     return qp::recv_awaitable(this, local_mr);
   }
 
+  struct header_info {
+    uint16_t lid;
+    uint32_t qpn;
+    uint32_t psn;
+    uint8_t raw_gid[sizeof(union ibv_gid)];
+  };
+
+  header_info header() const {
+    header_info ret{};
+    ret.lid = pd_->device()->lid();
+    ret.qpn = qp_->qp_num;
+    ret.psn = sq_psn_;
+    union ibv_gid gid = pd_->device()->gid();
+    ::memcpy(&ret.raw_gid[0], &gid, sizeof(union ibv_gid));
+    return ret;
+  }
+
   /**
    * @brief This function serializes a Queue Pair prepared to be sent to a
    * buffer.
@@ -681,7 +688,6 @@ class qp {
                               IBV_QP_MIN_RNR_TIMER | IBV_QP_MAX_DEST_RD_ATOMIC),
           "failed to transition qp to rtr state");
     } catch (const std::exception &e) {
-      // RDMAPP_LOG_ERROR("%s", e.what());
       qp_ = nullptr;
       destroy();
       throw;
@@ -709,7 +715,6 @@ class qp {
                                    IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC),
                "failed to transition qp to rts state");
     } catch (std::exception const &e) {
-      // RDMAPP_LOG_ERROR("%s", e.what());
       qp_ = nullptr;
       destroy();
       throw;
@@ -725,9 +730,6 @@ class qp {
    */
   void post_recv_rq(struct ibv_recv_wr const &recv_wr,
                     struct ibv_recv_wr *&bad_recv_wr) const {
-    // RDMAPP_LOG_TRACE("post recv wr_id=%p addr=%p",
-    //                  reinterpret_cast<void *>(recv_wr.wr_id),
-    //                  reinterpret_cast<void *>(recv_wr.sg_list->addr));
     check_rc(::ibv_post_recv(qp_, const_cast<struct ibv_recv_wr *>(&recv_wr),
                              &bad_recv_wr),
              "failed to post recv");

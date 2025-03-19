@@ -1,4 +1,5 @@
 #include "../rdma_test_common.hpp"
+
 int main(int argc, char **argv) {
   int pid = ::fork();
   if (pid < 0) {
@@ -6,37 +7,25 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  auto ctx = std::make_unique<asio::io_context>();
-  auto executor_wrapper =
-      std::make_unique<coro_io::ExecutorWrapper<>>(ctx->get_executor());
-
-  auto device = std::make_unique<rdmapp::device>();
-
-  auto pd = std::make_unique<rdmapp::pd>(&*device);
-
-  auto channel = std::make_unique<rdmapp::comp_channel>(&*device);
-  channel->set_non_blocking();
-
-  auto cq = std::make_unique<rdmapp::cq>(&*device, 128, &*channel);
-  cq->request_notify();
-
-  process_rdma_cq(*ctx, &*channel).via(&*executor_wrapper).detach();
-
   if (pid == 0) {
     ::sleep(1);
-    rdma_qp_client client(*ctx, &*pd, &*cq, 12345, "127.0.0.1");
-    client.run_and_stop().via(&*executor_wrapper).detach();
-    ctx->run();
+    coro_rdma_demo_client client;
+    async_simple::coro::syncAwait(client.run("127.0.0.1", "55555"));
   }
   else {
-    rdma_qp_server server(*ctx, &*pd, &*cq, 12345);
-    auto ec = server.listen();
+    coro_rpc::coro_rpc_server server(2, 55555, "0.0.0.0");
+    coro_rdma_demo_service service(server.get_io_context_pool().get_executor());
+    server.register_handler<&coro_rdma_demo_service::qp_handshake>(&service);
+    std::jthread watcher([&server, &service]() {
+      while (service.served_qp_count_ == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      service.stop_rdma_cq_worker();
+      server.stop();
+    });
+    auto ec = server.start();
     if (ec) {
-      std::cerr << "listen failed: " << ec.message() << std::endl;
-    }
-    else {
-      server.run_and_stop().via(&*executor_wrapper).detach();
-      ctx->run();
+      ELOG_INFO << "server start failed, ec: " << ec;
     }
     int status;
     ::wait(&status);
