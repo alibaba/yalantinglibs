@@ -3,7 +3,7 @@
 #include <system_error>
 
 namespace cinatra {
-enum class http_errc { connect_timeout = 313, request_timeout };
+enum class http_errc { connect_timeout = 2025, request_timeout };
 
 class http_error_category : public std::error_category {
  public:
@@ -12,11 +12,11 @@ class http_error_category : public std::error_category {
   std::string message(int ev) const override {
     switch (static_cast<http_errc>(ev)) {
       case http_errc::connect_timeout:
-        return "connect timeout";
+        return "Connect timeout";
       case http_errc::request_timeout:
-        return "request timeout";
+        return "Request timeout";
       default:
-        return "unknown error";
+        return "Unknown error";
     }
   }
 };

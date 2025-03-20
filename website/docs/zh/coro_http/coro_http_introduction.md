@@ -479,6 +479,32 @@ websocket 例子:
   CHECK(data.resp_body == send_str);
 ```
 
+## 错误码
+coro_http 错误码复用了std::error_code，具体错误的值为std::errc：https://en.cppreference.com/w/cpp/error/errc
+
+coro_http 只对std::errc::timeout错误码做了扩展，发生连接和请求超时的时候不会返回有二义性的std::errc::timeout，而是返回扩展的http_errc：
+```cpp
+enum class http_errc { connect_timeout = 2025, request_timeout };
+std::error_code make_error_code(http_errc e);
+```
+error message 分别对应：`Connect timeout` 和`Request timeout`
+
+常见的返回错误及其含义有：
+
+std::errc::protocol_error: url解析错误；response 解析错误；websocket 协议解析错误；chunked格式解析错误；gzip解析错误都归为协议错误；
+
+http_errc::connect_timeout：连接超时，自定义错误码2025，错误消息`Connect timeout`
+
+http_errc::request_timeout：请求超时，自定义错误码2026，错误消息`Request timeout`
+
+std::errc::invalid_argument：请求参数非法，文件上传时文件不存在；文件上传时upload size非法；
+
+std::errc::bad_file_descriptor：文件流上传时，文件打开失败；
+
+std::errc::no_such_file_or_directory：文件流发送时文件不存在
+
+网络io返回的错误来自于asio io请求返回的错误asio::error(std::errc 的子集)，如asio::error::eof, asio::error::broken_pipe，asio::connection_reset，asio::error::connection_refused等等；
+
 ## 线程模型
 coro_http_client 默认情况下是共享一个全局“线程池”，这个“线程池”准确来说是一个io_context pool，coro_http_client 的线程模型是一个client一个io_context，
 io_context 和 client 是一对多的关系。io_context pool 默认的线程数是机器的核数，如果希望控制pool 的线程数可以调用coro_io::get_global_executor(pool_size) 去设置
