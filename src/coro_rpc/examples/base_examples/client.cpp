@@ -33,6 +33,8 @@ using namespace std::string_literals;
  */
 
 Lazy<void> show_rpc_call() {
+  auto ctx = create_rdma_ctx();
+
   coro_rpc_client client;
 
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
@@ -40,6 +42,33 @@ Lazy<void> show_rpc_call() {
 
   auto ret = co_await client.call<echo>("hello");
   assert(ret.value() == "hello");
+
+  pingpong_dest dest{};
+  dest.lid = ctx.lid;
+  dest.qpn = ctx.qp->qp_num;
+  dest.psn = ++g_psn;
+  dest.gid = ctx.str_gid;
+
+  auto ret1 = co_await client.call<&rdma_service_t::handshake>(dest);
+  auto peer = ret1.value();
+
+  modify_qp_to_rts(ctx.qp, peer, false);
+
+  post_recv(ctx);
+  auto ret4 = co_await client.call<&rdma_service_t::test>();
+  assert(ret4);
+
+  struct ibv_wc wc;
+
+  do {
+    int ne = ibv_poll_cq(ctx.cq, 1, &wc);
+    if (ne < 0) {
+      fprintf(stderr, "poll CQ failed %d\n", ne);
+    }
+    if (ne > 0) {
+      std::cout << std::string_view(ctx.buf, 26) << "\n";
+    }
+  } while (true);
 
   ret = co_await client.call<async_echo_by_coroutine>("42");
   assert(ret.value() == "42");
@@ -113,6 +142,7 @@ Lazy<void> connection_reuse() {
 
 int main() {
   try {
+    easylog::set_min_severity(easylog::Severity::INFO);
     syncAwait(show_rpc_call());
     syncAwait(connection_reuse());
     std::cout << "Done!" << std::endl;
