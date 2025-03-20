@@ -24,7 +24,12 @@ int main() {
   coro_rpc_server server(/*thread=*/std::thread::hardware_concurrency(),
                          /*port=*/8801);
 
-  coro_rpc_server server2{/*thread=*/1, /*port=*/8802};
+  coro_rpc_server server2{/*thread=*/1, /*port=*/8804};
+
+  auto ctx = create_rdma_ctx();
+  rdma_service_t rdma_srv{ctx};
+  server.register_handler<&rdma_service_t::handshake, &rdma_service_t::test>(
+      &rdma_srv);
 
   // regist normal function for rpc
   server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,
