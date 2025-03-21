@@ -1914,6 +1914,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       result = async_simple::coro::syncAwait(client.async_upload_chunked(
           uri, http_method::PUT, "chunked_file.txt"sv));
       CHECK(result.status != 200);
+      CHECK(result.net_err == http_errc::connect_timeout);
 
       client.set_conn_timeout(500ms);
       client.set_req_timeout(0ms);
@@ -1921,6 +1922,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       result = async_simple::coro::syncAwait(client.async_upload_chunked(
           uri, http_method::PUT, "chunked_file.txt"sv));
       CHECK(result.status != 200);
+      CHECK(result.net_err == http_errc::request_timeout);
 
       fs::remove("chunked_file.txt");
     }
@@ -2134,7 +2136,7 @@ TEST_CASE("test coro_http_client request timeout") {
   if (!r.net_err) {
     r = async_simple::coro::syncAwait(client.async_get("/"));
     if (r.net_err) {
-      CHECK(r.net_err == std::errc::timed_out);
+      CHECK(r.net_err == http_errc::request_timeout);
     }
   }
 }
@@ -2280,7 +2282,7 @@ TEST_CASE("test coro http request timeout") {
 
   client.set_req_timeout(500ms);
   result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(result.net_err == std::errc::timed_out);
+  CHECK(result.net_err == http_errc::request_timeout);
 
   // after timeout, the socket in client has been closed, so use a new client
   // to test.
