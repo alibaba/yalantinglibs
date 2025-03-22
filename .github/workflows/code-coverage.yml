@@ -21,15 +21,15 @@ jobs:
         chmod +x ./llvm.sh
         sudo ./llvm.sh 17
 
-    - name: Install RDMA tools
+    - name: Install RDMA and OpenUCX
       run: |
-        sudo apt-get install libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2
+        sudo apt-get install -y libucx-dev libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2 ucx-utils
     
     - name: Setup SoftRoCE
       run: |
-        export IF_NAME=$(ip -o -4 route show to default | awk '{print $5}')
-        sudo modprobe -v rdma_rxe
-        sudo rdma link add rxe0 type rxe netdev $IF_NAME
+        # export IF_NAME=$(ip -o -4 route show to default | awk '{print $5}')
+        # sudo modprobe -v rdma_rxe
+        # sudo rdma link add rxe0 type rxe netdev $IF_NAME
 
     - name: Configure
       run: |
