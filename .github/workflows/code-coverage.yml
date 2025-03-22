@@ -25,7 +25,7 @@ jobs:
       run: |
         sudo apt-get install -y libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2
         curl -fsSL https://github.com/openucx/ucx/releases/download/v1.18.0/ucx-1.18.0.tar.gz | tar -xzvf - -C /tmp
-        cd /tmp/ucx-1.18.0 && ./contrib/configure-release --prefix=/usr --with-rdmacm --with-verbs 
+        cd /tmp/ucx-1.18.0 && ./contrib/configure-release --prefix=/usr --with-rdmacm --with-verbs --without-go --without-java
         make -j$(nproc) && sudo make install
     
     - name: Setup SoftRoCE
