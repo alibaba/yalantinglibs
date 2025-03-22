@@ -23,7 +23,11 @@ jobs:
 
     - name: Install RDMA and OpenUCX
       run: |
-        sudo apt-get install -y libucx-dev libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2 ucx-utils
+        sudo apt-get install -y libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2
+        mkdir -p /tmp/ucx
+        curl -fsSL https://github.com/openucx/ucx/releases/download/v1.18.0/ucx-1.18.0.tar.gz | tar -xzf - -C /tmp/ucx
+        cd /tmp/ucx && ./contrib/configure-release --prefix=/usr --with-rdmacm --with-verbs 
+        make -j$(nproc) && sudo make install
     
     - name: Setup SoftRoCE
       run: |
