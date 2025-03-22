@@ -83,7 +83,7 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     ELOG_INFO << "current path " << fs::current_path().string();
     if (file_exists(cert_file)) {
       ELOG_INFO << "load " << cert_file.string();
-      context.use_certificate_chain_file(cert_file);
+      context.use_certificate_chain_file(cert_file.string());
     }
     else {
       ELOG_ERROR << "no certificate file " << cert_file.string();
@@ -92,7 +92,7 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
 
     if (file_exists(key_file)) {
       ELOG_INFO << "load " << key_file.string();
-      context.use_private_key_file(key_file, asio::ssl::context::pem);
+      context.use_private_key_file(key_file.string(), asio::ssl::context::pem);
     }
     else {
       ELOG_ERROR << "no private file " << key_file.string();
@@ -101,7 +101,7 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
 
     if (file_exists(dh_file)) {
       ELOG_INFO << "load " << dh_file.string();
-      context.use_tmp_dh_file(dh_file);
+      context.use_tmp_dh_file(dh_file.string());
     }
     else {
       ELOG_INFO << "no temp dh file " << dh_file.string();
