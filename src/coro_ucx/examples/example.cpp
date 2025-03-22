@@ -3,40 +3,25 @@
 int main(int argc, char *argv[]) {
   // For server run ./example [port]
   // For client run ./example [ip] [port]
-  auto socket_ctx = std::make_unique<asio::io_context>();
-  auto executor_wrapper =
-      std::make_unique<coro_io::ExecutorWrapper<>>(socket_ctx->get_executor());
-  auto ucx_ctx = ucxpp::context::builder()
-                     .enable_stream()
-                     .enable_tag()
-                     .enable_wakeup()
-                     .enable_rma()
-                     .enable_amo64()
-                     .build();
-  auto worker = std::make_unique<ucxpp::worker>(ucx_ctx);
-
-  ucx_event_loop(*socket_ctx, &*worker).via(&*executor_wrapper).detach();
-
   if (argc == 2) {
     std::cout << "server mode, press Control+C to exit" << std::endl;
     std::string port_str = argv[1];
-    ucx_ep_server server(*socket_ctx, &*worker, std::stoi(port_str));
-    auto ec = server.listen();
+    coro_rpc::coro_rpc_server server(2, std::stoi(port_str), "0.0.0.0");
+    coro_ucx_demo_service service(server.get_io_context_pool().get_executor());
+    server.register_handler<&coro_ucx_demo_service::ep_handshake>(&service);
+    auto ec = server.start();
     if (ec) {
-      std::cerr << "listen failed: " << ec.message() << std::endl;
+      ELOG_INFO << "start server failed: " << ec;
       return -1;
     }
-    server.loop().via(&*executor_wrapper).detach();
-    socket_ctx->run();
   }
   else if (argc == 3) {
     std::cout << "client mode, connecting to server" << std::endl;
     std::string ip = argv[1];
     std::string port_str = argv[2];
-    ucx_ep_client client(*socket_ctx, &*worker, std::stoi(port_str), ip);
-    // TODO: fix memory leak
-    client.run().via(&*executor_wrapper).detach();
-    socket_ctx->run();
+
+    coro_ucx_demo_client client;
+    client.sync_run(ip, port_str).get();
   }
   else {
     std::cerr << "server usage: " << argv[0] << " [port]" << std::endl;

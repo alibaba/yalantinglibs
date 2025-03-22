@@ -162,6 +162,18 @@ class worker {
     return local_address(const_cast<worker_ptr>(this), address, address_length);
   }
 
+  std::vector<char> get_remote_address() const {
+    ucp_address_t *address;
+    size_t address_length;
+    check_ucs_status(
+        ::ucp_worker_get_address(worker_, &address, &address_length),
+        "failed to get address");
+    std::vector<char> buffer(address_length);
+    std::copy_n(reinterpret_cast<char const *>(address), address_length,
+                buffer.begin());
+    return buffer;
+  }
+
   /**
    * @brief Get the worker's native UCX handle
    *

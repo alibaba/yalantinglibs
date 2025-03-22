@@ -7,36 +7,28 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  auto socket_ctx = std::make_unique<asio::io_context>();
-  auto executor_wrapper =
-      std::make_unique<coro_io::ExecutorWrapper<>>(socket_ctx->get_executor());
-  auto ucx_ctx = ucxpp::context::builder()
-                     .enable_stream()
-                     .enable_tag()
-                     .enable_wakeup()
-                     .enable_rma()
-                     .enable_amo64()
-                     .build();
-  auto worker = std::make_unique<ucxpp::worker>(ucx_ctx);
-
-  ucx_event_loop(*socket_ctx, &*worker).via(&*executor_wrapper).detach();
-
   if (pid == 0) {
     ::sleep(1);
-    ucx_ep_client client(*socket_ctx, &*worker, 54321, "127.0.0.1");
-
-    client.run_and_stop().via(&*executor_wrapper).detach();
-    socket_ctx->run();
+    coro_ucx_demo_client client;
+    client.sync_run("127.0.0.1", "44444").get();
   }
   else {
-    ucx_ep_server server(*socket_ctx, &*worker, 54321, "127.0.0.1");
-    auto ec = server.listen();
+    coro_rpc::coro_rpc_server server(2, 44444, "0.0.0.0");
+    coro_ucx_demo_service service(server.get_io_context_pool().get_executor());
+    server.register_handler<&coro_ucx_demo_service::ep_handshake>(&service);
+    std::jthread watcher([&server, &service]() {
+      while (service.served_ep_count_ == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      service.stop_ucx_worker();
+      server.stop();
+    });
+    auto ec = server.start();
     if (ec) {
-      std::cerr << "listen failed: " << ec.message() << std::endl;
-      return -1;
+      ELOG_INFO << "server start failed, ec: " << ec;
     }
-    server.run_and_stop().via(&*executor_wrapper).detach();
-    socket_ctx->run();
+    int status;
+    ::wait(&status);
   }
 
   return 0;
