@@ -21,6 +21,19 @@ jobs:
         chmod +x ./llvm.sh
         sudo ./llvm.sh 17
 
+    - name: Install RDMA and OpenUCX
+      run: |
+        sudo apt-get install -y libibverbs-dev librdmacm-dev ibverbs-utils libibumad3 ibverbs-providers rdma-core perftest iproute2
+        curl -fsSL https://github.com/openucx/ucx/releases/download/v1.18.0/ucx-1.18.0.tar.gz | tar -xzvf - -C /tmp
+        cd /tmp/ucx-1.18.0 && ./contrib/configure-release --prefix=/usr --with-rdmacm --with-verbs --without-go --without-java
+        make -j$(nproc) && sudo make install
+    
+    - name: Setup SoftRoCE
+      run: |
+        # export IF_NAME=$(ip -o -4 route show to default | awk '{print $5}')
+        # sudo modprobe -v rdma_rxe
+        # sudo rdma link add rxe0 type rxe netdev $IF_NAME
+
     - name: Configure
       run: |
         cmake -B ${{github.workspace}}/build \
