@@ -37,9 +37,8 @@ int main() {
                         &service.my_gid));
   }
 
-  server
-      .register_handler<&rdma_service_t::get_con_data, &rdma_service_t::fetch>(
-          &service);
+  server.register_handler<&rdma_service_t::get_con_data, &rdma_service_t::fetch,
+                          &rdma_service_t::put>(&service);
 
   // regist normal function for rpc
   server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,

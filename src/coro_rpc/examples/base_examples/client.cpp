@@ -60,13 +60,21 @@ Lazy<void> show_rpc_call() {
   auto rdma_ret =
       co_await client.call<&rdma_service_t::get_con_data>(local_data);
   g_remote_con_data = rdma_ret.value();
-  connect_qp(res, true);
+  connect_qp(res);
 
   for (int i = 0; i < 3; i++) {
     auto rdma_ret1 = co_await client.call<&rdma_service_t::fetch>();
     poll_completion(res);
     std::cout << std::string_view(res->buf) << "\n";
     post_receive(res);
+  }
+
+  for (int i = 0; i < 3; i++) {
+    std::string msg = "hello rdma from client ";
+    msg.append(std::to_string(i));
+    post_send(res, IBV_WR_SEND, msg);
+    poll_completion(res);
+    co_await client.call<&rdma_service_t::put>();
   }
   resources_destroy(res);
   co_return;

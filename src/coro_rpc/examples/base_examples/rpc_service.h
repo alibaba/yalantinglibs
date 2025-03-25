@@ -277,7 +277,7 @@ inline int post_receive(resources *res) {
 
 inline cm_con_data_t g_remote_con_data{};
 
-inline int connect_qp(resources *res, bool is_client = false) {
+inline int connect_qp(resources *res) {
   struct cm_con_data_t local_con_data;
   char temp_char;
   union ibv_gid my_gid;
@@ -309,10 +309,7 @@ inline int connect_qp(resources *res, bool is_client = false) {
   // modify the QP to init
   modify_qp_to_init(res->qp);
 
-  // let the client post RR to be prepared for incoming messages
-  if (is_client) {
-    post_receive(res);
-  }
+  post_receive(res);
 
   // modify the QP to RTR
   modify_qp_to_rtr(res->qp, g_remote_con_data.qp_num, g_remote_con_data.lid,
@@ -432,6 +429,12 @@ struct rdma_service_t {
     msg.append(std::to_string(++count));
     post_send(res, IBV_WR_SEND, msg);
     poll_completion(res);
+  }
+
+  void put() {
+    poll_completion(res);
+    std::cout << std::string_view(res->buf) << "\n";
+    post_receive(res);
   }
 };
 /*-------------- rdma ---------------*/
