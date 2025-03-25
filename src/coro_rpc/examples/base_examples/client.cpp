@@ -38,6 +38,40 @@ Lazy<void> show_rpc_call() {
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
   assert(!ec);
 
+  /*----------------rdma---------------*/
+  resources resource{};
+  resources_create(&resource);
+  resources* res = &resource;
+
+  cm_con_data_t local_data{};
+  local_data.addr = (uintptr_t)res->buf;
+  local_data.rkey = res->mr->rkey;
+  local_data.qp_num = res->qp->qp_num;
+  local_data.lid = res->port_attr.lid;
+  union ibv_gid my_gid;
+  memset(&my_gid, 0, sizeof(my_gid));
+
+  if (config.gid_idx >= 0) {
+    CHECK(ibv_query_gid(res->ib_ctx, config.ib_port, config.gid_idx, &my_gid));
+  }
+
+  memcpy(local_data.gid, &my_gid, 16);
+
+  auto rdma_ret =
+      co_await client.call<&rdma_service_t::get_con_data>(local_data);
+  g_remote_con_data = rdma_ret.value();
+  connect_qp(res, true);
+
+  for (int i = 0; i < 3; i++) {
+    auto rdma_ret1 = co_await client.call<&rdma_service_t::fetch>();
+    poll_completion(res);
+    std::cout << std::string_view(res->buf) << "\n";
+    post_receive(res);
+  }
+  resources_destroy(res);
+  co_return;
+  /*----------------rdma---------------*/
+
   auto ret = co_await client.call<echo>("hello");
   assert(ret.value() == "hello");
 
