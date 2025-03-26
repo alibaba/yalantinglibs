@@ -18,6 +18,7 @@
 
 #include <arpa/inet.h>
 #include <infiniband/verbs.h>
+#include <sys/epoll.h>
 
 #include <string>
 #include <string_view>
@@ -38,11 +39,12 @@ struct resources {
   struct cm_con_data_t remote_props;   // values to connect to remote side
   struct ibv_context *ib_ctx;          // device handle
   struct ibv_pd *pd;                   // PD handle
-  struct ibv_cq *cq;                   // CQ handle
-  struct ibv_qp *qp;                   // QP handle
-  struct ibv_mr *mr;                   // MR handle for buf
-  char *buf;                           // memory buffer pointer, used for
-                                       // RDMA send ops
+  struct ibv_comp_channel *complete_event_channel;
+  struct ibv_cq *cq;  // CQ handle
+  struct ibv_qp *qp;  // QP handle
+  struct ibv_mr *mr;  // MR handle for buf
+  char *buf;          // memory buffer pointer, used for
+                      // RDMA send ops
 };
 
 #define CHECK(expr)            \
@@ -64,7 +66,7 @@ struct config_t {
 inline config_t config{};
 inline size_t g_buf_size = 256;
 
-inline int resources_create(resources *res) {
+inline int resources_create(resources *res, bool cq_event_non_block = false) {
   struct ibv_device **dev_list = NULL;
   struct ibv_qp_init_attr qp_init_attr;
   struct ibv_device *ib_dev = NULL;
@@ -84,7 +86,7 @@ inline int resources_create(resources *res) {
 
   if (num_devices == 0) {
     ELOGV(ERROR, "Found %d device(s)", num_devices);
-    goto die;
+    exit(EXIT_FAILURE);
   }
 
   ELOGV(INFO, "Found %d device(s)", num_devices);
@@ -106,7 +108,7 @@ inline int resources_create(resources *res) {
   // device wasn't found in the host
   if (!ib_dev) {
     ELOGV(ERROR, "IB device %s wasn't found", config.dev_name);
-    goto die;
+    exit(EXIT_FAILURE);
   }
 
   // get device handle
@@ -123,8 +125,33 @@ inline int resources_create(resources *res) {
 
   // a CQ with 10 entry
   cq_size = 10;
-  res->cq = ibv_create_cq(res->ib_ctx, cq_size, NULL, NULL, 0);
+
+  res->complete_event_channel = ibv_create_comp_channel(res->ib_ctx);
+  res->cq =
+      ibv_create_cq(res->ib_ctx, cq_size, NULL, res->complete_event_channel, 0);
   assert(res->cq != NULL);
+
+  // set non blocking
+  if (cq_event_non_block) {
+    int flags = ::fcntl(res->complete_event_channel->fd, F_GETFL);
+    assert(flags >= 0);
+    int ret =
+        ::fcntl(res->complete_event_channel->fd, F_SETFL, flags | O_NONBLOCK);
+    assert(ret >= 0);
+  }
+
+  // epoll
+  int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+  epoll_event ev = {0, {0}};
+  ev.events = EPOLLIN | EPOLLET;
+  // descriptor_data->registered_events_ = ev.events;
+  // ev.data.ptr = descriptor_data;
+  int result =
+      epoll_ctl(epoll_fd, EPOLL_CTL_ADD, res->complete_event_channel->fd, &ev);
+  assert(result == 0);
+
+  int r = ibv_req_notify_cq(res->cq, 0);
+  assert(r >= 0);
 
   // a buffer to hold the data
   size = g_buf_size;
@@ -157,10 +184,7 @@ inline int resources_create(resources *res) {
   ELOGV(INFO, "QP was created, QP number= %d", res->qp->qp_num);
   // \end create the QP
 
-  // FIXME: hard code here
   return 0;
-die:
-  exit(EXIT_FAILURE);
 }
 
 // Transition a QP from the RESET to INIT state
@@ -376,23 +400,41 @@ inline int post_send(resources *res, ibv_wr_opcode opcode,
 }
 
 inline int poll_completion(struct resources *res) {
+  void *ev_ctx;
+  int r = ibv_get_cq_event(res->complete_event_channel, &res->cq, &ev_ctx);
+  assert(r >= 0);
+
   struct ibv_wc wc;
-  do {
-    int ne = ibv_poll_cq(res->cq, 1, &wc);
-    if (ne < 0) {
-      ELOGV(ERROR, "poll CQ failed %d", ne);
-      exit(EXIT_FAILURE);
-    }
-    if (ne > 0) {
-      ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
-      break;
-    }
-  } while (true);
+  int ne = ibv_poll_cq(res->cq, 1, &wc);
+  if (ne < 0) {
+    ELOGV(ERROR, "poll CQ failed %d", ne);
+    exit(EXIT_FAILURE);
+  }
+  if (ne > 0) {
+    ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
+  }
+  ibv_ack_cq_events(res->cq, ne);
+  r = ibv_req_notify_cq(res->cq, 0);
+  assert(r >= 0);
+
+  // struct ibv_wc wc;
+  // do {
+  //   int ne = ibv_poll_cq(res->cq, 1, &wc);
+  //   if (ne < 0) {
+  //     ELOGV(ERROR, "poll CQ failed %d", ne);
+  //     exit(EXIT_FAILURE);
+  //   }
+  //   if (ne > 0) {
+  //     ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
+  //     break;
+  //   }
+  // } while (true);
   return 0;
 }
 
 // Cleanup and deallocate all resources used
 inline int resources_destroy(struct resources *res) {
+  ibv_destroy_comp_channel(res->complete_event_channel);
   ibv_destroy_qp(res->qp);
   ibv_dereg_mr(res->mr);
   free(res->buf);
