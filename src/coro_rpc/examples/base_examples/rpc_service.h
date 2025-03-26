@@ -275,7 +275,7 @@ static int modify_qp_to_rts(struct ibv_qp *qp) {
 inline int post_receive(resources *res) {
   struct ibv_recv_wr rr;
   struct ibv_sge sge;
-  struct ibv_recv_wr *bad_wr;
+  struct ibv_recv_wr *bad_wr = nullptr;
 
   // prepare the scatter / gather entry
   memset(&sge, 0, sizeof(sge));
@@ -411,6 +411,7 @@ inline int poll_completion(struct resources *res) {
   }
   if (ne > 0) {
     ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
+    assert(wc.status == IBV_WC_SUCCESS);
   }
   ibv_ack_cq_events(res->cq, ne);
   r = ibv_req_notify_cq(res->cq, 0);
