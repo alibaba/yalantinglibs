@@ -41,6 +41,12 @@ Lazy<void> show_rpc_call() {
   /*----------------rdma---------------*/
   resources resource{};
   resources_create(&resource);
+  asio::posix::stream_descriptor cq_fd(
+      client.get_executor().get_asio_executor(),
+      resource.complete_event_channel->fd);
+  int r = ibv_req_notify_cq(resource.cq, 0);
+  assert(r >= 0);
+
   resources* res = &resource;
 
   cm_con_data_t local_data{};
@@ -64,7 +70,17 @@ Lazy<void> show_rpc_call() {
 
   for (int i = 0; i < 3; i++) {
     auto rdma_ret1 = co_await client.call<&rdma_service_t::fetch>();
+    // poll_completion(res);
+    coro_io::callback_awaitor<std::error_code> awaitor;
+    auto ec = co_await awaitor.await_resume([&cq_fd](auto handler) {
+      cq_fd.async_wait(asio::posix::stream_descriptor::wait_read,
+                       [handler](const auto& ec) mutable {
+                         handler.set_value_then_resume(ec);
+                       });
+    });
+
     poll_completion(res);
+
     std::cout << std::string_view(res->buf) << "\n";
     post_receive(res);
   }

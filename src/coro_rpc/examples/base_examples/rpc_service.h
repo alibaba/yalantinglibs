@@ -20,6 +20,7 @@
 #include <infiniband/verbs.h>
 #include <sys/epoll.h>
 
+#include <asio/posix/stream_descriptor.hpp>
 #include <string>
 #include <string_view>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
@@ -66,7 +67,7 @@ struct config_t {
 inline config_t config{};
 inline size_t g_buf_size = 256;
 
-inline int resources_create(resources *res, bool cq_event_non_block = false) {
+inline int resources_create(resources *res) {
   struct ibv_device **dev_list = NULL;
   struct ibv_qp_init_attr qp_init_attr;
   struct ibv_device *ib_dev = NULL;
@@ -132,13 +133,11 @@ inline int resources_create(resources *res, bool cq_event_non_block = false) {
   assert(res->cq != NULL);
 
   // set non blocking
-  if (cq_event_non_block) {
-    int flags = ::fcntl(res->complete_event_channel->fd, F_GETFL);
-    assert(flags >= 0);
-    int ret =
-        ::fcntl(res->complete_event_channel->fd, F_SETFL, flags | O_NONBLOCK);
-    assert(ret >= 0);
-  }
+  int flags = ::fcntl(res->complete_event_channel->fd, F_GETFL);
+  assert(flags >= 0);
+  int ret =
+      ::fcntl(res->complete_event_channel->fd, F_SETFL, flags | O_NONBLOCK);
+  assert(ret >= 0);
 
   // epoll
   int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
