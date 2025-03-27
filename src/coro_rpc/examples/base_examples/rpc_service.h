@@ -140,14 +140,15 @@ inline int resources_create(resources *res) {
   assert(ret >= 0);
 
   // epoll
-  int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
-  epoll_event ev = {0, {0}};
-  ev.events = EPOLLIN | EPOLLET;
-  // descriptor_data->registered_events_ = ev.events;
-  // ev.data.ptr = descriptor_data;
-  int result =
-      epoll_ctl(epoll_fd, EPOLL_CTL_ADD, res->complete_event_channel->fd, &ev);
-  assert(result == 0);
+  // int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+  // epoll_event ev = {0, {0}};
+  // ev.events = EPOLLIN | EPOLLET;
+  // // descriptor_data->registered_events_ = ev.events;
+  // // ev.data.ptr = descriptor_data;
+  // int result =
+  //     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, res->complete_event_channel->fd,
+  //     &ev);
+  // assert(result == 0);
 
   int r = ibv_req_notify_cq(res->cq, 0);
   assert(r >= 0);
@@ -404,16 +405,18 @@ inline int poll_completion(struct resources *res) {
   assert(r >= 0);
 
   struct ibv_wc wc;
-  int ne = ibv_poll_cq(res->cq, 1, &wc);
-  if (ne < 0) {
-    ELOGV(ERROR, "poll CQ failed %d", ne);
-    exit(EXIT_FAILURE);
+  int ne = 0;
+  while ((ne = ibv_poll_cq(res->cq, 1, &wc)) != 0) {
+    if (ne < 0) {
+      ELOGV(ERROR, "poll CQ failed %d", ne);
+      exit(EXIT_FAILURE);
+    }
+    if (ne > 0) {
+      ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
+      assert(wc.status == IBV_WC_SUCCESS);
+    }
+    ibv_ack_cq_events(res->cq, ne);
   }
-  if (ne > 0) {
-    ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
-    assert(wc.status == IBV_WC_SUCCESS);
-  }
-  ibv_ack_cq_events(res->cq, ne);
   r = ibv_req_notify_cq(res->cq, 0);
   assert(r >= 0);
 
