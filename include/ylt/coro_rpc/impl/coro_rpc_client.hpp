@@ -536,7 +536,7 @@ class coro_rpc_client {
       ELOG_INFO << "current path: " << std::filesystem::current_path().string();
       if (file_exists(cert_file)) {
         ELOG_INFO << "load " << cert_file.string();
-        ssl_ctx_.load_verify_file(cert_file);
+        ssl_ctx_.load_verify_file(cert_file.string());
       }
       else {
         ELOG_INFO << "no certificate file " << cert_file.string();
