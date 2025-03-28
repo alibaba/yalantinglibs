@@ -89,6 +89,13 @@ Lazy<void> show_rpc_call() {
     std::string msg = "hello rdma from client ";
     msg.append(std::to_string(i));
     post_send(res, IBV_WR_SEND, msg);
+    coro_io::callback_awaitor<std::error_code> awaitor;
+    auto ec = co_await awaitor.await_resume([&cq_fd](auto handler) {
+      cq_fd.async_wait(asio::posix::stream_descriptor::wait_read,
+                       [handler](const auto& ec) mutable {
+                         handler.set_value_then_resume(ec);
+                       });
+    });
     poll_completion(res);
     co_await client.call<&rdma_service_t::put>();
   }

@@ -273,6 +273,8 @@ static int modify_qp_to_rts(struct ibv_qp *qp) {
   return 0;
 }
 
+inline int g_wr_id = 0;
+
 inline int post_receive(resources *res) {
   struct ibv_recv_wr rr;
   struct ibv_sge sge;
@@ -288,7 +290,7 @@ inline int post_receive(resources *res) {
   memset(&rr, 0, sizeof(rr));
 
   rr.next = NULL;
-  rr.wr_id = 0;
+  rr.wr_id = g_wr_id++;
   rr.sg_list = &sge;
   rr.num_sge = 1;
 
@@ -365,7 +367,7 @@ inline int post_send(resources *res, ibv_wr_opcode opcode,
   memset(&sr, 0, sizeof(sr));
 
   sr.next = NULL;
-  sr.wr_id = 0;
+  sr.wr_id = g_wr_id++;
   sr.sg_list = &sge;
 
   sr.num_sge = 1;
@@ -415,8 +417,9 @@ inline int poll_completion(struct resources *res) {
       ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
       assert(wc.status == IBV_WC_SUCCESS);
     }
-    ibv_ack_cq_events(res->cq, ne);
   }
+
+  ibv_ack_cq_events(res->cq, ne);
   r = ibv_req_notify_cq(res->cq, 0);
   assert(r >= 0);
 
