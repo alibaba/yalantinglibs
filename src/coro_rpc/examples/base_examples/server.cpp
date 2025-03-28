@@ -16,6 +16,7 @@
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "rpc_service.h"
+#include "ylt/coro_io/io_context_pool.hpp"
 using namespace coro_rpc;
 using namespace async_simple;
 using namespace async_simple::coro;
@@ -29,7 +30,15 @@ int main() {
   resources res{};
   resources_create(&res);
 
-  rdma_service_t service{&res};
+  auto executor = coro_io::get_global_executor();
+  rdma_service_t service{
+      &res,
+      asio::posix::stream_descriptor(executor->get_asio_executor(),
+                                     res.complete_event_channel->fd),
+      executor};
+  int r = ibv_req_notify_cq(res.cq, 0);
+  assert(r >= 0);
+
   memset(&service.my_gid, 0, sizeof(service.my_gid));
 
   if (config.gid_idx >= 0) {
@@ -37,8 +46,7 @@ int main() {
                         &service.my_gid));
   }
 
-  server.register_handler<&rdma_service_t::get_con_data, &rdma_service_t::fetch,
-                          &rdma_service_t::put>(&service);
+  server.register_handler<&rdma_service_t::get_con_data>(&service);
 
   // regist normal function for rpc
   server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,

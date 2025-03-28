@@ -135,6 +135,7 @@ class callback_awaitor_base {
       }
     }
     void resume() const { obj->coro_.resume(); }
+    auto handle_ptr() { return &obj->coro_; }
 
    private:
     Derived *obj;

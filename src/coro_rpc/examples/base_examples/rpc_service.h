@@ -273,9 +273,7 @@ static int modify_qp_to_rts(struct ibv_qp *qp) {
   return 0;
 }
 
-inline int g_wr_id = 0;
-
-inline int post_receive(resources *res) {
+inline int post_receive(resources *res, uint64_t wr_id) {
   struct ibv_recv_wr rr;
   struct ibv_sge sge;
   struct ibv_recv_wr *bad_wr = nullptr;
@@ -290,7 +288,7 @@ inline int post_receive(resources *res) {
   memset(&rr, 0, sizeof(rr));
 
   rr.next = NULL;
-  rr.wr_id = g_wr_id++;
+  rr.wr_id = wr_id;
   rr.sg_list = &sge;
   rr.num_sge = 1;
 
@@ -299,6 +297,18 @@ inline int post_receive(resources *res) {
   ELOGV(INFO, "Receive request was posted");
 
   return 0;
+}
+
+inline async_simple::coro::Lazy<int> post_receive_coro(resources *res) {
+  coro_io::callback_awaitor<int> awaitor;
+  auto ec = co_await awaitor.await_resume([=](auto handler) {
+    int r = post_receive(res, (uint64_t)handler.handle_ptr());
+    if (r != 0) {
+      handler.set_value_then_resume(r);
+    }
+  });
+  ELOG_INFO << "recv response: " << std::string_view(res->buf);
+  co_return ec;
 }
 
 inline cm_con_data_t g_remote_con_data{};
@@ -335,7 +345,7 @@ inline int connect_qp(resources *res) {
   // modify the QP to init
   modify_qp_to_init(res->qp);
 
-  post_receive(res);
+  // post_receive(res);
 
   // modify the QP to RTR
   modify_qp_to_rtr(res->qp, g_remote_con_data.qp_num, g_remote_con_data.lid,
@@ -348,8 +358,8 @@ inline int connect_qp(resources *res) {
 }
 
 // This function will create and post a send work request.
-inline int post_send(resources *res, ibv_wr_opcode opcode,
-                     std::string_view msg) {
+inline int post_send(resources *res, ibv_wr_opcode opcode, std::string_view msg,
+                     uint64_t id) {
   struct ibv_send_wr sr;
   struct ibv_sge sge;
   struct ibv_send_wr *bad_wr = NULL;
@@ -357,7 +367,8 @@ inline int post_send(resources *res, ibv_wr_opcode opcode,
   // prepare the scatter / gather entry
   memset(&sge, 0, sizeof(sge));
 
-  strcpy(res->buf, msg.data());
+  // strcpy(res->buf, msg.data());
+  memcpy(res->buf, msg.data(), msg.size());
 
   sge.addr = (uintptr_t)res->buf;
   sge.length = msg.size();
@@ -367,7 +378,7 @@ inline int post_send(resources *res, ibv_wr_opcode opcode,
   memset(&sr, 0, sizeof(sr));
 
   sr.next = NULL;
-  sr.wr_id = g_wr_id++;
+  sr.wr_id = id;
   sr.sg_list = &sge;
 
   sr.num_sge = 1;
@@ -401,9 +412,27 @@ inline int post_send(resources *res, ibv_wr_opcode opcode,
   return 0;
 }
 
+inline async_simple::coro::Lazy<int> post_send_coro(resources *res,
+                                                    ibv_wr_opcode opcode,
+                                                    std::string_view msg) {
+  coro_io::callback_awaitor<int> awaitor;
+  auto ec = co_await awaitor.await_resume([=](auto handler) {
+    int r = post_send(res, opcode, msg, (uint64_t)handler.handle_ptr());
+    if (r != 0) {
+      handler.set_value_then_resume(r);
+    }
+  });
+  ELOG_INFO << "post send ok";
+  co_return ec;
+}
+
 inline int poll_completion(struct resources *res) {
   void *ev_ctx;
   int r = ibv_get_cq_event(res->complete_event_channel, &res->cq, &ev_ctx);
+  assert(r >= 0);
+
+  ibv_ack_cq_events(res->cq, 1);
+  r = ibv_req_notify_cq(res->cq, 0);
   assert(r >= 0);
 
   struct ibv_wc wc;
@@ -417,34 +446,21 @@ inline int poll_completion(struct resources *res) {
       ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
       assert(wc.status == IBV_WC_SUCCESS);
     }
+
+    ((std::coroutine_handle<> *)wc.wr_id)->resume();
   }
 
-  ibv_ack_cq_events(res->cq, ne);
-  r = ibv_req_notify_cq(res->cq, 0);
-  assert(r >= 0);
-
-  // struct ibv_wc wc;
-  // do {
-  //   int ne = ibv_poll_cq(res->cq, 1, &wc);
-  //   if (ne < 0) {
-  //     ELOGV(ERROR, "poll CQ failed %d", ne);
-  //     exit(EXIT_FAILURE);
-  //   }
-  //   if (ne > 0) {
-  //     ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
-  //     break;
-  //   }
-  // } while (true);
   return 0;
 }
 
 // Cleanup and deallocate all resources used
 inline int resources_destroy(struct resources *res) {
-  ibv_destroy_comp_channel(res->complete_event_channel);
   ibv_destroy_qp(res->qp);
   ibv_dereg_mr(res->mr);
   free(res->buf);
+
   ibv_destroy_cq(res->cq);
+  ibv_destroy_comp_channel(res->complete_event_channel);
   ibv_dealloc_pd(res->pd);
   ibv_close_device(res->ib_ctx);
 
@@ -453,6 +469,8 @@ inline int resources_destroy(struct resources *res) {
 
 struct rdma_service_t {
   resources *res;
+  asio::posix::stream_descriptor cq_fd_;
+  coro_io::ExecutorWrapper<> *executor_wrapper_;
   union ibv_gid my_gid;
   std::atomic<int> count = 0;
 
@@ -468,21 +486,40 @@ struct rdma_service_t {
     memcpy(g_remote_con_data.gid, peer.gid, 16);
 
     connect_qp(res);
+    // post_receive_coro(res).start([](auto&&){});
+    auto on_recv = [this]() -> async_simple::coro::Lazy<void> {
+      while (true) {
+        coro_io::callback_awaitor<std::error_code> awaitor;
+        auto ec = co_await awaitor.await_resume([this](auto handler) {
+          cq_fd_.async_wait(asio::posix::stream_descriptor::wait_read,
+                            [handler](const auto &ec) mutable {
+                              handler.set_value_then_resume(ec);
+                            });
+        });
+        poll_completion(res);
+      }
+    };
+    on_recv().start([](auto &&) {
+    });
+
+    start().start([](auto &&) {
+    });
 
     return server_data;
   }
 
-  void fetch() {
-    std::string msg = "hello rdma! ";
-    msg.append(std::to_string(++count));
-    post_send(res, IBV_WR_SEND, msg);
-    poll_completion(res);
-  }
+  async_simple::coro::Lazy<void> start() {
+    int index = 0;
+    co_await post_receive_coro(res);
+    while (true) {
+      ELOG_INFO << "get request data: " << std::string_view(res->buf);
 
-  void put() {
-    poll_completion(res);
-    std::cout << std::string_view(res->buf) << "\n";
-    post_receive(res);
+      std::string msg = "hello rdma from server ";
+      msg.append(std::to_string(index++));
+      co_await async_simple::coro::collectAll(
+          post_receive_coro(res),
+          post_send_coro(res, IBV_WR_SEND, std::string_view(res->buf)));
+    }
   }
 };
 /*-------------- rdma ---------------*/
