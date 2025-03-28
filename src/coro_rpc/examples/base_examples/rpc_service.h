@@ -25,6 +25,8 @@
 #include <string_view>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
+#include "ylt/coro_io/coro_io.hpp"
+
 /*-------------- rdma ---------------*/
 struct cm_con_data_t {
   uint64_t addr;    // buffer address
@@ -46,6 +48,8 @@ struct resources {
   struct ibv_mr *mr;  // MR handle for buf
   char *buf;          // memory buffer pointer, used for
                       // RDMA send ops
+  uint64_t recv_id;
+  uint64_t send_id;
 };
 
 #define CHECK(expr)            \
@@ -287,6 +291,7 @@ inline int post_receive(resources *res, uint64_t wr_id) {
   // prepare the receive work request
   memset(&rr, 0, sizeof(rr));
 
+  res->recv_id = wr_id;
   rr.next = NULL;
   rr.wr_id = wr_id;
   rr.sg_list = &sge;
@@ -377,6 +382,7 @@ inline int post_send(resources *res, ibv_wr_opcode opcode, std::string_view msg,
   // prepare the send work request
   memset(&sr, 0, sizeof(sr));
 
+  res->send_id = id;
   sr.next = NULL;
   sr.wr_id = id;
   sr.sg_list = &sge;
@@ -410,6 +416,13 @@ inline int post_send(resources *res, ibv_wr_opcode opcode, std::string_view msg,
   }
 
   return 0;
+}
+
+template <typename T>
+inline void resume(T arg, uint64_t handle) {
+  auto awaiter = typename coro_io::callback_awaitor<T>::awaitor_handler(
+      (coro_io::callback_awaitor<T> *)handle);
+  awaiter.set_value_then_resume(arg);
 }
 
 inline async_simple::coro::Lazy<int> post_send_coro(resources *res,
@@ -447,7 +460,14 @@ inline int poll_completion(struct resources *res) {
       assert(wc.status == IBV_WC_SUCCESS);
     }
 
-    ((std::coroutine_handle<> *)wc.wr_id)->resume();
+    if (res->recv_id == wc.wr_id) {
+      res->recv_id = 0;
+    }
+    else {
+      res->send_id = 0;
+    }
+    resume<int>(wc.status, wc.wr_id);
+    // ((std::coroutine_handle<> *)wc.wr_id)->resume();
   }
 
   return 0;
@@ -513,7 +533,7 @@ struct rdma_service_t {
     co_await post_receive_coro(res);
     while (true) {
       ELOG_INFO << "get request data: " << std::string_view(res->buf);
-
+      // std::this_thread::sleep_for(std::chrono::seconds(1000)); //test timeout
       std::string msg = "hello rdma from server ";
       msg.append(std::to_string(index++));
       co_await async_simple::coro::collectAll(

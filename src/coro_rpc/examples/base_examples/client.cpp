@@ -83,6 +83,12 @@ Lazy<void> show_rpc_call() {
       });
       if (ec) {
         ELOG_INFO << ec.message();
+        if (res->recv_id)
+          resume<int>(ec.value(), res->recv_id);
+
+        if (res->send_id)
+          resume<int>(ec.value(), res->send_id);
+
         promise.setValue();
         break;
       }
@@ -94,13 +100,27 @@ Lazy<void> show_rpc_call() {
   on_response().via(&client.get_executor()).start([](auto&&) {
   });
 
+  auto close_lz = [&cq_fd]() -> async_simple::coro::Lazy<int> {
+    std::error_code ignore;
+    cq_fd.cancel(ignore);
+    cq_fd.close(ignore);
+    co_return 0;
+  };
+
   for (int i = 0; i < 3; i++) {
     // send request to server
     std::string msg = "hello rdma from client ";
     msg.append(std::to_string(i));
 
-    co_await async_simple::coro::collectAll(
+    // auto [rr, sr, cr] = co_await async_simple::coro::collectAll(
+    //     post_receive_coro(res), post_send_coro(res, IBV_WR_SEND, msg),
+    //     close_lz()); // for timeout test
+    auto [rr, sr, cr] = co_await async_simple::coro::collectAll(
         post_receive_coro(res), post_send_coro(res, IBV_WR_SEND, msg));
+    if (rr.value() || sr.value()) {
+      ELOG_ERROR << "rdma send recv error";
+      break;
+    }
   }
 
   std::error_code ignore;
