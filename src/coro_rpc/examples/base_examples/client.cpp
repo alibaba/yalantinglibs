@@ -35,6 +35,7 @@ struct bench_config {
   uint32_t client_concurrency;
   size_t data_len;
   size_t max_request_count;
+  size_t reg_mr_length;
 };
 
 Lazy<void> show_rpc_call(const bench_config& conf) {
@@ -60,7 +61,7 @@ Lazy<void> show_rpc_call(const bench_config& conf) {
 
   resources* res = &resource;
   auto qp = create_qp(res->pd, res->cq);
-  auto mr = create_mr(res->pd);
+  auto mr = create_mr(res->pd, conf.reg_mr_length);
   auto ctx = std::make_shared<conn_context>(conn_context{mr, qp});
 
   cm_con_data_t local_data{};
@@ -145,25 +146,6 @@ Lazy<void> show_rpc_call(const bench_config& conf) {
   co_return;
   /*----------------rdma---------------*/
 }
-/*send multi request with same socket in the same time*/
-Lazy<void> connection_reuse() {
-  coro_rpc_client client;
-  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
-  assert(!ec);
-  std::vector<Lazy<async_rpc_result<int>>> handlers;
-  for (int i = 0; i < 10; ++i) {
-    /* send_request is thread-safe, so you can call it in different thread with
-     * same client*/
-    handlers.push_back(co_await client.send_request<add>(i, i + 1));
-  }
-  std::vector<async_simple::Try<async_rpc_result<int>>> results =
-      co_await collectAll(std::move(handlers));
-  for (int i = 0; i < 10; ++i) {
-    std::cout << results[i].value()->result() << std::endl;
-    assert(results[i].value()->result() == 2 * i + 1);
-  }
-  co_return;
-}
 
 int main(int argc, char** argv) {
   cmdline::parser parser;
@@ -176,6 +158,7 @@ int main(int argc, char** argv) {
                        "total number of http clients", false, 1);
   parser.add<size_t>("max_request_count", 'm', "max request count", false,
                      100000);
+  parser.add<size_t>("reg_mr_len", 'r', "register memory lenght", false, 256);
 
   parser.parse_check(argc, argv);
 
@@ -185,11 +168,13 @@ int main(int argc, char** argv) {
   conf.client_concurrency = parser.get<uint32_t>("client_concurrency");
   conf.data_len = parser.get<size_t>("data_len");
   conf.max_request_count = parser.get<size_t>("max_request_count");
+  conf.reg_mr_length = parser.get<size_t>("reg_mr_len");
 
   ELOG_INFO << "ip: " << conf.host << ", " << "port: " << conf.port << ", "
             << "client concurrency: " << conf.client_concurrency << ", "
             << "data_len: " << conf.data_len << ", "
-            << "max_request_count: " << conf.max_request_count;
+            << "max_request_count: " << conf.max_request_count << ", "
+            << "reg_mr_length: " << conf.reg_mr_length;
 
   try {
     syncAwait(show_rpc_call(conf));

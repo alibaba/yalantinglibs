@@ -31,13 +31,16 @@ int main(int argc, char** argv) {
   parser.add<unsigned short>("port", 'p', "server port", false, 8801);
   parser.add<uint32_t>("thd_num", 't', "server thread number", false,
                        std::thread::hardware_concurrency());
+  parser.add<size_t>("reg_mr_len", 'r', "register memory lenght", false, 256);
 
   parser.parse_check(argc, argv);
 
   auto port = parser.get<unsigned short>("port");
   auto thd_num = parser.get<uint32_t>("thd_num");
+  auto reg_mr_length = parser.get<size_t>("reg_mr_len");
 
-  ELOG_INFO << "port: " << port << ", thd_num: " << thd_num;
+  ELOG_INFO << "port: " << port << ", thd_num: " << thd_num
+            << ", register mr lenght: " << reg_mr_length;
 
   // init rpc server
   coro_rpc_server server(thd_num, port);
@@ -60,6 +63,7 @@ int main(int argc, char** argv) {
     CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx,
                         &service.my_gid));
   }
+  service.reg_mr_len_ = reg_mr_length;
 
   server.register_handler<&rdma_service_t::get_con_data>(&service);
 

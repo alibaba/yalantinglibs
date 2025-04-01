@@ -64,7 +64,6 @@ struct config_t {
 };
 
 inline config_t config{};
-inline size_t g_buf_size = 256;
 
 inline auto create_qp(ibv_pd *pd, ibv_cq *cq) {
   struct ibv_qp_init_attr qp_init_attr;
@@ -85,14 +84,14 @@ inline auto create_qp(ibv_pd *pd, ibv_cq *cq) {
   return qp;
 }
 
-inline auto create_mr(ibv_pd *pd) {
-  auto buf = (char *)calloc(1, g_buf_size);
+inline auto create_mr(ibv_pd *pd, size_t reg_mr_len) {
+  auto buf = (char *)calloc(1, reg_mr_len);
   assert(buf != NULL);
 
   // register the memory buffer
   int mr_flags =
       IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
-  auto mr = ibv_reg_mr(pd, buf, g_buf_size, mr_flags);
+  auto mr = ibv_reg_mr(pd, buf, reg_mr_len, mr_flags);
   assert(mr != NULL);
 
   ELOGV(INFO, "MR was registered with addr=%p, lkey= %d, rkey= %d, flags= %d",
@@ -327,7 +326,7 @@ inline int post_receive(conn_context *ctx, uint64_t wr_id) {
   // prepare the scatter / gather entry
   memset(&sge, 0, sizeof(sge));
   sge.addr = (uintptr_t)ctx->mr->addr;
-  sge.length = g_buf_size;
+  sge.length = ctx->mr->length;
   sge.lkey = ctx->mr->lkey;
 
   // prepare the receive work request
@@ -464,12 +463,13 @@ struct rdma_service_t {
   union ibv_gid my_gid;
   std::atomic<int> count = 0;
   ylt::metric::counter_t qps_ = {"qps", ""};
+  size_t reg_mr_len_ = 0;
 
   cm_con_data_t get_con_data(cm_con_data_t peer) {
     auto qp = create_qp(res->pd, res->cq);
     assert(qp != NULL);
     ELOGV(INFO, "QP was created, QP number= %d", qp->qp_num);
-    auto mr = create_mr(res->pd);
+    auto mr = create_mr(res->pd, reg_mr_len_);
     connect_qp(qp, peer);
     auto ctx = std::make_shared<conn_context>(conn_context{mr, qp});
 
