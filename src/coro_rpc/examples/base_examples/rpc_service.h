@@ -280,7 +280,8 @@ struct conn_context {
 };
 
 // This function will create and post a send work request.
-inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id) {
+inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id,
+                     bool need_copy) {
   struct ibv_send_wr sr;
   struct ibv_sge sge;
   struct ibv_send_wr *bad_wr = NULL;
@@ -288,8 +289,9 @@ inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id) {
   // prepare the scatter / gather entry
   memset(&sge, 0, sizeof(sge));
 
-  // strcpy(res->buf, msg.data());
-  memcpy(ctx->mr->addr, msg.data(), msg.size());
+  if (need_copy) {
+    memcpy(ctx->mr->addr, msg.data(), msg.size());
+  }
 
   sge.addr = (uintptr_t)ctx->mr->addr;
   sge.length = msg.size();
@@ -392,10 +394,11 @@ inline void resume(T arg, uint64_t handle) {
 }
 
 inline async_simple::coro::Lazy<int> post_send_coro(conn_context *ctx,
-                                                    std::string_view msg) {
+                                                    std::string_view msg,
+                                                    bool need_copy) {
   coro_io::callback_awaitor<int> awaitor;
   auto ec = co_await awaitor.await_resume([=](auto handler) {
-    int r = post_send(ctx, msg, (uint64_t)handler.handle_ptr());
+    int r = post_send(ctx, msg, (uint64_t)handler.handle_ptr(), need_copy);
     if (r != 0) {
       handler.set_value_then_resume(r);
     }
@@ -506,12 +509,10 @@ struct rdma_service_t {
     while (true) {
       ELOG_INFO << "get request data: "
                 << std::string_view((char *)ctx->mr->addr);
-      // std::this_thread::sleep_for(std::chrono::seconds(1000)); //test timeout
-      std::string msg = "hello rdma from server ";
-      msg.append(std::to_string(index++));
       auto [rr, sr] = co_await async_simple::coro::collectAll(
           post_receive_coro(ctx.get()),
-          post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr)));
+          post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr),
+                         false));
       if (rr.value() || sr.value()) {
         ELOG_ERROR << "rdma send recv error";
         break;

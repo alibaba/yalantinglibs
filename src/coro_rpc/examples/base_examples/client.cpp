@@ -117,11 +117,8 @@ Lazy<void> show_rpc_call() {
     std::string msg = "hello rdma from client ";
     msg.append(std::to_string(i));
 
-    // auto [rr, sr, cr] = co_await async_simple::coro::collectAll(
-    //     post_receive_coro(res), post_send_coro(res, IBV_WR_SEND, msg),
-    //     close_lz()); // for timeout test
     auto [rr, sr] = co_await async_simple::coro::collectAll(
-        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg));
+        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, true));
     if (rr.value() || sr.value()) {
       ELOG_ERROR << "rdma send recv error";
       break;
