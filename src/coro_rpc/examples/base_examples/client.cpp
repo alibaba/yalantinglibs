@@ -43,6 +43,7 @@ Lazy<void> show_rpc_call() {
   /*----------------rdma---------------*/
   resources resource{};
   resources_create(&resource);
+
   asio::posix::stream_descriptor cq_fd(
       client.get_executor().get_asio_executor(),
       resource.complete_event_channel->fd);
@@ -50,11 +51,14 @@ Lazy<void> show_rpc_call() {
   assert(r >= 0);
 
   resources* res = &resource;
+  auto qp = create_qp(res->pd, res->cq);
+  auto mr = create_mr(res->pd);
+  auto ctx = std::make_shared<conn_context>(conn_context{mr, qp});
 
   cm_con_data_t local_data{};
-  local_data.addr = (uintptr_t)res->buf;
-  local_data.rkey = res->mr->rkey;
-  local_data.qp_num = res->qp->qp_num;
+  local_data.addr = (uintptr_t)mr->addr;
+  local_data.rkey = mr->rkey;
+  local_data.qp_num = qp->qp_num;
   local_data.lid = res->port_attr.lid;
   union ibv_gid my_gid;
   memset(&my_gid, 0, sizeof(my_gid));
@@ -67,12 +71,14 @@ Lazy<void> show_rpc_call() {
 
   auto rdma_ret = co_await client.call_for<&rdma_service_t::get_con_data>(
       std::chrono::seconds(3600), local_data);
-  g_remote_con_data = rdma_ret.value();
-  connect_qp(res);
+  // g_remote_con_data = rdma_ret.value();
+  connect_qp(qp, rdma_ret.value());
 
   async_simple::Promise<void> promise;
-  auto on_response = [res, &cq_fd,
-                      &promise]() -> async_simple::coro::Lazy<void> {
+  auto on_response =
+      [res, &cq_fd, &promise](
+          std::shared_ptr<conn_context> ctx) -> async_simple::coro::Lazy<void> {
+    auto sp = ctx;
     while (true) {
       coro_io::callback_awaitor<std::error_code> awaitor;
       auto ec = co_await awaitor.await_resume([&cq_fd](auto handler) {
@@ -83,21 +89,21 @@ Lazy<void> show_rpc_call() {
       });
       if (ec) {
         ELOG_INFO << ec.message();
-        if (res->recv_id)
-          resume<int>(ec.value(), res->recv_id);
+        if (ctx->recv_id)
+          resume<int>(ec.value(), ctx->recv_id);
 
-        if (res->send_id)
-          resume<int>(ec.value(), res->send_id);
+        if (ctx->send_id)
+          resume<int>(ec.value(), ctx->send_id);
 
         promise.setValue();
         break;
       }
 
-      poll_completion(res);
+      poll_completion(res, ctx);
     }
   };
 
-  on_response().via(&client.get_executor()).start([](auto&&) {
+  on_response(ctx).via(&client.get_executor()).start([](auto&&) {
   });
 
   auto close_lz = [&cq_fd]() -> async_simple::coro::Lazy<int> {
@@ -115,8 +121,8 @@ Lazy<void> show_rpc_call() {
     // auto [rr, sr, cr] = co_await async_simple::coro::collectAll(
     //     post_receive_coro(res), post_send_coro(res, IBV_WR_SEND, msg),
     //     close_lz()); // for timeout test
-    auto [rr, sr, cr] = co_await async_simple::coro::collectAll(
-        post_receive_coro(res), post_send_coro(res, IBV_WR_SEND, msg));
+    auto [rr, sr] = co_await async_simple::coro::collectAll(
+        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg));
     if (rr.value() || sr.value()) {
       ELOG_ERROR << "rdma send recv error";
       break;
@@ -129,6 +135,9 @@ Lazy<void> show_rpc_call() {
 
   co_await promise.getFuture();
 
+  ibv_destroy_qp(ctx->qp);
+  free(ctx->mr->addr);
+  ibv_dereg_mr(ctx->mr);
   resources_destroy(res);
 
   co_return;
@@ -157,7 +166,7 @@ Lazy<void> connection_reuse() {
 int main() {
   try {
     syncAwait(show_rpc_call());
-    syncAwait(connection_reuse());
+    // syncAwait(connection_reuse());
     std::cout << "Done!" << std::endl;
   } catch (const std::exception& e) {
     std::cout << "Error:" << e.what() << std::endl;
