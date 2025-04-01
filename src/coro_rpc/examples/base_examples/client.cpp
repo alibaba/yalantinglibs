@@ -21,20 +21,23 @@
 #include "async_simple/Try.h"
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
+#include "cmdline.h"
 #include "rpc_service.h"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
-#include "ylt/coro_rpc/impl/errno.h"
-#include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 using namespace coro_rpc;
 using namespace async_simple::coro;
 using namespace std::string_literals;
-/*!
- * \example helloworld/client.main.cpp
- * \brief helloworld example client code
- */
 
-Lazy<void> show_rpc_call() {
+struct bench_config {
+  std::string host;
+  std::string port;
+  uint32_t client_concurrency;
+  size_t data_len;
+  size_t max_request_count;
+};
+
+Lazy<void> show_rpc_call(const bench_config& conf) {
   size_t req_count = 0;
 #if NDEBUG
   req_count = 10000000;
@@ -42,7 +45,7 @@ Lazy<void> show_rpc_call() {
 #endif
   coro_rpc_client client;
 
-  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
+  [[maybe_unused]] auto ec = co_await client.connect(conf.host, conf.port);
   assert(!ec);
 
   /*----------------rdma---------------*/
@@ -117,11 +120,11 @@ Lazy<void> show_rpc_call() {
     co_return 0;
   };
 
-  std::string msg = "hello rdma from client ";
-  for (size_t i = 0; i < req_count; i++) {
+  std::string msg(conf.data_len, 'A');
+  for (size_t i = 0; i < conf.max_request_count; i++) {
     // send request to server
     auto [rr, sr] = co_await async_simple::coro::collectAll(
-        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, false));
+        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, true));
     if (rr.value() || sr.value()) {
       ELOG_ERROR << "rdma send recv error";
       break;
@@ -162,9 +165,34 @@ Lazy<void> connection_reuse() {
   co_return;
 }
 
-int main() {
+int main(int argc, char** argv) {
+  cmdline::parser parser;
+
+  parser.add<std::string>("host", 'h', "server ip address", false, "127.0.0.1");
+  parser.add<std::string>("port", 'p', "server port", false, "8801");
+
+  parser.add<size_t>("data_len", 'l', "data length", false, 16);
+  parser.add<uint32_t>("client_concurrency", 'c',
+                       "total number of http clients", false, 1);
+  parser.add<size_t>("max_request_count", 'm', "max request count", false,
+                     100000);
+
+  parser.parse_check(argc, argv);
+
+  bench_config conf{};
+  conf.host = parser.get<std::string>("host");
+  conf.port = parser.get<std::string>("port");
+  conf.client_concurrency = parser.get<uint32_t>("client_concurrency");
+  conf.data_len = parser.get<size_t>("data_len");
+  conf.max_request_count = parser.get<size_t>("max_request_count");
+
+  ELOG_INFO << "ip: " << conf.host << ", " << "port: " << conf.port << ", "
+            << "client concurrency: " << conf.client_concurrency << ", "
+            << "data_len: " << conf.data_len << ", "
+            << "max_request_count: " << conf.max_request_count;
+
   try {
-    syncAwait(show_rpc_call());
+    syncAwait(show_rpc_call(conf));
     // syncAwait(connection_reuse());
     std::cout << "Done!" << std::endl;
   } catch (const std::exception& e) {
