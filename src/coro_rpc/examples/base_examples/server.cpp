@@ -68,13 +68,25 @@ int main(int argc, char** argv) {
   server.register_handler<&rdma_service_t::get_con_data>(&service);
 
 #if NDEBUG
+  ELOG_INFO << "begin to statistic";
   int64_t last = 0;
-  std::thread thd([&service, &last] {
+  int64_t last_latence = 0;
+  std::thread thd([&service, &last, &last_latence] {
     while (true) {
       std::this_thread::sleep_for(std::chrono::seconds(1));
-      int64_t current = service.qps_.value();
-      std::cout << "qps: " << current - last << "\n";
-      last = current;
+      auto value = service.qps_.value();
+      if (value == 0) {
+        continue;
+      }
+      auto lat = service.latency_.value();
+      auto qps = value - last;
+      if (qps == 0) {
+        continue;
+      }
+      ELOG_INFO << "qps: " << qps << ", latency: " << (lat - last_latence) / qps
+                << "us";
+      last = value;
+      last_latence = lat;
     }
   });
 #endif

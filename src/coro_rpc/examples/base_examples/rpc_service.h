@@ -463,6 +463,7 @@ struct rdma_service_t {
   union ibv_gid my_gid;
   std::atomic<int> count = 0;
   ylt::metric::counter_t qps_ = {"qps", ""};
+  ylt::metric::counter_t latency_ = {"latency", ""};
   size_t reg_mr_len_ = 0;
 
   cm_con_data_t get_con_data(cm_con_data_t peer) {
@@ -512,10 +513,16 @@ struct rdma_service_t {
       ELOG_DEBUG << "get request data: "
                  << std::string_view((char *)ctx->mr->addr);
       qps_.inc();
+      auto start = std::chrono::system_clock::now();
       auto [rr, sr] = co_await async_simple::coro::collectAll(
           post_receive_coro(ctx.get()),
           post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr),
                          false));
+      auto end = std::chrono::system_clock::now();
+      auto dur =
+          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count();
+      latency_.inc(dur);
       if (rr.value() || sr.value()) {
         ELOG_ERROR << "rdma send recv error";
         break;
