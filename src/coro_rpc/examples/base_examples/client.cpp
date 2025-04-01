@@ -35,6 +35,11 @@ using namespace std::string_literals;
  */
 
 Lazy<void> show_rpc_call() {
+  size_t req_count = 0;
+#if NDEBUG
+  req_count = 10000000;
+  easylog::set_min_severity(easylog::Severity::INFO);
+#endif
   coro_rpc_client client;
 
   [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
@@ -112,13 +117,11 @@ Lazy<void> show_rpc_call() {
     co_return 0;
   };
 
-  for (int i = 0; i < 3; i++) {
+  std::string msg = "hello rdma from client ";
+  for (size_t i = 0; i < req_count; i++) {
     // send request to server
-    std::string msg = "hello rdma from client ";
-    msg.append(std::to_string(i));
-
     auto [rr, sr] = co_await async_simple::coro::collectAll(
-        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, true));
+        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, false));
     if (rr.value() || sr.value()) {
       ELOG_ERROR << "rdma send recv error";
       break;

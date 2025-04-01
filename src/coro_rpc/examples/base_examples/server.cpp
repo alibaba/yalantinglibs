@@ -21,6 +21,9 @@ using namespace coro_rpc;
 using namespace async_simple;
 using namespace async_simple::coro;
 int main() {
+#if NDEBUG
+  easylog::set_min_severity(easylog::Severity::INFO);
+#endif
   // init rpc server
   coro_rpc_server server(/*thread=*/std::thread::hardware_concurrency(),
                          /*port=*/8801);
@@ -48,6 +51,17 @@ int main() {
 
   server.register_handler<&rdma_service_t::get_con_data>(&service);
 
+#if NDEBUG
+  int64_t last = 0;
+  std::thread thd([&service, &last] {
+    while (true) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      int64_t current = service.qps_.value();
+      std::cout << "qps: " << current - last << "\n";
+      last = current;
+    }
+  });
+#endif
   // regist normal function for rpc
   server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,
                           echo_with_attachment, nested_echo,

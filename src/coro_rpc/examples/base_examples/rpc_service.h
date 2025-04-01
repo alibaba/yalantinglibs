@@ -24,6 +24,7 @@
 #include <string>
 #include <string_view>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
+#include <ylt/metric/counter.hpp>
 
 #include "ylt/coro_io/coro_io.hpp"
 
@@ -313,7 +314,7 @@ inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id,
   // into RNR flow
   CHECK(ibv_post_send(ctx->qp, &sr, &bad_wr));
 
-  ELOGV(INFO, "Send request was posted");
+  ELOGV(DEBUG, "Send request was posted");
 
   return 0;
 }
@@ -340,7 +341,7 @@ inline int post_receive(conn_context *ctx, uint64_t wr_id) {
 
   // post the receive request to the RQ
   CHECK(ibv_post_recv(ctx->qp, &rr, &bad_wr));
-  ELOGV(INFO, "Receive request was posted");
+  ELOGV(DEBUG, "Receive request was posted");
 
   return 0;
 }
@@ -353,7 +354,7 @@ inline async_simple::coro::Lazy<int> post_receive_coro(conn_context *ctx) {
       handler.set_value_then_resume(r);
     }
   });
-  ELOG_INFO << "recv response: " << std::string_view((char *)ctx->mr->addr);
+  ELOG_DEBUG << "recv response: " << std::string_view((char *)ctx->mr->addr);
   co_return ec;
 }
 
@@ -403,7 +404,7 @@ inline async_simple::coro::Lazy<int> post_send_coro(conn_context *ctx,
       handler.set_value_then_resume(r);
     }
   });
-  ELOG_INFO << "post send ok";
+  ELOG_DEBUG << "post send ok";
   co_return ec;
 }
 
@@ -428,7 +429,7 @@ inline int poll_completion(struct resources *res,
       exit(EXIT_FAILURE);
     }
     if (ne > 0) {
-      ELOGV(INFO, "Completion was found in CQ with status %d\n", wc.status);
+      ELOGV(DEBUG, "Completion was found in CQ with status %d", wc.status);
       assert(wc.status == IBV_WC_SUCCESS);
     }
 
@@ -462,6 +463,7 @@ struct rdma_service_t {
   coro_io::ExecutorWrapper<> *executor_wrapper_;
   union ibv_gid my_gid;
   std::atomic<int> count = 0;
+  ylt::metric::counter_t qps_ = {"qps", ""};
 
   cm_con_data_t get_con_data(cm_con_data_t peer) {
     auto qp = create_qp(res->pd, res->cq);
@@ -507,8 +509,9 @@ struct rdma_service_t {
 
     co_await post_receive_coro(ctx.get());
     while (true) {
-      ELOG_INFO << "get request data: "
-                << std::string_view((char *)ctx->mr->addr);
+      ELOG_DEBUG << "get request data: "
+                 << std::string_view((char *)ctx->mr->addr);
+      qps_.inc();
       auto [rr, sr] = co_await async_simple::coro::collectAll(
           post_receive_coro(ctx.get()),
           post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr),
