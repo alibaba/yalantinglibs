@@ -484,7 +484,6 @@ struct rdma_service_t {
   async_simple::coro::Lazy<void> start(std::shared_ptr<conn_context> ctx) {
     auto on_recv = [this](auto ctx) -> async_simple::coro::Lazy<void> {
       while (true) {
-        auto sp = ctx;
         coro_io::callback_awaitor<std::error_code> awaitor;
         auto ec = co_await awaitor.await_resume([this, ctx](auto handler) {
           cq_fd_.async_wait(asio::posix::stream_descriptor::wait_read,

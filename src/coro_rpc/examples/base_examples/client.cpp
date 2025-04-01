@@ -78,7 +78,6 @@ Lazy<void> show_rpc_call() {
   auto on_response =
       [res, &cq_fd, &promise](
           std::shared_ptr<conn_context> ctx) -> async_simple::coro::Lazy<void> {
-    auto sp = ctx;
     while (true) {
       coro_io::callback_awaitor<std::error_code> awaitor;
       auto ec = co_await awaitor.await_resume([&cq_fd](auto handler) {
