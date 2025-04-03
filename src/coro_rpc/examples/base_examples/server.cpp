@@ -13,19 +13,94 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cmath>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
+#include "cmdline.h"
 #include "rpc_service.h"
+#include "ylt/coro_io/io_context_pool.hpp"
 using namespace coro_rpc;
 using namespace async_simple;
 using namespace async_simple::coro;
-int main() {
+
+int main(int argc, char** argv) {
+#if NDEBUG
+  easylog::set_min_severity(easylog::Severity::INFO);
+#endif
+
+  cmdline::parser parser;
+  parser.add<unsigned short>("port", 'p', "server port", false, 8801);
+  parser.add<uint32_t>("thd_num", 't', "server thread number", false,
+                       std::thread::hardware_concurrency());
+  parser.add<size_t>("reg_mr_len", 'r', "register memory lenght", false, 256);
+  // 大多数 IB/RoCE 网络所用的 GID Index 为 3，对于阿里 eRDMA，需要设置为 1。
+  parser.add<int>("gid_index", 'i', "gid index", false, 0);
+
+  parser.parse_check(argc, argv);
+
+  auto port = parser.get<unsigned short>("port");
+  auto thd_num = parser.get<uint32_t>("thd_num");
+  auto reg_mr_length = parser.get<size_t>("reg_mr_len");
+  config.gid_idx = parser.get<int>("gid_index");
+
+  ELOG_INFO << "port: " << port << ", thd_num: " << thd_num
+            << ", register mr lenght: " << reg_mr_length
+            << ", gid index: " << config.gid_idx;
+
   // init rpc server
-  coro_rpc_server server(/*thread=*/std::thread::hardware_concurrency(),
-                         /*port=*/8801);
+  coro_rpc_server server(thd_num, port);
 
-  coro_rpc_server server2{/*thread=*/1, /*port=*/8802};
+  resources res{};
+  resources_create(&res);
 
+  auto executor = coro_io::get_global_executor();
+  rdma_service_t service{
+      &res,
+      asio::posix::stream_descriptor(executor->get_asio_executor(),
+                                     res.complete_event_channel->fd),
+      executor};
+  int r = ibv_req_notify_cq(res.cq, 0);
+  assert(r >= 0);
+
+  memset(&service.my_gid, 0, sizeof(service.my_gid));
+
+  if (config.gid_idx >= 0) {
+    CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx,
+                        &service.my_gid));
+  }
+  service.reg_mr_len_ = reg_mr_length;
+
+  server.register_handler<&rdma_service_t::get_con_data>(&service);
+
+#if NDEBUG
+  ELOG_INFO << "begin to statistic";
+  int64_t last = 0;
+  int64_t last_latence = 0;
+  std::thread thd([&service, &last, &last_latence, reg_mr_length] {
+    while (true) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      auto value = service.qps_.value();
+      if (value == 0) {
+        continue;
+      }
+      auto lat = service.latency_.value();
+      auto qps = value - last;
+      if (qps == 0) {
+        last = 0;
+        last_latence = 0;
+        continue;
+      }
+
+      double result = double(qps * reg_mr_length * 8) / (1000 * 1000 * 1000);
+      result = round(result * 100) / 100;
+
+      std::cout << "qps: " << qps << ", Throughout: " << result
+                << "Gb, latency: " << (lat - last_latence) / qps << "us\n";
+      last = value;
+      last_latence = lat;
+    }
+  });
+#endif
   // regist normal function for rpc
   server.register_handler<echo, async_echo_by_coroutine, async_echo_by_callback,
                           echo_with_attachment, nested_echo,
@@ -36,11 +111,6 @@ int main() {
   // regist member function for rpc
   HelloService hello_service;
   server.register_handler<&HelloService::hello>(&hello_service);
-
-  server2.register_handler<echo>();
-  // async start server
-  auto res = server2.async_start();
-  assert(!res.hasResult());
 
   // sync start server & sync await server stop
   return !server.start();
