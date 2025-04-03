@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cmath>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "cmdline.h"
@@ -32,15 +33,19 @@ int main(int argc, char** argv) {
   parser.add<uint32_t>("thd_num", 't', "server thread number", false,
                        std::thread::hardware_concurrency());
   parser.add<size_t>("reg_mr_len", 'r', "register memory lenght", false, 256);
+  // 大多数 IB/RoCE 网络所用的 GID Index 为 3，对于阿里 eRDMA，需要设置为 1。
+  parser.add<int>("gid_index", 'i', "gid index", false, 0);
 
   parser.parse_check(argc, argv);
 
   auto port = parser.get<unsigned short>("port");
   auto thd_num = parser.get<uint32_t>("thd_num");
   auto reg_mr_length = parser.get<size_t>("reg_mr_len");
+  config.gid_idx = parser.get<int>("gid_index");
 
   ELOG_INFO << "port: " << port << ", thd_num: " << thd_num
-            << ", register mr lenght: " << reg_mr_length;
+            << ", register mr lenght: " << reg_mr_length
+            << ", gid index: " << config.gid_idx;
 
   // init rpc server
   coro_rpc_server server(thd_num, port);
@@ -71,7 +76,7 @@ int main(int argc, char** argv) {
   ELOG_INFO << "begin to statistic";
   int64_t last = 0;
   int64_t last_latence = 0;
-  std::thread thd([&service, &last, &last_latence] {
+  std::thread thd([&service, &last, &last_latence, reg_mr_length] {
     while (true) {
       std::this_thread::sleep_for(std::chrono::seconds(1));
       auto value = service.qps_.value();
@@ -83,8 +88,12 @@ int main(int argc, char** argv) {
       if (qps == 0) {
         continue;
       }
-      ELOG_INFO << "qps: " << qps << ", latency: " << (lat - last_latence) / qps
-                << "us";
+
+      double result = double(qps * reg_mr_length * 8) / (1000 * 1000 * 1000);
+      result = round(result * 100) / 100;
+
+      std::cout << "qps: " << qps << ", Throughout: " << result
+                << "Gb, latency: " << (lat - last_latence) / qps << "us\n";
       last = value;
       last_latence = lat;
     }

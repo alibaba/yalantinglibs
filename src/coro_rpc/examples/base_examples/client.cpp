@@ -36,6 +36,7 @@ struct bench_config {
   size_t data_len;
   size_t max_request_count;
   size_t reg_mr_length;
+  int gid_index;
 };
 
 Lazy<void> show_rpc_call(const bench_config& conf) {
@@ -159,6 +160,7 @@ int main(int argc, char** argv) {
   parser.add<size_t>("max_request_count", 'm', "max request count", false,
                      100000);
   parser.add<size_t>("reg_mr_len", 'r', "register memory lenght", false, 256);
+  parser.add<int>("gid_index", 'i', "gid index", false, 0);
 
   parser.parse_check(argc, argv);
 
@@ -169,12 +171,14 @@ int main(int argc, char** argv) {
   conf.data_len = parser.get<size_t>("data_len");
   conf.max_request_count = parser.get<size_t>("max_request_count");
   conf.reg_mr_length = parser.get<size_t>("reg_mr_len");
+  conf.gid_index = parser.get<int>("gid_index");
 
   ELOG_INFO << "ip: " << conf.host << ", " << "port: " << conf.port << ", "
             << "client concurrency: " << conf.client_concurrency << ", "
             << "data_len: " << conf.data_len << ", "
             << "max_request_count: " << conf.max_request_count << ", "
-            << "reg_mr_length: " << conf.reg_mr_length;
+            << "reg_mr_length: " << conf.reg_mr_length << ", "
+            << "gid index: " << conf.gid_index;
 
   try {
     syncAwait(show_rpc_call(conf));
