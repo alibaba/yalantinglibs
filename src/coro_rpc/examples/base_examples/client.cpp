@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
   parser.add<std::string>("host", 'h', "server ip address", false, "127.0.0.1");
   parser.add<std::string>("port", 'p', "server port", false, "8801");
 
-  parser.add<size_t>("data_len", 'l', "data length", false, 16);
+  parser.add<size_t>("data_len", 'l', "data length", false, 0);
   parser.add<uint32_t>("client_concurrency", 'c',
                        "total number of http clients", false, 1);
   parser.add<size_t>("max_request_count", 'm', "max request count", false,
@@ -172,6 +172,11 @@ int main(int argc, char** argv) {
   conf.max_request_count = parser.get<size_t>("max_request_count");
   conf.reg_mr_length = parser.get<size_t>("reg_mr_len");
   conf.gid_index = parser.get<int>("gid_index");
+  if (conf.data_len == 0) {
+    conf.data_len = conf.reg_mr_length;
+  }
+
+  config.gid_idx = conf.gid_index;
 
   ELOG_INFO << "ip: " << conf.host << ", " << "port: " << conf.port << ", "
             << "client concurrency: " << conf.client_concurrency << ", "

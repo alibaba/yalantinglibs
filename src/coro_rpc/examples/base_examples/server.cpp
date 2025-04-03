@@ -86,6 +86,8 @@ int main(int argc, char** argv) {
       auto lat = service.latency_.value();
       auto qps = value - last;
       if (qps == 0) {
+        last = 0;
+        last_latence = 0;
         continue;
       }
 
