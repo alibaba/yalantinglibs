@@ -123,10 +123,11 @@ Lazy<void> show_rpc_call(const bench_config& conf) {
   };
 
   std::string msg(conf.data_len, 'A');
+  memcpy(ctx->mr->addr, msg.data(), msg.size());
   for (size_t i = 0; i < conf.max_request_count; i++) {
     // send request to server
     auto [rr, sr] = co_await async_simple::coro::collectAll(
-        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg, true));
+        post_receive_coro(ctx.get()), post_send_coro(ctx.get(), msg));
     if (rr.value() || sr.value()) {
       ELOG_ERROR << "rdma send recv error";
       break;

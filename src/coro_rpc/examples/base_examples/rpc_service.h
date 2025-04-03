@@ -280,18 +280,13 @@ struct conn_context {
 };
 
 // This function will create and post a send work request.
-inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id,
-                     bool need_copy) {
+inline int post_send(conn_context *ctx, std::string_view msg, uint64_t id) {
   struct ibv_send_wr sr;
   struct ibv_sge sge;
   struct ibv_send_wr *bad_wr = NULL;
 
   // prepare the scatter / gather entry
   memset(&sge, 0, sizeof(sge));
-
-  if (need_copy) {
-    memcpy(ctx->mr->addr, msg.data(), msg.size());
-  }
 
   sge.addr = (uintptr_t)ctx->mr->addr;
   sge.length = msg.size();
@@ -353,7 +348,8 @@ inline async_simple::coro::Lazy<int> post_receive_coro(conn_context *ctx) {
       handler.set_value_then_resume(r);
     }
   });
-  ELOG_DEBUG << "recv response: " << std::string_view((char *)ctx->mr->addr);
+  ELOG_DEBUG << "recv response: "
+             << std::string_view((char *)ctx->mr->addr, ctx->mr->length);
   co_return ec;
 }
 
@@ -394,11 +390,10 @@ inline void resume(T arg, uint64_t handle) {
 }
 
 inline async_simple::coro::Lazy<int> post_send_coro(conn_context *ctx,
-                                                    std::string_view msg,
-                                                    bool need_copy) {
+                                                    std::string_view msg) {
   coro_io::callback_awaitor<int> awaitor;
   auto ec = co_await awaitor.await_resume([=](auto handler) {
-    int r = post_send(ctx, msg, (uint64_t)handler.handle_ptr(), need_copy);
+    int r = post_send(ctx, msg, (uint64_t)handler.handle_ptr());
     if (r != 0) {
       handler.set_value_then_resume(r);
     }
@@ -511,13 +506,13 @@ struct rdma_service_t {
     co_await post_receive_coro(ctx.get());
     while (true) {
       ELOG_DEBUG << "get request data: "
-                 << std::string_view((char *)ctx->mr->addr);
+                 << std::string_view((char *)ctx->mr->addr, ctx->mr->length);
       qps_.inc();
       auto start = std::chrono::system_clock::now();
       auto [rr, sr] = co_await async_simple::coro::collectAll(
           post_receive_coro(ctx.get()),
-          post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr),
-                         false));
+          post_send_coro(ctx.get(), std::string_view((char *)ctx->mr->addr,
+                                                     ctx->mr->length)));
       auto end = std::chrono::system_clock::now();
       auto dur =
           std::chrono::duration_cast<std::chrono::microseconds>(end - start)
