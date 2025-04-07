@@ -16,9 +16,6 @@
 #include <ylt/coro_http/coro_http_server.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
-#include "cinatra/coro_http_request.hpp"
-#include "cinatra/coro_http_response.hpp"
-#include "cinatra/response_cv.hpp"
 #include "rpc_service.h"
 using namespace coro_rpc;
 using namespace async_simple;

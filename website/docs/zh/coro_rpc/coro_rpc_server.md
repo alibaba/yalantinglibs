@@ -38,6 +38,46 @@ int start_server() {
 }
 ```
 
+### 在rpc端口添加http服务或其他服务
+我们可以通过调用`add_subserver()`方法，添加一个子服务器。
+
+例如，如果想要同时监听http server，可以调用如下代码。
+```cpp
+coro_rpc_server server(/*thread=*/std::thread::hardware_concurrency(),
+                       /*port=*/8801);
+auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+std::function dispatcher = [](coro_io::socket_wrapper_t&& soc,
+                              std::string_view magic_number,
+                              coro_http::coro_http_server& server) {
+  server.transfer_connection(std::move(soc), magic_number);
+};
+server.add_subserver(std::move(dispatcher), std::move(http_server));
+```
+
+`magic_number`是客户端发来的第一个字节，当客户段建立连接发起首次请求时，rpc server会检查第一个字节是否是coro_rpc是魔数`21`,如果魔数不正确则会释放连接并调用用户注册的dispatcher方法。用户应当在dispatcher函数内根据魔数进行分发，将连接转发到正确的服务器。
+
+特别的是，`add_subserver()`方法可以添加多个子服务器, 这允许我们在同一个端口启动多个服务器。
+
+```cpp
+coro_rpc_server server(/*thread=*/std::thread::hardware_concurrency(),
+                       /*port=*/8801);
+auto rest_server = std::make_unique<coro_rest_server>(0, 0);
+auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+std::function dispatcher = [](coro_io::socket_wrapper_t&& soc,
+                              std::string_view magic_number,
+                              coro_http::coro_http_server& server, coro_rest_server& rest_server) {
+  if (magic_number == (char)16) { // rest server
+    server.transfer_connection(std::move(soc), magic_number);
+  }
+  else { //http
+    rest_server.transfer_connection(std::move(soc), magic_number);
+  }
+};
+server.add_subserver(std::move(dispatcher), std::move(http_server), std::move(rest_server));
+```
+
+
+
 coro_rpc支持注册并调用的rpc函数有三种：
 1. 普通函数
 2. 协程函数

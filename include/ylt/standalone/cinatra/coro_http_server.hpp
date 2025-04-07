@@ -2,10 +2,6 @@
 
 #include <memory>
 
-#include "asio/basic_stream_socket.hpp"
-#include "asio/bind_executor.hpp"
-#include "asio/executor.hpp"
-#include "asio/ip/tcp.hpp"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
