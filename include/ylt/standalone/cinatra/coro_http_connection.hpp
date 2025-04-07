@@ -39,10 +39,11 @@ class coro_http_connection
     : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
-  coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
+  coro_http_connection(executor_t *executor,
+                       coro_io::socket_wrapper_t &&socket_wrapper,
                        coro_http_router &router)
       : executor_(executor),
-        socket_(std::move(socket)),
+        socket_wrapper_(std::move(socket_wrapper)),
         router_(router),
         request_(parser_, this),
         response_(this) {
@@ -52,6 +53,14 @@ class coro_http_connection
   ~coro_http_connection() { close(); }
 
 #ifdef CINATRA_ENABLE_SSL
+  bool init_ssl(
+      std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream) {
+    if (ssl_stream) {
+      socket_wrapper_.ssl_stream() = std::move(ssl_stream);
+      return true;
+    }
+    return false;
+  }
   bool init_ssl(const std::string &cert_file, const std::string &key_file,
                 std::string passwd) {
     unsigned long ssl_options = asio::ssl::context::default_workarounds |
@@ -78,10 +87,9 @@ class coro_http_connection
                                        asio::ssl::context::pem);
       }
 
-      ssl_stream_ =
+      socket_wrapper_.ssl_stream() =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_, *ssl_ctx_);
-      use_ssl_ = true;
+              *socket_wrapper_.socket(), *ssl_ctx_);
     } catch (const std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
       return false;
@@ -90,17 +98,17 @@ class coro_http_connection
   }
 #endif
 
-  async_simple::coro::Lazy<void> start() {
-#ifdef CINATRA_ENABLE_SSL
-    bool has_shake = false;
-#endif
+  void add_head(std::string_view msg) {
+    head_buf_.sputn(msg.data(), msg.size());
+  }
+  async_simple::coro::Lazy<void> start(bool has_shake = false) {
     std::chrono::system_clock::time_point start{};
     std::chrono::system_clock::time_point mid{};
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
-      if (use_ssl_ && !has_shake) {
+      if (socket_wrapper_.use_ssl() && !has_shake) {
         auto ec = co_await coro_io::async_handshake(
-            ssl_stream_, asio::ssl::stream_base::server);
+            socket_wrapper_.ssl_stream(), asio::ssl::stream_base::server);
         if (ec) {
           CINATRA_LOG_ERROR << "handle_shake error: " << ec.message();
           close();
@@ -448,7 +456,7 @@ class coro_http_connection
 
   size_t available() {
     std::error_code ec{};
-    return socket_.available(ec);
+    return socket_wrapper_.socket()->available(ec);
   }
 
   void set_multi_buf(bool r) { multi_buf_ = r; }
@@ -768,7 +776,7 @@ class coro_http_connection
   }
 #endif
 
-  auto &tcp_socket() { return socket_; }
+  auto &tcp_socket() { return *socket_wrapper_.socket(); }
 
   void set_quit_callback(std::function<void(const uint64_t &conn_id)> callback,
                          uint64_t conn_id) {
@@ -805,12 +813,14 @@ class coro_http_connection
 #endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
-    if (use_ssl_) {
-      return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
+    if (socket_wrapper_.use_ssl()) {
+      return coro_io::async_read(*socket_wrapper_.ssl_stream(), buffer,
+                                 size_to_read);
     }
     else {
 #endif
-      return coro_io::async_read(socket_, buffer, size_to_read);
+      return coro_io::async_read(*socket_wrapper_.socket(), buffer,
+                                 size_to_read);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -826,12 +836,12 @@ class coro_http_connection
 #endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
-    if (use_ssl_) {
-      return coro_io::async_write(*ssl_stream_, buffer);
+    if (socket_wrapper_.use_ssl()) {
+      return coro_io::async_write(*socket_wrapper_.ssl_stream(), buffer);
     }
     else {
 #endif
-      return coro_io::async_write(socket_, buffer);
+      return coro_io::async_write(*socket_wrapper_.socket(), buffer);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -842,12 +852,14 @@ class coro_http_connection
       AsioBuffer &buffer, asio::string_view delim) noexcept {
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
-    if (use_ssl_) {
-      return coro_io::async_read_until(*ssl_stream_, buffer, delim);
+    if (socket_wrapper_.use_ssl()) {
+      return coro_io::async_read_until(*socket_wrapper_.ssl_stream(), buffer,
+                                       delim);
     }
     else {
 #endif
-      return coro_io::async_read_until(socket_, buffer, delim);
+      return coro_io::async_read_until(*socket_wrapper_.socket(), buffer,
+                                       delim);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -869,17 +881,19 @@ class coro_http_connection
     if (has_closed_) {
       return;
     }
-
-    asio::dispatch(socket_.get_executor(),
-                   [this, need_cb, self = shared_from_this()] {
-                     std::error_code ec;
-                     socket_.shutdown(asio::socket_base::shutdown_both, ec);
-                     socket_.close(ec);
-                     if (need_cb && quit_cb_) {
-                       quit_cb_(conn_id_);
-                     }
-                     has_closed_ = true;
-                   });
+    if (socket_wrapper_.socket()) {
+      asio::dispatch(socket_wrapper_.socket()->get_executor(),
+                     [this, need_cb, self = shared_from_this()] {
+                       std::error_code ec;
+                       socket_wrapper_.socket()->shutdown(
+                           asio::socket_base::shutdown_both, ec);
+                       socket_wrapper_.socket()->close(ec);
+                       if (need_cb && quit_cb_) {
+                         quit_cb_(conn_id_);
+                       }
+                       has_closed_ = true;
+                     });
+    }
   }
 
   void set_check_timeout(bool r) { checkout_timeout_ = r; }
@@ -940,7 +954,8 @@ class coro_http_connection
     }
 
     std::error_code ec;
-    auto pt = remote ? socket_.remote_endpoint(ec) : socket_.local_endpoint(ec);
+    auto pt = remote ? socket_wrapper_.socket()->remote_endpoint(ec)
+                     : socket_wrapper_.socket()->local_endpoint(ec);
     if (ec) {
       return;
     }
@@ -954,7 +969,7 @@ class coro_http_connection
  private:
   friend class multipart_reader_t<coro_http_connection>;
   coro_io::ExecutorWrapper<> *executor_;
-  asio::ip::tcp::socket socket_;
+  coro_io::socket_wrapper_t socket_wrapper_;
   coro_http_router &router_;
   asio::streambuf head_buf_;
   std::string body_;
@@ -980,8 +995,6 @@ class coro_http_connection
   websocket ws_;
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
-  bool use_ssl_ = false;
 #endif
   bool need_shrink_every_time_ = false;
   bool multi_buf_ = true;

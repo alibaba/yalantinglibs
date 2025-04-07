@@ -55,6 +55,7 @@
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/struct_pack.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 #include "ylt/struct_pack/util.h"
 #include "ylt/util/function_name.h"
 #include "ylt/util/type_traits.h"
@@ -636,8 +637,8 @@ class coro_rpc_client {
       buffer.resize(offset);
     }
 
-    auto &header = *(coro_rpc_protocol::req_header *)buffer.data();
-    header = {};
+    coro_rpc_protocol::req_header header{};
+
     header.magic = coro_rpc_protocol::magic_number;
     header.function_id = func_id<func>();
     header.attach_length = req_attachment_.size();
@@ -663,6 +664,11 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     }
 #endif
+    auto len_sz = struct_pack::get_needed_size<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(header);
+    assert(len_sz == offset);
+    struct_pack::serialize_to<struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+        (char *)buffer.data(), len_sz, header);
     return buffer;
   }
 
@@ -913,9 +919,12 @@ class coro_rpc_client {
     std::pair<std::error_code, std::size_t> ret;
     do {
       coro_rpc_protocol::resp_header header;
-      ret = co_await coro_io::async_read(
-          socket,
-          asio::buffer((char *)&header, coro_rpc_protocol::RESP_HEAD_LEN));
+      char buffer[coro_rpc_protocol::RESP_HEAD_LEN];
+      ret = co_await coro_io::async_read(socket, asio::buffer(buffer));
+      auto ec = struct_pack::deserialize_to<
+          struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+          header, std::string_view{buffer, buffer + sizeof(buffer)});
+      assert(!ec);
       if (ret.first) {
         ELOG_ERROR << "read rpc head failed, error msg:" << ret.first.message()
                    << ". close the socket.value=" << ret.first.value();

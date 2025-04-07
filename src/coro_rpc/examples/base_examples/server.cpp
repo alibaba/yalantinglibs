@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <ylt/coro_http/coro_http_server.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "rpc_service.h"
@@ -41,6 +42,30 @@ int main() {
   // async start server
   auto res = server2.async_start();
   assert(!res.hasResult());
+
+  // start an http server in same port(8801) of rpc server. you can open
+  // http://localhost:8801/ to visit it.
+  auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+  http_server->set_http_handler<coro_http::GET>(
+      "/", [](coro_http::coro_http_request& req,
+              coro_http::coro_http_response& resp) {
+        resp.set_status_and_content(coro_http::status_type::ok,
+                                    R"(<!DOCTYPE html>
+<html>
+    <head>
+        <title>Example</title>
+    </head>
+    <body>
+        <p>This is an example of a simple HTML page with one paragraph.</p>
+    </body>
+</html>)");
+      });
+  std::function dispatcher = [](coro_io::socket_wrapper_t&& soc,
+                                std::string_view magic_number,
+                                coro_http::coro_http_server& server) {
+    server.transfer_connection(std::move(soc), magic_number);
+  };
+  server.add_subserver(std::move(dispatcher), std::move(http_server));
 
   // sync start server & sync await server stop
   return !server.start();
