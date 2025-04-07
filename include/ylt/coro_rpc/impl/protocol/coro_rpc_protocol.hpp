@@ -33,6 +33,7 @@
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/coro_rpc/impl/router.hpp"
+#include "ylt/struct_pack/reflection.hpp"
 
 namespace coro_rpc {
 namespace protocol {
@@ -94,15 +95,42 @@ struct coro_rpc_protocol {
 
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
-      Socket& socket, req_header& req_head) {
+      Socket& socket, req_header& req_head, std::string& magic) {
     // TODO: add a connection-level buffer in parameter to reuse memory
-    auto [ec, _] = co_await coro_io::async_read(
-        socket, asio::buffer((char*)&req_head, sizeof(req_header)));
-    if (ec)
-      AS_UNLIKELY { co_return std::move(ec); }
-    else if (req_head.magic != magic_number ||
-             req_head.version > VERSION_NUMBER)
-      AS_UNLIKELY { co_return std::make_error_code(std::errc::protocol_error); }
+    char head_buffer[sizeof(req_header)];
+    if (magic.size()) {
+      auto [ec, _] = co_await coro_io::async_read(
+          socket, asio::buffer(head_buffer, sizeof(req_header)));
+      if (ec) [[unlikely]] {
+        co_return std::move(ec);
+      }
+    }
+    else [[unlikely]] {
+      auto [ec, _] =
+          co_await coro_io::async_read(socket, asio::buffer(head_buffer, 1));
+      if (ec) [[unlikely]] {
+        co_return std::move(ec);
+      }
+      else if (head_buffer[0] != magic_number) {
+        magic = head_buffer[0];
+        co_return std::make_error_code(std::errc::protocol_error);
+      }
+      std::tie(ec, _) = co_await coro_io::async_read(
+          socket, asio::buffer(head_buffer + 1, sizeof(req_header) - 1));
+      if (ec) [[unlikely]] {
+        co_return std::move(ec);
+      }
+    }
+    auto i = struct_pack::get_needed_size<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
+    auto ec = struct_pack::deserialize_to<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+        req_head,
+        std::string_view{head_buffer, head_buffer + sizeof(head_buffer)});
+    if (ec || req_head.magic != magic_number ||
+        req_head.version > VERSION_NUMBER) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
+    }
     co_return std::error_code{};
   }
 
@@ -137,12 +165,13 @@ struct coro_rpc_protocol {
                                       std::string_view err_msg = {}) {
     std::string err_msg_buf;
     std::string header_buf;
-    header_buf.resize(RESP_HEAD_LEN);
-    auto& resp_head = *(resp_header*)header_buf.data();
+    resp_header resp_head;
     resp_head.magic = magic_number;
     resp_head.version = VERSION_NUMBER;
     resp_head.seq_num = req_header.seq_num;
     resp_head.attach_length = attachment_len;
+    resp_head.msg_type = 0;
+    resp_head.err_code = 0;
     if (attachment_len > UINT32_MAX)
       AS_UNLIKELY {
         ELOG_ERROR << "attachment larger than 4G: " << attachment_len;
@@ -175,6 +204,8 @@ struct coro_rpc_protocol {
         }
       }
     resp_head.length = rpc_result.size();
+    struct_pack::serialize_to<struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+        header_buf, resp_head);
     return header_buf;
   }
 

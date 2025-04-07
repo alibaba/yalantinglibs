@@ -30,12 +30,14 @@
 #include <mutex>
 #include <system_error>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 #include <ylt/easylog.hpp>
 
 #include "async_simple/Common.h"
 #include "async_simple/Promise.h"
+#include "async_simple/util/move_only_function.h"
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -241,6 +243,25 @@ class coro_rpc_server_base {
   std::string_view address() const { return address_; }
   coro_rpc::err_code get_errc() const { return errc_; }
 
+  template <typename... ServerType>
+  void add_subserver(
+      std::function<void(coro_io::socket_wrapper_t &&socket,
+                         std::string_view magic_number, ServerType &...server)>
+          dispatcher,
+      std::unique_ptr<ServerType>... server) {
+    connection_transfer_ = [dispatcher = std::move(dispatcher),
+                            server = std::make_tuple(std::move(server)...)](
+                               coro_io::socket_wrapper_t &&socket,
+                               std::string_view magic_number,
+                               int index = -1) mutable {
+      std::apply(
+          [&dispatcher, &socket, magic_number](auto &...server) {
+            dispatcher(std::move(socket), magic_number, *server...);
+          },
+          server);
+    };
+  }
+
   /*!
    * Register RPC service functions (member function)
    *
@@ -411,7 +432,9 @@ class coro_rpc_server_base {
             conns_.erase(id);
           },
           conn_id);
-
+      if (connection_transfer_) {
+        conn->set_transfer_callback(&connection_transfer_);
+      }
       {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
@@ -477,6 +500,10 @@ class coro_rpc_server_base {
   bool is_enable_tcp_no_delay_;
   coro_rpc::err_code errc_ = {};
   std::chrono::steady_clock::duration conn_timeout_duration_;
+
+  async_simple::util::move_only_function<void(coro_io::socket_wrapper_t &&soc,
+                                              std::string_view magic_number)>
+      connection_transfer_;
 
 #ifdef YLT_ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};

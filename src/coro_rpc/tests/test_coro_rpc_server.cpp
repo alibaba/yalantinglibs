@@ -23,8 +23,12 @@
 
 #include "ServerTester.hpp"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/response_cv.hpp"
 #include "doctest.h"
 #include "rpc_api.hpp"
+#include "ylt/coro_http/coro_http_client.hpp"
+#include "ylt/coro_http/coro_http_server.hpp"
+#include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/struct_pack.hpp"
@@ -433,3 +437,98 @@ TEST_CASE("testing coro rpc write error") {
   REQUIRE(client.has_closed() == true);
   g_action = inject_action::nothing;
 }
+
+TEST_CASE("testing coro rpc subserver") {
+  ELOGV(INFO, "run testing coro rpc subserver");
+  std::string http_body = R"(
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Example</title>
+    </head>
+    <body>
+        <p>This is an example of a simple HTML page with one paragraph.</p>
+    </body>
+</html>)";
+  coro_rpc_server server(2, 8810);
+  server.register_handler<hi>();
+  std::function dispatcher = [](coro_io::socket_wrapper_t &&soc,
+                                std::string_view magic_number,
+                                coro_http::coro_http_server &server) {
+    CHECK(magic_number == "G");
+    server.transfer_connection(std::move(soc), magic_number);
+  };
+  auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+  http_server->set_http_handler<coro_http::GET>(
+      "/index.html",
+      [&](coro_http::coro_http_request &, coro_http::coro_http_response &resp) {
+        resp.set_status_and_content(coro_http::status_type::ok, http_body);
+      });
+  server.add_subserver(std::move(dispatcher), std::move(http_server));
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  auto ret = syncAwait(client.call<hi>());
+  REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+  coro_http::coro_http_client cli;
+  auto result = syncAwait(cli.connect("localhost:8810"));
+  CHECK_MESSAGE(!result.net_err, result.net_err.message());
+  result = syncAwait(cli.async_get("/index.html"));
+  CHECK_MESSAGE(result.status == (int)coro_http::status_type::ok,
+                result.status);
+  CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
+}
+#ifdef YLT_ENABLE_SSL
+TEST_CASE("testing coro rpc ssl subserver") {
+  ELOGV(INFO, "run testing coro rpc subserver");
+  std::string http_body = R"(
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Example</title>
+    </head>
+    <body>
+        <p>This is an example of a simple HTML page with one paragraph.</p>
+    </body>
+</html>)";
+  coro_rpc_server server(2, 8810);
+  server.init_ssl(
+      ssl_configure{"../openssl_files", "server.crt", "server.key"});
+  server.register_handler<hi>();
+  std::function dispatcher = [](coro_io::socket_wrapper_t &&soc,
+                                std::string_view magic_number,
+                                coro_http::coro_http_server &server) {
+    CHECK(magic_number == "G");
+    server.transfer_connection(std::move(soc), magic_number);
+  };
+  auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+  http_server->set_http_handler<coro_http::GET>(
+      "/index.html",
+      [&](coro_http::coro_http_request &, coro_http::coro_http_response &resp) {
+        resp.set_status_and_content(coro_http::status_type::ok, http_body);
+      });
+  server.add_subserver(std::move(dispatcher), std::move(http_server));
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  CHECK(client.init_ssl("../openssl_files", "server.crt"));
+  auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  auto ret = syncAwait(client.call<hi>());
+  REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+  coro_http::coro_http_client cli;
+  CHECK_MESSAGE(
+      cli.init_ssl(asio::ssl::verify_peer, "../openssl_files/server.crt"),
+      "init ssl failed");
+  auto result = syncAwait(cli.connect("https://localhost:8810"));
+  CHECK_MESSAGE(!result.net_err, result.net_err.message());
+  result = syncAwait(cli.async_get("/index.html"));
+  CHECK_MESSAGE(result.status == (int)coro_http::status_type::ok,
+                result.status);
+  CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
+}
+#endif

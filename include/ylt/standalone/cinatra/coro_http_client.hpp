@@ -2036,7 +2036,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           << "start connect to endpoint lists. total endpoint count:"
           << eps->size()
           << ", the first endpoint is: " << (*eps)[0].address().to_string()
-          << std::to_string((*eps)[0].port());
+          << ":" << std::to_string((*eps)[0].port());
       std::error_code ec;
       asio::ip::tcp::endpoint endpoint;
       if (std::tie(ec, endpoint) = co_await coro_io::async_connect(
