@@ -27,9 +27,7 @@ struct person {
   std::string name;
   int age;
 };
-#if __cplusplus >= 202002L
 YLT_REFL(person, id, name, age);
-#endif
 
 int main() {
   nest v{"Hi", my_struct{1, false, {3}}, 5};
