@@ -1,5 +1,11 @@
 #pragma once
 
+#include <memory>
+
+#include "asio/basic_stream_socket.hpp"
+#include "asio/bind_executor.hpp"
+#include "asio/executor.hpp"
+#include "asio/ip/tcp.hpp"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
@@ -22,12 +28,16 @@ class coro_http_server {
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
       : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {
+    out_executor_ =
+        std::make_unique<coro_io::ExecutorWrapper<>>(out_ctx_->get_executor());
     init_address(std::move(address));
   }
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
       : out_ctx_(&ctx), acceptor_(ctx), check_timer_(ctx) {
+    out_executor_ =
+        std::make_unique<coro_io::ExecutorWrapper<>>(out_ctx_->get_executor());
     init_address(std::move(address));
   }
 
@@ -638,6 +648,66 @@ class coro_http_server {
     return {};
   }
 
+ public:
+  void transfer_connection(coro_io::socket_wrapper_t &&soc,
+                           std::string_view head_msg) {
+    auto conn = accept_impl(std::move(soc), true);
+    conn->add_head(head_msg);
+    conn->start(true).via(conn->get_executor()).detach();
+  }
+
+ private:
+  std::shared_ptr<coro_http_connection> accept_impl(
+      coro_io::socket_wrapper_t &&socket, bool is_transfer_connect = false) {
+    uint64_t conn_id = ++conn_id_;
+    CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
+    auto conn = std::make_shared<coro_http_connection>(
+        socket.get_executor(), std::move(socket), router_);
+    if (no_delay_) {
+      conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
+    }
+    if (need_shrink_every_time_) {
+      conn->set_shrink_to_fit(true);
+    }
+    if (need_check_) {
+      conn->set_check_timeout(true);
+    }
+    if (default_handler_) {
+      conn->set_default_handler(default_handler_);
+    }
+
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+    if (write_failed_forever_) {
+      conn->set_write_failed_forever(write_failed_forever_);
+    }
+    if (read_failed_forever_) {
+      conn->set_read_failed_forever(read_failed_forever_);
+    }
+#endif
+
+#ifdef CINATRA_ENABLE_SSL
+    if (!is_transfer_connect && use_ssl_) {
+      conn->init_ssl(cert_file_, key_file_, passwd_);
+    }
+#endif
+    std::weak_ptr<std::mutex> weak(conn_mtx_);
+    conn->set_quit_callback(
+        [this, weak](const uint64_t &id) {
+          auto mtx = weak.lock();
+          if (mtx) {
+            std::scoped_lock lock(*mtx);
+            if (!connections_.empty())
+              connections_.erase(id);
+          }
+        },
+        conn_id);
+    {
+      std::scoped_lock lock(*conn_mtx_);
+      connections_.emplace(conn_id, conn);
+    }
+    return std::move(conn);
+  }
+
   async_simple::coro::Lazy<std::error_code> accept() {
     for (;;) {
       coro_io::ExecutorWrapper<> *executor;
@@ -649,8 +719,8 @@ class coro_http_server {
             out_ctx_->get_executor());
         executor = out_executor_.get();
       }
-
       asio::ip::tcp::socket socket(executor->get_asio_executor());
+
       auto error = co_await coro_io::async_accept(acceptor_, socket);
       if (error) {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
@@ -661,50 +731,11 @@ class coro_http_server {
         }
         continue;
       }
-
-      uint64_t conn_id = ++conn_id_;
-      CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
-      auto conn = std::make_shared<coro_http_connection>(
-          executor, std::move(socket), router_);
-      if (no_delay_) {
-        conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
-      }
-      if (need_shrink_every_time_) {
-        conn->set_shrink_to_fit(true);
-      }
-      if (need_check_) {
-        conn->set_check_timeout(true);
-      }
-      if (default_handler_) {
-        conn->set_default_handler(default_handler_);
-      }
-
-#ifdef CINATRA_ENABLE_SSL
-      if (use_ssl_) {
-        conn->init_ssl(cert_file_, key_file_, passwd_);
-      }
-#endif
-      std::weak_ptr<std::mutex> weak(conn_mtx_);
-      conn->set_quit_callback(
-          [this, weak](const uint64_t &id) {
-            auto mtx = weak.lock();
-            if (mtx) {
-              std::scoped_lock lock(*mtx);
-              if (!connections_.empty())
-                connections_.erase(id);
-            }
-          },
-          conn_id);
-
-      {
-        std::scoped_lock lock(*conn_mtx_);
-        connections_.emplace(conn_id, conn);
-      }
-
+      auto conn =
+          accept_impl(coro_io::socket_wrapper_t{std::move(socket), executor});
       start_one(conn).via(conn->get_executor()).detach();
     }
   }
-
   async_simple::coro::Lazy<void> start_one(
       std::shared_ptr<coro_http_connection> conn) noexcept {
     co_await conn->start();
