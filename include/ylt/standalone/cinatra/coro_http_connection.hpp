@@ -413,10 +413,6 @@ class coro_http_connection
         body_.shrink_to_fit();
       }
     }
-
-    if (head_buf_.size()) {
-      head_buf_.consume(head_buf_.size());
-    }
   }
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
