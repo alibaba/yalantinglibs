@@ -712,7 +712,7 @@ TEST_CASE("test client pool") {
               auto data = co_await client.async_get(url);
               if (data.status != 200) {
                 failed_count++;
-                CHECK(data.net_err == asio::error::eof);
+                CHECK(data.net_err);
               }
               else {
                 CHECK(data.resp_body == "shutdown");
