@@ -587,4 +587,35 @@ async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
   co_return std::pair{ec, size - least_bytes};
 }
 #endif
+
+struct socket_wrapper_t {
+  socket_wrapper_t(asio::ip::tcp::socket &&soc,
+                   coro_io::ExecutorWrapper<> *executor)
+      : socket_(std::make_unique<asio::ip::tcp::socket>(std::move(soc))),
+        executor_(executor) {}
+
+ private:
+  std::unique_ptr<asio::ip::tcp::socket> socket_;
+  coro_io::ExecutorWrapper<> *executor_;
+#ifdef YLT_ENABLE_SSL
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
+#endif
+ public:
+  bool use_ssl() const noexcept {
+#ifdef YLT_ENABLE_SSL
+    return ssl_stream_ != nullptr;
+#else
+    return false;
+#endif
+  }
+  auto get_executor() const noexcept { return executor_; }
+  std::unique_ptr<asio::ip::tcp::socket> &socket() noexcept { return socket_; }
+#ifdef YLT_ENABLE_SSL
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+      &ssl_stream() noexcept {
+    return ssl_stream_;
+  }
+#endif
+};
+
 }  // namespace coro_io
