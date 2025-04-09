@@ -14,15 +14,19 @@ class ib_devices_t {
     return inst;
   }
   int size() { return size_; }
-  ibv_device*& operator[](int i) {
+  ibv_device* operator[](int i) {
     if (i >= size_ || i < 0) {
       throw std::out_of_range("out of range");
     }
     return dev_list_[i];
   }
 
-  const std::vector<std::string>& dev_names() {
-    return dev_names_;
+  const std::vector<std::string>& dev_names() { return dev_names_; }
+
+  ibv_device* at(const std::string& dev_name) {
+    auto it = std::find(dev_names_.begin(), dev_names_.end(), dev_name);
+    size_t i = std::distance(dev_names_.begin(), it);
+    return (*this)[i];
   }
 
  private:
