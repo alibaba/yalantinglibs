@@ -670,7 +670,7 @@ class coro_http_server {
                            std::string_view head_msg) {
     auto conn = accept_impl(std::move(soc), true);
     conn->add_head(head_msg);
-    conn->start(true).via(conn->get_executor()).detach();
+    start_one(conn).via(conn->get_executor()).detach();
   }
 
  private:
