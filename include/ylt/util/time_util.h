@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <mutex>
 #include <string_view>
 
 namespace ylt {
