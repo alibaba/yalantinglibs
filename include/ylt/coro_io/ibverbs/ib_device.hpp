@@ -24,17 +24,21 @@ class ib_devices_t {
     return dev_list_[i];
   }
 
-  const std::vector<std::string>& dev_names() { return dev_names_; }
-
   ibv_device* at(const std::string& dev_name) {
     if (dev_name.empty()) {
       return (*this)[0];
     }
 
-    auto it = std::find(dev_names_.begin(), dev_names_.end(), dev_name);
-    size_t i = std::distance(dev_names_.begin(), it);
+    auto list = get_devices();
+
+    auto it = std::find_if(list.begin(), list.end(), [&dev_name](auto dev) {
+      return dev->name == dev_name;
+    });
+    size_t i = std::distance(list.begin(), it);
     return (*this)[i];
   }
+
+  std::span<ibv_device*> get_devices() { return {dev_list_, (size_t)size_}; }
 
  private:
   ib_devices_t() {
@@ -42,14 +46,8 @@ class ib_devices_t {
     if (dev_list_ == nullptr) {
       size_ = 0;
     }
-    else {
-      for (int i = 0; i < size_; i++) {
-        ELOG_INFO << "device name " << dev_list_[i]->name;
-        dev_names_.push_back(dev_list_[i]->name);
-      }
-      std::sort(dev_names_.begin(), dev_names_.end());
-    }
   }
+
   ~ib_devices_t() {
     if (dev_list_ != nullptr) {
       ibv_free_device_list(dev_list_);
@@ -58,7 +56,6 @@ class ib_devices_t {
 
   int size_;
   ibv_device** dev_list_;
-  std::vector<std::string> dev_names_;
 };
 
 struct ib_config_t {
@@ -112,9 +109,10 @@ class ib_device_t {
     pd_.reset(ibv_alloc_pd(ctx_.get()));
 
     if (auto ret = ibv_query_port(ctx_.get(), conf.port, &attr_); ret != 0) {
+      auto ec = std::make_error_code((std::errc)ret);
       ELOG_ERROR << "IBDevice failed to query port " << conf.port
-                 << " of device " << name_ << " error " << ret;
-      throw std::domain_error("IBDevice failed to query");
+                 << " of device " << name_ << " error " << ec.message();
+      throw std::system_error(ec);
     }
   }
 
@@ -126,31 +124,6 @@ class ib_device_t {
   ibv_pd* pd() const { return pd_.get(); }
   int gid_index() const { return gid_index_; }
   const ibv_port_attr& attr() const { return attr_; }
-
-  ibv_mr* reg_memory(void* addr, size_t length,
-                     int access = IBV_ACCESS_LOCAL_WRITE |
-                                  IBV_ACCESS_REMOTE_READ |
-                                  IBV_ACCESS_REMOTE_WRITE) const {
-    ELOG_INFO << "begin to reg_mr";
-    auto* mr = ibv_reg_mr(pd_.get(), addr, length, access);
-    if (mr == nullptr) {
-      ELOG_ERROR << "IBDevice " << name_ << ", failed to reg_mr, addr " << addr
-                 << ", length " << length << ", access " << access << ", error "
-                 << errno;
-      throw std::domain_error("IBDevice failed to reg_mr");
-    }
-    ELOG_INFO << "end reg_mr";
-    return mr;
-  }
-
-  void dereg_memory(ibv_mr* mr) const {
-    auto ret = ibv_dereg_mr(mr);
-    if (ret) {
-      ELOG_ERROR << "IBDevice " << name_ << ", failed to dereg_mr error "
-                 << ret;
-      throw std::domain_error("IBDevice failed to dereg_mr");
-    }
-  }
 
  private:
   std::string name_;
