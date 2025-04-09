@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 
-using namespace ylt::coro_rdma;
+using namespace coro_io;
 
 TEST_CASE("test device list") {
   auto& inst = ib_devices_t::instance();
