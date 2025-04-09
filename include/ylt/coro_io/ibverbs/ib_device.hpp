@@ -5,11 +5,11 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <system_error>
 
 #include "ylt/easylog.hpp"
 
-namespace ylt::coro_rdma {
+namespace coro_io {
 class ib_devices_t {
  public:
   static auto& instance() {
@@ -68,31 +68,37 @@ struct ib_deleter {
   void operator()(ibv_pd* pd) const {
     auto ret = ibv_dealloc_pd(pd);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_dealloc_pd failed " << ret;
+      ELOG_ERROR << "ibv_dealloc_pd failed: " << std::make_error_code(std::errc{ret});
     }
   }
   void operator()(ibv_context* context) const {
     auto ret = ibv_close_device(context);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_close_device failed " << ret;
+      ELOG_ERROR << "ibv_close_device failed " << std::make_error_code(std::errc{ret});
     }
   }
   void operator()(ibv_cq* cq) const {
     auto ret = ibv_destroy_cq(cq);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_cq failed " << ret;
+      ELOG_ERROR << "ibv_destroy_cq failed " << std::make_error_code(std::errc{ret});
     }
   }
   void operator()(ibv_qp* qp) const {
     auto ret = ibv_destroy_qp(qp);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_qp failed " << ret;
+      ELOG_ERROR << "ibv_destroy_qp failed " << std::make_error_code(std::errc{ret});
     }
   }
   void operator()(ibv_comp_channel* channel) const {
     auto ret = ibv_destroy_comp_channel(channel);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed " << ret;
+      ELOG_ERROR << "ibv_destroy_comp_channel failed " << std::make_error_code(std::errc{ret});
+    }
+  }
+  void operator()(ibv_mr* ptr) {
+    if (auto ret = ibv_dereg_mr(ptr); ret)
+        [[unlikely]] {
+      ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret});
     }
   }
 };
