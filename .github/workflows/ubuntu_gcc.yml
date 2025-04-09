@@ -2,9 +2,9 @@ name: Ubuntu (gcc)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, lts-1.1.0 ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, lts-1.1.0 ]
   workflow_call:
   workflow_dispatch:
 

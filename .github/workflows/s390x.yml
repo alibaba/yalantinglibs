@@ -2,9 +2,9 @@ name: IBM S390X
 
 on:
   push:
-   branches: [ main, develop ]
+   branches: [ main, develop, lts-1.1.0 ]
   pull_request:
-   branches: [ main, develop ]
+   branches: [ main, develop, lts-1.1.0 ]
   workflow_dispatch:
 
 jobs:

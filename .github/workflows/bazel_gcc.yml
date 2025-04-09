@@ -2,9 +2,9 @@ name: Bazel-GCC
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, lts-1.1.0 ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, lts-1.1.0 ]
   workflow_dispatch:
   
 jobs:

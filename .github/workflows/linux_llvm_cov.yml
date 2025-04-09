@@ -27,6 +27,7 @@ on:
       - main
       - fix_coverage_show
       - 0.3.8.2
+      - lts-1.1.0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
