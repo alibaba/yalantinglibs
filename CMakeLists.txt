@@ -21,6 +21,7 @@ if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs") # if ylt is top-level project
         include_directories(include/ylt/standalone)
         include_directories(src/include)
 
+        include(cmake/find_ibverbs.cmake)
         include(cmake/utils.cmake)
         include(cmake/build.cmake)
         include(cmake/develop.cmake)
