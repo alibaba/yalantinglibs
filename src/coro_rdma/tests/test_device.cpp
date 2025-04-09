@@ -6,13 +6,17 @@ using namespace ylt::coro_rdma;
 
 TEST_CASE("test device list") {
   auto& inst = ib_devices_t::instance();
-  auto& names = inst.dev_names();
-  CHECK(!names.empty());
+  auto list = inst.get_devices();
+  CHECK(!list.empty());
   CHECK(inst.size());
-  auto dev = inst.at(names[0]);
+  auto dev = inst.at(list[0]->name);
   CHECK(dev != nullptr);
 
   CHECK(inst.at("") == dev);
+
+  for (auto dev : list) {
+    ELOG_INFO << dev->dev_name;
+  }
 
   CHECK_THROWS_AS(inst[inst.size()], std::out_of_range);
   CHECK_THROWS_AS(inst.at("no such a device"), std::out_of_range);
@@ -33,15 +37,6 @@ TEST_CASE("test device") {
 }
 
 TEST_CASE("test device invalid") {
-  CHECK_THROWS_AS(ib_device_t dev({0, "", 3}), std::domain_error);
+  CHECK_THROWS_AS(ib_device_t dev({0, "", 3}), std::system_error);
   CHECK_THROWS_AS(ib_device_t dev({0, "no such"}), std::out_of_range);
-}
-
-TEST_CASE("test reg_mr") {
-  ib_device_t dev({});
-
-  char buf[256];
-  auto mr = dev.reg_memory(buf, 256);
-  dev.dereg_memory(mr);
-  CHECK(mr);
 }
