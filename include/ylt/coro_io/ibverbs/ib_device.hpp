@@ -68,37 +68,42 @@ struct ib_deleter {
   void operator()(ibv_pd* pd) const {
     auto ret = ibv_dealloc_pd(pd);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_dealloc_pd failed: " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_dealloc_pd failed: "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_context* context) const {
     auto ret = ibv_close_device(context);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_close_device failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_close_device failed "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_cq* cq) const {
     auto ret = ibv_destroy_cq(cq);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_cq failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_cq failed "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_qp* qp) const {
     auto ret = ibv_destroy_qp(qp);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_qp failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_qp failed "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_comp_channel* channel) const {
     auto ret = ibv_destroy_comp_channel(channel);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_comp_channel failed "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_mr* ptr) {
-    if (auto ret = ibv_dereg_mr(ptr); ret)
-        [[unlikely]] {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret});
+    if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
+      ELOG_ERROR << "ibv_destroy_comp_channel failed: "
+                 << std::make_error_code(std::errc{ret}).message();
     }
   }
 };
@@ -117,7 +122,7 @@ class ib_device_t {
     if (auto ret = ibv_query_port(ctx_.get(), conf.port, &attr_); ret != 0) {
       auto ec = std::make_error_code((std::errc)ret);
       ELOG_ERROR << "IBDevice failed to query port " << conf.port
-                 << " of device " << name_ << " error " << ec.message();
+                 << " of device " << name_ << ", error: " << ec.message();
       throw std::system_error(ec);
     }
   }
@@ -140,4 +145,4 @@ class ib_device_t {
   int gid_index_;
   uint16_t port_;
 };
-}  // namespace ylt::coro_rdma
+}  // namespace coro_io
