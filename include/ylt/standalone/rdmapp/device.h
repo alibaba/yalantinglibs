@@ -1,6 +1,7 @@
 #pragma once
 
 #include <infiniband/verbs.h>
+#include <netinet/in.h>
 
 #include <cassert>
 #include <cstdint>
@@ -107,7 +108,35 @@ class device {
   friend class cq;
   friend class qp;
   friend class srq;
-  void open_device(struct ibv_device *target, uint16_t port_num) {
+
+  static inline int ipv6_addr_v4mapped(const struct in6_addr *a) {
+    return ((a->s6_addr32[0] | a->s6_addr32[1]) |
+            (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL ||
+           /* IPv4 encoded multicast addresses */
+           (a->s6_addr32[0] == htonl(0xff0e0000) &&
+            ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
+  }
+
+  int choose_gid_index() {
+    int gid_index = 0, i;
+    struct ibv_gid_entry gid_entry;
+
+    for (i = 0; i < port_attr_.gid_tbl_len; i++) {
+      if (ibv_query_gid_ex(ctx_, port_num_, i, &gid_entry, 0)) {
+        continue;
+      }
+      if ((ipv6_addr_v4mapped((struct in6_addr *)gid_entry.gid.raw) &&
+           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
+          gid_entry.gid_type == IBV_GID_TYPE_IB) {
+        gid_index = i;
+        break;
+      }
+    }
+    return gid_index;
+  }
+
+  void open_device(struct ibv_device *target, uint16_t port_num,
+                   int gid_index = -1) {
     device_ = target;
     port_num_ = port_num;
     ctx_ = ::ibv_open_device(device_);
@@ -118,7 +147,7 @@ class device {
     check_rc(::ibv_query_device_ex(ctx_, &query, &device_attr_ex_),
              "failed to query extended attributes");
 
-    gid_index_ = 0;
+    gid_index_ = gid_index_ >= 0 ? gid_index_ : choose_gid_index();
     check_rc(::ibv_query_gid(ctx_, port_num, gid_index_, &gid_),
              "failed to query gid");
 
@@ -144,9 +173,9 @@ class device {
    * @param target The target device.
    * @param port_num The port number of the target device.
    */
-  device(struct ibv_device *target, uint16_t port_num = 1) {
+  device(struct ibv_device *target, uint16_t port_num = 1, int gid_index = -1) {
     assert(target != nullptr);
-    open_device(target, port_num);
+    open_device(target, port_num, gid_index);
   }
 
   /**
@@ -155,12 +184,13 @@ class device {
    * @param device_name The name of the target device.
    * @param port_num The port number of the target device.
    */
-  device(std::string const &device_name, uint16_t port_num = 1)
+  device(std::string const &device_name, uint16_t port_num = 1,
+         int gid_index = -1)
       : device_(nullptr), port_num_(0) {
     auto devices = device_list();
     for (auto target : devices) {
       if (::ibv_get_device_name(target) == device_name) {
-        open_device(target, port_num);
+        open_device(target, port_num, gid_index);
         return;
       }
     }
@@ -173,7 +203,7 @@ class device {
    * @param device_num The index of the target device.
    * @param port_num The port number of the target device.
    */
-  device(uint16_t device_num = 0, uint16_t port_num = 1)
+  device(uint16_t device_num = 0, uint16_t port_num = 1, int gid_index = -1)
       : device_(nullptr), port_num_(0) {
     auto devices = device_list();
     if (device_num >= devices.size()) {
@@ -184,7 +214,7 @@ class device {
           device_num, devices.size());
       throw std::invalid_argument(buffer);
     }
-    open_device(devices.at(device_num), port_num);
+    open_device(devices.at(device_num), port_num, gid_index);
   }
 
   /**
