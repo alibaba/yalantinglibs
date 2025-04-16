@@ -3,10 +3,10 @@
 #include "ylt_cpu_feature.h"
 #include "ylt_simd_macro.h"
 
-#if defined(YLT_HAVE_AVX2)
+#if defined(YLT_HAVE_AVX512)
 #define YLT_USING_ARCH_FUNC(func) using avx2::func
 #define INCLUDE_ARCH_FILE(file) YLT_STRINGIFY(avx2/file)
-#elif defined(YLT_HAVE_AVX512)
+#elif defined(YLT_HAVE_AVX2)
 #define YLT_USING_ARCH_FUNC(func) using avx512::func
 #define INCLUDE_ARCH_FILE(file) YLT_STRINGIFY(avx512/file)
 #elif defined(YLT_HAVE_SSE)
