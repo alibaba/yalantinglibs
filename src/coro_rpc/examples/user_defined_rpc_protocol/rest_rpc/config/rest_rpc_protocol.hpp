@@ -55,13 +55,16 @@ struct rest_rpc_protocol {
 
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
-      Socket& socket, req_header& req_head) {
+      Socket& socket, req_header& req_head, std::string& magic) {
     auto [ec, _] = co_await coro_io::async_read(
         socket, asio::buffer((char*)&req_head, sizeof(req_header)));
     if (ec)
       AS_UNLIKELY { co_return std::move(ec); }
     else if (req_head.magic != magic_number)
-      AS_UNLIKELY { co_return std::make_error_code(std::errc::protocol_error); }
+      AS_UNLIKELY {
+        magic = (char)req_head.magic;
+        co_return std::make_error_code(std::errc::protocol_error);
+      }
     co_return std::error_code{};
   }
 
