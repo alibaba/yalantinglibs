@@ -5,17 +5,16 @@
 #include <stdint.h>                          // int64_t, uint64_t
 
 #include <iostream>
+#include <chrono>
+#include <thread>
 
-inline int64_t gettimeofday_us() {
-    timeval now;
-    gettimeofday(&now, NULL);
-    return now.tv_sec * 1000000L + now.tv_usec;
-}
+#include <random>
+#include <benchmark/benchmark.h>
 
-inline std::vector<std::string_view> normal_sv_split(std::string_view s,
-    const char delim) {
+
+inline std::vector<std::string_view> normal_str_split(std::string_view s, const char delimiter) {
     size_t start = 0;
-    size_t end = s.find_first_of(delim);
+    size_t end = s.find_first_of(delimiter);
 
     std::vector<std::string_view> output;
 
@@ -23,43 +22,62 @@ inline std::vector<std::string_view> normal_sv_split(std::string_view s,
         output.emplace_back(s.substr(start, end - start));
 
         if (end == std::string_view::npos)
-        break;
+            break;
 
         start = end + 1;
-        end = s.find_first_of(delim, start);
+        end = s.find_first_of(delimiter, start);
     }
 
     return output;
 }
 
-#define REPEATED_NUMBER 10
+inline int64_t gettimeofday_us() {
+    timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec * 1000000L + now.tv_usec;
+}
 
-void __attribute__((noinline)) perf_normal_split() {
-    std::string_view sv_tmp = "hello world\t127.0.0.1\t1024\twww.yalantinglibs.com";
-    int64_t begin = gettimeofday_us();
-    for (size_t i = 0; i < REPEATED_NUMBER; ++i) {
-        normal_sv_split(sv_tmp, '\t');
+std::string generate_test_string(size_t length, char delimiter, size_t avg_segment_len) {
+    std::string s;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> char_dist('a', 'z');
+    std::uniform_int_distribution<size_t> seg_dist(1, 2 * avg_segment_len);
+
+    while (s.size() < length) {
+        size_t seg_len = seg_dist(gen);
+        for (size_t i = 0; i < seg_len && s.size() < length; ++i) {
+            s += static_cast<char>(char_dist(gen));
+        }
+        if (s.size() < length) s += delimiter;
     }
-
-    int64_t end = gettimeofday_us();
-
-    std::cout << "normal split total use: " << (end - begin) * 1.0 << std::endl;
+    return s;
 }
 
-void __attribute__((noinline)) perf_simd_split() {
-    std::string_view sv_tmp = "hello world\t127.0.0.1\t1024\twww.yalantinglibs.com";
-    int64_t begin = gettimeofday_us();
-    for (size_t i = 0; i < REPEATED_NUMBER; ++i) {
-        ylt::split_sv(sv_tmp, '\t');
+// Benchmark runner
+template<typename Func>
+void BM_Split(benchmark::State& state, Func split_func, bool return_string_view) {
+    const size_t str_len = state.range(0);
+    const char delimiter = ',';
+    const size_t avg_segment_len = 10;
+    auto test_str = generate_test_string(str_len, delimiter, avg_segment_len);
+
+    for (auto _ : state) {
+        if (return_string_view) {
+            auto result = split_func(test_str, delimiter);
+            benchmark::DoNotOptimize(result);
+        } else {
+            auto result = split_func(test_str, delimiter);
+            benchmark::DoNotOptimize(result);
+        }
     }
-
-    int64_t end = gettimeofday_us();
-
-    std::cout << "simd split total use: " << (end - begin) * 1.0 << std::endl;
 }
 
-int main()
-{
-    perf_normal_split();
-    perf_simd_split();
-}
+
+BENCHMARK_CAPTURE(BM_Split, simd_str_split_sv, ylt::split_sv, true)
+    ->Args({100})->Args({1000})->Args({10000});
+
+BENCHMARK_CAPTURE(BM_Split, naive_str_split_sv, normal_str_split, true)
+    ->Args({100})->Args({1000})->Args({10000});
+
+BENCHMARK_MAIN();
