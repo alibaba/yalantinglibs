@@ -19,7 +19,8 @@
 #endif
 #endif
 
-#if !defined(YLT_HAVE_AVX2) && !defined(YLT_HAVE_AVX512) && !defined(YLT_HAVE_SSE) && !defined(YLT_HAVE_NEON)
+#if !defined(YLT_HAVE_AVX2) && !defined(YLT_HAVE_AVX512) && \
+    !defined(YLT_HAVE_SSE) && !defined(YLT_HAVE_NEON)
 #define YLT_USING_ARCH_FUNC(func) using common::func
 #define INCLUDE_ARCH_FILE(file) YLT_STRINGIFY(common/file)
 #endif

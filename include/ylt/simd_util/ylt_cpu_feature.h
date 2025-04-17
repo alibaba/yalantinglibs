@@ -1,6 +1,7 @@
 #pragma once
 
-#if defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__) || defined(__unix__)
+#if defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__) || \
+    defined(__unix__)
 #endif
 
 #if defined(__SSE2__)
@@ -18,8 +19,3 @@
 #define YLT_HAVE_NEON
 #endif
 #endif
-
-
-
-
- 
