@@ -65,37 +65,37 @@ struct ib_config_t {
 };
 
 struct ib_deleter {
-  void operator()(ibv_pd* pd) const {
+  void operator()(ibv_pd* pd) const noexcept{
     auto ret = ibv_dealloc_pd(pd);
     if (ret != 0) {
       ELOG_ERROR << "ibv_dealloc_pd failed: " << std::make_error_code(std::errc{ret});
     }
   }
-  void operator()(ibv_context* context) const {
+  void operator()(ibv_context* context) const noexcept{
     auto ret = ibv_close_device(context);
     if (ret != 0) {
       ELOG_ERROR << "ibv_close_device failed " << std::make_error_code(std::errc{ret});
     }
   }
-  void operator()(ibv_cq* cq) const {
+  void operator()(ibv_cq* cq) const noexcept{
     auto ret = ibv_destroy_cq(cq);
     if (ret != 0) {
       ELOG_ERROR << "ibv_destroy_cq failed " << std::make_error_code(std::errc{ret});
     }
   }
-  void operator()(ibv_qp* qp) const {
+  void operator()(ibv_qp* qp) const noexcept{
     auto ret = ibv_destroy_qp(qp);
     if (ret != 0) {
       ELOG_ERROR << "ibv_destroy_qp failed " << std::make_error_code(std::errc{ret});
     }
   }
-  void operator()(ibv_comp_channel* channel) const {
+  void operator()(ibv_comp_channel* channel) const noexcept{
     auto ret = ibv_destroy_comp_channel(channel);
     if (ret != 0) {
       ELOG_ERROR << "ibv_destroy_comp_channel failed " << std::make_error_code(std::errc{ret});
     }
   }
-  void operator()(ibv_mr* ptr) {
+  void operator()(ibv_mr* ptr) const noexcept{
     if (auto ret = ibv_dereg_mr(ptr); ret)
         [[unlikely]] {
       ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret});
@@ -108,6 +108,7 @@ class ib_device_t {
   ib_device_t(const ib_config_t& conf) {
     auto& inst = ib_devices_t::instance();
     gid_index_ = conf.gid_index;
+
     port_ = conf.port;
     auto dev = inst.at(conf.dev_name);
     name_ = ibv_get_device_name(dev);
@@ -117,27 +118,45 @@ class ib_device_t {
     if (auto ret = ibv_query_port(ctx_.get(), conf.port, &attr_); ret != 0) {
       auto ec = std::make_error_code((std::errc)ret);
       ELOG_ERROR << "IBDevice failed to query port " << conf.port
-                 << " of device " << name_ << " error " << ec.message();
+                 << " of device " << name_ << " error msg: " << ec.message();
       throw std::system_error(ec);
+    }
+    if (gid_index_ >= 0) {
+      if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_,
+                          &gid_);ec) {
+        auto err_code = std::make_error_code(std::errc{ec});  
+        ELOG_ERROR << "IBDevice failed to query gid " << conf.port
+              << " of device " << name_ << "by gid_index:"<<gid_index_ <<", error msg: " << err_code.message();
+        throw std::system_error(err_code);          
+      }
+    }
+    else {
+      ELOG_ERROR << "gid index should greater than zero, now is: " << gid_index_;
+      throw std::invalid_argument{"gid index should greater than zero, now is: " + std::to_string(gid_index_)};
     }
   }
 
-  std::string_view name() const { return name_; }
+  std::string_view name() const noexcept { return name_; }
 
-  uint16_t port() const { return port_; }
+  uint16_t port() const noexcept { return port_; }
 
-  ibv_context* context() const { return ctx_.get(); }
-  ibv_pd* pd() const { return pd_.get(); }
-  int gid_index() const { return gid_index_; }
-  const ibv_port_attr& attr() const { return attr_; }
+  ibv_context* context() const noexcept { return ctx_.get(); }
+  ibv_pd* pd() const noexcept { return pd_.get(); }
+  int gid_index() const noexcept { return gid_index_; }
+  const ibv_gid& gid() const noexcept {return gid_;}
+  const ibv_port_attr& attr() const noexcept { return attr_; }
 
  private:
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
   ibv_port_attr attr_;
+  ibv_gid gid_;
   ibv_device* device_;
   int gid_index_;
+
   uint16_t port_;
 };
+
+
 }  // namespace ylt::coro_rdma
