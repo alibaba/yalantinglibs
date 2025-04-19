@@ -490,7 +490,7 @@ class coro_rpc_client {
     ELOG_TRACE << "start connect to endpoint lists. total endpoint count:"
                << eps->size()
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
-               << std::to_string((*eps)[0].port());
+               << ":" << std::to_string((*eps)[0].port());
     asio::ip::tcp::endpoint endpoint;
     std::tie(ec, endpoint) = co_await coro_io::async_connect(
         &control_->executor_, control_->socket_, *eps);
