@@ -136,6 +136,10 @@ class callback_awaitor_base {
     }
     void resume() const { obj->coro_.resume(); }
 
+    auto handler() const {
+      return (std::size_t)obj;
+    }
+
    private:
     Derived *obj;
   };
