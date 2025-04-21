@@ -985,7 +985,7 @@ class coro_http_connection
   bool checkout_timeout_ = false;
   std::atomic<std::chrono::system_clock::time_point> last_rwtime_ =
       std::chrono::system_clock::now();
-  uint64_t max_part_size_ = 8 * 1024 * 1024;
+  uint64_t max_part_size_ = 8 * 1024;
   std::string resp_str_;
 
 #ifdef CINATRA_ENABLE_GZIP

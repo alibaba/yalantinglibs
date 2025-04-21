@@ -193,7 +193,7 @@ public:
     return std::move(buffer);
   }
   struct config_t {
-    size_t buffer_size = 8 * 1024 * 1024; // 16MB
+    size_t buffer_size = 8 * 1024; // 16MB
     size_t max_buffer_count = 64;
     size_t max_memory_usage = 512 * 1024 * 1024; // 512MB
     size_t idle_queue_per_max_clear_count = 1000;

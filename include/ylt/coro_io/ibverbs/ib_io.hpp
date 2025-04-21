@@ -21,10 +21,10 @@ namespace coro_io {
 // unlike tcp socket, client won't connnected util server first read ib_socket.
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor &acceptor, coro_io::ib_socket_t& ib_socket) noexcept {
-  asio::ip::tcp::socket soc{ib_socket.get_executor()->get_asio_executor()};
+  auto soc = std::make_unique<asio::ip::tcp::socket>(ib_socket.get_executor()->get_asio_executor());
   auto ec = co_await async_io<std::error_code>(
       [&](auto &&cb) {
-        acceptor.async_accept(soc, std::move(cb));
+        acceptor.async_accept(*soc, std::move(cb));
       },
       acceptor);
   
@@ -32,7 +32,7 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
     co_return std::move(ec);
   }
   //TODO: SSL?
-  auto ret= co_await ib_socket.accept(soc);
+  auto ret= co_await ib_socket.accept(std::move(soc));
   ELOGV(INFO, "accept over:%s", ret.message().data());
   co_return ret;
 }
@@ -118,6 +118,7 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_re
 
 inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_read_some(coro_io::ib_socket_t& ib_socket, ib_buffer_view_t buffer) noexcept {
   if (ib_socket.get_config().buffer_size>buffer.length()) {
+    ELOG_INFO<<"buffer len short";
     co_return std::pair{std::make_error_code(std::errc::no_buffer_space),0};
   }
   ELOG_INFO<<"START IO";
@@ -128,7 +129,7 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_wr
   std::size_t block_size = std::min<std::size_t>(ib_socket.get_config().buffer_size, buffer.size());
   ib_buffer_t ib_buffer[2];
   int buffer_index=0;
-  if (!ib_socket.get_config().enable_zero_copy){
+  if (!ib_socket.get_config().enable_zero_copy) {
     do {
       std::size_t total_size_write = block_size;
       ib_buffer[0] = ib_socket.buffer_pool().get_buffer();

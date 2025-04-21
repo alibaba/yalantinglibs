@@ -1,6 +1,8 @@
 #pragma once
 #include <infiniband/verbs.h>
 
+#include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -55,7 +57,7 @@ class ib_socket_t {
   struct config_t {
     bool enable_zero_copy = true;
     uint32_t cq_size = 1024;
-    std::size_t buffer_size = 8 * 1024 * 1024;
+    std::size_t buffer_size = 8 * 1024;
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -126,42 +128,46 @@ public:
       ELOG_INFO<<"IO EVENT COMMING";
       void *ev_ctx;
       auto cq= cq_.get();
+      ELOG_INFO<<"get_cq_event";
       int r = ibv_get_cq_event(channel_.get(), &cq, &ev_ctx);
       // assert(r >= 0);
+      std::error_code ec;
       if (r) {
+        ELOG_INFO<<std::make_error_code(std::errc{r}).message();
         return std::make_error_code(std::errc{r});
       }
-
+      ELOG_INFO<<"ack_cq_events";
       ibv_ack_cq_events(cq, 1);
       r = ibv_req_notify_cq(cq, 0);
       if (r) {
+        ELOG_INFO<<std::make_error_code(std::errc{r}).message();
         return std::make_error_code(std::errc{r});
       }
-
+      ELOG_INFO<<"ibv_poll_cq";
       struct ibv_wc wc;
       int ne = 0;
       while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
         if (ne < 0) {
           ELOGV(ERROR, "poll CQ failed %d", ne);
-          return std::make_error_code(std::errc::io_error);
+        return std::make_error_code(std::errc::io_error);
         }
         if (ne > 0) {
           ELOGV(DEBUG, "Completion was found in CQ with status %d", wc.status);
-          
         }
-
-        if (!recv_op_id_.compare_exchange_strong(wc.wr_id,0)) {
-          send_op_id_.compare_exchange_strong(wc.wr_id,0);
-        }
-
+        
+        ec=make_error_code(wc.status);
         if (wc.status != IBV_WC_SUCCESS) {
-          ELOGV(DEBUG, "rdma failed with error code:", wc.status);
+          ELOGV(DEBUG, "rdma failed with error code:%d", wc.status);
         }
-
-        resume(std::pair{make_error_code(wc.status),(std::size_t)wc.byte_len}, wc.wr_id);
+        else {
+          ELOG_INFO<<"finish resume";
+          if (!recv_op_id_.compare_exchange_strong(wc.wr_id,0)) {
+            send_op_id_.compare_exchange_strong(wc.wr_id,0);
+          }
+          resume(std::pair{ec,(std::size_t)wc.byte_len}, wc.wr_id);
+        }
       }
-
-      return {};
+      return ec;
     }
   };
 
@@ -173,6 +179,7 @@ public:
   config_t conf_;
   uint64_t remote_buffer_size_ = 0;
   coro_io::ExecutorWrapper<>* executor_;
+  std::unique_ptr<asio::ip::tcp::socket> tcp_soc_;
 
  private:
   void init_qp() {
@@ -191,7 +198,8 @@ public:
   }
   void modify_qp_to_init() {
     // modify the QP to init
-    ibv_qp_attr attr{};
+    ibv_qp_attr attr;
+    memset(&attr, 0, sizeof(attr));
     attr.qp_state = IBV_QPS_INIT;
     attr.port_num = device_->port();
     attr.pkey_index = 0;
@@ -251,6 +259,7 @@ public:
   }
   template <typename T>
   inline static void resume(T arg, uint64_t handle) {
+    ELOG_INFO<<"finish resume:"<<handle;
     auto awaiter = typename coro_io::callback_awaitor<T>::awaitor_handler(
         (coro_io::callback_awaitor<T> *)handle);
     awaiter.set_value_then_resume(arg);
@@ -259,20 +268,28 @@ public:
 
 
   void init_fd() {
-
-    state_->fd_ = std::make_unique<asio::posix::stream_descriptor>(executor_->get_asio_executor(), state_->channel_->fd);
+    ELOG_INFO<<"state_->channel_->fd:"<<state_->channel_->fd;
     
+    int r = ibv_req_notify_cq(state_->cq_.get(), 0);
+    if (r) 
+    {
+      throw std::system_error(std::make_error_code(std::errc{errno}));
+    }
+    
+    state_->fd_ = std::make_unique<asio::posix::stream_descriptor>(executor_->get_asio_executor(), state_->channel_->fd);
     ELOG_INFO<<"init listen event";
     auto listen_event =
       [](std::shared_ptr<shared_state_t> self) -> async_simple::coro::Lazy<void> {
       std::error_code ec;
-      while (true) {
+      while (!ec) {
         coro_io::callback_awaitor<std::error_code> awaitor;
         
         ELOG_INFO<<"posix::stream_fd::wait_read now";
-        auto ec = co_await awaitor.await_resume([&self](auto handler) {
+        ELOG_INFO<<"fd:"<<self->fd_->native_handle();
+        ec = co_await awaitor.await_resume([&self](auto handler) {
           self->fd_->async_wait(asio::posix::stream_descriptor::wait_read,
-                          [handler](const auto& ec) mutable {
+                          [handler](const std::error_code& ec) mutable {
+                            ELOG_INFO<<"asio awake from posix::stream_fd::wait_read";
                             handler.set_value_then_resume(ec);
                           });
         });
@@ -280,18 +297,22 @@ public:
         if (ec) {
           break;
         }
-        if (ec = self->poll_completion(); ec) {
-          break;
-        }
+        ec = self->poll_completion();
       }
-      self->close(ec);
-      // TODO: should be std::pair<std::error_code,std::size_t>
-      if (std::size_t id=self->recv_op_id_.exchange(0);id) {
+      if (ec) {
+        ELOG_INFO<<ec.message();
+      }
+      std::error_code ec_ignore;
+      self->close(ec_ignore);
+      std::size_t id;
+      if (id=self->recv_op_id_.exchange(0);id) {
+        ELOG_INFO<<"resume by err here:"<<id;
         resume(std::pair{ec,std::size_t{0}}, id);
       }
-      if (std::size_t id=self->send_op_id_.exchange(0);id) {
+      if (id=self->send_op_id_.exchange(0);id) {
+        ELOG_INFO<<"resume by err here:"<<id;
         resume(std::pair{ec,std::size_t{0}}, id);
-      }
+      } 
     };
     ELOG_INFO<<"start coroutine listener";
     listen_event(state_).start([](auto&& ec){});
@@ -313,7 +334,7 @@ public:
     rr.num_sge = 1;
 
     // prepare the receive work request
-
+    ELOG_INFO<<"set id:"<<wr_id;
     state_->recv_op_id_ = wr_id;
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
@@ -345,7 +366,7 @@ public:
     rr.num_sge = 1;
 
     // prepare the receive work request
-
+    ELOG_INFO<<"set id:"<<wr_id;
     state_->send_op_id_ = wr_id;
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
@@ -379,6 +400,28 @@ public:
   template<io_type io,bool has_next_buffer>
   async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(ib_buffer_view_t buffer,std::span<char> next_buffer={}, ib_buffer_t* new_buffer=nullptr) {
     coro_io::callback_awaitor<std::pair<std::error_code,std::size_t>> awaitor;
+    if constexpr (io==read) {
+      if (tcp_soc_) [[unlikely]] {
+        ib_socket_info peer_info{};
+        constexpr auto sz = struct_pack::get_needed_size(peer_info);
+        char buffer[sz.size()];
+        ELOG_INFO<<"serialize peer_info";
+        peer_info.qp_num = qp_->qp_num;
+        peer_info.lid = device_->attr().lid;
+        memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
+        struct_pack::serialize_to((char*)buffer,sz,peer_info);
+        ELOG_INFO<<"send qp info to client";
+        auto tcp_soc=std::move(tcp_soc_);
+        auto ec = co_await async_write(*tcp_soc,asio::buffer(buffer));
+        if (ec.first) {
+          ELOG_INFO<<"write ib socket info to client";
+          std::error_code ec2;
+          state_->close(ec2);
+          co_return std::pair{ec.first,std::size_t{0}};
+        }
+      }
+    }
+    
     co_return co_await awaitor.await_resume([=,this](auto handler) {
       std::error_code ec;
       if constexpr (io == read) {
@@ -399,6 +442,7 @@ public:
             id = state->send_op_id_.exchange(0);
           }
           if (id) {
+            std::cout<<"ec resume"<<std::endl;
             resume(std::pair{ec, std::size_t{0}}, id);
           }
         });
@@ -428,11 +472,11 @@ public:
   
   config_t& get_config() noexcept { return conf_; }
   auto& get_device() noexcept {return *device_;}
-  async_simple::coro::Lazy<std::error_code> accept(asio::ip::tcp::socket& soc) noexcept {
+  async_simple::coro::Lazy<std::error_code> accept(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
-    auto [ec2, canceled] = co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(async_read(soc,asio::buffer(buffer)),coro_io::sleep_for(std::chrono::milliseconds{10000}));
+    auto [ec2, canceled] = co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(async_read(*soc,asio::buffer(buffer)),coro_io::sleep_for(std::chrono::milliseconds{10000}));
     if (ec2.value().first) [[unlikely]] {
       co_return std::move(ec2.value().first);
     }
@@ -463,19 +507,8 @@ public:
     } catch (...) {
       ELOG_INFO<<"unknown exception";
     }
-    
-    
-    ELOG_INFO<<"serialize peer_info";
-    peer_info.qp_num = qp_->qp_num;
-    peer_info.lid = device_->attr().lid;
-    memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
-    struct_pack::serialize_to((char*)buffer,sz,peer_info);
-    ELOG_INFO<<"send qp info to client";
-    auto ec4 = co_await async_write(soc,asio::buffer(buffer));
-    if (ec4.first) {
-      ELOG_INFO<<"write ib socket info to client";
-    }
-    co_return std::move(ec4.first);
+    tcp_soc_=std::move(soc);
+    co_return std::error_code{};
   }
 
   async_simple::coro::Lazy<std::error_code> connect(asio::ip::tcp::socket& soc) noexcept {
@@ -511,9 +544,15 @@ public:
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                       (uint8_t*)peer_info.gid);
       modify_qp_to_rts();
+      ELOG_INFO<<"start init fd";
       init_fd();
     } catch (std::system_error& err) {
       co_return err.code();
+    } catch (const std::exception& err) {
+      ELOG_INFO<<"accept failed";
+      std::cout<<err.what();
+    } catch (...) {
+      ELOG_INFO<<"unknown exception";
     }
     co_return std::error_code{};
   }
