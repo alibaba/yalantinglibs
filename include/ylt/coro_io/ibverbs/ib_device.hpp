@@ -68,37 +68,37 @@ struct ib_deleter {
   void operator()(ibv_pd* pd) const noexcept{
     auto ret = ibv_dealloc_pd(pd);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_dealloc_pd failed: " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_dealloc_pd failed: " << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_context* context) const noexcept{
     auto ret = ibv_close_device(context);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_close_device failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_close_device failed " << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_cq* cq) const noexcept{
     auto ret = ibv_destroy_cq(cq);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_cq failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_cq failed " << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_qp* qp) const noexcept{
     auto ret = ibv_destroy_qp(qp);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_qp failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_qp failed " << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_comp_channel* channel) const noexcept{
     auto ret = ibv_destroy_comp_channel(channel);
     if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_comp_channel failed " << std::make_error_code(std::errc{ret}).message();
     }
   }
   void operator()(ibv_mr* ptr) const noexcept{
     if (auto ret = ibv_dereg_mr(ptr); ret)
         [[unlikely]] {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret});
+      ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret}).message();
     }
   }
 };
