@@ -190,8 +190,14 @@ class io_context_pool {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
+
+#ifdef __ANDROID__
+        const pid_t tid = pthread_gettid_np(threads.back()->native_handle());
+        int rc = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+#else
         int rc = pthread_setaffinity_np(threads.back()->native_handle(),
                                         sizeof(cpu_set_t), &cpuset);
+#endif
         if (rc != 0) {
           std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
         }

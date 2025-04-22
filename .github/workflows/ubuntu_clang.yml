@@ -156,7 +156,7 @@ jobs:
       matrix:
         mode: [ Release, Debug ]
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -165,8 +165,8 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: Install clang-7
-        run:  sudo apt-get install clang-7 clang++-7 
+      - name: Install clang-11
+        run:  sudo apt-get install clang-11 clang++-11 
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -175,7 +175,7 @@ jobs:
 
       - name: Configure
         run: |
-          CXX=clang++-7 CC=clang-7 
+          CXX=clang++-11 CC=clang-11 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
