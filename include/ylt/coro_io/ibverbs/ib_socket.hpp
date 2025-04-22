@@ -67,12 +67,12 @@ class ib_socket_t {
                       .max_recv_sge = 1,
                       .max_inline_data = 0};
   };
-  ib_socket_t(coro_io::ExecutorWrapper<>* executor, ib_device_t* device,const config_t& config, ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
-      : device_(device),executor_(executor),ib_buffer_pool_(buffer_pool),state_(std::make_shared<shared_state_t>()) {
+  ib_socket_t(coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,const config_t& config, ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
+      : device_(std::move(device)),executor_(executor),ib_buffer_pool_(buffer_pool),state_(std::make_shared<shared_state_t>()) {
     init(config);
   }
-  ib_socket_t(coro_io::ExecutorWrapper<>* executor, ib_device_t* device,ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
-      : device_(device),executor_(executor),ib_buffer_pool_(buffer_pool),state_(std::make_shared<shared_state_t>()) {
+  ib_socket_t(coro_io::ExecutorWrapper<>* executor=coro_io::get_global_executor(), std::shared_ptr<ib_device_t> device=coro_io::g_ib_device(),ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
+      : device_(std::move(device)),executor_(executor),ib_buffer_pool_(buffer_pool),state_(std::make_shared<shared_state_t>()) {
     config_t config{};
     init(config);
   }
@@ -161,10 +161,15 @@ public:
           ELOGV(DEBUG, "rdma failed with error code:%d", wc.status);
         }
         else {
-          ELOG_INFO<<"finish resume";
-          if (!recv_op_id_.compare_exchange_strong(wc.wr_id,0)) {
-            send_op_id_.compare_exchange_strong(wc.wr_id,0);
+          ELOG_INFO<<"finish resume with id:"<<wc.wr_id;
+          ELOG_INFO<<"recv id:"<<recv_op_id_.load()<<"send id:"<<send_op_id_.load();
+          
+          if (auto id=wc.wr_id;!recv_op_id_.compare_exchange_strong(id,0)) {
+            if (auto id=wc.wr_id;!send_op_id_.compare_exchange_strong(id,0)) [[unlikely]] {
+              ELOG_ERROR<<"unknown id"<<wc.wr_id<<", ib_socket only allow one r/w in same time";
+            }
           }
+          ELOG_INFO<<"recv id:"<<recv_op_id_.load()<<"send id:"<<send_op_id_.load();
           resume(std::pair{ec,(std::size_t)wc.byte_len}, wc.wr_id);
         }
       }
@@ -172,7 +177,7 @@ public:
     }
   };
 
-  ib_device_t* device_;
+  std::shared_ptr<ib_device_t> device_;
   ib_buffer_pool_t* ib_buffer_pool_;
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::shared_ptr<shared_state_t> state_;
@@ -452,7 +457,7 @@ public:
       }
       else {
         if constexpr(has_next_buffer)
-          *new_buffer = ib_buffer_t::regist(device_->pd(), next_buffer.data(),
+          *new_buffer = ib_buffer_t::regist(device_, next_buffer.data(),
                                             next_buffer.size());
       }
     });
@@ -474,7 +479,8 @@ public:
   }
   std::size_t get_remote_buffer_size() const noexcept { return remote_buffer_size_;}
   config_t& get_config() noexcept { return conf_; }
-  auto& get_device() noexcept {return *device_;}
+  const config_t& get_config() const noexcept { return conf_; }
+  auto get_device() const noexcept {return device_;}
   async_simple::coro::Lazy<std::error_code> accept(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
@@ -568,6 +574,5 @@ public:
   auto get_executor() const {
     return executor_;
   }
-  const config_t& get_config() const noexcept;
 };
 }  // namespace coro_io

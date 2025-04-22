@@ -22,7 +22,7 @@ char buffer[8*1024*1024];
 async_simple::coro::Lazy<std::error_code> echo_connect(coro_io::ib_socket_t soc) {
   
   ELOG_INFO<<"start echo connect";
-  coro_io::ib_buffer_t ib=coro_io::ib_buffer_t::regist(soc.get_device().pd(),buffer,sizeof(buffer));
+  coro_io::ib_buffer_t ib=coro_io::ib_buffer_t::regist(soc.get_device(),buffer,sizeof(buffer));
   ELOG_INFO<<"start read from client";
   auto [ec,len] = co_await coro_io::async_read_some(soc,coro_io::ib_buffer_view_t{ib});
   if (ec) [[unlikely]] {
@@ -54,8 +54,6 @@ async_simple::coro::Lazy<std::error_code> echo_connect(coro_io::ib_socket_t soc)
   co_return std::error_code{};
 }
 
-std::shared_ptr<coro_io::ib_device_t> dev=coro_io::g_device();
-
 async_simple::coro::Lazy<std::error_code> echo_accept() {
   
   asio::ip::tcp::acceptor acceptor(coro_io::get_global_executor()->get_asio_executor());
@@ -84,7 +82,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   
   ELOG_INFO<<"tcp listening";
   while (true) {
-    coro_io::ib_socket_t soc(coro_io::get_global_executor(),dev.get());
+    coro_io::ib_socket_t soc;
     soc.get_config().buffer_size = 8 * 1024 * 1024;
     auto ec = co_await coro_io::async_accept(acceptor,soc );
     
@@ -106,8 +104,8 @@ std::atomic<std::size_t> cnt;
 async_simple::coro::Lazy<std::error_code> echo_client(coro_io::ib_socket_t& soc, std::string_view sv) {
   std::string buffer;
   buffer.resize(8*1024*1024);
-  auto ib2 = coro_io::ib_buffer_t::regist(soc.get_device().pd(),buffer.data(),8*1024*1024);
-  auto ib = coro_io::ib_buffer_t::regist(soc.get_device().pd(),(char*)sv.data(),sv.size());
+  auto ib2 = coro_io::ib_buffer_t::regist(soc.get_device(),buffer.data(),8*1024*1024);
+  auto ib = coro_io::ib_buffer_t::regist(soc.get_device(),(char*)sv.data(),sv.size());
   ELOG_INFO<<"start echo";
   for (int i = 0;; i ^= 1) {
     ELOG_INFO<<"prepare read buffer";
@@ -140,7 +138,7 @@ async_simple::coro::Lazy<std::error_code> echo_client(coro_io::ib_socket_t& soc,
 }
 
 async_simple::coro::Lazy<std::error_code> echo_connect(std::size_t buffer_size) {
-  coro_io::ib_socket_t soc(coro_io::get_global_executor(),dev.get());
+  coro_io::ib_socket_t soc{};
   auto ec = co_await coro_io::async_connect(soc,"127.0.0.1","58110");
   if (ec) [[unlikely]] {
 
@@ -157,12 +155,12 @@ int concurrency=1;
 
 
 int main() {
-  easylog::logger<>::instance().init(easylog::Severity::WARN,false,true,"1.log",10000,1,true);
+  easylog::logger<>::instance().init(easylog::Severity::TRACE,false,true,"1.log",10000,1,true);
   ELOG_INFO<<"start echo server & client";
   echo_accept().start([](auto&&){});
   for (int i=0;i<concurrency;++i)
     echo_connect(buffer_size).start([](auto&&){});
-  while (true) {
+  for(int i=0;i<1;++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c=cnt.exchange(0);
     std::cout<<"Throughput:"<<8.0*c/1000'000<<" Mb/s"<<std::endl;
