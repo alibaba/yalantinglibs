@@ -144,8 +144,10 @@ async_read_some(coro_io::ib_socket_t& ib_socket,
     ELOG_INFO << "buffer len short";
     co_return std::pair{std::make_error_code(std::errc::no_buffer_space), 0};
   }
-  ELOG_INFO << "START IO";
-  co_return co_await ib_socket.async_io<ib_socket_t::read>(buffer);
+  ELOG_INFO << "START async_read_some:" << &ib_socket;
+  auto ret = co_await ib_socket.async_io<ib_socket_t::read>(buffer);
+  ELOG_INFO << "async_read_some over:" << &ib_socket;
+  co_return std::move(ret);
 }
 
 inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
@@ -223,6 +225,8 @@ async_write(coro_io::ib_socket_t& ib_socket, ib_buffer_view_t buffer) noexcept {
   std::size_t block_size = std::min<std::size_t>(
       ib_socket.get_remote_buffer_size(), buffer.length());
   std::size_t total_size_write = 0;
+
+  ELOG_INFO << "start async_write:" << &ib_socket;
   for (; total_size_write < buffer.length();) {
     std::span<char> next_buffer = {
         (char*)buffer.address() + total_size_write,
@@ -234,6 +238,7 @@ async_write(coro_io::ib_socket_t& ib_socket, ib_buffer_view_t buffer) noexcept {
     total_size_write += block_size;
     block_size = next_buffer.size();
   }
+  ELOG_INFO << "async_write over:" << &ib_socket;
   co_return std::pair{std::error_code{}, total_size_write};
 }
 

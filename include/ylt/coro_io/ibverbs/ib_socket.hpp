@@ -4,8 +4,10 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <system_error>
@@ -87,6 +89,8 @@ class ib_socket_t {
     return state_->fd_ != nullptr && state_->fd_->is_open();
   }
   ib_buffer_pool_t& buffer_pool() const noexcept { return *ib_buffer_pool_; }
+  using callback_t =
+      std::function<void(std::pair<std::error_code, std::size_t>)>;
 
  private:
   struct shared_state_t {
@@ -94,8 +98,14 @@ class ib_socket_t {
     std::unique_ptr<ibv_cq, ib_deleter> cq_;
     std::unique_ptr<asio::posix::stream_descriptor> fd_;
     std::atomic<bool> has_close_ = 0;
-    size_t recv_op_id_ = 0;
-    size_t send_op_id_ = 0;
+    callback_t recv_cb_;
+    callback_t send_cb_;
+    void cancel() {
+      if (fd_) {
+        std::error_code ec;
+        fd_->cancel(ec);
+      }
+    }
     void close(std::error_code& ec) {
       auto has_close = has_close_.exchange(true);
       if (!has_close) {
@@ -146,10 +156,9 @@ class ib_socket_t {
           ELOGV(DEBUG, "rdma failed with error code:%d", wc.status);
         }
         else {
-          ELOG_INFO << "finish resume with id:" << *(std::size_t*)wc.wr_id;
-          ELOG_INFO << "recv id:" << recv_op_id_ << "send id:" << send_op_id_;
+          ELOG_INFO << "ready resume:" << (callback_t*)wc.wr_id;
           resume(std::pair{ec, (std::size_t)wc.byte_len},
-                 (std::size_t*)wc.wr_id);
+                 *(callback_t*)wc.wr_id);
         }
       }
       return ec;
@@ -241,13 +250,18 @@ class ib_socket_t {
     }
     ELOGV(INFO, "Modify QP to RTS done!");
   }
-  template <typename T>
-  inline static void resume(T arg, std::size_t* handle) {
-    ELOG_INFO << "finish resume:" << *handle;
-    auto awaiter = typename coro_io::callback_awaitor<T>::awaitor_handler(
-        (coro_io::callback_awaitor<T>*)*handle);
-    *handle = 0;
-    awaiter.set_value_then_resume(arg);
+  inline static void resume(std::pair<std::error_code, std::size_t>&& arg,
+                            callback_t& handle) {
+    ELOG_INFO << "resume callback:" << &handle;
+    if (handle) [[likely]] {
+      ELOG_INFO << "resuming:" << &handle;
+      auto handle_tmp = std::move(handle);
+      handle_tmp(std::move(arg));
+      ELOG_INFO << "resume over,clear cb:" << &handle;
+    }
+    else {
+      ELOG_INFO << "resume empty";
+    }
   }
 
   void init_fd() {
@@ -278,23 +292,23 @@ class ib_socket_t {
               });
         });
         ELOG_INFO << "awake from posix::stream_fd::wait_read";
+
         if (ec) {
+          // if (std::errc{ec.value()}!=std::errc::operation_canceled) {
+          std::error_code ec_ignore;
+          self->close(ec_ignore);
+          // }
+          resume(std::pair{ec, std::size_t{0}}, self->recv_cb_);
+          resume(std::pair{ec, std::size_t{0}}, self->send_cb_);
           break;
+          // if (std::errc{ec.value()}!=std::errc::operation_canceled) {
+          //   break;
+          // }
         }
         ec = self->poll_completion();
       }
       if (ec) {
         ELOG_INFO << ec.message();
-      }
-      std::error_code ec_ignore;
-      self->close(ec_ignore);
-      if (self->recv_op_id_) {
-        ELOG_INFO << "resume by err here:" << self->recv_op_id_;
-        resume(std::pair{ec, std::size_t{0}}, &self->recv_op_id_);
-      }
-      if (self->send_op_id_) {
-        ELOG_INFO << "resume by err here:" << self->recv_op_id_;
-        resume(std::pair{ec, std::size_t{0}}, &self->send_op_id_);
       }
     };
     ELOG_INFO << "start coroutine listener";
@@ -302,7 +316,7 @@ class ib_socket_t {
     });
   }
 
-  std::error_code post_recv(size_t handler, ib_buffer_view_t buffer) {
+  std::error_code post_recv(ib_buffer_view_t buffer, callback_t&& handler) {
     ibv_recv_wr rr{};
     ibv_sge sge{};
     ibv_recv_wr* bad_wr = nullptr;
@@ -313,13 +327,13 @@ class ib_socket_t {
     sge.lkey = buffer.lkey();
 
     rr.next = NULL;
-    rr.wr_id = (std::size_t)&state_->recv_op_id_;
+    rr.wr_id = (std::size_t)&state_->recv_cb_;
     rr.sg_list = &sge;
     rr.num_sge = 1;
 
     // prepare the receive work request
-    ELOG_INFO << "set id:" << handler;
-    state_->recv_op_id_ = handler;
+    ELOG_INFO << "set cb:" << (void*)rr.wr_id;
+    state_->recv_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
@@ -333,8 +347,7 @@ class ib_socket_t {
     ELOG_INFO << "ibv post recv ok";
     return {};
   }
-
-  std::error_code post_send(uint64_t handler, ib_buffer_view_t buffer) {
+  std::error_code post_send(ib_buffer_view_t buffer, callback_t&& handler) {
     ibv_send_wr sr{};
     ibv_sge sge{};
     ibv_send_wr* bad_wr = nullptr;
@@ -345,15 +358,15 @@ class ib_socket_t {
     sge.lkey = buffer.lkey();
 
     sr.next = NULL;
-    sr.wr_id = (std::size_t)&state_->send_op_id_;
+    sr.wr_id = (std::size_t)&state_->send_cb_;
     sr.sg_list = &sge;
     sr.num_sge = 1;
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
 
     // prepare the receive work request
-    ELOG_INFO << "set id:" << handler;
-    state_->send_op_id_ = handler;
+    ELOG_INFO << "set cb:" << (void*)sr.wr_id;
+    state_->send_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
@@ -381,10 +394,29 @@ class ib_socket_t {
   }
   enum io_type { read, write };
 
-  template <io_type io, bool has_next_buffer>
-  async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-  async_io_impl(ib_buffer_view_t buffer, std::span<char> next_buffer = {},
-                ib_buffer_t* new_buffer = nullptr) {
+  template <io_type io>
+  void async_io_impl(ib_buffer_view_t buffer, callback_t&& cb) {
+    std::error_code ec;
+    if constexpr (io == read) {
+      ELOG_INFO << "POST RECV";
+      ec = post_recv(buffer, std::move(cb));
+    }
+    else {
+      ELOG_INFO << "POST SEND";
+      ec = post_send(buffer, std::move(cb));
+    }
+    if (ec) [[unlikely]] {
+      asio::dispatch(executor_->get_asio_executor(),
+                     [state = state_, ec, cb = std::move(cb)]() mutable {
+                       resume(std::pair{ec, std::size_t{0}}, cb);
+                     });
+    }
+  }
+
+  template <io_type io, bool has_next_buffer = false>
+  async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io(
+      ib_buffer_view_t buffer, std::span<char> next_buffer = {},
+      ib_buffer_t* new_buffer = nullptr) {
     coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
     if constexpr (io == read) {
       if (tcp_soc_) [[unlikely]] {
@@ -408,38 +440,19 @@ class ib_socket_t {
         }
       }
     }
-
-    co_return co_await awaitor.await_resume([=, this](auto handler) {
-      std::error_code ec;
-      if constexpr (io == read) {
-        ELOG_INFO << "POST RECV";
-        ec = post_recv(handler.handler(), buffer);
+    auto result =
+        co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+            [this, &buffer](auto&& cb) {
+              this->async_io_impl<io>(buffer, std::move(cb));
+            },
+            *this);
+    if constexpr (has_next_buffer) {
+      if (!result.first) [[likely]] {
+        *new_buffer = ib_buffer_t::regist(device_, next_buffer.data(),
+                                          next_buffer.size());
       }
-      else {
-        ELOG_INFO << "POST SEND";
-        ec = post_send(handler.handler(), buffer);
-      }
-      if (ec) [[unlikely]] {
-        asio::dispatch(executor_->get_asio_executor(), [state = state_, ec]() {
-          std::size_t* id;
-          if constexpr (io == read) {
-            id = &state->recv_op_id_;
-          }
-          else {
-            id = &state->send_op_id_;
-          }
-          if (id) {
-            std::cout << "ec resume" << std::endl;
-            resume(std::pair{ec, std::size_t{0}}, id);
-          }
-        });
-      }
-      else {
-        if constexpr (has_next_buffer)
-          *new_buffer = ib_buffer_t::regist(device_, next_buffer.data(),
-                                            next_buffer.size());
-      }
-    });
+    }
+    co_return std::move(result);
   }
 
   template <io_type io>
@@ -447,16 +460,9 @@ class ib_socket_t {
       ib_buffer_t& buffer, std::span<char> next_buffer) {
     coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
     ib_buffer_t new_buffer;
-    auto result =
-        co_await async_io_impl<io, true>(buffer, next_buffer, &new_buffer);
+    auto result = co_await async_io<io, true>(buffer, next_buffer, &new_buffer);
     buffer = std::move(new_buffer);
     co_return result;
-  }
-
-  template <io_type io>
-  async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io(
-      ib_buffer_view_t buffer) {
-    return async_io_impl<io, false>(buffer, {}, nullptr);
   }
   std::size_t get_remote_buffer_size() const noexcept {
     return remote_buffer_size_;
@@ -561,6 +567,6 @@ class ib_socket_t {
   }
   auto get_executor() const { return executor_->get_asio_executor(); }
   auto get_coro_executor() const { return executor_; }
-  auto cancel(std::error_code& ec) const { state_->close(ec); }
+  auto cancel() const { state_->cancel(); }
 };
 }  // namespace coro_io
