@@ -165,8 +165,8 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: Install clang-7
-        run:  sudo apt-get install clang-7 clang++-7 
+      - name: Install clang-8
+        run:  sudo apt-get install clang-8 clang++-8 
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -175,7 +175,7 @@ jobs:
 
       - name: Configure
         run: |
-          CXX=clang++-7 CC=clang-7 
+          CXX=clang++-8 CC=clang-8 
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
