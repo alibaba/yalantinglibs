@@ -94,8 +94,8 @@ class ib_socket_t {
     std::unique_ptr<ibv_cq, ib_deleter> cq_;
     std::unique_ptr<asio::posix::stream_descriptor> fd_;
     std::atomic<bool> has_close_ = 0;
-    std::atomic<size_t> recv_op_id_ = 0;
-    std::atomic<size_t> send_op_id_ = 0;
+    size_t recv_op_id_ = 0;
+    size_t send_op_id_ = 0;
     void close(std::error_code& ec) {
       auto has_close = has_close_.exchange(true);
       if (!has_close) {
@@ -146,20 +146,10 @@ class ib_socket_t {
           ELOGV(DEBUG, "rdma failed with error code:%d", wc.status);
         }
         else {
-          ELOG_INFO << "finish resume with id:" << wc.wr_id;
-          ELOG_INFO << "recv id:" << recv_op_id_.load()
-                    << "send id:" << send_op_id_.load();
-
-          if (auto id = wc.wr_id; !recv_op_id_.compare_exchange_strong(id, 0)) {
-            if (auto id = wc.wr_id; !send_op_id_.compare_exchange_strong(id, 0))
-                [[unlikely]] {
-              ELOG_ERROR << "unknown id" << wc.wr_id
-                         << ", ib_socket only allow one r/w in same time";
-            }
-          }
-          ELOG_INFO << "recv id:" << recv_op_id_.load()
-                    << "send id:" << send_op_id_.load();
-          resume(std::pair{ec, (std::size_t)wc.byte_len}, wc.wr_id);
+          ELOG_INFO << "finish resume with id:" << *(std::size_t*)wc.wr_id;
+          ELOG_INFO << "recv id:" << recv_op_id_ << "send id:" << send_op_id_;
+          resume(std::pair{ec, (std::size_t)wc.byte_len},
+                 (std::size_t*)wc.wr_id);
         }
       }
       return ec;
@@ -252,10 +242,11 @@ class ib_socket_t {
     ELOGV(INFO, "Modify QP to RTS done!");
   }
   template <typename T>
-  inline static void resume(T arg, uint64_t handle) {
-    ELOG_INFO << "finish resume:" << handle;
+  inline static void resume(T arg, std::size_t* handle) {
+    ELOG_INFO << "finish resume:" << *handle;
     auto awaiter = typename coro_io::callback_awaitor<T>::awaitor_handler(
-        (coro_io::callback_awaitor<T>*)handle);
+        (coro_io::callback_awaitor<T>*)*handle);
+    *handle = 0;
     awaiter.set_value_then_resume(arg);
   }
 
@@ -297,14 +288,13 @@ class ib_socket_t {
       }
       std::error_code ec_ignore;
       self->close(ec_ignore);
-      std::size_t id;
-      if (id = self->recv_op_id_.exchange(0); id) {
-        ELOG_INFO << "resume by err here:" << id;
-        resume(std::pair{ec, std::size_t{0}}, id);
+      if (self->recv_op_id_) {
+        ELOG_INFO << "resume by err here:" << self->recv_op_id_;
+        resume(std::pair{ec, std::size_t{0}}, &self->recv_op_id_);
       }
-      if (id = self->send_op_id_.exchange(0); id) {
-        ELOG_INFO << "resume by err here:" << id;
-        resume(std::pair{ec, std::size_t{0}}, id);
+      if (self->send_op_id_) {
+        ELOG_INFO << "resume by err here:" << self->recv_op_id_;
+        resume(std::pair{ec, std::size_t{0}}, &self->send_op_id_);
       }
     };
     ELOG_INFO << "start coroutine listener";
@@ -312,7 +302,7 @@ class ib_socket_t {
     });
   }
 
-  std::error_code post_recv(size_t wr_id, ib_buffer_view_t buffer) {
+  std::error_code post_recv(size_t handler, ib_buffer_view_t buffer) {
     ibv_recv_wr rr{};
     ibv_sge sge{};
     ibv_recv_wr* bad_wr = nullptr;
@@ -323,13 +313,13 @@ class ib_socket_t {
     sge.lkey = buffer.lkey();
 
     rr.next = NULL;
-    rr.wr_id = wr_id;
+    rr.wr_id = (std::size_t)&state_->recv_op_id_;
     rr.sg_list = &sge;
     rr.num_sge = 1;
 
     // prepare the receive work request
-    ELOG_INFO << "set id:" << wr_id;
-    state_->recv_op_id_ = wr_id;
+    ELOG_INFO << "set id:" << handler;
+    state_->recv_op_id_ = handler;
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
@@ -344,7 +334,7 @@ class ib_socket_t {
     return {};
   }
 
-  std::error_code post_send(uint64_t wr_id, ib_buffer_view_t buffer) {
+  std::error_code post_send(uint64_t handler, ib_buffer_view_t buffer) {
     ibv_send_wr sr{};
     ibv_sge sge{};
     ibv_send_wr* bad_wr = nullptr;
@@ -355,15 +345,15 @@ class ib_socket_t {
     sge.lkey = buffer.lkey();
 
     sr.next = NULL;
-    sr.wr_id = wr_id;
+    sr.wr_id = (std::size_t)&state_->send_op_id_;
     sr.sg_list = &sge;
     sr.num_sge = 1;
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
 
     // prepare the receive work request
-    ELOG_INFO << "set id:" << wr_id;
-    state_->send_op_id_ = wr_id;
+    ELOG_INFO << "set id:" << handler;
+    state_->send_op_id_ = handler;
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
@@ -431,12 +421,12 @@ class ib_socket_t {
       }
       if (ec) [[unlikely]] {
         asio::dispatch(executor_->get_asio_executor(), [state = state_, ec]() {
-          std::size_t id;
+          std::size_t* id;
           if constexpr (io == read) {
-            id = state->recv_op_id_.exchange(0);
+            id = &state->recv_op_id_;
           }
           else {
-            id = state->send_op_id_.exchange(0);
+            id = &state->send_op_id_;
           }
           if (id) {
             std::cout << "ec resume" << std::endl;
@@ -569,6 +559,8 @@ class ib_socket_t {
     }
     co_return std::error_code{};
   }
-  auto get_executor() const { return executor_; }
+  auto get_executor() const { return executor_->get_asio_executor(); }
+  auto get_coro_executor() const { return executor_; }
+  auto cancel(std::error_code& ec) const { state_->close(ec); }
 };
 }  // namespace coro_io

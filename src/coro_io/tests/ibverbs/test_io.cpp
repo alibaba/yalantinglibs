@@ -162,7 +162,7 @@ std::size_t buffer_size = 8 * 1024 * 1024;
 int concurrency = 1;
 
 int main() {
-  easylog::logger<>::instance().init(easylog::Severity::TRACE, false, true,
+  easylog::logger<>::instance().init(easylog::Severity::WARN, false, true,
                                      "1.log", 10000, 1, true);
   ELOG_INFO << "start echo server & client";
   echo_accept().start([](auto&&) {
@@ -170,7 +170,7 @@ int main() {
   for (int i = 0; i < concurrency; ++i)
     echo_connect(buffer_size).start([](auto&&) {
     });
-  for (int i = 0; i < 1; ++i) {
+  for (int i = 0; i < 1000; ++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c = cnt.exchange(0);
     std::cout << "Throughput:" << 8.0 * c / 1000'000 << " Mb/s" << std::endl;

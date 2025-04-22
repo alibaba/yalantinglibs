@@ -24,8 +24,7 @@ namespace coro_io {
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor& acceptor,
     coro_io::ib_socket_t& ib_socket) noexcept {
-  auto soc = std::make_unique<asio::ip::tcp::socket>(
-      ib_socket.get_executor()->get_asio_executor());
+  auto soc = std::make_unique<asio::ip::tcp::socket>(ib_socket.get_executor());
   auto ec = co_await async_io<std::error_code>(
       [&](auto&& cb) {
         acceptor.async_accept(*soc, std::move(cb));
@@ -46,8 +45,9 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     const std::string& port) noexcept {
   // todo: get socket from client_pool, not connect each time?
 
-  asio::ip::tcp::socket soc{ib_socket.get_executor()->get_asio_executor()};
-  auto ec = co_await async_connect(ib_socket.get_executor(), soc, host, port);
+  asio::ip::tcp::socket soc{ib_socket.get_executor()};
+  auto ec =
+      co_await async_connect(ib_socket.get_coro_executor(), soc, host, port);
   if (ec) [[unlikely]] {
     co_return std::move(ec);
   }
