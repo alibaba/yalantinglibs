@@ -61,7 +61,6 @@
 #ifdef __linux__
 #include <sys/sendfile.h>
 #endif
-
 namespace coro_io {
 template <typename T>
 constexpr inline bool is_lazy_v =
@@ -77,6 +76,7 @@ class callback_awaitor_base {
         : awaitor(awaitor), op(op) {}
     constexpr bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> handle) noexcept {
+      ELOG_INFO << "set handle:" << handle.address();
       awaitor.coro_ = handle;
       op(awaitor_handler{&awaitor});
     }
@@ -134,11 +134,12 @@ class callback_awaitor_base {
         std::get<0>(obj->arg_) = std::move(ec);
       }
     }
-    void resume() const { obj->coro_.resume(); }
-
-    auto handler() const {
-      return (std::size_t)obj;
+    void resume() const {
+      ELOG_INFO << "resume handle:" << obj->coro_.address();
+      obj->coro_.resume();
     }
+
+    auto handler() const { return (std::size_t)obj; }
 
    private:
     Derived *obj;
@@ -265,7 +266,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
               }
             }
           });
-      if (hasCanceled) {
+      if (hasCanceled) [[unlikely]] {
         asio::dispatch(executor, [handler]() {
           handler.set_value(
               std::make_error_code(std::errc::operation_canceled));
@@ -716,8 +717,8 @@ struct socket_wrapper_t {
   auto get_executor() const noexcept { return executor_; }
   std::unique_ptr<asio::ip::tcp::socket> &socket() noexcept { return socket_; }
 #ifdef YLT_ENABLE_SSL
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      &ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
+  ssl_stream() noexcept {
     return ssl_stream_;
   }
 #endif
