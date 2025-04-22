@@ -57,7 +57,7 @@ class ib_socket_t {
   struct config_t {
     bool enable_zero_copy = true;
     uint32_t cq_size = 1024;
-    std::size_t buffer_size = 8 * 1024;
+    std::size_t buffer_size = 8 * 1024 * 1024;
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -92,9 +92,10 @@ private:
   }
 public:
   struct ib_socket_info {
-    uint32_t qp_num;  // QP number
-    uint16_t lid;     // LID of the IB port
     uint8_t gid[16];  // GID
+    uint16_t lid;     // LID of the IB port
+    uint32_t qp_num;  // QP number
+    uint32_t length;  // buffer length
   };
   bool is_open() const noexcept { return state_->fd_ != nullptr && state_->fd_->is_open(); }
   ib_buffer_pool_t& buffer_pool() const noexcept {
@@ -173,7 +174,6 @@ public:
 
   ib_device_t* device_;
   ib_buffer_pool_t* ib_buffer_pool_;
-  ib_socket_info info_;
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
@@ -351,7 +351,7 @@ public:
   }
 
   std::error_code post_send(uint64_t wr_id, ib_buffer_view_t buffer) {
-    ibv_send_wr rr{};
+    ibv_send_wr sr{};
     ibv_sge sge{};
     ibv_send_wr *bad_wr = nullptr;
 
@@ -360,10 +360,12 @@ public:
     sge.length = buffer.length();
     sge.lkey = buffer.lkey();
 
-    rr.next = NULL;
-    rr.wr_id = wr_id;
-    rr.sg_list = &sge;
-    rr.num_sge = 1;
+    sr.next = NULL;
+    sr.wr_id = wr_id;
+    sr.sg_list = &sge;
+    sr.num_sge = 1;
+    sr.opcode = IBV_WR_SEND;
+    sr.send_flags = IBV_SEND_SIGNALED;
 
     // prepare the receive work request
     ELOG_INFO<<"set id:"<<wr_id;
@@ -373,7 +375,7 @@ public:
     }
 
     // post the receive request to the RQ
-    if (auto ec = ibv_post_send(qp_.get(), &rr, &bad_wr);ec) {
+    if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr);ec) {
       auto error_code=std::make_error_code(std::errc{ec});
       ELOG_INFO << "ibv post send failed: " << error_code.message();
       return error_code;
@@ -408,6 +410,7 @@ public:
         ELOG_INFO<<"serialize peer_info";
         peer_info.qp_num = qp_->qp_num;
         peer_info.lid = device_->attr().lid;
+        peer_info.length = conf_.buffer_size;
         memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
         struct_pack::serialize_to((char*)buffer,sz,peer_info);
         ELOG_INFO<<"send qp info to client";
@@ -469,7 +472,7 @@ public:
   async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io(ib_buffer_view_t buffer) {
     return async_io_impl<io,false>(buffer,{},nullptr);
   }
-  
+  std::size_t get_remote_buffer_size() const noexcept { return remote_buffer_size_;}
   config_t& get_config() noexcept { return conf_; }
   auto& get_device() noexcept {return *device_;}
   async_simple::coro::Lazy<std::error_code> accept(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
@@ -490,6 +493,8 @@ public:
     ELOGV(INFO, "Remote QP number = %d", peer_info.qp_num);
     ELOGV(INFO, "Remote LID = %d", peer_info.lid);
     ELOGV(INFO, "Remote GID = %d", peer_info.gid);
+    ELOGV(INFO, "Remote buffer size = %d", peer_info.length);
+    remote_buffer_size_=peer_info.length;
     try {
       init_qp();
       modify_qp_to_init();
@@ -519,6 +524,7 @@ public:
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num=qp_->qp_num;
       peer_info.lid=device_->attr().lid;
+      peer_info.length=conf_.buffer_size;
       memcpy(peer_info.gid,&device_->gid(),sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -541,8 +547,11 @@ public:
       ELOGV(INFO, "Remote QP number = %d", peer_info.qp_num);
       ELOGV(INFO, "Remote LID = %d", peer_info.lid);
       ELOGV(INFO, "Remote GID = %d", peer_info.gid);
+      ELOGV(INFO,"Remote buffer size = %d", peer_info.length);
+      remote_buffer_size_=peer_info.length;
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                       (uint8_t*)peer_info.gid);
+      
       modify_qp_to_rts();
       ELOG_INFO<<"start init fd";
       init_fd();
