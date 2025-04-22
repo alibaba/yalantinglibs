@@ -11,14 +11,12 @@
 #include <system_error>
 #include <utility>
 
-#include "asio/any_io_executor.hpp"
 #include "asio/dispatch.hpp"
-#include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
-#include "asio/registered_buffer.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "ib_device.hpp"
+#include "ib_error.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -26,31 +24,6 @@
 #include "ylt/struct_pack.hpp"
 
 namespace coro_io {
-
-class ib_error_code_category : public std::error_category {
- public:
-  const char* name() const noexcept override {
-    return "ibverbs_error_code";  // 错误类别的名称
-  }
-
-  std::string message(int ev) const override {
-    using namespace std::string_literals;
-    switch (static_cast<ibv_wc_status>(ev)) {
-      case ibv_wc_status::IBV_WC_SUCCESS:
-        return "IBV_WC_OK"s;
-      default:
-        return "Unknown error"s;
-    }
-  }
-  static auto& instance() {
-    static ib_error_code_category instance;
-    return instance;
-  }
-};
-
-std::error_code make_error_code(ibv_wc_status e) {
-  return {static_cast<int>(e), ib_error_code_category::instance()};
-}
 
 class ib_socket_t {
  public:
