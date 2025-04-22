@@ -56,12 +56,12 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_re
   if (!ib_socket.get_config().enable_zero_copy){
     do {
       ib_buffer[0] = ib_socket.buffer_pool().get_buffer();
-      if (ib_buffer[0] ==nullptr) {
+      if (!ib_buffer[0]) {
         break;
       } 
       if (ib_socket.get_remote_buffer_size()<buffer.size()) {
         ib_buffer[1] = ib_socket.buffer_pool().get_buffer();
-        if (ib_buffer[1] == nullptr) {
+        if (!ib_buffer[1]) {
           break;
         }
       }
@@ -89,7 +89,7 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_re
       co_return std::pair{std::error_code{},total_size_read};
     } while (false);
   }
-  ib_buffer[0] = ib_buffer_t::regist(ib_socket.get_device().pd(), buffer.data(), std::min(buffer.size(),block_size));
+  ib_buffer[0] = ib_buffer_t::regist(ib_socket.get_device(), buffer.data(), std::min(buffer.size(),block_size));
   for (; total_size_read < buffer.size();) {
     std::span<char> next_buffer = {(char*)buffer.data()+total_size_read+ib_buffer[0]->length,std::min(buffer.size()-total_size_read-ib_buffer[0]->length,block_size)};
     auto [ec,size] = co_await ib_socket.async_io<ib_socket_t::read>(ib_buffer[0], next_buffer);
@@ -133,12 +133,12 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_wr
     do {
       std::size_t total_size_write = block_size;
       ib_buffer[0] = ib_socket.buffer_pool().get_buffer();
-      if (ib_buffer[0] ==nullptr) {
+      if (!ib_buffer[0]) {
         break;
       } 
       if (ib_socket.get_remote_buffer_size()<buffer.size()) {
         ib_buffer[1] = ib_socket.buffer_pool().get_buffer();
-        if (ib_buffer[1] == nullptr) {
+        if (!ib_buffer[1]) {
           break;
         }
       }
@@ -167,7 +167,7 @@ inline async_simple::coro::Lazy<std::pair<std::error_code,std::size_t>> async_wr
     } while (false);
   }
   std::size_t total_size_write = 0;
-  ib_buffer[0] = ib_buffer_t::regist(ib_socket.get_device().pd(),buffer.data(),block_size);
+  ib_buffer[0] = ib_buffer_t::regist(ib_socket.get_device(),buffer.data(),block_size);
   for (;total_size_write<buffer.size();) {
     std::span<char> next_buffer = {(char*)buffer.data()+total_size_write,std::min(buffer.size()-total_size_write,block_size)};
     auto [ec,len] = co_await ib_socket.async_io<ib_socket_t::write>(ib_buffer[0],next_buffer);

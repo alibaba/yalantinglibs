@@ -96,6 +96,7 @@ struct ib_deleter {
     }
   }
   void operator()(ibv_mr* ptr) const noexcept{
+    ELOG_INFO<<"ibv_reg_mr unregist: "<<ptr;
     if (auto ret = ibv_dereg_mr(ptr); ret)
         [[unlikely]] {
       ELOG_ERROR << "ibv_destroy_comp_channel failed: " << std::make_error_code(std::errc{ret}).message();

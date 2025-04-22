@@ -21,29 +21,46 @@
 namespace coro_io {
 
 class ib_buffer_pool_t;
-using ib_buffer_base_t = std::unique_ptr<ibv_mr, ib_deleter>;
-struct ib_buffer_t : public ib_buffer_base_t {
-  using ib_buffer_base_t::ib_buffer_base_t;
+struct ib_buffer_t {
   
  private:
+  std::unique_ptr<ibv_mr, ib_deleter> mr_;
+  std::shared_ptr<ib_device_t> dev_;
   std::weak_ptr<ib_buffer_pool_t> owner_pool_;
-  ib_buffer_t(ib_buffer_base_t&& o, std::weak_ptr<ib_buffer_pool_t> owner_pool={});
+  ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev, std::weak_ptr<ib_buffer_pool_t> owner_pool={});
  public:
-  static ib_buffer_t regist(ibv_pd* pd, void* ptr, std::size_t size,
+ 
+  ib_buffer_t()=default;
+  ibv_mr* operator->() noexcept {
+    return mr_.get();
+  }
+  ibv_mr* operator->() const noexcept{
+    return mr_.get();
+  }
+  ibv_mr& operator*() noexcept {
+    return *mr_.get();
+  }
+  ibv_mr& operator*() const noexcept{
+    return *mr_.get();
+  }
+  operator bool() const noexcept {
+    return mr_.get()!=nullptr;
+  }
+  static ib_buffer_t regist(std::shared_ptr<ib_device_t> dev, void* ptr, std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE) {
-    auto mr = ibv_reg_mr(pd, ptr, size, ib_flags);
+    auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
+    ELOG_INFO<<"ibv_reg_mr regist: "<<mr<<" with pd:"<<dev->pd();
     if (mr != nullptr) [[unlikely]] {
-      auto i = ib_buffer_base_t{mr};
-      return ib_buffer_t{std::move(i)};
+      return ib_buffer_t{mr,std::move(dev)};
     }
     else {
       throw std::make_error_code(std::errc{errno});
     }
   };
 
-  static ib_buffer_t regist(ib_buffer_pool_t* pool, ibv_pd* pd, void* ptr, std::size_t size,
+  static ib_buffer_t regist(ib_buffer_pool_t& pool, std::shared_ptr<ib_device_t> dev, void* ptr, std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE);
@@ -176,7 +193,7 @@ public:
         ELOG_TRACE << "Allocate failed.";
         throw std::bad_alloc();
       }
-      buffer = ib_buffer_t::regist(this, device_->pd(), ptr, pool_config_.buffer_size);
+      buffer = ib_buffer_t::regist(*this, device_, ptr, pool_config_.buffer_size);
     }
     ELOG_TRACE << "get buffer{data:" << buffer->addr << ",len"<<buffer->length<<"} from queue";
     return std::move(buffer);
@@ -217,45 +234,44 @@ public:
   config_t pool_config_;
 };
 
-inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t* pool, ibv_pd* pd, void* ptr, std::size_t size,
+inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool, std::shared_ptr<ib_device_t> dev, void* ptr, std::size_t size,
                             int ib_flags) {
-    auto mr = ibv_reg_mr(pd, ptr, size, ib_flags);
+    auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
     if (mr != nullptr) [[unlikely]] {
-      auto i = ib_buffer_base_t{mr};
-      return ib_buffer_t{std::move(i),pool->weak_from_this()};
+      return ib_buffer_t{mr,std::move(dev),pool.weak_from_this()};
     }
     else {
       throw std::make_error_code(std::errc{errno});
     }
 };
-inline ib_buffer_t::ib_buffer_t(ib_buffer_base_t&& o, std::weak_ptr<ib_buffer_pool_t> owner_pool) : ib_buffer_base_t(std::move(o)),owner_pool_(owner_pool){
+inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev, std::weak_ptr<ib_buffer_pool_t> owner_pool) : mr_(mr),dev_(std::move(dev)),owner_pool_(std::move(owner_pool)) {
   if (auto ptr = owner_pool_.lock(); ptr) {
-    ptr->total_memory_.fetch_add(get()->length,std::memory_order_relaxed);
+    ptr->total_memory_.fetch_add((*this)->length,std::memory_order_relaxed);
   }
 }
 inline ib_buffer_t::~ib_buffer_t() {
   if (auto ptr = owner_pool_.lock(); ptr) {
-    ptr->total_memory_.fetch_sub(get()->length,std::memory_order_relaxed);
+    ptr->total_memory_.fetch_sub((*this)->length,std::memory_order_relaxed);
   }
 }
 inline void ib_buffer_t::change_owner(std::weak_ptr<ib_buffer_pool_t> owner_pool){
   if (auto ptr = owner_pool_.lock(); ptr) {
-    ptr->total_memory_.fetch_sub(get()->length,std::memory_order_relaxed);
+    ptr->total_memory_.fetch_sub((*this)->length,std::memory_order_relaxed);
   }
   if (auto ptr = owner_pool.lock(); ptr) {
-    ptr->total_memory_.fetch_add(get()->length,std::memory_order_relaxed);
+    ptr->total_memory_.fetch_add((*this)->length,std::memory_order_relaxed);
   }
   owner_pool_=std::move(owner_pool);
 }
 
 
-inline std::shared_ptr<ib_device_t>& g_device() {
+inline std::shared_ptr<ib_device_t> g_ib_device() {
   static auto dev=std::make_shared<ib_device_t>(ib_config_t{});
   return dev;
 }
 
 inline ib_buffer_pool_t& g_ib_buffer_pool(const ib_buffer_pool_t::config_t &pool_config={}) {
-  static auto pool = ib_buffer_pool_t::create(g_device(),pool_config);
+  static auto pool = ib_buffer_pool_t::create(g_ib_device(),pool_config);
   return *pool;
 }
 }  // namespace coro_rdma
