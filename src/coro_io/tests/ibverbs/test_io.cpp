@@ -21,7 +21,7 @@
 #include "ylt/easylog/record.hpp"
 
 std::size_t buffer_size = 8 * 1024 * 1024;
-int concurrency = 1;
+int concurrency = 100;
 
 async_simple::coro::Lazy<std::error_code> echo_connect(
     coro_io::ib_socket_t soc) {
@@ -176,13 +176,15 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
 }
 
 int main() {
-  easylog::logger<>::instance().init(easylog::Severity::INFO, false, true,
+  easylog::logger<>::instance().init(easylog::Severity::WARN, false, true,
                                      "1.log", 10000, 1, true);
   ELOG_INFO << "start echo server & client";
-  echo_accept().start([](auto &&) {
+  echo_accept().start([](auto &&ec) {
+    ELOG_ERROR << ec.value().message();
   });
   for (int i = 0; i < concurrency; ++i)
-    echo_connect(buffer_size).start([](auto &&) {
+    echo_connect(buffer_size).start([](auto &&ec) {
+      ELOG_ERROR << ec.value().message();
     });
   for (int i = 0; i < 1000; ++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
