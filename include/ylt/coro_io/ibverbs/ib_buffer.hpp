@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <stdexcept>
 #include <system_error>
 
 #include "async_simple/coro/Lazy.h"
@@ -30,13 +31,23 @@ struct ib_buffer_t {
 
  public:
   ib_buffer_t() = default;
+  ibv_sge subview(std::size_t start = 0) const {
+    return ibv_sge{.addr = (uintptr_t)mr_->addr + start,
+                   .length = (uint32_t)(mr_->length - start),
+                   .lkey = mr_->lkey};
+  }
+  ibv_sge subview(std::size_t start, uint32_t length) const {
+    return ibv_sge{.addr = (uintptr_t)mr_->addr + start,
+                   .length = length,
+                   .lkey = mr_->lkey};
+  }
   ibv_mr* operator->() noexcept { return mr_.get(); }
   ibv_mr* operator->() const noexcept { return mr_.get(); }
   ibv_mr& operator*() noexcept { return *mr_.get(); }
   ibv_mr& operator*() const noexcept { return *mr_.get(); }
   operator bool() const noexcept { return mr_.get() != nullptr; }
   static ib_buffer_t regist(std::shared_ptr<ib_device_t> dev, void* ptr,
-                            std::size_t size,
+                            uint32_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE) {
@@ -60,36 +71,6 @@ struct ib_buffer_t {
   ib_buffer_t(ib_buffer_t&&) = default;
   ib_buffer_t& operator=(ib_buffer_t&&) = default;
   ~ib_buffer_t();
-};
-
-struct ib_buffer_view_t {
- private:
-  uint32_t lkey_;
-  void* address_;
-  std::size_t length_;
-
- public:
-  ib_buffer_view_t(uint32_t lkey, void* address, std::size_t length)
-      : lkey_(lkey), address_(address), length_(length) {}
-  ib_buffer_view_t(const ib_buffer_t& buffer)
-      : lkey_(buffer->lkey), address_(buffer->addr), length_(buffer->length) {}
-  ib_buffer_view_t(const ib_buffer_t& buffer, std::size_t length)
-      : lkey_(buffer->lkey), address_(buffer->addr), length_(length) {}
-  ib_buffer_view_t(ibv_mr* buffer)
-      : lkey_(buffer->lkey), address_(buffer->addr), length_(buffer->length) {}
-  ib_buffer_view_t(ibv_mr* buffer, void* address, std::size_t length)
-      : lkey_(buffer->lkey), address_(address), length_(length) {}
-  uint32_t lkey() const noexcept { return lkey_; }
-  void* address() const noexcept { return address_; }
-  std::size_t length() const noexcept { return length_; }
-  operator std::span<char>() const noexcept {
-    return std::span<char>{(char*)address_, length_};
-  }
-  ib_buffer_view_t subview(std::size_t start,
-                           std::size_t length) const noexcept {
-    assert(start + length < length_);
-    return ib_buffer_view_t{lkey_, (char*)address_ + start, length};
-  }
 };
 
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
@@ -156,7 +137,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
 
  public:
-  void collect_free_client(ib_buffer_t buffer) {
+  void collect_free(ib_buffer_t buffer) {
     if (buffer) {
       if (free_buffers_.size() < pool_config_.max_buffer_count) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
