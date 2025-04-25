@@ -37,6 +37,6 @@ TEST_CASE("test device") {
 }
 
 TEST_CASE("test device invalid") {
-  CHECK_THROWS_AS(ib_device_t dev({0, "", 3}), std::system_error);
-  CHECK_THROWS_AS(ib_device_t dev({0, "no such"}), std::out_of_range);
+  CHECK_THROWS_AS(ib_device_t dev({"", 3}), std::system_error);
+  CHECK_THROWS_AS(ib_device_t dev({"no such"}), std::out_of_range);
 }

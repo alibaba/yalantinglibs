@@ -275,8 +275,8 @@ inline void ib_buffer_t::change_owner(
   owner_pool_ = std::move(owner_pool);
 }
 
-inline std::shared_ptr<ib_device_t> g_ib_device() {
-  static auto dev = std::make_shared<ib_device_t>(ib_config_t{});
+inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {}) {
+  static auto dev = std::make_shared<ib_device_t>(conf);
   return dev;
 }
 

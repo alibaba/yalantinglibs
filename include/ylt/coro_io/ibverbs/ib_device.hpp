@@ -1,5 +1,6 @@
 #pragma once
 #include <infiniband/verbs.h>
+#include <netinet/in.h>
 
 #include <algorithm>
 #include <memory>
@@ -59,7 +60,6 @@ class ib_devices_t {
 };
 
 struct ib_config_t {
-  int gid_index = 1;
   std::string dev_name;
   uint16_t port = 1;
 };
@@ -113,8 +113,6 @@ class ib_device_t {
  public:
   ib_device_t(const ib_config_t& conf) {
     auto& inst = ib_devices_t::instance();
-    gid_index_ = conf.gid_index;
-
     port_ = conf.port;
     auto dev = inst.at(conf.dev_name);
     name_ = ibv_get_device_name(dev);
@@ -127,6 +125,11 @@ class ib_device_t {
                  << " of device " << name_ << " error msg: " << ec.message();
       throw std::system_error(ec);
     }
+
+    find_best_gid_index();
+
+    ELOG_INFO << "IBDevice " << name_ << ", best gid index " << gid_index_;
+
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
           ec) {
@@ -157,6 +160,34 @@ class ib_device_t {
   const ibv_port_attr& attr() const noexcept { return attr_; }
 
  private:
+  int ipv6_addr_v4mapped(const struct in6_addr* a) {
+    return ((a->s6_addr32[0] | a->s6_addr32[1]) |
+            (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL ||
+           /* IPv4 encoded multicast addresses */
+           (a->s6_addr32[0] == htonl(0xff0e0000) &&
+            ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
+  }
+
+  void find_best_gid_index() {
+    ibv_gid_entry gid_entry;
+
+    for (int i = 0; i < attr_.gid_tbl_len; i++) {
+      if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
+        auto ec = std::make_error_code((std::errc)ret);
+        ELOG_ERROR << "IBDevice failed to query gid ex " << port_
+                   << " of device " << name_ << " error msg: " << ec.message();
+        continue;
+      }
+
+      if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
+           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
+          gid_entry.gid_type == IBV_GID_TYPE_IB) {
+        gid_index_ = i;
+        break;
+      }
+    }
+  }
+
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
