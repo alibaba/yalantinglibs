@@ -31,8 +31,9 @@ class ib_socket_t {
  public:
   struct config_t {
     bool enable_zero_copy = true;
+    bool enable_read_buffer_when_zero_copy = false;
     uint32_t cq_size = 1024;
-    std::size_t buffer_size = 8 * 1024 * 1024;
+    std::size_t request_buffer_size = 8 * 1024 * 1024;
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -79,6 +80,7 @@ class ib_socket_t {
   }
 
  public:
+  enum io_type { recv, send };
   struct ib_socket_info {
     uint8_t gid[16];  // GID
     uint16_t lid;     // LID of the IB port
@@ -167,12 +169,35 @@ class ib_socket_t {
 
   std::shared_ptr<ib_device_t> device_;
   ib_buffer_pool_t* ib_buffer_pool_;
+  ib_buffer_t buffer_;
+  std::string_view least_data_;
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
-  uint64_t remote_buffer_size_ = 0;
+  uint32_t buffer_size_ = 0;
   coro_io::ExecutorWrapper<>* executor_;
-  std::unique_ptr<asio::ip::tcp::socket> tcp_soc_;
+
+ public:
+  std::size_t consume(char* dst, std::size_t sz) {
+    if (least_data_.size()) {
+      auto len = std::min(sz, least_data_.size());
+      memcpy(dst, least_data_.data(), len);
+      least_data_ = least_data_.substr(len);
+      if (least_data_.empty()) {
+        ib_buffer_pool_->collect_free(std::move(buffer_));
+      }
+      return len;
+    }
+    else {
+      return 0;
+    }
+  }
+  std::size_t least_buffer_size() { return least_data_.size(); }
+  void set_read_buffer(ib_buffer_t&& buffer, std::string_view data) {
+    ib_buffer_pool_->collect_free(std::move(buffer_));
+    buffer_ = std::move(buffer);
+    least_data_ = data;
+  }
 
  private:
   void init_qp() {
@@ -294,16 +319,11 @@ class ib_socket_t {
         ELOG_INFO << "awake from posix::stream_fd::wait_read";
 
         if (ec) {
-          // if (std::errc{ec.value()}!=std::errc::operation_canceled) {
           std::error_code ec_ignore;
           self->close(ec_ignore);
-          // }
           resume(std::pair{ec, std::size_t{0}}, self->recv_cb_);
           resume(std::pair{ec, std::size_t{0}}, self->send_cb_);
           break;
-          // if (std::errc{ec.value()}!=std::errc::operation_canceled) {
-          //   break;
-          // }
         }
         ec = self->poll_completion();
       }
@@ -315,22 +335,20 @@ class ib_socket_t {
     listen_event(state_).start([](auto&& ec) {
     });
   }
-
-  std::error_code post_recv(ib_buffer_view_t buffer, callback_t&& handler) {
-    ibv_recv_wr rr{};
-    ibv_sge sge{};
-    ibv_recv_wr* bad_wr = nullptr;
-
-    // prepare the scatter / gather entry
-    sge.addr = (uintptr_t)buffer.address();
-    sge.length = buffer.length();
-    sge.lkey = buffer.lkey();
-
+  template <typename T>
+  std::error_code post_recv(T& sge, callback_t&& handler) {
+    ibv_recv_wr rr;
     rr.next = NULL;
     rr.wr_id = (std::size_t)&state_->recv_cb_;
-    rr.sg_list = &sge;
-    rr.num_sge = 1;
-
+    if constexpr (std::is_same_v<T, ibv_sge>) {
+      rr.sg_list = &sge;
+      rr.num_sge = 1;
+    }
+    else {
+      rr.sg_list = sge.data();
+      rr.num_sge = sge.size();
+    }
+    ibv_recv_wr* bad_wr = nullptr;
     // prepare the receive work request
     ELOG_INFO << "set cb:" << (void*)rr.wr_id;
     state_->recv_cb_ = std::move(handler);
@@ -347,30 +365,29 @@ class ib_socket_t {
     ELOG_INFO << "ibv post recv ok";
     return {};
   }
-  std::error_code post_send(ib_buffer_view_t buffer, callback_t&& handler) {
+  template <typename T>
+  std::error_code post_send(T& sge, callback_t&& handler) {
     ibv_send_wr sr{};
-    ibv_sge sge{};
     ibv_send_wr* bad_wr = nullptr;
-
-    // prepare the scatter / gather entry
-    sge.addr = (uintptr_t)buffer.address();
-    sge.length = buffer.length();
-    sge.lkey = buffer.lkey();
 
     sr.next = NULL;
     sr.wr_id = (std::size_t)&state_->send_cb_;
-    sr.sg_list = &sge;
-    sr.num_sge = 1;
+    if constexpr (std::is_same_v<T, ibv_sge>) {
+      sr.sg_list = &sge;
+      sr.num_sge = 1;
+    }
+    else {
+      sr.sg_list = sge.data();
+      sr.num_sge = sge.size();
+    }
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
-
     // prepare the receive work request
     ELOG_INFO << "set cb:" << (void*)sr.wr_id;
     state_->send_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
-
     // post the receive request to the RQ
     if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) {
       auto error_code = std::make_error_code(std::errc{ec});
@@ -392,12 +409,11 @@ class ib_socket_t {
                      });
     }
   }
-  enum io_type { read, write };
 
-  template <io_type io>
-  void async_io_impl(ib_buffer_view_t buffer, callback_t&& cb) {
+  template <io_type io, typename T>
+  void async_io(T&& buffer, callback_t&& cb) {
     std::error_code ec;
-    if constexpr (io == read) {
+    if constexpr (io == recv) {
       ELOG_INFO << "POST RECV";
       ec = post_recv(buffer, std::move(cb));
     }
@@ -412,72 +428,18 @@ class ib_socket_t {
                      });
     }
   }
-
-  template <io_type io, bool has_next_buffer = false>
-  async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io(
-      ib_buffer_view_t buffer, std::span<char> next_buffer = {},
-      ib_buffer_t* new_buffer = nullptr) {
-    coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
-    if constexpr (io == read) {
-      if (tcp_soc_) [[unlikely]] {
-        ib_socket_info peer_info{};
-        constexpr auto sz = struct_pack::get_needed_size(peer_info);
-        char buffer[sz.size()];
-        ELOG_INFO << "serialize peer_info";
-        peer_info.qp_num = qp_->qp_num;
-        peer_info.lid = device_->attr().lid;
-        peer_info.length = conf_.buffer_size;
-        memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
-        struct_pack::serialize_to((char*)buffer, sz, peer_info);
-        ELOG_INFO << "send qp info to client";
-        auto tcp_soc = std::move(tcp_soc_);
-        auto ec = co_await async_write(*tcp_soc, asio::buffer(buffer));
-        if (ec.first) {
-          ELOG_INFO << "write ib socket info to client";
-          std::error_code ec2;
-          state_->close(ec2);
-          co_return std::pair{ec.first, std::size_t{0}};
-        }
-      }
-    }
-    auto result =
-        co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-            [this, &buffer](auto&& cb) {
-              this->async_io_impl<io>(buffer, std::move(cb));
-            },
-            *this);
-    if constexpr (has_next_buffer) {
-      if (!result.first) [[likely]] {
-        *new_buffer = ib_buffer_t::regist(device_, next_buffer.data(),
-                                          next_buffer.size());
-      }
-    }
-    co_return std::move(result);
-  }
-
-  template <io_type io>
-  async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io(
-      ib_buffer_t& buffer, std::span<char> next_buffer) {
-    coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
-    ib_buffer_t new_buffer;
-    auto result = co_await async_io<io, true>(buffer, next_buffer, &new_buffer);
-    buffer = std::move(new_buffer);
-    co_return result;
-  }
-  std::size_t get_remote_buffer_size() const noexcept {
-    return remote_buffer_size_;
-  }
+  uint32_t get_buffer_size() const noexcept { return buffer_size_; }
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return device_; }
   async_simple::coro::Lazy<std::error_code> accept(
-      std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
+      asio::ip::tcp::socket& soc) noexcept {
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
     auto [ec2, canceled] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
-        async_read(*soc, asio::buffer(buffer)),
+        async_read(soc, asio::buffer(buffer)),
         coro_io::sleep_for(std::chrono::milliseconds{10000}));
     if (ec2.value().first) [[unlikely]] {
       co_return std::move(ec2.value().first);
@@ -492,8 +454,10 @@ class ib_socket_t {
     ELOGV(INFO, "Remote QP number = %d", peer_info.qp_num);
     ELOGV(INFO, "Remote LID = %d", peer_info.lid);
     ELOGV(INFO, "Remote GID = %d", peer_info.gid);
-    ELOGV(INFO, "Remote buffer size = %d", peer_info.length);
-    remote_buffer_size_ = peer_info.length;
+    ELOGV(INFO, "Remote Request buffer size = %d", peer_info.length);
+    buffer_size_ =
+        std::min<uint32_t>(peer_info.length, get_config().request_buffer_size);
+    ELOGV(INFO, "Final buffer size = %d", buffer_size_);
     try {
       init_qp();
       modify_qp_to_init();
@@ -511,7 +475,20 @@ class ib_socket_t {
     } catch (...) {
       ELOG_INFO << "unknown exception";
     }
-    tcp_soc_ = std::move(soc);
+    ELOG_INFO << "serialize peer_info";
+    peer_info.qp_num = qp_->qp_num;
+    peer_info.lid = device_->attr().lid;
+    peer_info.length = conf_.request_buffer_size;
+    memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
+    struct_pack::serialize_to((char*)buffer, sz, peer_info);
+    ELOG_INFO << "send qp info to client";
+    auto ec = co_await async_write(soc, asio::buffer(buffer));
+    if (ec.first) {
+      ELOG_INFO << "write ib socket info to client";
+      std::error_code ec2;
+      state_->close(ec2);
+      co_return ec.first;
+    }
     co_return std::error_code{};
   }
 
@@ -524,7 +501,7 @@ class ib_socket_t {
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = qp_->qp_num;
       peer_info.lid = device_->attr().lid;
-      peer_info.length = conf_.buffer_size;
+      peer_info.length = conf_.request_buffer_size;
       memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -548,7 +525,9 @@ class ib_socket_t {
       ELOGV(INFO, "Remote LID = %d", peer_info.lid);
       ELOGV(INFO, "Remote GID = %d", peer_info.gid);
       ELOGV(INFO, "Remote buffer size = %d", peer_info.length);
-      remote_buffer_size_ = peer_info.length;
+      buffer_size_ = std::min<uint32_t>(peer_info.length,
+                                        get_config().request_buffer_size);
+      ELOGV(INFO, "Final buffer size = %d", buffer_size_);
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
 
