@@ -40,6 +40,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   for (int i = 0;; i ^= 1) {
     auto r_view = ib.subview();
     auto s_view = ib.subview(0, len);
+    
 
     ELOG_DEBUG << "start read from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(

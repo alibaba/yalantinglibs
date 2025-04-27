@@ -75,6 +75,7 @@ void regist(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_buffer,
                     IBV_ACCESS_REMOTE_WRITE;
         tmp_buffers.push_back(std::unique_ptr<ibv_mr, ib_deleter>{ibv_reg_mr(
             ib_socket.get_device()->pd(), (void*)sge.addr, sge.length, flags)});
+        sge.lkey=tmp_buffers.back()->lkey;
       }
     }
     if (io == ib_socket_t::recv && ib_socket.get_config().enable_zero_copy &&
@@ -281,7 +282,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t buffers,
       data = buffer.addr;
     }
     else {
-      data = buffer.data();
+      data = (uintptr_t)buffer.data();
     }
     if constexpr (is_ibv_sge) {
       size = buffer.length;
