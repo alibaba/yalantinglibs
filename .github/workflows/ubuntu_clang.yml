@@ -30,8 +30,12 @@ jobs:
 
       - name: Install softroce dependency
         run: |
-          sudo ifconfig
-          sudo apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core
+          sudo apt update
+          sudo apt upgrade -y
+          sudo apt install -y rdma-core librdmacm-dev libibverbs-dev ibverbs-utils perftest rdmacm-utils
+          sudo modprobe rdma_rxe
+          sudo modprobe ib_core
+          lsmod | grep rdma
           sudo rdma link add rxe_0 type rxe netdev eth0
           ls /dev/infiniband/
           ibv_devinfo
