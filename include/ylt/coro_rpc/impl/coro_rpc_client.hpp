@@ -917,8 +917,11 @@ class coro_rpc_client {
           socket,
           asio::buffer((char *)&header, coro_rpc_protocol::RESP_HEAD_LEN));
       if (ret.first) {
-        ELOG_ERROR << "read rpc head failed, error msg:" << ret.first.message()
-                   << ". close the socket.value=" << ret.first.value();
+        if (ret.first != asio::error::eof) {
+          ELOG_ERROR << "read rpc head failed, error msg:"
+                     << ret.first.message()
+                     << ". close the socket.value=" << ret.first.value();
+        }
         break;
       }
       auto iter = controller->response_handler_table_.find(header.seq_num);
