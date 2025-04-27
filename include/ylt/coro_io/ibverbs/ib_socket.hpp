@@ -359,14 +359,19 @@ class ib_socket_t {
   std::error_code post_recv(T& sge, callback_t&& handler) {
     ibv_recv_wr rr;
     rr.next = NULL;
+
     rr.wr_id = (std::size_t)&state_->recv_cb_;
     if constexpr (std::is_same_v<T, ibv_sge>) {
       rr.sg_list = &sge;
       rr.num_sge = 1;
+      ELOG_TRACE << "post recv sge address:" << sge.addr << ",length:" << sge.length;
     }
     else {
       rr.sg_list = sge.data();
       rr.num_sge = sge.size();
+      for (int i=0;i<sge.size();++i) {
+        ELOG_TRACE << "post recv sge["<<std::to_string(i)<<"].address:" << sge.data()[i].addr << ",length:" << sge.data()[i].length;
+      }
     }
     ibv_recv_wr* bad_wr = nullptr;
     // prepare the receive work request
@@ -395,10 +400,14 @@ class ib_socket_t {
     if constexpr (std::is_same_v<T, ibv_sge>) {
       sr.sg_list = &sge;
       sr.num_sge = 1;
+      ELOG_TRACE << "post send sge address:" << sge.addr << ",length:" << sge.length;
     }
     else {
       sr.sg_list = sge.data();
       sr.num_sge = sge.size();
+      for (int i=0;i<sge.size();++i) {
+        ELOG_TRACE << "post send sge["<<std::to_string(i)<<"].address:" << sge.data()[i].addr << ",length:" << sge.data()[i].length;
+      }
     }
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
