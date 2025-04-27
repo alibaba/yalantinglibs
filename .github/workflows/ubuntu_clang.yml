@@ -28,6 +28,12 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get install openssl libssl-dev
 
+      - name: Install softroce dependency
+        run: |
+          sudo ifconfig
+          sudo apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core
+          sudo modprobe rdma_rxe rdma_cm ib_umad
+
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
