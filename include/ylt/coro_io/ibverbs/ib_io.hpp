@@ -63,31 +63,36 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 namespace detail {
 
 template <coro_io::ib_socket_t::io_type io>
-void regist(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_buffer,
-            std::vector<std::unique_ptr<ibv_mr, ib_deleter>>& tmp_buffers,
+void regist(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge>& sge_buffer,
+            std::vector<std::unique_ptr<ibv_mr, ib_deleter>>& tmp_buffers,std::vector<ibv_sge>& tmp_sges,
             ib_buffer_t& buffer, uint32_t io_size) {
-  if (ib_socket.get_config().enable_zero_copy) {
-    tmp_buffers.reserve(sge_buffer.size());
-    for (auto& sge : sge_buffer) {
-      if (sge.lkey == 0) {
-        // todo: flag too many
-        int flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                    IBV_ACCESS_REMOTE_WRITE;
-        tmp_buffers.push_back(std::unique_ptr<ibv_mr, ib_deleter>{ibv_reg_mr(
-            ib_socket.get_device()->pd(), (void*)sge.addr, sge.length, flags)});
-        sge.lkey=tmp_buffers.back()->lkey;
-      }
+  tmp_buffers.reserve(sge_buffer.size());
+  tmp_sges.reserve(sge_buffer.size());
+  for (auto& sge : sge_buffer) {
+    tmp_sges.push_back(sge);
+    if (sge.lkey == 0) {
+      // todo: flag too many
+      int flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                  IBV_ACCESS_REMOTE_WRITE;
+      tmp_buffers.push_back(std::unique_ptr<ibv_mr, ib_deleter>{ibv_reg_mr(
+          ib_socket.get_device()->pd(), (void*)sge.addr, sge.length, flags)});
+      tmp_sges.back().lkey=tmp_buffers.back()->lkey;
     }
-    if (io == ib_socket_t::recv && ib_socket.get_config().enable_zero_copy &&
-        ib_socket.get_config().enable_read_buffer_when_zero_copy &&
-        io_size < ib_socket.get_buffer_size()) {
-      sge_buffer = {sge_buffer.data(), sge_buffer.size() + 1};
-      buffer = ib_socket.buffer_pool().get_buffer();
-      sge_buffer.back() =
-          ibv_sge{(uintptr_t)buffer->addr,
-                  ib_socket.get_buffer_size() - io_size, buffer->lkey};
+    else {
+      ELOG_INFO<<"already regist";
     }
+    ELOG_INFO<<"regist sge.lkey:"<<tmp_sges.back().lkey<<",sge.addr:"<<tmp_sges.back().addr<<",sge.length:"<<tmp_sges.back().length;
   }
+  if (io == ib_socket_t::recv && 
+      ib_socket.get_config().enable_read_buffer_when_zero_copy &&
+      io_size < ib_socket.get_buffer_size()) {
+    
+    buffer = ib_socket.buffer_pool().get_buffer();
+    tmp_sges.push_back(
+        ibv_sge{(uintptr_t)buffer->addr,
+                ib_socket.get_buffer_size() - io_size, buffer->lkey});
+  }
+  sge_buffer=tmp_sges;
 }
 
 inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
@@ -186,7 +191,7 @@ async_simple::coro::Lazy<std::error_code> async_io_regist(
     coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_buffer,
     uint32_t io_size, std::size_t& total_size,
     std::unique_ptr<async_simple::Promise<std::error_code>>& p,
-    bool read_some = false) {
+    bool read_some = false, bool is_first_call = false) {
   std::vector<std::unique_ptr<ibv_mr, ib_deleter>> tmp_buffers;
   std::size_t read_from_buffer_size = 0;
   if constexpr (io == ib_socket_t::recv) {
@@ -200,32 +205,44 @@ async_simple::coro::Lazy<std::error_code> async_io_regist(
     }
   }
   ib_buffer_t read_buffer;
-  regist<io>(ib_socket, sge_buffer, tmp_buffers, read_buffer, io_size);
+  std::vector<ibv_sge> tmp_sges;
+  if (ib_socket.get_config().enable_zero_copy) {
+    regist<io>(ib_socket, sge_buffer, tmp_buffers, tmp_sges,read_buffer, io_size);
+  }
+  
   if (p == nullptr) {
     auto [ec, len] = co_await async_io_impl<io>(
         ib_socket, sge_buffer, std::move(tmp_buffers), std::move(read_buffer));
+    
     total_size += len;
     if (ec) [[unlikely]] {
       co_return ec;
     }
+    else if (len<io_size && !read_some) [[unlikely]] {
+      p->setValue(std::make_error_code(std::errc::protocol_error));
+    }
   }
   else {
-    if (total_size > read_from_buffer_size) {
+    if (!is_first_call) {
       auto ec = co_await p->getFuture();
       if (ec) [[unlikely]] {
         co_return ec;
       }
+      else {
+        p=std::make_unique<async_simple::Promise<std::error_code>>();
+      }
     }
+    
     async_io_impl<io>(ib_socket, sge_buffer, std::move(tmp_buffers),
                       std::move(read_buffer))
         .start([&, io_size, read_some](auto&& result) {
           try {
+            total_size+=result.value().second;
             if (!result.value().first && result.value().second < io_size &&
                 !read_some) [[unlikely]] {
               p->setValue(std::make_error_code(std::errc::protocol_error));
             }
             else {
-              total_size += io_size;
               p->setValue(result.value().first);
             }
           } catch (...) {
@@ -305,7 +322,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t buffers,
         }
         auto ec = co_await async_io_regist<io>(ib_socket,
                                                sge_buffer.subspan(0, sge_index),
-                                               now_size, total_size, p);
+                                               now_size, total_size,  p,false, (i==0));
         if (ec) [[unlikely]] {
           co_return std::pair{ec, total_size};
         }
@@ -335,7 +352,7 @@ template <typename buffer_t, std::size_t n>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
     coro_io::ib_socket_t& ib_socket, std::span<buffer_t, n> buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, n + 1> sge{};
+  std::array<ibv_sge, n> sge{};
   co_return co_await detail::async_io_split<ib_socket_t::send>(ib_socket,
                                                                buffer, sge);
 }
@@ -344,7 +361,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
     coro_io::ib_socket_t& ib_socket, std::span<buffer_t> buffer) {
   std::size_t total_size_write = 0;
   std::vector<ibv_sge> sge;
-  sge.resize(buffer.size() + 1);
+  sge.resize(buffer.size());
   co_return co_await detail::async_io_split<ib_socket_t::send>(ib_socket,
                                                                buffer, sge);
 }
@@ -353,16 +370,16 @@ template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
     coro_io::ib_socket_t& ib_socket, buffer_t buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, 2> sge{};
+  ibv_sge sge{};
   co_return co_await detail::async_io_split<ib_socket_t::send>(
-      ib_socket, std::span{&buffer, 1}, std::span<ibv_sge>{sge});
+      ib_socket, std::span{&buffer, 1}, std::span{&sge,1});
 }
 
 template <typename buffer_t, std::size_t n>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
     coro_io::ib_socket_t& ib_socket, std::span<buffer_t, n> buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, n + 1> sge{};
+  std::array<ibv_sge, n> sge{};
   co_return co_await detail::async_io_split<ib_socket_t::recv>(
       ib_socket, buffer, std::span<ibv_sge>{sge});
 }
@@ -371,7 +388,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
     coro_io::ib_socket_t& ib_socket, std::span<buffer_t> buffer) {
   std::size_t total_size_write = 0;
   std::vector<ibv_sge> sge;
-  sge.resize(buffer.size() + 1);
+  sge.resize(buffer.size());
   co_return co_await detail::async_io_split<ib_socket_t::recv>(
       ib_socket, buffer, std::span<ibv_sge>{sge});
 }
@@ -380,9 +397,9 @@ template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
     coro_io::ib_socket_t& ib_socket, buffer_t buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, 2> sge{};
+  ibv_sge sge{};
   co_return co_await detail::async_io_split<ib_socket_t::recv>(
-      ib_socket, std::span{&buffer, 1}, std::span<ibv_sge>{sge});
+      ib_socket, std::span{&buffer, 1}, std::span{&sge,1});
 }
 
 template <typename buffer_t, std::size_t n>
@@ -390,7 +407,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_read_some(coro_io::ib_socket_t& ib_socket,
                 std::span<buffer_t, n> buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, n + 1> sge{};
+  std::array<ibv_sge, n> sge{};
   std::unique_ptr<async_simple::Promise<std::error_code>> p;
   uint32_t io_size =
       detail::make_sge(sge, std::span{&buffer, 1}, ib_socket.get_buffer_size());
@@ -407,7 +424,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_read_some(coro_io::ib_socket_t& ib_socket, std::span<buffer_t> buffer) {
   std::size_t total_size_write = 0;
   std::vector<ibv_sge> sge;
-  sge.resize(buffer.size() + 1);
+  sge.resize(buffer.size());
   std::unique_ptr<async_simple::Promise<std::error_code>> p;
   uint32_t io_size =
       detail::make_sge(sge, std::span{&buffer, 1}, ib_socket.get_buffer_size());
@@ -423,14 +440,14 @@ template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_read_some(coro_io::ib_socket_t& ib_socket, buffer_t buffer) {
   std::size_t total_size_write = 0;
-  std::array<ibv_sge, 2> sge{};
+  ibv_sge sge{};
   std::unique_ptr<async_simple::Promise<std::error_code>> p;
   uint32_t io_size =
       detail::make_sge(sge, std::span{&buffer, 1}, ib_socket.get_buffer_size());
   auto old = ib_socket.get_config().enable_read_buffer_when_zero_copy;
   ib_socket.get_config().enable_read_buffer_when_zero_copy = true;
   auto result = co_await detail::async_io_regist<ib_socket_t::recv>(
-      ib_socket, std::span<ibv_sge>{&sge[0], 1}, io_size, total_size_write, p,
+      ib_socket, std::span{&sge, 1}, io_size, total_size_write, p,
       true);
   ib_socket.get_config().enable_read_buffer_when_zero_copy = old;
   co_return std::pair{result, total_size_write};
