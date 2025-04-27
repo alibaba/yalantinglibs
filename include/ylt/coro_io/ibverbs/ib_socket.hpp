@@ -400,6 +400,17 @@ class ib_socket_t {
 
  public:
   ~ib_socket_t() {
+    if (qp_) {
+      ibv_qp_attr attr;
+      memset(&attr, 0, sizeof(attr));
+      attr.qp_state = IBV_QPS_RESET;
+      int ret = ibv_modify_qp(qp_.get(), &attr, IBV_QP_STATE);
+      if (ret) {
+        ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+
     auto state = state_;
     if (state) {
       asio::dispatch(executor_->get_asio_executor(),
