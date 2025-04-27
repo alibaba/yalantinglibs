@@ -30,23 +30,22 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   coro_io::ib_buffer_t ib =
       coro_io::ib_buffer_t::regist(soc.get_device(), buffer, buffer_size);
   ELOG_INFO << "start read from client";
-  auto [ec, len] =
-      co_await coro_io::async_read_some(soc, ib.subview());
+  auto [ec, len] = co_await coro_io::async_read_some(soc, ib.subview());
 
   if (ec) [[unlikely]] {
     ELOG_INFO << "err when read client:" << ec.message();
     co_return ec;
   }
-  ELOG_INFO << "read data ok:"<<len;
+  ELOG_INFO << "read data ok:" << len;
   for (int i = 0;; i ^= 1) {
     auto r_view = ib.subview();
-    auto s_view = ib.subview(0,len);
+    auto s_view = ib.subview(0, len);
 
-    ELOG_INFO << "start read from client" << &soc;
+    ELOG_DEBUG << "start read from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(
         coro_io::async_read_some(soc, r_view),
         coro_io::async_write(soc, s_view));
-    ELOG_INFO << "server waiting io for r/w from client over" << &soc;
+    ELOG_DEBUG << "server waiting io for r/w from client over" << &soc;
 
     if (r.hasError() || s.hasError()) [[unlikely]] {
       co_return std::make_error_code(std::errc::io_error);
@@ -58,7 +57,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
       co_return s.value().first;
     }
     len = r.value().second;
-    ELOG_INFO << "read data ok:"<<len;
+    ELOG_DEBUG << "read data ok:" << len;
   }
   delete[] buffer;
   co_return std::error_code{};
@@ -121,22 +120,20 @@ async_simple::coro::Lazy<std::error_code> echo_client(coro_io::ib_socket_t &soc,
                                          sv.size());
   ELOG_INFO << "start echo";
   for (int i = 0;; i ^= 1) {
-    ELOG_INFO << "prepare read buffer";
     ibv_sge r_view = ib2.subview();
-    ELOG_INFO << "prepare write buffer";
     ibv_sge s_view = ib.subview();
-    ELOG_INFO << "echoing";
+
     auto [result, time_out] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
         async_simple::coro::collectAll(coro_io::async_read_some(soc, r_view),
                                        coro_io::async_write(soc, s_view)),
         coro_io::sleep_for(std::chrono::seconds{1000}));
-    ELOG_INFO << "echoing over";
+
     if (result.hasError() || time_out.hasError()) [[unlikely]] {
       co_return std::make_error_code(std::errc::io_error);
     }
     if (time_out.value()) [[unlikely]] {
-      ELOG_INFO << "Time out!";
+      ELOG_WARN << "Time out!";
       co_return std::make_error_code(std::errc::timed_out);
     }
     auto &&[r, s] = result.value();
@@ -151,7 +148,7 @@ async_simple::coro::Lazy<std::error_code> echo_client(coro_io::ib_socket_t &soc,
     }
     auto resp = std::string_view{(char *)r_view.addr, r.value().second};
     if (resp.size() != sv.size()) [[unlikely]] {
-      ELOG_INFO << "data err";
+      ELOG_ERROR << "data err";
       co_return std::make_error_code(std::errc::protocol_error);
     }
     else {
@@ -176,7 +173,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
 }
 
 int main() {
-  easylog::logger<>::instance().init(easylog::Severity::WARN, false, true,
+  easylog::logger<>::instance().init(easylog::Severity::INFO, false, true,
                                      "1.log", 10000, 1, true);
   ELOG_INFO << "start echo server & client";
   echo_accept().start([](auto &&ec) {

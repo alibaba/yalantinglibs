@@ -123,25 +123,25 @@ class ib_socket_t {
       }
     }
     std::error_code poll_completion() {
-      ELOG_INFO << "IO EVENT COMMING";
+      ELOG_DEBUG << "IO EVENT COMMING";
       void* ev_ctx;
       auto cq = cq_.get();
-      ELOG_INFO << "get_cq_event";
+      ELOG_DEBUG << "get_cq_event";
       int r = ibv_get_cq_event(channel_.get(), &cq, &ev_ctx);
       // assert(r >= 0);
       std::error_code ec;
       if (r) {
-        ELOG_INFO << std::make_error_code(std::errc{r}).message();
+        ELOG_ERROR << std::make_error_code(std::errc{r}).message();
         return std::make_error_code(std::errc{r});
       }
-      ELOG_INFO << "ack_cq_events";
+      ELOG_DEBUG << "ack_cq_events";
       ibv_ack_cq_events(cq, 1);
       r = ibv_req_notify_cq(cq, 0);
       if (r) {
-        ELOG_INFO << std::make_error_code(std::errc{r}).message();
+        ELOG_ERROR << std::make_error_code(std::errc{r}).message();
         return std::make_error_code(std::errc{r});
       }
-      ELOG_INFO << "ibv_poll_cq";
+      ELOG_DEBUG << "ibv_poll_cq";
       struct ibv_wc wc;
       int ne = 0;
       while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
@@ -155,10 +155,10 @@ class ib_socket_t {
 
         ec = make_error_code(wc.status);
         if (wc.status != IBV_WC_SUCCESS) {
-          ELOGV(DEBUG, "rdma failed with error code:%d", wc.status);
+          ELOGV(ERROR, "rdma failed with error code:%d", wc.status);
         }
         else {
-          ELOG_INFO << "ready resume:" << (callback_t*)wc.wr_id;
+          ELOG_DEBUG << "ready resume:" << (callback_t*)wc.wr_id;
           resume(std::pair{ec, (std::size_t)wc.byte_len},
                  *(callback_t*)wc.wr_id);
         }
@@ -277,15 +277,15 @@ class ib_socket_t {
   }
   inline static void resume(std::pair<std::error_code, std::size_t>&& arg,
                             callback_t& handle) {
-    ELOG_INFO << "resume callback:" << &handle;
+    ELOG_DEBUG << "resume callback:" << &handle;
     if (handle) [[likely]] {
-      ELOG_INFO << "resuming:" << &handle;
+      ELOG_DEBUG << "resuming:" << &handle;
       auto handle_tmp = std::move(handle);
       handle_tmp(std::move(arg));
-      ELOG_INFO << "resume over,clear cb:" << &handle;
+      ELOG_DEBUG << "resume over,clear cb:" << &handle;
     }
     else {
-      ELOG_INFO << "resume empty";
+      ELOG_DEBUG << "resume empty";
     }
   }
 
@@ -306,17 +306,17 @@ class ib_socket_t {
       while (!ec) {
         coro_io::callback_awaitor<std::error_code> awaitor;
 
-        ELOG_INFO << "posix::stream_fd::wait_read now";
-        ELOG_INFO << "fd:" << self->fd_->native_handle();
+        ELOG_DEBUG << "posix::stream_fd::wait_read now";
+        ELOG_DEBUG << "fd:" << self->fd_->native_handle();
         ec = co_await awaitor.await_resume([&self](auto handler) {
           self->fd_->async_wait(
               asio::posix::stream_descriptor::wait_read,
               [handler](const std::error_code& ec) mutable {
-                ELOG_INFO << "asio awake from posix::stream_fd::wait_read";
+                ELOG_DEBUG << "asio awake from posix::stream_fd::wait_read";
                 handler.set_value_then_resume(ec);
               });
         });
-        ELOG_INFO << "awake from posix::stream_fd::wait_read";
+        ELOG_DEBUG << "awake from posix::stream_fd::wait_read";
 
         if (ec) {
           std::error_code ec_ignore;
@@ -350,7 +350,7 @@ class ib_socket_t {
     }
     ibv_recv_wr* bad_wr = nullptr;
     // prepare the receive work request
-    ELOG_INFO << "set cb:" << (void*)rr.wr_id;
+    ELOG_DEBUG << "set cb:" << (void*)rr.wr_id;
     state_->recv_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
@@ -359,10 +359,10 @@ class ib_socket_t {
     // post the receive request to the RQ
     if (auto ec = ibv_post_recv(qp_.get(), &rr, &bad_wr); ec) {
       auto error_code = std::make_error_code(std::errc{ec});
-      ELOG_INFO << "ibv post recv failed: " << error_code.message();
+      ELOG_ERROR << "ibv post recv failed: " << error_code.message();
       return error_code;
     }
-    ELOG_INFO << "ibv post recv ok";
+    ELOG_DEBUG << "ibv post recv ok";
     return {};
   }
   template <typename T>
@@ -383,7 +383,7 @@ class ib_socket_t {
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
     // prepare the receive work request
-    ELOG_INFO << "set cb:" << (void*)sr.wr_id;
+    ELOG_DEBUG << "set cb:" << (void*)sr.wr_id;
     state_->send_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
@@ -391,10 +391,10 @@ class ib_socket_t {
     // post the receive request to the RQ
     if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) {
       auto error_code = std::make_error_code(std::errc{ec});
-      ELOG_INFO << "ibv post send failed: " << error_code.message();
+      ELOG_ERROR << "ibv post send failed: " << error_code.message();
       return error_code;
     }
-    ELOG_INFO << "ibv post send ok";
+    ELOG_DEBUG << "ibv post send ok";
     return {};
   }
 
@@ -425,11 +425,11 @@ class ib_socket_t {
   void async_io(T&& buffer, callback_t&& cb) {
     std::error_code ec;
     if constexpr (io == recv) {
-      ELOG_INFO << "POST RECV";
+      ELOG_DEBUG << "POST RECV";
       ec = post_recv(buffer, std::move(cb));
     }
     else {
-      ELOG_INFO << "POST SEND";
+      ELOG_DEBUG << "POST SEND";
       ec = post_send(buffer, std::move(cb));
     }
     if (ec) [[unlikely]] {

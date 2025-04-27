@@ -76,7 +76,7 @@ class callback_awaitor_base {
         : awaitor(awaitor), op(op) {}
     constexpr bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> handle) noexcept {
-      ELOG_INFO << "set handle:" << handle.address();
+      ELOG_DEBUG << "set handle:" << handle.address();
       awaitor.coro_ = handle;
       op(awaitor_handler{&awaitor});
     }
@@ -135,7 +135,7 @@ class callback_awaitor_base {
       }
     }
     void resume() const {
-      ELOG_INFO << "resume handle:" << obj->coro_.address();
+      ELOG_DEBUG << "resume handle:" << obj->coro_.address();
       obj->coro_.resume();
     }
 
