@@ -96,6 +96,7 @@ class ib_socket_t {
 
  private:
   struct shared_state_t {
+    std::unique_ptr<ibv_qp, ib_deleter> qp_;
     std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
     std::unique_ptr<ibv_cq, ib_deleter> cq_;
     std::unique_ptr<asio::posix::stream_descriptor> fd_;
@@ -111,14 +112,23 @@ class ib_socket_t {
     void close(std::error_code& ec) {
       auto has_close = has_close_.exchange(true);
       if (!has_close) {
+        if (qp_) {
+          ibv_qp_attr attr;
+          memset(&attr, 0, sizeof(attr));
+          attr.qp_state = IBV_QPS_RESET;
+
+          int ret = ibv_modify_qp(qp_.get(), &attr, IBV_QP_STATE);
+          if (ret) {
+            ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
+                       << std::make_error_code(std::errc{ret}).message();
+          }
+        }
+
         if (fd_) {
           fd_->cancel(ec);
           if (ec)
             return;
           fd_->close(ec);
-          if (ec) {
-            return;
-          }
         }
       }
     }
@@ -171,7 +181,7 @@ class ib_socket_t {
   ib_buffer_pool_t* ib_buffer_pool_;
   ib_buffer_t buffer_;
   std::string_view least_data_;
-  std::unique_ptr<ibv_qp, ib_deleter> qp_;
+
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
@@ -212,7 +222,7 @@ class ib_socket_t {
     if (qp == nullptr) {
       throw std::system_error(std::make_error_code(std::errc{errno}));
     }
-    qp_.reset(qp);
+    state_->qp_.reset(qp);
   }
   void modify_qp_to_init() {
     // modify the QP to init
@@ -225,7 +235,7 @@ class ib_socket_t {
                            IBV_ACCESS_REMOTE_WRITE;
     int flags =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
-    if (auto ec = ibv_modify_qp(qp_.get(), &attr, flags); ec) {
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
       throw std::system_error(std::make_error_code(std::errc{ec}));
     }
     ELOGV(INFO, "Modify QP to INIT done!");
@@ -237,7 +247,7 @@ class ib_socket_t {
     attr.dest_qp_num = remote_qpn;
     attr.rq_psn = 0;
     attr.max_dest_rd_atomic = 1;
-    attr.min_rnr_timer = 0x12;
+    attr.min_rnr_timer = 31;
     attr.ah_attr.is_global = 0;
     attr.ah_attr.dlid = dlid;
     attr.ah_attr.sl = 0;
@@ -255,7 +265,7 @@ class ib_socket_t {
     int flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
                 IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
                 IBV_QP_MIN_RNR_TIMER;
-    if (auto ec = ibv_modify_qp(qp_.get(), &attr, flags); ec) {
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
       throw std::system_error(std::make_error_code(std::errc{ec}));
     }
     ELOGV(INFO, "Modify QP to RTR done!");
@@ -265,12 +275,12 @@ class ib_socket_t {
     attr.qp_state = IBV_QPS_RTS;
     attr.timeout = 0x12;  // 18
     attr.retry_cnt = 6;
-    attr.rnr_retry = 0;
+    attr.rnr_retry = 6;
     attr.sq_psn = 0;
     attr.max_rd_atomic = 1;
     int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
                 IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
-    if (auto ec = ibv_modify_qp(qp_.get(), &attr, flags); ec != 0) {
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec != 0) {
       throw std::system_error(std::make_error_code(std::errc{ec}));
     }
     ELOGV(INFO, "Modify QP to RTS done!");
@@ -318,6 +328,10 @@ class ib_socket_t {
         });
         ELOG_DEBUG << "awake from posix::stream_fd::wait_read";
 
+        if (!ec) {
+          ec = self->poll_completion();
+        }
+
         if (ec) {
           std::error_code ec_ignore;
           self->close(ec_ignore);
@@ -325,7 +339,6 @@ class ib_socket_t {
           resume(std::pair{ec, std::size_t{0}}, self->send_cb_);
           break;
         }
-        ec = self->poll_completion();
       }
       if (ec) {
         ELOG_INFO << ec.message();
@@ -357,7 +370,7 @@ class ib_socket_t {
     }
 
     // post the receive request to the RQ
-    if (auto ec = ibv_post_recv(qp_.get(), &rr, &bad_wr); ec) {
+    if (auto ec = ibv_post_recv(state_->qp_.get(), &rr, &bad_wr); ec) {
       auto error_code = std::make_error_code(std::errc{ec});
       ELOG_ERROR << "ibv post recv failed: " << error_code.message();
       return error_code;
@@ -389,7 +402,7 @@ class ib_socket_t {
       return std::make_error_code(std::errc::operation_canceled);
     }
     // post the receive request to the RQ
-    if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) {
+    if (auto ec = ibv_post_send(state_->qp_.get(), &sr, &bad_wr); ec) {
       auto error_code = std::make_error_code(std::errc{ec});
       ELOG_ERROR << "ibv post send failed: " << error_code.message();
       return error_code;
@@ -400,17 +413,6 @@ class ib_socket_t {
 
  public:
   ~ib_socket_t() {
-    if (qp_) {
-      ibv_qp_attr attr;
-      memset(&attr, 0, sizeof(attr));
-      attr.qp_state = IBV_QPS_RESET;
-      int ret = ibv_modify_qp(qp_.get(), &attr, IBV_QP_STATE);
-      if (ret) {
-        ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-
     auto state = state_;
     if (state) {
       asio::dispatch(executor_->get_asio_executor(),
@@ -487,7 +489,7 @@ class ib_socket_t {
       ELOG_INFO << "unknown exception";
     }
     ELOG_INFO << "serialize peer_info";
-    peer_info.qp_num = qp_->qp_num;
+    peer_info.qp_num = state_->qp_->qp_num;
     peer_info.lid = device_->attr().lid;
     peer_info.length = conf_.request_buffer_size;
     memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
@@ -510,7 +512,7 @@ class ib_socket_t {
       init_qp();
       modify_qp_to_init();
       ib_socket_t::ib_socket_info peer_info{};
-      peer_info.qp_num = qp_->qp_num;
+      peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = device_->attr().lid;
       peer_info.length = conf_.request_buffer_size;
       memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
