@@ -219,7 +219,7 @@ struct convert {
   template <typename U, std::enable_if_t<!std::is_signed<U>::value &&
                                          std::is_integral<U>::value>* = nullptr>
   static inline char* itoa(U u, char* p) {
-    return convert<D>::template itoa(p, u);
+    return convert<D>::template itoa<>(p, u);
   }
 
   // itoa: handle signed integral operands (selected by SFINAE)
@@ -257,7 +257,7 @@ struct convert {
       *p = '-';
       p += (mask & 1);
     }
-    p = convert<D>::template itoa(p, u);
+    p = convert<D>::template itoa<>(p, u);
     if (D == Rev && mask)
       *--p = '-';
     return p;
