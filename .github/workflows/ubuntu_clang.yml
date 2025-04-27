@@ -32,7 +32,6 @@ jobs:
         run: |
           sudo ifconfig
           sudo apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core
-          sudo modprobe rdma_rxe rdma_cm ib_umad
           sudo rdma link add rxe_0 type rxe netdev eth0
           ls /dev/infiniband/
           ibv_devinfo
