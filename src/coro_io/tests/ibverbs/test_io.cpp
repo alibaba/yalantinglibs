@@ -173,7 +173,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
 }
 
 int main() {
-  easylog::logger<>::instance().init(easylog::Severity::INFO, false, true,
+  easylog::logger<>::instance().init(easylog::Severity::WARN, false, true,
                                      "1.log", 10000, 1, true);
   ELOG_INFO << "start echo server & client";
   echo_accept().start([](auto &&ec) {
