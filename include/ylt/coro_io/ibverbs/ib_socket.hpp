@@ -250,7 +250,7 @@ class ib_socket_t {
   void modify_qp_to_rtr(uint32_t remote_qpn, uint16_t dlid, uint8_t* dgid) {
     ibv_qp_attr attr{};
     attr.qp_state = IBV_QPS_RTR;
-    attr.path_mtu = IBV_MTU_256;
+    attr.path_mtu = IBV_MTU_4096;
     attr.dest_qp_num = remote_qpn;
     attr.rq_psn = 0;
     attr.max_dest_rd_atomic = 1;
