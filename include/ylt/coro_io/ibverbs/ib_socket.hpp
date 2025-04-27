@@ -122,6 +122,9 @@ class ib_socket_t {
             ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
                        << std::make_error_code(std::errc{ret}).message();
           }
+          qp_ = nullptr;
+          cq_ = nullptr;
+          channel_ = nullptr;
         }
 
         if (fd_) {
@@ -171,6 +174,10 @@ class ib_socket_t {
           ELOG_DEBUG << "ready resume:" << (callback_t*)wc.wr_id;
           resume(std::pair{ec, (std::size_t)wc.byte_len},
                  *(callback_t*)wc.wr_id);
+          ELOG_DEBUG << "after resume:" << (callback_t*)wc.wr_id;
+          if (cq_ == nullptr) {
+            break;
+          }
         }
       }
       return ec;
