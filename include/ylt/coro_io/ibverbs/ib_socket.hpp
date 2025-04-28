@@ -39,7 +39,7 @@ class ib_socket_t {
     ibv_qp_type qp_type = IBV_QPT_RC;
     ibv_qp_cap cap = {.max_send_wr = 512,
                       .max_recv_wr = 512,
-                      .max_send_sge = 1,
+                      .max_send_sge = 6,
                       .max_recv_sge = 1,
                       .max_inline_data = 0};
   };
