@@ -26,10 +26,14 @@ struct ib_buffer_t {
   std::unique_ptr<ibv_mr, ib_deleter> mr_;
   std::shared_ptr<ib_device_t> dev_;
   std::weak_ptr<ib_buffer_pool_t> owner_pool_;
+  bool has_memory_ownership_;
   ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
               std::weak_ptr<ib_buffer_pool_t> owner_pool = {});
-
+  void set_has_ownership() {
+    has_memory_ownership_=true;
+  }
  public:
+  friend class ib_buffer_pool_t;
   ib_buffer_t() = default;
   ibv_sge subview(std::size_t start = 0) const {
     return ibv_sge{.addr = (uintptr_t)mr_->addr + start,
@@ -139,6 +143,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  public:
   void collect_free(ib_buffer_t buffer) {
     if (buffer) {
+      ELOG_TRACE << "collecting:" << (void*)buffer->addr;
       if (free_buffers_.size() < pool_config_.max_buffer_count) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
@@ -173,6 +178,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       }
       buffer =
           ib_buffer_t::regist(*this, device_, ptr, pool_config_.buffer_size);
+      buffer.set_has_ownership();
     }
     ELOG_TRACE << "get buffer{data:" << buffer->addr << ",len" << buffer->length
                << "} from queue";
@@ -235,14 +241,22 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
 };
 inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
                                 std::weak_ptr<ib_buffer_pool_t> owner_pool)
-    : mr_(mr), dev_(std::move(dev)), owner_pool_(std::move(owner_pool)) {
+    : mr_(mr), dev_(std::move(dev)), owner_pool_(std::move(owner_pool)),has_memory_ownership_(false) {
   if (auto ptr = owner_pool_.lock(); ptr) {
     ptr->total_memory_.fetch_add((*this)->length, std::memory_order_relaxed);
   }
 }
 inline ib_buffer_t::~ib_buffer_t() {
+
   if (auto ptr = owner_pool_.lock(); ptr) {
     ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
+  }
+  if (has_memory_ownership_) {
+    if (mr_) {
+      auto data=  mr_->addr;
+      mr_=nullptr;
+      free(data);
+    }
   }
 }
 inline void ib_buffer_t::change_owner(
