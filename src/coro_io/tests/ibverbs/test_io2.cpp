@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <string_view>
@@ -101,7 +102,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
 }
 
 template <std::size_t data_size>
-async_simple::coro::Lazy<std::error_code> test_read_server(
+async_simple::coro::Lazy<std::error_code> test_read(
     coro_io::ib_socket_t& soc) {
   std::string buffer;
   buffer.resize(data_size);
@@ -116,7 +117,7 @@ async_simple::coro::Lazy<std::error_code> test_read_server(
 }
 
 template <std::size_t data_size>
-async_simple::coro::Lazy<std::error_code> test_read_some_server(
+async_simple::coro::Lazy<std::error_code> test_read_some(
     coro_io::ib_socket_t& soc) {
   std::string buffer;
   buffer.resize(data_size);
@@ -132,32 +133,66 @@ async_simple::coro::Lazy<std::error_code> test_read_some_server(
 }
 
 template <std::size_t data_size>
-async_simple::coro::Lazy<std::error_code> test_write_client(
+async_simple::coro::Lazy<std::error_code> test_write(
     coro_io::ib_socket_t& soc) {
   std::string buffer;
   buffer.resize(data_size, 'A');
   std::error_code ec;
   std::size_t len;
   ELOG_TRACE << "START WRITE";
-  // co_await coro_io::sleep_for(std::chrono::seconds{1000});
   std::tie(ec, len) = co_await coro_io::async_write(
       soc, asio::buffer(buffer.data(), data_size));
   CHECK(len == data_size);
   co_return ec;
 }
 
+template <std::size_t data_size,std::size_t iov_size>
+async_simple::coro::Lazy<std::error_code> test_write_iov(
+    coro_io::ib_socket_t& soc) {
+  std::array<std::string, iov_size> buffer;
+  for (auto&e:buffer)
+    e.resize(data_size, 'A');
+  std::array<std::string_view, iov_size> buffer_collect;
+  std::error_code ec;
+  std::size_t len;
+  ELOG_TRACE << "START WRITE iov(size:"<<iov_size<<")";
+  std::tie(ec, len) = co_await coro_io::async_write(
+      soc,buffer);
+  CHECK(len == data_size*iov_size);
+  co_return ec;
+}
+
+template <std::size_t data_size,std::size_t iov_size>
+async_simple::coro::Lazy<std::error_code> test_read_iov(
+    coro_io::ib_socket_t& soc) {
+  std::array<std::string, iov_size> buffer;
+  for (auto&e:buffer)
+    e.resize(data_size);
+  std::array<std::string_view, iov_size> buffer_collect;
+  std::error_code ec;
+  std::size_t len;
+  ELOG_TRACE << "START READ iov(size:"<<iov_size<<")";
+  std::tie(ec, len) = co_await coro_io::async_read(
+      soc,buffer);
+  CHECK(len == data_size*iov_size);
+  for (auto &e:buffer) {
+    CHECK(std::string_view{e.data(), data_size} == std::string(data_size, 'A'));
+  }
+  co_return ec;
+}
+
 TEST_CASE("test socket io") {
   ELOG_INFO << "start echo server & client";
   buffer_size = 8 * 1024;
-  for (int i = 0; i < 1; ++i) {
+  for (int i = 0; i < 2; ++i) {
     enable_zero_copy = !!i;
     ELOG_INFO << "enable zero copy:" << enable_zero_copy;
     SUBCASE(
         "test read/write fix size no buffer zero copy, least than rdma "
         "buffer") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_server<16>>(),
-                     echo_connect<test_write_client<16>>()));
+          collectAll(echo_accept<test_read<16>>(),
+                     echo_connect<test_write<16>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -167,8 +202,8 @@ TEST_CASE("test socket io") {
         "test read/write fix size no buffer zero copy, bigger than rdma "
         "buffer") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_server<9 * 1024>>(),
-                     echo_connect<test_write_client<9 * 1024>>()));
+          collectAll(echo_accept<test_read<9 * 1024>>(),
+                     echo_connect<test_write<9 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -178,8 +213,8 @@ TEST_CASE("test socket io") {
         "test read/write fix size no buffer zero copy, very bigger than rdma "
         "buffer") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_server<35 * 1024>>(),
-                     echo_connect<test_write_client<35 * 1024>>()));
+          collectAll(echo_accept<test_read<35 * 1024>>(),
+                     echo_connect<test_write<35 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -187,8 +222,8 @@ TEST_CASE("test socket io") {
     }
     SUBCASE("test read_some & write with same size") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some_server<7 * 1024>>(),
-                     echo_connect<test_write_client<7 * 1024>>()));
+          collectAll(echo_accept<test_read_some<7 * 1024>>(),
+                     echo_connect<test_write<7 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -196,9 +231,9 @@ TEST_CASE("test socket io") {
     }
     SUBCASE("test read_some & read/write") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some_server<3 * 1024>,
-                                 test_read_server<9 * 1024>>(),
-                     echo_connect<test_write_client<12 * 1024>>()));
+          collectAll(echo_accept<test_read_some<3 * 1024>,
+                                 test_read<9 * 1024>>(),
+                     echo_connect<test_write<12 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -206,9 +241,9 @@ TEST_CASE("test socket io") {
     }
     SUBCASE("test read_some & read/write with small data") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some_server<3 * 1024>,
-                                 test_read_server<2 * 1024>>(),
-                     echo_connect<test_write_client<5 * 1024>>()));
+          collectAll(echo_accept<test_read_some<3 * 1024>,
+                                 test_read<2 * 1024>>(),
+                     echo_connect<test_write<5 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -216,9 +251,9 @@ TEST_CASE("test socket io") {
     }
     SUBCASE("test read_some over size") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some_server<11 * 1024>,
-                                 test_read_server<9 * 1024>>(),
-                     echo_connect<test_write_client<17 * 1024>>()));
+          collectAll(echo_accept<test_read_some<11 * 1024>,
+                                 test_read<9 * 1024>>(),
+                     echo_connect<test_write<17 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -226,9 +261,64 @@ TEST_CASE("test socket io") {
     }
     SUBCASE("test read_some over size") {
       auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some_server<11 * 1024>,
-                                 test_read_server<9 * 1024>>(),
-                     echo_connect<test_write_client<17 * 1024>>()));
+          collectAll(echo_accept<test_read_some<11 * 1024>,
+                                 test_read<9 * 1024>>(),
+                     echo_connect<test_write<17 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test write iov") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read<3 * 1024>>(),
+                     echo_connect<test_write_iov<1 * 1024,3>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test write iov multi sge") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read<20 * 1024>>(),
+                     echo_connect<test_write_iov<5 * 1024,4>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test write iov over buffer size") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read<36 * 1024>>(),
+                     echo_connect<test_write_iov<9 * 1024,4>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    
+    SUBCASE("test read iov") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_iov<1 * 1024,3>>(),
+                      echo_connect<test_write<3 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read iov multi sge") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_iov<5 * 1024,4>>(),
+                      echo_connect<test_write<20 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read iov multi sge") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_iov<9 * 1024,4>>(),
+                      echo_connect<test_write<36 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());

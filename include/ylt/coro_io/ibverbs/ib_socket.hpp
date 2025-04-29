@@ -403,6 +403,7 @@ class ib_socket_t {
     sr.wr_id = (std::size_t)&state_->send_cb_;
     sr.sg_list = sge.data();
     sr.num_sge = sge.size();
+    ELOG_TRACE << "post send sge size:" <<sge.size();
     for (int i = 0; i < sge.size(); ++i) {
       ELOG_TRACE << "post send sge[" << std::to_string(i)
                  << "].address:" << sge.data()[i].addr

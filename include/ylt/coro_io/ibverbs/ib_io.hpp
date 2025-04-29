@@ -11,6 +11,7 @@
 #include <span>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 
 #include "asio/buffer.hpp"
@@ -220,7 +221,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
 }
 
 template <typename T>
-void make_sge(std::vector<ibv_sge>& sge, std::span<T> buffer) {
+void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffer) {
   constexpr bool is_ibv_sge = requires { buffer.begin()->lkey; };
   sge.resize(buffer.size());
   for (int i = 0; i < buffer.size(); ++i) {
@@ -238,13 +239,21 @@ void make_sge(std::vector<ibv_sge>& sge, std::span<T> buffer) {
 }
 
 template <typename T>
-void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
-  make_sge(sge, std::span<T>{&buffer, 1});
+inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
+  using pointer_t = decltype(buffer.data());
+  if constexpr (std::is_same_v<pointer_t, void*> ||
+                std::is_same_v<pointer_t, char*> ||
+                std::is_same_v<pointer_t, const char*>) {
+    make_sge_impl(sge, std::span{&buffer, 1});
+  }
+  else {
+    make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+  }
 }
 
 template <coro_io::ib_socket_t::io_type io, typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t raw_buffer,
+async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
                bool read_some = false) {
   std::vector<ibv_sge> buffer_vec0, split_sge_block;
   make_sge(buffer_vec0, raw_buffer);
@@ -313,11 +322,11 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
 
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-async_read_some(coro_io::ib_socket_t& ib_socket, buffer_t buffer) {
+async_read_some(coro_io::ib_socket_t& ib_socket, buffer_t&& buffer) {
   auto old = ib_socket.get_config().enable_read_buffer_when_zero_copy;
   ib_socket.get_config().enable_read_buffer_when_zero_copy = true;
   auto result = co_await detail::async_io_split<ib_socket_t::recv>(
-      ib_socket, buffer, true);
+      ib_socket, std::forward<buffer_t>(buffer), true);
   ib_socket.get_config().enable_read_buffer_when_zero_copy = old;
   co_return result;
 }
