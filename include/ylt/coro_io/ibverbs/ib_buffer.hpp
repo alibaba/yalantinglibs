@@ -29,9 +29,8 @@ struct ib_buffer_t {
   bool has_memory_ownership_;
   ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
               std::weak_ptr<ib_buffer_pool_t> owner_pool = {});
-  void set_has_ownership() {
-    has_memory_ownership_=true;
-  }
+  void set_has_ownership() { has_memory_ownership_ = true; }
+
  public:
   friend class ib_buffer_pool_t;
   ib_buffer_t() = default;
@@ -241,20 +240,22 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
 };
 inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
                                 std::weak_ptr<ib_buffer_pool_t> owner_pool)
-    : mr_(mr), dev_(std::move(dev)), owner_pool_(std::move(owner_pool)),has_memory_ownership_(false) {
+    : mr_(mr),
+      dev_(std::move(dev)),
+      owner_pool_(std::move(owner_pool)),
+      has_memory_ownership_(false) {
   if (auto ptr = owner_pool_.lock(); ptr) {
     ptr->total_memory_.fetch_add((*this)->length, std::memory_order_relaxed);
   }
 }
 inline ib_buffer_t::~ib_buffer_t() {
-
   if (auto ptr = owner_pool_.lock(); ptr) {
     ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
   }
   if (has_memory_ownership_) {
     if (mr_) {
-      auto data=  mr_->addr;
-      mr_=nullptr;
+      auto data = mr_->addr;
+      mr_ = nullptr;
       free(data);
     }
   }
