@@ -31,7 +31,7 @@ class ib_socket_t {
  public:
   struct config_t {
     bool enable_zero_copy = true;
-    bool enable_read_buffer_when_zero_copy = false;
+    bool enable_read_buffer_when_zero_copy = true;
     uint32_t cq_size = 1024;
     std::size_t request_buffer_size = 8 * 1024 * 1024;
     std::chrono::milliseconds tcp_handshake_timeout =
@@ -403,7 +403,7 @@ class ib_socket_t {
     sr.wr_id = (std::size_t)&state_->send_cb_;
     sr.sg_list = sge.data();
     sr.num_sge = sge.size();
-    ELOG_TRACE << "post send sge size:" <<sge.size();
+    ELOG_TRACE << "post send sge size:" << sge.size();
     for (int i = 0; i < sge.size(); ++i) {
       ELOG_TRACE << "post send sge[" << std::to_string(i)
                  << "].address:" << sge.data()[i].addr
