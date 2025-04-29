@@ -43,22 +43,23 @@ class ib_socket_t {
                       .max_recv_sge = 1,
                       .max_inline_data = 0};
   };
-  ib_socket_t(coro_io::ExecutorWrapper<>* executor,
-              std::shared_ptr<ib_device_t> device, const config_t& config,
-              ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
+  ib_socket_t(
+      coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,
+      const config_t& config,
+      std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : device_(std::move(device)),
         executor_(executor),
-        ib_buffer_pool_(buffer_pool),
+        ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
     init(config);
   }
   ib_socket_t(
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       std::shared_ptr<ib_device_t> device = coro_io::g_ib_device(),
-      ib_buffer_pool_t* buffer_pool = &g_ib_buffer_pool())
+      std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : device_(std::move(device)),
         executor_(executor),
-        ib_buffer_pool_(buffer_pool),
+        ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
     config_t config{};
     init(config);
@@ -80,7 +81,7 @@ class ib_socket_t {
   }
 
  public:
-  enum io_type { recv, send };
+  enum io_type { recv = 0, send = 1 };
   struct ib_socket_info {
     uint8_t gid[16];  // GID
     uint16_t lid;     // LID of the IB port
@@ -90,7 +91,9 @@ class ib_socket_t {
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open();
   }
-  ib_buffer_pool_t& buffer_pool() const noexcept { return *ib_buffer_pool_; }
+  std::shared_ptr<ib_buffer_pool_t> buffer_pool() const noexcept {
+    return ib_buffer_pool_;
+  }
   using callback_t =
       std::function<void(std::pair<std::error_code, std::size_t>)>;
 
@@ -103,6 +106,7 @@ class ib_socket_t {
     std::atomic<bool> has_close_ = 0;
     callback_t recv_cb_;
     callback_t send_cb_;
+    ib_buffer_t buffer_[2];
     void cancel() {
       if (fd_) {
         std::error_code ec;
@@ -126,7 +130,8 @@ class ib_socket_t {
           cq_ = nullptr;
           channel_ = nullptr;
         }
-
+        std::move(buffer_[0]).collect();
+        std::move(buffer_[1]).collect();
         if (fd_) {
           fd_->cancel(ec);
           if (ec)
@@ -171,7 +176,8 @@ class ib_socket_t {
           ELOGV(ERROR, "rdma failed with error code:%d", wc.status);
         }
         else {
-          ELOG_DEBUG << "ready resume:" << (callback_t*)wc.wr_id;
+          ELOG_DEBUG << "ready resume: id:" << (callback_t*)wc.wr_id
+                     << ",len:" << wc.byte_len;
           resume(std::pair{ec, (std::size_t)wc.byte_len},
                  *(callback_t*)wc.wr_id);
           ELOG_DEBUG << "after resume:" << (callback_t*)wc.wr_id;
@@ -185,8 +191,7 @@ class ib_socket_t {
   };
 
   std::shared_ptr<ib_device_t> device_;
-  ib_buffer_pool_t* ib_buffer_pool_;
-  ib_buffer_t buffer_;
+  std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::string_view least_data_;
 
   std::shared_ptr<shared_state_t> state_;
@@ -204,16 +209,22 @@ class ib_socket_t {
     ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
     return len;
   }
-  std::size_t least_buffer_size() { return least_data_.size(); }
-  void set_buffer_len(std::size_t read_size) {
-    least_data_ = std::string_view{(char*)buffer_->addr, read_size};
+  std::size_t least_read_buffer_size() { return least_data_.size(); }
+  void set_read_buffer_len(std::size_t read_size) {
+    least_data_ = std::string_view{(char*)state_->buffer_[io_type::recv]->addr,
+                                   read_size};
   }
+  template <io_type io>
   ibv_sge get_buffer() {
-    assert(least_buffer_size() == 0);
-    if (!buffer_) {
-      buffer_ = buffer_pool().get_buffer();
+    if constexpr (io == io_type::recv) {
+      assert(least_read_buffer_size() == 0);
     }
-    return buffer_.subview();
+    ELOG_TRACE << "get buffer from client";
+    if (!state_->buffer_[io]) {
+      ELOG_TRACE << "no buffer now. try get new buffer from pool";
+      state_->buffer_[io] = buffer_pool()->get_buffer();
+    }
+    return state_->buffer_[io].subview();
   }
 
  private:

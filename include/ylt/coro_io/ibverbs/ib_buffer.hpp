@@ -64,6 +64,7 @@ struct ib_buffer_t {
     }
   };
 
+  void collect() &&;
   static ib_buffer_t regist(ib_buffer_pool_t& pool,
                             std::shared_ptr<ib_device_t> dev, void* ptr,
                             std::size_t size,
@@ -78,6 +79,7 @@ struct ib_buffer_t {
 
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  private:
+  friend class ib_buffer_t;
   struct private_construct_token {};
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
       std::weak_ptr<ib_buffer_pool_t> self_weak,
@@ -138,15 +140,12 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       }
     }
   }
-
- public:
-  void collect_free(ib_buffer_t buffer) {
+  void collect_free_inner(ib_buffer_t buffer) {
     if (buffer) {
       ELOG_TRACE << "collecting:" << (void*)buffer->addr;
       if (free_buffers_.size() < pool_config_.max_buffer_count) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
-        buffer.change_owner(weak_from_this());
         enqueue(std::move(buffer));
       }
       else {
@@ -155,6 +154,21 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                    << "buffer{data:" << buffer->addr << ",len" << buffer->length
                    << "} wont be collect";
       }
+    }
+    else {
+      ELOG_TRACE << "collecting nullptr";
+    }
+    return;
+  };
+
+ public:
+  void collect_free(ib_buffer_t buffer) {
+    if (buffer) {
+      buffer.change_owner(weak_from_this());
+      collect_free_inner(std::move(buffer));
+    }
+    else {
+      ELOG_TRACE << "collecting nullptr";
     }
     return;
   };
@@ -260,15 +274,29 @@ inline ib_buffer_t::~ib_buffer_t() {
     }
   }
 }
+
+inline void ib_buffer_t::collect() && {
+  ELOG_TRACE << "collecting buffer";
+  if (auto pool = owner_pool_.lock(); pool) {
+    ELOG_TRACE << "has pool. collecting buffer continue";
+    pool->collect_free_inner(std::move(*this));
+  }
+}
+
 inline void ib_buffer_t::change_owner(
     std::weak_ptr<ib_buffer_pool_t> owner_pool) {
-  if (auto ptr = owner_pool_.lock(); ptr) {
-    ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
+  auto pool_raw = owner_pool_.lock(), pool_new = owner_pool.lock();
+  if (pool_new != pool_raw) {
+    if (pool_raw) {
+      pool_raw->total_memory_.fetch_sub((*this)->length,
+                                        std::memory_order_relaxed);
+    }
+    if (pool_new) {
+      pool_new->total_memory_.fetch_sub((*this)->length,
+                                        std::memory_order_relaxed);
+    }
+    owner_pool_ = std::move(owner_pool);
   }
-  if (auto ptr = owner_pool.lock(); ptr) {
-    ptr->total_memory_.fetch_add((*this)->length, std::memory_order_relaxed);
-  }
-  owner_pool_ = std::move(owner_pool);
 }
 
 inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {}) {
@@ -276,9 +304,9 @@ inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {}) {
   return dev;
 }
 
-inline ib_buffer_pool_t& g_ib_buffer_pool(
+inline std::shared_ptr<ib_buffer_pool_t> g_ib_buffer_pool(
     const ib_buffer_pool_t::config_t& pool_config = {}) {
   static auto pool = ib_buffer_pool_t::create(g_ib_device(), pool_config);
-  return *pool;
+  return pool;
 }
 }  // namespace coro_io
