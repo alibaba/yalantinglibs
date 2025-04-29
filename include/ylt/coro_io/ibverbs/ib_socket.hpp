@@ -196,24 +196,24 @@ class ib_socket_t {
 
  public:
   std::size_t consume(char* dst, std::size_t sz) {
-    if (least_data_.size()) {
-      auto len = std::min(sz, least_data_.size());
+    auto len = std::min(sz, least_data_.size());
+    if (len) {
       memcpy(dst, least_data_.data(), len);
       least_data_ = least_data_.substr(len);
-      if (least_data_.empty()) {
-        ib_buffer_pool_->collect_free(std::move(buffer_));
-      }
-      return len;
     }
-    else {
-      return 0;
-    }
+    ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
+    return len;
   }
   std::size_t least_buffer_size() { return least_data_.size(); }
-  void set_read_buffer(ib_buffer_t&& buffer, std::string_view data) {
-    ib_buffer_pool_->collect_free(std::move(buffer_));
-    buffer_ = std::move(buffer);
-    least_data_ = data;
+  void set_buffer_len(std::size_t read_size) {
+    least_data_ = std::string_view{(char*)buffer_->addr, read_size};
+  }
+  ibv_sge get_buffer() {
+    assert(least_buffer_size() == 0);
+    if (!buffer_) {
+      buffer_ = buffer_pool().get_buffer();
+    }
+    return buffer_.subview();
   }
 
  private:
@@ -355,23 +355,17 @@ class ib_socket_t {
     listen_event(state_).start([](auto&& ec) {
     });
   }
-  template <typename T>
-  std::error_code post_recv(T& sge, callback_t&& handler) {
+  std::error_code post_recv(std::span<ibv_sge> sge, callback_t&& handler) {
     ibv_recv_wr rr;
     rr.next = NULL;
 
     rr.wr_id = (std::size_t)&state_->recv_cb_;
-    if constexpr (std::is_same_v<T, ibv_sge>) {
-      rr.sg_list = &sge;
-      rr.num_sge = 1;
-      ELOG_TRACE << "post recv sge address:" << sge.addr << ",length:" << sge.length;
-    }
-    else {
-      rr.sg_list = sge.data();
-      rr.num_sge = sge.size();
-      for (int i=0;i<sge.size();++i) {
-        ELOG_TRACE << "post recv sge["<<std::to_string(i)<<"].address:" << sge.data()[i].addr << ",length:" << sge.data()[i].length;
-      }
+    rr.sg_list = sge.data();
+    rr.num_sge = sge.size();
+    for (int i = 0; i < sge.size(); ++i) {
+      ELOG_TRACE << "post recv sge[" << std::to_string(i)
+                 << "].address:" << sge.data()[i].addr
+                 << ",length:" << sge.data()[i].length;
     }
     ibv_recv_wr* bad_wr = nullptr;
     // prepare the receive work request
@@ -390,24 +384,18 @@ class ib_socket_t {
     ELOG_DEBUG << "ibv post recv ok";
     return {};
   }
-  template <typename T>
-  std::error_code post_send(T& sge, callback_t&& handler) {
+  std::error_code post_send(std::span<ibv_sge> sge, callback_t&& handler) {
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
 
     sr.next = NULL;
     sr.wr_id = (std::size_t)&state_->send_cb_;
-    if constexpr (std::is_same_v<T, ibv_sge>) {
-      sr.sg_list = &sge;
-      sr.num_sge = 1;
-      ELOG_TRACE << "post send sge address:" << sge.addr << ",length:" << sge.length;
-    }
-    else {
-      sr.sg_list = sge.data();
-      sr.num_sge = sge.size();
-      for (int i=0;i<sge.size();++i) {
-        ELOG_TRACE << "post send sge["<<std::to_string(i)<<"].address:" << sge.data()[i].addr << ",length:" << sge.data()[i].length;
-      }
+    sr.sg_list = sge.data();
+    sr.num_sge = sge.size();
+    for (int i = 0; i < sge.size(); ++i) {
+      ELOG_TRACE << "post send sge[" << std::to_string(i)
+                 << "].address:" << sge.data()[i].addr
+                 << ",length:" << sge.data()[i].length;
     }
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
@@ -439,8 +427,8 @@ class ib_socket_t {
     }
   }
 
-  template <io_type io, typename T>
-  void async_io(T&& buffer, callback_t&& cb) {
+  template <io_type io>
+  void async_io(std::span<ibv_sge> buffer, callback_t&& cb) {
     std::error_code ec;
     if constexpr (io == recv) {
       ELOG_DEBUG << "POST RECV";
