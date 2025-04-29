@@ -24,6 +24,7 @@
 
 std::size_t buffer_size = 8 * 1024 * 1024;
 int concurrency = 10;
+bool enable_zero_copy = false;
 
 template <auto... ServerFunction>
 async_simple::coro::Lazy<std::error_code> echo_accept() {
@@ -55,6 +56,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   ELOG_INFO << "tcp listening";
   coro_io::ib_socket_t soc;
   soc.get_config().request_buffer_size = buffer_size;
+  soc.get_config().enable_zero_copy = enable_zero_copy;
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -80,6 +82,7 @@ template <auto... ClientFunction>
 async_simple::coro::Lazy<std::error_code> echo_connect() {
   coro_io::ib_socket_t soc{};
   soc.get_config().request_buffer_size = buffer_size;
+  soc.get_config().enable_zero_copy = enable_zero_copy;
   auto ec = co_await coro_io::async_connect(soc, "127.0.0.1", "58110");
   if (ec) [[unlikely]] {
     co_return ec;
@@ -146,74 +149,92 @@ async_simple::coro::Lazy<std::error_code> test_write_client(
 TEST_CASE("test socket io") {
   ELOG_INFO << "start echo server & client";
   buffer_size = 8 * 1024;
-  SUBCASE(
-      "test read/write fix size no buffer zero copy, least than rdma buffer") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_server<16>>(),
-                   echo_connect<test_write_client<16>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  for (int i = 0; i < 1; ++i) {
+    enable_zero_copy = !!i;
+    ELOG_INFO << "enable zero copy:" << enable_zero_copy;
+    SUBCASE(
+        "test read/write fix size no buffer zero copy, least than rdma "
+        "buffer") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_server<16>>(),
+                     echo_connect<test_write_client<16>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE(
+        "test read/write fix size no buffer zero copy, bigger than rdma "
+        "buffer") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_server<9 * 1024>>(),
+                     echo_connect<test_write_client<9 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE(
+        "test read/write fix size no buffer zero copy, very bigger than rdma "
+        "buffer") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_server<35 * 1024>>(),
+                     echo_connect<test_write_client<35 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read_some & write with same size") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_some_server<7 * 1024>>(),
+                     echo_connect<test_write_client<7 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read_some & read/write") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_some_server<3 * 1024>,
+                                 test_read_server<9 * 1024>>(),
+                     echo_connect<test_write_client<12 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read_some & read/write with small data") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_some_server<3 * 1024>,
+                                 test_read_server<2 * 1024>>(),
+                     echo_connect<test_write_client<5 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read_some over size") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_some_server<11 * 1024>,
+                                 test_read_server<9 * 1024>>(),
+                     echo_connect<test_write_client<17 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
+    SUBCASE("test read_some over size") {
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_read_some_server<11 * 1024>,
+                                 test_read_server<9 * 1024>>(),
+                     echo_connect<test_write_client<17 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    }
   }
-  SUBCASE(
-      "test read/write fix size no buffer zero copy, bigger than rdma buffer") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_server<9 * 1024>>(),
-                   echo_connect<test_write_client<9 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
-  SUBCASE(
-      "test read/write fix size no buffer zero copy, very bigger than rdma "
-      "buffer") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_server<17 * 1024>>(),
-                   echo_connect<test_write_client<17 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
-  SUBCASE("test read_some & write with same size") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_some_server<7 * 1024>>(),
-                   echo_connect<test_write_client<7 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
-  SUBCASE("test read_some & read/write") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_some_server<3 * 1024>,
-                               test_read_server<9 * 1024>>(),
-                   echo_connect<test_write_client<12 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
-  SUBCASE("test read_some & read/write with small data") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_some_server<3 * 1024>,
-                               test_read_server<2 * 1024>>(),
-                   echo_connect<test_write_client<5 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
-  SUBCASE("test read_some over size") {
-    auto result = async_simple::coro::syncAwait(
-        collectAll(echo_accept<test_read_some_server<11 * 1024>,
-                               test_read_server<9 * 1024>>(),
-                   echo_connect<test_write_client<17 * 1024>>()));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-  }
+
+  ELOG_INFO << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
 }
