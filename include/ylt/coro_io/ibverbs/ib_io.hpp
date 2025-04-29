@@ -52,8 +52,6 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     coro_io::ib_socket_t& ib_socket, const std::string& host,
     const std::string& port) {
-  // todo: get socket from client_pool, not connect each time?
-
   asio::ip::tcp::socket soc{ib_socket.get_executor()};
   auto ec =
       co_await async_connect(ib_socket.get_coro_executor(), soc, host, port);
@@ -221,18 +219,25 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
 }
 
 template <typename T>
-void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffer) {
-  constexpr bool is_ibv_sge = requires { buffer.begin()->lkey; };
-  sge.resize(buffer.size());
-  for (int i = 0; i < buffer.size(); ++i) {
+void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
+  constexpr bool is_ibv_sge = requires { buffers.begin()->lkey; };
+  sge.reserve(buffers.size());
+  for (auto& buffer : buffers) {
     if constexpr (is_ibv_sge) {
-      sge[i].addr = buffer[i].addr;
-      sge[i].length = buffer[i].length;
-      sge[i].lkey = buffer[i].lkey;
+      if (buffer.length == 0) [[unlikely]] {
+        continue;
+      }
+      sge.push_back(ibv_sge{buffer.addr, buffer.length, buffer.lkey});
     }
     else {
-      sge[i].addr = (uintptr_t)buffer[i].data();
-      sge[i].length = buffer[i].size();
+      if (buffer.size() == 0) [[unlikely]] {
+        continue;
+      }
+      for (std::size_t i = 0; i < buffer.size(); i += UINT32_MAX) {
+        sge.push_back(ibv_sge{(uintptr_t)buffer.data() + i,
+                              std::min<uint32_t>(buffer.size() - i, UINT32_MAX),
+                              0});
+      }
     }
   }
   return;
@@ -251,14 +256,37 @@ inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
   }
 }
 
+inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
+  if (read_size) {
+    for (auto& e : buffer) {
+      if (e.length <= read_size) {
+        read_size -= e.length;
+        e.length = 0;
+      }
+      else {
+        e.addr += read_size;
+        e.length -= read_size;
+        break;
+      }
+    }
+    auto it = std::find_if(buffer.begin(), buffer.end(), [](const ibv_sge& x) {
+      return x.length != 0;
+    });
+    buffer.erase(buffer.begin(), it);
+  }
+}
+
 template <coro_io::ib_socket_t::io_type io, typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
                bool read_some = false) {
   std::vector<ibv_sge> buffer_vec0, split_sge_block;
   make_sge(buffer_vec0, raw_buffer);
-  split_sge_block.reserve(buffer_vec0.size());
   std::span<ibv_sge> buffer = buffer_vec0;
+  if (buffer.size() == 0) [[unlikely]] {
+    co_return std::pair{std::error_code{}, std::size_t{0}};
+  }
+  split_sge_block.reserve(buffer.size());
   uint32_t max_size = ib_socket.get_buffer_size();
   std::size_t io_completed_size = 0;
   std::size_t sge_index = 0;
@@ -273,33 +301,63 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);
-      split_sge_block.push_back(
-          ibv_sge{sge.addr + i, (uint32_t)block_size, sge.lkey});
+      if (split_sge_block.size() &&
+          split_sge_block.back().addr + split_sge_block.back().length ==
+              sge.addr + i &&
+          split_sge_block.back().lkey == sge.lkey) {  // try combine iov
+        split_sge_block.back().length += block_size;
+      }
+      else {
+        split_sge_block.push_back(
+            ibv_sge{sge.addr + i, (uint32_t)block_size, sge.lkey});
+      }
       now_split_size += block_size;
       if (now_split_size == max_size) {
         auto [ec, len] = co_await async_io_impl<io>(ib_socket, split_sge_block,
                                                     now_split_size);
         io_completed_size += len;
-        if (ec || read_some) {
+        ELOG_TRACE << "has completed size:" << io_completed_size;
+        if (ec) {
+          co_return std::pair{ec, io_completed_size};
+        }
+        else if (len == 0 || len > now_split_size) [[unlikely]] {
+          ELOG_ERROR << "read size error, it shouldn't be:" << len;
+          co_return std::pair{std::make_error_code(std::errc::io_error),
+                              io_completed_size};
+        }
+        else if (read_some) {
           co_return std::pair{ec, io_completed_size};
         }
         if (len < now_split_size) [[unlikely]] {
-          // TODO: when read size smaller than want size, we should wait until
-          // read over
-          co_return std::pair{std::make_error_code(std::errc::protocol_error),
-                              io_completed_size};
+          reset_buffer(split_sge_block, len);
         }
-        now_split_size = 0;
-        split_sge_block.clear();
+        else {
+          split_sge_block.clear();
+        }
+        now_split_size -= len;
       }
     }
   }
   std::error_code ec;
-  std::size_t len;
-  if (now_split_size > 0) {
+  std::size_t len = 0;
+  while (now_split_size > 0) {
+    reset_buffer(split_sge_block, len);
     std::tie(ec, len) =
         co_await async_io_impl<io>(ib_socket, split_sge_block, now_split_size);
     io_completed_size += len;
+    ELOG_TRACE << "has completed size:" << io_completed_size;
+    if (ec) {
+      co_return std::pair{ec, io_completed_size};
+    }
+    else if (len == 0 || len > now_split_size) [[unlikely]] {
+      ELOG_ERROR << "read size error, it shouldn't be:" << len;
+      co_return std::pair{std::make_error_code(std::errc::io_error),
+                          io_completed_size};
+    }
+    else if (read_some) {
+      co_return std::pair{ec, io_completed_size};
+    }
+    now_split_size -= len;
   }
   co_return std::pair{ec, io_completed_size};
 }
