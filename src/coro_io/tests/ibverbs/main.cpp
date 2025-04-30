@@ -16,9 +16,12 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 
 #include "doctest.h"
-
+#include "ylt/easylog.hpp"
 // doctest comments
 // 'function' : must be 'attribute' - see issue #182
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
-int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
+int main(int argc, char** argv) { 
+    // easylog::logger<>::instance().init(easylog::Severity::TRACE, false, true,
+    //                                  "1.log", 1000000000, 1000, true);
+  return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

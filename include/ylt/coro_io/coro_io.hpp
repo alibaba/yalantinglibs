@@ -22,7 +22,9 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <atomic>
+#include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <system_error>
 #include <thread>
@@ -31,6 +33,7 @@
 
 #include "asio/dispatch.hpp"
 #include "asio/io_context.hpp"
+#include "asio/ip/address.hpp"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/SpinLock.h"
@@ -107,6 +110,7 @@ class callback_awaitor_base {
     awaitor_handler &operator=(awaitor_handler &&) = default;
     template <typename... Args>
     void set_value_then_resume(Args &&...args) const {
+      ELOG_INFO<<"OH ready resume in awaitor_handler";
       set_value(std::forward<Args>(args)...);
       resume();
     }
@@ -235,6 +239,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
   if (!slot) {
     co_return co_await awaitor.await_resume([&](auto handler) {
       io_func([&, handler](auto &&...args) mutable {
+        ELOG_INFO<<"calling cb";
         handler.set_value(std::forward<decltype(args)>(args)...);
         handler.resume();
       });
@@ -275,6 +280,7 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
       }
       else {
         io_func([&, handler](auto &&...args) mutable {
+          ELOG_INFO<<"calling cb";
           slot->clear(async_simple::Terminate);
           handler.set_value(std::forward<decltype(args)>(args)...);
           handler.resume();
@@ -329,7 +335,8 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor &acceptor, asio::ip::tcp::socket &socket) noexcept {
   return async_io<std::error_code>(
       [&](auto &&cb) {
-        acceptor.async_accept(socket, std::move(cb));
+        ELOG_INFO<<"call asio acceptor.async_accept";
+        acceptor.async_accept(socket, cb);
       },
       acceptor);
 }
@@ -420,33 +427,56 @@ template <typename executor_t>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     executor_t *executor, asio::ip::tcp::socket &socket,
     const std::string &host, const std::string &port) noexcept {
-  asio::ip::tcp::resolver resolver(executor->get_asio_executor());
-  auto result = co_await async_io<
-      std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+  std::error_code ec;
+  auto address= asio::ip::make_address(host,ec);
+  std::pair<std::error_code, asio::ip::tcp::resolver::iterator> result;
+  if (ec) {
+    asio::ip::tcp::resolver resolver(executor->get_asio_executor());
+    result = co_await async_io<
+        std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+        [&](auto &&cb) {
+          ELOG_INFO<<"call asio resolver.async_resolve";
+          resolver.async_resolve(host, port, std::move(cb));
+          ELOG_INFO<<"call asio resolver.async_resolve over, waiting cb";
+        },
+        resolver);
+    ELOG_INFO<<"call asio resolver.async_resolve cbover";
+    if (result.first) {
+      co_return result.first;
+    }
+    co_return co_await async_io<std::error_code>(
       [&](auto &&cb) {
-        resolver.async_resolve(host, port, std::move(cb));
-      },
-      resolver);
-
-  if (result.first) {
-    co_return result.first;
-  }
-  result = co_await async_io<
-      std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
-      [&](auto &&cb) {
+        ELOG_INFO<<"call asio socket.async_connect";
         asio::async_connect(socket, result.second, std::move(cb));
       },
       socket);
-  co_return result.first;
+  }
+  else {
+    ELOG_INFO<<"direct call without resolve";
+    uint16_t port_v;
+    auto result = std::from_chars(port.data(),port.data()+port.size(),port_v);
+    if (result.ec!=std::errc{}) {
+      co_return std::make_error_code(result.ec);
+    }
+    asio::ip::tcp::endpoint ep{address,port_v};
+    co_return co_await async_io<std::error_code>(
+      [&](auto &&cb) {
+        ELOG_INFO<<"call asio socket.async_connect";
+        asio::async_connect(socket,std::span{&ep,1},std::move(cb));
+      },
+      socket);
+    
+  }
+
+  
 }
 
 template <typename executor_t, typename EndPointSeq>
-inline async_simple::coro::Lazy<
-    std::pair<std::error_code, asio::ip::tcp::endpoint>>
+inline async_simple::coro::Lazy<std::error_code>
 async_connect(executor_t *executor, asio::ip::tcp::socket &socket,
               const EndPointSeq &endpoint) noexcept {
   auto result =
-      co_await async_io<std::pair<std::error_code, asio::ip::tcp::endpoint>>(
+      co_await async_io<std::error_code>(
           [&](auto &&cb) {
             asio::async_connect(socket, endpoint, std::move(cb));
           },
