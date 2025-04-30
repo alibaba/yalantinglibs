@@ -47,20 +47,20 @@ class ib_socket_t {
       coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,
       const config_t& config,
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
-      : device_(std::move(device)),
-        executor_(executor),
+      : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
+    state_->device_=std::move(device);
     init(config);
   }
   ib_socket_t(
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       std::shared_ptr<ib_device_t> device = coro_io::g_ib_device(),
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
-      : device_(std::move(device)),
-        executor_(executor),
+      : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
+    state_->device_=std::move(device);
     config_t config{};
     init(config);
   }
@@ -69,11 +69,11 @@ class ib_socket_t {
 
  private:
   void init(const config_t& config) {
-    state_->channel_.reset(ibv_create_comp_channel(device_->context()));
+    state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
       throw std::system_error(std::make_error_code(std::errc{errno}));
     }
-    state_->cq_.reset(ibv_create_cq(device_->context(), config.cq_size, NULL,
+    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size, NULL,
                                     state_->channel_.get(), 0));
     if (!state_->cq_) [[unlikely]] {
       throw std::system_error(std::make_error_code(std::errc{errno}));
@@ -99,9 +99,10 @@ class ib_socket_t {
 
  private:
   struct shared_state_t {
-    std::unique_ptr<ibv_qp, ib_deleter> qp_;
+    std::shared_ptr<ib_device_t> device_;
     std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
     std::unique_ptr<ibv_cq, ib_deleter> cq_;
+    std::unique_ptr<ibv_qp, ib_deleter> qp_;
     std::unique_ptr<asio::posix::stream_descriptor> fd_;
     std::atomic<bool> has_close_ = 0;
     callback_t recv_cb_;
@@ -190,10 +191,9 @@ class ib_socket_t {
     }
   };
 
-  std::shared_ptr<ib_device_t> device_;
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::string_view least_data_;
-
+  std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
@@ -236,7 +236,7 @@ class ib_socket_t {
     qp_init_attr.send_cq = state_->cq_.get();
     qp_init_attr.recv_cq = state_->cq_.get();
     qp_init_attr.cap = conf_.cap;
-    auto qp = ibv_create_qp(device_->pd(), &qp_init_attr);
+    auto qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
     if (qp == nullptr) {
       throw std::system_error(std::make_error_code(std::errc{errno}));
     }
@@ -247,7 +247,7 @@ class ib_socket_t {
     ibv_qp_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.qp_state = IBV_QPS_INIT;
-    attr.port_num = device_->port();
+    attr.port_num = state_->device_->port();
     attr.pkey_index = 0;
     attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
                            IBV_ACCESS_REMOTE_WRITE;
@@ -265,19 +265,19 @@ class ib_socket_t {
     attr.dest_qp_num = remote_qpn;
     attr.rq_psn = 0;
     attr.max_dest_rd_atomic = 1;
-    attr.min_rnr_timer = 31;
+    attr.min_rnr_timer = 25;
     attr.ah_attr.is_global = 0;
     attr.ah_attr.dlid = dlid;
     attr.ah_attr.sl = 0;
     attr.ah_attr.src_path_bits = 0;
-    attr.ah_attr.port_num = device_->port();
-    if (device_->gid_index() >= 0) {
+    attr.ah_attr.port_num = state_->device_->port();
+    if (state_->device_->gid_index() >= 0) {
       attr.ah_attr.is_global = 1;
       attr.ah_attr.port_num = 1;
       memcpy(&attr.ah_attr.grh.dgid, dgid, 16);
       attr.ah_attr.grh.flow_label = 0;
       attr.ah_attr.grh.hop_limit = 1;
-      attr.ah_attr.grh.sgid_index = device_->gid_index();
+      attr.ah_attr.grh.sgid_index = state_->device_->gid_index();
       attr.ah_attr.grh.traffic_class = 0;
     }
     int flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
@@ -392,6 +392,33 @@ class ib_socket_t {
       ELOG_ERROR << "ibv post recv failed: " << error_code.message();
       return error_code;
     }
+    if (soc_) [[unlikely]] {
+      ELOG_INFO << "serialize peer_info";
+      ib_socket_t::ib_socket_info peer_info;
+      peer_info.qp_num = state_->qp_->qp_num;
+      peer_info.lid = state_->device_->attr().lid;
+      peer_info.length = conf_.request_buffer_size;
+      memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
+      constexpr auto sz = struct_pack::get_needed_size(peer_info);
+      char buffer[sz.size()];
+      struct_pack::serialize_to((char*)buffer, sz, peer_info);
+      ELOG_INFO << "send qp info to client";
+      auto &soc_ref=*soc_;
+      async_write(soc_ref, asio::buffer(buffer))
+          .start([soc = std::move(soc_), state = state_](auto&& ec) {
+            try {
+              if (!ec.value().first) {
+                return;
+              }
+              ELOG_WARN << "rmda connection failed by exception:" << ec.value().first.message();
+            } catch (const std::exception& e) {
+              ELOG_WARN << "rmda connection failed by exception:" << e.what();
+            }
+            std::error_code ec_ignore;
+            state->close(ec_ignore);
+          });
+      soc_ = nullptr;
+    }
     ELOG_DEBUG << "ibv post recv ok";
     return {};
   }
@@ -460,16 +487,17 @@ class ib_socket_t {
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
-  auto get_device() const noexcept { return device_; }
+  auto get_device() const noexcept { return state_->device_; }
   async_simple::coro::Lazy<std::error_code> accept(
-      asio::ip::tcp::socket& soc) noexcept {
+      std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
+    soc_=std::move(soc);
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
     auto [ec2, canceled] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
-        async_read(soc, asio::buffer(buffer)),
-        coro_io::sleep_for(std::chrono::milliseconds{10000}));
+        async_read(*soc_, asio::buffer(buffer)),
+        coro_io::sleep_for(std::chrono::milliseconds{10000},executor_));
     if (ec2.value().first) [[unlikely]] {
       co_return std::move(ec2.value().first);
     }
@@ -504,20 +532,6 @@ class ib_socket_t {
     } catch (...) {
       ELOG_INFO << "unknown exception";
     }
-    ELOG_INFO << "serialize peer_info";
-    peer_info.qp_num = state_->qp_->qp_num;
-    peer_info.lid = device_->attr().lid;
-    peer_info.length = conf_.request_buffer_size;
-    memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
-    struct_pack::serialize_to((char*)buffer, sz, peer_info);
-    ELOG_INFO << "send qp info to client";
-    auto ec = co_await async_write(soc, asio::buffer(buffer));
-    if (ec.first) {
-      ELOG_INFO << "write ib socket info to client";
-      std::error_code ec2;
-      state_->close(ec2);
-      co_return ec.first;
-    }
     co_return std::error_code{};
   }
 
@@ -529,9 +543,9 @@ class ib_socket_t {
       modify_qp_to_init();
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
-      peer_info.lid = device_->attr().lid;
+      peer_info.lid = state_->device_->attr().lid;
       peer_info.length = conf_.request_buffer_size;
-      memcpy(peer_info.gid, &device_->gid(), sizeof(peer_info.gid));
+      memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
       struct_pack::serialize_to((char*)buffer, sz, peer_info);

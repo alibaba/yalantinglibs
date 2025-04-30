@@ -33,10 +33,10 @@ namespace coro_io {
 // unlike tcp socket, client won't connnected util server first read ib_socket.
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor& acceptor, coro_io::ib_socket_t& ib_socket) {
-  asio::ip::tcp::socket soc{ib_socket.get_executor()};
+  auto soc = std::make_unique<asio::ip::tcp::socket>(ib_socket.get_executor());
   auto ec = co_await async_io<std::error_code>(
-      [&](auto&& cb) {
-        acceptor.async_accept(soc, std::move(cb));
+      [&](auto cb) {
+        acceptor.async_accept(*soc, cb);
       },
       acceptor);
 
@@ -44,7 +44,7 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
     co_return std::move(ec);
   }
   // TODO: SSL?
-  auto ret = co_await ib_socket.accept(soc);
+  auto ret = co_await ib_socket.accept(std::move(soc));
   ELOGV(INFO, "accept over:%s", ret.message().data());
   co_return ret;
 }
@@ -245,15 +245,21 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
 
 template <typename T>
 inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
-  using pointer_t = decltype(buffer.data());
-  if constexpr (std::is_same_v<pointer_t, void*> ||
-                std::is_same_v<pointer_t, char*> ||
-                std::is_same_v<pointer_t, const char*>) {
-    make_sge_impl(sge, std::span{&buffer, 1});
+  if constexpr (requires{buffer.data();}) {
+    using pointer_t = decltype(buffer.data());
+    if constexpr (std::is_same_v<pointer_t, void*> ||
+                  std::is_same_v<pointer_t, char*> ||
+                  std::is_same_v<pointer_t, const char*>) {
+      make_sge_impl(sge, std::span{&buffer, 1});
+    }
+    else {
+      make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+    }
   }
   else {
-    make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+    make_sge_impl(sge, std::span<T>{&buffer,1});
   }
+  
 }
 
 inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {

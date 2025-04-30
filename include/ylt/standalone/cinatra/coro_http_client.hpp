@@ -2040,8 +2040,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           << ", the first endpoint is: " << (*eps)[0].address().to_string()
           << ":" << std::to_string((*eps)[0].port());
       std::error_code ec;
-      asio::ip::tcp::endpoint endpoint;
-      if (std::tie(ec, endpoint) = co_await coro_io::async_connect(
+      if (ec = co_await coro_io::async_connect(
               &executor_wrapper_, socket_->impl_, *eps);
           ec) {
         co_return resp_data{ec, 404};
@@ -2087,8 +2086,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       socket_->has_closed_ = false;
       CINATRA_LOG_TRACE << "connect to endpoint: "
-                        << endpoint.address().to_string() << ":"
-                        << std::to_string(endpoint.port()) << " successfully";
+                        << socket_->impl_.remote_endpoint().address().to_string() << ":"
+                        << socket_->impl_.remote_endpoint().port() << " successfully";
     }
     co_return resp_data{};
   }

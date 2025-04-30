@@ -96,10 +96,10 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         break;
       }
       while (true) {
-        ELOG_TRACE << "start collect timeout client of pool{" << self.get()
+        ELOG_TRACE << "start collect timeout buffer of pool{" << self.get()
                    << "}, now client count: " << self->free_buffers_.size();
         std::size_t is_all_cleared = self->free_buffers_.clear_old(clear_cnt);
-        ELOG_TRACE << "finish collect timeout client of pool{" << self.get()
+        ELOG_TRACE << "finish collect timeout buffer of pool{" << self.get()
                    << "}, now client cnt: " << self->free_buffers_.size();
         if (is_all_cleared != 0) [[unlikely]] {
           try {

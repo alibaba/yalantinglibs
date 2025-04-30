@@ -491,11 +491,10 @@ class coro_rpc_client {
                << eps->size()
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
                << std::to_string((*eps)[0].port());
-    asio::ip::tcp::endpoint endpoint;
-    std::tie(ec, endpoint) = co_await coro_io::async_connect(
+    ec = co_await coro_io::async_connect(
         &control_->executor_, control_->socket_, *eps);
-    std::error_code err_code;
-    timer_->cancel(err_code);
+    std::error_code ignore_ec;
+    timer_->cancel(ignore_ec);
     if (control_->is_timeout_) {
       ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;
@@ -506,8 +505,7 @@ class coro_rpc_client {
       co_return errc::not_connected;
     }
     ELOG_INFO << "connect successful, the endpoint is: "
-              << endpoint.address().to_string() + ":" +
-                     std::to_string(endpoint.port());
+              << control_->socket_.remote_endpoint().address().to_string() + ":" <<control_->socket_.remote_endpoint().port();
 
     if (config_.enable_tcp_no_delay == true) {
       control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);

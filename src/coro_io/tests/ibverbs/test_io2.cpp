@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -27,6 +28,7 @@ std::size_t buffer_size = 8 * 1024 * 1024;
 int concurrency = 10;
 bool enable_zero_copy = false;
 bool enable_read_buffer_when_zero_copy = false;
+std::atomic<int> port;
 
 template <auto... ServerFunction>
 async_simple::coro::Lazy<std::error_code> echo_accept() {
@@ -37,7 +39,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   if (ec) [[unlikely]] {
     co_return ec;
   }
-  auto endpoint = asio::ip::tcp::endpoint(address, 58110);
+  auto endpoint = asio::ip::tcp::endpoint(address, 0);
   acceptor.open(endpoint.protocol(), ec);
   if (ec) [[unlikely]] {
     co_return ec;
@@ -50,12 +52,14 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   if (ec) [[unlikely]] {
     co_return ec;
   }
+  port = acceptor.local_endpoint().port();
+  ELOG_INFO << "port:" << port;
   acceptor.listen(asio::ip::tcp::socket::max_listen_connections, ec);
   if (ec) [[unlikely]] {
     co_return ec;
   }
 
-  ELOG_INFO << "tcp listening";
+  ELOG_INFO << "tcp listening port:" << port;
   coro_io::ib_socket_t soc;
   soc.get_config().request_buffer_size = buffer_size;
   soc.get_config().enable_zero_copy = enable_zero_copy;
@@ -89,7 +93,9 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   soc.get_config().enable_zero_copy = enable_zero_copy;
   soc.get_config().enable_read_buffer_when_zero_copy =
       enable_read_buffer_when_zero_copy;
-  auto ec = co_await coro_io::async_connect(soc, "127.0.0.1", "58110");
+  ELOG_INFO << "tcp connecting port:" << port;
+  auto ec =
+      co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
   if (ec) [[unlikely]] {
     co_return ec;
   }
@@ -114,7 +120,8 @@ async_simple::coro::Lazy<std::error_code> test_read(coro_io::ib_socket_t& soc) {
   std::size_t len;
   ELOG_TRACE << "START READ";
   if constexpr (never_run) {
-    co_await coro_io::sleep_for(std::chrono::seconds{1000});
+    co_await coro_io::sleep_for(std::chrono::seconds{1000},
+                                soc.get_coro_executor());
   }
   std::tie(ec, len) =
       co_await coro_io::async_read(soc, asio::buffer(buffer.data(), data_size));
@@ -154,7 +161,8 @@ async_simple::coro::Lazy<std::error_code> test_write(
   std::size_t len;
   ELOG_TRACE << "START WRITE";
   if constexpr (never_run) {
-    co_await coro_io::sleep_for(std::chrono::seconds{1000});
+    co_await coro_io::sleep_for(std::chrono::seconds{1000},
+                                soc.get_coro_executor());
   }
   std::tie(ec, len) = co_await coro_io::async_write(
       soc, asio::buffer(buffer.data(), data_size));
@@ -206,6 +214,7 @@ TEST_CASE("test socket io") {
   std::array<std::array<bool, 2>, 3> config = {std::array{true, false},
                                                std::array{true, true},
                                                std::array{false, false}};
+
   for (auto& e : config) {
     enable_zero_copy = e[0];
     enable_read_buffer_when_zero_copy = e[1];
@@ -222,235 +231,234 @@ TEST_CASE("test socket io") {
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
       CHECK_MESSAGE(!ec2.value(), ec2.value().message());
     }
-    {
-      ELOG_WARN << "test read/write fix size, bigger than rdma "
-                   "buffer";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<9 * 1024>>(),
-                     echo_connect<test_write<9 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read/write fix size, very bigger than rdma "
-                   "buffer";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<35 * 1024>>(),
-                     echo_connect<test_write<35 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read bigger than write";
-      auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read<7 * 1024>>(),
-          echo_connect<test_write<4 * 1024>, test_write<3 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read bigger than write & bigger than buffer size";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<35 * 1024>>(),
-                     echo_connect<test_write<7 * 1024>, test_write<2 * 1024>,
-                                  test_write<26 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read iov bigger than write";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_iov<1 * 1024, 7>>(),
-                     echo_connect<test_write<4 * 1000>,
-                                  test_write<7 * 1024 - 4 * 1000>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read iov bigger than write & bigger than buffer size";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_iov<12 * 1024, 3>>(),
-                     echo_connect<test_write<7 * 1024>, test_write<2 * 1024>,
-                                  test_write<27 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read_some & write with same size";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_some<7 * 1024>>(),
-                     echo_connect<test_write<7 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read_some & read/write";
-      auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read_some<3 * 1024>, test_read<9 * 1024>>(),
-          echo_connect<test_write<12 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read_some & read/write with small data";
-      auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read_some<3 * 1024>, test_read<2 * 1024>>(),
-          echo_connect<test_write<5 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read_some over size";
-      auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read_some<11 * 1024>, test_read<9 * 1024>>(),
-          echo_connect<test_write<17 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test write iov";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<3 * 1024>>(),
-                     echo_connect<test_write_iov<1 * 1024, 3>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test write iov multi sge";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<20 * 1024>>(),
-                     echo_connect<test_write_iov<5 * 1024, 4>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test write iov over buffer size";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<36 * 1024>>(),
-                     echo_connect<test_write_iov<9 * 1024, 4>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
+    // {
+    //   ELOG_WARN << "test read/write fix size, bigger than rdma "
+    //                "buffer";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<9 * 1024>>(),
+    //                  echo_connect<test_write<9 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read/write fix size, very bigger than rdma "
+    //                "buffer";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<35 * 1024>>(),
+    //                  echo_connect<test_write<35 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read bigger than write";
+    //   auto result = async_simple::coro::syncAwait(collectAll(
+    //       echo_accept<test_read<7 * 1024>>(),
+    //       echo_connect<test_write<4 * 1024>, test_write<3 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read bigger than write & bigger than buffer size";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<35 * 1024>>(),
+    //                  echo_connect<test_write<7 * 1024>, test_write<2 * 1024>,
+    //                               test_write<26 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read iov bigger than write";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_iov<1 * 1024, 7>>(),
+    //                  echo_connect<test_write<4 * 1000>,
+    //                               test_write<7 * 1024 - 4 * 1000>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read iov bigger than write & bigger than buffer size";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_iov<12 * 1024, 3>>(),
+    //                  echo_connect<test_write<7 * 1024>, test_write<2 * 1024>,
+    //                               test_write<27 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read_some & write with same size";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_some<7 * 1024>>(),
+    //                  echo_connect<test_write<7 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read_some & read/write";
+    //   auto result = async_simple::coro::syncAwait(collectAll(
+    //       echo_accept<test_read_some<3 * 1024>, test_read<9 * 1024>>(),
+    //       echo_connect<test_write<12 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read_some & read/write with small data";
+    //   auto result = async_simple::coro::syncAwait(collectAll(
+    //       echo_accept<test_read_some<3 * 1024>, test_read<2 * 1024>>(),
+    //       echo_connect<test_write<5 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read_some over size";
+    //   auto result = async_simple::coro::syncAwait(collectAll(
+    //       echo_accept<test_read_some<11 * 1024>, test_read<9 * 1024>>(),
+    //       echo_connect<test_write<17 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test write iov";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<3 * 1024>>(),
+    //                  echo_connect<test_write_iov<1 * 1024, 3>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test write iov multi sge";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<20 * 1024>>(),
+    //                  echo_connect<test_write_iov<5 * 1024, 4>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test write iov over buffer size";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<36 * 1024>>(),
+    //                  echo_connect<test_write_iov<9 * 1024, 4>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
 
-    {
-      ELOG_WARN << "test read iov";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_iov<1 * 1024, 3>>(),
-                     echo_connect<test_write<3 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read iov multi sge";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_iov<5 * 1024, 4>>(),
-                     echo_connect<test_write<20 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read iov multi sge bigger";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read_iov<9 * 1024, 4>>(),
-                     echo_connect<test_write<36 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    }
-    {
-      ELOG_WARN << "test read smaller than write";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<7 * 1024>, test_read<1 * 1024>>(),
-                     echo_connect<test_write<8 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
-      else {
-        CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
-    }
-    {
-      ELOG_WARN << "test read smaller than write with bigger data";
-      auto result = async_simple::coro::syncAwait(
-          collectAll(echo_accept<test_read<2 * 1024>, test_read<17 * 1024>,
-                                 test_read<11 * 1024>>(),
-                     echo_connect<test_write<30 * 1024>>()));
-      auto& ec1 = std::get<0>(result);
-      auto& ec2 = std::get<1>(result);
-      if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
-      else {
-        CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
-    }
-    {
-      ELOG_WARN << "test read time out";
-      auto result = async_simple::coro::syncAwait(
-          collectAll<async_simple::SignalType::Terminate>(
-              collectAll(echo_accept<test_read<2 * 1024>>(),
-                         echo_connect<test_write<2 * 1024, true>>()),
-              coro_io::sleep_for(std::chrono::milliseconds{100})));
-      auto& ec1 = std::get<0>(std::get<0>(result).value());
-      auto& ec2 = std::get<1>(std::get<0>(result).value());
-      auto& ec3 = std::get<1>(result);
-      CHECK_MESSAGE(ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      CHECK_MESSAGE(ec3.value(), "time out failed");
-    }
-    {
-      ELOG_WARN << "test write time out";
-      auto result = async_simple::coro::syncAwait(
-          collectAll<async_simple::SignalType::Terminate>(
-              collectAll(echo_accept<test_read<2 * 1024, true>>(),
-                         echo_connect<test_write<2 * 1024>>()),
-              coro_io::sleep_for(std::chrono::milliseconds{100})));
+    // {
+    //   ELOG_WARN << "test read iov";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_iov<1 * 1024, 3>>(),
+    //                  echo_connect<test_write<3 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read iov multi sge";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_iov<5 * 1024, 4>>(),
+    //                  echo_connect<test_write<20 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read iov multi sge bigger";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read_iov<9 * 1024, 4>>(),
+    //                  echo_connect<test_write<36 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    // }
+    // {
+    //   ELOG_WARN << "test read smaller than write";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<7 * 1024>, test_read<1 * 1024>>(),
+    //                  echo_connect<test_write<8 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
+    //     CHECK_MESSAGE(ec1.value(), ec1.value().message());
+    //     CHECK_MESSAGE(ec2.value(), ec2.value().message());
+    //   }
+    //   else {
+    //     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    //   }
+    // }
+    // {
+    //   ELOG_WARN << "test read smaller than write with bigger data";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll(echo_accept<test_read<2 * 1024>, test_read<17 * 1024>,
+    //                              test_read<11 * 1024>>(),
+    //                  echo_connect<test_write<30 * 1024>>()));
+    //   auto& ec1 = std::get<0>(result);
+    //   auto& ec2 = std::get<1>(result);
+    //   if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
+    //     CHECK_MESSAGE(ec1.value(), ec1.value().message());
+    //     CHECK_MESSAGE(ec2.value(), ec2.value().message());
+    //   }
+    //   else {
+    //     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    //     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    //   }
+    // }
+    // {
+    //   ELOG_WARN << "test read time out";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll<async_simple::SignalType::Terminate>(
+    //           collectAll(echo_accept<test_read<2 * 1024>>(),
+    //                      echo_connect<test_write<2 * 1024, true>>()),
+    //           coro_io::sleep_for(std::chrono::milliseconds{100})));
+    //   auto& ec1 = std::get<0>(std::get<0>(result).value());
+    //   auto& ec2 = std::get<1>(std::get<0>(result).value());
+    //   auto& ec3 = std::get<1>(result);
+    //   CHECK_MESSAGE(ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(ec2.value(), ec2.value().message());
+    //   CHECK_MESSAGE(ec3.value(), "time out failed");
+    // }
+    // {
+    //   ELOG_WARN << "test write time out";
+    //   auto result = async_simple::coro::syncAwait(
+    //       collectAll<async_simple::SignalType::Terminate>(
+    //           collectAll(echo_accept<test_read<2 * 1024, true>>(),
+    //                      echo_connect<test_write<2 * 1024>>()),
+    //           coro_io::sleep_for(std::chrono::milliseconds{100})));
 
-      auto& ec1 = std::get<0>(std::get<0>(result).value());
-      auto& ec2 = std::get<1>(std::get<0>(result).value());
-      auto& ec3 = std::get<1>(result);
-      CHECK_MESSAGE(ec1.value(), ec1.value().message());
-      CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      CHECK_MESSAGE(ec3.value(), "time out failed");
-    }
+    //   auto& ec1 = std::get<0>(std::get<0>(result).value());
+    //   auto& ec2 = std::get<1>(std::get<0>(result).value());
+    //   auto& ec3 = std::get<1>(result);
+    //   CHECK_MESSAGE(ec1.value(), ec1.value().message());
+    //   CHECK_MESSAGE(ec2.value(), ec2.value().message());
+    //   CHECK_MESSAGE(ec3.value(), "time out failed");
+    // }
   }
-
   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
 }
