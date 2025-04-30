@@ -84,7 +84,7 @@ void regist(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge>& sge_buffer,
               << ",sge.length:" << tmp_sges.back().length;
   }
   if constexpr (io == ib_socket_t::recv) {
-    if (ib_socket.get_config().enable_read_buffer_when_zero_copy &&
+    if (ib_socket.get_config().enable_zero_copy_recv_unknown_size_data &&
         io_size < ib_socket.get_buffer_size()) {
       auto buffer = ib_socket.get_buffer<io>();
       tmp_sges.push_back(ibv_sge{
@@ -139,7 +139,7 @@ bool check_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
   bool is_enable_zero_copy = ib_socket.get_config().enable_zero_copy;
   if constexpr (io == ib_socket_t::recv) {
     if (is_enable_zero_copy &&
-        ib_socket.get_config().enable_read_buffer_when_zero_copy) {
+        ib_socket.get_config().enable_zero_copy_recv_unknown_size_data) {
       if (io_size < ib_socket.get_buffer_size())
         sge_size += 1;
     }
@@ -204,14 +204,13 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
     if (!enable_zero_copy) {
       socket_buffer.length = result.second;
       copy(socket_buffer, sge_list);
-      if (socket_buffer.length > io_size) {
-        ib_socket.set_read_buffer_len(socket_buffer.length - io_size);
+      if (io_size < result.second) {
+        ib_socket.set_read_buffer_len(io_size,result.second - io_size);
       }
     }
-    else if (ib_socket.get_config().enable_read_buffer_when_zero_copy) {
+    else if (ib_socket.get_config().enable_zero_copy_recv_unknown_size_data) {
       if (io_size < result.second) {
-        auto least_len = result.second - io_size;
-        ib_socket.set_read_buffer_len(least_len);
+        ib_socket.set_read_buffer_len(0,result.second - io_size);
       }
     }
   }
@@ -293,7 +292,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
   split_sge_block.reserve(buffer.size());
-  uint32_t max_size = ib_socket.get_buffer_size();
+  uint32_t max_size = ib_socket.get_buffer_size(),max_size_raw=max_size;
   std::size_t io_completed_size = 0;
   std::size_t sge_index = 0;
   std::size_t read_from_buffer_size = consume_buffer(ib_socket, buffer);
@@ -305,6 +304,18 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
   uint32_t now_split_size = 0;
   for (auto& sge : buffer) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
+      if (io_completed_size>0 && max_size_raw==max_size && ib_socket.get_config().enable_zero_copy ) {
+        bool check;
+        if constexpr(io==ib_socket_t::recv) {
+          check=ib_socket.get_config().enable_zero_copy_recv_unknown_size_data;
+        }
+        else{
+          check=ib_socket.get_config().enable_zero_copy_send_unknown_size_data;
+        }
+        if (!check) {
+          max_size = std::max(max_size,ib_socket.get_max_zero_copy_size());
+        }
+      }
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);
       if (split_sge_block.size() &&
@@ -387,11 +398,8 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_read_some(coro_io::ib_socket_t& ib_socket, buffer_t&& buffer) {
-  auto old = ib_socket.get_config().enable_read_buffer_when_zero_copy;
-  ib_socket.get_config().enable_read_buffer_when_zero_copy = true;
   auto result = co_await detail::async_io_split<ib_socket_t::recv>(
       ib_socket, std::forward<buffer_t>(buffer), true);
-  ib_socket.get_config().enable_read_buffer_when_zero_copy = old;
   co_return result;
 }
 

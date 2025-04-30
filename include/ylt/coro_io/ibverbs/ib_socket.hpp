@@ -31,9 +31,11 @@ class ib_socket_t {
  public:
   struct config_t {
     bool enable_zero_copy = true;
-    bool enable_read_buffer_when_zero_copy = true;
+    bool enable_zero_copy_recv_unknown_size_data = true; /*recv data we dont know size ,may add buffer & copy*/
+    bool enable_zero_copy_send_unknown_size_data = true; /*send data that peer dont know data size.*/
     uint32_t cq_size = 1024;
-    std::size_t request_buffer_size = 8 * 1024 * 1024;
+    uint32_t request_buffer_size = 8 * 1024 * 1024;
+    uint32_t max_zero_copy_size = 128 * 1024 * 1024; // zero means disable
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -85,8 +87,9 @@ class ib_socket_t {
   struct ib_socket_info {
     uint8_t gid[16];  // GID
     uint16_t lid;     // LID of the IB port
+    uint32_t max_zero_copy_size;
+    uint32_t buffer_size;  // buffer length
     uint32_t qp_num;  // QP number
-    uint32_t length;  // buffer length
   };
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open();
@@ -197,6 +200,7 @@ class ib_socket_t {
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
+  uint32_t max_zero_copy_size_ = 0;
   coro_io::ExecutorWrapper<>* executor_;
 
  public:
@@ -210,9 +214,9 @@ class ib_socket_t {
     return len;
   }
   std::size_t least_read_buffer_size() { return least_data_.size(); }
-  void set_read_buffer_len(std::size_t read_size) {
-    least_data_ = std::string_view{(char*)state_->buffer_[io_type::recv]->addr,
-                                   read_size};
+  void set_read_buffer_len(std::size_t has_read_size, std::size_t least_size) {
+    least_data_ = std::string_view{(char*)state_->buffer_[io_type::recv]->addr+has_read_size,
+                                   least_size};
   }
   template <io_type io>
   ibv_sge get_buffer() {
@@ -397,7 +401,8 @@ class ib_socket_t {
       ib_socket_t::ib_socket_info peer_info;
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
-      peer_info.length = conf_.request_buffer_size;
+      peer_info.buffer_size = conf_.request_buffer_size;
+      peer_info.max_zero_copy_size = conf_.max_zero_copy_size;
       memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -485,6 +490,7 @@ class ib_socket_t {
     }
   }
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
+  uint32_t get_max_zero_copy_size() const noexcept { return max_zero_copy_size_; }
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return state_->device_; }
@@ -511,9 +517,12 @@ class ib_socket_t {
     ELOGV(INFO, "Remote QP number = %d", peer_info.qp_num);
     ELOGV(INFO, "Remote LID = %d", peer_info.lid);
     ELOGV(INFO, "Remote GID = %d", peer_info.gid);
-    ELOGV(INFO, "Remote Request buffer size = %d", peer_info.length);
+    ELOGV(INFO, "Remote Request buffer size = %d", peer_info.buffer_size);
+    ELOGV(INFO, "Remote max zero copy size = %d", peer_info.max_zero_copy_size);
     buffer_size_ =
-        std::min<uint32_t>(peer_info.length, get_config().request_buffer_size);
+        std::min<uint32_t>(peer_info.buffer_size, get_config().request_buffer_size);
+    max_zero_copy_size_ =
+        std::min<uint32_t>(peer_info.max_zero_copy_size, get_config().max_zero_copy_size);
     ELOGV(INFO, "Final buffer size = %d", buffer_size_);
     try {
       init_qp();
@@ -544,7 +553,7 @@ class ib_socket_t {
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
-      peer_info.length = conf_.request_buffer_size;
+      peer_info.buffer_size = conf_.request_buffer_size;
       memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -567,9 +576,12 @@ class ib_socket_t {
       ELOGV(INFO, "Remote QP number = %d", peer_info.qp_num);
       ELOGV(INFO, "Remote LID = %d", peer_info.lid);
       ELOGV(INFO, "Remote GID = %d", peer_info.gid);
-      ELOGV(INFO, "Remote buffer size = %d", peer_info.length);
-      buffer_size_ = std::min<uint32_t>(peer_info.length,
+      ELOGV(INFO, "Remote buffer size = %d", peer_info.buffer_size);
+      ELOGV(INFO, "Remote max zero copy size = %d", peer_info.max_zero_copy_size);
+      buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
                                         get_config().request_buffer_size);
+      max_zero_copy_size_ =
+        std::min<uint32_t>(peer_info.max_zero_copy_size, get_config().max_zero_copy_size);
       ELOGV(INFO, "Final buffer size = %d", buffer_size_);
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
