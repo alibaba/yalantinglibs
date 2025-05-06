@@ -31,11 +31,13 @@ class ib_socket_t {
  public:
   struct config_t {
     bool enable_zero_copy = true;
-    bool enable_zero_copy_recv_unknown_size_data = true; /*recv data we dont know size ,may add buffer & copy*/
-    bool enable_zero_copy_send_unknown_size_data = true; /*send data that peer dont know data size.*/
+    bool enable_zero_copy_recv_unknown_size_data =
+        true; /*recv data we dont know size ,may add buffer & copy*/
+    bool enable_zero_copy_send_unknown_size_data =
+        true; /*send data that peer dont know data size.*/
     uint32_t cq_size = 1024;
     uint32_t request_buffer_size = 8 * 1024 * 1024;
-    uint32_t max_zero_copy_size = 128 * 1024 * 1024; // zero means disable
+    uint32_t max_zero_copy_size = 128 * 1024 * 1024;  // zero means disable
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -52,7 +54,7 @@ class ib_socket_t {
       : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
-    state_->device_=std::move(device);
+    state_->device_ = std::move(device);
     init(config);
   }
   ib_socket_t(
@@ -62,7 +64,7 @@ class ib_socket_t {
       : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
-    state_->device_=std::move(device);
+    state_->device_ = std::move(device);
     config_t config{};
     init(config);
   }
@@ -75,8 +77,8 @@ class ib_socket_t {
     if (!state_->channel_) [[unlikely]] {
       throw std::system_error(std::make_error_code(std::errc{errno}));
     }
-    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size, NULL,
-                                    state_->channel_.get(), 0));
+    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size,
+                                    NULL, state_->channel_.get(), 0));
     if (!state_->cq_) [[unlikely]] {
       throw std::system_error(std::make_error_code(std::errc{errno}));
     }
@@ -89,7 +91,7 @@ class ib_socket_t {
     uint16_t lid;     // LID of the IB port
     uint32_t max_zero_copy_size;
     uint32_t buffer_size;  // buffer length
-    uint32_t qp_num;  // QP number
+    uint32_t qp_num;       // QP number
   };
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open();
@@ -215,8 +217,9 @@ class ib_socket_t {
   }
   std::size_t least_read_buffer_size() { return least_data_.size(); }
   void set_read_buffer_len(std::size_t has_read_size, std::size_t least_size) {
-    least_data_ = std::string_view{(char*)state_->buffer_[io_type::recv]->addr+has_read_size,
-                                   least_size};
+    least_data_ = std::string_view{
+        (char*)state_->buffer_[io_type::recv]->addr + has_read_size,
+        least_size};
   }
   template <io_type io>
   ibv_sge get_buffer() {
@@ -408,14 +411,15 @@ class ib_socket_t {
       char buffer[sz.size()];
       struct_pack::serialize_to((char*)buffer, sz, peer_info);
       ELOG_INFO << "send qp info to client";
-      auto &soc_ref=*soc_;
+      auto& soc_ref = *soc_;
       async_write(soc_ref, asio::buffer(buffer))
           .start([soc = std::move(soc_), state = state_](auto&& ec) {
             try {
               if (!ec.value().first) {
                 return;
               }
-              ELOG_WARN << "rmda connection failed by exception:" << ec.value().first.message();
+              ELOG_WARN << "rmda connection failed by exception:"
+                        << ec.value().first.message();
             } catch (const std::exception& e) {
               ELOG_WARN << "rmda connection failed by exception:" << e.what();
             }
@@ -490,20 +494,22 @@ class ib_socket_t {
     }
   }
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
-  uint32_t get_max_zero_copy_size() const noexcept { return max_zero_copy_size_; }
+  uint32_t get_max_zero_copy_size() const noexcept {
+    return max_zero_copy_size_;
+  }
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return state_->device_; }
   async_simple::coro::Lazy<std::error_code> accept(
       std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
-    soc_=std::move(soc);
+    soc_ = std::move(soc);
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
     auto [ec2, canceled] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
         async_read(*soc_, asio::buffer(buffer)),
-        coro_io::sleep_for(std::chrono::milliseconds{10000},executor_));
+        coro_io::sleep_for(std::chrono::milliseconds{10000}, executor_));
     if (ec2.value().first) [[unlikely]] {
       co_return std::move(ec2.value().first);
     }
@@ -519,10 +525,10 @@ class ib_socket_t {
     ELOGV(INFO, "Remote GID = %d", peer_info.gid);
     ELOGV(INFO, "Remote Request buffer size = %d", peer_info.buffer_size);
     ELOGV(INFO, "Remote max zero copy size = %d", peer_info.max_zero_copy_size);
-    buffer_size_ =
-        std::min<uint32_t>(peer_info.buffer_size, get_config().request_buffer_size);
-    max_zero_copy_size_ =
-        std::min<uint32_t>(peer_info.max_zero_copy_size, get_config().max_zero_copy_size);
+    buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
+                                      get_config().request_buffer_size);
+    max_zero_copy_size_ = std::min<uint32_t>(peer_info.max_zero_copy_size,
+                                             get_config().max_zero_copy_size);
     ELOGV(INFO, "Final buffer size = %d", buffer_size_);
     try {
       init_qp();
@@ -577,11 +583,12 @@ class ib_socket_t {
       ELOGV(INFO, "Remote LID = %d", peer_info.lid);
       ELOGV(INFO, "Remote GID = %d", peer_info.gid);
       ELOGV(INFO, "Remote buffer size = %d", peer_info.buffer_size);
-      ELOGV(INFO, "Remote max zero copy size = %d", peer_info.max_zero_copy_size);
+      ELOGV(INFO, "Remote max zero copy size = %d",
+            peer_info.max_zero_copy_size);
       buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
                                         get_config().request_buffer_size);
-      max_zero_copy_size_ =
-        std::min<uint32_t>(peer_info.max_zero_copy_size, get_config().max_zero_copy_size);
+      max_zero_copy_size_ = std::min<uint32_t>(peer_info.max_zero_copy_size,
+                                               get_config().max_zero_copy_size);
       ELOGV(INFO, "Final buffer size = %d", buffer_size_);
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
