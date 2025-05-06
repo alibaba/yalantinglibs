@@ -205,12 +205,12 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
       socket_buffer.length = result.second;
       copy(socket_buffer, sge_list);
       if (io_size < result.second) {
-        ib_socket.set_read_buffer_len(io_size,result.second - io_size);
+        ib_socket.set_read_buffer_len(io_size, result.second - io_size);
       }
     }
     else if (ib_socket.get_config().enable_zero_copy_recv_unknown_size_data) {
       if (io_size < result.second) {
-        ib_socket.set_read_buffer_len(0,result.second - io_size);
+        ib_socket.set_read_buffer_len(0, result.second - io_size);
       }
     }
   }
@@ -244,7 +244,7 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
 
 template <typename T>
 inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
-  if constexpr (requires{buffer.data();}) {
+  if constexpr (requires { buffer.data(); }) {
     using pointer_t = decltype(buffer.data());
     if constexpr (std::is_same_v<pointer_t, void*> ||
                   std::is_same_v<pointer_t, char*> ||
@@ -256,9 +256,8 @@ inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
     }
   }
   else {
-    make_sge_impl(sge, std::span<T>{&buffer,1});
+    make_sge_impl(sge, std::span<T>{&buffer, 1});
   }
-  
 }
 
 inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
@@ -292,7 +291,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
   split_sge_block.reserve(buffer.size());
-  uint32_t max_size = ib_socket.get_buffer_size(),max_size_raw=max_size;
+  uint32_t max_size = ib_socket.get_buffer_size(), max_size_raw = max_size;
   std::size_t io_completed_size = 0;
   std::size_t sge_index = 0;
   std::size_t read_from_buffer_size = consume_buffer(ib_socket, buffer);
@@ -304,16 +303,19 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
   uint32_t now_split_size = 0;
   for (auto& sge : buffer) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
-      if (io_completed_size>0 && max_size_raw==max_size && ib_socket.get_config().enable_zero_copy ) {
+      if (io_completed_size > 0 && max_size_raw == max_size &&
+          ib_socket.get_config().enable_zero_copy) {
         bool check;
-        if constexpr(io==ib_socket_t::recv) {
-          check=ib_socket.get_config().enable_zero_copy_recv_unknown_size_data;
+        if constexpr (io == ib_socket_t::recv) {
+          check =
+              ib_socket.get_config().enable_zero_copy_recv_unknown_size_data;
         }
-        else{
-          check=ib_socket.get_config().enable_zero_copy_send_unknown_size_data;
+        else {
+          check =
+              ib_socket.get_config().enable_zero_copy_send_unknown_size_data;
         }
         if (!check) {
-          max_size = std::max(max_size,ib_socket.get_max_zero_copy_size());
+          max_size = std::max(max_size, ib_socket.get_max_zero_copy_size());
         }
       }
       block_size =

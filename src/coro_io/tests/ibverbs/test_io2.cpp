@@ -135,7 +135,7 @@ async_simple::coro::Lazy<std::error_code> test_read(coro_io::ib_socket_t& soc) {
   co_return ec;
 }
 
-template <std::size_t data_size, std::size_t got_size=0>
+template <std::size_t data_size, std::size_t got_size = 0>
 async_simple::coro::Lazy<std::error_code> test_read_some(
     coro_io::ib_socket_t& soc) {
   std::string buffer;
@@ -147,8 +147,8 @@ async_simple::coro::Lazy<std::error_code> test_read_some(
       soc, asio::buffer(buffer.data(), buffer.size()));
   if (!ec) {
     auto sz = std::min<std::size_t>(data_size, soc.get_buffer_size());
-    if (got_size!=0) {
-      sz=got_size;
+    if (got_size != 0) {
+      sz = got_size;
     }
     CHECK(len == sz);
     CHECK(std::string_view{buffer.data(), len} == std::string(sz, 'A'));
@@ -211,9 +211,6 @@ async_simple::coro::Lazy<std::error_code> test_read_iov(
   }
   co_return ec;
 }
-
-
-
 
 TEST_CASE("test socket io") {
   ELOG_INFO << "start echo server & client";
@@ -358,8 +355,9 @@ TEST_CASE("test socket io") {
     {
       ELOG_WARN << "test read_some bigger than write size";
       auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read_some<7 * 1024,3*1024>,test_read<4 * 1024>>(),
-          echo_connect<test_write<3 * 1024>,test_write<4 * 1024>>()));
+          echo_accept<test_read_some<7 * 1024, 3 * 1024>,
+                      test_read<4 * 1024>>(),
+          echo_connect<test_write<3 * 1024>, test_write<4 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -368,7 +366,7 @@ TEST_CASE("test socket io") {
     {
       ELOG_WARN << "test read_some size is >= buffer size";
       auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_read_some<9 * 1024>,test_read<4 * 1024>>(),
+          echo_accept<test_read_some<9 * 1024>, test_read<4 * 1024>>(),
           echo_connect<test_write<12 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
@@ -502,44 +500,43 @@ TEST_CASE("test socket io") {
   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
 }
 
-
-
 async_simple::coro::Lazy<std::error_code> test_rpc_like_recv(
     coro_io::ib_socket_t& soc) {
   std::size_t size;
   std::string body;
   std::error_code ec;
   std::size_t len;
-  soc.get_config().enable_zero_copy_recv_unknown_size_data=true;
-  std::tie(ec, len) = co_await coro_io::async_read(soc, asio::buffer(&size,sizeof(size)));
+  soc.get_config().enable_zero_copy_recv_unknown_size_data = true;
+  std::tie(ec, len) =
+      co_await coro_io::async_read(soc, asio::buffer(&size, sizeof(size)));
   if (ec) {
     co_return ec;
   }
-  CHECK(len==sizeof(size));
-  ELOG_WARN<<"got size:"<<size;
-  struct_pack::detail::resize(body,size);
-  soc.get_config().enable_zero_copy_recv_unknown_size_data=false;
-  std::tie(ec, len) = co_await coro_io::async_read(soc,body);
+  CHECK(len == sizeof(size));
+  ELOG_WARN << "got size:" << size;
+  struct_pack::detail::resize(body, size);
+  soc.get_config().enable_zero_copy_recv_unknown_size_data = false;
+  std::tie(ec, len) = co_await coro_io::async_read(soc, body);
   if (!ec) {
-    CHECK(len==size);
-    CHECK(body==std::string(size,'A'));
+    CHECK(len == size);
+    CHECK(body == std::string(size, 'A'));
   }
   co_return ec;
 }
 
-template<std::size_t body_sz>
+template <std::size_t body_sz>
 async_simple::coro::Lazy<std::error_code> test_rpc_like_send(
     coro_io::ib_socket_t& soc) {
   std::string body;
-  body.resize(body_sz+sizeof(std::size_t),'A');
-  auto sz=body_sz;
-  memcpy(body.data(),&sz,sizeof(sz));
+  body.resize(body_sz + sizeof(std::size_t), 'A');
+  auto sz = body_sz;
+  memcpy(body.data(), &sz, sizeof(sz));
   std::error_code ec;
   std::size_t len;
-  soc.get_config().enable_zero_copy_send_unknown_size_data=false;
-  std::tie(ec, len) = co_await coro_io::async_write(soc,body);
+  soc.get_config().enable_zero_copy_send_unknown_size_data = false;
+  std::tie(ec, len) = co_await coro_io::async_write(soc, body);
   if (!ec) {
-    CHECK(len==body.size());
+    CHECK(len == body.size());
   }
   co_return ec;
 }
@@ -554,49 +551,57 @@ TEST_CASE("test rpc-like io") {
       ELOG_WARN << "test small size";
       enable_zero_copy = e[0];
       enable_read_buffer_when_zero_copy = e[1];
-      auto result = async_simple::coro::syncAwait(collectAll(
-          echo_accept<test_rpc_like_recv>(), echo_connect<test_rpc_like_send<5*1024>>()));
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_rpc_like_recv>(),
+                     echo_connect<test_rpc_like_send<5 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
       CHECK_MESSAGE(!ec1.value(), ec1.value().message());
       CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+      ELOG_WARN << "memory size:"
+                << coro_io::g_ib_buffer_pool()->total_memory();
     }
     // {
     //   ELOG_WARN << "test medium size";
     //   enable_zero_copy = e[0];
     //   enable_read_buffer_when_zero_copy = e[1];
     //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(), echo_connect<test_rpc_like_send<50*1024>>()));
+    //       echo_accept<test_rpc_like_recv>(),
+    //       echo_connect<test_rpc_like_send<50*1024>>()));
     //   auto& ec1 = std::get<0>(result);
     //   auto& ec2 = std::get<1>(result);
     //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    //   ELOG_WARN << "memory size:" <<
+    //   coro_io::g_ib_buffer_pool()->total_memory();
     // }
     // {
     //   ELOG_WARN << "test large size";
     //   enable_zero_copy = e[0];
     //   enable_read_buffer_when_zero_copy = e[1];
     //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(), echo_connect<test_rpc_like_send<10*1024*1024>>()));
+    //       echo_accept<test_rpc_like_recv>(),
+    //       echo_connect<test_rpc_like_send<10*1024*1024>>()));
     //   auto& ec1 = std::get<0>(result);
     //   auto& ec2 = std::get<1>(result);
     //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    //   ELOG_WARN << "memory size:" <<
+    //   coro_io::g_ib_buffer_pool()->total_memory();
     // }
     // {
     //   ELOG_WARN << "test very large size";
     //   enable_zero_copy = e[0];
     //   enable_read_buffer_when_zero_copy = e[1];
     //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(), echo_connect<test_rpc_like_send<300*1024*1024>>()));
+    //       echo_accept<test_rpc_like_recv>(),
+    //       echo_connect<test_rpc_like_send<300*1024*1024>>()));
     //   auto& ec1 = std::get<0>(result);
     //   auto& ec2 = std::get<1>(result);
     //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    //   ELOG_WARN << "memory size:" <<
+    //   coro_io::g_ib_buffer_pool()->total_memory();
     // }
   }
 }
