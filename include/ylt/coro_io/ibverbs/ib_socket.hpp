@@ -475,24 +475,27 @@ class ib_socket_t {
     }
   }
 
-  template <io_type io>
-  void async_io(std::span<ibv_sge> buffer, callback_t&& cb) {
-    std::error_code ec;
-    if constexpr (io == recv) {
-      ELOG_DEBUG << "POST RECV";
-      ec = post_recv(buffer, std::move(cb));
-    }
-    else {
-      ELOG_DEBUG << "POST SEND";
-      ec = post_send(buffer, std::move(cb));
-    }
-    if (ec) [[unlikely]] {
-      asio::dispatch(executor_->get_asio_executor(),
-                     [state = state_, ec, cb = std::move(cb)]() mutable {
-                       resume(std::pair{ec, std::size_t{0}}, cb);
-                     });
+  void async_post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
+    ELOG_DEBUG << "POST RECV";
+    if (auto ec = post_recv(buffer, std::move(cb)); ec) [[unlikely]] {
+      safe_resume(ec, std::move(cb));
     }
   }
+
+  void async_post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
+    ELOG_DEBUG << "POST SEND";
+    if (auto ec = post_send(buffer, std::move(cb)); ec) [[unlikely]] {
+      safe_resume(ec, std::move(cb));
+    }
+  }
+
+  void safe_resume(std::error_code ec, callback_t&& cb) {
+    asio::dispatch(executor_->get_asio_executor(),
+                   [ec, cb = std::move(cb)]() mutable {
+                     resume(std::pair{ec, std::size_t{0}}, cb);
+                   });
+  }
+
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
   uint32_t get_max_zero_copy_size() const noexcept {
     return max_zero_copy_size_;

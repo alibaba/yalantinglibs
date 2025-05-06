@@ -57,6 +57,8 @@ struct ib_buffer_t {
     auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
     ELOG_INFO << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
     if (mr != nullptr) [[unlikely]] {
+      ELOG_INFO << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
+                << ", sge.length: " << mr->length;
       return ib_buffer_t{mr, std::move(dev)};
     }
     else {
