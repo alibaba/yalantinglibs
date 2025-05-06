@@ -239,24 +239,19 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
       }
     }
   }
-  return;
 }
 
 template <typename T>
 inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
-  if constexpr (requires { buffer.data(); }) {
-    using pointer_t = decltype(buffer.data());
-    if constexpr (std::is_same_v<pointer_t, void*> ||
-                  std::is_same_v<pointer_t, char*> ||
-                  std::is_same_v<pointer_t, const char*>) {
-      make_sge_impl(sge, std::span{&buffer, 1});
-    }
-    else {
-      make_sge_impl(sge, std::span<typename T::value_type>{buffer});
-    }
+  using pointer_t = decltype(buffer.data());
+  if constexpr (std::is_same_v<pointer_t, void*> ||
+                std::is_same_v<pointer_t, char*> ||
+                std::is_same_v<pointer_t, const char*>) {
+    make_sge_impl(sge, std::span{&buffer, 1});
   }
   else {
-    make_sge_impl(sge, std::span<T>{&buffer, 1});
+    // multiple buffers
+    make_sge_impl(sge, std::span<typename T::value_type>{buffer});
   }
 }
 
@@ -280,22 +275,21 @@ inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
   }
 }
 
-template <coro_io::ib_socket_t::io_type io, typename buffer_t>
+template <coro_io::ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
+async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
-  std::vector<ibv_sge> buffer_vec0, split_sge_block;
-  make_sge(buffer_vec0, raw_buffer);
-  std::span<ibv_sge> buffer = buffer_vec0;
+  std::vector<ibv_sge> sge_list;
+  make_sge(sge_list, raw_buffer);
+  std::span<ibv_sge> buffer = sge_list;
   if (buffer.size() == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
+
+  std::vector<ibv_sge> split_sge_block;
   split_sge_block.reserve(buffer.size());
-  uint32_t max_size = ib_socket.get_buffer_size(), max_size_raw = max_size;
-  std::size_t io_completed_size = 0;
-  std::size_t sge_index = 0;
-  std::size_t read_from_buffer_size = consume_buffer(ib_socket, buffer);
-  io_completed_size = read_from_buffer_size;
+  uint32_t max_size = ib_socket.get_buffer_size();
+  std::size_t io_completed_size = consume_buffer(ib_socket, buffer);
   if (buffer.empty()) {
     co_return std::pair{std::error_code{}, io_completed_size};
   }
@@ -303,8 +297,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, buffer_t&& raw_buffer,
   uint32_t now_split_size = 0;
   for (auto& sge : buffer) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
-      if (io_completed_size > 0 && max_size_raw == max_size &&
-          ib_socket.get_config().enable_zero_copy) {
+      if (io_completed_size > 0 && ib_socket.get_config().enable_zero_copy) {
         bool check;
         if constexpr (io == ib_socket_t::recv) {
           check =
