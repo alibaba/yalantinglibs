@@ -373,7 +373,7 @@ class ib_socket_t {
     listen_event(state_).start([](auto&& ec) {
     });
   }
-  std::error_code post_recv(std::span<ibv_sge> sge, callback_t&& handler) {
+  std::error_code post_recv_impl(std::span<ibv_sge> sge, callback_t&& handler) {
     ibv_recv_wr rr;
     rr.next = NULL;
 
@@ -431,7 +431,7 @@ class ib_socket_t {
     ELOG_DEBUG << "ibv post recv ok";
     return {};
   }
-  std::error_code post_send(std::span<ibv_sge> sge, callback_t&& handler) {
+  std::error_code post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
 
@@ -475,16 +475,16 @@ class ib_socket_t {
     }
   }
 
-  void async_post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
+  void post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
     ELOG_DEBUG << "POST RECV";
-    if (auto ec = post_recv(buffer, std::move(cb)); ec) [[unlikely]] {
+    if (auto ec = post_recv_impl(buffer, std::move(cb)); ec) [[unlikely]] {
       safe_resume(ec, std::move(cb));
     }
   }
 
-  void async_post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
+  void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
     ELOG_DEBUG << "POST SEND";
-    if (auto ec = post_send(buffer, std::move(cb)); ec) [[unlikely]] {
+    if (auto ec = post_send_impl(buffer, std::move(cb)); ec) [[unlikely]] {
       safe_resume(ec, std::move(cb));
     }
   }
