@@ -143,6 +143,7 @@ inline std::size_t copy(std::span<ibv_sge> from, ibv_sge to) {
   }
   return transfer_total;
 }
+
 inline void copy(ibv_sge from, std::span<ibv_sge> to) {
   std::size_t transfer_total = 0;
   for (auto& sge : to) {
@@ -152,8 +153,9 @@ inline void copy(ibv_sge from, std::span<ibv_sge> to) {
   return;
 }
 
-bool check_recv_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
-                                 std::size_t sge_size, std::size_t io_size) {
+inline bool check_recv_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
+                                        std::size_t sge_size,
+                                        std::size_t io_size) {
   bool is_enable_zero_copy = ib_socket.get_config().enable_zero_copy;
   if (is_enable_zero_copy &&
       ib_socket.get_config().enable_zero_copy_recv_unknown_size_data) {
@@ -168,8 +170,8 @@ bool check_recv_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
   return is_enable_zero_copy;
 }
 
-bool check_send_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
-                                 std::size_t sge_size) {
+inline bool check_send_enable_zero_copy(coro_io::ib_socket_t& ib_socket,
+                                        std::size_t sge_size) {
   if (sge_size > ib_socket.get_config().cap.max_send_sge) {
     return false;
   }
@@ -333,7 +335,24 @@ inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
   }
 }
 
-template <coro_io::ib_socket_t::io_type io, typename Buffer>
+template <ib_socket_t::io_type io>
+void update_max_size(coro_io::ib_socket_t& ib_socket, size_t io_completed_size,
+                     uint32_t& max_size) {
+  if (io_completed_size > 0 && ib_socket.get_config().enable_zero_copy) {
+    bool check;
+    if constexpr (io == ib_socket_t::recv) {
+      check = ib_socket.get_config().enable_zero_copy_recv_unknown_size_data;
+    }
+    else {
+      check = ib_socket.get_config().enable_zero_copy_send_unknown_size_data;
+    }
+    if (!check) {
+      max_size = std::max(max_size, ib_socket.get_max_zero_copy_size());
+    }
+  }
+}
+
+template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
@@ -351,26 +370,16 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   if (buffer.empty()) {
     co_return std::pair{std::error_code{}, io_completed_size};
   }
+
   std::size_t block_size;
   uint32_t now_split_size = 0;
   for (auto& sge : buffer) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
-      if (io_completed_size > 0 && ib_socket.get_config().enable_zero_copy) {
-        bool check;
-        if constexpr (io == ib_socket_t::recv) {
-          check =
-              ib_socket.get_config().enable_zero_copy_recv_unknown_size_data;
-        }
-        else {
-          check =
-              ib_socket.get_config().enable_zero_copy_send_unknown_size_data;
-        }
-        if (!check) {
-          max_size = std::max(max_size, ib_socket.get_max_zero_copy_size());
-        }
-      }
+      update_max_size<io>(ib_socket, io_completed_size, max_size);
+
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);
+
       if (split_sge_block.size() &&
           split_sge_block.back().addr + split_sge_block.back().length ==
               sge.addr + i &&
@@ -381,6 +390,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         split_sge_block.push_back(
             ibv_sge{sge.addr + i, (uint32_t)block_size, sge.lkey});
       }
+
       now_split_size += block_size;
       if (now_split_size == max_size) {
         std::error_code ec;
@@ -399,14 +409,17 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         if (ec) {
           co_return std::pair{ec, io_completed_size};
         }
-        else if (len == 0 || len > now_split_size) [[unlikely]] {
+
+        if (len == 0 || len > now_split_size) [[unlikely]] {
           ELOG_ERROR << "read size error, it shouldn't be:" << len;
           co_return std::pair{std::make_error_code(std::errc::io_error),
                               io_completed_size};
         }
-        else if (read_some) {
+
+        if (read_some) {
           co_return std::pair{ec, io_completed_size};
         }
+
         if (len < now_split_size) [[unlikely]] {
           reset_buffer(split_sge_block, len);
         }
@@ -417,6 +430,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       }
     }
   }
+
   std::error_code ec;
   std::size_t len = 0;
   while (now_split_size > 0) {
@@ -435,12 +449,15 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     if (ec) {
       co_return std::pair{ec, io_completed_size};
     }
-    else if (len == 0 || len > now_split_size) [[unlikely]] {
-      ELOG_ERROR << "read size error, it shouldn't be:" << len;
+
+    if (len == 0 || len > now_split_size) [[unlikely]] {
+      ELOG_ERROR << ((io == ib_socket_t::io_type::recv) ? "recv " : "send")
+                 << "size error, it shouldn't be:" << len;
       co_return std::pair{std::make_error_code(std::errc::io_error),
                           io_completed_size};
     }
-    else if (read_some) {
+
+    if (read_some) {
       co_return std::pair{ec, io_completed_size};
     }
     now_split_size -= len;
