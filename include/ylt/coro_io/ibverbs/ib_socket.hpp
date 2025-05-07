@@ -26,6 +26,115 @@
 #include "ylt/struct_pack.hpp"
 
 namespace coro_io {
+using callback_t = std::function<void(std::pair<std::error_code, std::size_t>)>;
+inline void resume(std::pair<std::error_code, std::size_t>&& arg,
+                   callback_t& handle) {
+  ELOG_DEBUG << "resume callback:" << &handle;
+  if (handle) [[likely]] {
+    ELOG_DEBUG << "resuming:" << &handle;
+    auto handle_tmp = std::move(handle);
+    handle_tmp(std::move(arg));
+    ELOG_DEBUG << "resume over,clear cb:" << &handle;
+  }
+  else {
+    ELOG_DEBUG << "resume empty";
+  }
+}
+
+struct shared_state_t {
+  std::shared_ptr<ib_device_t> device_;
+  std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
+  std::unique_ptr<ibv_cq, ib_deleter> cq_;
+  std::unique_ptr<ibv_qp, ib_deleter> qp_;
+  std::unique_ptr<asio::posix::stream_descriptor> fd_;
+  std::atomic<bool> has_close_ = 0;
+  callback_t recv_cb_;
+  callback_t send_cb_;
+  ib_buffer_t buffer_[2];
+
+  void cancel() {
+    if (fd_) {
+      std::error_code ec;
+      fd_->cancel(ec);
+    }
+  }
+
+  void close(std::error_code& ec) {
+    auto has_close = has_close_.exchange(true);
+    if (!has_close) {
+      if (qp_) {
+        ibv_qp_attr attr;
+        memset(&attr, 0, sizeof(attr));
+        attr.qp_state = IBV_QPS_RESET;
+
+        int ret = ibv_modify_qp(qp_.get(), &attr, IBV_QP_STATE);
+        if (ret) {
+          ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
+                     << std::make_error_code(std::errc{ret}).message();
+        }
+        qp_ = nullptr;
+        cq_ = nullptr;
+        channel_ = nullptr;
+      }
+      std::move(buffer_[0]).collect();
+      std::move(buffer_[1]).collect();
+      if (fd_) {
+        fd_->cancel(ec);
+        if (ec)
+          return;
+        fd_->close(ec);
+      }
+    }
+  }
+
+  std::error_code poll_completion() {
+    ELOG_DEBUG << "IO EVENT COMMING";
+    void* ev_ctx;
+    auto cq = cq_.get();
+    ELOG_DEBUG << "get_cq_event";
+    int r = ibv_get_cq_event(channel_.get(), &cq, &ev_ctx);
+    // assert(r >= 0);
+    std::error_code ec;
+    if (r) {
+      ELOG_ERROR << std::make_error_code(std::errc{r}).message();
+      return std::make_error_code(std::errc{r});
+    }
+    ELOG_DEBUG << "ack_cq_events";
+    ibv_ack_cq_events(cq, 1);
+    r = ibv_req_notify_cq(cq, 0);
+    if (r) {
+      ELOG_ERROR << std::make_error_code(std::errc{r}).message();
+      return std::make_error_code(std::errc{r});
+    }
+    ELOG_DEBUG << "ibv_poll_cq";
+    struct ibv_wc wc;
+    int ne = 0;
+    while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
+      if (ne < 0) {
+        ELOGV(ERROR, "poll CQ failed %d", ne);
+        return std::make_error_code(std::errc::io_error);
+      }
+      if (ne > 0) {
+        ELOGV(DEBUG, "Completion was found in CQ with status %d", wc.status);
+      }
+
+      ec = make_error_code(wc.status);
+      if (wc.status != IBV_WC_SUCCESS) {
+        ELOGV(ERROR, "rdma failed with error code:%d", wc.status);
+      }
+      else {
+        ELOG_DEBUG << "ready resume: id:" << (callback_t*)wc.wr_id
+                   << ",len:" << wc.byte_len;
+        resume(std::pair{ec, (std::size_t)wc.byte_len}, *(callback_t*)wc.wr_id);
+        ELOG_DEBUG << "after resume:" << (callback_t*)wc.wr_id;
+        if (cq_ == nullptr) {
+          break;
+        }
+      }
+    }
+    return ec;
+  }
+};
 
 class ib_socket_t {
  public:
@@ -47,6 +156,16 @@ class ib_socket_t {
                       .max_recv_sge = 1,
                       .max_inline_data = 0};
   };
+
+  enum io_type { recv = 0, send = 1 };
+  struct ib_socket_info {
+    uint8_t gid[16];  // GID
+    uint16_t lid;     // LID of the IB port
+    uint32_t max_zero_copy_size;
+    uint32_t buffer_size;  // buffer length
+    uint32_t qp_num;       // QP number
+  };
+
   ib_socket_t(
       coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,
       const config_t& config,
@@ -68,144 +187,27 @@ class ib_socket_t {
     config_t config{};
     init(config);
   }
+
   ib_socket_t(ib_socket_t&&) = default;
   ib_socket_t& operator=(ib_socket_t&&) = default;
-
- private:
-  void init(const config_t& config) {
-    state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
-    if (!state_->channel_) [[unlikely]] {
-      throw std::system_error(std::make_error_code(std::errc{errno}));
-    }
-    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size,
-                                    NULL, state_->channel_.get(), 0));
-    if (!state_->cq_) [[unlikely]] {
-      throw std::system_error(std::make_error_code(std::errc{errno}));
+  ~ib_socket_t() {
+    auto state = state_;
+    if (state) {
+      asio::dispatch(executor_->get_asio_executor(),
+                     [state = std::move(state)]() {
+                       std::error_code ec;
+                       state->close(ec);
+                     });
     }
   }
 
- public:
-  enum io_type { recv = 0, send = 1 };
-  struct ib_socket_info {
-    uint8_t gid[16];  // GID
-    uint16_t lid;     // LID of the IB port
-    uint32_t max_zero_copy_size;
-    uint32_t buffer_size;  // buffer length
-    uint32_t qp_num;       // QP number
-  };
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open();
   }
   std::shared_ptr<ib_buffer_pool_t> buffer_pool() const noexcept {
     return ib_buffer_pool_;
   }
-  using callback_t =
-      std::function<void(std::pair<std::error_code, std::size_t>)>;
 
- private:
-  struct shared_state_t {
-    std::shared_ptr<ib_device_t> device_;
-    std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
-    std::unique_ptr<ibv_cq, ib_deleter> cq_;
-    std::unique_ptr<ibv_qp, ib_deleter> qp_;
-    std::unique_ptr<asio::posix::stream_descriptor> fd_;
-    std::atomic<bool> has_close_ = 0;
-    callback_t recv_cb_;
-    callback_t send_cb_;
-    ib_buffer_t buffer_[2];
-    void cancel() {
-      if (fd_) {
-        std::error_code ec;
-        fd_->cancel(ec);
-      }
-    }
-    void close(std::error_code& ec) {
-      auto has_close = has_close_.exchange(true);
-      if (!has_close) {
-        if (qp_) {
-          ibv_qp_attr attr;
-          memset(&attr, 0, sizeof(attr));
-          attr.qp_state = IBV_QPS_RESET;
-
-          int ret = ibv_modify_qp(qp_.get(), &attr, IBV_QP_STATE);
-          if (ret) {
-            ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
-                       << std::make_error_code(std::errc{ret}).message();
-          }
-          qp_ = nullptr;
-          cq_ = nullptr;
-          channel_ = nullptr;
-        }
-        std::move(buffer_[0]).collect();
-        std::move(buffer_[1]).collect();
-        if (fd_) {
-          fd_->cancel(ec);
-          if (ec)
-            return;
-          fd_->close(ec);
-        }
-      }
-    }
-    std::error_code poll_completion() {
-      ELOG_DEBUG << "IO EVENT COMMING";
-      void* ev_ctx;
-      auto cq = cq_.get();
-      ELOG_DEBUG << "get_cq_event";
-      int r = ibv_get_cq_event(channel_.get(), &cq, &ev_ctx);
-      // assert(r >= 0);
-      std::error_code ec;
-      if (r) {
-        ELOG_ERROR << std::make_error_code(std::errc{r}).message();
-        return std::make_error_code(std::errc{r});
-      }
-      ELOG_DEBUG << "ack_cq_events";
-      ibv_ack_cq_events(cq, 1);
-      r = ibv_req_notify_cq(cq, 0);
-      if (r) {
-        ELOG_ERROR << std::make_error_code(std::errc{r}).message();
-        return std::make_error_code(std::errc{r});
-      }
-      ELOG_DEBUG << "ibv_poll_cq";
-      struct ibv_wc wc;
-      int ne = 0;
-      while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
-        if (ne < 0) {
-          ELOGV(ERROR, "poll CQ failed %d", ne);
-          return std::make_error_code(std::errc::io_error);
-        }
-        if (ne > 0) {
-          ELOGV(DEBUG, "Completion was found in CQ with status %d", wc.status);
-        }
-
-        ec = make_error_code(wc.status);
-        if (wc.status != IBV_WC_SUCCESS) {
-          ELOGV(ERROR, "rdma failed with error code:%d", wc.status);
-        }
-        else {
-          ELOG_DEBUG << "ready resume: id:" << (callback_t*)wc.wr_id
-                     << ",len:" << wc.byte_len;
-          resume(std::pair{ec, (std::size_t)wc.byte_len},
-                 *(callback_t*)wc.wr_id);
-          ELOG_DEBUG << "after resume:" << (callback_t*)wc.wr_id;
-          if (cq_ == nullptr) {
-            break;
-          }
-        }
-      }
-      return ec;
-    }
-  };
-
-  std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
-  std::string_view least_data_;
-  std::unique_ptr<asio::ip::tcp::socket> soc_;
-  std::shared_ptr<shared_state_t> state_;
-  config_t conf_;
-  uint32_t buffer_size_ = 0;
-  uint32_t max_zero_copy_size_ = 0;
-  coro_io::ExecutorWrapper<>* executor_;
-
- public:
   std::size_t consume(char* dst, std::size_t sz) {
     auto len = std::min(sz, least_data_.size());
     if (len) {
@@ -215,12 +217,14 @@ class ib_socket_t {
     ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
     return len;
   }
+
   std::size_t least_read_buffer_size() { return least_data_.size(); }
   void set_read_buffer_len(std::size_t has_read_size, std::size_t least_size) {
     least_data_ = std::string_view{
         (char*)state_->buffer_[io_type::recv]->addr + has_read_size,
         least_size};
   }
+
   template <io_type io>
   ibv_sge get_buffer() {
     if constexpr (io == io_type::recv) {
@@ -232,247 +236,6 @@ class ib_socket_t {
       state_->buffer_[io] = buffer_pool()->get_buffer();
     }
     return state_->buffer_[io].subview();
-  }
-
- private:
-  void init_qp() {
-    struct ibv_qp_init_attr qp_init_attr;
-    memset(&qp_init_attr, 0, sizeof(qp_init_attr));
-    qp_init_attr.qp_type = conf_.qp_type;
-    qp_init_attr.sq_sig_all = 1;
-    qp_init_attr.send_cq = state_->cq_.get();
-    qp_init_attr.recv_cq = state_->cq_.get();
-    qp_init_attr.cap = conf_.cap;
-    auto qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
-    if (qp == nullptr) {
-      throw std::system_error(std::make_error_code(std::errc{errno}));
-    }
-    state_->qp_.reset(qp);
-  }
-  void modify_qp_to_init() {
-    // modify the QP to init
-    ibv_qp_attr attr;
-    memset(&attr, 0, sizeof(attr));
-    attr.qp_state = IBV_QPS_INIT;
-    attr.port_num = state_->device_->port();
-    attr.pkey_index = 0;
-    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE;
-    int flags =
-        IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
-    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
-      throw std::system_error(std::make_error_code(std::errc{ec}));
-    }
-    ELOGV(INFO, "Modify QP to INIT done!");
-  }
-  void modify_qp_to_rtr(uint32_t remote_qpn, uint16_t dlid, uint8_t* dgid) {
-    ibv_qp_attr attr{};
-    attr.qp_state = IBV_QPS_RTR;
-    attr.path_mtu = IBV_MTU_4096;
-    attr.dest_qp_num = remote_qpn;
-    attr.rq_psn = 0;
-    attr.max_dest_rd_atomic = 1;
-    attr.min_rnr_timer = 25;
-    attr.ah_attr.is_global = 0;
-    attr.ah_attr.dlid = dlid;
-    attr.ah_attr.sl = 0;
-    attr.ah_attr.src_path_bits = 0;
-    attr.ah_attr.port_num = state_->device_->port();
-    if (state_->device_->gid_index() >= 0) {
-      attr.ah_attr.is_global = 1;
-      attr.ah_attr.port_num = 1;
-      memcpy(&attr.ah_attr.grh.dgid, dgid, 16);
-      attr.ah_attr.grh.flow_label = 0;
-      attr.ah_attr.grh.hop_limit = 1;
-      attr.ah_attr.grh.sgid_index = state_->device_->gid_index();
-      attr.ah_attr.grh.traffic_class = 0;
-    }
-    int flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
-                IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
-                IBV_QP_MIN_RNR_TIMER;
-    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
-      throw std::system_error(std::make_error_code(std::errc{ec}));
-    }
-    ELOGV(INFO, "Modify QP to RTR done!");
-  }
-  void modify_qp_to_rts() {
-    ibv_qp_attr attr{};
-    attr.qp_state = IBV_QPS_RTS;
-    attr.timeout = 0x12;  // 18
-    attr.retry_cnt = 6;
-    attr.rnr_retry = 6;
-    attr.sq_psn = 0;
-    attr.max_rd_atomic = 1;
-    int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
-                IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
-    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec != 0) {
-      throw std::system_error(std::make_error_code(std::errc{ec}));
-    }
-    ELOGV(INFO, "Modify QP to RTS done!");
-  }
-  inline static void resume(std::pair<std::error_code, std::size_t>&& arg,
-                            callback_t& handle) {
-    ELOG_DEBUG << "resume callback:" << &handle;
-    if (handle) [[likely]] {
-      ELOG_DEBUG << "resuming:" << &handle;
-      auto handle_tmp = std::move(handle);
-      handle_tmp(std::move(arg));
-      ELOG_DEBUG << "resume over,clear cb:" << &handle;
-    }
-    else {
-      ELOG_DEBUG << "resume empty";
-    }
-  }
-
-  void init_fd() {
-    ELOG_INFO << "state_->channel_->fd:" << state_->channel_->fd;
-
-    int r = ibv_req_notify_cq(state_->cq_.get(), 0);
-    if (r) {
-      throw std::system_error(std::make_error_code(std::errc{errno}));
-    }
-
-    state_->fd_ = std::make_unique<asio::posix::stream_descriptor>(
-        executor_->get_asio_executor(), state_->channel_->fd);
-    ELOG_INFO << "init listen event";
-    auto listen_event = [](std::shared_ptr<shared_state_t> self)
-        -> async_simple::coro::Lazy<void> {
-      std::error_code ec;
-      while (!ec) {
-        coro_io::callback_awaitor<std::error_code> awaitor;
-
-        ELOG_DEBUG << "posix::stream_fd::wait_read now";
-        ELOG_DEBUG << "fd:" << self->fd_->native_handle();
-        ec = co_await awaitor.await_resume([&self](auto handler) {
-          self->fd_->async_wait(
-              asio::posix::stream_descriptor::wait_read,
-              [handler](const std::error_code& ec) mutable {
-                ELOG_DEBUG << "asio awake from posix::stream_fd::wait_read";
-                handler.set_value_then_resume(ec);
-              });
-        });
-        ELOG_DEBUG << "awake from posix::stream_fd::wait_read";
-
-        if (!ec) {
-          ec = self->poll_completion();
-        }
-
-        if (ec) {
-          std::error_code ec_ignore;
-          self->close(ec_ignore);
-          resume(std::pair{ec, std::size_t{0}}, self->recv_cb_);
-          resume(std::pair{ec, std::size_t{0}}, self->send_cb_);
-          break;
-        }
-      }
-      if (ec) {
-        ELOG_INFO << ec.message();
-      }
-    };
-    ELOG_INFO << "start coroutine listener";
-    listen_event(state_).start([](auto&& ec) {
-    });
-  }
-  std::error_code post_recv_impl(std::span<ibv_sge> sge, callback_t&& handler) {
-    ibv_recv_wr rr;
-    rr.next = NULL;
-
-    rr.wr_id = (std::size_t)&state_->recv_cb_;
-    rr.sg_list = sge.data();
-    rr.num_sge = sge.size();
-    for (int i = 0; i < sge.size(); ++i) {
-      ELOG_TRACE << "post recv sge[" << std::to_string(i)
-                 << "].address:" << sge.data()[i].addr
-                 << ",length:" << sge.data()[i].length;
-    }
-    ibv_recv_wr* bad_wr = nullptr;
-    // prepare the receive work request
-    ELOG_DEBUG << "set cb:" << (void*)rr.wr_id;
-    state_->recv_cb_ = std::move(handler);
-    if (state_->has_close_) {
-      return std::make_error_code(std::errc::operation_canceled);
-    }
-
-    // post the receive request to the RQ
-    if (auto ec = ibv_post_recv(state_->qp_.get(), &rr, &bad_wr); ec) {
-      auto error_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "ibv post recv failed: " << error_code.message();
-      return error_code;
-    }
-    if (soc_) [[unlikely]] {
-      ELOG_INFO << "serialize peer_info";
-      ib_socket_t::ib_socket_info peer_info;
-      peer_info.qp_num = state_->qp_->qp_num;
-      peer_info.lid = state_->device_->attr().lid;
-      peer_info.buffer_size = conf_.request_buffer_size;
-      peer_info.max_zero_copy_size = conf_.max_zero_copy_size;
-      memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
-      constexpr auto sz = struct_pack::get_needed_size(peer_info);
-      char buffer[sz.size()];
-      struct_pack::serialize_to((char*)buffer, sz, peer_info);
-      ELOG_INFO << "send qp info to client";
-      auto& soc_ref = *soc_;
-      async_write(soc_ref, asio::buffer(buffer))
-          .start([soc = std::move(soc_), state = state_](auto&& ec) {
-            try {
-              if (!ec.value().first) {
-                return;
-              }
-              ELOG_WARN << "rmda connection failed by exception:"
-                        << ec.value().first.message();
-            } catch (const std::exception& e) {
-              ELOG_WARN << "rmda connection failed by exception:" << e.what();
-            }
-            std::error_code ec_ignore;
-            state->close(ec_ignore);
-          });
-      soc_ = nullptr;
-    }
-    ELOG_DEBUG << "ibv post recv ok";
-    return {};
-  }
-  std::error_code post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
-    ibv_send_wr sr{};
-    ibv_send_wr* bad_wr = nullptr;
-
-    sr.next = NULL;
-    sr.wr_id = (std::size_t)&state_->send_cb_;
-    sr.sg_list = sge.data();
-    sr.num_sge = sge.size();
-    ELOG_TRACE << "post send sge size:" << sge.size();
-    for (int i = 0; i < sge.size(); ++i) {
-      ELOG_TRACE << "post send sge[" << std::to_string(i)
-                 << "].address:" << sge.data()[i].addr
-                 << ",length:" << sge.data()[i].length;
-    }
-    sr.opcode = IBV_WR_SEND;
-    sr.send_flags = IBV_SEND_SIGNALED;
-    // prepare the receive work request
-    ELOG_DEBUG << "set cb:" << (void*)sr.wr_id;
-    state_->send_cb_ = std::move(handler);
-    if (state_->has_close_) {
-      return std::make_error_code(std::errc::operation_canceled);
-    }
-    // post the receive request to the RQ
-    if (auto ec = ibv_post_send(state_->qp_.get(), &sr, &bad_wr); ec) {
-      auto error_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "ibv post send failed: " << error_code.message();
-      return error_code;
-    }
-    ELOG_DEBUG << "ibv post send ok";
-    return {};
-  }
-
- public:
-  ~ib_socket_t() {
-    auto state = state_;
-    if (state) {
-      asio::dispatch(executor_->get_asio_executor(),
-                     [state = std::move(state)]() {
-                       std::error_code ec;
-                       state->close(ec);
-                     });
-    }
   }
 
   void post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
@@ -489,17 +252,11 @@ class ib_socket_t {
     }
   }
 
-  void safe_resume(std::error_code ec, callback_t&& cb) {
-    asio::dispatch(executor_->get_asio_executor(),
-                   [ec, cb = std::move(cb)]() mutable {
-                     resume(std::pair{ec, std::size_t{0}}, cb);
-                   });
-  }
-
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
   uint32_t get_max_zero_copy_size() const noexcept {
     return max_zero_copy_size_;
   }
+
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return state_->device_; }
@@ -612,5 +369,254 @@ class ib_socket_t {
   auto get_executor() const { return executor_->get_asio_executor(); }
   auto get_coro_executor() const { return executor_; }
   auto cancel() const { state_->cancel(); }
+
+ private:
+  void init(const config_t& config) {
+    state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
+    if (!state_->channel_) [[unlikely]] {
+      throw std::system_error(std::make_error_code(std::errc{errno}));
+    }
+    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size,
+                                    NULL, state_->channel_.get(), 0));
+    if (!state_->cq_) [[unlikely]] {
+      throw std::system_error(std::make_error_code(std::errc{errno}));
+    }
+  }
+
+  void init_qp() {
+    struct ibv_qp_init_attr qp_init_attr;
+    memset(&qp_init_attr, 0, sizeof(qp_init_attr));
+    qp_init_attr.qp_type = conf_.qp_type;
+    qp_init_attr.sq_sig_all = 1;
+    qp_init_attr.send_cq = state_->cq_.get();
+    qp_init_attr.recv_cq = state_->cq_.get();
+    qp_init_attr.cap = conf_.cap;
+    auto qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
+    if (qp == nullptr) {
+      throw std::system_error(std::make_error_code(std::errc{errno}));
+    }
+    state_->qp_.reset(qp);
+  }
+
+  void modify_qp_to_init() {
+    // modify the QP to init
+    ibv_qp_attr attr;
+    memset(&attr, 0, sizeof(attr));
+    attr.qp_state = IBV_QPS_INIT;
+    attr.port_num = state_->device_->port();
+    attr.pkey_index = 0;
+    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                           IBV_ACCESS_REMOTE_WRITE;
+    int flags =
+        IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
+      throw std::system_error(std::make_error_code(std::errc{ec}));
+    }
+    ELOGV(INFO, "Modify QP to INIT done!");
+  }
+
+  void modify_qp_to_rtr(uint32_t remote_qpn, uint16_t dlid, uint8_t* dgid) {
+    ibv_qp_attr attr{};
+    attr.qp_state = IBV_QPS_RTR;
+    attr.path_mtu = IBV_MTU_4096;
+    attr.dest_qp_num = remote_qpn;
+    attr.rq_psn = 0;
+    attr.max_dest_rd_atomic = 1;
+    attr.min_rnr_timer = 25;
+    attr.ah_attr.is_global = 0;
+    attr.ah_attr.dlid = dlid;
+    attr.ah_attr.sl = 0;
+    attr.ah_attr.src_path_bits = 0;
+    attr.ah_attr.port_num = state_->device_->port();
+    if (state_->device_->gid_index() >= 0) {
+      attr.ah_attr.is_global = 1;
+      attr.ah_attr.port_num = 1;
+      memcpy(&attr.ah_attr.grh.dgid, dgid, 16);
+      attr.ah_attr.grh.flow_label = 0;
+      attr.ah_attr.grh.hop_limit = 1;
+      attr.ah_attr.grh.sgid_index = state_->device_->gid_index();
+      attr.ah_attr.grh.traffic_class = 0;
+    }
+    int flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
+                IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
+                IBV_QP_MIN_RNR_TIMER;
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
+      throw std::system_error(std::make_error_code(std::errc{ec}));
+    }
+    ELOGV(INFO, "Modify QP to RTR done!");
+  }
+
+  void modify_qp_to_rts() {
+    ibv_qp_attr attr{};
+    attr.qp_state = IBV_QPS_RTS;
+    attr.timeout = 0x12;  // 18
+    attr.retry_cnt = 6;
+    attr.rnr_retry = 6;
+    attr.sq_psn = 0;
+    attr.max_rd_atomic = 1;
+    int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
+                IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
+    if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec != 0) {
+      throw std::system_error(std::make_error_code(std::errc{ec}));
+    }
+    ELOGV(INFO, "Modify QP to RTS done!");
+  }
+
+  void init_fd() {
+    ELOG_INFO << "state_->channel_->fd:" << state_->channel_->fd;
+
+    int r = ibv_req_notify_cq(state_->cq_.get(), 0);
+    if (r) {
+      throw std::system_error(std::make_error_code(std::errc{errno}));
+    }
+
+    state_->fd_ = std::make_unique<asio::posix::stream_descriptor>(
+        executor_->get_asio_executor(), state_->channel_->fd);
+    ELOG_INFO << "init listen event";
+    auto listen_event = [](std::shared_ptr<shared_state_t> self)
+        -> async_simple::coro::Lazy<void> {
+      std::error_code ec;
+      while (!ec) {
+        coro_io::callback_awaitor<std::error_code> awaitor;
+
+        ELOG_DEBUG << "posix::stream_fd::wait_read now";
+        ELOG_DEBUG << "fd:" << self->fd_->native_handle();
+        ec = co_await awaitor.await_resume([&self](auto handler) {
+          self->fd_->async_wait(
+              asio::posix::stream_descriptor::wait_read,
+              [handler](const std::error_code& ec) mutable {
+                ELOG_DEBUG << "asio awake from posix::stream_fd::wait_read";
+                handler.set_value_then_resume(ec);
+              });
+        });
+        ELOG_DEBUG << "awake from posix::stream_fd::wait_read";
+
+        if (!ec) {
+          ec = self->poll_completion();
+        }
+
+        if (ec) {
+          std::error_code ec_ignore;
+          self->close(ec_ignore);
+          resume(std::pair{ec, std::size_t{0}}, self->recv_cb_);
+          resume(std::pair{ec, std::size_t{0}}, self->send_cb_);
+          break;
+        }
+      }
+      if (ec) {
+        ELOG_INFO << ec.message();
+      }
+    };
+    ELOG_INFO << "start coroutine listener";
+    listen_event(state_).start([](auto&& ec) {
+    });
+  }
+
+  std::error_code post_recv_impl(std::span<ibv_sge> sge, callback_t&& handler) {
+    ibv_recv_wr rr;
+    rr.next = NULL;
+
+    rr.wr_id = (std::size_t)&state_->recv_cb_;
+    rr.sg_list = sge.data();
+    rr.num_sge = sge.size();
+    for (int i = 0; i < sge.size(); ++i) {
+      ELOG_TRACE << "post recv sge[" << std::to_string(i)
+                 << "].address:" << sge.data()[i].addr
+                 << ",length:" << sge.data()[i].length;
+    }
+    ibv_recv_wr* bad_wr = nullptr;
+    // prepare the receive work request
+    ELOG_DEBUG << "set cb:" << (void*)rr.wr_id;
+    state_->recv_cb_ = std::move(handler);
+    if (state_->has_close_) {
+      return std::make_error_code(std::errc::operation_canceled);
+    }
+
+    // post the receive request to the RQ
+    if (auto ec = ibv_post_recv(state_->qp_.get(), &rr, &bad_wr); ec) {
+      auto error_code = std::make_error_code(std::errc{ec});
+      ELOG_ERROR << "ibv post recv failed: " << error_code.message();
+      return error_code;
+    }
+    if (soc_) [[unlikely]] {
+      ELOG_INFO << "serialize peer_info";
+      ib_socket_t::ib_socket_info peer_info;
+      peer_info.qp_num = state_->qp_->qp_num;
+      peer_info.lid = state_->device_->attr().lid;
+      peer_info.buffer_size = conf_.request_buffer_size;
+      peer_info.max_zero_copy_size = conf_.max_zero_copy_size;
+      memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
+      constexpr auto sz = struct_pack::get_needed_size(peer_info);
+      char buffer[sz.size()];
+      struct_pack::serialize_to((char*)buffer, sz, peer_info);
+      ELOG_INFO << "send qp info to client";
+      auto& soc_ref = *soc_;
+      async_write(soc_ref, asio::buffer(buffer))
+          .start([soc = std::move(soc_), state = state_](auto&& ec) {
+            try {
+              if (!ec.value().first) {
+                return;
+              }
+              ELOG_WARN << "rmda connection failed by exception:"
+                        << ec.value().first.message();
+            } catch (const std::exception& e) {
+              ELOG_WARN << "rmda connection failed by exception:" << e.what();
+            }
+            std::error_code ec_ignore;
+            state->close(ec_ignore);
+          });
+      soc_ = nullptr;
+    }
+    ELOG_DEBUG << "ibv post recv ok";
+    return {};
+  }
+
+  std::error_code post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
+    ibv_send_wr sr{};
+    ibv_send_wr* bad_wr = nullptr;
+
+    sr.next = NULL;
+    sr.wr_id = (std::size_t)&state_->send_cb_;
+    sr.sg_list = sge.data();
+    sr.num_sge = sge.size();
+    ELOG_TRACE << "post send sge size:" << sge.size();
+    for (int i = 0; i < sge.size(); ++i) {
+      ELOG_TRACE << "post send sge[" << std::to_string(i)
+                 << "].address:" << sge.data()[i].addr
+                 << ",length:" << sge.data()[i].length;
+    }
+    sr.opcode = IBV_WR_SEND;
+    sr.send_flags = IBV_SEND_SIGNALED;
+    // prepare the receive work request
+    ELOG_DEBUG << "set cb:" << (void*)sr.wr_id;
+    state_->send_cb_ = std::move(handler);
+    if (state_->has_close_) {
+      return std::make_error_code(std::errc::operation_canceled);
+    }
+    // post the receive request to the RQ
+    if (auto ec = ibv_post_send(state_->qp_.get(), &sr, &bad_wr); ec) {
+      auto error_code = std::make_error_code(std::errc{ec});
+      ELOG_ERROR << "ibv post send failed: " << error_code.message();
+      return error_code;
+    }
+    ELOG_DEBUG << "ibv post send ok";
+    return {};
+  }
+
+  void safe_resume(std::error_code ec, callback_t&& cb) {
+    asio::dispatch(executor_->get_asio_executor(),
+                   [ec, cb = std::move(cb)]() mutable {
+                     resume(std::pair{ec, std::size_t{0}}, cb);
+                   });
+  }
+
+  std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
+  std::string_view least_data_;
+  std::unique_ptr<asio::ip::tcp::socket> soc_;
+  std::shared_ptr<shared_state_t> state_;
+  config_t conf_;
+  uint32_t buffer_size_ = 0;
+  uint32_t max_zero_copy_size_ = 0;
+  coro_io::ExecutorWrapper<>* executor_;
 };
 }  // namespace coro_io
