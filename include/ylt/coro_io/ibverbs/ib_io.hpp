@@ -358,22 +358,22 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
   std::vector<ibv_sge> sge_list;
   make_sge(sge_list, raw_buffer);
-  std::span<ibv_sge> buffer = sge_list;
-  if (buffer.size() == 0) [[unlikely]] {
+  std::span<ibv_sge> sge_span = sge_list;
+  if (sge_span.size() == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
 
   std::vector<ibv_sge> split_sge_block;
-  split_sge_block.reserve(buffer.size());
+  split_sge_block.reserve(sge_span.size());
   uint32_t max_size = ib_socket.get_buffer_size();
-  std::size_t io_completed_size = consume_buffer(ib_socket, buffer);
-  if (buffer.empty()) {
+  std::size_t io_completed_size = consume_buffer(ib_socket, sge_span);
+  if (sge_span.empty()) {
     co_return std::pair{std::error_code{}, io_completed_size};
   }
 
   std::size_t block_size;
   uint32_t now_split_size = 0;
-  for (auto& sge : buffer) {
+  for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       update_max_size<io>(ib_socket, io_completed_size, max_size);
 
