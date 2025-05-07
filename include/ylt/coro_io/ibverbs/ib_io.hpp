@@ -202,7 +202,7 @@ async_recv_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
   auto result =
       co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
           [&](auto&& cb) {
-            ib_socket.async_post_recv(io_buffer, std::move(cb));
+            ib_socket.post_recv(io_buffer, std::move(cb));
           },
           ib_socket);
   if (result.first) [[unlikely]] {
@@ -260,7 +260,7 @@ async_send_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
   auto result =
       co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
           [&](auto&& cb) {
-            ib_socket.async_post_send(io_buffer, std::move(cb));
+            ib_socket.post_send(io_buffer, std::move(cb));
           },
           ib_socket);
   if (result.first) [[unlikely]] {
@@ -393,8 +393,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
           std::tie(ec, len) = co_await async_send_impl(
               ib_socket, split_sge_block, now_split_size);
         }
-        // std::tie(ec, len) = co_await async_io_impl<io>(
-        //     ib_socket, split_sge_block, now_split_size);
+
         io_completed_size += len;
         ELOG_TRACE << "has completed size:" << io_completed_size;
         if (ec) {
@@ -430,9 +429,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       std::tie(ec, len) =
           co_await async_send_impl(ib_socket, split_sge_block, now_split_size);
     }
-    // std::tie(ec, len) =
-    //     co_await async_io_impl<io>(ib_socket, split_sge_block,
-    //     now_split_size);
+
     io_completed_size += len;
     ELOG_TRACE << "has completed size:" << io_completed_size;
     if (ec) {
