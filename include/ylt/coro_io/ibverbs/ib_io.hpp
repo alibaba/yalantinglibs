@@ -211,11 +211,6 @@ async_recv_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
     co_return std::pair{result.first, std::min(result.second, io_size)};
   }
 
-  if (result.second > ib_socket.get_buffer_size())
-      [[unlikely]] {  // it should never happen
-    co_return std::pair{std::make_error_code(std::errc::io_error), 0};
-  }
-
   if (!enable_zero_copy) {
     socket_buffer.length = result.second;
     copy(socket_buffer, sge_list);
@@ -269,11 +264,6 @@ async_send_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
     co_return std::pair{result.first, std::min(result.second, io_size)};
   }
 
-  if (result.second > ib_socket.get_buffer_size())
-      [[unlikely]] {  // it should never happen
-    co_return std::pair{std::make_error_code(std::errc::io_error), 0};
-  }
-
   co_return std::pair{result.first, std::min(result.second, io_size)};
 }
 
@@ -303,15 +293,20 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
 
 template <typename T>
 inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
-  using pointer_t = decltype(buffer.data());
-  if constexpr (std::is_same_v<pointer_t, void*> ||
-                std::is_same_v<pointer_t, char*> ||
-                std::is_same_v<pointer_t, const char*>) {
-    make_sge_impl(sge, std::span{&buffer, 1});
+  if constexpr (requires { buffer.data(); }) {
+    using pointer_t = decltype(buffer.data());
+    if constexpr (std::is_same_v<pointer_t, void*> ||
+                  std::is_same_v<pointer_t, char*> ||
+                  std::is_same_v<pointer_t, const char*>) {
+      make_sge_impl(sge, std::span{&buffer, 1});
+    }
+    else {
+      // multiple buffers
+      make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+    }
   }
   else {
-    // multiple buffers
-    make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+    make_sge_impl(sge, std::span<T>{&buffer, 1});
   }
 }
 
@@ -371,11 +366,26 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     co_return std::pair{std::error_code{}, io_completed_size};
   }
 
+  if constexpr (io == ib_socket_t::recv) {
+    if (ib_socket.get_config().enable_zero_copy &&
+        !ib_socket.get_config().enable_zero_copy_recv_unknown_size_data) {
+      max_size = std::max(max_size, ib_socket.get_max_zero_copy_size());
+    }
+  }
+
   std::size_t block_size;
   uint32_t now_split_size = 0;
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
-      update_max_size<io>(ib_socket, io_completed_size, max_size);
+      // update_max_size<io>(ib_socket, io_completed_size, max_size);
+      if constexpr (io == ib_socket_t::send) {
+        if (ib_socket.get_config().enable_zero_copy &&
+            ib_socket.get_buffer_size() == max_size && io_completed_size > 0 &&
+            !ib_socket.get_config().enable_zero_copy_send_unknown_size_data) {
+          ELOG_INFO << "max size:" << ib_socket.get_max_zero_copy_size();
+          max_size = std::max(max_size, ib_socket.get_max_zero_copy_size());
+        }
+      }
 
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);

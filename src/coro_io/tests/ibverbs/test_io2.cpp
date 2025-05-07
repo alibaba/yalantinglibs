@@ -66,6 +66,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   soc.get_config().enable_zero_copy = enable_zero_copy;
   soc.get_config().enable_zero_copy_recv_unknown_size_data =
       enable_read_buffer_when_zero_copy;
+  soc.get_config().max_zero_copy_size = 1024 * 1024;
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -94,6 +95,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   soc.get_config().enable_zero_copy = enable_zero_copy;
   soc.get_config().enable_zero_copy_recv_unknown_size_data =
       enable_read_buffer_when_zero_copy;
+  soc.get_config().max_zero_copy_size = 1024 * 1024;
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -544,7 +546,7 @@ async_simple::coro::Lazy<std::error_code> test_rpc_like_send(
 TEST_CASE("test rpc-like io") {
   ELOG_WARN << "test rpc-like io";
   buffer_size = 8 * 1024;
-  std::array<std::array<bool, 2>, 3> config = {std::array{true, false},
+  std::array<std::array<bool, 2>, 2> config = {std::array{true, false},
                                                std::array{false, false}};
   for (auto& e : config) {
     {
@@ -561,47 +563,34 @@ TEST_CASE("test rpc-like io") {
       ELOG_WARN << "memory size:"
                 << coro_io::g_ib_buffer_pool()->total_memory();
     }
-    // {
-    //   ELOG_WARN << "test medium size";
-    //   enable_zero_copy = e[0];
-    //   enable_read_buffer_when_zero_copy = e[1];
-    //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(),
-    //       echo_connect<test_rpc_like_send<50*1024>>()));
-    //   auto& ec1 = std::get<0>(result);
-    //   auto& ec2 = std::get<1>(result);
-    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" <<
-    //   coro_io::g_ib_buffer_pool()->total_memory();
-    // }
-    // {
-    //   ELOG_WARN << "test large size";
-    //   enable_zero_copy = e[0];
-    //   enable_read_buffer_when_zero_copy = e[1];
-    //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(),
-    //       echo_connect<test_rpc_like_send<10*1024*1024>>()));
-    //   auto& ec1 = std::get<0>(result);
-    //   auto& ec2 = std::get<1>(result);
-    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" <<
-    //   coro_io::g_ib_buffer_pool()->total_memory();
-    // }
-    // {
-    //   ELOG_WARN << "test very large size";
-    //   enable_zero_copy = e[0];
-    //   enable_read_buffer_when_zero_copy = e[1];
-    //   auto result = async_simple::coro::syncAwait(collectAll(
-    //       echo_accept<test_rpc_like_recv>(),
-    //       echo_connect<test_rpc_like_send<300*1024*1024>>()));
-    //   auto& ec1 = std::get<0>(result);
-    //   auto& ec2 = std::get<1>(result);
-    //   CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-    //   CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    //   ELOG_WARN << "memory size:" <<
-    //   coro_io::g_ib_buffer_pool()->total_memory();
-    // }
+    {
+      ELOG_WARN << "test medium size";
+      enable_zero_copy = e[0];
+      enable_read_buffer_when_zero_copy = e[1];
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_rpc_like_recv>(),
+                     echo_connect<test_rpc_like_send<50 * 1024>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+      ELOG_WARN << "memory size:"
+                << coro_io::g_ib_buffer_pool()->total_memory();
+    }
+    {
+      ELOG_WARN << "test large size";
+
+      enable_zero_copy = e[0];
+      enable_read_buffer_when_zero_copy = e[1];
+      auto result = async_simple::coro::syncAwait(
+          collectAll(echo_accept<test_rpc_like_recv>(),
+                     echo_connect<test_rpc_like_send<2 * 1024 * 1024 + 10>>()));
+      auto& ec1 = std::get<0>(result);
+      auto& ec2 = std::get<1>(result);
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+      ELOG_WARN << "memory size:"
+                << coro_io::g_ib_buffer_pool()->total_memory();
+    }
   }
 }

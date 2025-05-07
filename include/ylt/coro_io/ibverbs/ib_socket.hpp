@@ -146,7 +146,7 @@ class ib_socket_t {
         true; /*send data that peer dont know data size.*/
     uint32_t cq_size = 1024;
     uint32_t request_buffer_size = 8 * 1024 * 1024;
-    uint32_t max_zero_copy_size = 128 * 1024 * 1024;  // zero means disable
+    uint32_t max_zero_copy_size = 1024 * 1024 * 1024;  // zero means disable
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
@@ -320,6 +320,7 @@ class ib_socket_t {
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
       peer_info.buffer_size = conf_.request_buffer_size;
+      peer_info.max_zero_copy_size = conf_.max_zero_copy_size;
       memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
