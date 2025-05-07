@@ -209,26 +209,26 @@ class ib_socket_t {
   }
 
   std::size_t consume(char* dst, std::size_t sz) {
-    auto len = std::min(sz, least_data_.size());
+    auto len = std::min(sz, remain_data_.size());
     if (len) {
-      memcpy(dst, least_data_.data(), len);
-      least_data_ = least_data_.substr(len);
+      memcpy(dst, remain_data_.data(), len);
+      remain_data_ = remain_data_.substr(len);
     }
     ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
     return len;
   }
 
-  std::size_t least_read_buffer_size() { return least_data_.size(); }
-  void set_read_buffer_len(std::size_t has_read_size, std::size_t least_size) {
-    least_data_ = std::string_view{
+  std::size_t remain_read_buffer_size() { return remain_data_.size(); }
+  void set_read_buffer_len(std::size_t has_read_size, std::size_t remain_size) {
+    remain_data_ = std::string_view{
         (char*)state_->buffer_[io_type::recv]->addr + has_read_size,
-        least_size};
+        remain_size};
   }
 
   template <io_type io>
   ibv_sge get_buffer() {
     if constexpr (io == io_type::recv) {
-      assert(least_read_buffer_size() == 0);
+      assert(remain_read_buffer_size() == 0);
     }
     ELOG_TRACE << "get buffer from client";
     if (!state_->buffer_[io]) {
@@ -611,7 +611,7 @@ class ib_socket_t {
   }
 
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
-  std::string_view least_data_;
+  std::string_view remain_data_;
   std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;

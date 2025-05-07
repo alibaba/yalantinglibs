@@ -118,7 +118,7 @@ template <typename T>
 inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
                                   std::span<T>& sge_buffer) {
   std::size_t transfer_total = 0;
-  if (ib_socket.least_read_buffer_size()) {
+  if (ib_socket.remain_read_buffer_size()) {
     while (sge_buffer.size()) {
       auto length = ib_socket.consume((char*)sge_buffer.front().addr,
                                       sge_buffer.front().length);
