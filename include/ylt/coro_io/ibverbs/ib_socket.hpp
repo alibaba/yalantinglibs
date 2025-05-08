@@ -423,7 +423,7 @@ class ib_socket_t {
     attr.dest_qp_num = remote_qpn;
     attr.rq_psn = 0;
     attr.max_dest_rd_atomic = 1;
-    attr.min_rnr_timer = 25;
+    attr.min_rnr_timer = 10;
     attr.ah_attr.is_global = 0;
     attr.ah_attr.dlid = dlid;
     attr.ah_attr.sl = 0;
@@ -451,8 +451,8 @@ class ib_socket_t {
     ibv_qp_attr attr{};
     attr.qp_state = IBV_QPS_RTS;
     attr.timeout = 0x12;  // 18
-    attr.retry_cnt = 6;
-    attr.rnr_retry = 6;
+    attr.retry_cnt = 0;
+    attr.rnr_retry = 0;
     attr.sq_psn = 0;
     attr.max_rd_atomic = 1;
     int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
