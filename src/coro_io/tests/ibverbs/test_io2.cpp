@@ -27,8 +27,6 @@
 
 std::size_t buffer_size = 8 * 1024 * 1024;
 int concurrency = 10;
-bool enable_zero_copy = false;
-bool enable_read_buffer_when_zero_copy = false;
 std::atomic<int> port;
 
 template <auto... ServerFunction>
@@ -63,10 +61,6 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   ELOG_INFO << "tcp listening port:" << port;
   coro_io::ib_socket_t soc;
   soc.get_config().request_buffer_size = buffer_size;
-  soc.get_config().enable_zero_copy = enable_zero_copy;
-  soc.get_config().enable_zero_copy_recv_unknown_size_data =
-      enable_read_buffer_when_zero_copy;
-  soc.get_config().max_zero_copy_size = 1024 * 1024;
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -92,10 +86,6 @@ template <auto... ClientFunction>
 async_simple::coro::Lazy<std::error_code> echo_connect() {
   coro_io::ib_socket_t soc{};
   soc.get_config().request_buffer_size = buffer_size;
-  soc.get_config().enable_zero_copy = enable_zero_copy;
-  soc.get_config().enable_zero_copy_recv_unknown_size_data =
-      enable_read_buffer_when_zero_copy;
-  soc.get_config().max_zero_copy_size = 1024 * 1024;
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -217,16 +207,6 @@ async_simple::coro::Lazy<std::error_code> test_read_iov(
 TEST_CASE("test socket io") {
   ELOG_INFO << "start echo server & client";
   buffer_size = 8 * 1024;
-  std::array<std::array<bool, 2>, 3> config = {std::array{true, false},
-                                               std::array{true, true},
-                                               std::array{false, false}};
-
-  for (auto& e : config) {
-    enable_zero_copy = e[0];
-    enable_read_buffer_when_zero_copy = e[1];
-    ELOG_WARN << "enable zero copy:" << enable_zero_copy;
-    ELOG_WARN << "enable_read_buffer_when_zero_copy:"
-              << enable_read_buffer_when_zero_copy;
     {
       ELOG_WARN << "test read/write fix size, least than rdma "
                    "buffer";
@@ -319,14 +299,8 @@ TEST_CASE("test socket io") {
           echo_connect<test_write<12 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
-      if (enable_read_buffer_when_zero_copy || !enable_zero_copy) {
-        CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
-      else {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
     }
     {
       ELOG_WARN << "test read_some & read/write with small data";
@@ -335,14 +309,8 @@ TEST_CASE("test socket io") {
           echo_connect<test_write<5 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
-      if (enable_read_buffer_when_zero_copy || !enable_zero_copy) {
-        CHECK_MESSAGE(!ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
-      else {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
+      CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+      CHECK_MESSAGE(!ec2.value(), ec2.value().message());
     }
     {
       ELOG_WARN << "test read_some over buffer size";
@@ -443,14 +411,8 @@ TEST_CASE("test socket io") {
                      echo_connect<test_write<8 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
-      if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
-      else {
         CHECK_MESSAGE(!ec1.value(), ec1.value().message());
         CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
     }
     {
       ELOG_WARN << "test read smaller than write with bigger data";
@@ -460,14 +422,8 @@ TEST_CASE("test socket io") {
                      echo_connect<test_write<30 * 1024>>()));
       auto& ec1 = std::get<0>(result);
       auto& ec2 = std::get<1>(result);
-      if (enable_zero_copy && !enable_read_buffer_when_zero_copy) {
-        CHECK_MESSAGE(ec1.value(), ec1.value().message());
-        CHECK_MESSAGE(ec2.value(), ec2.value().message());
-      }
-      else {
         CHECK_MESSAGE(!ec1.value(), ec1.value().message());
         CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-      }
     }
     {
       ELOG_WARN << "test read time out";
@@ -498,7 +454,6 @@ TEST_CASE("test socket io") {
       CHECK_MESSAGE(ec2.value(), ec2.value().message());
       CHECK_MESSAGE(ec3.value(), "time out failed");
     }
-  }
   ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
 }
 
@@ -508,7 +463,6 @@ async_simple::coro::Lazy<std::error_code> test_rpc_like_recv(
   std::string body;
   std::error_code ec;
   std::size_t len;
-  soc.get_config().enable_zero_copy_recv_unknown_size_data = true;
   std::tie(ec, len) =
       co_await coro_io::async_read(soc, asio::buffer(&size, sizeof(size)));
   if (ec) {
@@ -517,7 +471,6 @@ async_simple::coro::Lazy<std::error_code> test_rpc_like_recv(
   CHECK(len == sizeof(size));
   ELOG_WARN << "got size:" << size;
   struct_pack::detail::resize(body, size);
-  soc.get_config().enable_zero_copy_recv_unknown_size_data = false;
   std::tie(ec, len) = co_await coro_io::async_read(soc, body);
   if (!ec) {
     CHECK(len == size);
@@ -535,7 +488,6 @@ async_simple::coro::Lazy<std::error_code> test_rpc_like_send(
   memcpy(body.data(), &sz, sizeof(sz));
   std::error_code ec;
   std::size_t len;
-  soc.get_config().enable_zero_copy_send_unknown_size_data = false;
   std::tie(ec, len) = co_await coro_io::async_write(soc, body);
   if (!ec) {
     CHECK(len == body.size());
@@ -546,13 +498,8 @@ async_simple::coro::Lazy<std::error_code> test_rpc_like_send(
 TEST_CASE("test rpc-like io") {
   ELOG_WARN << "test rpc-like io";
   buffer_size = 8 * 1024;
-  std::array<std::array<bool, 2>, 2> config = {std::array{true, false},
-                                               std::array{false, false}};
-  for (auto& e : config) {
     {
       ELOG_WARN << "test small size";
-      enable_zero_copy = e[0];
-      enable_read_buffer_when_zero_copy = e[1];
       auto result = async_simple::coro::syncAwait(
           collectAll(echo_accept<test_rpc_like_recv>(),
                      echo_connect<test_rpc_like_send<5 * 1024>>()));
@@ -565,8 +512,6 @@ TEST_CASE("test rpc-like io") {
     }
     {
       ELOG_WARN << "test medium size";
-      enable_zero_copy = e[0];
-      enable_read_buffer_when_zero_copy = e[1];
       auto result = async_simple::coro::syncAwait(
           collectAll(echo_accept<test_rpc_like_recv>(),
                      echo_connect<test_rpc_like_send<50 * 1024>>()));
@@ -579,9 +524,6 @@ TEST_CASE("test rpc-like io") {
     }
     {
       ELOG_WARN << "test large size";
-
-      enable_zero_copy = e[0];
-      enable_read_buffer_when_zero_copy = e[1];
       auto result = async_simple::coro::syncAwait(
           collectAll(echo_accept<test_rpc_like_recv>(),
                      echo_connect<test_rpc_like_send<2 * 1024 * 1024 + 10>>()));
@@ -592,5 +534,4 @@ TEST_CASE("test rpc-like io") {
       ELOG_WARN << "memory size:"
                 << coro_io::g_ib_buffer_pool()->total_memory();
     }
-  }
 }

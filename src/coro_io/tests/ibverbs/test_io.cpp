@@ -31,7 +31,6 @@ struct config_t {
   std::size_t buffer_size = 8 * 1024 * 1024;
   std::size_t request_size = 8 * 1024 * 1024;
   int concurrency = 2;
-  bool enable_zero_copy = false;
   int test_type = 0;
   int enable_log = 0;
   bool enable_server = true;
@@ -60,7 +59,6 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   }
   uint64_t sz = *(uint64_t *)buffer.data();
   buffer.resize(sz);
-  soc.get_config().enable_zero_copy_recv_unknown_size_data = false;
   std::tie(ec, len) =
       co_await coro_io::async_read(soc, std::string_view{buffer});
   if (ec) [[unlikely]] {
@@ -74,7 +72,6 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   auto s_view = std::string_view{&ch, 1};
   while (true) {
     ELOG_DEBUG << "start read from client" << &soc;
-    soc.get_config().enable_zero_copy_recv_unknown_size_data = true;
     auto [r, s] = co_await async_simple::coro::collectAll(
         coro_io::async_read(soc, std::string_view{buffer.data(), 8}),
         coro_io::async_write(soc, s_view));
@@ -91,7 +88,6 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
     }
     uint64_t sz = *(uint64_t *)buffer.data();
     buffer.resize(sz);
-    soc.get_config().enable_zero_copy_recv_unknown_size_data = false;
     auto [ec, len] =
         co_await coro_io::async_read(soc, std::string_view{buffer});
     if (ec) [[unlikely]] {
@@ -176,7 +172,6 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   ELOG_INFO << "tcp listening";
   while (true) {
     coro_io::ib_socket_t soc;
-    soc.get_config().enable_zero_copy = config.enable_zero_copy;
     soc.get_config().request_buffer_size = config.buffer_size;
     auto ec = co_await coro_io::async_accept(acceptor, soc);
 
@@ -205,8 +200,6 @@ async_simple::coro::Lazy<std::error_code> echo_client(
   recv_buffer.resize(1);
   std::string_view recv_view = std::string_view{recv_buffer};
   ELOG_INFO << "start echo";
-  soc.get_config().enable_zero_copy_recv_unknown_size_data = false;
-  soc.get_config().enable_zero_copy_send_unknown_size_data = false;
   while (true) {
     auto [result, time_out] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
@@ -290,7 +283,6 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
 
 async_simple::coro::Lazy<std::error_code> echo_connect() {
   coro_io::ib_socket_t soc{};
-  soc.get_config().enable_zero_copy = config.enable_zero_copy;
   soc.get_config().request_buffer_size = config.buffer_size;
   auto ec = co_await coro_io::async_connect(soc, config.enable_client,
                                             std::to_string(config.port));
