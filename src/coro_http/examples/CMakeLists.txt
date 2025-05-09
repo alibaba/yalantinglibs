@@ -42,20 +42,16 @@ if(ENABLE_pybind11)
   cmake_minimum_required(VERSION 3.14)
   project(MyPybind11Project)
 
-  # 启用 FetchContent
   include(FetchContent)
 
-  # 声明 pybind11 的下载信息
   FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v2.13.6  # 可以替换为你需要的版本
+    GIT_TAG v2.13.6
   )
 
-  # 确保 pybind11 被下载并可用
   FetchContent_MakeAvailable(pybind11)
 
-  # 添加你的 pybind11 模块
   include_directories(${CMAKE_CURRENT_BINARY_DIR}/_deps/pybind11-src/include)
 
   pybind11_add_module(py_example py_example/py_example.cpp)
