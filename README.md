@@ -543,6 +543,28 @@ options:
 ./benchmark_client # [threads = hardware counts] [client_pre_thread = 20] [pipeline_size = 1] [host = 127.0.0.1] [port = 9000] [test_data_path = ./test_data/echo_test] [test_seconds = 30] [warm_up_seconds = 5]
 ```
 
+## cross language support
+### how to use coro_http with python
+See `yalantinglibs/src/coro_http/examples/py_example`
+
+#### build and run py_example
+- Set option `ENABLE_pybind11`(in `yalantinglibs/src/coro_http/examples/CMakeLists.txt`) `ON` and then build `py_example`.
+
+- go to `yalantinglibs/src/coro_http/examples/py_example`
+
+- python3 test.py
+
+### how to use coro_rpc with golang
+See `yalantinglibs/src/coro_rpc/examples/basic_example/go_example`
+
+#### build and run go_example
+- Set option `ENABLE_go`(in `yalantinglibs/src/coro_rpc/examples/base_examples/CMakeLists.txt`) `ON` and then build `coro_rpc`.
+
+- go to `yalantinglibs/src/coro_rpc/examples/base_examples/go_example`
+
+- go build test_rpc.go
+
+- ./test_rpc
 
 ## How to generate document
 

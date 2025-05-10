@@ -465,6 +465,28 @@ struct_json、struct_xml、struct_yaml 由独立子仓库实现： [iguana](http
 ```bash
 ./benchmark_client # [线程数（默认为硬件线程数）] [每线程客户端数（默认为20）] [pipeline大小(默认为1，当设为1时相当于ping-pong模式)] [主机地址（默认为127.0.0.1）] [端口号（默认为9000）] [测试数据文件夹地址（默认为"./test_data/echo_test"] [测试秒数（默认为30）] [热身秒数（默认为5）]
 ```
+## 跨语言支持
+### 如何在python 中使用coro_http_client
+参考 `yalantinglibs/src/coro_http/examples/py_example`
+
+#### 编译和运行 py_example
+- 设置 option `ENABLE_pybind11`(in `yalantinglibs/src/coro_http/examples/CMakeLists.txt`) ON 然后编译 `py_example`.
+
+- 进入到py_example目录: `yalantinglibs/src/coro_http/examples/py_example`
+
+- python3 test.py
+
+### how to use coro_rpc with golang
+参考 `yalantinglibs/src/coro_rpc/examples/basic_example/go_example`
+
+#### 编译和运行 go_example
+- 设置 option `ENABLE_go`(in `yalantinglibs/src/coro_rpc/examples/base_examples/CMakeLists.txt`) ON and then build `coro_rpc`.
+
+- 进入到go_example 目录 `yalantinglibs/src/coro_rpc/examples/base_examples/go_example`
+
+- go build test_rpc.go
+
+- ./test_rpc
 
 ## 如何生成文档
 

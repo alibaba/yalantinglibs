@@ -36,3 +36,28 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows"
     target_link_libraries(coro_http_load_balancer wsock32 ws2_32)
     target_link_libraries(coro_chat_room wsock32 ws2_32)
 endif()
+
+option(ENABLE_pybind11 "Enable pybind11 " OFF)
+if(ENABLE_pybind11)
+  cmake_minimum_required(VERSION 3.14)
+  project(MyPybind11Project)
+
+  include(FetchContent)
+
+  FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.13.6
+  )
+
+  FetchContent_MakeAvailable(pybind11)
+
+  include_directories(${CMAKE_CURRENT_BINARY_DIR}/_deps/pybind11-src/include)
+
+  pybind11_add_module(py_example py_example/py_example.cpp)
+  set_target_properties(py_example PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+  )
+endif()
