@@ -298,8 +298,10 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .directlyStart([](auto&&) {
-            },coro_io::get_global_executor());
+            .directlyStart(
+                [](auto&&) {
+                },
+                coro_io::get_global_executor());
       }
     }
   }
@@ -369,6 +371,13 @@ class client_pool : public std::enable_shared_from_this<
       std::string_view host_name, const pool_config& pool_config = {},
       io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
     return std::make_shared<client_pool>(private_construct_token{}, host_name,
+                                         pool_config, io_context_pool);
+  }
+
+  static std::unique_ptr<client_pool> create_unique(
+      std::string_view host_name, const pool_config& pool_config = {},
+      io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
+    return std::make_unique<client_pool>(private_construct_token{}, host_name,
                                          pool_config, io_context_pool);
   }
 
