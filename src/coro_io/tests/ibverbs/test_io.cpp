@@ -250,7 +250,7 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
         async_simple::SignalType::Terminate>(
         async_simple::coro::collectAll(coro_io::async_read_some(soc, r_view),
                                        coro_io::async_write(soc, s_view)),
-        coro_io::sleep_for(std::chrono::seconds{10}), soc.get_coro_executor());
+        coro_io::sleep_for(std::chrono::seconds{10}));
 
     if (result.hasError() || time_out.hasError()) [[unlikely]] {
       co_return std::make_error_code(std::errc::io_error);
