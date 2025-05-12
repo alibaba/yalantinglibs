@@ -427,6 +427,7 @@ TEST_CASE("test socket io") {
     }
     {
       ELOG_WARN << "test read time out";
+      // TODO: sometimes hang, will fix
       auto result = async_simple::coro::syncAwait(
           collectAll<async_simple::SignalType::Terminate>(
               collectAll(echo_accept<test_read<2 * 1024>>(),
