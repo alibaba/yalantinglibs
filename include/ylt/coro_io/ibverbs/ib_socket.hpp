@@ -234,14 +234,14 @@ class ib_socket_t {
   void post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
     ELOG_DEBUG << "POST RECV";
     if (auto ec = post_recv_impl(buffer, std::move(cb)); ec) [[unlikely]] {
-      resume(std::pair{ec, std::size_t{0}}, state_->send_cb_);
+      safe_resume(ec, std::move(state_->recv_cb_));
     }
   }
 
   void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
     ELOG_DEBUG << "POST SEND";
     if (auto ec = post_send_impl(buffer, std::move(cb)); ec) [[unlikely]] {
-      resume(std::pair{ec, std::size_t{0}}, state_->send_cb_);
+      safe_resume(ec, std::move(state_->send_cb_));
     }
   }
 
@@ -583,6 +583,13 @@ class ib_socket_t {
     }
     ELOG_DEBUG << "ibv post send ok";
     return {};
+  }
+
+  void safe_resume(std::error_code ec, callback_t&& cb) {
+    asio::dispatch(executor_->get_asio_executor(),
+                   [ec, cb = std::move(cb)]() mutable {
+                     resume(std::pair{ec, std::size_t{0}}, cb);
+                   });
   }
 
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
