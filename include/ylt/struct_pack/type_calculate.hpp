@@ -61,7 +61,7 @@ constexpr decltype(auto) get_size_literal() {
          static_cast<char>(size / (127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (1ull * 127 * 127 * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 7>{
@@ -70,8 +70,10 @@ constexpr decltype(auto) get_size_literal() {
          static_cast<char>(size / (127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
          static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (1ull * 127 * 127 * 127 * 127 * 127) % 127 +
+                           1),
+         static_cast<char>(size / (1ull * 127 * 127 * 127 * 127 * 127 * 127) +
+                           129)}};
   }
   else if constexpr (size <
                      1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
@@ -81,10 +83,12 @@ constexpr decltype(auto) get_size_literal() {
         static_cast<char>(size / (127 * 127) % 127 + 1),
         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127 * 127) +
-                          129),
+        static_cast<char>(size / (1ull * 127 * 127 * 127 * 127 * 127) % 127 +
+                          1),
+        static_cast<char>(
+            size / (1ull * 127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(
+            size / (1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127) + 129),
     }};
   }
   else {
