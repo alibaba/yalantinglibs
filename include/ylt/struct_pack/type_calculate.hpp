@@ -37,53 +37,55 @@ constexpr decltype(auto) get_size_literal() {
     return string_literal<char, 3>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
-         static_cast<char>(size / (127 * 127) + 129)}};
+         static_cast<char>(size / (127ull * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127) {
     return string_literal<char, 4>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
-         static_cast<char>(size / (127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (127ull * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 5>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
-         static_cast<char>(size / (127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (127ull * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 6>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
-         static_cast<char>(size / (127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (127ull * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127 * 127) + 129)}};
   }
   else if constexpr (size < 1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 7>{
         {static_cast<char>(size % 127 + 1),
          static_cast<char>(size / 127 % 127 + 1),
-         static_cast<char>(size / (127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-         static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) + 129)}};
+         static_cast<char>(size / (127ull * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127 * 127) % 127 + 1),
+         static_cast<char>(size / (127ull * 127 * 127 * 127 * 127 * 127) +
+                           129)}};
   }
   else if constexpr (size <
                      1ull * 127 * 127 * 127 * 127 * 127 * 127 * 127 * 127) {
     return string_literal<char, 8>{{
         static_cast<char>(size % 127 + 1),
         static_cast<char>(size / 127 % 127 + 1),
-        static_cast<char>(size / (127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127) % 127 + 1),
-        static_cast<char>(size / (127 * 127 * 127 * 127 * 127 * 127 * 127) +
+        static_cast<char>(size / (127ull * 127) % 127 + 1),
+        static_cast<char>(size / (127ull * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127ull * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127ull * 127 * 127 * 127 * 127) % 127 + 1),
+        static_cast<char>(size / (127ull * 127 * 127 * 127 * 127 * 127) % 127 +
+                          1),
+        static_cast<char>(size / (127ull * 127 * 127 * 127 * 127 * 127 * 127) +
                           129),
     }};
   }
