@@ -32,7 +32,7 @@ TEST_CASE("test varadic param") {
   server->register_handler<test_func>();
   auto res = server->async_start();
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
-  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  coro_rpc_client client(*coro_io::get_global_executor());
 
   syncAwait(client.connect("localhost", std::to_string(server->port())));
 

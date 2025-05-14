@@ -47,6 +47,7 @@ struct TesterConfig {
   TesterConfig(TesterConfig &c) {
     enable_heartbeat = c.enable_heartbeat;
     use_ssl = c.use_ssl;
+    use_rdma = c.use_rdma;
     sync_client = c.sync_client;
     use_outer_io_context = c.use_outer_io_context;
     port = c.port;
@@ -54,6 +55,7 @@ struct TesterConfig {
   }
   bool enable_heartbeat;
   bool use_ssl;
+  bool use_rdma;
   bool sync_client;
   bool use_outer_io_context;
   unsigned short port;
@@ -66,6 +68,7 @@ struct TesterConfig {
     os << std::boolalpha;
     os << " enable_heartbeat: " << config.enable_heartbeat << ";"
        << " use_ssl: " << config.use_ssl << ";"
+       << " use_rdma: " << config.use_rdma << ";"
        << " sync_client: " << config.sync_client << ";"
        << " use_outer_io_context: " << config.use_outer_io_context << ";"
        << " port: " << config.port << ";"
@@ -111,16 +114,20 @@ struct ServerTester : TesterConfig {
     test_all();
   }
   virtual void test_all() {
-    test_connect_timeout();
+    if (!use_rdma) {
+      test_connect_timeout();
+    }
     test_function_registered();
     if (sync_client) {
       // only sync_call implement inject behavior
       test_client_send_bad_header();
       test_client_send_bad_magic_num();
       test_client_send_header_length_is_0();
-      test_client_close_socket_after_send_header();
-      test_client_close_socket_after_send_partial_header();
-      test_client_close_socket_after_send_payload();
+      if (!use_rdma) {
+        test_client_close_socket_after_send_header();
+        test_client_close_socket_after_send_partial_header();
+        test_client_close_socket_after_send_payload();
+      }
     }
     test_heartbeat();
     test_call_function_with_long_response_time();
@@ -135,17 +142,23 @@ struct ServerTester : TesterConfig {
     int retry = 4;
     for (int i = 0; i < retry; i++) {
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
-                                                   g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor());
       }
       else {
-        client = std::make_shared<coro_rpc_client>(
-            *coro_io::get_global_executor(), g_client_id++);
+        client =
+            std::make_shared<coro_rpc_client>(*coro_io::get_global_executor());
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+      }
+#endif
+#ifdef YLT_ENABLE_IBV
+      if (use_rdma) {
+        bool ok = client->init_ibv();
+        REQUIRE_MESSAGE(ok == true,
+                        "init ibv fail, please check ibverbs config");
       }
 #endif
       g_action = action;
@@ -353,17 +366,23 @@ struct ServerTester : TesterConfig {
     auto init_client = [this]() {
       std::shared_ptr<coro_rpc_client> client;
       if (use_outer_io_context) {
-        client = std::make_shared<coro_rpc_client>(io_context_.get_executor(),
-                                                   g_client_id++);
+        client = std::make_shared<coro_rpc_client>(io_context_.get_executor());
       }
       else {
-        client = std::make_shared<coro_rpc_client>(
-            *coro_io::get_global_executor(), g_client_id++);
+        client =
+            std::make_shared<coro_rpc_client>(*coro_io::get_global_executor());
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {
         bool ok = client->init_ssl("../openssl_files", "server.crt");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+      }
+#endif
+#ifdef YLT_ENABLE_IBV
+      if (use_rdma) {
+        bool ok = client->init_ibv();
+        REQUIRE_MESSAGE(ok == true,
+                        "init ibv fail, please check ibverbs config");
       }
 #endif
       return client;
