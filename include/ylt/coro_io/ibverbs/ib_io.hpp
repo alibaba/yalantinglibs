@@ -61,8 +61,18 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
   co_return co_await ib_socket.connect(soc);
 }
 
-namespace detail {
+template <typename EndPointSeq>
+inline async_simple::coro::Lazy<std::error_code> async_connect(
+    coro_io::ib_socket_t& ib_socket, const EndPointSeq& endpoint) noexcept {
+  asio::ip::tcp::socket soc{ib_socket.get_executor()};
+  auto ec = co_await async_connect(soc, endpoint);
+  if (ec) [[unlikely]] {
+    co_return std::move(ec);
+  }
+  co_return co_await ib_socket.connect(soc);
+}
 
+namespace detail {
 
 template <typename T>
 inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
@@ -103,16 +113,16 @@ inline void copy(ibv_sge from, std::span<ibv_sge> to) {
   return;
 }
 
-
-async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-inline async_recv_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
-                std::size_t io_size) {
+async_simple::coro::
+    Lazy<std::pair<std::error_code, std::size_t>> inline async_recv_impl(
+        coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
+        std::size_t io_size) {
   std::vector<ib_buffer_t> tmp_buffers;
   std::vector<ibv_sge> tmp_sges;
   ibv_sge socket_buffer = ib_socket.get_buffer<ib_socket_t::io_type::recv>();
 
   std::span<ibv_sge> io_buffer;
-    io_buffer = {&socket_buffer, 1};
+  io_buffer = {&socket_buffer, 1};
   auto result =
       co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
           [&](auto&& cb) {
@@ -132,9 +142,10 @@ inline async_recv_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_l
   co_return std::pair{result.first, std::min(result.second, io_size)};
 }
 
-async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-inline async_send_impl(coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
-                std::size_t io_size) {
+async_simple::coro::
+    Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
+        coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
+        std::size_t io_size) {
   std::vector<ib_buffer_t> tmp_buffers;
   ibv_sge socket_buffer;
   socket_buffer = ib_socket.get_buffer<ib_socket_t::io_type::send>();
@@ -221,7 +232,6 @@ inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
   }
 }
 
-
 template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
@@ -241,12 +251,10 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     co_return std::pair{std::error_code{}, io_completed_size};
   }
 
-
   std::size_t block_size;
   uint32_t now_split_size = 0;
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
-
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);
 

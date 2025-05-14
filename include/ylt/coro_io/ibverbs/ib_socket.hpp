@@ -166,6 +166,12 @@ class ib_socket_t {
       : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
+    if (ib_buffer_pool_ == nullptr) {
+      ib_buffer_pool_ = g_ib_buffer_pool();
+    }
+    if (device == nullptr) {
+      device = coro_io::g_ib_device();
+    }
     state_->device_ = std::move(device);
     init(config);
   }
@@ -176,6 +182,12 @@ class ib_socket_t {
       : executor_(executor),
         ib_buffer_pool_(std::move(buffer_pool)),
         state_(std::make_shared<shared_state_t>()) {
+    if (ib_buffer_pool_ == nullptr) {
+      ib_buffer_pool_ = g_ib_buffer_pool();
+    }
+    if (device == nullptr) {
+      device = coro_io::g_ib_device();
+    }
     state_->device_ = std::move(device);
     config_t config{};
     init(config);
@@ -183,16 +195,7 @@ class ib_socket_t {
 
   ib_socket_t(ib_socket_t&&) = default;
   ib_socket_t& operator=(ib_socket_t&&) = default;
-  ~ib_socket_t() {
-    auto state = state_;
-    if (state) {
-      asio::dispatch(executor_->get_asio_executor(),
-                     [state = std::move(state)]() {
-                       std::error_code ec;
-                       state->close(ec);
-                     });
-    }
-  }
+  ~ib_socket_t() { close(); }
 
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open();
@@ -250,16 +253,18 @@ class ib_socket_t {
   config_t& get_config() noexcept { return conf_; }
   const config_t& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return state_->device_; }
-  async_simple::coro::Lazy<std::error_code> accept(
-      std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
-    soc_ = std::move(soc);
+
+  async_simple::coro::Lazy<std::error_code> accept() noexcept {
+    if (soc_ == nullptr) {
+      co_return std::make_error_code(std::errc::invalid_argument);
+    }
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
     auto [ec2, canceled] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
         async_read(*soc_, asio::buffer(buffer)),
-        coro_io::sleep_for(std::chrono::milliseconds{10000}, executor_));
+        coro_io::sleep_for(std::chrono::milliseconds{100000}, executor_));
     if (ec2.value().first) [[unlikely]] {
       co_return std::move(ec2.value().first);
     }
@@ -296,6 +301,14 @@ class ib_socket_t {
     }
     co_return std::error_code{};
   }
+  void prepare_accpet(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
+    soc_ = std::move(soc);
+  }
+
+  async_simple::coro::Lazy<std::error_code> accept(
+      std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
+    return accept();
+  }
 
   async_simple::coro::Lazy<std::error_code> connect(
       asio::ip::tcp::socket& soc) noexcept {
@@ -321,6 +334,10 @@ class ib_socket_t {
       if (ec) {
         ELOG_INFO << ec.message();
         co_return std::move(ec);
+      }
+      else if (state_->has_close_) {
+        ELOG_INFO << "connect closed when connecting";
+        co_return std::make_error_code(std::errc::operation_canceled);
       }
       auto ec2 = struct_pack::deserialize_to(peer_info, std::span{buffer});
       if (ec2) [[unlikely]] {
@@ -348,6 +365,17 @@ class ib_socket_t {
       ELOG_INFO << "unknown exception";
     }
     co_return std::error_code{};
+  }
+
+  void close() {
+    auto state = state_;
+    if (state) {
+      asio::dispatch(executor_->get_asio_executor(),
+                     [state = std::move(state)]() {
+                       std::error_code ec;
+                       state->close(ec);
+                     });
+    }
   }
   auto get_executor() const { return executor_->get_asio_executor(); }
   auto get_coro_executor() const { return executor_; }

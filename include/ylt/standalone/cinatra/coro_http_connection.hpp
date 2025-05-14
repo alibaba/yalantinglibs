@@ -26,6 +26,7 @@
 #endif
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/socket_wrapper.hpp"
 
 namespace cinatra {
 struct websocket_result {
