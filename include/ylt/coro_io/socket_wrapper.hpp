@@ -42,6 +42,7 @@ struct socket_wrapper_t {
         executor_(executor) {
     init_ssl(ssl_ctx);
   }
+#endif
 #ifdef YLT_ENABLE_IBV
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
                    coro_io::ExecutorWrapper<> *executor,
@@ -52,7 +53,6 @@ struct socket_wrapper_t {
     ib_socket_->prepare_accpet(
         std::make_unique<asio::ip::tcp::socket>(std::move(soc)));
   }
-#endif
 #endif
   // tcp client init
   void init_client(bool enable_tcp_no_delay) {

@@ -307,6 +307,7 @@ class ib_socket_t {
 
   async_simple::coro::Lazy<std::error_code> accept(
       std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
+    soc_ = std::move(soc);
     return accept();
   }
 
