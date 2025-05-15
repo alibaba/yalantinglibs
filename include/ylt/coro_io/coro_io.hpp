@@ -187,6 +187,30 @@ struct post_helper {
   Func func;
 };
 
+template <typename R, typename Func, typename Executor>
+struct dispatch_helper {
+  void operator()(auto handler) {
+    asio::dispatch(e, [this, handler]() {
+      try {
+        if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
+          func();
+          handler.resume();
+        }
+        else {
+          auto r = func();
+          handler.set_value_then_resume(std::move(r));
+        }
+      } catch (const std::exception &e) {
+        R er;
+        er.setException(std::current_exception());
+        handler.set_value_then_resume(std::move(er));
+      }
+    });
+  }
+  Executor e;
+  Func func;
+};
+
 template <typename Func, typename Executor>
 inline async_simple::coro::Lazy<
     async_simple::Try<typename util::function_traits<Func>::return_type>>
@@ -205,6 +229,17 @@ inline async_simple::coro::Lazy<
 post(Func func,
      coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
   return post(std::move(func), e->get_asio_executor());
+}
+
+template <typename Func, typename Executor>
+inline async_simple::coro::Lazy<
+    async_simple::Try<typename util::function_traits<Func>::return_type>>
+dispatch(Func func, Executor executor) {
+  using R =
+      async_simple::Try<typename util::function_traits<Func>::return_type>;
+  callback_awaitor<R> awaitor;
+  dispatch_helper<R, Func, Executor> helper{executor, std::move(func)};
+  co_return co_await awaitor.await_resume(helper);
 }
 
 namespace detail {

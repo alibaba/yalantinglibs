@@ -183,8 +183,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       if (pool_config_.max_memory_usage <
           pool_config_.buffer_size +
               total_memory_.load(std::memory_order_acquire)) [[unlikely]] {
-        ELOG_TRACE << "Memory out of pool limit. return null buffer";
-        return std::move(buffer);
+        ELOG_TRACE << "Memory out of pool limit";
+        // return std::move(buffer);
       }
       auto ptr = malloc(pool_config_.buffer_size);
       if (ptr == nullptr) {

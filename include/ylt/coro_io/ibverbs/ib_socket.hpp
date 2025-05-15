@@ -10,6 +10,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <queue>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 
@@ -40,17 +42,65 @@ inline void resume(std::pair<std::error_code, std::size_t>&& arg,
     ELOG_DEBUG << "resume empty";
   }
 }
+struct shared_state_t;
+struct buffer_queue {
+  std::vector<ib_buffer_t> queue;
+  uint32_t front=0,end=0;
+  buffer_queue(uint16_t size) {
+    size=16-std::countl_zero(size);
+    if (size>=16) {
+      throw std::invalid_argument("too big ib_socket buffer size");
+    }
+    size=1<<size;
+    queue.resize(size);
+  }
+  std::error_code post_recv_real(ibv_sge buffer, shared_state_t* state);
+  std::error_code push(ib_buffer_t buf, shared_state_t* state) {
+    ELOG_TRACE<<"push. now buffer size:"<<size();
+    auto ec = post_recv_real(buf.subview(), state);
+    if (!ec) {
+      front=(front+1)%queue.size();
+      queue[front]=std::move(buf);
+    }
+    return ec;
+  }
+  ib_buffer_t pop() {
+    ELOG_TRACE<<"pop. now buffer size:"<<size();
+    end=(end+1)%queue.size();
+    return std::move(queue[end]);
+  }
+  bool full() {
+    return front==end;
+  }
+  std::size_t size() {
+    if (end>=front) {
+      return queue.size()+front-end;
+    }
+    else {
+      return front-end;
+    }
+  }
+};
 
 struct shared_state_t {
   std::shared_ptr<ib_device_t> device_;
+  std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::atomic<bool> has_close_ = 0;
+  buffer_queue recv_queue;
+  std::size_t recv_buffer_cnt;
+  std::queue<std::pair<std::error_code,std::size_t>> recv_result;//TODO optimize
   callback_t recv_cb_;
   callback_t send_cb_;
   ib_buffer_t buffer_[2];
+  shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,std::size_t recv_buffer_cnt=2,std::size_t max_recv_buffer_cnt=8):ib_buffer_pool_(std::move(ib_buffer_pool)),recv_buffer_cnt(recv_buffer_cnt),recv_queue(max_recv_buffer_cnt) {
+    if (ib_buffer_pool_ == nullptr) {
+      ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
+    }
+  }
 
   void cancel() {
     if (fd_) {
@@ -117,7 +167,6 @@ struct shared_state_t {
       if (ne > 0) {
         ELOGV(DEBUG, "Completion was found in CQ with status %d", wc.status);
       }
-
       ec = make_error_code(wc.status);
       if (wc.status != IBV_WC_SUCCESS) {
         ELOGV(ERROR, "rdma failed with error code:%d", wc.status);
@@ -125,7 +174,32 @@ struct shared_state_t {
       else {
         ELOG_DEBUG << "ready resume: id:" << (callback_t*)wc.wr_id
                    << ",len:" << wc.byte_len;
-        resume(std::pair{ec, (std::size_t)wc.byte_len}, *(callback_t*)wc.wr_id);
+        if (wc.wr_id==0) { //recv
+          if (recv_cb_) {
+            assert(recv_result.empty());
+            bool could_insert = (recv_queue.size()<=recv_buffer_cnt);
+            buffer_[0]=recv_queue.pop(); //TODO:enum
+            if (could_insert) {
+              if (recv_queue.push(ib_buffer_pool_->get_buffer(),this)) {
+                std::error_code ec;
+                close(ec);
+              }
+            }
+            resume(std::pair{ec, (std::size_t)wc.byte_len},recv_cb_);
+          }
+          else {
+            if (!recv_queue.full()) {
+              if (recv_queue.push(ib_buffer_pool_->get_buffer(),this)) {
+                std::error_code ec;
+                close(ec);
+              }
+            }
+            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
+          }
+        }
+        else {
+          resume(std::pair{ec, (std::size_t)wc.byte_len}, *(callback_t*)wc.wr_id);
+        }
         ELOG_DEBUG << "after resume:" << (callback_t*)wc.wr_id;
         if (cq_ == nullptr) {
           break;
@@ -136,16 +210,42 @@ struct shared_state_t {
   }
 };
 
+inline std::error_code buffer_queue::post_recv_real(ibv_sge buffer,shared_state_t* state) {
+  ibv_recv_wr rr;
+  rr.next = NULL;
+
+  rr.wr_id = 0;
+  rr.sg_list = &buffer;
+  rr.num_sge = 1;
+  ELOG_TRACE << "post recv sge address:" << buffer.addr
+             << ",length:" << buffer.length;
+  ibv_recv_wr* bad_wr = nullptr;
+  // prepare the receive work request
+  if (state->has_close_) {
+    return std::make_error_code(std::errc::operation_canceled);
+  }
+
+  // post the receive request to the RQ
+  if (auto ec = ibv_post_recv(state->qp_.get(), &rr, &bad_wr); ec) {
+    auto error_code = std::make_error_code(std::errc{ec});
+    ELOG_ERROR << "ibv post recv failed: " << error_code.message();
+    return error_code;
+  }
+  ELOG_DEBUG << "ibv post recv ok";
+  return {};
+}
+
 class ib_socket_t {
  public:
   struct config_t {
     uint32_t cq_size = 1024;
     uint32_t request_buffer_size = 8 * 1024 * 1024;
+    uint32_t recv_buffer_cnt = 2;
     std::chrono::milliseconds tcp_handshake_timeout =
         std::chrono::milliseconds{1000};
     ibv_qp_type qp_type = IBV_QPT_RC;
-    ibv_qp_cap cap = {.max_send_wr = 512,
-                      .max_recv_wr = 512,
+    ibv_qp_cap cap = {.max_send_wr = 8,
+                      .max_recv_wr = 8,
                       .max_send_sge = 6,
                       .max_recv_sge = 1,
                       .max_inline_data = 0};
@@ -164,11 +264,7 @@ class ib_socket_t {
       const config_t& config,
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : executor_(executor),
-        ib_buffer_pool_(std::move(buffer_pool)),
-        state_(std::make_shared<shared_state_t>()) {
-    if (ib_buffer_pool_ == nullptr) {
-      ib_buffer_pool_ = g_ib_buffer_pool();
-    }
+        state_(std::make_shared<shared_state_t>(std::move(buffer_pool),config.recv_buffer_cnt,config.cap.max_recv_wr)) {
     if (device == nullptr) {
       device = coro_io::g_ib_device();
     }
@@ -180,11 +276,7 @@ class ib_socket_t {
       std::shared_ptr<ib_device_t> device = coro_io::g_ib_device(),
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : executor_(executor),
-        ib_buffer_pool_(std::move(buffer_pool)),
-        state_(std::make_shared<shared_state_t>()) {
-    if (ib_buffer_pool_ == nullptr) {
-      ib_buffer_pool_ = g_ib_buffer_pool();
-    }
+        state_(std::make_shared<shared_state_t>(std::move(buffer_pool))) {
     if (device == nullptr) {
       device = coro_io::g_ib_device();
     }
@@ -201,7 +293,7 @@ class ib_socket_t {
     return state_->fd_ != nullptr && state_->fd_->is_open();
   }
   std::shared_ptr<ib_buffer_pool_t> buffer_pool() const noexcept {
-    return ib_buffer_pool_;
+    return state_->ib_buffer_pool_;
   }
 
   std::size_t consume(char* dst, std::size_t sz) {
@@ -227,18 +319,18 @@ class ib_socket_t {
       assert(remain_read_buffer_size() == 0);
     }
     ELOG_TRACE << "get buffer from client";
-    if (!state_->buffer_[io]) {
-      ELOG_TRACE << "no buffer now. try get new buffer from pool";
-      state_->buffer_[io] = buffer_pool()->get_buffer();
+    if constexpr (io==ib_socket_t::send) {
+      if (!state_->buffer_[io]) {
+        ELOG_TRACE << "no buffer now. try get new buffer from pool";
+        state_->buffer_[io] = buffer_pool()->get_buffer();
+      }
     }
     return state_->buffer_[io].subview();
   }
 
-  void post_recv(std::span<ibv_sge> buffer, callback_t&& cb) {
+  void post_recv(callback_t&& cb) {
     ELOG_DEBUG << "POST RECV";
-    if (auto ec = post_recv_impl(buffer, std::move(cb)); ec) [[unlikely]] {
-      safe_resume(ec, std::move(state_->recv_cb_));
-    }
+    post_recv_impl(std::move(cb));
   }
 
   void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
@@ -299,6 +391,39 @@ class ib_socket_t {
     } catch (...) {
       ELOG_INFO << "unknown exception";
     }
+
+    for (int i=0;i<conf_.recv_buffer_cnt;++i) {
+      if (auto ec = state_->recv_queue.push(state_->ib_buffer_pool_->get_buffer(), state_.get());ec) {
+        co_return ec;
+      }
+      if (state_->recv_queue.full()) {
+        break;
+      }
+    }
+
+    ELOG_INFO << "serialize peer_info";
+    peer_info.qp_num = state_->qp_->qp_num;
+    peer_info.lid = state_->device_->attr().lid;
+    peer_info.buffer_size = conf_.request_buffer_size;
+    memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
+    struct_pack::serialize_to((char*)buffer, sz, peer_info);
+    ELOG_INFO << "send qp info to client";
+    auto& soc_ref = *soc_;
+    async_write(soc_ref, asio::buffer(buffer))
+        .start([soc = std::move(soc_), state = state_](auto&& ec) {
+          try {
+            if (!ec.value().first) {
+              return;
+            }
+            ELOG_WARN << "rmda connection failed by exception:"
+                      << ec.value().first.message();
+          } catch (const std::exception& e) {
+            ELOG_WARN << "rmda connection failed by exception:" << e.what();
+          }
+          std::error_code ec_ignore;
+          state->close(ec_ignore);
+        });
+    soc_ = nullptr;
     co_return std::error_code{};
   }
   void prepare_accpet(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
@@ -354,6 +479,14 @@ class ib_socket_t {
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
 
+      for (int i=0;i<conf_.recv_buffer_cnt;++i) {
+        if (auto ec = state_->recv_queue.push(state_->ib_buffer_pool_->get_buffer(), state_.get());ec) {
+          co_return ec;
+        }
+        if (state_->recv_queue.full()) {
+          break;
+        }
+      }
       modify_qp_to_rts();
       ELOG_INFO << "start init fd";
       init_fd();
@@ -523,63 +656,25 @@ class ib_socket_t {
     listen_event(state_).start([](auto&& ec) {
     });
   }
+  
 
-  std::error_code post_recv_impl(std::span<ibv_sge> sge, callback_t&& handler) {
-    ibv_recv_wr rr;
-    rr.next = NULL;
-
-    rr.wr_id = (std::size_t)&state_->recv_cb_;
-    rr.sg_list = sge.data();
-    rr.num_sge = sge.size();
-    for (int i = 0; i < sge.size(); ++i) {
-      ELOG_TRACE << "post recv sge[" << std::to_string(i)
-                 << "].address:" << sge.data()[i].addr
-                 << ",length:" << sge.data()[i].length;
-    }
-    ibv_recv_wr* bad_wr = nullptr;
-    // prepare the receive work request
-    ELOG_DEBUG << "set cb:" << (void*)rr.wr_id;
-    state_->recv_cb_ = std::move(handler);
-    if (state_->has_close_) {
-      return std::make_error_code(std::errc::operation_canceled);
-    }
-
-    // post the receive request to the RQ
-    if (auto ec = ibv_post_recv(state_->qp_.get(), &rr, &bad_wr); ec) {
-      auto error_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "ibv post recv failed: " << error_code.message();
-      return error_code;
-    }
-    if (soc_) [[unlikely]] {
-      ELOG_INFO << "serialize peer_info";
-      ib_socket_t::ib_socket_info peer_info;
-      peer_info.qp_num = state_->qp_->qp_num;
-      peer_info.lid = state_->device_->attr().lid;
-      peer_info.buffer_size = conf_.request_buffer_size;
-      memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
-      constexpr auto sz = struct_pack::get_needed_size(peer_info);
-      char buffer[sz.size()];
-      struct_pack::serialize_to((char*)buffer, sz, peer_info);
-      ELOG_INFO << "send qp info to client";
-      auto& soc_ref = *soc_;
-      async_write(soc_ref, asio::buffer(buffer))
-          .start([soc = std::move(soc_), state = state_](auto&& ec) {
-            try {
-              if (!ec.value().first) {
-                return;
-              }
-              ELOG_WARN << "rmda connection failed by exception:"
-                        << ec.value().first.message();
-            } catch (const std::exception& e) {
-              ELOG_WARN << "rmda connection failed by exception:" << e.what();
-            }
-            std::error_code ec_ignore;
-            state->close(ec_ignore);
-          });
-      soc_ = nullptr;
-    }
-    ELOG_DEBUG << "ibv post recv ok";
-    return {};
+  void post_recv_impl(callback_t&& handler) {
+    coro_io::dispatch([state=state_,handler=std::move(handler)](){
+      state->recv_cb_=std::move(handler);
+      if (!state->recv_result.empty()) {
+        auto result=state->recv_result.front();
+        bool could_insert = (state->recv_queue.size()<=state->recv_buffer_cnt);
+        state->recv_result.pop();
+        state->buffer_[recv]=std::move(state->recv_queue.pop());
+        if (could_insert) {
+          if (state->recv_queue.push(state->ib_buffer_pool_->get_buffer(),state.get())) {
+            std::error_code ec;
+            state->close(ec);
+          }
+        }
+        resume(std::move(result),state->recv_cb_);
+      }
+    },executor_->get_asio_executor()).start([](auto&&){});
   }
 
   std::error_code post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
@@ -621,7 +716,6 @@ class ib_socket_t {
                    });
   }
 
-  std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::string_view remain_data_;
   std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<shared_state_t> state_;
