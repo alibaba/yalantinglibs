@@ -301,6 +301,9 @@ class ib_socket_t {
     if (len) {
       memcpy(dst, remain_data_.data(), len);
       remain_data_ = remain_data_.substr(len);
+      if (remain_data_.empty()) {
+        std::move(state_->buffer_[recv]).collect();
+      }
     }
     ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
     return len;
@@ -311,6 +314,9 @@ class ib_socket_t {
     remain_data_ = std::string_view{
         (char*)state_->buffer_[io_type::recv]->addr + has_read_size,
         remain_size};
+    if (remain_size==0) {
+      std::move(state_->buffer_[recv]).collect();
+    }
   }
 
   template <io_type io>
