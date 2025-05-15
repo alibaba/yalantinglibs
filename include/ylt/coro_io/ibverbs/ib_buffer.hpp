@@ -265,14 +265,16 @@ inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
   }
 }
 inline ib_buffer_t::~ib_buffer_t() {
-  if (auto ptr = owner_pool_.lock(); ptr) {
-    ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
-  }
-  if (has_memory_ownership_) {
-    if (mr_) {
-      auto data = mr_->addr;
-      mr_ = nullptr;
-      free(data);
+  if (mr_) {
+    if (auto ptr = owner_pool_.lock(); ptr) {
+      ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
+    }
+    if (has_memory_ownership_) {
+      if (mr_) {
+        auto data = mr_->addr;
+        mr_ = nullptr;
+        free(data);
+      }
     }
   }
 }

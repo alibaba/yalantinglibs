@@ -130,9 +130,7 @@ async_simple::coro::
   ibv_sge socket_buffer = ib_socket.get_buffer<ib_socket_t::io_type::recv>();
   socket_buffer.length = result.second;
   copy(socket_buffer, sge_list);
-  if (io_size < result.second) {
-    ib_socket.set_read_buffer_len(io_size, result.second - io_size);
-  }
+  ib_socket.set_read_buffer_len(io_size, result.second - io_size);
 
   co_return std::pair{result.first, std::min(result.second, io_size)};
 }
