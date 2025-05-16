@@ -3,6 +3,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/benchmark)
 add_executable(coro_rpc_benchmark_server server.cpp)
 add_executable(coro_rpc_benchmark_client client.cpp)
 
+add_executable(bench bench.cpp)
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
     target_link_libraries(coro_rpc_benchmark_server wsock32 ws2_32)
     target_link_libraries(coro_rpc_benchmark_client wsock32 ws2_32)
