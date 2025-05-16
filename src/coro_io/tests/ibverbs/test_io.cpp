@@ -24,6 +24,7 @@
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/easylog.hpp"
 #include "ylt/easylog/record.hpp"
+#include "ylt/reflection/user_reflect_macro.hpp"
 #include "ylt/standalone/iguana/prettify.hpp"
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
@@ -38,6 +39,7 @@ struct config_t {
   int port = 58110;
   int test_time = 100;
 };
+YLT_REFL(config_t,buffer_size,request_size,concurrency,test_type,enable_log,enable_server,enable_client,port,test_time);
 
 config_t config;
 
