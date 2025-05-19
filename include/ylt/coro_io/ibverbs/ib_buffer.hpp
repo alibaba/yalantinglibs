@@ -248,6 +248,7 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                                        int ib_flags) {
   auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
+    ELOG_INFO << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
     return ib_buffer_t{mr, std::move(dev), pool.weak_from_this()};
   }
   else {

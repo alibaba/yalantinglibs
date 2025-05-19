@@ -103,7 +103,7 @@ struct ib_deleter {
   void operator()(ibv_mr* ptr) const noexcept {
     ELOG_INFO << "ibv_reg_mr unregist: " << ptr;
     if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed: "
+      ELOG_ERROR << "ibv_dereg_mr failed: "
                  << std::make_error_code(std::errc{ret}).message();
     }
   }
@@ -149,6 +149,11 @@ class ib_device_t {
     }
   }
 
+  ~ib_device_t() {
+    pd_ = nullptr;
+    ctx_ = nullptr;
+  }
+
   std::string_view name() const noexcept { return name_; }
 
   uint16_t port() const noexcept { return port_; }
@@ -189,8 +194,8 @@ class ib_device_t {
   }
 
   std::string name_;
-  std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
+  std::unique_ptr<ibv_context, ib_deleter> ctx_;
   ibv_port_attr attr_;
   ibv_gid gid_;
   ibv_device* device_;
