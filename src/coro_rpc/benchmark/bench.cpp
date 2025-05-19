@@ -12,6 +12,8 @@ struct bench_config {
   size_t max_request_count;
   unsigned short port;
   size_t resp_len;
+  uint32_t buffer_size;
+  bool enbale_log;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -22,12 +24,16 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.max_request_count = parser.get<size_t>("max_request_count");
   conf.port = parser.get<unsigned short>("port");
   conf.resp_len = parser.get<size_t>("resp_len");
+  conf.buffer_size = parser.get<uint32_t>("buffer_size");
+  conf.enbale_log = parser.get<bool>("enable_log");
 
   ELOG_WARN << "url: " << conf.url << ", "
             << "client concurrency: " << conf.client_concurrency << ", "
             << "data_len: " << conf.data_len << ", "
             << "max_request_count: " << conf.max_request_count << ", "
             << "port: " << conf.port << ", "
+            << "buffer_size: " << conf.buffer_size << ", "
+            << "enbale_log: " << conf.enbale_log << ", "
             << "resp_len: " << conf.resp_len;
 
   return conf;
@@ -50,9 +56,12 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   std::string send_str(conf.data_len, 'A');
   std::string_view send_str_view(send_str);
 
+  ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
+
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
   pool_conf.client_config.socket_config =
-      coro_rpc::coro_rpc_client::ibverbs_config{};
+      coro_rpc::coro_rpc_client::ibverbs_config{
+          .lower_layer_config.request_buffer_size = conf.buffer_size};
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);
   auto lazy = [&]() -> async_simple::coro::Lazy<void> {
@@ -83,8 +92,6 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
 }
 
 int main(int argc, char** argv) {
-  easylog::set_min_severity(easylog::Severity::WARN);
-  easylog::set_async(true);
   cmdline::parser parser;
 
   parser.add<std::string>("url", 'u', "url", false, "0.0.0.0:9000");
@@ -96,9 +103,20 @@ int main(int argc, char** argv) {
 
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 0);
+  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 8388608);
+  parser.add<bool>("enable_log", 'o', "enable log", false, false);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
+
+  if (conf.enbale_log) {
+    easylog::set_min_severity(easylog::Severity::INFO);
+  }
+  else {
+    easylog::set_min_severity(easylog::Severity::WARN);
+  }
+
+  easylog::set_async(true);
 
   if (conf.client_concurrency == 0) {
     std::cout << "start server\n";
@@ -106,6 +124,7 @@ int main(int argc, char** argv) {
     if (conf.resp_len != 0) {
       resp_str = std::string(conf.resp_len, 'A');
       g_resp_str = resp_str;
+      g_resp_len = conf.resp_len;
     }
     coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(), 9000);
     server.register_handler<echo>();

@@ -531,6 +531,7 @@ class ib_socket_t {
 
  private:
   void init(const config_t& config) {
+    conf_ = config;
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
       throw std::system_error(std::make_error_code(std::errc{errno}));
