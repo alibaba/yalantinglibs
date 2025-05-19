@@ -81,7 +81,7 @@ struct ib_buffer_t {
 
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  private:
-  friend class ib_buffer_t;
+  friend struct ib_buffer_t;
   struct private_construct_token {};
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
       std::weak_ptr<ib_buffer_pool_t> self_weak,
@@ -197,7 +197,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     }
     ELOG_TRACE << "get buffer{data:" << buffer->addr << ",len" << buffer->length
                << "} from queue";
-    return std::move(buffer);
+    return buffer;
   }
   ib_buffer_t try_get_buffer() {
     ib_buffer_t buffer;
@@ -209,7 +209,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     else {
       ELOG_TRACE << "get buffer failed. there is no free buffer";
     }
-    return std::move(buffer);
+    return buffer;
   }
   struct config_t {
     size_t buffer_size = 8 * 1024 * 1024;  // 16MB

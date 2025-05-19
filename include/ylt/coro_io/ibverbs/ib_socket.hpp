@@ -736,11 +736,11 @@ class ib_socket_t {
                    });
   }
 
+  coro_io::ExecutorWrapper<>* executor_;
   std::string_view remain_data_;
   std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<shared_state_t> state_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
-  coro_io::ExecutorWrapper<>* executor_;
 };
 }  // namespace coro_io
