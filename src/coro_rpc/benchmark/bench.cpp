@@ -14,6 +14,7 @@ struct bench_config {
   size_t resp_len;
   uint32_t buffer_size;
   int log_level;
+  bool enable_ib;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -25,7 +26,8 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.port = parser.get<unsigned short>("port");
   conf.resp_len = parser.get<size_t>("resp_len");
   conf.buffer_size = parser.get<uint32_t>("buffer_size");
-  conf.log_level = parser.get<int>("enable_log");
+  conf.log_level = parser.get<int>("log_level");
+  conf.enable_ib = parser.get<bool>("enable_ib");
 
   ELOG_WARN << "url: " << conf.url << ", "
             << "client concurrency: " << conf.client_concurrency << ", "
@@ -34,6 +36,7 @@ bench_config init_conf(const cmdline::parser& parser) {
             << "port: " << conf.port << ", "
             << "buffer_size: " << conf.buffer_size << ", "
             << "log level: " << conf.log_level << ", "
+            << "enable ibverbs: " << conf.enable_ib << ", "
             << "resp_len: " << conf.resp_len;
 
   return conf;
@@ -59,10 +62,12 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
 
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
-  coro_io::ibverbs_config ib_conf{};
-  ib_conf.request_buffer_size = conf.buffer_size;
+  if (conf.enable_ib) {
+    coro_io::ibverbs_config ib_conf{};
+    ib_conf.request_buffer_size = conf.buffer_size;
+    pool_conf.client_config.socket_config = ib_conf;
+  }
 
-  pool_conf.client_config.socket_config = ib_conf;
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);
   auto lazy = [&]() -> async_simple::coro::Lazy<void> {
@@ -105,8 +110,9 @@ int main(int argc, char** argv) {
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 0);
   parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 8388608);
-  parser.add<int>("enable_log", 'o', "Severity::INFO 1 as default, WARN is 4",
+  parser.add<int>("log_level", 'o', "Severity::INFO 1 as default, WARN is 4",
                   false, 1);
+  parser.add<bool>("enable_ib", 'i', "response data length", false, true);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -127,7 +133,8 @@ int main(int argc, char** argv) {
                                      conf.port, "0.0.0.0",
                                      std::chrono::seconds(10));
     server.register_handler<echo>();
-    server.init_ibv();
+    if (conf.enable_ib)
+      server.init_ibv();
     [[maybe_unused]] auto ret = server.start();
   }
   else {
