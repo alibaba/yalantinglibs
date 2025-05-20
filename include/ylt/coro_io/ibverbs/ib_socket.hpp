@@ -84,19 +84,20 @@ struct shared_state_t {
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::atomic<bool> has_close_ = 0;
-  buffer_queue recv_queue;
-  std::size_t recv_buffer_cnt;
+  buffer_queue recv_queue_;
+  std::size_t recv_buffer_cnt_;
   std::queue<std::pair<std::error_code, std::size_t>>
       recv_result;  // TODO optimize
   callback_t recv_cb_;
   callback_t send_cb_;
-  ib_buffer_t buffer_[2];
+  ib_buffer_t recv_buf_;
+  ib_buffer_t send_buf_;
   shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                  std::size_t recv_buffer_cnt = 2,
                  std::size_t max_recv_buffer_cnt = 8)
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
-        recv_buffer_cnt(recv_buffer_cnt),
-        recv_queue(max_recv_buffer_cnt) {
+        recv_buffer_cnt_(recv_buffer_cnt),
+        recv_queue_(max_recv_buffer_cnt) {
     if (ib_buffer_pool_ == nullptr) {
       ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
     }
@@ -125,8 +126,8 @@ struct shared_state_t {
         qp_ = nullptr;
         cq_ = nullptr;
       }
-      std::move(buffer_[0]).collect();
-      std::move(buffer_[1]).collect();
+      std::move(recv_buf_).collect();
+      std::move(send_buf_).collect();
       if (fd_) {
         fd_->cancel(ec);
         if (ec)
@@ -177,10 +178,10 @@ struct shared_state_t {
         if (wc.wr_id == 0) {  // recv
           if (recv_cb_) {
             assert(recv_result.empty());
-            bool could_insert = (recv_queue.size() <= recv_buffer_cnt);
-            buffer_[0] = recv_queue.pop();  // TODO:enum
+            bool could_insert = (recv_queue_.size() <= recv_buffer_cnt_);
+            recv_buf_ = recv_queue_.pop();  // TODO:enum
             if (could_insert) {
-              if (recv_queue.push(ib_buffer_pool_->get_buffer(), this)) {
+              if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
               }
@@ -188,8 +189,8 @@ struct shared_state_t {
             resume(std::pair{ec, (std::size_t)wc.byte_len}, recv_cb_);
           }
           else {
-            if (!recv_queue.full()) {
-              if (recv_queue.push(ib_buffer_pool_->get_buffer(), this)) {
+            if (!recv_queue_.full()) {
+              if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
               }
@@ -306,7 +307,7 @@ class ib_socket_t {
       memcpy(dst, remain_data_.data(), len);
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
-        std::move(state_->buffer_[recv]).collect();
+        std::move(state_->recv_buf_).collect();
       }
     }
     ELOG_TRACE << "consume dst:" << dst << "want sz:" << sz << "get sz:" << len;
@@ -316,26 +317,25 @@ class ib_socket_t {
   std::size_t remain_read_buffer_size() { return remain_data_.size(); }
   void set_read_buffer_len(std::size_t has_read_size, std::size_t remain_size) {
     remain_data_ = std::string_view{
-        (char*)state_->buffer_[io_type::recv]->addr + has_read_size,
-        remain_size};
+        (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
-      std::move(state_->buffer_[recv]).collect();
+      std::move(state_->recv_buf_).collect();
     }
   }
 
-  template <io_type io>
-  ibv_sge get_buffer() {
-    if constexpr (io == io_type::recv) {
-      assert(remain_read_buffer_size() == 0);
+  ibv_sge get_recv_buffer() {
+    assert(remain_read_buffer_size() == 0);
+    ELOG_TRACE << "get recv buffer from client";
+    return state_->recv_buf_.subview();
+  }
+
+  ibv_sge get_send_buffer() {
+    ELOG_TRACE << "get send buffer from client";
+    if (!state_->send_buf_) {
+      ELOG_TRACE << "no buffer now. try get new buffer from pool";
+      state_->send_buf_ = buffer_pool()->get_buffer();
     }
-    ELOG_TRACE << "get buffer from client";
-    if constexpr (io == ib_socket_t::send) {
-      if (!state_->buffer_[io]) {
-        ELOG_TRACE << "no buffer now. try get new buffer from pool";
-        state_->buffer_[io] = buffer_pool()->get_buffer();
-      }
-    }
-    return state_->buffer_[io].subview();
+    return state_->send_buf_.subview();
   }
 
   void post_recv(callback_t&& cb) {
@@ -403,12 +403,12 @@ class ib_socket_t {
     }
 
     for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-      if (auto ec = state_->recv_queue.push(
+      if (auto ec = state_->recv_queue_.push(
               state_->ib_buffer_pool_->get_buffer(), state_.get());
           ec) {
         co_return ec;
       }
-      if (state_->recv_queue.full()) {
+      if (state_->recv_queue_.full()) {
         break;
       }
     }
@@ -492,12 +492,12 @@ class ib_socket_t {
                        (uint8_t*)peer_info.gid);
 
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        if (auto ec = state_->recv_queue.push(
+        if (auto ec = state_->recv_queue_.push(
                 state_->ib_buffer_pool_->get_buffer(), state_.get());
             ec) {
           co_return ec;
         }
-        if (state_->recv_queue.full()) {
+        if (state_->recv_queue_.full()) {
           break;
         }
       }
@@ -679,12 +679,12 @@ class ib_socket_t {
           if (!state->recv_result.empty()) {
             auto result = state->recv_result.front();
             bool could_insert =
-                (state->recv_queue.size() <= state->recv_buffer_cnt);
+                (state->recv_queue_.size() <= state->recv_buffer_cnt_);
             state->recv_result.pop();
-            state->buffer_[recv] = std::move(state->recv_queue.pop());
+            state->recv_buf_ = std::move(state->recv_queue_.pop());
             if (could_insert) {
-              if (state->recv_queue.push(state->ib_buffer_pool_->get_buffer(),
-                                         state.get())) {
+              if (state->recv_queue_.push(state->ib_buffer_pool_->get_buffer(),
+                                          state.get())) {
                 std::error_code ec;
                 state->close(ec);
               }
