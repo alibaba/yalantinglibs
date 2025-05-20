@@ -59,9 +59,10 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
 
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
-  pool_conf.client_config.socket_config =
-      coro_rpc::coro_rpc_client::ibverbs_config{
-          .lower_layer_config.request_buffer_size = conf.buffer_size};
+  coro_rpc::coro_rpc_client::ibverbs_config ib_conf{};
+  ib_conf.lower_layer_config.request_buffer_size = conf.buffer_size;
+
+  pool_conf.client_config.socket_config = ib_conf;
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);
   auto lazy = [&]() -> async_simple::coro::Lazy<void> {
