@@ -158,7 +158,7 @@ struct shared_state_t {
       return std::make_error_code(std::errc{r});
     }
     ELOG_DEBUG << "ibv_poll_cq";
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
       if (ne < 0) {
@@ -238,22 +238,26 @@ inline std::error_code buffer_queue::post_recv_real(ibv_sge buffer,
   return {};
 }
 
+#ifdef YLT_ENABLE_IBV
+struct ibverbs_config {
+  uint32_t cq_size = 1024;
+  uint32_t request_buffer_size = 8 * 1024 * 1024;
+  uint32_t recv_buffer_cnt = 2;
+  std::chrono::milliseconds tcp_handshake_timeout =
+      std::chrono::milliseconds{1000};
+  ibv_qp_type qp_type = IBV_QPT_RC;
+  ibv_qp_cap cap = {.max_send_wr = 8,
+                    .max_recv_wr = 8,
+                    .max_send_sge = 6,
+                    .max_recv_sge = 1,
+                    .max_inline_data = 0};
+  std::shared_ptr<coro_io::ib_device_t> device;
+  std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool;
+};
+#endif
+
 class ib_socket_t {
  public:
-  struct config_t {
-    uint32_t cq_size = 1024;
-    uint32_t request_buffer_size = 8 * 1024 * 1024;
-    uint32_t recv_buffer_cnt = 2;
-    std::chrono::milliseconds tcp_handshake_timeout =
-        std::chrono::milliseconds{1000};
-    ibv_qp_type qp_type = IBV_QPT_RC;
-    ibv_qp_cap cap = {.max_send_wr = 8,
-                      .max_recv_wr = 8,
-                      .max_send_sge = 6,
-                      .max_recv_sge = 1,
-                      .max_inline_data = 0};
-  };
-
   enum io_type { recv = 0, send = 1 };
   struct ib_socket_info {
     uint8_t gid[16];       // GID
@@ -264,7 +268,7 @@ class ib_socket_t {
 
   ib_socket_t(
       coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,
-      const config_t& config,
+      const ibverbs_config& config,
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : executor_(executor),
         state_(std::make_shared<shared_state_t>(std::move(buffer_pool),
@@ -286,7 +290,7 @@ class ib_socket_t {
       device = coro_io::g_ib_device();
     }
     state_->device_ = std::move(device);
-    config_t config{};
+    ibverbs_config config{};
     init(config);
   }
 
@@ -352,8 +356,8 @@ class ib_socket_t {
 
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
 
-  config_t& get_config() noexcept { return conf_; }
-  const config_t& get_config() const noexcept { return conf_; }
+  ibverbs_config& get_config() noexcept { return conf_; }
+  const ibverbs_config& get_config() const noexcept { return conf_; }
   auto get_device() const noexcept { return state_->device_; }
 
   async_simple::coro::Lazy<std::error_code> accept() noexcept {
@@ -530,7 +534,7 @@ class ib_socket_t {
   auto cancel() const { state_->cancel(); }
 
  private:
-  void init(const config_t& config) {
+  void init(const ibverbs_config& config) {
     conf_ = config;
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
@@ -740,7 +744,7 @@ class ib_socket_t {
   std::string_view remain_data_;
   std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<shared_state_t> state_;
-  config_t conf_;
+  ibverbs_config conf_;
   uint32_t buffer_size_ = 0;
 };
 }  // namespace coro_io
