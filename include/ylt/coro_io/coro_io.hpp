@@ -105,7 +105,6 @@ class callback_awaitor_base {
     awaitor_handler &operator=(awaitor_handler &&) = default;
     template <typename... Args>
     void set_value_then_resume(Args &&...args) const {
-      ELOG_INFO << "OH ready resume in awaitor_handler";
       set_value(std::forward<Args>(args)...);
       resume();
     }
