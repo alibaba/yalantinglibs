@@ -62,11 +62,13 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
 
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+#ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
     coro_io::ibverbs_config ib_conf{};
     ib_conf.request_buffer_size = conf.buffer_size;
     pool_conf.client_config.socket_config = ib_conf;
   }
+#endif
 
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);
@@ -133,8 +135,10 @@ int main(int argc, char** argv) {
                                      conf.port, "0.0.0.0",
                                      std::chrono::seconds(10));
     server.register_handler<echo>();
+#ifdef YLT_ENABLE_IBV
     if (conf.enable_ib)
       server.init_ibv();
+#endif
     [[maybe_unused]] auto ret = server.start();
   }
   else {
