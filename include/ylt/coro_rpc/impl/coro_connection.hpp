@@ -199,8 +199,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     }
 #endif
 #ifdef YLT_ENABLE_IBV
-    if constexpr (std::is_same_v<
-                           Socket, coro_io::socket_wrapper_t::ibv_socket_t>) {
+    if constexpr (std::is_same_v<Socket,
+                                 coro_io::socket_wrapper_t::ibv_socket_t>) {
       auto ec = co_await socket.accept();
       if (ec) [[unlikely]] {
         ELOG_ERROR << "ibverbs init qp failed: " << ec.message() << " conn_id  "

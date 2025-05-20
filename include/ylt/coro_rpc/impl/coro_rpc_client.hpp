@@ -52,9 +52,9 @@
 #include "expected.hpp"
 #include "protocol/coro_rpc_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/ibverbs/ib_buffer.hpp"
-#include "ylt/coro_io/ibverbs/ib_device.hpp"
+#ifdef YLT_ENABLE_IBV
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
+#endif
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"

@@ -39,7 +39,8 @@ struct config_t {
   int port = 58110;
   int test_time = 100;
 };
-YLT_REFL(config_t,buffer_size,request_size,concurrency,test_type,enable_log,enable_server,enable_client,port,test_time);
+YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
+         enable_log, enable_server, enable_client, port, test_time);
 
 config_t config;
 
