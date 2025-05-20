@@ -127,7 +127,7 @@ async_simple::coro::
   if (result.first) [[unlikely]] {
     co_return std::pair{result.first, std::min(result.second, io_size)};
   }
-  ibv_sge socket_buffer = ib_socket.get_buffer<ib_socket_t::io_type::recv>();
+  ibv_sge socket_buffer = ib_socket.get_recv_buffer();
   socket_buffer.length = result.second;
   copy(socket_buffer, sge_list);
   size_t recved_len = std::min(result.second, io_size);
@@ -142,7 +142,7 @@ async_simple::coro::
         std::size_t io_size) {
   std::vector<ib_buffer_t> tmp_buffers;
   ibv_sge socket_buffer;
-  socket_buffer = ib_socket.get_buffer<ib_socket_t::io_type::send>();
+  socket_buffer = ib_socket.get_send_buffer();
 
   auto len = copy(sge_list, socket_buffer);
   assert(len == io_size);
@@ -234,7 +234,10 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;
   if (sge_span.size() == 0) [[unlikely]] {
-    co_await coro_io::dispatch([](){},ib_socket.get_coro_executor()->get_asio_executor());
+    co_await coro_io::dispatch(
+        []() {
+        },
+        ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
 
@@ -243,7 +246,10 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   uint32_t max_size = ib_socket.get_buffer_size();
   std::size_t io_completed_size = consume_buffer(ib_socket, sge_span);
   if (sge_span.empty()) {
-    co_await coro_io::dispatch([](){},ib_socket.get_coro_executor()->get_asio_executor());
+    co_await coro_io::dispatch(
+        []() {
+        },
+        ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, io_completed_size};
   }
 
