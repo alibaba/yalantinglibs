@@ -178,13 +178,7 @@ class coro_rpc_client {
   struct tcp_config {
     bool enable_tcp_no_delay = true;
   };
-#ifdef YLT_ENABLE_IBV
-  struct ibverbs_config {
-    coro_io::ib_socket_t::config_t lower_layer_config;
-    std::shared_ptr<coro_io::ib_device_t> device;
-    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool;
-  };
-#endif
+
 #ifdef YLT_ENABLE_SSL
   struct tcp_with_ssl_config {
     bool enable_tcp_no_delay = true;
@@ -209,7 +203,7 @@ class coro_rpc_client {
 #endif
 #ifdef YLT_ENABLE_IBV
                  ,
-                 ibverbs_config
+                 coro_io::ibverbs_config
 #endif
                  >
         socket_config;
@@ -267,9 +261,10 @@ class coro_rpc_client {
     return true;
   }
 #ifdef YLT_ENABLE_IBV
-  [[nodiscard]] bool init_socket_wrapper(const ibverbs_config &config) {
-    control_->socket_wrapper_.init_client(config.lower_layer_config,
-                                          config.device, config.buffer_pool);
+  [[nodiscard]] bool init_socket_wrapper(
+      const coro_io::ibverbs_config &config) {
+    control_->socket_wrapper_.init_client(config, config.device,
+                                          config.buffer_pool);
     return true;
   }
 #endif
@@ -410,12 +405,13 @@ class coro_rpc_client {
 #endif
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_ibv(
-      const coro_io::ib_socket_t::config_t &config = {},
+      const coro_io::ibverbs_config &config = {},
       std::shared_ptr<coro_io::ib_device_t> device = nullptr,
       std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool = nullptr) {
-    config_.socket_config =
-        ibverbs_config{config, std::move(device), std::move(buffer_pool)};
-    return init_socket_wrapper(std::get<ibverbs_config>(config_.socket_config));
+    config_.socket_config = coro_io::ibverbs_config{
+        .device = std::move(device), .buffer_pool = std::move(buffer_pool)};
+    return init_socket_wrapper(
+        std::get<coro_io::ibverbs_config>(config_.socket_config));
   }
 #endif
 

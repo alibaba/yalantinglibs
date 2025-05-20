@@ -22,7 +22,7 @@
 namespace coro_io {
 struct socket_wrapper_t {
   // construct by listen tcp
-  socket_wrapper_t() {};
+  socket_wrapper_t(){};
   socket_wrapper_t(coro_io::ExecutorWrapper<> *executor)
       : socket_(std::make_unique<asio::ip::tcp::socket>(
             executor->get_asio_executor())),
@@ -68,7 +68,7 @@ struct socket_wrapper_t {
   }
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_client(const coro_io::ib_socket_t::config_t &config,
+  void init_client(const coro_io::ibverbs_config &config,
                    std::shared_ptr<coro_io::ib_device_t> device,
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool) {
     ib_socket_ = std::make_unique<ib_socket_t>(executor_, std::move(device),
@@ -165,8 +165,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
-  ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+      &ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;
