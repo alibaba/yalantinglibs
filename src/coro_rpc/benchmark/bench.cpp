@@ -127,7 +127,8 @@ int main(int argc, char** argv) {
       g_resp_str = resp_str;
       g_resp_len = conf.resp_len;
     }
-    coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(), 9000);
+    coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(),
+                                     conf.port);
     server.register_handler<echo>();
     server.init_ibv();
     [[maybe_unused]] auto ret = server.start();
