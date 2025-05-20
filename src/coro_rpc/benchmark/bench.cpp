@@ -13,7 +13,7 @@ struct bench_config {
   unsigned short port;
   size_t resp_len;
   uint32_t buffer_size;
-  bool enbale_log;
+  int log_level;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -25,7 +25,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.port = parser.get<unsigned short>("port");
   conf.resp_len = parser.get<size_t>("resp_len");
   conf.buffer_size = parser.get<uint32_t>("buffer_size");
-  conf.enbale_log = parser.get<bool>("enable_log");
+  conf.log_level = parser.get<int>("enable_log");
 
   ELOG_WARN << "url: " << conf.url << ", "
             << "client concurrency: " << conf.client_concurrency << ", "
@@ -33,7 +33,7 @@ bench_config init_conf(const cmdline::parser& parser) {
             << "max_request_count: " << conf.max_request_count << ", "
             << "port: " << conf.port << ", "
             << "buffer_size: " << conf.buffer_size << ", "
-            << "enbale_log: " << conf.enbale_log << ", "
+            << "log level: " << conf.log_level << ", "
             << "resp_len: " << conf.resp_len;
 
   return conf;
@@ -105,17 +105,13 @@ int main(int argc, char** argv) {
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 0);
   parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 8388608);
-  parser.add<bool>("enable_log", 'o', "enable log", false, false);
+  parser.add<int>("enable_log", 'o', "Severity::INFO 1 as default, WARN is 4",
+                  false, 1);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
 
-  if (conf.enbale_log) {
-    easylog::set_min_severity(easylog::Severity::INFO);
-  }
-  else {
-    easylog::set_min_severity(easylog::Severity::WARN);
-  }
+  easylog::set_min_severity((easylog::Severity)conf.log_level);
 
   easylog::set_async(true);
 
@@ -128,7 +124,8 @@ int main(int argc, char** argv) {
       g_resp_len = conf.resp_len;
     }
     coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(),
-                                     conf.port);
+                                     conf.port, "0.0.0.0",
+                                     std::chrono::seconds(10));
     server.register_handler<echo>();
     server.init_ibv();
     [[maybe_unused]] auto ret = server.start();

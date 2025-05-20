@@ -134,8 +134,8 @@ class ib_device_t {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
           ec) {
         auto err_code = std::make_error_code(std::errc{ec});
-        ELOG_ERROR << "IBDevice failed to query gid " << conf.port
-                   << " of device " << name_ << "by gid_index:" << gid_index_
+        ELOG_ERROR << "IBDevice failed to query port " << conf.port
+                   << " of device " << name_ << " by gid_index:" << gid_index_
                    << ", error msg: " << err_code.message();
         throw std::system_error(err_code);
       }
