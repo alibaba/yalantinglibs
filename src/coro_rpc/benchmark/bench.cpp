@@ -72,7 +72,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
         client.set_req_attachment(send_str_view);
         auto result = co_await client.call<echo>();
         if (!result.has_value()) {
-          ELOG_ERROR << result.error();
+          ELOG_ERROR << result.error().msg;
           co_return;
         }
         g_count += send_str_view.length();

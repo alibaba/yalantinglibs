@@ -158,7 +158,7 @@ struct shared_state_t {
       return std::make_error_code(std::errc{r});
     }
     ELOG_DEBUG << "ibv_poll_cq";
-    struct ibv_wc wc;
+    struct ibv_wc wc{};
     int ne = 0;
     while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
       if (ne < 0) {

@@ -157,10 +157,10 @@ async_simple::coro::
           },
           ib_socket);
   if (result.first) [[unlikely]] {
-    co_return std::pair{result.first, std::min(result.second, io_size)};
+    co_return std::pair{result.first, result.second};
   }
 
-  co_return std::pair{result.first, std::min(result.second, io_size)};
+  co_return std::pair{result.first, io_size};
 }
 
 template <typename T>
