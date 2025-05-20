@@ -306,7 +306,6 @@ inline async_simple::coro::Lazy<ret_type> async_io(IO_func io_func,
       }
       else {
         io_func([&, handler](auto &&...args) mutable {
-          ELOG_INFO << "calling cb";
           slot->clear(async_simple::Terminate);
           handler.set_value(std::forward<decltype(args)>(args)...);
           handler.resume();
