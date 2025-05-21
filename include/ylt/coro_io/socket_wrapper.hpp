@@ -22,7 +22,7 @@
 namespace coro_io {
 struct socket_wrapper_t {
   // construct by listen tcp
-  socket_wrapper_t(){};
+  socket_wrapper_t() {};
   socket_wrapper_t(coro_io::ExecutorWrapper<> *executor)
       : socket_(std::make_unique<asio::ip::tcp::socket>(
             executor->get_asio_executor())),
@@ -75,12 +75,6 @@ struct socket_wrapper_t {
                                                config, std::move(buffer_pool));
   }
 #endif
-
-  void reset() {
-    if (socket_) {
-      *socket_ = asio::ip::tcp::socket(executor_->get_asio_executor());
-    }
-  }
 
  private:
   std::unique_ptr<asio::ip::tcp::socket> socket_;
@@ -171,8 +165,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      &ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
+  ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;
