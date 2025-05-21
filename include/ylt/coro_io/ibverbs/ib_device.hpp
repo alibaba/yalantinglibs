@@ -127,6 +127,30 @@ inline std::string gid_to_string(const ibv_gid& gid) {
   return gid_to_string(std::span<const uint8_t>(gid.raw, 16));
 }
 
+inline std::string mtu_str(ibv_mtu mtu) {
+  std::string str;
+  switch (mtu) {
+    case IBV_MTU_256:
+      str = "IBV_MTU_256";
+      break;
+    case IBV_MTU_512:
+      str = "IBV_MTU_512";
+      break;
+    case IBV_MTU_1024:
+      str = "IBV_MTU_1024";
+      break;
+    case IBV_MTU_2048:
+      str = "IBV_MTU_2048";
+      break;
+    case IBV_MTU_4096:
+      str = "IBV_MTU_4096";
+      break;
+    default:
+      break;
+  }
+  return str;
+}
+
 class ib_device_t {
  public:
   ib_device_t(const ib_config_t& conf) {
@@ -143,6 +167,9 @@ class ib_device_t {
                  << " of device " << name_ << " error msg: " << ec.message();
       throw std::system_error(ec);
     }
+
+    ELOG_INFO << "Active MTU: " << mtu_str(attr_.active_mtu) << ", "
+              << "Max MTU: " << mtu_str(attr_.max_mtu);
 
     find_best_gid_index();
 
