@@ -180,7 +180,8 @@ TEST_CASE("test send_request config") {
     auto load_balancer =
         coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(hosts);
     for (int i = 0; i < 100; ++i) {
-      auto config = coro_rpc::coro_rpc_client::config{.client_id = 114514};
+      coro_rpc::coro_rpc_client::config config{};
+      config.client_id = 114514;
       auto res = co_await load_balancer.send_request(
           [&i, &hosts](coro_rpc::coro_rpc_client &client, std::string_view host)
               -> async_simple::coro::Lazy<void> {

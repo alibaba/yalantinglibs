@@ -1,0 +1,6 @@
+check_library_exists(ibverbs ibv_create_qp "" HAVE_IBVERBS_IBV)
+if(HAVE_IBVERBS_IBV)
+  set(YLT_ENABLE_IBV ON)
+  set(IBVERBS_LIBRARY ibverbs)
+  message(STATUS "have libibverbs")
+endif()
