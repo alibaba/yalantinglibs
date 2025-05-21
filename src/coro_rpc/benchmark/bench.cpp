@@ -92,10 +92,16 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
     });
   }
 
+  std::cout << std::fixed << std::setprecision(2);
+
   while (true) {
+    auto start = std::chrono::system_clock::now();
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c = g_count.exchange(0);
-    std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s\n";
+    auto end = std::chrono::system_clock::now();
+    auto dur = (end - start) / std::chrono::milliseconds(1);
+    double val = (8.0 * c * 1000) / (1000'000'000ll * dur);
+    std::cout << "Throughput:" << val << " Gb/s\n";
   }
 }
 
