@@ -109,6 +109,24 @@ struct ib_deleter {
   }
 };
 
+inline std::string gid_to_string(std::span<const uint8_t> raw) {
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+
+  for (int i = 0; i < 16; i += 2) {
+    oss << std::setw(2) << static_cast<int>(raw[i]) << std::setw(2)
+        << static_cast<int>(raw[i + 1]);
+    if (i < 14)
+      oss << ":";
+  }
+
+  return oss.str();
+}
+
+inline std::string gid_to_string(const ibv_gid& gid) {
+  return gid_to_string(std::span<const uint8_t>(gid.raw, 16));
+}
+
 class ib_device_t {
  public:
   ib_device_t(const ib_config_t& conf) {
@@ -139,6 +157,8 @@ class ib_device_t {
                    << ", error msg: " << err_code.message();
         throw std::system_error(err_code);
       }
+
+      ELOG_INFO << "Local GID: " << gid_to_string(gid_);
     }
     else {
       ELOG_ERROR << "gid index should greater than zero, now is: "
