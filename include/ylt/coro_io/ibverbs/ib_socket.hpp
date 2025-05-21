@@ -248,9 +248,9 @@ struct ibverbs_config {
   uint32_t request_buffer_size = 4 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 2;
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 8,
-                    .max_recv_wr = 8,
-                    .max_send_sge = 6,
+  ibv_qp_cap cap = {.max_send_wr = 32,
+                    .max_recv_wr = 32,
+                    .max_send_sge = 1,
                     .max_recv_sge = 1,
                     .max_inline_data = 0};
   std::shared_ptr<coro_io::ib_device_t> device;
