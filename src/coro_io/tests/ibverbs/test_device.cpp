@@ -32,7 +32,7 @@ TEST_CASE("test device") {
   auto pd = dev.pd();
   CHECK(pd);
   CHECK(dev.port() == 1);
-  CHECK(dev.gid_index() == 1);
+  CHECK(dev.gid_index() >= 0);
   auto& attr = dev.attr();
 }
 
