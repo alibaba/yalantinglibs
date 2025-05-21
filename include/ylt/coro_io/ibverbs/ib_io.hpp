@@ -143,6 +143,10 @@ async_simple::coro::
   std::vector<ib_buffer_t> tmp_buffers;
   ibv_sge socket_buffer;
   socket_buffer = ib_socket.get_send_buffer();
+  if (socket_buffer.length == 0) [[unlikely]] {
+    co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
+                        std::size_t{0}};
+  }
 
   auto len = copy(sge_list, socket_buffer);
   assert(len == io_size);

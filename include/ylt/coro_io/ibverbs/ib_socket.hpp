@@ -53,6 +53,10 @@ struct buffer_queue {
   std::error_code post_recv_real(ibv_sge buffer, shared_state_t* state);
   std::error_code push(ib_buffer_t buf, shared_state_t* state) {
     ELOG_TRACE << "push. now buffer size:" << size();
+    if (buf->length == 0) {
+      ELOG_INFO << "Out of ib_buffer_pool limit." << size();
+      return std::make_error_code(std::errc::no_buffer_space);
+    }
     auto ec = post_recv_real(buf.subview(), state);
     if (!ec) {
       front = (front + 1) % queue.size();
@@ -241,14 +245,12 @@ inline std::error_code buffer_queue::post_recv_real(ibv_sge buffer,
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
   uint32_t cq_size = 1024;
-  uint32_t request_buffer_size = 8 * 1024 * 1024;
+  uint32_t request_buffer_size = 4 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 2;
-  std::chrono::milliseconds tcp_handshake_timeout =
-      std::chrono::milliseconds{1000};
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 8,
-                    .max_recv_wr = 8,
-                    .max_send_sge = 6,
+  ibv_qp_cap cap = {.max_send_wr = 32,
+                    .max_recv_wr = 32,
+                    .max_send_sge = 1,
                     .max_recv_sge = 1,
                     .max_inline_data = 0};
   std::shared_ptr<coro_io::ib_device_t> device;
@@ -388,6 +390,11 @@ class ib_socket_t {
     buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
                                       get_config().request_buffer_size);
     ELOGV(INFO, "Final buffer size = %d", buffer_size_);
+    if (buffer_size_ > buffer_pool()->max_buffer_size()) {
+      ELOGV(ERROR, "Buffer size larger than buffer_pool limit: %d",
+            buffer_size_);
+      co_return std::make_error_code(std::errc::no_buffer_space);
+    }
     try {
       init_qp();
       modify_qp_to_init();
@@ -492,6 +499,11 @@ class ib_socket_t {
       buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
                                         get_config().request_buffer_size);
       ELOGV(INFO, "Final buffer size = %d", buffer_size_);
+      if (buffer_size_ > buffer_pool()->max_buffer_size()) {
+        ELOGV(ERROR, "Buffer size larger than buffer_pool limit: %d",
+              buffer_size_);
+        co_return std::make_error_code(std::errc::no_buffer_space);
+      }
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
 

@@ -25,7 +25,7 @@
 #include "ylt/easylog/record.hpp"
 #include "ylt/struct_pack/util.h"
 
-std::size_t buffer_size = 8 * 1024 * 1024;
+std::size_t buffer_size = 4 * 1024 * 1024;
 int concurrency = 10;
 std::atomic<int> port;
 
