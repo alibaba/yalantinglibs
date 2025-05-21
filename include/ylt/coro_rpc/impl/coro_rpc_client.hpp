@@ -530,7 +530,11 @@ class coro_rpc_client {
 
   async_simple::coro::Lazy<void> reset() {
     co_await close_socket(control_);
-    control_->socket_wrapper_.reset();
+    std::visit(
+        [this](auto &socket_config) {
+          return init_socket_wrapper(socket_config);
+        },
+        config_.socket_config);
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
     co_return;
