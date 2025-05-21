@@ -530,7 +530,7 @@ class coro_rpc_client {
 
   async_simple::coro::Lazy<void> reset() {
     co_await close_socket(control_);
-    control_->socket_wrapper_ = {};  // TODO:IMPL
+    control_->socket_wrapper_.reset();
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
     co_return;
@@ -573,6 +573,11 @@ class coro_rpc_client {
                  << config_.port;
       std::tie(ec, iter) = co_await coro_io::async_resolve(
           &control_->executor_, config_.host, config_.port);
+      if (ec) {
+        ELOG_WARN << "client_id " << config_.client_id
+                  << " async_resolve failed:" << ec.message();
+        co_return errc::not_connected;
+      }
       asio::ip::tcp::resolver::iterator end;
       while (iter != end) {
         eps->push_back(iter->endpoint());

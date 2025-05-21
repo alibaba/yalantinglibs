@@ -76,6 +76,12 @@ struct socket_wrapper_t {
   }
 #endif
 
+  void reset() {
+    if (socket_) {
+      *socket_ = asio::ip::tcp::socket(executor_->get_asio_executor());
+    }
+  }
+
  private:
   std::unique_ptr<asio::ip::tcp::socket> socket_;
   coro_io::ExecutorWrapper<> *executor_;
