@@ -145,14 +145,15 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   void collect_free_inner(ib_buffer_t buffer) {
     if (buffer) {
       ELOG_TRACE << "collecting:" << (void*)buffer->addr;
-      if (free_buffers_.size() < pool_config_.max_buffer_count) {
+      if (free_buffers_.size() * pool_config_.buffer_size <
+          pool_config_.max_memory_usage) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
         enqueue(std::move(buffer));
       }
       else {
         ELOG_TRACE << "out of max connection limit <<"
-                   << pool_config_.max_buffer_count
+                   << pool_config_.max_memory_usage
                    << "buffer{data:" << buffer->addr << ",len" << buffer->length
                    << "} wont be collect";
       }
@@ -164,6 +165,9 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   };
 
  public:
+  std::size_t max_buffer_size() const noexcept {
+    return this->pool_config_.buffer_size;
+  }
   void collect_free(ib_buffer_t buffer) {
     if (buffer) {
       buffer.change_owner(weak_from_this());
@@ -183,7 +187,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       if (pool_config_.max_memory_usage <
           pool_config_.buffer_size +
               total_memory_.load(std::memory_order_acquire)) [[unlikely]] {
-        ELOG_TRACE << "Memory out of pool limit";
+        ELOG_WARN << "Memory out of pool limit";
         // return std::move(buffer);
       }
       auto ptr = malloc(pool_config_.buffer_size);
@@ -212,9 +216,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return buffer;
   }
   struct config_t {
-    size_t buffer_size = 8 * 1024 * 1024;  // 16MB
-    size_t max_buffer_count = 64;
-    size_t max_memory_usage = 512 * 1024 * 1024;  // 512MB
+    size_t buffer_size = 4 * 1024 * 1024;                   // 4MB
+    uint64_t max_memory_usage = 4ull * 1024 * 1024 * 1024;  // 4GB
     size_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
   };
