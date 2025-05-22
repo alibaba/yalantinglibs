@@ -55,10 +55,11 @@ struct ib_buffer_t {
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE) {
     auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
-    ELOG_INFO << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
+    ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
     if (mr != nullptr) [[unlikely]] {
-      ELOG_INFO << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
-                << ", sge.length: " << mr->length;
+      ELOG_TRACE << "regist sge.lkey: " << mr->lkey
+                 << ", sge.addr: " << mr->addr
+                 << ", sge.length: " << mr->length;
       return ib_buffer_t{mr, std::move(dev)};
     }
     else {
@@ -144,7 +145,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
   void collect_free_inner(ib_buffer_t buffer) {
     if (buffer) {
-      ELOG_TRACE << "collecting:" << (void*)buffer->addr;
       if (free_buffers_.size() * pool_config_.buffer_size <
           pool_config_.max_memory_usage) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
@@ -158,9 +158,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                    << "} wont be collect";
       }
     }
-    else {
-      ELOG_TRACE << "collecting nullptr";
-    }
     return;
   };
 
@@ -172,9 +169,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     if (buffer) {
       buffer.change_owner(weak_from_this());
       collect_free_inner(std::move(buffer));
-    }
-    else {
-      ELOG_TRACE << "collecting nullptr";
     }
     return;
   };
@@ -188,11 +182,11 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
           pool_config_.buffer_size +
               total_memory_.load(std::memory_order_acquire)) [[unlikely]] {
         ELOG_WARN << "Memory out of pool limit";
-        // return std::move(buffer);
+        return std::move(buffer);
       }
       auto ptr = malloc(pool_config_.buffer_size);
       if (ptr == nullptr) {
-        ELOG_TRACE << "Allocate failed.";
+        ELOG_ERROR << "ib_buffer_pool allocate failed.";
         throw std::bad_alloc();
       }
       buffer =
@@ -284,9 +278,7 @@ inline ib_buffer_t::~ib_buffer_t() {
 }
 
 inline void ib_buffer_t::collect() && {
-  ELOG_TRACE << "collecting buffer";
   if (auto pool = owner_pool_.lock(); pool) {
-    ELOG_TRACE << "has pool. collecting buffer continue";
     pool->collect_free_inner(std::move(*this));
   }
 }

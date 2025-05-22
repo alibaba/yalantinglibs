@@ -8,6 +8,7 @@
 #include <string>
 #include <system_error>
 
+#include "asio/ip/address.hpp"
 #include "ylt/easylog.hpp"
 
 namespace coro_io {
@@ -101,13 +102,24 @@ struct ib_deleter {
     }
   }
   void operator()(ibv_mr* ptr) const noexcept {
-    ELOG_INFO << "ibv_reg_mr unregist: " << ptr;
     if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
       ELOG_ERROR << "ibv_dereg_mr failed: "
                  << std::make_error_code(std::errc{ret}).message();
     }
   }
 };
+
+namespace detail {
+inline std::string gid_to_string(uint8_t (&a)[16]) noexcept {
+  std::string ret;
+  ret.resize(40);
+  sprintf(ret.data(),
+          "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"
+          "02x%02x",
+          a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10],
+          a[11], a[12], a[13], a[14], a[15]);
+  return ret;
+}
 
 inline std::string mtu_str(ibv_mtu mtu) {
   std::string str;
@@ -132,7 +144,7 @@ inline std::string mtu_str(ibv_mtu mtu) {
   }
   return str;
 }
-
+}  // namespace detail
 class ib_device_t {
  public:
   ib_device_t(const ib_config_t& conf) {
@@ -150,12 +162,10 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    ELOG_INFO << "Active MTU: " << mtu_str(attr_.active_mtu) << ", "
-              << "Max MTU: " << mtu_str(attr_.max_mtu);
+    ELOG_TRACE << "Active MTU: " << detail::mtu_str(attr_.active_mtu) << ", "
+               << "Max MTU: " << detail::mtu_str(attr_.max_mtu);
 
     find_best_gid_index();
-
-    ELOG_INFO << "IBDevice " << name_ << ", best gid index " << gid_index_;
 
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
@@ -163,6 +173,15 @@ class ib_device_t {
         auto err_code = std::make_error_code(std::errc{ec});
         ELOG_ERROR << "IBDevice failed to query port " << conf.port
                    << " of device " << name_ << " by gid_index:" << gid_index_
+                   << ", error msg: " << err_code.message();
+        throw std::system_error(err_code);
+      }
+      std::error_code err_code;
+      gid_address_ =
+          asio::ip::make_address(detail::gid_to_string(gid_.raw), err_code);
+      if (err_code) {
+        ELOG_ERROR << "IBDevice failed to convert gid to ip address of device "
+                   << name_ << " by gid_index:" << gid_index_
                    << ", error msg: " << err_code.message();
         throw std::system_error(err_code);
       }
@@ -189,6 +208,7 @@ class ib_device_t {
   ibv_pd* pd() const noexcept { return pd_.get(); }
   int gid_index() const noexcept { return gid_index_; }
   const ibv_gid& gid() const noexcept { return gid_; }
+  asio::ip::address gid_address() const noexcept { return gid_address_; }
   const ibv_port_attr& attr() const noexcept { return attr_; }
 
  private:
@@ -225,6 +245,7 @@ class ib_device_t {
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   ibv_port_attr attr_;
   ibv_gid gid_;
+  asio::ip::address gid_address_;
   ibv_device* device_;
   int gid_index_;
 

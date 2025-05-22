@@ -43,7 +43,6 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
   if (ec) [[unlikely]] {
     co_return std::move(ec);
   }
-  // TODO: SSL?
   auto ret = co_await ib_socket.accept(std::move(soc));
   ELOGV(INFO, "accept over:%s", ret.message().data());
   co_return ret;
