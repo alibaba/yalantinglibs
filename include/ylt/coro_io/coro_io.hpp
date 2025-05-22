@@ -782,10 +782,10 @@ async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
 }
 #endif
 
-enum protocal { tcp, tcp_with_ssl, rdma };
 struct endpoint {
+  enum protocal { tcp, rdma };
   asio::ip::address address;
-  asio::ip::port_type port;
+  uint32_t port;
   protocal proto;
 };
 

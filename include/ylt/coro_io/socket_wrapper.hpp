@@ -140,21 +140,23 @@ struct socket_wrapper_t {
 
   coro_io::endpoint remote_endpoint() {
 #ifdef YLT_ENABLE_IBV
-    if (ib_socket_) {  // TODO: impl it later
-      return {};
+    if (ib_socket_) {
+      return {ib_socket_->get_remote_address(), ib_socket_->get_remote_qp_num(),
+              coro_io::endpoint::rdma};
     }
 #endif
     return {socket_->remote_endpoint().address(),
-            socket_->remote_endpoint().port(), protocal::tcp};
+            socket_->remote_endpoint().port(), coro_io::endpoint::tcp};
   }
   coro_io::endpoint local_endpoint() {
 #ifdef YLT_ENABLE_IBV
-    if (ib_socket_) {  // TODO: impl it later
-      return {};
+    if (ib_socket_) {
+      return {ib_socket_->get_local_address(), ib_socket_->get_local_qp_num(),
+              coro_io::endpoint::rdma};
     }
 #endif
     return {socket_->local_endpoint().address(),
-            socket_->local_endpoint().port(), protocal::tcp};
+            socket_->local_endpoint().port(), coro_io::endpoint::tcp};
   }
 
   auto get_executor() const noexcept { return executor_; }

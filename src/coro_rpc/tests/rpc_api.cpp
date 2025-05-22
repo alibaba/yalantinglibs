@@ -62,8 +62,8 @@ void test_ctx_impl(T *ctx, std::string_view name) {
   }
   ELOGV(INFO, "call function echo_with_attachment, conn ID:%d, request ID:%d",
         ctx->get_connection_id(), ctx->get_request_id());
-  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint() << "local endpoint"
-        << ctx->get_local_endpoint();
+  ELOGI << "remote endpoint: " << ctx->get_remote_endpoint()
+        << ", local endpoint:" << ctx->get_local_endpoint();
   if (ctx->get_rpc_function_name() != name) {
     throw std::runtime_error("get error rpc function name!");
   }
