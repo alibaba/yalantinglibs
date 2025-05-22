@@ -57,10 +57,14 @@ rpc_result wait_response_finish(void *p) {
   return rpc_result{0, buf, 0};
 }
 
-void *start_rpc_server(char *addr, int parallel) {
+void *start_rpc_server(char *addr, int parallel, bool enable_ib) {
   auto server = std::make_unique<coro_rpc::coro_rpc_server>(
       parallel, addr, std::chrono::seconds(600));
   server->register_handler<ylt_load_service>();
+#ifdef YLT_ENABLE_IBV
+  if (enable_ib)
+    server->init_ibv();
+#endif
   auto res = server->async_start();
   if (res.hasResult()) {
     ELOG_ERROR << "start server failed";
@@ -79,12 +83,20 @@ void stop_rpc_server(void *server) {
 }
 
 // rpc client
-void *create_client_pool(char *addr, int req_timeout_sec) {
+void *create_client_pool(char *addr, int req_timeout_sec, bool enable_ib) {
   std::vector<std::string_view> hosts{std::string_view(addr)};
+  coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+#ifdef YLT_ENABLE_IBV
+  if (enable_ib) {
+    coro_io::ibverbs_config ib_conf{};
+    pool_conf.client_config.socket_config = ib_conf;
+  }
+#endif
+  pool_conf.client_config.request_timeout_duration =
+      std::chrono::seconds{req_timeout_sec};
+
   auto ld = coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(
-      hosts, {.pool_config{.client_config = {
-                               .request_timeout_duration =
-                                   std::chrono::seconds{req_timeout_sec}}}});
+      hosts, {pool_conf});
   auto ld_ptr = std::make_unique<decltype(ld)>(std::move(ld));
   return ld_ptr.release();
 }

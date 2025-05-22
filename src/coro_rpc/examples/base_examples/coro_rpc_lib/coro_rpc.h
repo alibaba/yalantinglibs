@@ -17,10 +17,11 @@ extern void load_service(void *ctx, uint64_t req_id);
 extern void *response_msg(void *ctx, char *msg, uint64_t size);
 extern void response_error(void *ctx, uint16_t err_code, const char *err_msg);
 extern rpc_result wait_response_finish(void *p);
-extern void *start_rpc_server(char *addr, int parallel);
+extern void *start_rpc_server(char *addr, int parallel, bool enable_ib);
 extern void stop_rpc_server(void *server);
 
-extern void *create_client_pool(char *addr, int req_timeout_sec);
+extern void *create_client_pool(char *addr, int req_timeout_sec,
+                                bool enable_ib);
 extern void free_client_pool(void *pool);
 extern rpc_result load(void *pool, uint64_t req_id, char *dest,
                        uint64_t dest_len);
