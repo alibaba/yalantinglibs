@@ -9,7 +9,7 @@ import(
 /*
 #cgo CXXFLAGS: -std=c++20
 #cgo CFLAGS: -I../coro_rpc_lib
-#cgo LDFLAGS: -L./ -lcoro_rpc -lm -lstdc++
+#cgo LDFLAGS: -L./ -lcoro_rpc -lm -lstdc++ -libverbs
 #include "coro_rpc.h"
 */
 import "C"
@@ -54,7 +54,7 @@ func load_service(ctx unsafe.Pointer, req_id C.uint64_t) {
 
 func test_client(host string, len int) {
   peer := C.CString(host)
-  pool := C.create_client_pool(peer, C.int(30))
+  pool := C.create_client_pool(peer, C.int(30), C.bool(true))
 
   outbuf := make([]byte, len)
   for i := 0; i < 3; i++ {
@@ -90,7 +90,7 @@ func main()  {
   flag.Parse()
   fmt.Println(*addr, "thread number,", *thds, ", response data len:", *resp_len)
   g_resp_buf = make([]byte, *resp_len)
-  var server = C.start_rpc_server(C.CString(*addr), 96)
+  var server = C.start_rpc_server(C.CString(*addr), 96, C.bool(true))
   init_response_buf()
 
   // var quit1 string
