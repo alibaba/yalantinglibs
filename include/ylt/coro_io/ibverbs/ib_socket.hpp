@@ -180,9 +180,8 @@ struct ib_socket_shared_state_t {
         if (wc.wr_id == 0) {  // recv
           if (recv_cb_) {
             assert(recv_result.empty());
-            bool could_insert = (recv_queue_.size() <= recv_buffer_cnt_);
             recv_buf_ = recv_queue_.pop();
-            if (could_insert) {
+            if (recv_queue_.empty()) {
               if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
@@ -191,13 +190,13 @@ struct ib_socket_shared_state_t {
             resume(std::pair{ec, (std::size_t)wc.byte_len}, recv_cb_);
           }
           else {
-            if (!recv_queue_.full()) {
+            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
+            if (!recv_queue_.full() && recv_result.size()==recv_queue_.size()) {
               if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
               }
             }
-            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
           }
         }
         else {

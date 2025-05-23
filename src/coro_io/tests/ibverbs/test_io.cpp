@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -45,6 +46,8 @@ YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
 config_t config;
 
 std::atomic<uint64_t> cnt[2];
+
+std::atomic<uint64_t> connect_cnt;
 
 using namespace std::chrono_literals;
 using namespace std::literals;
@@ -185,12 +188,15 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
 
     ELOG_INFO << "start new connection";
     auto executor = soc.get_executor();
+    ++connect_cnt;
     if (config.test_type == 0) {
       echo_connect(std::move(soc)).start([](auto &&) {
+        --connect_cnt;
       });
     }
     else {
       echo_connect_read_some(std::move(soc)).start([](auto &&) {
+        --connect_cnt;
       });
     }
   }
@@ -297,12 +303,15 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   s.resize(config.request_size, 'A');
   uint64_t &sz = *(uint64_t *)s.data();
   sz = config.request_size - 8;
+  ++connect_cnt;
   if (config.test_type == 0) {
-    co_return co_await echo_client(soc, s);
+    ec = co_await echo_client(soc, s);
   }
   else {
-    co_return co_await echo_client_read_some(soc, s);
+    ec = co_await echo_client_read_some(soc, s);
   }
+  --connect_cnt;
+  co_return ec;
 }
 
 int main() {
@@ -345,7 +354,7 @@ int main() {
   for (int i = 0; i < config.test_time; ++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c = cnt_p->exchange(0);
-    std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s"
+    std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s, alive connection:" << connect_cnt
               << std::endl;
   }
   return 0;
