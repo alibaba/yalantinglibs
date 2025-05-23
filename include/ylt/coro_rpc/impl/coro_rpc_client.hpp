@@ -196,6 +196,7 @@ class coro_rpc_client {
     std::chrono::milliseconds request_timeout_duration;
     std::string host;
     std::string port;
+    std::string local_ip;
     std::variant<tcp_config
 #ifdef YLT_ENABLE_SSL
                  ,
@@ -214,6 +215,7 @@ class coro_rpc_client {
           host(),
           port(),
           socket_config(tcp_config{}) {}
+    config(const std::string &loc_ip) : config() { local_ip = loc_ip; }
     config(config &&) = default;
     config(const config &) = default;
     config &operator=(const config &) = default;
@@ -240,15 +242,18 @@ class coro_rpc_client {
    */
   coro_rpc_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
-      config conf = config{})
-      : control_(
-            std::make_shared<control_t>(executor->get_asio_executor(), false)),
+      config conf = {})
+      : control_(std::make_shared<control_t>(executor->get_asio_executor(),
+                                             false, conf.local_ip)),
         timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())) {
     if (!init_config(config{})) [[unlikely]] {
       close();
     }
   }
+
+  coro_rpc_client(const std::string &local_ip)
+      : coro_rpc_client(coro_io::get_global_executor(), config(local_ip)) {}
 
   std::string_view get_host() const { return config_.host; }
 
@@ -855,11 +860,12 @@ class coro_rpc_client {
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     resp_body resp_buffer_;
     std::atomic<uint32_t> recving_cnt_ = 0;
-    control_t(asio::io_context::executor_type executor, bool is_timeout)
+    control_t(asio::io_context::executor_type executor, bool is_timeout,
+              const std::string &local_ip = "")
         : is_timeout_(is_timeout),
           has_closed_(false),
           executor_(executor),
-          socket_wrapper_(&executor_) {}
+          socket_wrapper_(&executor_, local_ip) {}
   };
 
   static void close_socket_async(
@@ -958,8 +964,11 @@ class coro_rpc_client {
           header, std::string_view{buffer, buffer + sizeof(buffer)});
       assert(!ec);
       if (ret.first) {
-        ELOG_ERROR << "read rpc head failed, error msg:" << ret.first.message()
-                   << ". close the socket.value=" << ret.first.value();
+        if (ret.first != asio::error::eof) {
+          ELOG_ERROR << "read rpc head failed, error msg:"
+                     << ret.first.message()
+                     << ". close the socket.value=" << ret.first.value();
+        }
         break;
       }
       auto iter = controller->response_handler_table_.find(header.seq_num);
