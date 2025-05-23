@@ -557,7 +557,7 @@ TEST_CASE("testing coro rpc ssl subserver") {
   CHECK_MESSAGE(!result.net_err, result.net_err.message());
   result = syncAwait(cli.async_get("/index.html"));
   CHECK_MESSAGE(result.status == (int)coro_http::status_type::ok,
-                result.status);
+                result.net_err.message());
   CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
 }
 #endif
