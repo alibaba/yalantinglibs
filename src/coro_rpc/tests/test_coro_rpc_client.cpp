@@ -17,11 +17,13 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/io_context.hpp>
+#include <asio/ip/host_name.hpp>
 #include <chrono>
 #include <cstddef>
 #include <memory>
 #include <thread>
 #include <variant>
+#include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -463,6 +465,83 @@ TEST_CASE("testing std::string_view") {
 
   ret = client.sync_call<test_string_view>("ABDD");
   CHECK(ret.value() == "ABDDOK");
+}
+
+std::string get_first_local_ip() {
+  using asio::ip::tcp;
+  tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
+  tcp::resolver::query query(asio::ip::host_name(), "");
+  tcp::resolver::iterator iter = resolver.resolve(query);
+  tcp::resolver::iterator end;  // End marker.
+  while (iter != end) {
+    tcp::endpoint ep = *iter++;
+    auto addr = ep.address();
+    if (addr.is_v4()) {
+      return addr.to_string();
+    }
+  }
+
+  return "localhost";
+}
+
+TEST_CASE("testing client with local ip") {
+  coro_rpc_server server(1, 8901);
+  server.register_handler<hello>();
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+
+  std::string local_ip = get_first_local_ip();
+  ELOG_INFO << "local ip: " << local_ip;
+  coro_rpc_client client(local_ip);
+  auto ec = client.sync_connect("127.0.0.1", "8901");
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  auto ret = client.sync_call<hello>();
+  CHECK(ret.value() == "hello"s);
+
+  coro_rpc_server server1(1, 8902, local_ip);
+  server1.register_handler<hello>();
+  res = server1.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+  ec = client.sync_connect(local_ip, "8902");
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  ret = client.sync_call<hello>();
+  CHECK(ret.value() == "hello"s);
+
+  coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+  pool_conf.client_config.local_ip = get_first_local_ip();
+
+  auto client_pool = coro_io::client_pool<coro_rpc_client>::create(
+      "127.0.0.1:8901", pool_conf);
+
+  auto lazy = [&]() -> Lazy<void> {
+    auto result = co_await client_pool->send_request(
+        [](coro_rpc_client& client) -> Lazy<coro_rpc::rpc_result<std::string>> {
+          co_return co_await client.call<hello>();
+        });
+
+    auto& call_result = result.value();
+    CHECK(call_result.value() == "hello"s);
+  };
+
+  syncAwait(lazy());
+
+  std::string host = local_ip.append(":8902");
+  auto client_pool1 =
+      coro_io::client_pool<coro_rpc_client>::create(host, pool_conf);
+
+  auto lazy1 = [&]() -> Lazy<void> {
+    auto result = co_await client_pool1->send_request(
+        [](coro_rpc_client& client) -> Lazy<coro_rpc::rpc_result<std::string>> {
+          co_return co_await client.call<hello>();
+        });
+
+    auto& call_result = result.value();
+    CHECK(call_result.value() == "hello"s);
+  };
+
+  syncAwait(lazy1());
 }
 
 TEST_CASE("testing client with context response user-defined error") {
