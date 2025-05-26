@@ -206,18 +206,13 @@ class coro_rpc_client {
    */
   coro_rpc_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
-      uint64_t client_id = get_global_client_id(),
-      const std::string &local_ip = "")
-      : control_(std::make_shared<control_t>(executor->get_asio_executor(),
-                                             false, local_ip)),
+      uint64_t client_id = get_global_client_id())
+      : control_(
+            std::make_shared<control_t>(executor->get_asio_executor(), false)),
         timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())) {
     config_.client_id = client_id;
   }
-
-  coro_rpc_client(std::string local_ip)
-      : coro_rpc_client(coro_io::get_global_executor(), get_global_client_id(),
-                        local_ip) {}
 
   std::string_view get_host() const { return config_.host; }
 
@@ -439,8 +434,8 @@ class coro_rpc_client {
 
   async_simple::coro::Lazy<void> reset() {
     co_await close_socket(control_);
-    control_->socket_ = std::make_unique<asio::ip::tcp::socket>(
-        control_->executor_.get_asio_executor());
+    control_->socket_ =
+        asio::ip::tcp::socket(control_->executor_.get_asio_executor());
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
     co_return;
@@ -481,7 +476,7 @@ class coro_rpc_client {
       ELOG_TRACE << "start resolve host: " << config_.host << ":"
                  << config_.port;
       std::tie(ec, iter) = co_await coro_io::async_resolve(
-          &control_->executor_, *control_->socket_, config_.host, config_.port);
+          &control_->executor_, control_->socket_, config_.host, config_.port);
       asio::ip::tcp::resolver::iterator end;
       while (iter != end) {
         eps->push_back(iter->endpoint());
@@ -497,7 +492,7 @@ class coro_rpc_client {
                << std::to_string((*eps)[0].port());
     asio::ip::tcp::endpoint endpoint;
     std::tie(ec, endpoint) = co_await coro_io::async_connect(
-        &control_->executor_, *control_->socket_, *eps);
+        &control_->executor_, control_->socket_, *eps);
     std::error_code err_code;
     timer_->cancel(err_code);
     if (control_->is_timeout_) {
@@ -514,7 +509,7 @@ class coro_rpc_client {
                      std::to_string(endpoint.port());
 
     if (config_.enable_tcp_no_delay == true) {
-      control_->socket_->set_option(asio::ip::tcp::no_delay(true), ec);
+      control_->socket_.set_option(asio::ip::tcp::no_delay(true), ec);
     }
 
 #ifdef YLT_ENABLE_SSL
@@ -552,7 +547,7 @@ class coro_rpc_client {
           asio::ssl::host_name_verification(config_.ssl_domain));
       control_->ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              *control_->socket_, ssl_ctx_);
+              control_->socket_, ssl_ctx_);
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
       ELOG_ERROR << "init ssl failed: " << e.what();
@@ -799,24 +794,13 @@ class coro_rpc_client {
     coro_io::ExecutorWrapper<> executor_;
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     resp_body resp_buffer_;
-    std::unique_ptr<asio::ip::tcp::socket> socket_;
+    asio::ip::tcp::socket socket_;
     std::atomic<uint32_t> recving_cnt_ = 0;
-    control_t(asio::io_context::executor_type executor, bool is_timeout,
-              const std::string &local_ip = "")
-        : is_timeout_(is_timeout), has_closed_(false), executor_(executor) {
-      if (!local_ip.empty()) {
-        asio::error_code ec;
-        socket_ = std::make_unique<asio::ip::tcp::socket>(
-            executor, asio::ip::tcp::endpoint(
-                          asio::ip::address::from_string(local_ip, ec), 0));
-        if (ec) {
-          ELOG_ERROR << "create socket with local ip " << local_ip << " failed";
-        }
-      }
-      else {
-        socket_ = std::make_unique<asio::ip::tcp::socket>(executor);
-      }
-    }
+    control_t(asio::io_context::executor_type executor, bool is_timeout)
+        : socket_(executor),
+          is_timeout_(is_timeout),
+          has_closed_(false),
+          executor_(executor) {}
   };
 
   static void close_socket_async(
@@ -827,11 +811,11 @@ class coro_rpc_client {
     }
     asio::dispatch(control->executor_.get_asio_executor(), [control]() {
       assert(&control->executor_.get_asio_executor().context() ==
-             &control->socket_->get_executor().context());
+             &control->socket_.get_executor().context());
       control->has_closed_ = true;
       asio::error_code ec;
-      control->socket_->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-      control->socket_->close(ec);
+      control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+      control->socket_.close(ec);
     });
     return;
   }
@@ -845,11 +829,11 @@ class coro_rpc_client {
     co_await coro_io::post(
         [control = control.get()]() {
           assert(&control->executor_.get_asio_executor().context() ==
-                 &control->socket_->get_executor().context());
+                 &control->socket_.get_executor().context());
           control->has_closed_ = true;
           asio::error_code ec;
-          control->socket_->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-          control->socket_->close(ec);
+          control->socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+          control->socket_.close(ec);
         },
         &control->executor_);
     co_return;
@@ -906,7 +890,7 @@ class coro_rpc_client {
     }
     else {
 #endif
-      co_return co_await send_impl<func>(*control_->socket_, id,
+      co_return co_await send_impl<func>(control_->socket_, id,
                                          config.request_attachment,
                                          std::forward<Args>(args)...);
 #ifdef YLT_ENABLE_SSL
@@ -1136,7 +1120,7 @@ class coro_rpc_client {
           }
           else {
 #endif
-            recv(control_, *control.socket_).start([](auto &&) {
+            recv(control_, control.socket_).start([](auto &&) {
             });
 #ifdef YLT_ENABLE_SSL
           }
@@ -1197,7 +1181,7 @@ class coro_rpc_client {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
       ELOG_INFO << "client_id " << config_.client_id << " shutdown";
-      control_->socket_->shutdown(asio::ip::tcp::socket::shutdown_send);
+      control_->socket_.shutdown(asio::ip::tcp::socket::shutdown_send);
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
     else {
