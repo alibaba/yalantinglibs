@@ -100,7 +100,7 @@ struct ib_socket_shared_state_t {
   ib_buffer_t recv_buf_;
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            std::size_t recv_buffer_cnt = 2,
-                           std::size_t max_recv_buffer_cnt = 8)
+                           std::size_t max_recv_buffer_cnt = 32)
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         recv_buffer_cnt_(recv_buffer_cnt),
         recv_queue_(max_recv_buffer_cnt) {
