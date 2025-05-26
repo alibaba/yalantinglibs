@@ -2,9 +2,9 @@ name: Ubuntu (clang)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 0.4.0 ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, 0.4.0 ]
   workflow_call:
   workflow_dispatch:
 

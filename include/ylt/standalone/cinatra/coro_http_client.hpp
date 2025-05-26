@@ -131,6 +131,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string proxy_auth_passwd;
     std::string proxy_auth_token;
     bool enable_tcp_no_delay;
+    std::string local_ip;
 #ifdef CINATRA_ENABLE_SSL
     bool use_ssl =
         false;  // if set use_ssl true, cinatra will add https automaticlly.
@@ -147,6 +148,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   coro_http_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor())
       : coro_http_client(executor->get_asio_executor()) {}
+
+  coro_http_client(asio::io_context::executor_type executor,
+                   const std::string &local_ip)
+      : coro_http_client(executor) {}
 
   bool init_config(const config &conf) {
     config_ = conf;

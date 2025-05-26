@@ -271,7 +271,7 @@ class client_pool : public std::enable_shared_from_this<
     if (client == nullptr) {
       std::unique_ptr<client_t> cli;
       auto executor = io_context_pool_.get_executor();
-      client = std::make_unique<client_t>(*executor);
+      client = std::make_unique<client_t>(*executor, client_config.local_ip);
       if (!client->init_config(client_config))
         AS_UNLIKELY {
           ELOG_ERROR << "init client config failed.";
@@ -298,8 +298,10 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .directlyStart([](auto&&) {
-            },coro_io::get_global_executor());
+            .directlyStart(
+                [](auto&&) {
+                },
+                coro_io::get_global_executor());
       }
     }
   }
