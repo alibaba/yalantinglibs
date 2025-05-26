@@ -208,8 +208,8 @@ class coro_rpc_client {
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
       uint64_t client_id = get_global_client_id(),
       const std::string &local_ip = "")
-      : control_(
-            std::make_shared<control_t>(executor->get_asio_executor(), false)),
+      : control_(std::make_shared<control_t>(executor->get_asio_executor(),
+                                             false, local_ip)),
         timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())) {
     config_.client_id = client_id;
