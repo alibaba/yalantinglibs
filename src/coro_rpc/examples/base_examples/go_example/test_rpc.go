@@ -54,7 +54,9 @@ func load_service(ctx unsafe.Pointer, req_id C.uint64_t) {
 
 func test_client(host string, len int) {
   peer := C.CString(host)
-  pool := C.create_client_pool(peer, C.int(30), C.bool(true))
+  conf := C.client_config{connect_timeout_sec:15, req_timeout_sec:30, local_ip:C.get_first_local_ip(), enable_ib:C.bool(false)}
+  C.test(conf)
+  pool := C.create_client_pool(peer, conf)
 
   outbuf := make([]byte, len)
   for i := 0; i < 3; i++ {
