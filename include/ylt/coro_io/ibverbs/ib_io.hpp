@@ -19,6 +19,7 @@
 #include "async_simple/Promise.h"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/Collect.h"
+#include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
 #include "ib_buffer.hpp"
 #include "ib_socket.hpp"
@@ -138,32 +139,39 @@ async_simple::coro::
 async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
-        std::size_t io_size) {
+        std::size_t io_size,std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>> &prev_op) {
   std::vector<ib_buffer_t> tmp_buffers;
-  ibv_sge socket_buffer;
-  socket_buffer = ib_socket.get_send_buffer();
-  if (socket_buffer.length == 0) [[unlikely]] {
+  auto buffer = ib_socket.buffer_pool()->get_buffer();
+  if (!buffer || buffer->length < io_size) [[unlikely]] {
     co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
                         std::size_t{0}};
   }
-
+  ibv_sge socket_buffer=buffer.subview();
   auto len = copy(sge_list, socket_buffer);
   assert(len == io_size);
-
-  std::span<ibv_sge> io_buffer;
-  io_buffer = {&socket_buffer, 1};
   socket_buffer.length = io_size;
-  auto result =
-      co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-          [&](auto&& cb) {
-            ib_socket.post_send(io_buffer, std::move(cb));
-          },
-          ib_socket);
-  if (result.first) [[unlikely]] {
-    co_return std::pair{result.first, result.second};
+  async_simple::Promise<std::pair<std::error_code,std::size_t>> promise;
+  auto tmp_prev_op=std::move(prev_op);
+  
+  std::pair<std::error_code,std::size_t> result{};
+  if (tmp_prev_op) {
+    result = co_await std::move(*tmp_prev_op);
   }
-
-  co_return std::pair{result.first, io_size};
+  prev_op=promise.getFuture();
+  auto slot = co_await async_simple::coro::CurrentSlot{};
+  coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+        [&ib_socket,socket_buffer](auto&& cb) mutable {
+          ib_socket.post_send({&socket_buffer, 1}, std::move(cb));
+        },
+        ib_socket).setLazyLocal(slot->signal()).start([p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
+    std::move(buffer).collect();
+    if (!result.hasError()) {
+      result.value().second=io_size;
+    }
+    p.setValue(std::move(result));
+  });
+  
+  co_return std::pair{result.first, result.second};
 }
 
 template <typename T>
@@ -258,6 +266,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 
   std::size_t block_size;
   uint32_t now_split_size = 0;
+  std::optional<async_simple::Future<std::pair<std::error_code,std::size_t>>> future;
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
@@ -284,32 +293,31 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         }
         else {
           std::tie(ec, len) = co_await async_send_impl(
-              ib_socket, split_sge_block, now_split_size);
+              ib_socket, split_sge_block, now_split_size,future);
         }
-
         io_completed_size += len;
         ELOG_TRACE << "has completed size:" << io_completed_size;
         if (ec) {
           co_return std::pair{ec, io_completed_size};
         }
 
-        if (len == 0 || len > now_split_size) [[unlikely]] {
-          ELOG_ERROR << "read size error, it shouldn't be:" << len;
-          co_return std::pair{std::make_error_code(std::errc::io_error),
-                              io_completed_size};
-        }
-
-        if (read_some) {
-          co_return std::pair{ec, io_completed_size};
-        }
-
-        if (len < now_split_size) [[unlikely]] {
-          reset_buffer(split_sge_block, len);
+        if constexpr (io==ib_socket_t::io_type::recv) {
+          if (read_some) {
+            co_return std::pair{ec, io_completed_size};
+          }
+          if (len < now_split_size) [[unlikely]] {
+            reset_buffer(split_sge_block, len);
+          }
+          else {
+            split_sge_block.clear();
+          }
+          now_split_size -= len;
         }
         else {
           split_sge_block.clear();
+          now_split_size = 0;
         }
-        now_split_size -= len;
+        
       }
     }
   }
@@ -317,14 +325,14 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   std::error_code ec;
   std::size_t len = 0;
   while (now_split_size > 0) {
-    reset_buffer(split_sge_block, len);
     if constexpr (io == ib_socket_t::io_type::recv) {
+      reset_buffer(split_sge_block, len);
       std::tie(ec, len) =
           co_await async_recv_impl(ib_socket, split_sge_block, now_split_size);
     }
     else {
       std::tie(ec, len) =
-          co_await async_send_impl(ib_socket, split_sge_block, now_split_size);
+          co_await async_send_impl(ib_socket, split_sge_block, now_split_size,future);
     }
 
     io_completed_size += len;
@@ -333,17 +341,24 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       co_return std::pair{ec, io_completed_size};
     }
 
-    if (len == 0 || len > now_split_size) [[unlikely]] {
-      ELOG_ERROR << ((io == ib_socket_t::io_type::recv) ? "recv " : "send")
-                 << "size error, it shouldn't be:" << len;
-      co_return std::pair{std::make_error_code(std::errc::io_error),
-                          io_completed_size};
+    if constexpr (io==ib_socket_t::io_type::recv) {
+      if (read_some) {
+        co_return std::pair{ec, io_completed_size};
+      }
+      now_split_size -= len;
     }
-
-    if (read_some) {
-      co_return std::pair{ec, io_completed_size};
+    else {
+      now_split_size = 0;
     }
-    now_split_size -= len;
+  }
+  if constexpr (io==ib_socket_t::io_type::send) {
+    if (future) {
+      std::tie(ec,len) = co_await std::move(*future);
+      io_completed_size+=len;
+      if (ec) [[unlikely]] {
+        co_return std::pair{ec, io_completed_size};
+      }
+    }
   }
   co_return std::pair{ec, io_completed_size};
 }

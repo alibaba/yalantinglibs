@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <exception>
 #include <functional>
 #include <iostream>
@@ -95,9 +96,8 @@ struct ib_socket_shared_state_t {
   std::queue<std::pair<std::error_code, std::size_t>>
       recv_result;  // TODO optimize with circle buffer
   callback_t recv_cb_;
-  callback_t send_cb_;
+  std::deque<callback_t> send_cb_; // TODO optimize with circle buffer
   ib_buffer_t recv_buf_;
-  ib_buffer_t send_buf_;
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            std::size_t recv_buffer_cnt = 2,
                            std::size_t max_recv_buffer_cnt = 8)
@@ -133,7 +133,6 @@ struct ib_socket_shared_state_t {
         cq_ = nullptr;
       }
       std::move(recv_buf_).collect();
-      std::move(send_buf_).collect();
       if (fd_) {
         fd_->cancel(ec);
         if (ec)
@@ -181,7 +180,7 @@ struct ib_socket_shared_state_t {
           if (recv_cb_) {
             assert(recv_result.empty());
             recv_buf_ = recv_queue_.pop();
-            if (recv_queue_.empty()) {
+            if (recv_queue_.size()<recv_buffer_cnt_) {
               if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
@@ -191,7 +190,7 @@ struct ib_socket_shared_state_t {
           }
           else {
             recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
-            if (!recv_queue_.full() && recv_result.size()==recv_queue_.size()) {
+            if (!recv_queue_.full() && recv_result.size()+recv_buffer_cnt_>recv_queue_.size()) {
               if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
                 std::error_code ec;
                 close(ec);
@@ -335,23 +334,13 @@ class ib_socket_t {
     return state_->recv_buf_.subview();
   }
 
-  ibv_sge get_send_buffer() {
-    if (!state_->send_buf_) {
-      state_->send_buf_ = buffer_pool()->get_buffer();
-    }
-    if (!state_->send_buf_) [[unlikely]] {
-      return {};
-    }
-    else {
-      return state_->send_buf_.subview();
-    }
-  }
-
   void post_recv(callback_t&& cb) { post_recv_impl(std::move(cb)); }
 
   void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
     if (auto ec = post_send_impl(buffer, std::move(cb)); ec) [[unlikely]] {
-      safe_resume(ec, std::move(state_->send_cb_));
+      auto cb=state_->send_cb_.back();
+      state_->send_cb_.pop_back();
+      safe_resume(ec, std::move(cb));
     }
   }
 
@@ -621,7 +610,7 @@ class ib_socket_t {
     attr.dest_qp_num = remote_qpn;
     attr.rq_psn = 0;
     attr.max_dest_rd_atomic = 1;
-    attr.min_rnr_timer = 1;
+    attr.min_rnr_timer = 8;
     attr.ah_attr.is_global = 0;
     attr.ah_attr.dlid = dlid;
     attr.ah_attr.sl = 0;
@@ -651,7 +640,7 @@ class ib_socket_t {
     attr.qp_state = IBV_QPS_RTS;
     attr.timeout = 0x12;  // 18
     attr.retry_cnt = 5;
-    attr.rnr_retry = 5;
+    attr.rnr_retry = 7;
     attr.sq_psn = 0;
     attr.max_rd_atomic = 1;
     int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
@@ -693,8 +682,12 @@ class ib_socket_t {
           self->close(ec_ignore);
           ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
                                            self->recv_cb_);
-          ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
-                                           self->send_cb_);
+          while (!self->send_cb_.empty()) {
+            auto cb=self->send_cb_.front();
+            self->send_cb_.pop_front();
+            ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
+                                            cb);
+          }
           break;
         }
       }
@@ -736,13 +729,15 @@ class ib_socket_t {
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
 
+    
+    state_->send_cb_.push_back(std::move(handler));
+
     sr.next = NULL;
-    sr.wr_id = (std::size_t)&state_->send_cb_;
+    sr.wr_id = (std::size_t)&state_->send_cb_.back();
     sr.sg_list = sge.data();
     sr.num_sge = sge.size();
     sr.opcode = IBV_WR_SEND;
     sr.send_flags = IBV_SEND_SIGNALED;
-    state_->send_cb_ = std::move(handler);
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
