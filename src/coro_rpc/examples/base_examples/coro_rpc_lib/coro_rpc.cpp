@@ -83,10 +83,6 @@ void stop_rpc_server(void *server) {
   }
 }
 
-void test(client_config r) {
-  ELOG_INFO << "client_config msg: " << std::string_view(r.local_ip);
-}
-
 // rpc client
 void *create_client_pool(char *addr, client_config conf) {
   std::vector<std::string_view> hosts{std::string_view(addr)};
@@ -97,10 +93,28 @@ void *create_client_pool(char *addr, client_config conf) {
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
-  pool_conf.client_config.connect_timeout_duration =
-      std::chrono::seconds{conf.connect_timeout_sec};
-  pool_conf.client_config.request_timeout_duration =
-      std::chrono::seconds{conf.req_timeout_sec};
+  if (conf.connect_timeout_sec != 0) {
+    pool_conf.client_config.connect_timeout_duration =
+        std::chrono::seconds{conf.connect_timeout_sec};
+  }
+
+  if (conf.req_timeout_sec != 0) {
+    pool_conf.client_config.request_timeout_duration =
+        std::chrono::seconds{conf.req_timeout_sec};
+  }
+
+  if (conf.local_ip == nullptr) {
+    pool_conf.client_config.local_ip = "localhost";
+  }
+  else {
+    pool_conf.client_config.local_ip = conf.local_ip;
+  }
+
+  ELOG_INFO << "client config connect timeout seconds: "
+            << conf.connect_timeout_sec
+            << ", request timeout seconds: " << conf.req_timeout_sec
+            << ", local_ip: " << pool_conf.client_config.local_ip
+            << ", enable ibverbs: " << conf.enable_ib;
 
   auto ld = coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(
       hosts, {pool_conf});

@@ -31,7 +31,6 @@ extern void *create_client_pool(char *addr, client_config conf);
 extern void free_client_pool(void *pool);
 extern rpc_result load(void *pool, uint64_t req_id, char *dest,
                        uint64_t dest_len);
-extern void test(client_config r);
 /*
 enum log_level {
   NONE = 0,

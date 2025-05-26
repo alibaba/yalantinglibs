@@ -9,7 +9,7 @@ import(
 /*
 #cgo CXXFLAGS: -std=c++20
 #cgo CFLAGS: -I../coro_rpc_lib
-#cgo LDFLAGS: -L./ -lcoro_rpc -lm -lstdc++ -libverbs
+#cgo LDFLAGS: -L./ -lcoro_rpc -lm -lstdc++
 #include "coro_rpc.h"
 */
 import "C"
@@ -55,7 +55,6 @@ func load_service(ctx unsafe.Pointer, req_id C.uint64_t) {
 func test_client(host string, len int) {
   peer := C.CString(host)
   conf := C.client_config{connect_timeout_sec:15, req_timeout_sec:30, local_ip:C.get_first_local_ip(), enable_ib:C.bool(false)}
-  C.test(conf)
   pool := C.create_client_pool(peer, conf)
 
   outbuf := make([]byte, len)
