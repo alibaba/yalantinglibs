@@ -1,5 +1,6 @@
 #include "coro_rpc.h"
 
+#include <asio/ip/host_name.hpp>
 #include <ylt/coro_io/load_balancer.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -83,17 +84,37 @@ void stop_rpc_server(void *server) {
 }
 
 // rpc client
-void *create_client_pool(char *addr, int req_timeout_sec, bool enable_ib) {
+void *create_client_pool(char *addr, client_config conf) {
   std::vector<std::string_view> hosts{std::string_view(addr)};
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
-  if (enable_ib) {
+  if (conf.enable_ib) {
     coro_io::ibverbs_config ib_conf{};
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
-  pool_conf.client_config.request_timeout_duration =
-      std::chrono::seconds{req_timeout_sec};
+  if (conf.connect_timeout_sec != 0) {
+    pool_conf.client_config.connect_timeout_duration =
+        std::chrono::seconds{conf.connect_timeout_sec};
+  }
+
+  if (conf.req_timeout_sec != 0) {
+    pool_conf.client_config.request_timeout_duration =
+        std::chrono::seconds{conf.req_timeout_sec};
+  }
+
+  if (conf.local_ip == nullptr) {
+    pool_conf.client_config.local_ip = "localhost";
+  }
+  else {
+    pool_conf.client_config.local_ip = conf.local_ip;
+  }
+
+  ELOG_INFO << "client config connect timeout seconds: "
+            << conf.connect_timeout_sec
+            << ", request timeout seconds: " << conf.req_timeout_sec
+            << ", local_ip: " << pool_conf.client_config.local_ip
+            << ", enable ibverbs: " << conf.enable_ib;
 
   auto ld = coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(
       hosts, {pool_conf});
@@ -158,3 +179,22 @@ void init_rpc_log(char *log_filename, int log_level, uint64_t max_file_size,
 }
 
 void flush_rpc_log() { easylog::flush(); }
+
+char *get_first_local_ip() {
+  std::string local_ip = "localhost";
+  using asio::ip::tcp;
+  tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
+  tcp::resolver::query query(asio::ip::host_name(), "");
+  tcp::resolver::iterator iter = resolver.resolve(query);
+  tcp::resolver::iterator end;  // End marker.
+  while (iter != end) {
+    tcp::endpoint ep = *iter++;
+    auto addr = ep.address();
+    if (addr.is_v4()) {
+      local_ip = addr.to_string();
+      break;
+    }
+  }
+
+  return create_copy_cstr(local_ip);
+}

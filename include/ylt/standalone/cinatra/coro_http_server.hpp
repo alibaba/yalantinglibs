@@ -670,7 +670,7 @@ class coro_http_server {
                            std::string_view head_msg) {
     auto conn = accept_impl(std::move(soc), true);
     conn->add_head(head_msg);
-    start_one(conn).via(conn->get_executor()).detach();
+    start_one(conn, true).via(conn->get_executor()).detach();
   }
 
  private:
@@ -757,6 +757,11 @@ class coro_http_server {
   async_simple::coro::Lazy<void> start_one(
       std::shared_ptr<coro_http_connection> conn) noexcept {
     co_await conn->start();
+  }
+
+  async_simple::coro::Lazy<void> start_one(
+      std::shared_ptr<coro_http_connection> conn, bool has_shake) noexcept {
+    co_await conn->start(has_shake);
   }
 
   void close_acceptor() {

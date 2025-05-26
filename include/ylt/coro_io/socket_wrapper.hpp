@@ -22,11 +22,22 @@
 namespace coro_io {
 struct socket_wrapper_t {
   // construct by listen tcp
-  socket_wrapper_t() {};
-  socket_wrapper_t(coro_io::ExecutorWrapper<> *executor)
-      : socket_(std::make_unique<asio::ip::tcp::socket>(
-            executor->get_asio_executor())),
-        executor_(executor) {
+  socket_wrapper_t(){};
+  socket_wrapper_t(coro_io::ExecutorWrapper<> *executor,
+                   const std::string &local_ip = "")
+      : executor_(executor) {
+    if (local_ip.empty()) {
+      socket_ = std::make_unique<asio::ip::tcp::socket>(
+          executor->get_asio_executor());
+    }
+    else {
+      asio::error_code ec;
+      socket_ = std::make_unique<asio::ip::tcp::socket>(
+          executor->get_asio_executor(),
+          asio::ip::tcp::endpoint(asio::ip::address::from_string(local_ip, ec),
+                                  0));
+    }
+
     init_client(true);
   };
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
@@ -167,8 +178,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
-  ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+      &ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;
