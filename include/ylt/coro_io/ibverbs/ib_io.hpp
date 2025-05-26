@@ -151,11 +151,9 @@ async_simple::coro::
   assert(len == io_size);
   socket_buffer.length = io_size;
   async_simple::Promise<std::pair<std::error_code,std::size_t>> promise;
-  auto tmp_prev_op=std::move(prev_op);
-  
   std::pair<std::error_code,std::size_t> result{};
-  if (tmp_prev_op) {
-    result = co_await std::move(*tmp_prev_op);
+  if (prev_op) {
+    result = co_await std::move(*prev_op);
   }
   prev_op=promise.getFuture();
   auto slot = co_await async_simple::coro::CurrentSlot{};
