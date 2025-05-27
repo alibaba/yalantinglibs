@@ -258,7 +258,7 @@ struct ibverbs_config {
                     .max_recv_wr = 64,
                     .max_send_sge = 1,
                     .max_recv_sge = 1,
-                    .max_inline_data = 0};
+                    .max_inline_data = 1};
   std::shared_ptr<coro_io::ib_device_t> device;
   std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool;
 };
