@@ -256,7 +256,7 @@ struct ibverbs_config {
   ibv_qp_type qp_type = IBV_QPT_RC;
   ibv_qp_cap cap = {.max_send_wr = 32,
                     .max_recv_wr = 32,
-                    .max_send_sge = 2,
+                    .max_send_sge = 3,
                     .max_recv_sge = 1,
                     .max_inline_data = 256};
   std::shared_ptr<coro_io::ib_device_t> device;
@@ -763,7 +763,6 @@ class ib_socket_t {
     assert(sge.size());
     if (sge[0].lkey == 0) {
       sr.send_flags = IBV_SEND_INLINE;
-      ELOG_TRACE << "enable inline data";
     }
     sr.next = NULL;
     sr.wr_id = (std::size_t)&state_->send_cb_.back();
