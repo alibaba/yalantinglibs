@@ -210,7 +210,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return buffer;
   }
   struct config_t {
-    size_t buffer_size = 2 * 1024 * 1024;                   // 4MB
+    size_t buffer_size = 1 * 1024 * 1024;                   // 4MB
     uint64_t max_memory_usage = 4ull * 1024 * 1024 * 1024;  // 4GB
     size_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};

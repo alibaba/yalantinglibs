@@ -161,7 +161,7 @@ async_simple::coro::
         [&ib_socket,socket_buffer](auto&& cb) mutable {
           ib_socket.post_send({&socket_buffer, 1}, std::move(cb));
         },
-        ib_socket).setLazyLocal(slot->signal()).start([p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
+        ib_socket).setLazyLocal(slot?slot->signal():nullptr).start([p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
     std::move(buffer).collect();
     if (!result.hasError()) {
       result.value().second=io_size;

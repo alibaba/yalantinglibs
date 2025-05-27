@@ -99,7 +99,7 @@ struct ib_socket_shared_state_t {
   std::deque<callback_t> send_cb_; // TODO optimize with circle buffer
   ib_buffer_t recv_buf_;
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
-                           std::size_t recv_buffer_cnt = 4,
+                           std::size_t recv_buffer_cnt = 6,
                            std::size_t max_recv_buffer_cnt = 32)
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         recv_buffer_cnt_(recv_buffer_cnt),
@@ -251,11 +251,11 @@ inline std::error_code ib_buffer_queue::post_recv_real(
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
   uint32_t cq_size = 1024;
-  uint32_t request_buffer_size = 2 * 1024 * 1024;
-  uint32_t recv_buffer_cnt = 4;
+  uint32_t request_buffer_size = 1 * 1024 * 1024;
+  uint32_t recv_buffer_cnt = 6;
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 32,
-                    .max_recv_wr = 32,
+  ibv_qp_cap cap = {.max_send_wr = 64,
+                    .max_recv_wr = 64,
                     .max_send_sge = 1,
                     .max_recv_sge = 1,
                     .max_inline_data = 0};
