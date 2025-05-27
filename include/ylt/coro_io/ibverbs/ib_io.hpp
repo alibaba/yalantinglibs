@@ -141,16 +141,27 @@ async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size,std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>> &prev_op) {
-  std::vector<ib_buffer_t> tmp_buffers;
-  auto buffer = ib_socket.buffer_pool()->get_buffer();
-  if (!buffer || buffer->length < io_size) [[unlikely]] {
-    co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
-                        std::size_t{0}};
+  ib_buffer_t buffer;
+  ibv_sge socket_buffer;
+  std::span<ibv_sge> list;
+  if (ib_socket.get_config().cap.max_inline_data>=io_size) {
+    if (sge_list.size()<=ib_socket.get_config().cap.max_send_sge) {
+      list=sge_list;
+    }
   }
-  ibv_sge socket_buffer=buffer.subview();
-  auto len = copy(sge_list, socket_buffer);
-  assert(len == io_size);
-  socket_buffer.length = io_size;
+  else {
+    buffer = ib_socket.buffer_pool()->get_buffer();
+    socket_buffer = buffer.subview();
+    if (!buffer || buffer->length < io_size) [[unlikely]] {
+      co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
+                          std::size_t{0}};
+    }
+    auto len = copy(sge_list, socket_buffer);
+    assert(len == io_size);
+    socket_buffer.length = io_size;
+    list={&socket_buffer, 1};
+  }
+  
   async_simple::Promise<std::pair<std::error_code,std::size_t>> promise;
   std::pair<std::error_code,std::size_t> result{};
   if (prev_op) {
@@ -159,12 +170,14 @@ async_simple::coro::
   prev_op=promise.getFuture();
   auto slot = co_await async_simple::coro::CurrentSlot{};
   auto work = coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-        [&ib_socket,socket_buffer](auto&& cb) mutable {
-          ib_socket.post_send({&socket_buffer, 1}, std::move(cb));
+        [&ib_socket,list](auto&& cb) mutable {
+          ib_socket.post_send(list, std::move(cb));
         },
         ib_socket);
-  auto cb = [p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
-    std::move(buffer).collect();
+  auto cb = [p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable {
+    if (buffer) {
+      std::move(buffer).collect();
+    }
     if (!result.hasError()) {
       result.value().second=io_size;
     }

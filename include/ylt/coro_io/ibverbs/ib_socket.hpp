@@ -103,7 +103,7 @@ struct ib_socket_shared_state_t {
                            std::size_t max_recv_buffer_cnt = 32)
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         recv_buffer_cnt_(recv_buffer_cnt),
-        recv_queue_(max_recv_buffer_cnt) {
+        recv_queue_(max_recv_buffer_cnt - 1) {
     if (ib_buffer_pool_ == nullptr) {
       ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
     }
@@ -254,11 +254,11 @@ struct ibverbs_config {
   uint32_t request_buffer_size = 2 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 4;
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 64,
-                    .max_recv_wr = 64,
-                    .max_send_sge = 1,
+  ibv_qp_cap cap = {.max_send_wr = 32,
+                    .max_recv_wr = 32,
+                    .max_send_sge = 2,
                     .max_recv_sge = 1,
-                    .max_inline_data = 1};
+                    .max_inline_data = 256};
   std::shared_ptr<coro_io::ib_device_t> device;
   std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool;
 };
@@ -279,15 +279,8 @@ class ib_socket_t {
       coro_io::ExecutorWrapper<>* executor, std::shared_ptr<ib_device_t> device,
       const ibverbs_config& config,
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
-      : executor_(executor),
-        state_(std::make_shared<ib_socket_shared_state_t>(
-            std::move(buffer_pool), config.recv_buffer_cnt,
-            config.cap.max_recv_wr)) {
-    if (device == nullptr) {
-      device = coro_io::g_ib_device();
-    }
-    state_->device_ = std::move(device);
-    init(config);
+      : executor_(executor) {
+    init(default_config, std::move(buffer_pool),std::move(device));
   }
 
  private:
@@ -298,15 +291,8 @@ class ib_socket_t {
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       std::shared_ptr<ib_device_t> device = coro_io::g_ib_device(),
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
-      : executor_(executor),
-        state_(std::make_shared<ib_socket_shared_state_t>(
-            std::move(buffer_pool), default_config.recv_buffer_cnt,
-            default_config.cap.max_recv_wr)) {
-    if (device == nullptr) {
-      device = coro_io::g_ib_device();
-    }
-    state_->device_ = std::move(device);
-    init(default_config);
+      : executor_(executor) {
+    init(default_config, std::move(buffer_pool),std::move(device));
   }
 
   ib_socket_t(ib_socket_t&&) = default;
@@ -563,15 +549,31 @@ class ib_socket_t {
   auto cancel() const { state_->cancel(); }
 
  private:
-  void init(const ibverbs_config& config) {
+
+  void init(const ibverbs_config& config, std::shared_ptr<ib_buffer_pool_t> buffer_pool, std::shared_ptr<ib_device_t> device) {
+   
+    if (config.cap.max_recv_sge == 0 || config.cap.max_send_sge == 0 || config.cap.max_send_wr == 0 || config.cap.max_recv_wr <= 1) {
+      ELOG_ERROR << "invalid qp cap value!";
+      throw std::invalid_argument{"invalid qp cap value!"};
+    }
+    if (device == nullptr) {
+      device = coro_io::g_ib_device();
+    }
     conf_ = config;
+    if (!device->is_support_inline_data()) {
+      conf_.cap.max_inline_data = 0;
+    }
+    state_ = std::make_shared<ib_socket_shared_state_t>(
+            std::move(buffer_pool), conf_.recv_buffer_cnt,
+            conf_.cap.max_recv_wr);
+    state_->device_ = std::move(device);
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
       auto err_code = std::make_error_code(std::errc{errno});
       ELOG_ERROR << " ibv_channel init failed" << err_code.message();
       throw std::system_error(err_code);
     }
-    state_->cq_.reset(ibv_create_cq(state_->device_->context(), config.cq_size,
+    state_->cq_.reset(ibv_create_cq(state_->device_->context(), conf_.cq_size,
                                     NULL, state_->channel_.get(), 0));
     if (!state_->cq_) [[unlikely]] {
       auto err_code = std::make_error_code(std::errc{errno});
@@ -588,11 +590,26 @@ class ib_socket_t {
     qp_init_attr.send_cq = state_->cq_.get();
     qp_init_attr.recv_cq = state_->cq_.get();
     qp_init_attr.cap = conf_.cap;
-    auto qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
-    if (qp == nullptr) {
-      auto err_code = std::make_error_code(std::errc{errno});
-      ELOG_ERROR << "init qp failed: " << err_code.message();
-      throw std::system_error(err_code);
+    ibv_qp* qp;
+    do {
+      qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
+      if (qp == nullptr) {
+        auto err_code = std::make_error_code(std::errc{errno});
+        if (qp_init_attr.cap.max_inline_data > 0 && err_code.value()==EINVAL) {
+          qp_init_attr.cap.max_inline_data = 0;
+        }
+        else {
+          ELOG_ERROR << "init qp failed: " << err_code.message();
+          throw std::system_error(err_code);
+        }
+      }
+      else {
+        break;
+      }
+    }while (true);
+    if (qp_init_attr.cap.max_inline_data == 0 &&
+        conf_.cap.max_inline_data != 0) {
+      get_device()->set_support_inline_data(false);
     }
     state_->qp_.reset(qp);
   }
@@ -743,13 +760,17 @@ class ib_socket_t {
 
     
     state_->send_cb_.push_back(std::move(handler));
-
+    assert(sge.size());
+    if (sge[0].lkey == 0) {
+      sr.send_flags = IBV_SEND_INLINE;
+      ELOG_TRACE << "enable inline data";
+    }
     sr.next = NULL;
     sr.wr_id = (std::size_t)&state_->send_cb_.back();
     sr.sg_list = sge.data();
     sr.num_sge = sge.size();
     sr.opcode = IBV_WR_SEND;
-    sr.send_flags = IBV_SEND_SIGNALED;
+    sr.send_flags |= IBV_SEND_SIGNALED;
     if (state_->has_close_) {
       return std::make_error_code(std::errc::operation_canceled);
     }
