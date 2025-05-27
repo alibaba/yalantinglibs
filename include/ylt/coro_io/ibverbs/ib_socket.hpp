@@ -251,7 +251,7 @@ inline std::error_code ib_buffer_queue::post_recv_real(
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
   uint32_t cq_size = 1024;
-  uint32_t request_buffer_size = 4 * 1024 * 1024;
+  uint32_t request_buffer_size = 2 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 4;
   ibv_qp_type qp_type = IBV_QPT_RC;
   ibv_qp_cap cap = {.max_send_wr = 32,
