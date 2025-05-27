@@ -8,6 +8,7 @@
 #include <exception>
 #include <future>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <system_error>
@@ -157,17 +158,24 @@ async_simple::coro::
   }
   prev_op=promise.getFuture();
   auto slot = co_await async_simple::coro::CurrentSlot{};
-  coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+  auto work = coro_io::async_io<std::pair<std::error_code, std::size_t>>(
         [&ib_socket,socket_buffer](auto&& cb) mutable {
           ib_socket.post_send({&socket_buffer, 1}, std::move(cb));
         },
-        ib_socket).setLazyLocal(slot?slot->signal():nullptr).start([p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
+        ib_socket);
+  auto cb = [p=std::move(promise),io_size=io_size,buffer=std::move(buffer)](auto&& result) mutable{
     std::move(buffer).collect();
     if (!result.hasError()) {
       result.value().second=io_size;
     }
     p.setValue(std::move(result));
-  });
+  };
+  if (slot) {
+    std::move(work).setLazyLocal(slot->signal()).start(std::move(cb));
+  }
+  else {
+    std::move(work).start(std::move(cb));
+  }
   
   co_return std::pair{result.first, result.second};
 }
