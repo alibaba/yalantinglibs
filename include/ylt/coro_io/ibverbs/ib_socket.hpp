@@ -143,6 +143,12 @@ struct ib_socket_shared_state_t {
     }
   }
 
+  struct resume_struct {
+    std::error_code ec;
+    std::size_t len;
+    callback_t* cb;
+  };
+
   std::error_code poll_completion() {
     void* ev_ctx;
     auto cq = cq_.get();
@@ -161,10 +167,13 @@ struct ib_socket_shared_state_t {
     }
     struct ibv_wc wc{};
     int ne = 0;
+    std::vector<resume_struct> vec;
+    callback_t tmp_callback;
     while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
       if (ne < 0) {
         ELOG_ERROR << "poll CQ failed:" << ne;
-        return std::make_error_code(std::errc::io_error);
+        ec = std::make_error_code(std::errc::io_error);
+        break;
       }
       if (ne > 0) {
         ELOG_TRACE << "Completion was found in CQ with status:" << wc.status;
@@ -186,7 +195,8 @@ struct ib_socket_shared_state_t {
                 close(ec);
               }
             }
-            resume(std::pair{ec, (std::size_t)wc.byte_len}, recv_cb_);
+            tmp_callback=std::move(recv_cb_);
+            vec.push_back({ec,wc.byte_len,&tmp_callback});
           }
           else {
             recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
@@ -199,13 +209,15 @@ struct ib_socket_shared_state_t {
           }
         }
         else {
-          resume(std::pair{ec, (std::size_t)wc.byte_len},
-                 *(callback_t*)wc.wr_id);
+          vec.push_back({ec,wc.byte_len,(callback_t*)wc.wr_id});
         }
         if (cq_ == nullptr) {
           break;
         }
       }
+    }
+    for (auto &result:vec) {
+      resume(std::pair{result.ec, result.len}, *result.cb);
     }
     return ec;
   }
