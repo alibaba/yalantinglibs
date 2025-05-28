@@ -86,7 +86,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
     if (r.hasError() || s.hasError()) [[unlikely]] {
       co_return std::make_error_code(std::errc::io_error);
     }
-    if (s.value().first) [[unlikely]] {
+    if (r.value().first) [[unlikely]] {
       co_return r.value().first;
     }
     if (s.value().first) [[unlikely]] {

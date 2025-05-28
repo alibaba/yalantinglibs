@@ -143,11 +143,11 @@ async_simple::coro::
   }
   else {
     buffer = ib_socket.buffer_pool()->get_buffer();
-    socket_buffer = buffer.subview();
     if (!buffer || buffer->length < io_size) [[unlikely]] {
       co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
                           std::size_t{0}};
     }
+    socket_buffer = buffer.subview();
     auto len = copy(sge_list, socket_buffer);
     assert(len == io_size);
     socket_buffer.length = io_size;
