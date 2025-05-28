@@ -16,6 +16,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SyncAwait.h"
+#include "doctest.h"
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -29,7 +30,6 @@
 #include "ylt/standalone/iguana/prettify.hpp"
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
-#include "doctest.h"
 struct config_t {
   std::size_t buffer_size = 2 * 1024 * 1024;
   std::size_t request_size = 20 * 1024 * 1024 + 1;
@@ -324,7 +324,7 @@ TEST_CASE("ib socket pressure test") {
     struct_json::to_json(config, s);
     fs << iguana::prettify(s);
   }
-  auto old_s= easylog::logger<>::instance().get_min_severity();
+  auto old_s = easylog::logger<>::instance().get_min_severity();
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;
@@ -333,7 +333,7 @@ TEST_CASE("ib socket pressure test") {
     s = easylog::Severity::WARN;
   }
   easylog::logger<>::instance().set_min_severity(s);
-  
+
   ELOG_INFO << "start echo server & client";
   if (config.enable_server) {
     echo_accept().start([](auto &&ec) {
@@ -356,8 +356,8 @@ TEST_CASE("ib socket pressure test") {
   for (int i = 0; i < config.test_time; ++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c = cnt_p->exchange(0);
-    std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s, alive connection:" << connect_cnt
-              << std::endl;
+    std::cout << "Throughput:" << 8.0 * c / 1000'000'000
+              << " Gb/s, alive connection:" << connect_cnt << std::endl;
   }
   // easylog::logger<>::instance().set_min_severity(old_s);
 }

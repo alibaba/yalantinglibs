@@ -172,7 +172,8 @@ async_simple::coro::Lazy<std::error_code> test_write(coro_io::ib_socket_t& soc,
   co_return ec;
 }
 
-async_simple::coro::Lazy<std::error_code> test_close(coro_io::ib_socket_t& soc) {
+async_simple::coro::Lazy<std::error_code> test_close(
+    coro_io::ib_socket_t& soc) {
   soc.close();
   co_return std::error_code{};
 }
@@ -214,13 +215,12 @@ async_simple::coro::Lazy<std::error_code> read_iov(coro_io::ib_socket_t& soc,
 }
 TEST_CASE("test socket close") {
   ELOG_INFO << "start test socket close";
-    auto result = async_simple::coro::syncAwait(
-    collectAll(echo_accept({test(test_read, 16)}),
-                   echo_connect({test(test_close)})));
-    auto& ec1 = std::get<0>(result);
-    auto& ec2 = std::get<1>(result);
-    CHECK_MESSAGE(ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  auto result = async_simple::coro::syncAwait(collectAll(
+      echo_accept({test(test_read, 16)}), echo_connect({test(test_close)})));
+  auto& ec1 = std::get<0>(result);
+  auto& ec2 = std::get<1>(result);
+  CHECK_MESSAGE(ec1.value(), ec1.value().message());
+  CHECK_MESSAGE(!ec2.value(), ec2.value().message());
 }
 
 TEST_CASE("test socket io") {
