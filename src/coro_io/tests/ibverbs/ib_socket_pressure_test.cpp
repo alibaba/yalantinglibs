@@ -29,16 +29,17 @@
 #include "ylt/standalone/iguana/prettify.hpp"
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
+#include "doctest.h"
 struct config_t {
   std::size_t buffer_size = 2 * 1024 * 1024;
-  std::size_t request_size = 2 * 1024 * 1024;
-  int concurrency = 2;
+  std::size_t request_size = 20 * 1024 * 1024 + 1;
+  int concurrency = 50;
   int test_type = 0;
   int enable_log = 0;
   bool enable_server = true;
   std::string enable_client = "127.0.0.1";
   int port = 58110;
-  int test_time = 100;
+  int test_time = 10;
 };
 YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
          enable_log, enable_server, enable_client, port, test_time);
@@ -313,8 +314,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   --connect_cnt;
   co_return ec;
 }
-
-int main() {
+TEST_CASE("ib socket pressure test") {
   try {
     struct_json::from_json_file(config, "ib_bench_config.json");
   } catch (...) {
@@ -324,6 +324,7 @@ int main() {
     struct_json::to_json(config, s);
     fs << iguana::prettify(s);
   }
+  auto old_s= easylog::logger<>::instance().get_min_severity();
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;
@@ -332,6 +333,7 @@ int main() {
     s = easylog::Severity::WARN;
   }
   easylog::logger<>::instance().set_min_severity(s);
+  
   ELOG_INFO << "start echo server & client";
   if (config.enable_server) {
     echo_accept().start([](auto &&ec) {
@@ -357,5 +359,5 @@ int main() {
     std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s, alive connection:" << connect_cnt
               << std::endl;
   }
-  return 0;
+  // easylog::logger<>::instance().set_min_severity(old_s);
 }
