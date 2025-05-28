@@ -141,6 +141,9 @@ async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size,std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>> &prev_op) {
+  if (io_size==0) [[unlikely]] {
+    co_return std::pair{std::error_code{},0};
+  }
   ib_buffer_t buffer;
   ibv_sge socket_buffer;
   std::span<ibv_sge> list;

@@ -335,6 +335,8 @@ class ib_socket_t {
   void post_recv(callback_t&& cb) { post_recv_impl(std::move(cb)); }
 
   void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
+    ELOG_TRACE << "post send sge cnt:" << buffer.size() << ", address:" << buffer[0].addr
+             << ",length:" << buffer[0].length;
     if (auto ec = post_send_impl(buffer, std::move(cb)); ec) [[unlikely]] {
       auto cb=state_->send_cb_.back();
       state_->send_cb_.pop_back();
