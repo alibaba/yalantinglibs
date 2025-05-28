@@ -61,8 +61,7 @@ struct socket_wrapper_t {
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool)
       : executor_(executor),
         ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, buffer_pool)) {
-    ib_socket_->prepare_accpet(
-        std::make_unique<asio::ip::tcp::socket>(std::move(soc)));
+    ib_socket_->prepare_accpet(std::move(soc));
   }
 #endif
   // tcp client init

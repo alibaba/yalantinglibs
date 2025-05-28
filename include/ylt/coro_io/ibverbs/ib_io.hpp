@@ -35,10 +35,10 @@ namespace coro_io {
 // unlike tcp socket, client won't connnected util server first read ib_socket.
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor& acceptor, coro_io::ib_socket_t& ib_socket) {
-  auto soc = std::make_unique<asio::ip::tcp::socket>(ib_socket.get_executor());
+  asio::ip::tcp::socket soc(ib_socket.get_executor());
   auto ec = co_await async_io<std::error_code>(
       [&](auto cb) {
-        acceptor.async_accept(*soc, cb);
+        acceptor.async_accept(soc, cb);
       },
       acceptor);
 

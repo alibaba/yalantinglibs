@@ -425,24 +425,15 @@ class ib_socket_t {
   auto get_device() const noexcept { return state_->device_; }
 
   async_simple::coro::Lazy<std::error_code> accept() noexcept {
-    if (soc_ == nullptr) {
-      co_return std::make_error_code(std::errc::invalid_argument);
-    }
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
     char buffer[sz.size()];
-    auto [ec2, canceled] = co_await async_simple::coro::collectAll<
-        async_simple::SignalType::Terminate>(
-        async_read(*soc_, asio::buffer(buffer)),
-        coro_io::sleep_for(std::chrono::milliseconds{100000}, executor_));
-    if (ec2.value().first) [[unlikely]] {
-      co_return std::move(ec2.value().first);
+    auto [ec,_] = co_await async_read(state_->soc_, asio::buffer(buffer));
+    if (ec) [[unlikely]] {
+      co_return ec;
     }
-    else if (canceled.value()) [[unlikely]] {
-      co_return std::make_error_code(std::errc::timed_out);
-    }
-    auto ec3 = struct_pack::deserialize_to(peer_info, std::span{buffer});
-    if (ec3) [[unlikely]] {
+    auto ec2 = struct_pack::deserialize_to(peer_info, std::span{buffer});
+    if (ec2) [[unlikely]] {
       co_return std::make_error_code(std::errc::protocol_error);
     }
     ELOG_DEBUG << "Remote QP number =  " << peer_info.qp_num;
@@ -495,11 +486,13 @@ class ib_socket_t {
     peer_info.buffer_size = conf_.request_buffer_size;
     memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
     struct_pack::serialize_to((char*)buffer, sz, peer_info);
-    auto& soc_ref = *soc_;
-    async_write(soc_ref, asio::buffer(buffer))
-        .start([soc = std::move(soc_), state = state_](auto&& ec) {
+    async_write(state_->soc_, asio::buffer(buffer))
+        .start([state = state_](auto&& ec) {
           try {
             if (!ec.value().first) {
+              std::error_code ec;
+              state->soc_.shutdown(asio::ip::tcp::socket::shutdown_both,ec);
+              state->soc_.close(ec);
               return;
             }
             ELOG_WARN << "rmda connection failed by exception:"
@@ -509,16 +502,15 @@ class ib_socket_t {
           }
           state->close();
         });
-    soc_ = nullptr;
     co_return std::error_code{};
   }
-  void prepare_accpet(std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
-    soc_ = std::move(soc);
+  void prepare_accpet(asio::ip::tcp::socket soc) noexcept {
+    state_->soc_ = std::move(soc);
   }
 
   async_simple::coro::Lazy<std::error_code> accept(
-      std::unique_ptr<asio::ip::tcp::socket> soc) noexcept {
-    soc_ = std::move(soc);
+      asio::ip::tcp::socket soc) noexcept {
+    state_->soc_ = std::move(soc);
     return accept();
   }
 
@@ -552,6 +544,7 @@ class ib_socket_t {
       }
       std::tie(ec, len) = co_await async_read(state_->soc_, asio::buffer(buffer));
       std::error_code ignore_ec;
+      state_->soc_.shutdown(asio::ip::tcp::socket::shutdown_both,ignore_ec);
       state_->soc_.close(ignore_ec);
       if (ec) {
         ELOG_INFO << ec.message();
@@ -859,7 +852,6 @@ class ib_socket_t {
   asio::ip::address remote_address_;
   uint32_t remote_qp_num_{};
   std::string_view remain_data_;
-  std::unique_ptr<asio::ip::tcp::socket> soc_;
   std::shared_ptr<ib_socket_shared_state_t> state_;
   coro_io::ExecutorWrapper<>* executor_;
   ibverbs_config conf_;
