@@ -53,24 +53,13 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     coro_io::ib_socket_t& ib_socket, const std::string& host,
     const std::string& port) {
-  asio::ip::tcp::socket soc{ib_socket.get_executor()};
-  auto ec =
-      co_await async_connect(ib_socket.get_coro_executor(), soc, host, port);
-  if (ec) [[unlikely]] {
-    co_return std::move(ec);
-  }
-  co_return co_await ib_socket.connect(soc);
+  return ib_socket.connect(host,port);
 }
 
 template <typename EndPointSeq>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     coro_io::ib_socket_t& ib_socket, const EndPointSeq& endpoint) noexcept {
-  asio::ip::tcp::socket soc{ib_socket.get_executor()};
-  auto ec = co_await async_connect(soc, endpoint);
-  if (ec) [[unlikely]] {
-    co_return std::move(ec);
-  }
-  co_return co_await ib_socket.connect(soc);
+  return ib_socket.connect(endpoint);
 }
 
 namespace detail {
