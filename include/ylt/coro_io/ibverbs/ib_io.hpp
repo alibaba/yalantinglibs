@@ -32,7 +32,6 @@
 #include "ylt/struct_pack/reflection.hpp"
 namespace coro_io {
 
-// unlike tcp socket, client won't connnected util server first read ib_socket.
 inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor& acceptor, coro_io::ib_socket_t& ib_socket) {
   asio::ip::tcp::socket soc(ib_socket.get_executor());

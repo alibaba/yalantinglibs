@@ -101,7 +101,7 @@ struct ib_socket_shared_state_t
   std::queue<std::pair<std::error_code, std::size_t>>
       recv_result;  // TODO optimize with circle buffer
   callback_t recv_cb_;
-  std::deque<callback_t> send_cb_;  // TODO optimize with circle buffer
+  callback_t send_cb_;
   ib_buffer_t recv_buf_;
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            coro_io::ExecutorWrapper<>* executor,
@@ -168,23 +168,16 @@ struct ib_socket_shared_state_t
   auto get_executor() const noexcept { return executor_->get_asio_executor(); }
 
   async_simple::coro::Lazy<void> shutdown() {
-    ELOG_TRACE << "ibv shutdown test";
-    auto result = co_await collectAll(
+    co_await collectAll(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
               if (auto ec = post_send_impl({}, std::move(cb)); ec)
                   [[unlikely]] {
-                auto cb = send_cb_.back();
-                send_cb_.pop_back();
-                cb(std::pair{std::error_code{}, std::size_t{0}});
+                send_cb_(std::pair{std::error_code{}, std::size_t{0}});
               }
             },
             *this),
-        coro_io::sleep_for(std::chrono::seconds{1}));
-    if (!std::get<0>(result).hasError()) {
-      ELOG_TRACE << "ibv shutdown over:"
-                 << std::get<0>(result).value().first.message();
-    }
+        coro_io::sleep_for(std::chrono::seconds{1}, executor_));
     co_return;
   }
 
@@ -198,12 +191,12 @@ struct ib_socket_shared_state_t
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
 
-    send_cb_.push_back(std::move(handler));
+    send_cb_ = std::move(handler);
     if (sge.size() && sge[0].lkey == 0) {
       sr.send_flags = IBV_SEND_INLINE;
     }
     sr.next = NULL;
-    sr.wr_id = (std::size_t)&send_cb_.back();
+    sr.wr_id = (uintptr_t)&send_cb_;
     sr.sg_list = sge.data();
     sr.num_sge = sge.size();
     sr.opcode = IBV_WR_SEND;
@@ -258,7 +251,7 @@ struct ib_socket_shared_state_t
                    << ",len:" << wc.byte_len;
         if (wc.wr_id == 0) {  // recv
           if (wc.byte_len == 0) {
-            ELOG_TRACE << "close by peer";
+            ELOG_INFO << "close by peer";
             peer_close_ = true;
             close();
             break;
@@ -326,11 +319,11 @@ inline std::error_code ib_buffer_queue::post_recv_real(
 
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
-  uint32_t cq_size = 1024;
+  uint32_t cq_size = 128;
   uint32_t request_buffer_size = 2 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 4;
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 32,
+  ibv_qp_cap cap = {.max_send_wr = 1,
                     .max_recv_wr = 32,
                     .max_send_sge = 3,
                     .max_recv_sge = 1,
@@ -418,9 +411,7 @@ class ib_socket_t {
     }
     if (auto ec = state_->post_send_impl(buffer, std::move(cb)); ec)
         [[unlikely]] {
-      auto cb = state_->send_cb_.back();
-      state_->send_cb_.pop_back();
-      safe_resume(ec, std::move(cb));
+      safe_resume(ec, std::move(state_->send_cb_));
     }
   }
 
@@ -811,11 +802,8 @@ class ib_socket_t {
           self->close();
           ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
                                            self->recv_cb_);
-          while (!self->send_cb_.empty()) {
-            auto cb = self->send_cb_.front();
-            self->send_cb_.pop_front();
-            ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}}, cb);
-          }
+          ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
+                                           self->send_cb_);
           break;
         }
       }

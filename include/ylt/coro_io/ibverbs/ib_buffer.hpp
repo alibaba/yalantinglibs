@@ -210,7 +210,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return buffer;
   }
   struct config_t {
-    size_t buffer_size = 2 * 1024 * 1024;                   // 4MB
+    size_t buffer_size = 2 * 1024 * 1024;                   // 2MB
     uint64_t max_memory_usage = 4ull * 1024 * 1024 * 1024;  // 4GB
     size_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
@@ -245,7 +245,7 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                                        int ib_flags) {
   auto mr = ibv_reg_mr(dev->pd(), ptr, size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
-    ELOG_INFO << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
+    ELOG_DEBUG << "ibv_reg_mr regist: " << mr << " with pd:" << dev->pd();
     return ib_buffer_t{mr, std::move(dev), pool.weak_from_this()};
   }
   else {
