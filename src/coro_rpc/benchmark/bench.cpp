@@ -3,7 +3,6 @@
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "cmdline.h"
-#include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
