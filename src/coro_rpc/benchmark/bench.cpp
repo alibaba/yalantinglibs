@@ -101,7 +101,8 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
     auto end = std::chrono::system_clock::now();
     auto dur = (end - start) / std::chrono::milliseconds(1);
     double val = (8.0 * c * 1000) / (1000'000'000ll * dur);
-    std::cout << "Throughput:" << val << " Gb/s\n";
+    std::cout << "qps " << c / conf.data_len << ", Throughput:" << val
+              << " Gb/s\n";
   }
 }
 
