@@ -41,7 +41,6 @@
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
