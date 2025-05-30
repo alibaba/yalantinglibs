@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -16,6 +17,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SyncAwait.h"
+#include "doctest.h"
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -30,21 +32,21 @@
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
 struct config_t {
-  std::size_t buffer_size = 4 * 1024 * 1024;
-  std::size_t request_size = 4 * 1024 * 1024;
-  int concurrency = 2;
+  std::size_t buffer_size = 2 * 1024 * 1024;
+  std::size_t request_size = 20 * 1024 * 1024 + 1;
+  int concurrency = 50;
   int test_type = 0;
   int enable_log = 0;
   bool enable_server = true;
   std::string enable_client = "127.0.0.1";
   int port = 58110;
-  int test_time = 100;
+  int test_time = 10;
 };
 YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
          enable_log, enable_server, enable_client, port, test_time);
 
 config_t config;
-
+static std::shared_ptr<coro_io::ib_buffer_pool_t> pool;
 std::atomic<uint64_t> cnt[2];
 
 std::atomic<uint64_t> connect_cnt;
@@ -86,7 +88,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
     if (r.hasError() || s.hasError()) [[unlikely]] {
       co_return std::make_error_code(std::errc::io_error);
     }
-    if (s.value().first) [[unlikely]] {
+    if (r.value().first) [[unlikely]] {
       co_return r.value().first;
     }
     if (s.value().first) [[unlikely]] {
@@ -177,8 +179,8 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
 
   ELOG_INFO << "tcp listening";
   while (true) {
-    coro_io::ib_socket_t soc;
-    soc.get_config().request_buffer_size = config.buffer_size;
+    coro_io::ib_socket_t soc(coro_io::get_global_executor(),
+                             coro_io::g_ib_device(), pool);
     auto ec = co_await coro_io::async_accept(acceptor, soc);
 
     if (ec) [[unlikely]] {
@@ -291,8 +293,8 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
 }
 
 async_simple::coro::Lazy<std::error_code> echo_connect() {
-  coro_io::ib_socket_t soc{};
-  soc.get_config().request_buffer_size = config.buffer_size;
+  coro_io::ib_socket_t soc(coro_io::get_global_executor(),
+                           coro_io::g_ib_device(), pool);
   auto ec = co_await coro_io::async_connect(soc, config.enable_client,
                                             std::to_string(config.port));
   if (ec) [[unlikely]] {
@@ -313,8 +315,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   --connect_cnt;
   co_return ec;
 }
-
-int main() {
+TEST_CASE("ib socket pressure test") {
   try {
     struct_json::from_json_file(config, "ib_bench_config.json");
   } catch (...) {
@@ -324,6 +325,9 @@ int main() {
     struct_json::to_json(config, s);
     fs << iguana::prettify(s);
   }
+  auto old_s = easylog::logger<>::instance().get_min_severity();
+  pool = coro_io::ib_buffer_pool_t::create({},
+                                           {.buffer_size = config.buffer_size});
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;
@@ -332,6 +336,7 @@ int main() {
     s = easylog::Severity::WARN;
   }
   easylog::logger<>::instance().set_min_severity(s);
+
   ELOG_INFO << "start echo server & client";
   if (config.enable_server) {
     echo_accept().start([](auto &&ec) {
@@ -354,8 +359,8 @@ int main() {
   for (int i = 0; i < config.test_time; ++i) {
     std::this_thread::sleep_for(std::chrono::seconds{1});
     auto c = cnt_p->exchange(0);
-    std::cout << "Throughput:" << 8.0 * c / 1000'000'000 << " Gb/s, alive connection:" << connect_cnt
-              << std::endl;
+    std::cout << "Throughput:" << 8.0 * c / 1000'000'000
+              << " Gb/s, alive connection:" << connect_cnt << std::endl;
   }
-  return 0;
+  // easylog::logger<>::instance().set_min_severity(old_s);
 }

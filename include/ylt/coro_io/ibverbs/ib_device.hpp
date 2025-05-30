@@ -211,6 +211,11 @@ class ib_device_t {
   asio::ip::address gid_address() const noexcept { return gid_address_; }
   const ibv_port_attr& attr() const noexcept { return attr_; }
 
+  bool is_support_inline_data() const noexcept { return support_inline_data_; }
+  void set_support_inline_data(bool flag) noexcept {
+    support_inline_data_ = flag;
+  }
+
  private:
   int ipv6_addr_v4mapped(const struct in6_addr* a) {
     return ((a->s6_addr32[0] | a->s6_addr32[1]) |
@@ -243,6 +248,7 @@ class ib_device_t {
   std::string name_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
+  std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;
   ibv_gid gid_;
   asio::ip::address gid_address_;

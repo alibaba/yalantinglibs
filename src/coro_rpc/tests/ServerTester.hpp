@@ -114,20 +114,16 @@ struct ServerTester : TesterConfig {
     test_all();
   }
   virtual void test_all() {
-    if (!use_rdma) {
-      test_connect_timeout();
-    }
+    test_connect_timeout();
     test_function_registered();
     if (sync_client) {
       // only sync_call implement inject behavior
       test_client_send_bad_header();
       test_client_send_bad_magic_num();
       test_client_send_header_length_is_0();
-      if (!use_rdma) {
-        test_client_close_socket_after_send_header();
-        test_client_close_socket_after_send_partial_header();
-        test_client_close_socket_after_send_payload();
-      }
+      test_client_close_socket_after_send_header();
+      test_client_close_socket_after_send_partial_header();
+      test_client_close_socket_after_send_payload();
     }
     test_heartbeat();
     test_call_function_with_long_response_time();
@@ -390,8 +386,6 @@ struct ServerTester : TesterConfig {
     auto client = init_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     coro_rpc::err_code ec;
-    // ec = syncAwait(client->connect("127.0.0.1", port, 0ms));
-    // CHECK_MESSAGE(ec == std::errc::timed_out, make_error_code(ec).message());
     auto client2 = init_client();
     ec = syncAwait(client2->connect("10.255.255.1", port_, 5ms));
     CHECK_MESSAGE(ec,
