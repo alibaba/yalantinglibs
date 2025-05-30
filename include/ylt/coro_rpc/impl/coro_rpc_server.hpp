@@ -41,6 +41,7 @@
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
@@ -114,6 +115,9 @@ class coro_rpc_server_base {
     if (config.ssl_config) {
       init_ssl_context_helper(context_, config.ssl_config.value());
     }
+    else if (config.ibv_config) {
+      init_ibv(config.ibv_config);
+    }
 #endif
     init_address(config.address);
   }
@@ -129,7 +133,9 @@ class coro_rpc_server_base {
   }
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_ibv() { use_ibv_ = true; }
+  void init_ibv(const coro_io::ibverbs_config &conf = {}) {
+    ibv_config_ = conf;
+  }
 #endif
 
   /*!
@@ -167,7 +173,7 @@ class coro_rpc_server_base {
       }
       errc_ = listen();
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t & pool) {
+        if constexpr (requires(typename server_config::executor_pool_t &pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
@@ -436,8 +442,9 @@ class coro_rpc_server_base {
         }
 #endif
 #ifdef YLT_ENABLE_IBV
-        if (use_ibv_) {
-          wrapper = {std::move(socket), executor, nullptr, nullptr};
+        if (ibv_config_.has_value()) {
+          wrapper = {std::move(socket), executor, *ibv_config_, nullptr,
+                     nullptr};
           break;
         }
 #endif
@@ -524,7 +531,7 @@ class coro_rpc_server_base {
   bool use_ssl_ = false;
 #endif
 #ifdef YLT_ENABLE_IBV
-  bool use_ibv_ = false;
+  std::optional<coro_io::ibverbs_config> ibv_config_;
 #endif
 };
 }  // namespace coro_rpc

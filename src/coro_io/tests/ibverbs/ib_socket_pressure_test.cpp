@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -45,7 +46,7 @@ YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
          enable_log, enable_server, enable_client, port, test_time);
 
 config_t config;
-
+static std::shared_ptr<coro_io::ib_buffer_pool_t> pool;
 std::atomic<uint64_t> cnt[2];
 
 std::atomic<uint64_t> connect_cnt;
@@ -178,8 +179,8 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
 
   ELOG_INFO << "tcp listening";
   while (true) {
-    coro_io::ib_socket_t soc;
-    soc.get_config().request_buffer_size = config.buffer_size;
+    coro_io::ib_socket_t soc(coro_io::get_global_executor(),
+                             coro_io::g_ib_device(), pool);
     auto ec = co_await coro_io::async_accept(acceptor, soc);
 
     if (ec) [[unlikely]] {
@@ -292,8 +293,8 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
 }
 
 async_simple::coro::Lazy<std::error_code> echo_connect() {
-  coro_io::ib_socket_t soc{};
-  soc.get_config().request_buffer_size = config.buffer_size;
+  coro_io::ib_socket_t soc(coro_io::get_global_executor(),
+                           coro_io::g_ib_device(), pool);
   auto ec = co_await coro_io::async_connect(soc, config.enable_client,
                                             std::to_string(config.port));
   if (ec) [[unlikely]] {
@@ -325,6 +326,8 @@ TEST_CASE("ib socket pressure test") {
     fs << iguana::prettify(s);
   }
   auto old_s = easylog::logger<>::instance().get_min_severity();
+  pool = coro_io::ib_buffer_pool_t::create({},
+                                           {.buffer_size = config.buffer_size});
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;

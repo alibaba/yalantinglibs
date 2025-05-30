@@ -16,7 +16,12 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <thread>
+
+#ifdef YLT_ENABLE_IBV
+#include "ylt/coro_io/ibverbs/ib_socket.hpp"
+#endif
 
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/coro_rpc_server.hpp"
@@ -34,6 +39,9 @@ struct config_base {
   std::string address = "0.0.0.0";
 #ifdef YLT_ENABLE_SSL
   std::optional<ssl_configure> ssl_config = std::nullopt;
+#endif
+#ifdef YLT_ENABLE_IBV
+  std::optional<coro_io::ibverbs_config> ibv_config = std::nullopt;
 #endif
 };
 

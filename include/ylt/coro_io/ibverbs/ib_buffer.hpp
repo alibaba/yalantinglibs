@@ -80,13 +80,14 @@ struct ib_buffer_t {
   ~ib_buffer_t();
 };
 
+std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {});
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  private:
   friend struct ib_buffer_t;
   struct private_construct_token {};
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
       std::weak_ptr<ib_buffer_pool_t> self_weak,
-      std::chrono::milliseconds sleep_time, std::size_t clear_cnt) {
+      std::chrono::milliseconds sleep_time) {
     std::shared_ptr<ib_buffer_pool_t> self = self_weak.lock();
     if (self == nullptr) {
       co_return;
@@ -101,7 +102,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       while (true) {
         ELOG_TRACE << "start collect timeout buffer of pool{" << self.get()
                    << "}, now client count: " << self->free_buffers_.size();
-        std::size_t is_all_cleared = self->free_buffers_.clear_old(clear_cnt);
+        std::size_t is_all_cleared = self->free_buffers_.clear_old(1000);
         ELOG_TRACE << "finish collect timeout buffer of pool{" << self.get()
                    << "}, now client cnt: " << self->free_buffers_.size();
         if (is_all_cleared != 0) [[unlikely]] {
@@ -134,8 +135,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                    << "}";
         collect_idle_timeout_client(this->weak_from_this(),
                                     (std::max)(pool_config_.idle_timeout,
-                                               std::chrono::milliseconds{50}),
-                                    pool_config_.idle_queue_per_max_clear_count)
+                                               std::chrono::milliseconds{50}))
             .directlyStart(
                 [](auto&&) {
                 },
@@ -212,13 +212,13 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   struct config_t {
     size_t buffer_size = 2 * 1024 * 1024;                   // 2MB
     uint64_t max_memory_usage = 4ull * 1024 * 1024 * 1024;  // 4GB
-    size_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
   };
   ib_buffer_pool_t(private_construct_token t,
                    std::shared_ptr<ib_device_t> device,
                    const config_t& pool_config)
-      : device_(std::move(device)), pool_config_(std::move(pool_config)) {}
+      : device_(device ? std::move(device) : coro_io::g_ib_device()),
+        pool_config_(std::move(pool_config)) {}
   static std::shared_ptr<ib_buffer_pool_t> create(
       std::shared_ptr<ib_device_t> device, const config_t& pool_config) {
     return std::make_shared<ib_buffer_pool_t>(private_construct_token{},
@@ -252,10 +252,22 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
     throw std::make_error_code(std::errc{errno});
   }
 };
+
+inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf) {
+  static auto dev = std::make_shared<ib_device_t>(conf);
+  return dev;
+}
+
+inline std::shared_ptr<ib_buffer_pool_t> g_ib_buffer_pool(
+    const ib_buffer_pool_t::config_t& pool_config = {}) {
+  static auto pool = ib_buffer_pool_t::create(g_ib_device(), pool_config);
+  return pool;
+}
+
 inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
                                 std::weak_ptr<ib_buffer_pool_t> owner_pool)
     : mr_(mr),
-      dev_(std::move(dev)),
+      dev_(dev ? std::move(dev) : coro_io::g_ib_device()),
       owner_pool_(std::move(owner_pool)),
       has_memory_ownership_(false) {
   if (auto ptr = owner_pool_.lock(); ptr) {
@@ -299,14 +311,4 @@ inline void ib_buffer_t::change_owner(
   }
 }
 
-inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {}) {
-  static auto dev = std::make_shared<ib_device_t>(conf);
-  return dev;
-}
-
-inline std::shared_ptr<ib_buffer_pool_t> g_ib_buffer_pool(
-    const ib_buffer_pool_t::config_t& pool_config = {}) {
-  static auto pool = ib_buffer_pool_t::create(g_ib_device(), pool_config);
-  return pool;
-}
 }  // namespace coro_io

@@ -3,6 +3,7 @@
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "cmdline.h"
+#include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
@@ -64,9 +65,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::ibverbs_config ib_conf{};
-    ib_conf.request_buffer_size = conf.buffer_size;
-    pool_conf.client_config.socket_config = ib_conf;
+    pool_conf.client_config.socket_config = coro_io::ibverbs_config{};
   }
 #endif
 
@@ -128,6 +127,10 @@ int main(int argc, char** argv) {
   easylog::set_min_severity((easylog::Severity)conf.log_level);
 
   easylog::set_async(true);
+
+#ifdef YLT_ENABLE_IBV
+  coro_io::g_ib_buffer_pool({.buffer_size = conf.buffer_size});
+#endif
 
   if (conf.client_concurrency == 0) {
     std::cout << "start server\n";

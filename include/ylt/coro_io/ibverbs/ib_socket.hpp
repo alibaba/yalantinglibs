@@ -251,7 +251,7 @@ struct ib_socket_shared_state_t
                    << ",len:" << wc.byte_len;
         if (wc.wr_id == 0) {  // recv
           if (wc.byte_len == 0) {
-            ELOG_INFO << "close by peer";
+            ELOG_DEBUG << "close by peer";
             peer_close_ = true;
             close();
             break;
@@ -320,7 +320,6 @@ inline std::error_code ib_buffer_queue::post_recv_real(
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
   uint32_t cq_size = 128;
-  uint32_t request_buffer_size = 2 * 1024 * 1024;
   uint32_t recv_buffer_cnt = 4;
   ibv_qp_type qp_type = IBV_QPT_RC;
   ibv_qp_cap cap = {.max_send_wr = 1,
@@ -349,7 +348,7 @@ class ib_socket_t {
       const ibverbs_config& config,
       std::shared_ptr<ib_buffer_pool_t> buffer_pool = g_ib_buffer_pool())
       : executor_(executor) {
-    init(default_config, std::move(buffer_pool), std::move(device));
+    init(config, std::move(buffer_pool), std::move(device));
   }
 
  private:
@@ -448,7 +447,7 @@ class ib_socket_t {
     ELOG_DEBUG << "Remote address = " << remote_address_;
     ELOG_DEBUG << "Remote Request buffer size = " << peer_info.buffer_size;
     buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
-                                      get_config().request_buffer_size);
+                                      buffer_pool()->max_buffer_size());
     ELOG_DEBUG << "Final buffer size = " << buffer_size_;
     if (buffer_size_ > buffer_pool()->max_buffer_size()) {
       ELOG_WARN << "Buffer size larger than buffer_pool limit: "
@@ -480,7 +479,7 @@ class ib_socket_t {
 
     peer_info.qp_num = state_->qp_->qp_num;
     peer_info.lid = state_->device_->attr().lid;
-    peer_info.buffer_size = conf_.request_buffer_size;
+    peer_info.buffer_size = buffer_pool()->max_buffer_size();
     memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
     struct_pack::serialize_to((char*)buffer, sz, peer_info);
     async_write(state_->soc_, asio::buffer(buffer))
@@ -530,7 +529,7 @@ class ib_socket_t {
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
-      peer_info.buffer_size = conf_.request_buffer_size;
+      peer_info.buffer_size = buffer_pool()->max_buffer_size();
       memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -572,7 +571,7 @@ class ib_socket_t {
       ELOG_TRACE << "Remote address = " << remote_address_;
       ELOG_TRACE << "Remote Request buffer size = " << peer_info.buffer_size;
       buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
-                                        get_config().request_buffer_size);
+                                        buffer_pool()->max_buffer_size());
       ELOG_TRACE << "Final buffer size = " << buffer_size_;
       if (buffer_size_ > buffer_pool()->max_buffer_size()) {
         ELOG_WARN << "Buffer size larger than buffer_pool limit: "

@@ -57,10 +57,12 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
                    coro_io::ExecutorWrapper<> *executor,
+                   const coro_io::ibverbs_config &config,
                    std::shared_ptr<coro_io::ib_device_t> dev,
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool)
       : executor_(executor),
-        ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, buffer_pool)) {
+        ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, config,
+                                                 buffer_pool)) {
     ib_socket_->prepare_accpet(std::move(soc));
   }
 #endif
