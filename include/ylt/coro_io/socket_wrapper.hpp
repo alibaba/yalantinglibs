@@ -83,8 +83,14 @@ struct socket_wrapper_t {
   void init_client(const coro_io::ibverbs_config &config,
                    std::shared_ptr<coro_io::ib_device_t> device,
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool) {
-    ib_socket_ = std::make_unique<ib_socket_t>(executor_, std::move(device),
-                                               config, std::move(buffer_pool));
+    if (ib_socket_) {
+      *ib_socket_ = ib_socket_t(executor_, std::move(device), config,
+                                std::move(buffer_pool));
+    }
+    else {
+      ib_socket_ = std::make_unique<ib_socket_t>(
+          executor_, std::move(device), config, std::move(buffer_pool));
+    }
   }
 #endif
 

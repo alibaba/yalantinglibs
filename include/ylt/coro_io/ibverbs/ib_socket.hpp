@@ -173,7 +173,8 @@ struct ib_socket_shared_state_t
             [this](auto&& cb) mutable {
               if (auto ec = post_send_impl({}, std::move(cb)); ec)
                   [[unlikely]] {
-                send_cb_(std::pair{std::error_code{}, std::size_t{0}});
+                auto temp_cb = std::move(send_cb_);
+                temp_cb(std::pair{std::error_code{}, std::size_t{0}});
               }
             },
             *this),
