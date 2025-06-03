@@ -25,7 +25,6 @@
 #include "ylt/easylog/record.hpp"
 #include "ylt/struct_pack/util.h"
 
-std::size_t buffer_size = 4 * 1024 * 1024;
 int concurrency = 10;
 std::atomic<int> port;
 
@@ -62,7 +61,6 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
 
   ELOG_INFO << "tcp listening port:" << port;
   coro_io::ib_socket_t soc;
-  soc.get_config().request_buffer_size = buffer_size;
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -86,7 +84,6 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
         functions) {
   coro_io::ib_socket_t soc{};
-  soc.get_config().request_buffer_size = buffer_size;
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -172,6 +169,12 @@ async_simple::coro::Lazy<std::error_code> test_write(coro_io::ib_socket_t& soc,
   co_return ec;
 }
 
+async_simple::coro::Lazy<std::error_code> test_close(
+    coro_io::ib_socket_t& soc) {
+  soc.close();
+  co_return std::error_code{};
+}
+
 async_simple::coro::Lazy<std::error_code> write_iov(coro_io::ib_socket_t& soc,
                                                     std::size_t data_size,
                                                     std::size_t iov_size) {
@@ -207,10 +210,18 @@ async_simple::coro::Lazy<std::error_code> read_iov(coro_io::ib_socket_t& soc,
   }
   co_return ec;
 }
+TEST_CASE("test socket close") {
+  ELOG_INFO << "start test socket close";
+  auto result = async_simple::coro::syncAwait(collectAll(
+      echo_accept({test(test_read, 16)}), echo_connect({test(test_close)})));
+  auto& ec1 = std::get<0>(result);
+  auto& ec2 = std::get<1>(result);
+  CHECK_MESSAGE(ec1.value(), ec1.value().message());
+  CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+}
 
 TEST_CASE("test socket io") {
   ELOG_INFO << "start echo server & client";
-  buffer_size = 8 * 1024;
   {
     ELOG_WARN << "test read/write fix size, least than rdma "
                  "buffer";
@@ -508,7 +519,6 @@ async_simple::coro::Lazy<std::error_code> rpc_like_send(
 
 TEST_CASE("test rpc-like io") {
   ELOG_WARN << "test rpc-like io";
-  buffer_size = 8 * 1024;
   {
     ELOG_WARN << "test small size";
     auto result = async_simple::coro::syncAwait(

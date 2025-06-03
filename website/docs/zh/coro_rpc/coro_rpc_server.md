@@ -401,6 +401,16 @@ server.init_ssl({
 
 启用ssl支持后，服务器将拒绝一切非ssl连接。
 
+## rdma 支持
+
+coro_rpc支持使用rdma：
+```cpp
+coro_rpc_server server;
+server.init_ibverbs(ibverbs_config{});
+```
+
+启用rdma后，服务器将拒接一切非rdma连接。
+
 ## 高级设置
 
 我们提供了coro_rpc::config_t类，用户可以通过该类型设置server的细节：
@@ -415,6 +425,8 @@ struct config_base {
   std::string address="0.0.0.0"; /*监听地址*/
   /*下面设置只有启用SSL才有*/
   std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
+  /*下面设置只有启用rdma才有*/
+  std::optional<coro_io::ibverbs_config> ibv_config = std::nullopt; // 配置是否启用rdma
 };
 struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径

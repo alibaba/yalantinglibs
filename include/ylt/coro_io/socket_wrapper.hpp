@@ -22,7 +22,7 @@
 namespace coro_io {
 struct socket_wrapper_t {
   // construct by listen tcp
-  socket_wrapper_t(){};
+  socket_wrapper_t() {};
   socket_wrapper_t(coro_io::ExecutorWrapper<> *executor,
                    const std::string &local_ip = "")
       : executor_(executor) {
@@ -57,12 +57,13 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
                    coro_io::ExecutorWrapper<> *executor,
+                   const coro_io::ibverbs_config &config,
                    std::shared_ptr<coro_io::ib_device_t> dev,
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool)
       : executor_(executor),
-        ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, buffer_pool)) {
-    ib_socket_->prepare_accpet(
-        std::make_unique<asio::ip::tcp::socket>(std::move(soc)));
+        ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, config,
+                                                 buffer_pool)) {
+    ib_socket_->prepare_accpet(std::move(soc));
   }
 #endif
   // tcp client init
@@ -82,8 +83,14 @@ struct socket_wrapper_t {
   void init_client(const coro_io::ibverbs_config &config,
                    std::shared_ptr<coro_io::ib_device_t> device,
                    std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool) {
-    ib_socket_ = std::make_unique<ib_socket_t>(executor_, std::move(device),
-                                               config, std::move(buffer_pool));
+    if (ib_socket_) {
+      *ib_socket_ = ib_socket_t(executor_, std::move(device), config,
+                                std::move(buffer_pool));
+    }
+    else {
+      ib_socket_ = std::make_unique<ib_socket_t>(
+          executor_, std::move(device), config, std::move(buffer_pool));
+    }
   }
 #endif
 
@@ -178,8 +185,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      &ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
+  ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;

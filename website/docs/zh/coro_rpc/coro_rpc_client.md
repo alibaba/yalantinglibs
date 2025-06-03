@@ -93,23 +93,97 @@ client.call<echo>("hello, coro_rpc");// The string literal can be converted to s
 
 ## 连接选项
 
-coro_rpc_client提供了`init_config`函数，用于配置连接选项。下面这份代码会列出可配置的选项。
+coro_rpc_client提供了`init_config`函数，用于配置连接选项。下面这份代码列出了可配置的选项。这些选项默认均可以不填写。
 
 ```cpp
 using namespace coro_rpc;
 using namespace std::chrono;
 void set_config(coro_rpc_client& client) {
+  uint64_t client_id;
+  std::chrono::milliseconds connect_timeout_duration;
+  std::chrono::milliseconds request_timeout_duration;
+  std::string host;
+  std::string port;
+  std::string local_ip;
   client.init_config(config{
-    .timeout_duration = 5s //请求和连接的超时时间
-    .host = "localhost" // 服务器域名
-    .port = "9001" // 服务器端口
-    .enable_tcp_no_delay  = true //是否禁止socket底层延迟发送请求
-    /*以下选项只在激活ssl支持后可用*/
-    .ssl_cert_path = "./server.crt" //ssl证书路径
-    .ssl_domain = "localhost" 
+    .connect_timeout_duration = 5s, // 连接的超时时间
+    .request_timeout_duration = 5s, // 请求超时时间
+    .host = "localhost", // 服务器域名
+    .port = "9001", // 服务器端口
+    .local_ip = "", // 本地ip，用于指定本地通信的ip地址。
+    .socket_config=std::variant<tcp_config,
+                 tcp_with_ssl_config,
+                 coro_io::ibverbs_config>{tcp_config{}}; // 指定底层的协议及其底层配置，目前支持tcp, ssl over tcp, rdma三种协议。
   });
 }
 ```
+
+
+### rdma配置
+
+ibverbs协议的配置如下：
+```cpp
+struct ibverbs_config {
+  uint32_t cq_size = 128; // 事件通知队列的最大长度
+  uint32_t recv_buffer_cnt = 4;                 // 默认提交到接受队列的缓冲数目，一个缓冲区默认2m，因此一个rdma在连接成功后即占用8MB的内存。积压的接收数据越多，队列中的缓冲区也会越多，最多可以缓冲max_recv_wr*buffer_size这么多的数据(buffer_size为buffer_pool配置的缓冲区大小），此后如果上层仍不消费数据，则发送端会收到rnr错误，不断重试并等待对端消费。
+  ibv_qp_type qp_type = IBV_QPT_RC;             // 默认的qp类型。
+  ibv_qp_cap cap = {.max_send_wr = 1,           // 发送队列的最大长度。
+                    .max_recv_wr = 32,          // 接受队列的最大长度
+                    .max_send_sge = 3,          // 发送的最大地址分段数，在不启用inline data时只需要1个。使用inline data时数据可能不经过拷贝直接从原始分段地址发送，因此设置为3段（默认支持3段分散地址）。
+                    .max_recv_sge = 1,          // 接受的最大地址分段数，目前的缓冲区配置下只需要1个即可。
+                    .max_inline_data = 256};    // 如果发送的数据包小于inline data，且底层网卡支持该设置，则小数据包不会被拷贝到缓冲中，而是直接交给网卡发送。
+  std::shared_ptr<coro_io::ib_device_t> device; // rpc使用的底层ib网卡。默认选择设备列表第一个网卡。
+  std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool; // socket使用的缓冲池，默认使用全局缓冲池。
+};
+```
+
+可以通过下面的代码简单的启用rdma：
+
+```cpp
+  coro_rpc_client cli;
+  cli.init_ibv(); //使用默认配置
+  cli.init_ibv(ibverbs_config{}); //使用用户指定的配置
+```
+
+也可以在配置中启用rdma：
+
+```cpp
+  coro_rpc_client cli;
+  cli.init_config(config{.socket_config=ibverbs_config{}})
+```
+
+#### rdma buffer池
+
+用户可以手动选择buffer_pool：
+
+```cpp
+  
+  coro_io::g_ib_buffer_pool({.buffer_size=1024}); // 修改默认的全局buffer_pool的配置
+  // 手动创建连接池
+  auto pool = coro_io::ib_buffer_pool_t::create(coro_io::g_ib_device(),{.buffer_size = 3* 1024 * 1024,/* 缓冲大小*/
+                            .max_memory_usage = 20 * 1024 * 1024,/*最大内存占用，超过后内存分配会失败，并导致连接关闭*/
+                            .idle_timeout = 5s /* 长时间未使用的buffer会被回收*/});
+  coro_rpc_client cli;
+  cli.init_ibv(coro_io::ibverbs_config{
+    .buffer_pool=pool;
+  };);
+```
+
+#### rdma设备
+
+用户可以手动选择rdma设备：
+
+```cpp
+  coro_io::g_ib_device({.dev_name= "my_dev" }); // 指定默认的rdma设备
+  // 手动指定rdma设备
+  auto dev = std::make_shared<coro_io::ib_device_t>(coro_io::ib_config_t{.dev_name="my_dev"});
+  coro_rpc_client cli;
+  coro_rpc
+  cli.init_ibv(coro_io::ibverbs_config{
+    .device = dev
+  };);
+```
+
 
 ## 调用模型
 

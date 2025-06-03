@@ -128,21 +128,17 @@ struct CoroServerTester : ServerTester {
     test_function_not_registered();
     test_start_new_server_with_same_port();
     test_server_send_bad_rpc_result();
-    if (!use_rdma) {  // TODO: fix it later
-      test_server_send_no_body();
-    }
+    test_server_send_no_body();
     test_context_func();
     test_return_err_by_throw_exception();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void>();
     this->test_call_with_delay_func<
         coro_fun_with_user_define_connection_type>();
     this->test_call_with_delay_func<coro_fun_with_delay_return_void_twice>();
-    if (!use_rdma) {  // TODO: fix it later
-      this->test_call_with_delay_func_client_read_length_error<
-          coro_fun_with_delay_return_void>();
-      this->test_call_with_delay_func_client_read_body_error<
-          coro_fun_with_delay_return_void>();
-    }
+    this->test_call_with_delay_func_client_read_length_error<
+        coro_fun_with_delay_return_void>();
+    this->test_call_with_delay_func_client_read_body_error<
+        coro_fun_with_delay_return_void>();
     if (enable_heartbeat) {
       this->test_call_with_delay_func_server_timeout<
           coro_fun_with_delay_return_void_cost_long_time>();
