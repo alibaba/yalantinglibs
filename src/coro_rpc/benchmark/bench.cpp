@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
   cmdline::parser parser;
 
   parser.add<std::string>("url", 'u', "url", false, "0.0.0.0:9000");
-  parser.add<size_t>("data_len", 'l', "data length", false, 7340032);  // 7MB
+  parser.add<size_t>("data_len", 'l', "data length", false, 1024*1024*8);  // 8MB
   parser.add<uint32_t>("client_concurrency", 'c',
                        "total number of http clients", false, 0);
   parser.add<size_t>("max_request_count", 'm', "max request count", false,
@@ -116,10 +116,10 @@ int main(int argc, char** argv) {
 
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 0);
-  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 8388608);
+  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 1024*1024*2);
   parser.add<int>("log_level", 'o', "Severity::INFO 1 as default, WARN is 4",
                   false, 1);
-  parser.add<bool>("enable_ib", 'i', "response data length", false, true);
+  parser.add<bool>("enable_ib", 'i', "enable ib", false, true);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);

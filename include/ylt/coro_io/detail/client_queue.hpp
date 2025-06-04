@@ -63,14 +63,12 @@ class client_queue {
   }
   bool try_dequeue(client_t& c) {
     const int_fast16_t index = selected_index_;
-    if (size_[index ^ 1]) {
-      if (queue_[index ^ 1].try_dequeue(c)) {
-        --size_[index ^ 1];
-        return true;
-      }
-    }
     if (queue_[index].try_dequeue(c)) {
       --size_[index];
+      return true;
+    }
+    if (queue_[index ^ 1].try_dequeue(c)) {
+      --size_[index ^ 1];
       return true;
     }
     return false;

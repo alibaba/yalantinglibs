@@ -451,9 +451,9 @@ class ib_socket_t {
     ELOG_DEBUG << "Remote address = " << remote_address_;
     ELOG_DEBUG << "Remote Request buffer size = " << peer_info.buffer_size;
     buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
-                                      buffer_pool()->max_buffer_size());
+                                      buffer_pool()->buffer_size());
     ELOG_DEBUG << "Final buffer size = " << buffer_size_;
-    if (buffer_size_ > buffer_pool()->max_buffer_size()) {
+    if (buffer_size_ > buffer_pool()->buffer_size()) {
       ELOG_WARN << "Buffer size larger than buffer_pool limit: "
                 << buffer_size_;
       co_return std::make_error_code(std::errc::no_buffer_space);
@@ -483,7 +483,7 @@ class ib_socket_t {
 
     peer_info.qp_num = state_->qp_->qp_num;
     peer_info.lid = state_->device_->attr().lid;
-    peer_info.buffer_size = buffer_pool()->max_buffer_size();
+    peer_info.buffer_size = buffer_pool()->buffer_size();
     memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
     struct_pack::serialize_to((char*)buffer, sz, peer_info);
     async_write(state_->soc_, asio::buffer(buffer))
@@ -533,7 +533,7 @@ class ib_socket_t {
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
-      peer_info.buffer_size = buffer_pool()->max_buffer_size();
+      peer_info.buffer_size = buffer_pool()->buffer_size();
       memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
@@ -575,9 +575,9 @@ class ib_socket_t {
       ELOG_TRACE << "Remote address = " << remote_address_;
       ELOG_TRACE << "Remote Request buffer size = " << peer_info.buffer_size;
       buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
-                                        buffer_pool()->max_buffer_size());
+                                        buffer_pool()->buffer_size());
       ELOG_TRACE << "Final buffer size = " << buffer_size_;
-      if (buffer_size_ > buffer_pool()->max_buffer_size()) {
+      if (buffer_size_ > buffer_pool()->buffer_size()) {
         ELOG_WARN << "Buffer size larger than buffer_pool limit: "
                   << buffer_size_;
         co_return std::make_error_code(std::errc::no_buffer_space);

@@ -72,8 +72,7 @@ struct ib_buffer_t {
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE);
-  void change_owner(std::weak_ptr<ib_buffer_pool_t> owner_pool);
-  ib_buffer_t(ib_buffer_t&&) =default;
+  ib_buffer_t(ib_buffer_t&&) = default;
   ib_buffer_t& operator=(ib_buffer_t&&);
   ~ib_buffer_t();
 };
@@ -98,12 +97,14 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         break;
       }
       while (true) {
-        ELOG_TRACE << "start collect timeout buffer of pool{" << self.get()
-                   << "}, now client count: " << self->free_buffers_.size();
-        std::size_t is_all_cleared = self->free_buffers_.clear_old(1000);
-        ELOG_TRACE << "finish collect timeout buffer of pool{" << self.get()
-                   << "}, now client cnt: " << self->free_buffers_.size();
-        if (is_all_cleared != 0) [[unlikely]] {
+        ELOG_TRACE << "start ib_buffer timeout free of pool{" << self.get()
+                  << "}, now ib_buffer count: " << self->free_buffers_.size();
+        std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
+        self->total_memory_ -= clear_cnt * self->buffer_size();
+        ELOG_TRACE << "finish ib_buffer timeout free of pool{" << self.get()
+                  << "}, now ib_buffer cnt: " << self->free_buffers_.size()
+                  << " mem usage:" << self->total_memory_;
+        if (clear_cnt != 0) {
           try {
             co_await async_simple::coro::Yield{};
           } catch (std::exception& e) {
@@ -129,7 +130,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     client.owner_pool_ = std::weak_ptr<ib_buffer_pool_t>{};
     if (free_buffers_.enqueue(std::move(client)) == 1) {
       std::size_t expected = 0;
-      if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1)) [[unlikely]] {
+      if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1))
+          [[unlikely]] {
         ELOG_TRACE << "start timeout client collecter of client_pool{" << this
                    << "}";
         collect_idle_timeout_client(this->weak_from_this(),
@@ -144,7 +146,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
   void collect_free(ib_buffer_t buffer) {
     if (buffer) {
-      if (free_buffers_.size() * pool_config_.buffer_size <
+      if (free_buffers_.size() * buffer_size() <
           pool_config_.max_memory_usage) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
@@ -162,7 +164,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 
  public:
   friend struct ib_buffer_t;
-  std::size_t max_buffer_size() const noexcept {
+  std::size_t buffer_size() const noexcept {
     return this->pool_config_.buffer_size;
   }
   ib_buffer_t get_buffer() {
@@ -172,18 +174,17 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       ELOG_TRACE
           << "There is no free buffer. Allocate and regist new buffer now";
       if (pool_config_.max_memory_usage <
-          pool_config_.buffer_size +
-              total_memory_.load(std::memory_order_acquire)) [[unlikely]] {
+          buffer_size() + total_memory_.load(std::memory_order_acquire))
+          [[unlikely]] {
         ELOG_WARN << "Memory out of pool limit";
         return std::move(buffer);
       }
-      auto ptr = malloc(pool_config_.buffer_size);
+      auto ptr = malloc(buffer_size());
       if (ptr == nullptr) {
         ELOG_ERROR << "ib_buffer_pool allocate failed.";
         throw std::bad_alloc();
       }
-      buffer =
-          ib_buffer_t::regist(*this, device_, ptr, pool_config_.buffer_size);
+      buffer = ib_buffer_t::regist(*this, device_, ptr, buffer_size());
       buffer.set_has_ownership();
     }
     else {
@@ -213,7 +214,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return std::make_shared<ib_buffer_pool_t>(private_construct_token{},
                                               std::move(device), config_t{});
   }
-  std::atomic<std::size_t> total_memory_ = 0;
+  std::atomic<uint64_t> total_memory_ = 0;
   std::size_t total_memory() const noexcept {
     return total_memory_.load(std::memory_order_acquire);
   }
@@ -261,10 +262,10 @@ inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
 
 inline ib_buffer_t& ib_buffer_t::operator=(ib_buffer_t&& o) {
   this->~ib_buffer_t();
-  mr_=std::move(o.mr_);
-  dev_=std::move(o.dev_);
-  owner_pool_=std::move(o.owner_pool_);
-  has_memory_ownership_=o.has_memory_ownership_;
+  mr_ = std::move(o.mr_);
+  dev_ = std::move(o.dev_);
+  owner_pool_ = std::move(o.owner_pool_);
+  has_memory_ownership_ = o.has_memory_ownership_;
   return *this;
 }
 
