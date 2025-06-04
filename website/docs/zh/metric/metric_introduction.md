@@ -614,37 +614,3 @@ test_summary{quantile="0.990000"} 99.000000
 test_summary_sum 5050.000000
 test_summary_count 100
 ```
-
-## 配置prometheus 前端
-安装[prometheus](https://github.com/prometheus/prometheus)之后，打开其配置文件：prometheus.yml
-
-修改要连接的服务端地址：
-```
-- targets: ["127.0.0.1:9001"]
-```
-然后启动prometheus，prometheus会定时访问`http://127.0.0.1:9001/metrics` 拉取所有指标数据。
-
-在本地浏览器输入:127.0.0.1:9090, 打开prometheus前端，在前端页面的搜索框中输入指标的名称request_count之后就能看到table和graph 结果了。
-
-# cinatra http server中启用内置的metric指标
-
-http server 内置的指标：
-```cpp
-server_total_req: server总的请求数；
-server_failed_req：server总的失败请求数；
-server_total_fd：server使用的总的句柄数；
-server_total_recv_bytes：server总共收到的字节数；
-server_total_send_bytes：server总共发送的字节数；
-server_req_latency：http 请求的延迟，从收到请求到发送响应的时间间隔
-server_read_latency：http 读请求的延迟，读到完整的http数据的时间间隔
-```
-
-```cpp
-coro_http_server server(1, 9001);
-server.use_metrics("/metrics");//这个url默认就是/metrics，可以不填
-```
-在浏览器中输入`http://127.0.0.1:9001/metrics` 即可看到所有的指标。
-
-查看当前server的client pool中有多少client，调用`pool.free_client_count()`
-
-查看当前server内部线程池中有多少线程，调用`coro_io::get_total_thread_num()`
