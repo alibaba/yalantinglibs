@@ -66,8 +66,6 @@ struct ib_buffer_t {
       throw std::make_error_code(std::errc{errno});
     }
   };
-
-  void collect() &&;
   static ib_buffer_t regist(ib_buffer_pool_t& pool,
                             std::shared_ptr<ib_device_t> dev, void* ptr,
                             std::size_t size,
@@ -75,8 +73,8 @@ struct ib_buffer_t {
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE);
   void change_owner(std::weak_ptr<ib_buffer_pool_t> owner_pool);
-  ib_buffer_t(ib_buffer_t&&) = default;
-  ib_buffer_t& operator=(ib_buffer_t&&) = default;
+  ib_buffer_t(ib_buffer_t&&) =default;
+  ib_buffer_t& operator=(ib_buffer_t&&);
   ~ib_buffer_t();
 };
 
@@ -128,9 +126,10 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     co_return;
   }
   void enqueue(ib_buffer_t client) {
+    client.owner_pool_ = std::weak_ptr<ib_buffer_pool_t>{};
     if (free_buffers_.enqueue(std::move(client)) == 1) {
       std::size_t expected = 0;
-      if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1)) {
+      if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1)) [[unlikely]] {
         ELOG_TRACE << "start timeout client collecter of client_pool{" << this
                    << "}";
         collect_idle_timeout_client(this->weak_from_this(),
@@ -143,7 +142,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       }
     }
   }
-  void collect_free_inner(ib_buffer_t buffer) {
+  void collect_free(ib_buffer_t buffer) {
     if (buffer) {
       if (free_buffers_.size() * pool_config_.buffer_size <
           pool_config_.max_memory_usage) {
@@ -162,16 +161,10 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   };
 
  public:
+  friend struct ib_buffer_t;
   std::size_t max_buffer_size() const noexcept {
     return this->pool_config_.buffer_size;
   }
-  void collect_free(ib_buffer_t buffer) {
-    if (buffer) {
-      buffer.change_owner(weak_from_this());
-      collect_free_inner(std::move(buffer));
-    }
-    return;
-  };
   ib_buffer_t get_buffer() {
     ib_buffer_t buffer;
     free_buffers_.try_dequeue(buffer);
@@ -193,20 +186,11 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
           ib_buffer_t::regist(*this, device_, ptr, pool_config_.buffer_size);
       buffer.set_has_ownership();
     }
+    else {
+      buffer.owner_pool_ = weak_from_this();
+    }
     ELOG_TRACE << "get buffer{data:" << buffer->addr << ",len" << buffer->length
                << "} from queue";
-    return buffer;
-  }
-  ib_buffer_t try_get_buffer() {
-    ib_buffer_t buffer;
-    free_buffers_.try_dequeue(buffer);
-    if (buffer) {
-      ELOG_TRACE << "get buffer{data:" << buffer->addr << ",len"
-                 << buffer->length << "} from queue";
-    }
-    else {
-      ELOG_TRACE << "get buffer failed. there is no free buffer";
-    }
     return buffer;
   }
   struct config_t {
@@ -274,40 +258,26 @@ inline ib_buffer_t::ib_buffer_t(ibv_mr* mr, std::shared_ptr<ib_device_t> dev,
     ptr->total_memory_.fetch_add((*this)->length, std::memory_order_relaxed);
   }
 }
+
+inline ib_buffer_t& ib_buffer_t::operator=(ib_buffer_t&& o) {
+  this->~ib_buffer_t();
+  mr_=std::move(o.mr_);
+  dev_=std::move(o.dev_);
+  owner_pool_=std::move(o.owner_pool_);
+  has_memory_ownership_=o.has_memory_ownership_;
+  return *this;
+}
+
 inline ib_buffer_t::~ib_buffer_t() {
   if (mr_) {
     if (auto ptr = owner_pool_.lock(); ptr) {
-      ptr->total_memory_.fetch_sub((*this)->length, std::memory_order_relaxed);
+      ptr->collect_free(std::move(*this));
     }
-    if (has_memory_ownership_) {
-      if (mr_) {
-        auto data = mr_->addr;
-        mr_ = nullptr;
-        free(data);
-      }
+    else if (has_memory_ownership_) {
+      auto data = mr_->addr;
+      mr_ = nullptr;
+      free(data);
     }
-  }
-}
-
-inline void ib_buffer_t::collect() && {
-  if (auto pool = owner_pool_.lock(); pool) {
-    pool->collect_free_inner(std::move(*this));
-  }
-}
-
-inline void ib_buffer_t::change_owner(
-    std::weak_ptr<ib_buffer_pool_t> owner_pool) {
-  auto pool_raw = owner_pool_.lock(), pool_new = owner_pool.lock();
-  if (pool_new != pool_raw) {
-    if (pool_raw) {
-      pool_raw->total_memory_.fetch_sub((*this)->length,
-                                        std::memory_order_relaxed);
-    }
-    if (pool_new) {
-      pool_new->total_memory_.fetch_sub((*this)->length,
-                                        std::memory_order_relaxed);
-    }
-    owner_pool_ = std::move(owner_pool);
   }
 }
 

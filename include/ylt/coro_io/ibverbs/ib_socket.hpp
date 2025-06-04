@@ -23,6 +23,7 @@
 #include "asio/ip/address_v4.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
+#include "async_simple/Signal.h"
 #include "async_simple/coro/Lazy.h"
 #include "ib_device.hpp"
 #include "ib_error.hpp"
@@ -163,12 +164,10 @@ struct ib_socket_shared_state_t
     }
   }
 
-  ~ib_socket_shared_state_t() { std::move(recv_buf_).collect(); }
-
   auto get_executor() const noexcept { return executor_->get_asio_executor(); }
 
   async_simple::coro::Lazy<void> shutdown() {
-    co_await collectAll(
+    co_await collectAll<async_simple::SignalType::Terminate>(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
               if (auto ec = post_send_impl({}, std::move(cb)); ec)
@@ -381,7 +380,7 @@ class ib_socket_t {
       memcpy(dst, remain_data_.data(), len);
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
-        std::move(state_->recv_buf_).collect();
+        state_->recv_buf_={};
       }
     }
     return len;
@@ -392,7 +391,7 @@ class ib_socket_t {
     remain_data_ = std::string_view{
         (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
-      std::move(state_->recv_buf_).collect();
+      state_->recv_buf_={};
     }
   }
 

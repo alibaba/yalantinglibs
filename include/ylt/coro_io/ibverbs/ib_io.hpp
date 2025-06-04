@@ -171,7 +171,7 @@ async_simple::coro::
   auto cb = [p = std::move(promise), io_size = io_size,
              buffer = std::move(buffer)](auto&& result) mutable {
     if (buffer) {
-      std::move(buffer).collect();
+      buffer={};
     }
     if (!result.hasError()) {
       result.value().second = io_size;
