@@ -16,6 +16,9 @@
 #ifndef ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
 #define ASYNC_SIMPLE_CORO_FUTURE_AWAITER_H
 
+#include <atomic>
+#include <memory>
+#include "async_simple/Signal.h"
 #ifndef ASYNC_SIMPLE_USE_MODULES
 #include "async_simple/Future.h"
 #include "async_simple/coro/Lazy.h"
@@ -31,11 +34,12 @@ namespace coro::detail {
 template <typename T>
 struct FutureAwaiter {
     Future<T> future_;
+    async_simple::Slot* slot_ = nullptr;
 
     bool await_ready() { return future_.hasResult(); }
 
     template <typename PromiseType>
-    void await_suspend(CoroHandle<PromiseType> continuation) {
+    bool await_suspend(CoroHandle<PromiseType> continuation) {
         static_assert(std::is_base_of_v<LazyPromiseBase, PromiseType>,
                       "FutureAwaiter is only allowed to be called by Lazy");
         Executor* ex = continuation.promise()._executor;
@@ -43,15 +47,40 @@ struct FutureAwaiter {
         if (ex != nullptr) {
             ctx = ex->checkout();
         }
-        future_.setContinuation([continuation, ex, ctx](Try<T>&& t) mutable {
+        if (continuation.promise()._lazy_local) {
+            slot_ = continuation.promise()._lazy_local->getSlot();
+        }
+        auto state=std::make_shared<std::atomic<bool>>(true);
+        if (!signalHelper{Terminate}.tryEmplace(
+                slot_, [continuation, ex, ctx, state ](
+                           SignalType, Signal*) mutable {
+                  if (!state->exchange(false)) {
+                    return;
+                  }
+                  if (ex != nullptr) {
+                    ex->checkin(continuation, ctx);
+                  }
+                  else {
+                    continuation.resume();
+                  }
+                })) {
+          return false;
+        }
+        future_.setContinuation([continuation, ex, ctx,state=std::move(state)](Try<T>&& t) mutable {
+            if (!state->exchange(false)) {
+                return;
+            }
             if (ex != nullptr) {
                 ex->checkin(continuation, ctx);
             } else {
                 continuation.resume();
             }
         });
+        return true;
     }
     auto await_resume() {
+        signalHelper{Terminate}.checkHasCanceled(
+                slot_, "async_simple::Future is canceled!");
         if constexpr (!std::is_same_v<T, void>)
             return std::move(future_.value());
     }

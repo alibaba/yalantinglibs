@@ -240,6 +240,16 @@ dispatch(Func func, Executor executor) {
   co_return co_await awaitor.await_resume(helper);
 }
 
+template <typename Executor>
+inline async_simple::coro::Lazy<
+    async_simple::Try<void>>
+dispatch(Executor executor) {
+  if (executor.running_in_this_thread()) {
+    co_return async_simple::Try<void>{};
+  }
+  co_return co_await dispatch([](){},executor);
+}
+
 namespace detail {
 
 template <typename T>

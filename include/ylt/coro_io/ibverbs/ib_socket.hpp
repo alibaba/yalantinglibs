@@ -25,6 +25,7 @@
 #include "asio/posix/stream_descriptor.hpp"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/util/move_only_function.h"
 #include "ib_device.hpp"
 #include "ib_error.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -78,8 +79,8 @@ struct ib_buffer_queue {
 
 struct ib_socket_shared_state_t
     : std::enable_shared_from_this<ib_socket_shared_state_t> {
-  using callback_t =
-      std::function<void(std::pair<std::error_code, std::size_t>)>;
+  using callback_t = async_simple::util::move_only_function<void(
+      std::pair<std::error_code, std::size_t>)>;
   static void resume(std::pair<std::error_code, std::size_t>&& arg,
                      callback_t& handle) {
     if (handle) [[likely]] {
@@ -150,8 +151,11 @@ struct ib_socket_shared_state_t
     channel_ = nullptr;
   }
 
-  void close() {
-    auto has_close = has_close_.exchange(true);
+  void close(bool should_check = true) {
+    bool has_close = false;
+    if (should_check) {
+      has_close = has_close_.exchange(true);
+    }    
     if (!has_close) {
       if (fd_ && !peer_close_) {
         shutdown().start([self = shared_from_this()](auto&&) {
@@ -380,7 +384,7 @@ class ib_socket_t {
       memcpy(dst, remain_data_.data(), len);
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
-        state_->recv_buf_={};
+        state_->recv_buf_ = {};
       }
     }
     return len;
@@ -391,7 +395,7 @@ class ib_socket_t {
     remain_data_ = std::string_view{
         (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
-      state_->recv_buf_={};
+      state_->recv_buf_ = {};
     }
   }
 
@@ -602,9 +606,11 @@ class ib_socket_t {
 
   void close() {
     if (state_) {
-      asio::dispatch(executor_->get_asio_executor(), [state = state_]() {
-        state->close();
-      });
+      if (!state_->has_close_.exchange(true)) {
+        asio::dispatch(executor_->get_asio_executor(), [state = state_]() {
+          state->close(false);
+        });
+      }
     }
   }
   auto get_executor() const { return executor_->get_asio_executor(); }
@@ -816,7 +822,7 @@ class ib_socket_t {
 
   void post_recv_impl(callback_t&& handler) {
     coro_io::dispatch(
-        [state = state_, handler = std::move(handler)]() {
+        [state = state_, handler = std::move(handler)]() mutable {
           state->recv_cb_ = std::move(handler);
           if (!state->recv_result.empty()) {
             auto result = state->recv_result.front();
