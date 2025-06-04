@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <exception>
 #include <functional>
@@ -210,7 +211,7 @@ struct ib_socket_shared_state_t
     }
     // post the receive request to the RQ
     if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) {
-      auto error_code = std::make_error_code(std::errc{ec});
+      auto error_code = std::make_error_code(std::errc{std::abs(ec)});
       ELOG_ERROR << "ibv post send failed: " << error_code.message();
       return error_code;
     }
@@ -368,7 +369,17 @@ class ib_socket_t {
   }
 
   ib_socket_t(ib_socket_t&&) = default;
-  ib_socket_t& operator=(ib_socket_t&&) = default;
+  ib_socket_t& operator=(ib_socket_t&& o) {
+    close();
+    remote_address_ = std::move(o.remote_address_);
+    remote_qp_num_ = o.remote_qp_num_;
+    remain_data_ = o.remain_data_;
+    state_ = std::move(o.state_);
+    executor_ = o.executor_;
+    conf_ = std::move(o.conf_);
+    buffer_size_ = o.buffer_size_;
+    return *this;
+  }
   ~ib_socket_t() { close(); }
 
   bool is_open() const noexcept {
@@ -431,6 +442,9 @@ class ib_socket_t {
     auto [ec, _] = co_await async_read(state_->soc_, asio::buffer(buffer));
     if (ec) [[unlikely]] {
       co_return ec;
+    }
+    if(state_->channel_ == nullptr) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
     }
     auto ec2 = struct_pack::deserialize_to(peer_info, std::span{buffer});
     if (ec2) [[unlikely]] {
@@ -707,6 +721,7 @@ class ib_socket_t {
     if (qp_init_attr.cap.max_inline_data == 0 &&
         conf_.cap.max_inline_data != 0) {
       get_device()->set_support_inline_data(false);
+      conf_.cap.max_inline_data = 0;
     }
     state_->qp_.reset(qp);
   }

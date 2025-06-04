@@ -195,11 +195,6 @@ class ib_device_t {
     }
   }
 
-  ~ib_device_t() {
-    pd_ = nullptr;
-    ctx_ = nullptr;
-  }
-
   std::string_view name() const noexcept { return name_; }
 
   uint16_t port() const noexcept { return port_; }
@@ -252,7 +247,6 @@ class ib_device_t {
   ibv_port_attr attr_;
   ibv_gid gid_;
   asio::ip::address gid_address_;
-  ibv_device* device_;
   int gid_index_;
 
   uint16_t port_;
