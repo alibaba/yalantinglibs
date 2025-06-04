@@ -111,8 +111,8 @@ int main() {
   simple p1;
   struct_json::from_json(p1, json);
   struct_xml::from_xml(p1, xml);
-  struct_yaml::from_yaml(p1, xml);
-  struct_pb::from_pb(p1, xml);
+  struct_yaml::from_yaml(p1, yaml);
+  struct_pb::from_pb(p1, protobuf);
 }
 ```
 
