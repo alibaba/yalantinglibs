@@ -230,7 +230,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_callback;
@@ -456,6 +456,9 @@ class ib_socket_t {
       co_return std::make_error_code(std::errc::no_buffer_space);
     }
     try {
+      if (state_->cq_ == nullptr) {
+        co_return std::make_error_code(std::errc::device_or_resource_busy);
+      }
       init_qp();
       modify_qp_to_init();
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
@@ -525,6 +528,9 @@ class ib_socket_t {
 
   async_simple::coro::Lazy<std::error_code> connect_impl() noexcept {
     try {
+      if (state_->cq_ == nullptr) {
+        co_return std::make_error_code(std::errc::device_or_resource_busy);
+      }
       init_qp();
       modify_qp_to_init();
       ib_socket_t::ib_socket_info peer_info{};
