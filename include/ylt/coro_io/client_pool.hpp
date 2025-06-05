@@ -173,6 +173,10 @@ class client_pool : public std::enable_shared_from_this<
       std::unique_ptr<client_t>& client, std::weak_ptr<client_pool> watcher) {
     using namespace std::chrono_literals;
     std::shared_ptr<client_pool> self = watcher.lock();
+    if (self == nullptr) {
+      co_return;
+    }
+
     uint32_t i = UINT32_MAX;  // (at least connect once)
     do {
       ELOG_TRACE << "try to reconnect client{" << client.get() << "},host:{"
@@ -194,7 +198,7 @@ class client_pool : public std::enable_shared_from_this<
         co_await coro_io::sleep_for(wait_time, &client->get_executor());
       self = watcher.lock();
       ++i;
-    } while (i < self->pool_config_.connect_retry_count);
+    } while (self && i < self->pool_config_.connect_retry_count);
     ELOG_WARN << "reconnect client{" << client.get() << "},host:{"
               << client->get_host() << ":" << client->get_port()
               << "} out of max limit, stop retry. connect failed";
@@ -298,8 +302,10 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .directlyStart([](auto&&) {
-            },coro_io::get_global_executor());
+            .directlyStart(
+                [](auto&&) {
+                },
+                coro_io::get_global_executor());
       }
     }
   }
