@@ -50,7 +50,7 @@ if(ENABLE_SANITIZER AND NOT MSVC)
         endif()
     else()
         ## address santizer
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
             check_asan(HAS_ASAN)
             if(HAS_ASAN)
                 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")

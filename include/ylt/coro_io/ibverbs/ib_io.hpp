@@ -178,7 +178,6 @@ async_simple::coro::
     }
   }
   prev_op = promise.getFuture();
-  auto slot = co_await async_simple::coro::CurrentSlot{};
   ib_socket.post_send(list,
                       [p = std::move(promise), io_size = io_size,
                        buffer = std::move(buffer)](auto&& result) mutable {

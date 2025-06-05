@@ -172,17 +172,17 @@ struct ib_socket_shared_state_t
   auto get_executor() const noexcept { return executor_->get_asio_executor(); }
 
   async_simple::coro::Lazy<void> shutdown() {
-    co_await collectAll<async_simple::SignalType::Terminate>(
-        coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-            [this](auto&& cb) mutable {
-              if (auto ec = post_send_impl({}, std::move(cb)); ec)
-                  [[unlikely]] {
-                auto temp_cb = std::move(send_cb_);
-                temp_cb(std::pair{std::error_code{}, std::size_t{0}});
-              }
-            },
-            *this),
-        coro_io::sleep_for(std::chrono::seconds{1}, executor_));
+    // co_await collectAll<async_simple::SignalType::Terminate>(
+    //     coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+    //         [this](auto&& cb) mutable {
+    //           if (auto ec = post_send_impl({}, std::move(cb)); ec)
+    //               [[unlikely]] {
+    //             auto temp_cb = std::move(send_cb_);
+    //             temp_cb(std::pair{std::error_code{}, std::size_t{0}});
+    //           }
+    //         },
+    //         *this),
+    //     coro_io::sleep_for(std::chrono::seconds{1}, executor_));
     co_return;
   }
 
@@ -192,30 +192,39 @@ struct ib_socket_shared_state_t
     callback_t* cb;
   };
 
-  std::error_code post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
-    ibv_send_wr sr{};
-    ibv_send_wr* bad_wr = nullptr;
-
-    send_cb_ = std::move(handler);
-    if (sge.size() && sge[0].lkey == 0) {
-      sr.send_flags = IBV_SEND_INLINE;
+  void post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
+    std::vector<ibv_sge> sge_copy;
+    for (auto&e:sge) {
+      sge_copy.push_back(e);
     }
-    sr.next = NULL;
-    sr.wr_id = (uintptr_t)&send_cb_;
-    sr.sg_list = sge.data();
-    sr.num_sge = sge.size();
-    sr.opcode = IBV_WR_SEND;
-    sr.send_flags |= IBV_SEND_SIGNALED;
-    if (qp_ == nullptr) {
-      return std::make_error_code(std::errc::operation_canceled);
-    }
-    // post the receive request to the RQ
-    if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) {
-      auto error_code = std::make_error_code(std::errc{std::abs(ec)});
-      ELOG_ERROR << "ibv post send failed: " << error_code.message();
-      return error_code;
-    }
-    return {};
+    coro_io::dispatch([self=shared_from_this(),handler=std::move(handler),sge=std::move(sge_copy)]() mutable {
+      ibv_send_wr sr{};
+      ibv_send_wr* bad_wr = nullptr;
+      self->send_cb_ = std::move(handler);
+      if (sge.size() && sge[0].lkey == 0) {
+        sr.send_flags = IBV_SEND_INLINE;
+      }
+      sr.next = NULL;
+      sr.wr_id = (uintptr_t)&self->send_cb_;
+      sr.sg_list = sge.data();
+      sr.num_sge = sge.size();
+      sr.opcode = IBV_WR_SEND;
+      sr.send_flags |= IBV_SEND_SIGNALED;
+      std::error_code err;
+      if (self->qp_ == nullptr) {
+        err = std::make_error_code(std::errc::operation_canceled);
+      }
+      // post the receive request to the RQ
+      else if (auto ec = ibv_post_send(self->qp_.get(), &sr, &bad_wr); ec) {
+        err = std::make_error_code(std::errc{std::abs(ec)});
+        ELOG_ERROR << "ibv post send failed: " << err.message();
+      }
+      if (err) {
+        ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}}, handler);
+      }
+    },executor_->get_asio_executor()).start([](auto&&res) {
+    });
+    
   }
 
   std::error_code poll_completion() {
@@ -423,10 +432,7 @@ class ib_socket_t {
                  << ", address:" << buffer[0].addr
                  << ",length:" << buffer[0].length;
     }
-    if (auto ec = state_->post_send_impl(buffer, std::move(cb)); ec)
-        [[unlikely]] {
-      safe_resume(ec, std::move(state_->send_cb_));
-    }
+    state_->post_send_impl(buffer, std::move(cb));
   }
 
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
@@ -544,6 +550,13 @@ class ib_socket_t {
     try {
       init_qp();
       modify_qp_to_init();
+      for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
+        if (auto ec = state_->recv_queue_.push(
+                state_->ib_buffer_pool_->get_buffer(), state_.get());
+            ec) {
+          co_return ec;
+        }
+      }
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
@@ -598,13 +611,6 @@ class ib_socket_t {
       }
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
-      for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        if (auto ec = state_->recv_queue_.push(
-                state_->ib_buffer_pool_->get_buffer(), state_.get());
-            ec) {
-          co_return ec;
-        }
-      }
       if (state_->recv_queue_.empty()) {
         ELOG_WARN << "buffer out of limit, init ib_socket failed";
         co_return std::make_error_code(std::errc::no_buffer_space);
@@ -814,6 +820,7 @@ class ib_socket_t {
                                   handler.set_value_then_resume(ec);
                                 });
         });
+        
         if (!ec) {
           ec = self->poll_completion();
         }

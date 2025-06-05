@@ -189,7 +189,9 @@ class coro_rpc_server_base {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
       accept().start([this, p = std::move(promise)](auto &&res) mutable {
+        ELOG_ERROR<<"server quit!";
         if (res.hasError()) {
+          stop();
           errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};
           p.setValue(errc_);
         }
@@ -418,9 +420,8 @@ class coro_rpc_server_base {
       }
 #endif
       if (error) {
-        ELOG_INFO << "accept failed, error: " << error.message();
-        if (error == asio::error::operation_aborted ||
-            error == asio::error::bad_descriptor) {
+        ELOG_ERROR << "accept failed, error: " << error.message();
+        if (error == asio::error::operation_aborted) {
           acceptor_close_waiter_.set_value();
           co_return coro_rpc::errc::operation_canceled;
         }
@@ -433,6 +434,7 @@ class coro_rpc_server_base {
         socket.set_option(asio::ip::tcp::no_delay(true), error);
       }
       coro_io::socket_wrapper_t wrapper;
+      bool init_failed = false;
       do {
 #ifdef YLT_ENABLE_SSL
         if (use_ssl_) {
@@ -442,13 +444,20 @@ class coro_rpc_server_base {
 #endif
 #ifdef YLT_ENABLE_IBV
         if (ibv_config_.has_value()) {
-          wrapper = {std::move(socket), executor, *ibv_config_, nullptr,
-                     nullptr};
+          try {
+            wrapper = {std::move(socket), executor, *ibv_config_, nullptr,
+                      nullptr};
+          }
+          catch(...) {
+            init_failed=true;
+          }
           break;
         }
 #endif
         wrapper = {std::move(socket), executor};
       } while (false);
+      if (init_failed)
+        continue;
       auto conn = std::make_shared<coro_connection>(std::move(wrapper),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
