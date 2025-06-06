@@ -67,44 +67,56 @@ struct ib_config_t {
 
 struct ib_deleter {
   void operator()(ibv_pd* pd) const noexcept {
-    auto ret = ibv_dealloc_pd(pd);
-    if (ret != 0) {
-      ELOG_ERROR << "ibv_dealloc_pd failed: "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (pd) {
+      auto ret = ibv_dealloc_pd(pd);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_dealloc_pd failed: "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
   void operator()(ibv_context* context) const noexcept {
-    auto ret = ibv_close_device(context);
-    if (ret != 0) {
-      ELOG_ERROR << "ibv_close_device failed "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (context) {
+      auto ret = ibv_close_device(context);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_close_device failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
   void operator()(ibv_cq* cq) const noexcept {
-    auto ret = ibv_destroy_cq(cq);
-    if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_cq failed "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (cq) {
+      auto ret = ibv_destroy_cq(cq);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_cq failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
   void operator()(ibv_qp* qp) const noexcept {
-    auto ret = ibv_destroy_qp(qp);
-    if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_qp failed "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (qp) {
+      auto ret = ibv_destroy_qp(qp);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_qp failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
   void operator()(ibv_comp_channel* channel) const noexcept {
-    auto ret = ibv_destroy_comp_channel(channel);
-    if (ret != 0) {
-      ELOG_ERROR << "ibv_destroy_comp_channel failed "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (channel) {
+      auto ret = ibv_destroy_comp_channel(channel);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_comp_channel failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
   void operator()(ibv_mr* ptr) const noexcept {
-    if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
-      ELOG_ERROR << "ibv_dereg_mr failed: "
-                 << std::make_error_code(std::errc{ret}).message();
+    if (ptr) {
+      if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
+        ELOG_ERROR << "ibv_dereg_mr failed: "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
     }
   }
 };
@@ -195,11 +207,6 @@ class ib_device_t {
     }
   }
 
-  ~ib_device_t() {
-    pd_ = nullptr;
-    ctx_ = nullptr;
-  }
-
   std::string_view name() const noexcept { return name_; }
 
   uint16_t port() const noexcept { return port_; }
@@ -252,7 +259,6 @@ class ib_device_t {
   ibv_port_attr attr_;
   ibv_gid gid_;
   asio::ip::address gid_address_;
-  ibv_device* device_;
   int gid_index_;
 
   uint16_t port_;

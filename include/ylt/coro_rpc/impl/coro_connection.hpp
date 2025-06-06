@@ -192,6 +192,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         ELOG_ERROR << "handshake failed: " << shake_ec.message() << " conn_id  "
                    << conn_id_;
         close();
+        co_return;
       }
       else {
         ELOG_INFO << "handshake ok conn_id " << conn_id_;
@@ -208,6 +209,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         ELOG_ERROR << "ibverbs init qp failed: " << ec.message() << " conn_id  "
                    << conn_id_;
         close();
+        co_return;
       }
     }
 #endif

@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "asio/buffer.hpp"
+#include "async_simple/Executor.h"
 #include "async_simple/Future.h"
 #include "async_simple/Promise.h"
 #include "async_simple/Signal.h"
@@ -46,6 +47,9 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
   }
   auto ret = co_await ib_socket.accept(std::move(soc));
   ELOGV(INFO, "accept over:%s", ret.message().data());
+  if (ret) [[unlikely]] {
+    co_return std::make_error_code(std::errc::protocol_error);
+  }
   co_return ret;
 }
 
@@ -159,32 +163,31 @@ async_simple::coro::
   async_simple::Promise<std::pair<std::error_code, std::size_t>> promise;
   std::pair<std::error_code, std::size_t> result{};
   if (prev_op) {
-    result = co_await std::move(*prev_op);
+    bool is_canceled = false;
+    try {
+      result = co_await std::move(*prev_op);
+    } catch (const async_simple::SignalException& e) {
+      is_canceled = true;
+    }
+    if (is_canceled) [[unlikely]] {
+      co_await coro_io::dispatch(ib_socket.get_executor());
+      ib_socket.close();
+      co_return std::pair{std::make_error_code(std::errc::operation_canceled),
+                          std::size_t{0}};
+    }
   }
   prev_op = promise.getFuture();
-  auto slot = co_await async_simple::coro::CurrentSlot{};
-  auto work = coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-      [&ib_socket, list](auto&& cb) mutable {
-        ib_socket.post_send(list, std::move(cb));
-      },
-      ib_socket);
-  auto cb = [p = std::move(promise), io_size = io_size,
-             buffer = std::move(buffer)](auto&& result) mutable {
-    if (buffer) {
-      std::move(buffer).collect();
-    }
-    if (!result.hasError()) {
-      result.value().second = io_size;
-    }
-    p.setValue(std::move(result));
-  };
-  if (slot) {
-    std::move(work).setLazyLocal(slot->signal()).start(std::move(cb));
-  }
-  else {
-    std::move(work).start(std::move(cb));
-  }
-
+  ib_socket.post_send(list,
+                      [p = std::move(promise), io_size = io_size,
+                       buffer = std::move(buffer)](auto&& result) mutable {
+                        if (buffer) {
+                          buffer = {};
+                        }
+                        if (!result.first) [[likely]] {
+                          result.second = io_size;
+                        }
+                        p.setValue(std::move(result));
+                      });
   co_return std::pair{result.first, result.second};
 }
 
@@ -255,13 +258,17 @@ template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
+  if (!ib_socket.is_open()) {
+    co_await coro_io::dispatch(
+        ib_socket.get_coro_executor()->get_asio_executor());
+    co_return std::pair{std::make_error_code(std::errc::not_connected),
+                        std::size_t{0}};
+  }
   std::vector<ibv_sge> sge_list;
   make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;
   if (sge_span.size() == 0) [[unlikely]] {
     co_await coro_io::dispatch(
-        []() {
-        },
         ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
@@ -272,8 +279,6 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   std::size_t io_completed_size = consume_buffer(ib_socket, sge_span);
   if (sge_span.empty()) {
     co_await coro_io::dispatch(
-        []() {
-        },
         ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, io_completed_size};
   }
@@ -367,7 +372,18 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   }
   if constexpr (io == ib_socket_t::io_type::send) {
     if (future) {
-      std::tie(ec, len) = co_await std::move(*future);
+      bool is_canceled = false;
+      try {
+        std::tie(ec, len) = co_await std::move(*future);
+      } catch (const async_simple::SignalException& e) {
+        is_canceled = true;
+      }
+      if (is_canceled) [[unlikely]] {
+        co_await coro_io::dispatch(ib_socket.get_executor());
+        ib_socket.close();
+        co_return std::pair{std::make_error_code(std::errc::operation_canceled),
+                            std::size_t{0}};
+      }
       io_completed_size += len;
       if (ec) [[unlikely]] {
         co_return std::pair{ec, io_completed_size};

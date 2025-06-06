@@ -108,8 +108,8 @@ void latency_watcher() {
 }
 int main() {
   for (int i = 0; i < thread_cnt; ++i) {
-    clients.emplace_back(std::make_unique<coro_rpc_client>(
-        coro_io::get_global_executor()->get_asio_executor()));
+    clients.emplace_back(
+        std::make_unique<coro_rpc_client>(coro_io::get_global_executor()));
     syncAwait(clients.back()->connect("localhost:8801"));
   }
   for (int i = 0, lim = thread_cnt; i < lim; ++i) {

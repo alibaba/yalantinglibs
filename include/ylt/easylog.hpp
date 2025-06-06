@@ -43,7 +43,13 @@ class logger {
     return instance;
   }
 
-  void operator+=(record_t &record) { write(record); }
+  void operator+=(record_t &record) {
+    if (has_destruct_) [[unlikely]] {
+      return;
+    }
+
+    write(record);
+  }
 
   void write(record_t &record) {
     if (async_ && appender_) {
@@ -102,6 +108,7 @@ class logger {
 
   void set_async(bool enable) { async_ = enable; }
   bool get_async() { return async_; }
+  ~logger() { has_destruct_ = true; }
 
  private:
   logger() {
@@ -137,6 +144,7 @@ class logger {
   bool enable_console_ = true;
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
+  inline static std::atomic<bool> has_destruct_ = false;
 };
 
 template <size_t Id = 0>
