@@ -86,8 +86,8 @@ struct TesterConfig {
 struct ServerTester : TesterConfig {
   ServerTester(TesterConfig config)
       : TesterConfig(config),
-        port_(std::to_string(config.port)),
-        executor_(io_context_.get_executor()) {
+        executor_(io_context_.get_executor()),
+        port_(std::to_string(config.port)) {
     if (use_outer_io_context) {
       std::promise<void> promise;
       auto future = promise.get_future();
