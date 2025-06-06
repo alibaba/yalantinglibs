@@ -194,7 +194,7 @@ class client_pool : public std::enable_shared_from_this<
         co_await coro_io::sleep_for(wait_time, &client->get_executor());
       self = watcher.lock();
       ++i;
-    } while (i < self->pool_config_.connect_retry_count);
+    } while (self && i < self->pool_config_.connect_retry_count);
     ELOG_WARN << "reconnect client{" << client.get() << "},host:{"
               << client->get_host() << ":" << client->get_port()
               << "} out of max limit, stop retry. connect failed";
