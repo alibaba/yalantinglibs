@@ -484,6 +484,9 @@ class ib_socket_t {
       co_return std::make_error_code(std::errc::no_buffer_space);
     }
     try {
+      if (state_->cq_ == nullptr) {
+        co_return std::make_error_code(std::errc::device_or_resource_busy);
+      }
       init_qp();
       modify_qp_to_init();
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
@@ -553,6 +556,9 @@ class ib_socket_t {
 
   async_simple::coro::Lazy<std::error_code> connect_impl() noexcept {
     try {
+      if (state_->cq_ == nullptr) {
+        co_return std::make_error_code(std::errc::device_or_resource_busy);
+      }
       init_qp();
       modify_qp_to_init();
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {

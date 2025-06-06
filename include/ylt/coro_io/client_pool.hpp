@@ -173,6 +173,10 @@ class client_pool : public std::enable_shared_from_this<
       std::unique_ptr<client_t>& client, std::weak_ptr<client_pool> watcher) {
     using namespace std::chrono_literals;
     std::shared_ptr<client_pool> self = watcher.lock();
+    if (self == nullptr) {
+      co_return;
+    }
+
     uint32_t i = UINT32_MAX;  // (at least connect once)
     do {
       ELOG_TRACE << "try to reconnect client{" << client.get() << "},host:{"
