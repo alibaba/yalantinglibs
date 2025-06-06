@@ -1,9 +1,15 @@
+#include <chrono>
+#include <vector>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 #include <ylt/metric/summary.hpp>
 
+#include "async_simple/Signal.h"
+#include "async_simple/coro/Collect.h"
+#include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
+#include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
@@ -69,6 +75,35 @@ ylt::metric::summary_t g_latency{"rpc call latency(us)", "help",
                                  std::vector{0.5, 0.9, 0.95, 0.99},
                                  std::chrono::seconds{60}};
 
+async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
+  size_t total = 0;
+
+  std::cout << std::fixed << std::setprecision(2);
+  g_count = 0;
+  for (uint32_t i = 0; i < conf.duration; i++) {
+    auto start = std::chrono::system_clock::now();
+    auto is_ok = co_await coro_io::sleep_for(std::chrono::seconds{1});
+    if (!is_ok) {
+      break;
+    }
+    auto c = g_count.exchange(0);
+    total += c;
+    auto end = std::chrono::system_clock::now();
+    auto dur = (end - start) / std::chrono::milliseconds(1);
+    double val = (8.0 * c * 1000) / (1000'000'000ll * dur);
+    std::cout << "qps " << c / conf.send_data_len << ", Throughput:" << val
+              << " Gb/s\n";
+  }
+  double val = (8.0 * total) / (1000'000'000ll * conf.duration);
+  std::cout << "avg qps " << total / (conf.send_data_len * conf.duration)
+            << " and throughput:" << val << " Gb/s in duration "
+            << conf.duration << "\n";
+  std::string str_rate;
+  g_latency.serialize(str_rate);
+  std::cout << "latency: " << str_rate << "\n";
+  co_return;
+}
+
 async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
 
@@ -79,65 +114,42 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   }
 #endif
 
-  std::shared_ptr<std::atomic<bool>> finish =
-      std::make_shared<std::atomic<bool>>();
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);
-  auto lazy = [pool, conf, finish]() -> async_simple::coro::Lazy<void> {
+  auto lazy = [pool, conf]() -> async_simple::coro::Lazy<void> {
     std::string send_str(conf.send_data_len, 'A');
     std::string_view send_str_view(send_str);
     for (size_t i = 0; i < conf.max_request_count; i++) {
-      if (finish->load(std::memory_order_acquire)) {
+      auto ec =
+          co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
+                                          -> async_simple::coro::Lazy<bool> {
+            client.set_req_attachment(send_str_view);
+            auto start = std::chrono::steady_clock::now();
+            auto result = co_await client.call<echo>();
+            if (!result.has_value()) {
+              ELOG_ERROR << result.error().msg;
+              co_return false;
+            }
+            auto now = std::chrono::steady_clock::now();
+            g_latency.observe(
+                std::chrono::duration_cast<std::chrono::microseconds>(now -
+                                                                      start)
+                    .count());
+            g_count += send_str_view.length();
+            co_return true;
+          });
+      if (!ec.has_value()) {
         break;
       }
-      co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
-                                      -> async_simple::coro::Lazy<void> {
-        client.set_req_attachment(send_str_view);
-        auto start = std::chrono::steady_clock::now();
-        auto result = co_await client.call<echo>();
-        if (!result.has_value()) {
-          ELOG_ERROR << result.error().msg;
-          co_return;
-        }
-        auto now = std::chrono::steady_clock::now();
-        g_latency.observe(
-            std::chrono::duration_cast<std::chrono::microseconds>(now - start)
-                .count());
-        g_count += send_str_view.length();
-      });
     }
   };
-
+  std::vector<async_simple::coro::Lazy<void>> works;
+  works.reserve(conf.client_concurrency);
   for (size_t i = 0; i < conf.client_concurrency; i++) {
-    lazy().start([](auto&&) {
-    });
+    works.push_back(lazy());
   }
-
-  std::cout << std::fixed << std::setprecision(2);
-
-  size_t total = 0;
-  for (uint32_t i = 0; i < conf.duration; i++) {
-    auto start = std::chrono::system_clock::now();
-    std::this_thread::sleep_for(std::chrono::seconds{1});
-    auto c = g_count.exchange(0);
-    total += c;
-    auto end = std::chrono::system_clock::now();
-    auto dur = (end - start) / std::chrono::milliseconds(1);
-    double val = (8.0 * c * 1000) / (1000'000'000ll * dur);
-
-    std::cout << "qps " << c / conf.send_data_len << ", Throughput:" << val
-              << " Gb/s\n";
-  }
-
-  finish->store(true, std::memory_order_release);
-
-  double val = (8.0 * total) / (1000'000'000ll * conf.duration);
-  std::cout << "avg qps " << total / (conf.send_data_len * conf.duration)
-            << " and throughput:" << val << " Gb/s in duration "
-            << conf.duration << "\n";
-  std::string str_rate;
-  g_latency.serialize(str_rate);
-  std::cout << "latency: " << str_rate << "\n";
+  co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(
+      async_simple::coro::collectAll(std::move(works)), watcher(conf));
 
   co_return std::error_code{};
 }
@@ -155,7 +167,8 @@ int main(int argc, char** argv) {
 
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 13);
-  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 1024 * 1024 * 2);
+  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false,
+                       1024 * 1024 * 2);
   parser.add<int>("log_level", 'o', "Severity::INFO 1 as default, WARN is 4",
                   false, 1);
   parser.add<bool>("enable_ib", 'i', "enable ib", false, true);
@@ -166,7 +179,7 @@ int main(int argc, char** argv) {
 
   easylog::set_min_severity((easylog::Severity)conf.log_level);
 
-  easylog::set_async(true);
+  easylog::set_async(false);
 
 #ifdef YLT_ENABLE_IBV
   coro_io::g_ib_buffer_pool({.buffer_size = conf.buffer_size});

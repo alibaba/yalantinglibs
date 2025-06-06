@@ -172,7 +172,7 @@ class coro_rpc_server_base {
       }
       errc_ = listen();
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t & pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
@@ -189,7 +189,7 @@ class coro_rpc_server_base {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
       accept().start([this, p = std::move(promise)](auto &&res) mutable {
-        ELOG_ERROR<<"server quit!";
+        ELOG_ERROR << "server quit!";
         if (res.hasError()) {
           stop();
           errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};
@@ -421,7 +421,8 @@ class coro_rpc_server_base {
 #endif
       if (error) {
         ELOG_ERROR << "accept failed, error: " << error.message();
-        if (error == asio::error::operation_aborted) {
+        if (error == asio::error::operation_aborted ||
+            error == asio::error::bad_descriptor) {
           acceptor_close_waiter_.set_value();
           co_return coro_rpc::errc::operation_canceled;
         }
@@ -446,10 +447,9 @@ class coro_rpc_server_base {
         if (ibv_config_.has_value()) {
           try {
             wrapper = {std::move(socket), executor, *ibv_config_, nullptr,
-                      nullptr};
-          }
-          catch(...) {
-            init_failed=true;
+                       nullptr};
+          } catch (...) {
+            init_failed = true;
           }
           break;
         }

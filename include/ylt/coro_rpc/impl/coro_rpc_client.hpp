@@ -228,13 +228,13 @@ class coro_rpc_client {
    * Create client with io_context
    * @param io_context asio io_context, async event handler
    */
-  coro_rpc_client(asio::io_context::executor_type executor, config conf = {})
-      : control_(std::make_shared<control_t>(executor, false)),
-        timer_(std::make_unique<coro_io::period_timer>(executor)) {
-    if (!init_config(conf)) [[unlikely]] {
-      close();
-    }
-  }
+  // coro_rpc_client(asio::io_context::executor_type executor, config conf = {})
+  //     : control_(std::make_shared<control_t>(executor, false)),
+  //       timer_(std::make_unique<coro_io::period_timer>(executor)) {
+  //   if (!init_config(conf)) [[unlikely]] {
+  //     close();
+  //   }
+  // }
 
   /*!
    * Create client with executor
@@ -243,8 +243,7 @@ class coro_rpc_client {
   coro_rpc_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
       config conf = {})
-      : control_(std::make_shared<control_t>(executor->get_asio_executor(),
-                                             false, conf.local_ip)),
+      : control_(std::make_shared<control_t>(executor, false, conf.local_ip)),
         timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())) {
     if (!init_config(config{})) [[unlikely]] {
@@ -486,7 +485,7 @@ class coro_rpc_client {
   /*!
    * Get inner executor
    */
-  auto &get_executor() { return control_->executor_; }
+  auto &get_executor() { return *control_->executor_; }
 
   uint32_t get_client_id() const { return config_.client_id; }
 
@@ -581,7 +580,7 @@ class coro_rpc_client {
       ELOG_TRACE << "start resolve host: " << config_.host << ":"
                  << config_.port;
       std::tie(ec, iter) = co_await coro_io::async_resolve(
-          &control_->executor_, config_.host, config_.port);
+          control_->executor_, config_.host, config_.port);
       if (ec) {
         ELOG_WARN << "client_id " << config_.client_id
                   << " async_resolve failed:" << ec.message();
@@ -855,17 +854,17 @@ class coro_rpc_client {
 #endif
     bool is_timeout_;
     std::atomic<bool> has_closed_ = false;
-    coro_io::ExecutorWrapper<> executor_;
+    coro_io::ExecutorWrapper<> *executor_;
     coro_io::socket_wrapper_t socket_wrapper_;
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     resp_body resp_buffer_;
     std::atomic<uint32_t> recving_cnt_ = 0;
-    control_t(asio::io_context::executor_type executor, bool is_timeout,
+    control_t(coro_io::ExecutorWrapper<> *executor, bool is_timeout,
               const std::string &local_ip = "")
         : is_timeout_(is_timeout),
           has_closed_(false),
           executor_(executor),
-          socket_wrapper_(&executor_, local_ip) {}
+          socket_wrapper_(executor_, local_ip) {}
   };
 
   static void close_socket_async(
@@ -894,7 +893,7 @@ class coro_rpc_client {
           control->has_closed_ = true;
           control->socket_wrapper_.close();
         },
-        &control->executor_);
+        control->executor_);
     co_return;
   }
 
@@ -1142,7 +1141,7 @@ class coro_rpc_client {
     assert(config.request_timeout_duration.has_value());
 
     auto timer = std::make_unique<coro_io::period_timer>(
-        control_->executor_.get_asio_executor());
+        control_->executor_->get_asio_executor());
     auto result = co_await control_->socket_wrapper_.visit([&](auto &socket) {
       return send_request_for_impl<func>(socket, config, id, *timer,
                                          std::forward<Args>(args)...);
@@ -1245,7 +1244,7 @@ class coro_rpc_client {
           co_await coro_io::post(
               []() {
               },
-              &control_->executor_);
+              control_->executor_);
         }
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
@@ -1263,7 +1262,7 @@ class coro_rpc_client {
           co_await coro_io::post(
               []() {
               },
-              &control_->executor_);
+              control_->executor_);
         }
         ret = co_await coro_io::async_write(socket, iov);
         write_mutex_ = false;
