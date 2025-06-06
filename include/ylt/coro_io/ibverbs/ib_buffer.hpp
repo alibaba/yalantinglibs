@@ -33,7 +33,7 @@ struct ib_buffer_t {
   void release_resource();
 
  public:
-  ib_buffer_t()=default;
+  ib_buffer_t() = default;
   friend class ib_buffer_pool_t;
   ibv_sge subview(std::size_t start = 0) const {
     return ibv_sge{.addr = (uintptr_t)mr_->addr + start,
@@ -50,11 +50,10 @@ struct ib_buffer_t {
   ibv_mr& operator*() noexcept { return *mr_.get(); }
   ibv_mr& operator*() const noexcept { return *mr_.get(); }
   operator bool() const noexcept { return mr_.get() != nullptr; }
-  static std::unique_ptr<ibv_mr> regist(ib_device_t& dev, void* ptr,
-                            uint32_t size,
-                            int ib_flags = IBV_ACCESS_LOCAL_WRITE |
-                                           IBV_ACCESS_REMOTE_READ |
-                                           IBV_ACCESS_REMOTE_WRITE) {
+  static std::unique_ptr<ibv_mr> regist(
+      ib_device_t& dev, void* ptr, uint32_t size,
+      int ib_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                     IBV_ACCESS_REMOTE_WRITE) {
     auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
     ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
     if (mr != nullptr) [[unlikely]] {
@@ -67,8 +66,8 @@ struct ib_buffer_t {
       throw std::make_error_code(std::errc{errno});
     }
   };
-  static ib_buffer_t regist(ib_buffer_pool_t& pool, std::unique_ptr<char[]> data,
-                            std::size_t size,
+  static ib_buffer_t regist(ib_buffer_pool_t& pool,
+                            std::unique_ptr<char[]> data, std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE);
@@ -81,19 +80,19 @@ std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {});
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  private:
   friend struct ib_buffer_t;
-  
+
   struct ib_buffer_impl_t {
     std::unique_ptr<ibv_mr, ib_deleter> mr_;
     std::unique_ptr<char[]> memory_owner_;
     ib_buffer_t convert_to_ib_buffer(ib_buffer_pool_t& pool) && {
-      return ib_buffer_t{std::move(mr_),std::move(memory_owner_),pool};
+      return ib_buffer_t{std::move(mr_), std::move(memory_owner_), pool};
     }
     ib_buffer_impl_t& operator=(ib_buffer_impl_t&& o) noexcept = default;
     ib_buffer_impl_t(ib_buffer_impl_t&& o) noexcept = default;
     ib_buffer_impl_t() noexcept = default;
-    ib_buffer_impl_t(std::unique_ptr<ibv_mr, ib_deleter>&& mr,  std::unique_ptr<char[]> && memory_owner) noexcept
-        : mr_(std::move(mr)), memory_owner_(std::move(memory_owner)) {
-    }
+    ib_buffer_impl_t(std::unique_ptr<ibv_mr, ib_deleter>&& mr,
+                     std::unique_ptr<char[]>&& memory_owner) noexcept
+        : mr_(std::move(mr)), memory_owner_(std::move(memory_owner)) {}
   };
   struct private_construct_token {};
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
@@ -112,7 +111,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       }
       while (true) {
         ELOG_TRACE << "start ib_buffer timeout free of pool{" << self.get()
-                  << "}, now ib_buffer count: " << self->free_buffers_.size();
+                   << "}, now ib_buffer count: " << self->free_buffers_.size();
         std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
         self->total_memory_ -= clear_cnt * self->buffer_size();
         ELOG_WARN << "finish ib_buffer timeout free of pool{" << self.get()
@@ -141,7 +140,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     co_return;
   }
   void enqueue(ib_buffer_t& buffer) {
-    auto impl=std::make_unique<ib_buffer_impl_t>(std::move(buffer.mr_),std::move(buffer.memory_owner_));
+    auto impl = std::make_unique<ib_buffer_impl_t>(
+        std::move(buffer.mr_), std::move(buffer.memory_owner_));
     if (free_buffers_.enqueue(std::move(impl)) == 1) {
       std::size_t expected = 0;
       if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1))
@@ -201,8 +201,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     else {
       ib_buffer = std::move(*buffer).convert_to_ib_buffer(*this);
     }
-    ELOG_TRACE << "get buffer{data:" << ib_buffer->addr << ",len" << ib_buffer->length
-               << "} from queue";
+    ELOG_TRACE << "get buffer{data:" << ib_buffer->addr << ",len"
+               << ib_buffer->length << "} from queue";
     return ib_buffer;
   }
   struct config_t {
@@ -230,21 +230,24 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return total_memory_.load(std::memory_order_acquire);
   }
   std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
-  coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>> free_buffers_;
+  coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
+      free_buffers_;
   std::shared_ptr<ib_device_t> device_;
   config_t pool_config_;
 };
 
-inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool, std::unique_ptr<char[]> data,
-                                      std::size_t size,
-                                       int ib_flags) {
-  auto mr = ibv_reg_mr(pool.device_->pd(),data.get(), size, ib_flags);
+inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
+                                       std::unique_ptr<char[]> data,
+                                       std::size_t size, int ib_flags) {
+  auto mr = ibv_reg_mr(pool.device_->pd(), data.get(), size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
-    ELOG_DEBUG << "ibv_reg_mr regist: " << mr << " with pd:" << pool.device_->pd();
+    ELOG_DEBUG << "ibv_reg_mr regist: " << mr
+               << " with pd:" << pool.device_->pd();
     std::unique_ptr<int> a;
     a.release();
     pool.total_memory_.fetch_add(size, std::memory_order_relaxed);
-    return ib_buffer_t{std::unique_ptr<ibv_mr,ib_deleter>{mr}, std::move(data), pool};
+    return ib_buffer_t{std::unique_ptr<ibv_mr, ib_deleter>{mr}, std::move(data),
+                       pool};
   }
   else {
     throw std::make_error_code(std::errc{errno});
@@ -263,12 +266,11 @@ inline std::shared_ptr<ib_buffer_pool_t> g_ib_buffer_pool(
 }
 
 inline ib_buffer_t::ib_buffer_t(std::unique_ptr<ibv_mr, ib_deleter> mr,
-              std::unique_ptr<char[]> memory_owner,
-              ib_buffer_pool_t& owner_pool) noexcept
+                                std::unique_ptr<char[]> memory_owner,
+                                ib_buffer_pool_t& owner_pool) noexcept
     : mr_(std::move(mr)),
       memory_owner_(std::move(memory_owner)),
-      owner_pool_(owner_pool.weak_from_this()) {    
-}
+      owner_pool_(owner_pool.weak_from_this()) {}
 
 inline ib_buffer_t& ib_buffer_t::operator=(ib_buffer_t&& o) {
   release_resource();
@@ -278,9 +280,7 @@ inline ib_buffer_t& ib_buffer_t::operator=(ib_buffer_t&& o) {
   return *this;
 }
 
-inline ib_buffer_t::~ib_buffer_t() {
-  release_resource();
-}
+inline ib_buffer_t::~ib_buffer_t() { release_resource(); }
 
 inline void ib_buffer_t::release_resource() {
   if (mr_) {

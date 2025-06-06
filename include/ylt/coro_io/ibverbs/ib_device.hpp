@@ -71,7 +71,7 @@ struct ib_deleter {
       auto ret = ibv_dealloc_pd(pd);
       if (ret != 0) {
         ELOG_ERROR << "ibv_dealloc_pd failed: "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
@@ -80,7 +80,7 @@ struct ib_deleter {
       auto ret = ibv_close_device(context);
       if (ret != 0) {
         ELOG_ERROR << "ibv_close_device failed "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
@@ -89,7 +89,7 @@ struct ib_deleter {
       auto ret = ibv_destroy_cq(cq);
       if (ret != 0) {
         ELOG_ERROR << "ibv_destroy_cq failed "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
@@ -98,7 +98,7 @@ struct ib_deleter {
       auto ret = ibv_destroy_qp(qp);
       if (ret != 0) {
         ELOG_ERROR << "ibv_destroy_qp failed "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
@@ -107,7 +107,7 @@ struct ib_deleter {
       auto ret = ibv_destroy_comp_channel(channel);
       if (ret != 0) {
         ELOG_ERROR << "ibv_destroy_comp_channel failed "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
@@ -115,7 +115,7 @@ struct ib_deleter {
     if (ptr) {
       if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
         ELOG_ERROR << "ibv_dereg_mr failed: "
-                  << std::make_error_code(std::errc{ret}).message();
+                   << std::make_error_code(std::errc{ret}).message();
       }
     }
   }
