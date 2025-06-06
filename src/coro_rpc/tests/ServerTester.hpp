@@ -430,20 +430,19 @@ struct ServerTester : TesterConfig {
   };
 
   template <auto func, typename... Args>
-  void test_call_with_delay_func_server_timeout(Args... args){
-      // g_action = {};
-      // auto client = this->create_client();
-      // ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
-      //       client->get_client_id());
-      // auto ret = this->template call<func>(client,
-      // std::forward<Args>(args)...);
-      // REQUIRE(ret);
-      // std::this_thread::sleep_for(700ms);
-      // ret = this->call<func>(client, std::forward<Args>(args)...);
-      // REQUIRE(!ret);
-      // REQUIRE_MESSAGE(
-      //     ret.error().code == coro_rpc::errc::io_error,
-      //     std::to_string(client->get_client_id()).append(ret.error().msg));
+  void test_call_with_delay_func_server_timeout(Args... args) {
+    g_action = {};
+    auto client = this->create_client();
+    ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
+          client->get_client_id());
+    auto ret = this->template call<func>(client, std::forward<Args>(args)...);
+    REQUIRE(ret);
+    std::this_thread::sleep_for(700ms);
+    ret = this->call<func>(client, std::forward<Args>(args)...);
+    REQUIRE(!ret);
+    REQUIRE_MESSAGE(
+        ret.error().code == coro_rpc::errc::io_error,
+        std::to_string(client->get_client_id()).append(ret.error().msg));
   };
   asio::io_context io_context_;
   coro_io::ExecutorWrapper<> executor_;

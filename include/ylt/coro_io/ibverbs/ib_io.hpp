@@ -170,8 +170,7 @@ async_simple::coro::
       is_canceled = true;
     }
     if (is_canceled) [[unlikely]] {
-      co_await coro_io::dispatch(
-          ib_socket.get_executor());
+      co_await coro_io::dispatch(ib_socket.get_executor());
       ib_socket.close();
       co_return std::pair{std::make_error_code(std::errc::operation_canceled),
                           std::size_t{0}};
@@ -259,6 +258,12 @@ template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
+  if (!ib_socket.is_open()) {
+    co_await coro_io::dispatch(
+        ib_socket.get_coro_executor()->get_asio_executor());
+    co_return std::pair{std::make_error_code(std::errc::not_connected),
+                        std::size_t{0}};
+  }
   std::vector<ibv_sge> sge_list;
   make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;
@@ -374,8 +379,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         is_canceled = true;
       }
       if (is_canceled) [[unlikely]] {
-        co_await coro_io::dispatch(
-            ib_socket.get_executor());
+        co_await coro_io::dispatch(ib_socket.get_executor());
         ib_socket.close();
         co_return std::pair{std::make_error_code(std::errc::operation_canceled),
                             std::size_t{0}};
