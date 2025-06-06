@@ -364,7 +364,7 @@ TEST_CASE("test server accept error") {
   server.register_handler<hi>();
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start timeout");
-  coro_rpc_client client(*coro_io::get_global_executor());
+  coro_rpc_client client(coro_io::get_global_executor());
   ELOGV(INFO, "run test server accept error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
@@ -449,7 +449,7 @@ TEST_CASE("testing coro rpc write error") {
   server.register_handler<hi>();
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
-  coro_rpc_client client(*coro_io::get_global_executor());
+  coro_rpc_client client(coro_io::get_global_executor());
   ELOGV(INFO, "run testing coro rpc write error, client_id %d",
         client.get_client_id());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
@@ -492,7 +492,7 @@ TEST_CASE("testing coro rpc subserver") {
   server.add_subserver(std::move(dispatcher), std::move(http_server));
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
-  coro_rpc_client client(*coro_io::get_global_executor());
+  coro_rpc_client client(coro_io::get_global_executor());
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
   REQUIRE_MESSAGE(!ec,
                   std::to_string(client.get_client_id()).append(ec.message()));
@@ -538,7 +538,7 @@ TEST_CASE("testing coro rpc ssl subserver") {
   server.add_subserver(std::move(dispatcher), std::move(http_server));
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
-  coro_rpc_client client(*coro_io::get_global_executor());
+  coro_rpc_client client(coro_io::get_global_executor());
   CHECK(client.init_ssl("../openssl_files", "server.crt"));
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
   REQUIRE_MESSAGE(!ec,

@@ -1,3 +1,5 @@
+#include <infiniband/verbs.h>
+
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -110,14 +112,22 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   co_return std::error_code{};
 }
 
+ibv_sge make_sge(ibv_mr &mr) {
+  ibv_sge sge{};
+  sge.addr = (uint64_t)mr.addr;
+  sge.length = mr.length;
+  sge.lkey = mr.lkey;
+  return sge;
+}
+
 async_simple::coro::Lazy<std::error_code> echo_connect_read_some(
     coro_io::ib_socket_t soc) {
   char *buffer = new char[config.buffer_size];
   ELOG_INFO << "start echo connect";
-  coro_io::ib_buffer_t ib = coro_io::ib_buffer_t::regist(
-      soc.get_device(), buffer, config.buffer_size);
+  auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), buffer,
+                                         config.buffer_size);
   ELOG_INFO << "start read from client";
-  auto [ec, len] = co_await coro_io::async_read_some(soc, ib.subview());
+  auto [ec, len] = co_await coro_io::async_read_some(soc, make_sge(*ib));
 
   if (ec) [[unlikely]] {
     ELOG_INFO << "err when read client:" << ec.message();
@@ -125,8 +135,9 @@ async_simple::coro::Lazy<std::error_code> echo_connect_read_some(
   }
   ELOG_INFO << "read data ok:" << len;
   while (true) {
-    auto r_view = ib.subview();
-    auto s_view = ib.subview(0, 1);
+    auto r_view = make_sge(*ib);
+    auto s_view = make_sge(*ib);
+    s_view.length = 1;
 
     ELOG_DEBUG << "start read from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(
@@ -248,14 +259,14 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
     coro_io::ib_socket_t &soc, std::string_view sv) {
   std::string buffer;
   buffer.resize(config.buffer_size);
-  auto ib2 = coro_io::ib_buffer_t::regist(soc.get_device(), buffer.data(),
+  auto ib2 = coro_io::ib_buffer_t::regist(*soc.get_device(), buffer.data(),
                                           config.buffer_size);
-  auto ib = coro_io::ib_buffer_t::regist(soc.get_device(), (char *)sv.data(),
+  auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), (char *)sv.data(),
                                          sv.size());
   ELOG_INFO << "start echo";
   while (true) {
-    ibv_sge r_view = ib2.subview();
-    ibv_sge s_view = ib.subview();
+    ibv_sge r_view = make_sge(*ib2);
+    ibv_sge s_view = make_sge(*ib);
 
     auto [result, time_out] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
