@@ -206,7 +206,7 @@ struct ib_socket_shared_state_t
           sr.opcode = IBV_WR_SEND;
           sr.send_flags |= IBV_SEND_SIGNALED;
           std::error_code err;
-          if (self->qp_ == nullptr) {
+          if (self->has_close_) {
             err = std::make_error_code(std::errc::operation_canceled);
           }
           // post the receive request to the RQ
