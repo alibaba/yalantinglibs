@@ -8,20 +8,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <deque>
 #include <exception>
-#include <functional>
-#include <iostream>
 #include <memory>
 #include <queue>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
 
-#include "asio/any_io_executor.hpp"
 #include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
-#include "asio/ip/address_v4.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
 #include "async_simple/Signal.h"
@@ -101,8 +96,8 @@ struct ib_socket_shared_state_t
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
-  std::unique_ptr<ibv_qp, ib_deleter> qp_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
+  std::unique_ptr<ibv_qp, ib_deleter> qp_;
 
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = 0;
@@ -145,14 +140,11 @@ struct ib_socket_shared_state_t
         ELOG_ERROR << "ibv_modify_qp IBV_QPS_RESET failed, "
                    << std::make_error_code(std::errc{ret}).message();
       }
-      // qp_ = nullptr;
-      // cq_ = nullptr;
     }
     if (fd_) {
       fd_->cancel(ec);
-      fd_->close(ec);
+      fd_->release();
     }
-    // channel_ = nullptr;
   }
 
   void close(bool should_check = true) {

@@ -225,18 +225,6 @@ class coro_rpc_client {
   static inline const config default_config;
 
   /*!
-   * Create client with io_context
-   * @param io_context asio io_context, async event handler
-   */
-  // coro_rpc_client(asio::io_context::executor_type executor, config conf = {})
-  //     : control_(std::make_shared<control_t>(executor, false)),
-  //       timer_(std::make_unique<coro_io::period_timer>(executor)) {
-  //   if (!init_config(conf)) [[unlikely]] {
-  //     close();
-  //   }
-  // }
-
-  /*!
    * Create client with executor
    * @param executor coro_io's executor, default executor is come
    */
