@@ -71,7 +71,7 @@ inline std::string_view echo() {
   return g_resp_str;
 }
 
-ylt::metric::summary_t g_latency{"rpc call latency(us)", "help",
+ylt::metric::summary_t g_latency{"Latency(us) of rpc call", "help",
                                  std::vector{0.5, 0.9, 0.95, 0.99},
                                  std::chrono::seconds{60}};
 
@@ -94,13 +94,15 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
     std::cout << "qps " << c / conf.send_data_len << ", Throughput:" << val
               << " Gb/s\n";
   }
+
+  std::cout << "# Benchmark result \n";
   double val = (8.0 * total) / (1000'000'000ll * conf.duration);
   std::cout << "avg qps " << total / (conf.send_data_len * conf.duration)
             << " and throughput:" << val << " Gb/s in duration "
             << conf.duration << "\n";
   std::string str_rate;
   g_latency.serialize(str_rate);
-  std::cout << "latency: " << str_rate << "\n";
+  std::cout << str_rate << "\n";
   co_return;
 }
 
@@ -127,7 +129,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
             auto start = std::chrono::steady_clock::now();
             auto result = co_await client.call<echo>();
             if (!result.has_value()) {
-              ELOG_ERROR << result.error().msg;
+              ELOG_WARN << result.error().msg;
               co_return false;
             }
             auto now = std::chrono::steady_clock::now();

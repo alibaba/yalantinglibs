@@ -336,3 +336,46 @@ Lazy<void> call() {
 单个coro_rpc_client在多个线程同时调用时需要注意，只有部分成员函数是线程安全的，包括`send_request()`,`close()`,`connect()`,`get_executor()`,`get_pipeline_size()`,`get_client_id()`,`get_config()`等。如果用户没有重新调用connect()函数并传入endpoint或hostname，那么`get_port()`,`get_host()`函数也是线程安全的。
 
 需要注意，`call`,`get_resp_attachment`,`set_req_attachment`,`release_resp_attachment`和`init_config`函数均不是线程安全的，禁止多个线程同时调用。此时只能使用`send_request`实现多个线程并发请求同一个连接。
+
+# coro_rpc 性能测试
+先编译coro_rpc 的bench再执行bench命令行，命令行详情：
+```
+options:
+  -u, --url                   url (string [=0.0.0.0:9000])
+  -s, --send_data_len         send data length (unsigned long [=8388608])
+  -c, --client_concurrency    total number of http clients (unsigned int [=0])
+  -m, --max_request_count     max request count (unsigned long [=100000000])
+  -p, --port                  server port (unsigned short [=9000])
+  -r, --resp_len              response data length (unsigned long [=13])
+  -b, --buffer_size           buffer size (unsigned int [=2097152])
+  -o, --log_level             Severity::INFO 1 as default, WARN is 4 (int [=1])
+  -i, --enable_ib             enable ib (bool [=1])
+  -d, --duration              duration seconds (unsigned int [=100000])
+  -?, --help                  print this message
+```
+
+server侧命令行：
+`./bench -p 9004 -r 13 -o 5`
+
+含义：启动服务端，response的数据长度为13，日志级别为error(日志级别和easylog的日志级别对应)。
+
+client测命令行：
+`./bench -u 0.0.0.0:9004 -c 100 -s 8388608 -o 5 -d 30`
+
+含义：启动100个client去压测，每次请求发送8MB数据，日志级别为error，持续时间30秒。
+
+默认会启用ibverbs，如果希望只测试tcp则添加`-i 0`
+
+性能测试完成之后将输出qps，吞吐和latency数据，测试结果类似于：
+```
+# Benchmark result
+avg qps 2757 and throughput:185.04 Gb/s in duration 30
+# HELP Latency(us) of rpc call help
+# TYPE Latency(us) of rpc call summary
+rpc call latency(us){quantile="0.500000"} 3616.000000
+rpc call latency(us){quantile="0.900000"} 3712.000000
+rpc call latency(us){quantile="0.950000"} 3776.000000
+rpc call latency(us){quantile="0.990000"} 3872.000000
+rpc call latency(us)_sum 298707968.000000
+rpc call latency(us)_count 82761
+```
