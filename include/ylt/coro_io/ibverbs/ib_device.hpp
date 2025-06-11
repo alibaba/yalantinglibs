@@ -174,7 +174,8 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    ELOG_TRACE << "Active MTU: " << detail::mtu_str(attr_.active_mtu) << ", "
+    ELOG_TRACE << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
+               << ", "
                << "Max MTU: " << detail::mtu_str(attr_.max_mtu);
 
     find_best_gid_index();

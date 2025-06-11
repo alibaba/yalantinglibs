@@ -1,8 +1,17 @@
 #pragma once
+#include <iostream>
 #include <shared_mutex>
 #include <system_error>
+#include <thread>
 #include <utility>
 
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
+#if __has_include("ylt/coro_io/coro_io.hpp")
+#include "ylt/coro_io/coro_io.hpp"
+#else
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#endif
 #include "metric.hpp"
 #include "ylt/util/map_sharded.hpp"
 
@@ -11,14 +20,14 @@ class manager_helper {
  public:
   static bool register_metric(auto& metric_map, auto metric) {
     if (metric::metric_t::g_user_metric_count > ylt_metric_capacity) {
-      CINATRA_LOG_ERROR << "metric count at capacity size: "
-                        << metric::metric_t::g_user_metric_count;
+      std::cerr << "metric count at capacity size: "
+                << metric::metric_t::g_user_metric_count << std::endl;
       return false;
     }
     auto&& [it, r] = metric_map.try_emplace(metric->str_name(), metric);
     if (!r) {
-      CINATRA_LOG_ERROR << "duplicate registered metric name: "
-                        << metric->str_name();
+      std::cerr << "duplicate registered metric name: " << metric->str_name()
+                << std::endl;
       return false;
     }
 

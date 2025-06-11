@@ -184,7 +184,9 @@ int main(int argc, char** argv) {
   easylog::set_async(false);
 
 #ifdef YLT_ENABLE_IBV
-  coro_io::g_ib_buffer_pool({.buffer_size = conf.buffer_size});
+  if (conf.enable_ib) {
+    coro_io::g_ib_buffer_pool({.buffer_size = conf.buffer_size});
+  }
 #endif
 
   if (conf.client_concurrency == 0) {

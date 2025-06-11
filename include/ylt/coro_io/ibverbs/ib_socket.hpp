@@ -823,11 +823,12 @@ class ib_socket_t {
         }
 
         if (ec) {
+          auto send_cb = std::move(self->send_cb_);
           self->close();
           ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
                                            self->recv_cb_);
           ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
-                                           self->send_cb_);
+                                           send_cb);
           break;
         }
       }
