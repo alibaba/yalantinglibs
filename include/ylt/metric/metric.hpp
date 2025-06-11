@@ -8,16 +8,7 @@
 #include <regex>
 #include <span>
 #include <string>
-#include <thread>
 #include <vector>
-
-#include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/SyncAwait.h"
-#if __has_include("ylt/coro_io/coro_io.hpp")
-#include "ylt/coro_io/coro_io.hpp"
-#else
-#include "cinatra/ylt/coro_io/coro_io.hpp"
-#endif
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 namespace iguana {
