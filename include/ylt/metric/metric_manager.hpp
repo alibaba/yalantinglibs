@@ -11,14 +11,14 @@ class manager_helper {
  public:
   static bool register_metric(auto& metric_map, auto metric) {
     if (metric::metric_t::g_user_metric_count > ylt_metric_capacity) {
-      CINATRA_LOG_ERROR << "metric count at capacity size: "
-                        << metric::metric_t::g_user_metric_count;
+      std::cerr << "metric count at capacity size: "
+                << metric::metric_t::g_user_metric_count << std::endl;
       return false;
     }
     auto&& [it, r] = metric_map.try_emplace(metric->str_name(), metric);
     if (!r) {
-      CINATRA_LOG_ERROR << "duplicate registered metric name: "
-                        << metric->str_name();
+      std::cerr << "duplicate registered metric name: " << metric->str_name()
+                << std::endl;
       return false;
     }
 

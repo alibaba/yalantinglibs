@@ -13,7 +13,6 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
-#include "cinatra/cinatra_log_wrapper.hpp"
 #if __has_include("ylt/coro_io/coro_io.hpp")
 #include "ylt/coro_io/coro_io.hpp"
 #else
