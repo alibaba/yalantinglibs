@@ -3,6 +3,7 @@
 #include <shared_mutex>
 #include <system_error>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 
 #include "async_simple/coro/Lazy.h"

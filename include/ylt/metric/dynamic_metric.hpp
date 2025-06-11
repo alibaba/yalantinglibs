@@ -1,5 +1,6 @@
 #pragma once
 #include <thread>
+#include <unordered_map>
 
 #include "metric.hpp"
 #include "thread_local_value.hpp"
