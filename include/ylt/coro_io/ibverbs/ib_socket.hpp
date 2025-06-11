@@ -333,7 +333,7 @@ struct ibverbs_config {
   uint32_t cq_size = 128;
   uint32_t recv_buffer_cnt = 4;
   ibv_qp_type qp_type = IBV_QPT_RC;
-  ibv_qp_cap cap = {.max_send_wr = 1,
+  ibv_qp_cap cap = {.max_send_wr = 2,
                     .max_recv_wr = 32,
                     .max_send_sge = 3,
                     .max_recv_sge = 1,

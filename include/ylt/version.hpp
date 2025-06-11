@@ -20,4 +20,4 @@
 // YLT_VERSION % 100 is the sub-minor version
 // YLT_VERSION / 100 % 1000 is the minor version
 // YLT_VERSION / 100000 is the major version
-#define YLT_VERSION 309  // 0.3.9
+#define YLT_VERSION 501  // 0.5.1
