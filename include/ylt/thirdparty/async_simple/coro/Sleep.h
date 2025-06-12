@@ -22,7 +22,7 @@
 #include <thread>
 #include "async_simple/Executor.h"
 #include "async_simple/coro/Lazy.h"
-#include <iostream>
+
 #endif  // ASYNC_SIMPLE_USE_MODULES
 
 namespace async_simple {
@@ -52,7 +52,6 @@ Lazy<void> sleep(std::chrono::duration<Rep, Period> dur,
                  uint64_t schedule_hint) {
     auto ex = co_await CurrentExecutor();
     if (!ex) {
-        std::cout<<"BLOCK SLEEP"<<std::endl;
         std::this_thread::sleep_for(dur);
         co_return;
     }

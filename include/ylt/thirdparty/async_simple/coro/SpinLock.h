@@ -17,6 +17,8 @@
 #define ASYNC_SIMPLE_CORO_SPIN_LOCK_H
 
 #ifndef ASYNC_SIMPLE_USE_MODULES
+#include <atomic>
+#include <cassert>
 #include <mutex>
 #include <thread>
 #include "async_simple/coro/Lazy.h"
@@ -61,13 +63,13 @@ public:
     }
 
     void unlock() noexcept {
-      assert(_locked.load(std::memory_order_acquire) == true);
-      _locked.store(false, std::memory_order_release);
+        assert(_locked.load(std::memory_order_acquire) == true);
+        _locked.store(false, std::memory_order_release);
     }
 
     [[nodiscard]] Lazy<std::unique_lock<SpinLock>> coScopedLock() {
-      co_await coLock();
-      co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
+        co_await coLock();
+        co_return std::unique_lock<SpinLock>{*this, std::adopt_lock};
     }
 
 private:

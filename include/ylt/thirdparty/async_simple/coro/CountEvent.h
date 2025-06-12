@@ -34,15 +34,15 @@ namespace detail {
 // The last 'down' will resume the awaiting coroutine on this event.
 class CountEvent {
 public:
- CountEvent(size_t count) : _count(count) {}
- CountEvent(const CountEvent&) = delete;
- CountEvent(CountEvent&& other)
-     : _count(other._count.exchange(0, std::memory_order_relaxed)),
-       _awaitingCoro(std::exchange(other._awaitingCoro, nullptr)) {}
+    CountEvent(size_t count) : _count(count) {}
+    CountEvent(const CountEvent&) = delete;
+    CountEvent(CountEvent&& other)
+        : _count(other._count.exchange(0, std::memory_order_relaxed)),
+          _awaitingCoro(std::exchange(other._awaitingCoro, nullptr)) {}
 
- [[nodiscard]] CoroHandle<> down(size_t n = 1) {
-   std::size_t oldCount;
-   return down(oldCount, n);
+    [[nodiscard]] CoroHandle<> down(size_t n = 1) {
+        std::size_t oldCount;
+        return down(oldCount, n);
     }
     [[nodiscard]] CoroHandle<> down(size_t& oldCount, std::size_t n) {
         // read acquire and write release, _awaitingCoro store can not be
