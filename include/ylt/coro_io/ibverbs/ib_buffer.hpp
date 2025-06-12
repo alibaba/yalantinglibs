@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -114,9 +115,12 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                    << "}, now ib_buffer count: " << self->free_buffers_.size();
         std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
         self->total_memory_ -= clear_cnt * self->buffer_size();
-        ELOG_WARN << "finish ib_buffer timeout free of pool{" << self.get()
+        ELOG_INFO << "finish ib_buffer timeout free of pool{" << self.get()
                   << "}, now ib_buffer cnt: " << self->free_buffers_.size()
-                  << " mem usage:" << self->total_memory_;
+                  << " mem usage:"
+                  << (int64_t)(std::round(self->total_memory_ /
+                                          (1.0 * 1024 * 1024)))
+                  << " MB";
         if (clear_cnt != 0) {
           try {
             co_await async_simple::coro::Yield{};

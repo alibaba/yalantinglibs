@@ -172,7 +172,7 @@ class coro_rpc_server_base {
       }
       errc_ = listen();
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t & pool) {
+        if constexpr (requires(typename server_config::executor_pool_t &pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
@@ -420,7 +420,12 @@ class coro_rpc_server_base {
       }
 #endif
       if (error) {
-        ELOG_ERROR << "accept failed, error: " << error.message();
+        if (error == asio::error::operation_aborted) {
+          ELOG_INFO << "server was canceled:" << error.message();
+        }
+        else {
+          ELOG_ERROR << "server accept failed:" << error.message();
+        }
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
           acceptor_close_waiter_.set_value();

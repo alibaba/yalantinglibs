@@ -206,7 +206,7 @@ struct ib_socket_shared_state_t
           sr.opcode = IBV_WR_SEND;
           sr.send_flags |= IBV_SEND_SIGNALED;
           std::error_code err;
-          if (self->has_close_) {
+          if (self->fd_ == nullptr) {
             err = std::make_error_code(std::errc::operation_canceled);
           }
           // post the receive request to the RQ
@@ -240,7 +240,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc {};
+    struct ibv_wc wc{};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_callback;
