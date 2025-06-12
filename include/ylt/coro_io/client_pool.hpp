@@ -374,6 +374,13 @@ class client_pool : public std::enable_shared_from_this<
                                          pool_config, io_context_pool);
   }
 
+  static std::unique_ptr<client_pool> create_unique(
+      std::string_view host_name, const pool_config& pool_config = {},
+      io_context_pool_t& io_context_pool = coro_io::g_io_context_pool()) {
+    return std::make_unique<client_pool>(private_construct_token{}, host_name,
+                                         pool_config, io_context_pool);
+  }
+
   client_pool(private_construct_token t, std::string_view host_name,
               const pool_config& pool_config,
               io_context_pool_t& io_context_pool)

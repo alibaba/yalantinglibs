@@ -74,10 +74,11 @@ class logger {
   void init(Severity min_severity, bool async, bool enable_console,
             const std::string &filename, size_t max_file_size, size_t max_files,
             bool flush_every_time) {
-    static appender appender(filename, async, enable_console, max_file_size,
-                             max_files, flush_every_time);
+    static auto app =
+        std::make_shared<appender>(filename, async, enable_console,
+                                   max_file_size, max_files, flush_every_time);
     async_ = async;
-    appender_ = &appender;
+    appender_ = app;
     min_severity_ = min_severity;
     enable_console_ = enable_console;
   }
@@ -112,11 +113,11 @@ class logger {
 
  private:
   logger() {
-    static appender appender{};
-    appender.start_thread();
-    appender.enable_console(true);
+    static auto app = std::make_shared<appender>();
+    app->start_thread();
+    app->enable_console(true);
     async_ = true;
-    appender_ = &appender;
+    appender_ = app;
   }
 
   logger(const logger &) = default;
@@ -142,7 +143,7 @@ class logger {
 #endif
   bool async_ = false;
   bool enable_console_ = true;
-  appender *appender_ = nullptr;
+  std::shared_ptr<appender> appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
   inline static std::atomic<bool> has_destruct_ = false;
 };
