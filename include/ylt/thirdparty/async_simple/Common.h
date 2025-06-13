@@ -32,6 +32,8 @@ namespace async_simple {
 inline void logicAssert(bool x, const char* errorMsg) {
     if (x)
         AS_LIKELY { return; }
+    int* ptr = nullptr;
+    *ptr = 1;
     throw std::logic_error(errorMsg);
 }
 
