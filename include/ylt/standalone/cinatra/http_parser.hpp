@@ -42,7 +42,7 @@ class http_parser {
       }
     }
   }
- 
+
   int parse_response(const char *data, size_t size, int last_len) {
     int minor_version;
 
