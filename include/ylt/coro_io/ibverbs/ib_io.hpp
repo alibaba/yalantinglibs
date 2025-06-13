@@ -170,7 +170,6 @@ async_simple::coro::
       is_canceled = true;
     }
     if (is_canceled) [[unlikely]] {
-      co_await coro_io::dispatch(ib_socket.get_executor());
       ib_socket.close();
       co_return std::pair{std::make_error_code(std::errc::operation_canceled),
                           std::size_t{0}};
@@ -256,11 +255,9 @@ inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
 
 template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
-               bool read_some = false) {
+async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
+                    bool read_some) {
   if (!ib_socket.is_open()) {
-    co_await coro_io::dispatch(
-        ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::make_error_code(std::errc::not_connected),
                         std::size_t{0}};
   }
@@ -268,8 +265,6 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;
   if (sge_span.size() == 0) [[unlikely]] {
-    co_await coro_io::dispatch(
-        ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, std::size_t{0}};
   }
 
@@ -278,8 +273,6 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   uint32_t max_size = ib_socket.get_buffer_size();
   std::size_t io_completed_size = consume_buffer(ib_socket, sge_span);
   if (sge_span.empty()) {
-    co_await coro_io::dispatch(
-        ib_socket.get_coro_executor()->get_asio_executor());
     co_return std::pair{std::error_code{}, io_completed_size};
   }
 
@@ -379,7 +372,6 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         is_canceled = true;
       }
       if (is_canceled) [[unlikely]] {
-        co_await coro_io::dispatch(ib_socket.get_executor());
         ib_socket.close();
         co_return std::pair{std::make_error_code(std::errc::operation_canceled),
                             std::size_t{0}};
@@ -391,6 +383,19 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     }
   }
   co_return std::pair{ec, io_completed_size};
+}
+
+template <ib_socket_t::io_type io, typename Buffer>
+async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
+async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
+               bool read_some = false) {
+  auto ret = co_await async_io_split_impl<io>(
+      ib_socket, std::forward<Buffer>(raw_buffer), read_some);
+  if (!ib_socket.get_executor().running_in_this_thread()) [[unlikely]] {
+    // switch to io_thread
+    co_await dispatch(ib_socket.get_executor());
+  }
+  co_return ret;
 }
 
 }  // namespace detail
