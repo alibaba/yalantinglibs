@@ -18,6 +18,7 @@
 
 #ifndef ASYNC_SIMPLE_USE_MODULES
 #include <stdexcept>
+#include <iostream>
 #include "async_simple/CommonMacros.h"
 
 #endif  // ASYNC_SIMPLE_USE_MODULES
@@ -32,9 +33,12 @@ namespace async_simple {
 inline void logicAssert(bool x, const char* errorMsg) {
     if (x)
         AS_LIKELY { return; }
-    int* ptr = nullptr;
-    *ptr = 1;
-    throw std::logic_error(errorMsg);
+    std::cout << "logicAssert" << std::endl;
+    while(true) {
+        int* ptr = nullptr;
+        *ptr = 1;
+    }
+    // throw std::logic_error(errorMsg);
 }
 
 }  // namespace async_simple
