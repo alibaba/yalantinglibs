@@ -158,7 +158,8 @@ public:
         assert(old >= 1u);
         if (!hasResult() && old == 1) {
             try {
-                throw std::runtime_error("Promise is broken");
+                logicAssert(false, "Promise is broken");
+                //throw std::runtime_error("Promise is broken");
             } catch (...) {
                 setResult(Try<T>(std::current_exception()));
             }
