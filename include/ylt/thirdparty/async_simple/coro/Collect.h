@@ -167,7 +167,7 @@ struct CollectAnyAwaiter {
                            SignalType type, Signal*) mutable {
                     auto count = e->downCount();
                     if (count == size + 1) {
-                      c.resume();
+                        c.resume();
                     }
                 })) {  // has canceled
             return false;
@@ -187,13 +187,13 @@ struct CollectAnyAwaiter {
                     auto count = e->downCount();
                     // n+1: n coro + 1 cancel handler
                     if (count == size + 1) {
-                      _result = std::make_unique<ResultType>();
-                      _result->_idx = i;
-                      _result->_value = std::move(result);
-                      if (auto ptr = local->getSlot(); ptr) {
-                        ptr->signal()->emit(_SignalType);
-                      }
-                      c.resume();
+                        _result = std::make_unique<ResultType>();
+                        _result->_idx = i;
+                        _result->_value = std::move(result);
+                        if (auto ptr = local->getSlot(); ptr) {
+                            ptr->signal()->emits(_SignalType);
+                        }
+                        c.resume();
                     }
                 });
         }  // end for
@@ -269,7 +269,7 @@ struct CollectAnyVariadicAwaiter {
                                                      Signal*) mutable {
                     auto count = e->downCount();
                     if (count == std::tuple_size<InputType>() + 1) {
-                      c.resume();
+                        c.resume();
                     }
                 })) {  // has canceled
             return false;
@@ -291,12 +291,12 @@ struct CollectAnyVariadicAwaiter {
                         auto count = e->downCount();
                         // n+1: n coro + 1 cancel handler
                         if (count == std::tuple_size<InputType>() + 1) {
-                          _result = std::make_unique<ResultType>(
-                              std::in_place_index_t<index>(), std::move(res));
-                          if (auto ptr = local->getSlot(); ptr) {
-                            ptr->signal()->emit(_SignalType);
-                          }
-                          c.resume();
+                            _result = std::make_unique<ResultType>(
+                                std::in_place_index_t<index>(), std::move(res));
+                            if (auto ptr = local->getSlot(); ptr) {
+                                ptr->signal()->emits(_SignalType);
+                            }
+                            c.resume();
                         }
                     });
             }(),
@@ -392,15 +392,14 @@ struct CollectAllAwaiter {
         _event.setAwaitingCoro(continuation);
         auto size = _input.size();
         for (size_t i = 0; i < size; ++i) {
-          auto& exec = _input[i]._coro.promise()._executor;
-          if (exec == nullptr) {
-            exec = executor;
-          }
-          std::unique_ptr<LazyLocalBase> local;
-          local = std::make_unique<LazyLocalBase>(_signal.get());
-          _input[i]._coro.promise()._lazy_local = local.get();
-          auto&& func =
-              [this, i, local = std::move(local)]() mutable {
+            auto& exec = _input[i]._coro.promise()._executor;
+            if (exec == nullptr) {
+                exec = executor;
+            }
+            std::unique_ptr<LazyLocalBase> local;
+            local = std::make_unique<LazyLocalBase>(_signal.get());
+            _input[i]._coro.promise()._lazy_local = local.get();
+            auto&& func = [this, i, local = std::move(local)]() mutable {
                 _input[i].start([this, i, local = std::move(local)](
                                     Try<ValueType>&& result) {
                     _output[i] = std::move(result);
@@ -410,21 +409,21 @@ struct CollectAllAwaiter {
                     auto signalType = _SignalType;
                     auto awaitingCoro = _event.down(oldCount, 1);
                     if (oldCount == size) {
-                        signal->emit(signalType);
+                        signal->emits(signalType);
                     }
                     if (awaitingCoro) {
                         awaitingCoro.resume();
                     }
                 });
-              };
-          if (Para == true && _input.size() > 1) {
-            if (exec != nullptr)
-              AS_LIKELY {
-                exec->schedule_move_only(std::move(func));
-                continue;
-              }
-          }
-          func();
+            };
+            if (Para == true && _input.size() > 1) {
+                if (exec != nullptr)
+                    AS_LIKELY {
+                        exec->schedule_move_only(std::move(func));
+                        continue;
+                    }
+            }
+            func();
         }
     }
     inline auto await_resume() { return std::move(_output); }
@@ -583,7 +582,7 @@ struct CollectAllVariadicAwaiter {
                         auto signalType = _SignalType;
                         auto awaitingCoro = _event.down(oldCount, 1);
                         if (oldCount == sizeof...(Ts)) {
-                            signal->emit(signalType);
+                            signal->emits(signalType);
                         }
                         if (awaitingCoro) {
                             awaitingCoro.resume();
