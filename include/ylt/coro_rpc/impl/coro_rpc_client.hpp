@@ -1158,7 +1158,6 @@ class coro_rpc_client {
       }
     }
     else {
-      auto i = build_failed_rpc_result<rpc_return_t>(std::move(result));
       co_return build_failed_rpc_result<rpc_return_t>(std::move(result));
     }
   }
