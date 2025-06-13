@@ -1706,11 +1706,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       parse_ret = -1;
     }
 #endif
-    if (parse_ret < 0) {
+    if (parse_ret < 0) [[unlikely]] {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       inject_response_valid = ClientInjectAction::none;
 #endif
       return std::make_error_code(std::errc::protocol_error);
+    }
+    if (parser_.body_len() < 0) [[unlikely]] {
+      CINATRA_LOG_ERROR << "invalid http content length: "
+                        << parser_.body_len();
+      return std::make_error_code(std::errc::invalid_argument);
     }
     head_buf_.consume(header_size);  // header size
     data.resp_headers = parser.get_headers();
