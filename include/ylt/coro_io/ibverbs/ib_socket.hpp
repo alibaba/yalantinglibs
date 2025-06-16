@@ -213,7 +213,7 @@ struct ib_socket_shared_state_t
           }
           // post the receive request to the RQ
           else if (auto ec = ibv_post_send(self->qp_.get(), &sr, &bad_wr); ec) {
-            err = std::make_error_code(std::errc{ec});
+            err = std::make_error_code(std::errc{std::abs(ec)});
             ELOG_ERROR << "ibv post send failed: " << err.message();
           }
           if (err) {
@@ -332,7 +332,7 @@ inline std::error_code ib_buffer_queue::post_recv_real(
 
   // post the receive request to the RQ
   if (auto ec = ibv_post_recv(state->qp_.get(), &rr, &bad_wr); ec) {
-    auto error_code = std::make_error_code(std::errc{ec});
+    auto error_code = std::make_error_code(std::errc{std::abs(ec)});
     ELOG_ERROR << "ibv post recv failed: " << error_code.message();
     return error_code;
   }
