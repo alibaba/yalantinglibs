@@ -64,8 +64,11 @@ struct ib_buffer_queue {
   bool full() const noexcept { return front == end && !may_empty; }
   bool empty() const noexcept { return front == end && may_empty; }
   std::size_t size() {
-    if (end >= front) {
+    if (end > front) {
       return queue.size() + front - end;
+    }
+    else if (end == front) {
+      return empty() ? 0 : queue.size();
     }
     else {
       return front - end;
@@ -242,7 +245,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
