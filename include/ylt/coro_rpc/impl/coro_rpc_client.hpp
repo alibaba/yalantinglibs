@@ -613,6 +613,8 @@ class coro_rpc_client {
     if (!is_timeout) {
       co_return false;
     }
+
+    ELOG_WARN << "client close timeout socket client id: " << get_client_id();
     if (auto self = socket_watcher.lock()) {
       self->is_timeout_ = is_timeout;
       close_socket_async(self);

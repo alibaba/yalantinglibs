@@ -155,6 +155,7 @@ struct ib_socket_shared_state_t
       has_close = has_close_.exchange(true);
     }
     if (!has_close) {
+      ELOG_WARN << "ib_socket close ";
       if (fd_ && !peer_close_) {
         shutdown().start([self = shared_from_this()](auto&&) {
           self->close_impl();
@@ -211,6 +212,13 @@ struct ib_socket_shared_state_t
           // post the receive request to the RQ
           else if (auto ec = ibv_post_send(self->qp_.get(), &sr, &bad_wr); ec) {
             err = std::make_error_code(std::errc{ec});
+            std::string out;
+            ELOG_WARN << "wr_id: " << sr.wr_id << ", "
+                      << "sg_list: " << sr.sg_list << ", "
+                      << "num_sge: " << sr.num_sge << ", "
+                      << "opcode: " << sr.opcode << ", "
+                      << "send_flags: " << sr.send_flags << ", "
+                      << "fd: " << self->fd_;
             ELOG_ERROR << "ibv post send failed: " << err.message();
           }
           if (err) {
@@ -242,7 +250,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
@@ -264,7 +272,7 @@ struct ib_socket_shared_state_t
                    << ",len:" << wc.byte_len;
         if (wc.wr_id == 0) {  // recv
           if (wc.byte_len == 0) {
-            ELOG_DEBUG << "close by peer";
+            ELOG_WARN << "close by peer";
             peer_close_ = true;
             close();
             break;
@@ -827,8 +835,15 @@ class ib_socket_t {
                                 });
         });
 
+        if (ec) {
+          ELOG_WARN << "channel read error: " << ec.message();
+        }
+
         if (!ec) {
           ec = self->poll_completion();
+          if (ec) {
+            ELOG_WARN << "poll_completion error: " << ec.message();
+          }
         }
 
         if (ec) {

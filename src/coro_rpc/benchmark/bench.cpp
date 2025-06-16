@@ -140,7 +140,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
             g_count += send_str_view.length();
             co_return true;
           });
-      if (!ec.has_value()) {
+      if (!ec.has_value() || !ec.value()) {
         break;
       }
     }

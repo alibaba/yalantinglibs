@@ -590,7 +590,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             ELOG_INFO << "close timeout client client_id " << client_id_
                       << ", conn_id " << conn_id_;
 #else
-            ELOG_INFO << "close timeout client conn_id " << conn_id_;
+            ELOG_WARN << "close timeout client conn_id " << conn_id_;
 #endif
 
             close();
