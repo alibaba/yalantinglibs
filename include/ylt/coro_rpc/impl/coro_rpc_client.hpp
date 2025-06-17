@@ -946,8 +946,8 @@ class coro_rpc_client {
       std::shared_ptr<control_t> controller, Socket &socket) {
     std::pair<std::error_code, std::size_t> ret;
     do {
-      coro_rpc_protocol::resp_header header;
-      char buffer[coro_rpc_protocol::RESP_HEAD_LEN];
+      coro_rpc_protocol::resp_header header{};
+      char buffer[coro_rpc_protocol::RESP_HEAD_LEN] = {};
       ret = co_await coro_io::async_read(socket, asio::buffer(buffer));
       auto ec = struct_pack::deserialize_to<
           struct_pack::sp_config::DISABLE_ALL_META_INFO>(
