@@ -29,6 +29,7 @@
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/easylog.hpp"
 #include "ylt/struct_pack.hpp"
+#include "ylt/util/concurrentqueue.h"
 
 namespace coro_io {
 
@@ -75,6 +76,16 @@ struct ib_buffer_queue {
     }
   }
 };
+template <typename T>
+struct SPMCQueue {
+  ylt::detail::moodycamel::ConcurrentQueue<T> queue;
+  ylt::detail::moodycamel::ProducerToken token;
+  SPMCQueue() : queue(), token(queue) {}
+  bool try_pop(T& t) noexcept {
+    return queue.try_dequeue_from_producer(token, t);
+  }
+  void push(T&& t) noexcept { queue.enqueue(token, std::move(t)); }
+};
 
 struct ib_socket_shared_state_t
     : std::enable_shared_from_this<ib_socket_shared_state_t> {
@@ -94,7 +105,6 @@ struct ib_socket_shared_state_t
   std::queue<std::pair<std::error_code, std::size_t>>
       recv_result;  // TODO optimize with circle buffer
   callback_t recv_cb_;
-  std::deque<callback_t> send_cb_;
   ib_buffer_t recv_buf_;
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
@@ -106,6 +116,8 @@ struct ib_socket_shared_state_t
   std::atomic<bool> has_close_ = 0;
   bool peer_close_ = false;
 
+  SPMCQueue<callback_t> send_cb_;
+
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            coro_io::ExecutorWrapper<>* executor,
                            std::size_t recv_buffer_cnt = 4,
@@ -113,8 +125,9 @@ struct ib_socket_shared_state_t
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         executor_(executor),
         soc_(executor->get_asio_executor()),
-        recv_buffer_cnt_(std::max<std::size_t>(1,recv_buffer_cnt)),
-        recv_queue_(std::max<std::size_t>(recv_buffer_cnt_,max_recv_buffer_cnt - 1)) {
+        recv_buffer_cnt_(std::max<std::size_t>(1, recv_buffer_cnt)),
+        recv_queue_(
+            std::max<std::size_t>(recv_buffer_cnt_, max_recv_buffer_cnt - 1)) {
     if (ib_buffer_pool_ == nullptr) {
       ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
     }
@@ -175,7 +188,7 @@ struct ib_socket_shared_state_t
     co_await collectAll<async_simple::SignalType::Terminate>(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
-              post_send_impl({},false, std::move(cb));
+              post_send_impl({}, false, std::move(cb));
             },
             *this),
         coro_io::sleep_for(std::chrono::seconds{1}, executor_));
@@ -188,45 +201,45 @@ struct ib_socket_shared_state_t
     uint64_t wr_id;
   };
 
-  void post_send_impl(std::span<ibv_sge> sge, bool enable_inline_send, callback_t&& handler) {
-    std::vector<ibv_sge> sge_copy;
-    for (auto& e : sge) {
-      sge_copy.push_back(e);
+  void post_send_impl(std::span<ibv_sge> sge, bool enable_inline_send,
+                      callback_t&& handler) {
+    ibv_send_wr sr{};
+    ibv_send_wr* bad_wr = nullptr;
+    if (enable_inline_send) {
+      sr.send_flags = IBV_SEND_INLINE;
     }
-    coro_io::dispatch(
-        [self = shared_from_this(), handler = std::move(handler),enable_inline_send,
-         sge = std::move(sge_copy)]() mutable {
-          ibv_send_wr sr{};
-          ibv_send_wr* bad_wr = nullptr;
-          if (enable_inline_send) {
-            sr.send_flags = IBV_SEND_INLINE;
-          }
-          sr.next = NULL;
-          sr.wr_id = 1;
-          sr.sg_list = sge.data();
-          sr.num_sge = sge.size();
-          sr.opcode = IBV_WR_SEND;
-          sr.send_flags |= IBV_SEND_SIGNALED;
-          std::error_code err;
-          if (self->fd_ == nullptr) {
-            err = std::make_error_code(std::errc::operation_canceled);
-          }
-          // post the receive request to the RQ
-          else if (auto ec = ibv_post_send(self->qp_.get(), &sr, &bad_wr); ec) {
-            err = std::make_error_code(std::errc{std::abs(ec)});
-            ELOG_ERROR << "ibv post send failed: " << err.message();
-          }
-          if (err) {
-            ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}},
-                                             handler);
-          }
-          else {
-            self->send_cb_.push_back(std::move(handler));
-          }
-        },
-        executor_->get_asio_executor())
-        .start([](auto&& res) {
-        });
+    sr.next = NULL;
+    sr.wr_id = 1;
+    sr.sg_list = sge.data();
+    sr.num_sge = sge.size();
+    sr.opcode = IBV_WR_SEND;
+    sr.send_flags |= IBV_SEND_SIGNALED;
+    std::error_code err;
+    if (sge.size() && has_close_) [[unlikely]] {
+      err = std::make_error_code(std::errc::operation_canceled);
+    }
+    // post the receive request to the RQ
+    else if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec)
+        [[unlikely]] {
+      err = std::make_error_code(std::errc{std::abs(ec)});
+      ELOG_ERROR << "ibv post send failed: " << err.message();
+    }
+    if (err) [[unlikely]] {
+      ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}}, handler);
+    }
+    else {
+      send_cb_.push(std::move(handler));
+      if (has_close_) [[unlikely]] {
+        if (send_cb_.try_pop(handler)) {
+          asio::dispatch(
+              executor_->get_asio_executor(), [handler = std::move(handler)]() {
+                handler(std::pair{
+                    std::make_error_code(std::errc::operation_canceled),
+                    std::size_t{0}});
+              });
+        }
+      }
+    }
   }
 
   std::error_code poll_completion() {
@@ -301,13 +314,17 @@ struct ib_socket_shared_state_t
         }
       }
     }
+
+    callback_t send_cb;
     for (auto& result : vec) {
       if (result.wr_id == 0) {
         resume(std::pair{result.ec, result.len}, tmp_recv_callback);
       }
       else {
-        resume(std::pair{result.ec, result.len}, send_cb_.front());
-        send_cb_.pop_front();
+        bool pop_result = send_cb_.try_pop(send_cb);
+        assert(pop_result);
+        assert(send_cb);
+        resume(std::pair{result.ec, result.len}, send_cb);
       }
     }
     return ec;
@@ -435,7 +452,8 @@ class ib_socket_t {
 
   void post_recv(callback_t&& cb) { post_recv_impl(std::move(cb)); }
 
-  void post_send(std::span<ibv_sge> buffer, bool enable_inline_send, callback_t&& cb) {
+  void post_send(std::span<ibv_sge> buffer, bool enable_inline_send,
+                 callback_t&& cb) {
     if (buffer.size()) {
       ELOG_TRACE << "post send sge cnt:" << buffer.size()
                  << ", address:" << buffer[0].addr
@@ -838,10 +856,10 @@ class ib_socket_t {
           self->close();
           ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
                                            self->recv_cb_);
-          while (!self->send_cb_.empty()) {
-            ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
-                                             self->send_cb_.front());
-            self->send_cb_.pop_front();
+          callback_t cb;
+          while (self->send_cb_.try_pop(cb)) {
+            assert(cb);
+            ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}}, cb);
           }
 
           break;
@@ -877,13 +895,6 @@ class ib_socket_t {
         },
         executor_->get_asio_executor())
         .start([](auto&&) {
-        });
-  }
-
-  void safe_resume(std::error_code ec, callback_t&& cb) {
-    asio::dispatch(
-        executor_->get_asio_executor(), [ec, cb = std::move(cb)]() mutable {
-          ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}}, cb);
         });
   }
   asio::ip::address remote_address_;
