@@ -692,7 +692,7 @@ class coro_rpc_client {
     header.magic = coro_rpc_protocol::magic_number;
     header.function_id = func_id<func>();
     header.attach_length = req_attachment_.size();
-    id = request_id_++;
+    id = control_->request_id_++;
     ELOG_TRACE << "send request ID:" << id << ".";
     header.seq_num = id;
 
@@ -849,6 +849,7 @@ class coro_rpc_client {
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     resp_body resp_buffer_;
     std::atomic<uint32_t> recving_cnt_ = 0;
+    std::atomic<uint32_t> request_id_{0};
     control_t(coro_io::ExecutorWrapper<> *executor, bool is_timeout,
               const std::string &local_ip = "")
         : is_timeout_(is_timeout),
@@ -963,7 +964,8 @@ class coro_rpc_client {
       auto iter = controller->response_handler_table_.find(header.seq_num);
       if (iter == controller->response_handler_table_.end()) {
         ELOG_ERROR << "unexists request ID:" << header.seq_num
-                   << ". close the socket.";
+                   << ". close the socket."
+                   << ", request id: " << controller->request_id_;
         break;
       }
       ELOG_TRACE << "find request ID:" << header.seq_num
@@ -1288,7 +1290,6 @@ class coro_rpc_client {
   bool should_reset_ = false;
   async_simple::coro::Mutex connect_mutex_;
   std::atomic<bool> write_mutex_ = false;
-  std::atomic<uint32_t> request_id_{0};
   std::unique_ptr<coro_io::period_timer> timer_;
   std::shared_ptr<control_t> control_;
   std::vector<asio::ip::tcp::endpoint> endpoints_;

@@ -215,9 +215,16 @@ struct ib_socket_shared_state_t
           // post the receive request to the RQ
           else if (auto ec = ibv_post_send(self->qp_.get(), &sr, &bad_wr); ec) {
             err = std::make_error_code(std::errc{std::abs(ec)});
+            if (sr.sg_list == nullptr) {
+              ELOG_ERROR << "null sg_list";
+            }
+
             std::string out;
             ELOG_WARN << "wr_id: " << sr.wr_id << ", "
                       << "sg_list: " << sr.sg_list << ", "
+                      << "sg addr: " << (void*)sr.sg_list->addr << ", "
+                      << ", length: " << sr.sg_list->length << ", "
+                      << ", lkey: " << sr.sg_list->lkey << ", "
                       << "num_sge: " << sr.num_sge << ", "
                       << "opcode: " << sr.opcode << ", "
                       << "send_flags: " << sr.send_flags << ", "
@@ -253,7 +260,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
