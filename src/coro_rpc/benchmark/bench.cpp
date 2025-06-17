@@ -23,6 +23,9 @@ struct bench_config {
   int log_level;
   bool enable_ib;
   uint32_t duration;
+  uint32_t min_recv_buf_count;
+  uint32_t max_recv_buf_count;
+  bool use_client_pool;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -37,6 +40,9 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.log_level = parser.get<int>("log_level");
   conf.enable_ib = parser.get<bool>("enable_ib");
   conf.duration = parser.get<uint32_t>("duration");
+  conf.min_recv_buf_count = parser.get<uint32_t>("min_recv_buf_count");
+  conf.max_recv_buf_count = parser.get<uint32_t>("max_recv_buf_count");
+  conf.use_client_pool = parser.get<bool>("use_client_pool");
 
   if (conf.client_concurrency == 0) {
     ELOG_WARN << "port: " << conf.port << ", "
@@ -48,6 +54,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   }
   else {
     ELOG_WARN << "url: " << conf.url << ", "
+              << "use_client_pool: " << conf.use_client_pool << ", "
               << "buffer_size: " << conf.buffer_size << ", "
               << "client concurrency: " << conf.client_concurrency << ", "
               << "send data_len: " << conf.send_data_len << ", "
@@ -55,6 +62,8 @@ bench_config init_conf(const cmdline::parser& parser) {
               << "enable ibverbs: " << conf.enable_ib << ", "
               << "log level: " << conf.log_level << ", ";
   }
+  ELOG_WARN << "min_recv_buf_count: " << conf.min_recv_buf_count
+            << ", max_recv_buf_count: " << conf.max_recv_buf_count;
   return conf;
 }
 
@@ -112,7 +121,10 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    pool_conf.client_config.socket_config = coro_io::ibverbs_config{};
+    coro_io::ibverbs_config ib_conf{};
+    ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+    ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
 
@@ -156,6 +168,59 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   co_return std::error_code{};
 }
 
+async_simple::coro::Lazy<std::error_code> request_no_pool(
+    const bench_config& conf) {
+  ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
+
+  std::vector<std::shared_ptr<coro_rpc::coro_rpc_client>> vec;
+  for (size_t i = 0; i < conf.client_concurrency; i++) {
+    auto client = std::make_shared<coro_rpc::coro_rpc_client>();
+#ifdef YLT_ENABLE_IBV
+    if (conf.enable_ib) {
+      coro_io::ibverbs_config ib_conf{};
+      ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+      ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+      client->init_ibv(ib_conf);
+    }
+#endif
+    auto ec = co_await client->connect(conf.url);
+    if (ec) {
+      ELOG_ERROR << "connect failed";
+      co_return std::make_error_code(std::errc::not_connected);
+    }
+    vec.push_back(std::move(client));
+  }
+
+  auto lazy = [&vec, conf](size_t i) -> async_simple::coro::Lazy<void> {
+    std::string send_str(conf.send_data_len, 'A');
+    std::string_view send_str_view(send_str);
+    auto& client = *vec[i];
+    for (size_t i = 0; i < conf.max_request_count; i++) {
+      client.set_req_attachment(send_str_view);
+      auto start = std::chrono::steady_clock::now();
+      auto result = co_await client.call<echo>();
+      if (!result.has_value()) {
+        ELOG_WARN << result.error().msg;
+        break;
+      }
+      auto now = std::chrono::steady_clock::now();
+      g_latency.observe(
+          std::chrono::duration_cast<std::chrono::microseconds>(now - start)
+              .count());
+      g_count += send_str_view.length();
+    }
+  };
+  std::vector<async_simple::coro::Lazy<void>> works;
+  works.reserve(conf.client_concurrency);
+  for (size_t i = 0; i < conf.client_concurrency; i++) {
+    works.push_back(lazy(i));
+  }
+  co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(
+      async_simple::coro::collectAll(std::move(works)), watcher(conf));
+
+  co_return std::error_code{};
+}
+
 int main(int argc, char** argv) {
   cmdline::parser parser;
 
@@ -175,6 +240,11 @@ int main(int argc, char** argv) {
                   false, 1);
   parser.add<bool>("enable_ib", 'i', "enable ib", false, true);
   parser.add<uint32_t>("duration", 'd', "duration seconds", false, 100000);
+  parser.add<uint32_t>("min_recv_buf_count", 'e', "min recieve buffer count",
+                       false, 4);
+  parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
+                       false, 32);
+  parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -202,13 +272,22 @@ int main(int argc, char** argv) {
                                      std::chrono::seconds(10));
     server.register_handler<echo>();
 #ifdef YLT_ENABLE_IBV
-    if (conf.enable_ib)
-      server.init_ibv();
+    if (conf.enable_ib) {
+      coro_io::ibverbs_config ib_conf{};
+      ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+      ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+      server.init_ibv(ib_conf);
+    }
 #endif
     [[maybe_unused]] auto ret = server.start();
   }
   else {
     std::cout << "will start client\n";
-    async_simple::coro::syncAwait(request(conf));
+    if (conf.use_client_pool) {
+      async_simple::coro::syncAwait(request(conf));
+    }
+    else {
+      async_simple::coro::syncAwait(request_no_pool(conf));
+    }
   }
 }
