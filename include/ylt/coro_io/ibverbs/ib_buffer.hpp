@@ -146,6 +146,9 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   void enqueue(ib_buffer_t& buffer) {
     auto impl = std::make_unique<ib_buffer_impl_t>(
         std::move(buffer.mr_), std::move(buffer.memory_owner_));
+    if (impl->mr_->lkey == 0) {
+      ELOG_ERROR << "lkey is zero! we wont collect it!";
+    }
     if (free_buffers_.enqueue(std::move(impl)) == 1) {
       std::size_t expected = 0;
       if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1))
@@ -188,7 +191,13 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   ib_buffer_t get_buffer() {
     std::unique_ptr<ib_buffer_impl_t> buffer;
     ib_buffer_t ib_buffer;
-    free_buffers_.try_dequeue(buffer);
+    do {
+      free_buffers_.try_dequeue(buffer);
+      if (buffer && buffer->mr_->lkey == 0) {
+        ELOG_ERROR << "lkey shouldn't be zero";
+        continue;
+      }
+    } while (false);
     if (!buffer) {
       ELOG_TRACE
           << "There is no free buffer. Allocate and regist new buffer now";
@@ -201,6 +210,10 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       std::unique_ptr<char[]> data;
       data.reset(new char[buffer_size()]);
       ib_buffer = ib_buffer_t::regist(*this, std::move(data), buffer_size());
+      if (ib_buffer && ib_buffer.mr_->lkey == 0) {
+        ELOG_ERROR << "lkey shouldn't be zero";
+        exit(1);
+      }
     }
     else {
       ib_buffer = std::move(*buffer).convert_to_ib_buffer(*this);
@@ -247,14 +260,14 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
   if (mr != nullptr) [[unlikely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr
                << " with pd:" << pool.device_->pd();
-    std::unique_ptr<int> a;
-    a.release();
     pool.total_memory_.fetch_add(size, std::memory_order_relaxed);
     return ib_buffer_t{std::unique_ptr<ibv_mr, ib_deleter>{mr}, std::move(data),
                        pool};
   }
   else {
-    throw std::make_error_code(std::errc{errno});
+    auto ec = std::make_error_code(std::errc{errno});
+    ELOG_ERROR << "ibv regist memory failed:" << ec.message();
+    return ib_buffer_t{};
   }
 };
 
