@@ -175,7 +175,7 @@ struct ib_socket_shared_state_t
     co_await collectAll<async_simple::SignalType::Terminate>(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
-              post_send_impl({}, std::move(cb));
+              post_send_impl({},false, std::move(cb));
             },
             *this),
         coro_io::sleep_for(std::chrono::seconds{1}, executor_));
@@ -188,17 +188,17 @@ struct ib_socket_shared_state_t
     uint64_t wr_id;
   };
 
-  void post_send_impl(std::span<ibv_sge> sge, callback_t&& handler) {
+  void post_send_impl(std::span<ibv_sge> sge, bool enable_inline_send, callback_t&& handler) {
     std::vector<ibv_sge> sge_copy;
     for (auto& e : sge) {
       sge_copy.push_back(e);
     }
     coro_io::dispatch(
-        [self = shared_from_this(), handler = std::move(handler),
+        [self = shared_from_this(), handler = std::move(handler),enable_inline_send,
          sge = std::move(sge_copy)]() mutable {
           ibv_send_wr sr{};
           ibv_send_wr* bad_wr = nullptr;
-          if (sge.size() && sge[0].lkey == 0) {
+          if (enable_inline_send) {
             sr.send_flags = IBV_SEND_INLINE;
           }
           sr.next = NULL;
@@ -435,13 +435,13 @@ class ib_socket_t {
 
   void post_recv(callback_t&& cb) { post_recv_impl(std::move(cb)); }
 
-  void post_send(std::span<ibv_sge> buffer, callback_t&& cb) {
+  void post_send(std::span<ibv_sge> buffer, bool enable_inline_send, callback_t&& cb) {
     if (buffer.size()) {
       ELOG_TRACE << "post send sge cnt:" << buffer.size()
                  << ", address:" << buffer[0].addr
                  << ",length:" << buffer[0].length;
     }
-    state_->post_send_impl(buffer, std::move(cb));
+    state_->post_send_impl(buffer, enable_inline_send, std::move(cb));
   }
 
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
