@@ -295,7 +295,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc {};
+    struct ibv_wc wc{};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
@@ -893,6 +893,12 @@ class ib_socket_t {
 
         if (!ec) {
           ec = self->poll_completion();
+          if (ec) {
+            ELOG_INFO << "ib_socket poll_completion error: " << ec.message();
+          }
+        }
+        else {
+          ELOG_INFO << "ib_socket channel listen error: " << ec.message();
         }
 
         if (ec) {
