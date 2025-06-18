@@ -146,9 +146,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   void enqueue(ib_buffer_t& buffer) {
     auto impl = std::make_unique<ib_buffer_impl_t>(
         std::move(buffer.mr_), std::move(buffer.memory_owner_));
-    if (impl->mr_->lkey == 0) {
-      ELOG_ERROR << "lkey is zero! we wont collect it!";
-    }
     if (free_buffers_.enqueue(std::move(impl)) == 1) {
       std::size_t expected = 0;
       if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1))
@@ -193,10 +190,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     ib_buffer_t ib_buffer;
     do {
       free_buffers_.try_dequeue(buffer);
-      if (buffer && buffer->mr_->lkey == 0) {
-        ELOG_ERROR << "lkey shouldn't be zero";
-        continue;
-      }
     } while (false);
     if (!buffer) {
       ELOG_TRACE
@@ -211,8 +204,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       data.reset(new char[buffer_size()]);
       ib_buffer = ib_buffer_t::regist(*this, std::move(data), buffer_size());
       if (ib_buffer && ib_buffer.mr_->lkey == 0) {
-        ELOG_ERROR << "lkey shouldn't be zero";
-        exit(1);
+        ELOG_WARN << "lkey is zero!";
       }
     }
     else {
