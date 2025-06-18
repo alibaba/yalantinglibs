@@ -32,50 +32,8 @@
 #include "ylt/util/concurrentqueue.h"
 
 namespace coro_io {
-
+namespace detail {
 struct ib_socket_shared_state_t;
-struct ib_buffer_queue {
-  std::vector<ib_buffer_t> queue;
-  uint32_t front = 0, end = 0;
-  bool may_empty = true;
-  ib_buffer_queue(uint16_t size) {
-    assert(size > 0);
-    queue.resize(size);
-  }
-  std::error_code post_recv_real(ibv_sge buffer,
-                                 ib_socket_shared_state_t* state);
-  std::error_code push(ib_buffer_t buf, ib_socket_shared_state_t* state) {
-    if (!buf || buf->length == 0) {
-      ELOG_INFO << "Out of ib_buffer_pool limit." << size();
-      return {};
-    }
-    auto ec = post_recv_real(buf.subview(), state);
-    if (!ec) {
-      may_empty = false;
-      front = (front + 1) % queue.size();
-      queue[front] = std::move(buf);
-    }
-    return ec;
-  }
-  ib_buffer_t pop() {
-    end = (end + 1) % queue.size();
-    may_empty = true;
-    return std::move(queue[end]);
-  }
-  bool full() const noexcept { return front == end && !may_empty; }
-  bool empty() const noexcept { return front == end && may_empty; }
-  std::size_t size() {
-    if (end > front) {
-      return queue.size() + front - end;
-    }
-    else if (end == front) {
-      return empty() ? 0 : queue.size();
-    }
-    else {
-      return front - end;
-    }
-  }
-};
 template <typename T>
 struct SPMCQueue {
   ylt::detail::moodycamel::ConcurrentQueue<T> queue;
@@ -85,6 +43,39 @@ struct SPMCQueue {
     return queue.try_dequeue_from_producer(token, t);
   }
   void push(T&& t) noexcept { queue.enqueue(token, std::move(t)); }
+  std::size_t size() const noexcept {
+    return queue.size_approx();
+  }
+};
+
+struct ib_buffer_queue {
+  SPMCQueue<ib_buffer_t> queue_;
+  uint32_t max_size_;
+  ib_buffer_queue(uint16_t size):max_size_(size) {
+  }
+  std::error_code post_recv(ibv_sge buffer,
+                                 ib_socket_shared_state_t* state);
+  std::error_code push(ib_buffer_t buf, ib_socket_shared_state_t* state) {
+    if (!buf || buf->length == 0) {
+      ELOG_INFO << "Out of ib_buffer_pool limit." << size();
+      return {};
+    }
+    auto ec = post_recv(buf.subview(), state);
+    if (!ec) {
+      queue_.push(std::move(buf));
+    }
+    return ec;
+  }
+  ib_buffer_t pop() {
+    ib_buffer_t buffer;
+    queue_.try_pop(buffer);
+    return buffer;
+  }
+  bool full() const noexcept { return size() >= max_size_; }
+  bool empty() const noexcept { return size() == 0; }
+  std::size_t size() const noexcept {
+    return queue_.size();
+  }
 };
 
 struct ib_socket_shared_state_t
@@ -100,12 +91,9 @@ struct ib_socket_shared_state_t
   }
   coro_io::ExecutorWrapper<>* executor_;
   std::shared_ptr<ib_device_t> device_;
-  ib_buffer_queue recv_queue_;
-  std::size_t recv_buffer_cnt_;
-  std::queue<std::pair<std::error_code, std::size_t>>
-      recv_result;  // TODO optimize with circle buffer
-  callback_t recv_cb_;
-  ib_buffer_t recv_buf_;
+  ib_buffer_queue recv_buffer_queue_;
+  std::size_t recv_buffer_expected_cnt_;
+
   std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
@@ -118,6 +106,11 @@ struct ib_socket_shared_state_t
 
   SPMCQueue<callback_t> send_cb_;
 
+  SPMCQueue<std::pair<std::error_code, std::size_t>>
+    recv_result;  // TODO optimize with circle buffer
+  std::atomic<void*> recv_cb_;
+  ib_buffer_t recv_buf_;
+
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            coro_io::ExecutorWrapper<>* executor,
                            std::size_t recv_buffer_cnt = 4,
@@ -125,12 +118,18 @@ struct ib_socket_shared_state_t
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         executor_(executor),
         soc_(executor->get_asio_executor()),
-        recv_buffer_cnt_(std::max<std::size_t>(1, recv_buffer_cnt)),
-        recv_queue_(
-            std::max<std::size_t>(recv_buffer_cnt_, max_recv_buffer_cnt - 1)) {
+        recv_buffer_expected_cnt_(std::max<std::size_t>(1, recv_buffer_cnt)),
+        recv_buffer_queue_(
+            std::max<std::size_t>(recv_buffer_expected_cnt_, max_recv_buffer_cnt)) {
     if (ib_buffer_pool_ == nullptr) {
       ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
     }
+  }
+
+  ib_socket_shared_state_t(ib_socket_shared_state_t&&)=delete;
+  ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&)=delete;
+  ~ib_socket_shared_state_t() {
+    delete (callback_t*)recv_cb_.load();
   }
 
   void cancel() {
@@ -195,6 +194,31 @@ struct ib_socket_shared_state_t
     co_return;
   }
 
+  void post_recv_impl(callback_t&& handler) { // single-thread consume
+    if (!post_recv_try_deque(handler)) {
+      auto handler_ptr = std::make_unique<callback_t>(std::move(handler));
+      void * handler_raw_ptr = handler_ptr.release();
+      recv_cb_ = handler_raw_ptr;
+      if (recv_result.size()) [[unlikely]] { // redeque to avoid loss message
+        if (recv_cb_.compare_exchange_strong(handler_raw_ptr,nullptr)) {
+          handler_ptr.reset((callback_t*)handler_raw_ptr);
+          [[maybe_unused]] bool is_ok = post_recv_try_deque(*handler_ptr);
+          assert(is_ok);
+        }
+      }
+    }
+  }
+
+  bool post_recv_try_deque(callback_t& handler) {
+    std::pair<std::error_code, std::size_t> result;
+    if (!recv_result.try_pop(result)) {
+      detail::ib_socket_shared_state_t::resume(std::move(result),
+                                        handler);
+      return true;
+    }
+    return false;
+  }
+
   struct resume_struct {
     std::error_code ec;
     std::size_t len;
@@ -237,6 +261,22 @@ struct ib_socket_shared_state_t
                     std::make_error_code(std::errc::operation_canceled),
                     std::size_t{0}});
               });
+        }
+      }
+    }
+  }
+
+  void add_recv_buffer(ib_buffer_t buffer, std::size_t recollcet_limit) {
+    if (!recv_buffer_queue_.full()) {
+      auto free_buffer_cnt =
+          recv_buffer_queue_.size() - recv_result.size();
+      if (free_buffer_cnt <= recollcet_limit) {
+        if (!buffer) {
+          buffer = ib_buffer_pool_->get_buffer();
+        }
+        if (recv_buffer_queue_.push(std::move(buffer),
+                                    this)) {
+          close();
         }
       }
     }
@@ -285,26 +325,8 @@ struct ib_socket_shared_state_t
             close();
             break;
           }
-          if (recv_cb_) {
-            assert(recv_result.empty());
-            recv_buf_ = recv_queue_.pop();
-            if (recv_queue_.size() < recv_buffer_cnt_) {
-              if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
-                close();
-              }
-            }
-            tmp_recv_callback = std::move(recv_cb_);
-            vec.push_back({ec, wc.byte_len, 0});
-          }
-          else {
-            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
-            if (!recv_queue_.full() &&
-                recv_result.size() + recv_buffer_cnt_ > recv_queue_.size()) {
-              if (recv_queue_.push(ib_buffer_pool_->get_buffer(), this)) {
-                close();
-              }
-            }
-          }
+          recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
+          add_recv_buffer({},recv_buffer_expected_cnt_ / 2);
         }
         else {
           vec.push_back({ec, wc.byte_len, wc.wr_id});
@@ -312,6 +334,18 @@ struct ib_socket_shared_state_t
         if (cq_ == nullptr) {
           break;
         }
+      }
+    }
+    
+    if (recv_cb_.load(std::memory_order_relaxed)) {
+      std::unique_ptr<callback_t> recv_cb;
+      recv_cb.reset((callback_t*)recv_cb_.exchange(nullptr));
+      if (recv_cb) {
+        tmp_recv_callback = std::move(*recv_cb);
+        std::pair<std::error_code, std::size_t> ret;
+        [[maybe_unused]] bool is_ok = recv_result.try_pop(ret);
+        assert(is_ok);
+        vec.push_back({ret.first,ret.second,0});
       }
     }
 
@@ -331,7 +365,7 @@ struct ib_socket_shared_state_t
   }
 };
 
-inline std::error_code ib_buffer_queue::post_recv_real(
+inline std::error_code ib_buffer_queue::post_recv(
     ibv_sge buffer, ib_socket_shared_state_t* state) {
   ibv_recv_wr rr;
   rr.next = NULL;
@@ -355,6 +389,7 @@ inline std::error_code ib_buffer_queue::post_recv_real(
   }
   return {};
 }
+}
 
 #ifdef YLT_ENABLE_IBV
 struct ibverbs_config {
@@ -374,7 +409,7 @@ struct ibverbs_config {
 class ib_socket_t {
  public:
   enum io_type { recv = 0, send = 1 };
-  using callback_t = ib_socket_shared_state_t::callback_t;
+  using callback_t = detail::ib_socket_shared_state_t::callback_t;
   struct ib_socket_info {
     uint8_t gid[16];       // GID
     uint16_t lid;          // LID of the IB port
@@ -430,7 +465,8 @@ class ib_socket_t {
       memcpy(dst, remain_data_.data(), len);
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
-        state_->recv_buf_ = {};
+        assert(state_->recv_buf_);
+        state_->add_recv_buffer(std::move(state_->recv_buf_), state_->recv_buffer_expected_cnt_ / 2);
       }
     }
     return len;
@@ -441,16 +477,17 @@ class ib_socket_t {
     remain_data_ = std::string_view{
         (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
-      state_->recv_buf_ = {};
+      state_->add_recv_buffer(std::move(state_->recv_buf_), state_->recv_buffer_expected_cnt_ / 2);
     }
   }
 
   ibv_sge get_recv_buffer() {
     assert(remain_read_buffer_size() == 0);
+    state_->recv_buf_ = state_->recv_buffer_queue_.pop();
     return state_->recv_buf_.subview();
   }
 
-  void post_recv(callback_t&& cb) { post_recv_impl(std::move(cb)); }
+  void post_recv(callback_t&& cb) { state_->post_recv_impl(std::move(cb)); }
 
   void post_send(std::span<ibv_sge> buffer, bool enable_inline_send,
                  callback_t&& cb) {
@@ -517,13 +554,13 @@ class ib_socket_t {
     }
 
     for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-      if (auto ec = state_->recv_queue_.push(
+      if (auto ec = state_->recv_buffer_queue_.push(
               state_->ib_buffer_pool_->get_buffer(), state_.get());
           ec) {
         co_return ec;
       }
     }
-    if (state_->recv_queue_.empty()) {
+    if (state_->recv_buffer_queue_.empty()) {
       ELOG_WARN << "buffer out of limit, init ib_socket failed";
       co_return std::make_error_code(std::errc::no_buffer_space);
     }
@@ -578,7 +615,7 @@ class ib_socket_t {
       init_qp();
       modify_qp_to_init();
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        if (auto ec = state_->recv_queue_.push(
+        if (auto ec = state_->recv_buffer_queue_.push(
                 state_->ib_buffer_pool_->get_buffer(), state_.get());
             ec) {
           co_return ec;
@@ -638,7 +675,7 @@ class ib_socket_t {
       }
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
-      if (state_->recv_queue_.empty()) {
+      if (state_->recv_buffer_queue_.empty()) {
         ELOG_WARN << "buffer out of limit, init ib_socket failed";
         co_return std::make_error_code(std::errc::no_buffer_space);
       }
@@ -706,7 +743,7 @@ class ib_socket_t {
     if (!device->is_support_inline_data()) {
       conf_.cap.max_inline_data = 0;
     }
-    state_ = std::make_shared<ib_socket_shared_state_t>(
+    state_ = std::make_shared<detail::ib_socket_shared_state_t>(
         std::move(buffer_pool), executor_, conf_.recv_buffer_cnt,
         conf_.cap.max_recv_wr);
     state_->device_ = std::move(device);
@@ -836,7 +873,7 @@ class ib_socket_t {
 
     state_->fd_ = std::make_unique<asio::posix::stream_descriptor>(
         executor_->get_asio_executor(), state_->channel_->fd);
-    auto listen_event = [](std::shared_ptr<ib_socket_shared_state_t> self)
+    auto listen_event = [](std::shared_ptr<detail::ib_socket_shared_state_t> self)
         -> async_simple::coro::Lazy<void> {
       std::error_code ec;
       while (!ec) {
@@ -854,12 +891,16 @@ class ib_socket_t {
 
         if (ec) {
           self->close();
-          ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
-                                           self->recv_cb_);
+          std::unique_ptr<callback_t> recv_cb;
+          recv_cb.reset((callback_t*)self->recv_cb_.exchange(nullptr));
+          if (recv_cb) {
+            detail::ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}},
+                                            *recv_cb);
+          }
           callback_t cb;
           while (self->send_cb_.try_pop(cb)) {
             assert(cb);
-            ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}}, cb);
+            detail::ib_socket_shared_state_t::resume(std::pair{ec, std::size_t{0}}, cb);
           }
 
           break;
@@ -872,35 +913,10 @@ class ib_socket_t {
     listen_event(state_).start([](auto&& ec) {
     });
   }
-
-  void post_recv_impl(callback_t&& handler) {
-    coro_io::dispatch(
-        [state = state_, handler = std::move(handler)]() mutable {
-          state->recv_cb_ = std::move(handler);
-          if (!state->recv_result.empty()) {
-            auto result = state->recv_result.front();
-            bool could_insert =
-                (state->recv_queue_.size() <= state->recv_buffer_cnt_);
-            state->recv_result.pop();
-            state->recv_buf_ = std::move(state->recv_queue_.pop());
-            if (could_insert) {
-              if (state->recv_queue_.push(state->ib_buffer_pool_->get_buffer(),
-                                          state.get())) {
-                state->close();
-              }
-            }
-            ib_socket_shared_state_t::resume(std::move(result),
-                                             state->recv_cb_);
-          }
-        },
-        executor_->get_asio_executor())
-        .start([](auto&&) {
-        });
-  }
   asio::ip::address remote_address_;
   uint32_t remote_qp_num_{};
   std::string_view remain_data_;
-  std::shared_ptr<ib_socket_shared_state_t> state_;
+  std::shared_ptr<detail::ib_socket_shared_state_t> state_;
   coro_io::ExecutorWrapper<>* executor_;
   ibverbs_config conf_;
   uint32_t buffer_size_ = 0;

@@ -118,7 +118,7 @@ async_simple::coro::
           },
           ib_socket);
   if (result.first) [[unlikely]] {
-    co_return std::pair{result.first, std::min(result.second, io_size)};
+    co_return std::pair{result.first, 0};
   }
   ibv_sge socket_buffer = ib_socket.get_recv_buffer();
   socket_buffer.length = result.second;
