@@ -101,8 +101,7 @@ struct ib_socket_shared_state_t
 
   FIFOQueue<callback_t> send_cb_;
 
-  FIFOQueue<std::pair<std::error_code, std::size_t>>
-      recv_result;  // TODO optimize with circle buffer
+  FIFOQueue<std::pair<std::error_code, std::size_t>> recv_result_;
   std::atomic<void*> recv_cb_;
   ib_buffer_t recv_buf_;
 
@@ -113,9 +112,8 @@ struct ib_socket_shared_state_t
       : ib_buffer_pool_(std::move(ib_buffer_pool)),
         executor_(executor),
         soc_(executor->get_asio_executor()),
-        recv_buffer_expected_cnt_(std::max<std::size_t>(1, recv_buffer_cnt)),
-        recv_buffer_queue_(std::max<std::size_t>(recv_buffer_expected_cnt_,
-                                                 max_recv_buffer_cnt)) {
+        recv_buffer_expected_cnt_(recv_buffer_cnt),
+        recv_buffer_queue_(max_recv_buffer_cnt) {
     if (ib_buffer_pool_ == nullptr) {
       ib_buffer_pool_ = coro_io::g_ib_buffer_pool();
     }
@@ -196,7 +194,7 @@ struct ib_socket_shared_state_t
       auto handler_ptr = std::make_unique<callback_t>(std::move(handler));
       void* handler_raw_ptr = handler_ptr.release();
       recv_cb_ = handler_raw_ptr;
-      if (recv_result.size()) [[unlikely]] {  // redeque to avoid loss message
+      if (recv_result_.size()) [[unlikely]] {  // redeque to avoid loss message
         if (recv_cb_.compare_exchange_strong(handler_raw_ptr, nullptr)) {
           handler_ptr.reset((callback_t*)handler_raw_ptr);
           [[maybe_unused]] bool is_ok = post_recv_try_deque(*handler_ptr);
@@ -208,7 +206,7 @@ struct ib_socket_shared_state_t
 
   bool post_recv_try_deque(callback_t& handler) {
     std::pair<std::error_code, std::size_t> result;
-    if (recv_result.try_pop(result)) {
+    if (recv_result_.try_pop(result)) {
       detail::ib_socket_shared_state_t::resume(std::move(result), handler);
       return true;
     }
@@ -267,10 +265,10 @@ struct ib_socket_shared_state_t
     }
   }
 
-  void add_recv_buffer(ib_buffer_t buffer, std::size_t recollcet_limit) {
+  void add_recv_buffer(ib_buffer_t buffer, std::size_t free_buffer_limit) {
     if (!recv_buffer_queue_.full()) {
-      auto free_buffer_cnt = recv_buffer_queue_.size() - recv_result.size();
-      if (free_buffer_cnt <= recollcet_limit) {
+      auto free_buffer_cnt = recv_buffer_queue_.size() - recv_result_.size();
+      if (free_buffer_cnt <= free_buffer_limit) {
         if (!buffer) {
           buffer = ib_buffer_pool_->get_buffer();
         }
@@ -326,7 +324,7 @@ struct ib_socket_shared_state_t
           }
           else {
             has_recv_event = true;
-            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
+            recv_result_.push(std::pair{ec, (std::size_t)wc.byte_len});
             add_recv_buffer({}, recv_buffer_expected_cnt_ / 2);
           }
         }
@@ -345,7 +343,7 @@ struct ib_socket_shared_state_t
       if (recv_cb) {
         tmp_recv_callback = std::move(*recv_cb);
         std::pair<std::error_code, std::size_t> ret;
-        [[maybe_unused]] bool is_ok = recv_result.try_pop(ret);
+        [[maybe_unused]] bool is_ok = recv_result_.try_pop(ret);
         assert(is_ok);
         vec.push_back({ret.first, ret.second, 0});
       }
@@ -626,6 +624,10 @@ class ib_socket_t {
           co_return ec;
         }
       }
+      if (state_->recv_buffer_queue_.empty()) {
+        ELOG_WARN << "buffer out of limit, init ib_socket failed";
+        co_return std::make_error_code(std::errc::no_buffer_space);
+      }
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
       peer_info.lid = state_->device_->attr().lid;
@@ -680,10 +682,6 @@ class ib_socket_t {
       }
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
-      if (state_->recv_buffer_queue_.empty()) {
-        ELOG_WARN << "buffer out of limit, init ib_socket failed";
-        co_return std::make_error_code(std::errc::no_buffer_space);
-      }
       modify_qp_to_rts();
       ELOG_INFO << "start init fd";
       init_fd();
@@ -736,15 +734,17 @@ class ib_socket_t {
   void init(const ibverbs_config& config,
             std::shared_ptr<ib_buffer_pool_t> buffer_pool,
             std::shared_ptr<ib_device_t> device) {
-    if (config.cap.max_recv_sge == 0 || config.cap.max_send_sge == 0 ||
-        config.cap.max_send_wr == 0 || config.cap.max_recv_wr <= 1) {
-      ELOG_ERROR << "invalid qp cap value!";
-      throw std::invalid_argument{"invalid qp cap value!"};
-    }
     if (device == nullptr) {
       device = coro_io::g_ib_device();
     }
     conf_ = config;
+
+    conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
+    conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
+    conf_.cap.max_send_sge = std::max<uint32_t>(conf_.cap.max_send_sge, 1);
+    conf_.cap.max_send_wr = std::max<uint32_t>(conf_.cap.max_send_wr, 1);
+    conf_.cap.max_recv_wr =
+        std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
     if (!device->is_support_inline_data()) {
       conf_.cap.max_inline_data = 0;
     }
