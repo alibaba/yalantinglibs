@@ -101,7 +101,8 @@ struct ib_socket_shared_state_t
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
 
   asio::ip::tcp::socket soc_;
-  std::atomic<bool> has_close_ = 0;
+  std::atomic<bool> has_close_ = false;
+  std::atomic<bool> channel_got_error_ = false;
   bool peer_close_ = false;
 
   SPMCQueue<callback_t> send_cb_;
@@ -184,13 +185,17 @@ struct ib_socket_shared_state_t
   auto get_executor() const noexcept { return executor_->get_asio_executor(); }
 
   async_simple::coro::Lazy<void> shutdown() {
-    co_await collectAll<async_simple::SignalType::Terminate>(
-        coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-            [this](auto&& cb) mutable {
-              post_send_impl({}, false, std::move(cb));
-            },
-            *this),
-        coro_io::sleep_for(std::chrono::seconds{1}, executor_));
+    if (!channel_got_error_) [[unlikely]] {
+      ELOG_TRACE <<"start to nofity peer close";
+      co_await collectAll<async_simple::SignalType::Terminate>(
+          coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+              [this](auto&& cb) mutable {
+                post_send_impl({}, false, std::move(cb));
+              },
+              *this),
+          coro_io::sleep_for(std::chrono::seconds{1}, executor_));
+      ELOG_TRACE <<"finished to nofity peer close";
+    }
     co_return;
   }
 
@@ -211,7 +216,7 @@ struct ib_socket_shared_state_t
 
   bool post_recv_try_deque(callback_t& handler) {
     std::pair<std::error_code, std::size_t> result;
-    if (!recv_result.try_pop(result)) {
+    if (recv_result.try_pop(result)) {
       detail::ib_socket_shared_state_t::resume(std::move(result),
                                         handler);
       return true;
@@ -239,7 +244,7 @@ struct ib_socket_shared_state_t
     sr.opcode = IBV_WR_SEND;
     sr.send_flags |= IBV_SEND_SIGNALED;
     std::error_code err;
-    if (sge.size() && has_close_) [[unlikely]] {
+    if ((sge.size() && has_close_) || channel_got_error_) [[unlikely]] { // if sge is empty, client don't real close, it's trying to notify peer to close
       err = std::make_error_code(std::errc::operation_canceled);
     }
     // post the receive request to the RQ
@@ -253,8 +258,9 @@ struct ib_socket_shared_state_t
     }
     else {
       send_cb_.push(std::move(handler));
-      if (has_close_) [[unlikely]] {
+      if (channel_got_error_) [[unlikely]] { // channel is error, so send_cb_ queue may not consume to empty. we have to resume handler now.
         if (send_cb_.try_pop(handler)) {
+          ELOG_INFO<<"resume handler inplace by channel got error";
           asio::dispatch(
               executor_->get_asio_executor(), [handler = std::move(handler)]() {
                 handler(std::pair{
@@ -302,6 +308,7 @@ struct ib_socket_shared_state_t
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
+    bool has_recv_event = false;
     while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
       if (ne < 0) {
         ELOG_ERROR << "poll CQ failed:" << ne;
@@ -323,10 +330,12 @@ struct ib_socket_shared_state_t
             ELOG_DEBUG << "close by peer";
             peer_close_ = true;
             close();
-            break;
           }
-          recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
-          add_recv_buffer({},recv_buffer_expected_cnt_ / 2);
+          else {
+            has_recv_event = true;
+            recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
+            add_recv_buffer({},recv_buffer_expected_cnt_ / 2);
+          }
         }
         else {
           vec.push_back({ec, wc.byte_len, wc.wr_id});
@@ -337,7 +346,7 @@ struct ib_socket_shared_state_t
       }
     }
     
-    if (recv_cb_.load(std::memory_order_relaxed)) {
+    if (has_recv_event && recv_cb_.load(std::memory_order_relaxed)) {
       std::unique_ptr<callback_t> recv_cb;
       recv_cb.reset((callback_t*)recv_cb_.exchange(nullptr));
       if (recv_cb) {
@@ -484,6 +493,7 @@ class ib_socket_t {
   ibv_sge get_recv_buffer() {
     assert(remain_read_buffer_size() == 0);
     state_->recv_buf_ = state_->recv_buffer_queue_.pop();
+    assert(state_->recv_buf_);
     return state_->recv_buf_.subview();
   }
 
@@ -890,6 +900,7 @@ class ib_socket_t {
         }
 
         if (ec) {
+          self->channel_got_error_ = true;
           self->close();
           std::unique_ptr<callback_t> recv_cb;
           recv_cb.reset((callback_t*)self->recv_cb_.exchange(nullptr));
