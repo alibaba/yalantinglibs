@@ -290,6 +290,10 @@ inline void ib_buffer_t::release_resource() {
   if (mr_) {
     if (auto ptr = owner_pool_.lock(); ptr) {
       ptr->collect_free(*this);
+      // if buffer not collect by pool, we need desc total memory here.
+      if (mr_) [[unlikely]] {
+        ptr->total_memory_ -= mr_->length;
+      }
     }
   }
 }
