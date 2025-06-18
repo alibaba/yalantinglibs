@@ -35,10 +35,10 @@ namespace coro_io {
 namespace detail {
 struct ib_socket_shared_state_t;
 template <typename T>
-struct SPMCQueue {
+struct FIFOQueue {
   ylt::detail::moodycamel::ConcurrentQueue<T> queue;
   ylt::detail::moodycamel::ProducerToken token;
-  SPMCQueue() : queue(), token(queue) {}
+  FIFOQueue() : queue(), token(queue) {}
   bool try_pop(T& t) noexcept {
     return queue.try_dequeue_from_producer(token, t);
   }
@@ -47,7 +47,7 @@ struct SPMCQueue {
 };
 
 struct ib_buffer_queue {
-  SPMCQueue<ib_buffer_t> queue_;
+  FIFOQueue<ib_buffer_t> queue_;
   uint32_t max_size_;
   ib_buffer_queue(uint16_t size) : max_size_(size) {}
   std::error_code post_recv(ibv_sge buffer, ib_socket_shared_state_t* state);
@@ -99,9 +99,9 @@ struct ib_socket_shared_state_t
   std::atomic<bool> channel_got_error_ = false;
   bool peer_close_ = false;
 
-  SPMCQueue<callback_t> send_cb_;
+  FIFOQueue<callback_t> send_cb_;
 
-  SPMCQueue<std::pair<std::error_code, std::size_t>>
+  FIFOQueue<std::pair<std::error_code, std::size_t>>
       recv_result;  // TODO optimize with circle buffer
   std::atomic<void*> recv_cb_;
   ib_buffer_t recv_buf_;
