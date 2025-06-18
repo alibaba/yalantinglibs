@@ -180,7 +180,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
       coro_io::ibverbs_config ib_conf{};
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
-      [[maybe_unused ]] bool is_ok = client->init_ibv(ib_conf);
+      [[maybe_unused]] bool is_ok = client->init_ibv(ib_conf);
       assert(is_ok);
     }
 #endif

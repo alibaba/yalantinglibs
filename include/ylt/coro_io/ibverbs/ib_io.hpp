@@ -151,8 +151,10 @@ async_simple::coro::
     }
     else {
       zero_copy_buffer = std::make_unique<char[]>(io_size);
-      socket_buffer={.addr=(uintptr_t)zero_copy_buffer.get(),.length=(uint32_t)io_size,.lkey=0};
-      copy(sge_list,socket_buffer);
+      socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
+                       .length = (uint32_t)io_size,
+                       .lkey = 0};
+      copy(sge_list, socket_buffer);
     }
   }
   else {
@@ -184,20 +186,21 @@ async_simple::coro::
     }
   }
   prev_op = promise.getFuture();
-  ib_socket.post_send(list,is_enable_inline_send,
-                      [p = std::move(promise), io_size = io_size,
-                       buffer = std::move(buffer),zero_copy_buffer=std::move(zero_copy_buffer)](auto&& result) mutable {
-                        if (buffer) {
-                          buffer = {};
-                        }
-                        if (zero_copy_buffer) {
-                          zero_copy_buffer = {};
-                        }
-                        if (!result.first) [[likely]] {
-                          result.second = io_size;
-                        }
-                        p.setValue(std::move(result));
-                      });
+  ib_socket.post_send(
+      list, is_enable_inline_send,
+      [p = std::move(promise), io_size = io_size, buffer = std::move(buffer),
+       zero_copy_buffer = std::move(zero_copy_buffer)](auto&& result) mutable {
+        if (buffer) {
+          buffer = {};
+        }
+        if (zero_copy_buffer) {
+          zero_copy_buffer = {};
+        }
+        if (!result.first) [[likely]] {
+          result.second = io_size;
+        }
+        p.setValue(std::move(result));
+      });
   co_return std::pair{result.first, result.second};
 }
 
