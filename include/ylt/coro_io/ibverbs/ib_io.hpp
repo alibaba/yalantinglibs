@@ -141,10 +141,18 @@ async_simple::coro::
   }
   ib_buffer_t buffer;
   ibv_sge socket_buffer;
+  std::unique_ptr<char[]> zero_copy_buffer;
   std::span<ibv_sge> list;
+  bool is_enable_inline_send = false;
   if (ib_socket.get_config().cap.max_inline_data >= io_size) {
+    is_enable_inline_send = true;
     if (sge_list.size() <= ib_socket.get_config().cap.max_send_sge) {
       list = sge_list;
+    }
+    else {
+      zero_copy_buffer = std::make_unique<char[]>(io_size);
+      socket_buffer={.addr=(uintptr_t)zero_copy_buffer.get(),.length=(uint32_t)io_size,.lkey=0};
+      copy(sge_list,socket_buffer);
     }
   }
   else {
@@ -176,11 +184,14 @@ async_simple::coro::
     }
   }
   prev_op = promise.getFuture();
-  ib_socket.post_send(list,
+  ib_socket.post_send(list,is_enable_inline_send,
                       [p = std::move(promise), io_size = io_size,
-                       buffer = std::move(buffer)](auto&& result) mutable {
+                       buffer = std::move(buffer),zero_copy_buffer=std::move(zero_copy_buffer)](auto&& result) mutable {
                         if (buffer) {
                           buffer = {};
+                        }
+                        if (zero_copy_buffer) {
+                          zero_copy_buffer = {};
                         }
                         if (!result.first) [[likely]] {
                           result.second = io_size;
