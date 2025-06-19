@@ -118,7 +118,7 @@ async_simple::coro::
           },
           ib_socket);
   if (result.first) [[unlikely]] {
-    co_return std::pair{result.first, std::min(result.second, io_size)};
+    co_return std::pair{result.first, 0};
   }
   ibv_sge socket_buffer = ib_socket.get_recv_buffer();
   socket_buffer.length = result.second;
@@ -139,21 +139,31 @@ async_simple::coro::
   if (io_size == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, 0};
   }
-  ib_buffer_t buffer;
   ibv_sge socket_buffer;
+  std::unique_ptr<char[]> zero_copy_buffer;
   std::span<ibv_sge> list;
+  bool is_enable_inline_send = false;
+  ib_buffer_t send_buffer;
   if (ib_socket.get_config().cap.max_inline_data >= io_size) {
+    is_enable_inline_send = true;
     if (sge_list.size() <= ib_socket.get_config().cap.max_send_sge) {
       list = sge_list;
     }
+    else {
+      zero_copy_buffer = std::make_unique<char[]>(io_size);
+      socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
+                       .length = (uint32_t)io_size,
+                       .lkey = 0};
+      copy(sge_list, socket_buffer);
+    }
   }
   else {
-    buffer = ib_socket.buffer_pool()->get_buffer();
-    if (!buffer || buffer->length < io_size) [[unlikely]] {
+    send_buffer = ib_socket.get_send_buffer();
+    if (!send_buffer || send_buffer->length < io_size) [[unlikely]] {
       co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
                           std::size_t{0}};
     }
-    socket_buffer = buffer.subview();
+    socket_buffer = send_buffer.subview();
     auto len = copy(sge_list, socket_buffer);
     assert(len == io_size);
     socket_buffer.length = io_size;
@@ -176,11 +186,16 @@ async_simple::coro::
     }
   }
   prev_op = promise.getFuture();
-  ib_socket.post_send(list,
+  ib_socket.post_send(list, is_enable_inline_send,
                       [p = std::move(promise), io_size = io_size,
-                       buffer = std::move(buffer)](auto&& result) mutable {
+                       buffer = std::move(send_buffer),
+                       zero_copy_buffer = std::move(zero_copy_buffer),
+                       state = ib_socket.get_state()](auto&& result) mutable {
                         if (buffer) {
-                          buffer = {};
+                          state->return_send_buffer(std::move(buffer));
+                        }
+                        if (zero_copy_buffer) {
+                          zero_copy_buffer = {};
                         }
                         if (!result.first) [[likely]] {
                           result.second = io_size;
@@ -389,12 +404,12 @@ template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
-  auto ret = co_await async_io_split_impl<io>(
-      ib_socket, std::forward<Buffer>(raw_buffer), read_some);
-  if (!ib_socket.get_executor().running_in_this_thread()) [[unlikely]] {
+  if (!ib_socket.get_executor().running_in_this_thread()) {
     // switch to io_thread
     co_await dispatch(ib_socket.get_executor());
   }
+  auto ret = co_await async_io_split_impl<io>(
+      ib_socket, std::forward<Buffer>(raw_buffer), read_some);
   co_return ret;
 }
 

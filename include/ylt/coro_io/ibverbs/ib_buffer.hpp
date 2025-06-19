@@ -205,7 +205,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     else {
       ib_buffer = std::move(*buffer).convert_to_ib_buffer(*this);
     }
-    ELOG_TRACE << "get buffer{data:" << ib_buffer->addr << ",len"
+    ELOG_WARN << "get buffer{data:" << ib_buffer->addr << ",len"
                << ib_buffer->length << "} from queue";
     return ib_buffer;
   }
@@ -290,6 +290,10 @@ inline void ib_buffer_t::release_resource() {
   if (mr_) {
     if (auto ptr = owner_pool_.lock(); ptr) {
       ptr->collect_free(*this);
+      // if buffer not collect by pool, we need dec total memory here.
+      if (mr_) [[unlikely]] {
+        ptr->total_memory_ -= mr_->length;
+      }
     }
   }
 }
