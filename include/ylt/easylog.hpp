@@ -141,7 +141,7 @@ class logger {
         text.append("] [");
         text.append(severity_str(record.get_severity()));
         text.append("] ");
-        text.append(record.get_file_str());  // string_view works with append
+        text.append(record.get_file_str());
         text.append(": ");
         text.append(record.get_message());
     
