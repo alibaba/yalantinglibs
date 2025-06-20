@@ -172,19 +172,7 @@ async_simple::coro::
 
   async_simple::Promise<std::pair<std::error_code, std::size_t>> promise;
   std::pair<std::error_code, std::size_t> result{};
-  if (prev_op) {
-    bool is_canceled = false;
-    try {
-      result = co_await std::move(*prev_op);
-    } catch (const async_simple::SignalException& e) {
-      is_canceled = true;
-    }
-    if (is_canceled) [[unlikely]] {
-      ib_socket.close();
-      co_return std::pair{std::make_error_code(std::errc::operation_canceled),
-                          std::size_t{0}};
-    }
-  }
+  auto write_op = std::move(prev_op);
   prev_op = promise.getFuture();
   ib_socket.post_send(list, is_enable_inline_send,
                       [p = std::move(promise), io_size = io_size,
@@ -202,6 +190,19 @@ async_simple::coro::
                         }
                         p.setValue(std::move(result));
                       });
+  if (write_op) {
+    bool is_canceled = false;
+    try {
+      result = co_await std::move(*write_op);
+    } catch (const async_simple::SignalException& e) {
+      is_canceled = true;
+    }
+    if (is_canceled) [[unlikely]] {
+      ib_socket.close();
+      co_return std::pair{std::make_error_code(std::errc::operation_canceled),
+                          std::size_t{0}};
+    }
+  }
   co_return std::pair{result.first, result.second};
 }
 

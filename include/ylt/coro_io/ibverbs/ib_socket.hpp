@@ -108,7 +108,6 @@ struct ib_socket_shared_state_t
 
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
-  bool channel_got_error_ = false;
   bool peer_close_ = false;
 
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
@@ -201,17 +200,15 @@ struct ib_socket_shared_state_t
   auto get_executor() const noexcept { return executor_->get_asio_executor(); }
 
   async_simple::coro::Lazy<void> shutdown() {
-    if (!channel_got_error_) {
-      ELOG_TRACE << "start to nofity peer close";
-      co_await collectAll<async_simple::SignalType::Terminate>(
-          coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-              [this](auto&& cb) mutable {
-                post_send_impl({}, false, std::move(cb));
-              },
-              *this),
-          coro_io::sleep_for(std::chrono::seconds{1}, executor_));
-      ELOG_TRACE << "finished to nofity peer close";
-    }
+    ELOG_TRACE << "start to nofity peer close";
+    co_await collectAll<async_simple::SignalType::Terminate>(
+        coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+            [this](auto&& cb) mutable {
+              post_send_impl({}, false, std::move(cb));
+            },
+            *this),
+        coro_io::sleep_for(std::chrono::seconds{1}, executor_));
+    ELOG_TRACE << "finished to nofity peer close";
     co_return;
   }
 
@@ -255,6 +252,11 @@ struct ib_socket_shared_state_t
   }
 
   void post_recv_impl(callback_t&& handler) {
+    if (has_close_) [[unlikely]] {
+      ib_socket_shared_state_t::resume(
+          std::pair{std::make_error_code(std::errc::io_error), 0}, handler);
+      return;
+    }
     recv_cb_ = std::move(handler);
     if (!recv_result.empty()) {
       auto result = recv_result.front();
@@ -281,7 +283,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc {};
+    struct ibv_wc wc{};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
@@ -881,16 +883,15 @@ class ib_socket_t {
         if (!ec) {
           ec = self->poll_completion();
           if (ec) {
-            ELOG_INFO << "channel closed by poll_completion error:"
-                      << ec.message();
+            ELOG_DEBUG << "channel closed by poll_completion:" << ec.message();
           }
         }
         else {
-          ELOG_INFO << "channel closed by channel error:" << ec.message();
+          ELOG_DEBUG << "channel closed by channel:" << ec.message();
         }
 
         if (ec) {
-          self->channel_got_error_ = true;
+          self->peer_close_ = true;
           self->close();
           detail::ib_socket_shared_state_t::resume(
               std::pair{ec, std::size_t{0}}, self->recv_cb_);
