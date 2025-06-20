@@ -363,7 +363,7 @@ inline void stat_metric() {
       system_metric_manager::instance().get_metric_static<gauge_t>(
           "ylt_user_metric_labels");
   user_metric_label_count->update(
-      dynamic_metric::g_user_metric_label_count->value());
+      dynamic_metric::g_user_metric_label_count.value());
 }
 
 inline void ylt_stat() {
