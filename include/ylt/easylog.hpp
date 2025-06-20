@@ -133,16 +133,21 @@ class logger {
       }
     }
 
-    for (auto &appender : appenders_) {
-      std::string text =
-          std::format("[{}] [{}] {}: {}",
-                      std::chrono::duration_cast<std::chrono::milliseconds>(
-                          record.get_time_point().time_since_epoch())
-                          .count(),
-                      severity_str(record.get_severity()),
-                      record.get_file_str(), record.get_message());
-
-      appender(text);
+    if (appenders_.size() > 0) {
+        std::string text = 
+            "[" + 
+            std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                record.get_time_point().time_since_epoch()).count()) + 
+            "] [" + 
+            severity_str(record.get_severity()) + 
+            "] " + 
+            record.get_file_str() + 
+            ": " + 
+            record.get_message();
+    
+        for (auto &appender : appenders_) {
+            appender(text);
+        }
     }
   }
 
