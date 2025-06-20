@@ -453,7 +453,8 @@ TEST_CASE("test socket io") {
     auto result = async_simple::coro::syncAwait(
         collectAll<async_simple::SignalType::Terminate>(
             collectAll(echo_accept({test(test_read, 2 * 1024)}),
-                       echo_connect({test(test_write, 2 * 1024, true)})),
+                       echo_connect({test(test_write, 2 * 1024, true),
+                                     test(test_write, 2 * 1024)})),
             coro_io::sleep_for(std::chrono::milliseconds{100})));
     auto& ec1 = std::get<0>(std::get<0>(result).value());
     auto& ec2 = std::get<1>(std::get<0>(result).value());

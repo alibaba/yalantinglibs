@@ -129,6 +129,27 @@ async_simple::coro::
   co_return std::pair{result.first, recved_len};
 }
 
+inline async_simple::coro::Lazy<std::error_code> async_io_wait_send_ack(
+    ib_socket_t& soc,
+    std::optional<
+        async_simple::Future<std::pair<std::error_code, std::size_t>>>&&
+        write_future) {
+  bool is_canceled = false;
+  try {
+    auto [ec, len] = co_await std::move(*write_future);
+    if (ec) [[unlikely]] {
+      co_return ec;
+    }
+  } catch (const async_simple::SignalException& e) {
+    is_canceled = true;
+  }
+  if (is_canceled) [[unlikely]] {
+    soc.close();
+    co_return std::make_error_code(std::errc::operation_canceled);
+  }
+  co_return std::error_code{};
+}
+
 async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
@@ -146,16 +167,11 @@ async_simple::coro::
   ib_buffer_t send_buffer;
   if (ib_socket.get_config().cap.max_inline_data >= io_size) {
     is_enable_inline_send = true;
-    if (sge_list.size() <= ib_socket.get_config().cap.max_send_sge) {
-      list = sge_list;
-    }
-    else {
-      zero_copy_buffer = std::make_unique<char[]>(io_size);
-      socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
-                       .length = (uint32_t)io_size,
-                       .lkey = 0};
-      copy(sge_list, socket_buffer);
-    }
+    zero_copy_buffer = std::make_unique<char[]>(io_size);
+    socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
+                     .length = (uint32_t)io_size,
+                     .lkey = 0};
+    copy(sge_list, socket_buffer);
   }
   else {
     send_buffer = ib_socket.get_send_buffer();
@@ -191,36 +207,33 @@ async_simple::coro::
                         p.setValue(std::move(result));
                       });
   if (write_op) {
-    bool is_canceled = false;
-    try {
-      result = co_await std::move(*write_op);
-    } catch (const async_simple::SignalException& e) {
-      is_canceled = true;
-    }
-    if (is_canceled) [[unlikely]] {
-      ib_socket.close();
-      co_return std::pair{std::make_error_code(std::errc::operation_canceled),
-                          std::size_t{0}};
-    }
+    result.first =
+        co_await async_io_wait_send_ack(ib_socket, std::move(write_op));
   }
-  co_return std::pair{result.first, result.second};
+  if (result.first) {
+    co_return result;
+  }
+  co_return std::pair{result.first, io_size};
 }
 
 template <typename T>
-void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
+std::size_t make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
   constexpr bool is_ibv_sge = requires { buffers.begin()->lkey; };
   sge.reserve(buffers.size());
+  std::size_t total = 0;
   for (auto& buffer : buffers) {
     if constexpr (is_ibv_sge) {
       if (buffer.length == 0) [[unlikely]] {
         continue;
       }
+      total += buffer.length;
       sge.push_back(ibv_sge{buffer.addr, buffer.length, buffer.lkey});
     }
     else {
       if (buffer.size() == 0) [[unlikely]] {
         continue;
       }
+      total += buffer.size();
       for (std::size_t i = 0; i < buffer.size(); i += UINT32_MAX) {
         sge.push_back(ibv_sge{(uintptr_t)buffer.data() + i,
                               std::min<uint32_t>(buffer.size() - i, UINT32_MAX),
@@ -228,24 +241,25 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
       }
     }
   }
+  return total;
 }
 
 template <typename T>
-inline void make_sge(std::vector<ibv_sge>& sge, T& buffer) {
+inline std::size_t make_sge(std::vector<ibv_sge>& sge, T& buffer) {
   if constexpr (requires { buffer.data(); }) {
     using pointer_t = decltype(buffer.data());
     if constexpr (std::is_same_v<pointer_t, void*> ||
                   std::is_same_v<pointer_t, char*> ||
                   std::is_same_v<pointer_t, const char*>) {
-      make_sge_impl(sge, std::span{&buffer, 1});
+      return make_sge_impl(sge, std::span{&buffer, 1});
     }
     else {
       // multiple buffers
-      make_sge_impl(sge, std::span<typename T::value_type>{buffer});
+      return make_sge_impl(sge, std::span<typename T::value_type>{buffer});
     }
   }
   else {
-    make_sge_impl(sge, std::span<T>{&buffer, 1});
+    return make_sge_impl(sge, std::span<T>{&buffer, 1});
   }
 }
 
@@ -272,13 +286,13 @@ inline void reset_buffer(std::vector<ibv_sge>& buffer, std::size_t read_size) {
 template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
-                    bool read_some) {
+                    bool read_some, bool write_wait_ack) {
   if (!ib_socket.is_open()) {
     co_return std::pair{std::make_error_code(std::errc::not_connected),
                         std::size_t{0}};
   }
   std::vector<ibv_sge> sge_list;
-  make_sge(sge_list, raw_buffer);
+  std::size_t total_io_size = make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;
   if (sge_span.size() == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, std::size_t{0}};
@@ -294,8 +308,9 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 
   std::size_t block_size;
   uint32_t now_split_size = 0;
-  std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>>
-      future;
+  std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>>&
+      future = ib_socket.write_future();
+
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
@@ -379,21 +394,14 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     }
   }
   if constexpr (io == ib_socket_t::io_type::send) {
-    if (future) {
-      bool is_canceled = false;
-      try {
-        std::tie(ec, len) = co_await std::move(*future);
-      } catch (const async_simple::SignalException& e) {
-        is_canceled = true;
-      }
-      if (is_canceled) [[unlikely]] {
-        ib_socket.close();
-        co_return std::pair{std::make_error_code(std::errc::operation_canceled),
-                            std::size_t{0}};
-      }
-      io_completed_size += len;
-      if (ec) [[unlikely]] {
-        co_return std::pair{ec, io_completed_size};
+    if (write_wait_ack && future) {
+      if (ib_socket.write_future()) {
+        auto ec = co_await async_io_wait_send_ack(
+            ib_socket, std::move(ib_socket.write_future()));
+        ib_socket.write_future() = {};
+        if (ec) [[unlikely]] {
+          co_return std::pair{ec, io_completed_size};
+        }
       }
     }
   }
@@ -404,13 +412,13 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
-               bool read_some = false) {
+               bool read_some = false, bool write_wait_ack = false) {
   if (!ib_socket.get_executor().running_in_this_thread()) {
     // switch to io_thread
     co_await dispatch(ib_socket.get_executor());
   }
   auto ret = co_await async_io_split_impl<io>(
-      ib_socket, std::forward<Buffer>(raw_buffer), read_some);
+      ib_socket, std::forward<Buffer>(raw_buffer), read_some, write_wait_ack);
   co_return ret;
 }
 
@@ -418,9 +426,10 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
-    coro_io::ib_socket_t& ib_socket, buffer_t&& buffer) {
+    coro_io::ib_socket_t& ib_socket, buffer_t&& buffer,
+    bool write_wait_ack = false) {
   return detail::async_io_split<ib_socket_t::send>(
-      ib_socket, std::forward<buffer_t>(buffer));
+      ib_socket, std::forward<buffer_t>(buffer), false, write_wait_ack);
 }
 
 template <typename buffer_t>

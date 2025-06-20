@@ -19,6 +19,7 @@
 #include "asio/ip/address.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
+#include "async_simple/Future.h"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/util/move_only_function.h"
@@ -109,6 +110,9 @@ struct ib_socket_shared_state_t
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
+
+  std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>>
+      write_future_;
 
   ib_socket_shared_state_t(std::shared_ptr<ib_buffer_pool_t> ib_buffer_pool,
                            coro_io::ExecutorWrapper<>* executor,
@@ -202,11 +206,16 @@ struct ib_socket_shared_state_t
   async_simple::coro::Lazy<void> shutdown() {
     ELOG_TRACE << "start to nofity peer close";
     co_await collectAll<async_simple::SignalType::Terminate>(
-        coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-            [this](auto&& cb) mutable {
-              post_send_impl({}, false, std::move(cb));
-            },
-            *this),
+        [this]() -> async_simple::coro::Lazy<void> {
+          if (this->write_future_) {
+            co_await std::move(*this->write_future_);
+          }
+          co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
+              [this](auto&& cb) mutable {
+                post_send_impl({}, false, std::move(cb));
+              },
+              *this);
+        }(),
         coro_io::sleep_for(std::chrono::seconds{1}, executor_));
     ELOG_TRACE << "finished to nofity peer close";
     co_return;
@@ -435,6 +444,11 @@ class ib_socket_t {
   }
   std::shared_ptr<ib_buffer_pool_t> buffer_pool() const noexcept {
     return state_->ib_buffer_pool_;
+  }
+
+  std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>>&
+  write_future() {
+    return state_->write_future_;
   }
 
   std::size_t consume(char* dst, std::size_t sz) {
