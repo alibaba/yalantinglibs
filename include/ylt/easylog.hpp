@@ -134,16 +134,16 @@ class logger {
     }
 
     if (appenders_.size() > 0) {
-        std::string text = 
-            "[" + 
-            std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                record.get_time_point().time_since_epoch()).count()) + 
-            "] [" + 
-            severity_str(record.get_severity()) + 
-            "] " + 
-            record.get_file_str() + 
-            ": " + 
-            record.get_message();
+        std::string text;
+        text.append("[");
+        text.append(std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+            record.get_time_point().time_since_epoch()).count()));
+        text.append("] [");
+        text.append(severity_str(record.get_severity()));
+        text.append("] ");
+        text.append(record.get_file_str());  // string_view works with append
+        text.append(": ");
+        text.append(record.get_message());
     
         for (auto &appender : appenders_) {
             appender(text);
