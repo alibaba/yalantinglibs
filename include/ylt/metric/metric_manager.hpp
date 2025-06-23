@@ -170,8 +170,9 @@ class static_metric_manager {
   static_metric_manager& operator=(static_metric_manager const&) = delete;
   static_metric_manager& operator=(static_metric_manager&&) = delete;
 
-  static static_metric_manager<Tag>& instance() {
-    static static_metric_manager<Tag> inst;
+  static std::shared_ptr<static_metric_manager<Tag>> instance() {
+    static std::shared_ptr<static_metric_manager<Tag>> inst(
+        new static_metric_manager<Tag>());
     return inst;
   }
 
@@ -280,8 +281,9 @@ class dynamic_metric_manager {
   dynamic_metric_manager& operator=(dynamic_metric_manager const&) = delete;
   dynamic_metric_manager& operator=(dynamic_metric_manager&&) = delete;
 
-  static dynamic_metric_manager<Tag>& instance() {
-    static dynamic_metric_manager<Tag> inst;
+  static std::shared_ptr<dynamic_metric_manager<Tag>> instance() {
+    static std::shared_ptr<dynamic_metric_manager<Tag>> inst(
+        new dynamic_metric_manager<Tag>());
     return inst;
   }
 
@@ -586,7 +588,7 @@ struct metric_collector_t {
  private:
   template <typename T>
   static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
-    auto v = T::instance().collect();
+    auto v = T::instance()->collect();
     vec.insert(vec.end(), v.begin(), v.end());
   }
 };

@@ -10,8 +10,9 @@ namespace ylt::metric {
 
 class dynamic_metric : public metric_t {
  public:
-  static inline thread_local_value<int64_t> g_user_metric_label_count{
-      std::thread::hardware_concurrency()};
+  static inline auto g_user_metric_label_count =
+      std::make_shared<thread_local_value<int64_t>>(
+          std::thread::hardware_concurrency());
   using metric_t::metric_t;
 };
 
@@ -62,7 +63,7 @@ class dynamic_metric_impl : public dynamic_metric {
     template <typename T, typename... Args>
     metric_pair(T&& first, Args&&... args)
         : label(std::forward<T>(first)), value(std::forward<Args>(args)...) {
-      g_user_metric_label_count.inc();
+      g_user_metric_label_count->inc();
       if (ylt_label_max_age.count()) {
         tp = std::chrono::steady_clock::now();
       }
