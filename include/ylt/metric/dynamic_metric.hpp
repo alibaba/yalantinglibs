@@ -62,7 +62,7 @@ class dynamic_metric_impl : public dynamic_metric {
     template <typename T, typename... Args>
     metric_pair(T&& first, Args&&... args)
         : label(std::forward<T>(first)), value(std::forward<Args>(args)...) {
-      g_user_metric_label_count->inc();
+      g_user_metric_label_count.inc();
       if (ylt_label_max_age.count()) {
         tp = std::chrono::steady_clock::now();
       }
