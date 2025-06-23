@@ -86,6 +86,7 @@ endif ()
 
 # --------------------- GCC
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    link_libraries(dl)
     if (ENABLE_CPP_20)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
     endif()

@@ -31,6 +31,12 @@
 #endif
 #endif
 
+#if __has_include(<stacktrace>)
+#include <stacktrace>
+#endif
+
+#include <ylt/util/b_stacktrace.h>
+
 #include "easylog/appender.hpp"
 
 namespace easylog {
@@ -60,6 +66,13 @@ class logger {
     }
 
     if (record.get_severity() == Severity::CRITICAL) {
+#ifdef __cpp_lib_stacktrace
+      std::cerr << std::stacktrace::current() << std::endl;
+#else
+      auto str = ylt::util::b_stacktrace_get_string();
+      std::cerr << str << std::endl;
+      free(str);
+#endif
       flush();
       std::exit(EXIT_FAILURE);
     }
