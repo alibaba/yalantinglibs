@@ -519,8 +519,8 @@ TEST_CASE("test dynamic histogram") {
 struct my_tag {};
 using my_manager = static_metric_manager<my_tag>;
 
-auto g_pair = my_manager::instance()->create_metric_static<counter_t>(
-    "test_g_counter", "");
+auto g_pair = my_manager::instance()
+                  -> create_metric_static<counter_t>("test_g_counter", "");
 
 TEST_CASE("test no label") {
   {

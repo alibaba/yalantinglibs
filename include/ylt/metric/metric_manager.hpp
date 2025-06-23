@@ -171,8 +171,11 @@ class static_metric_manager {
   static_metric_manager& operator=(static_metric_manager&&) = delete;
 
   static std::shared_ptr<static_metric_manager<Tag>> instance() {
-    static std::shared_ptr<static_metric_manager<Tag>> inst(
-        new static_metric_manager<Tag>());
+    static auto inst = std::shared_ptr<static_metric_manager<Tag>>(
+        new static_metric_manager<Tag>(), [](static_metric_manager<Tag>* ptr) {
+          std::atomic_thread_fence(std::memory_order_seq_cst);
+          delete ptr;
+        });
     return inst;
   }
 
@@ -282,8 +285,12 @@ class dynamic_metric_manager {
   dynamic_metric_manager& operator=(dynamic_metric_manager&&) = delete;
 
   static std::shared_ptr<dynamic_metric_manager<Tag>> instance() {
-    static std::shared_ptr<dynamic_metric_manager<Tag>> inst(
-        new dynamic_metric_manager<Tag>());
+    static auto inst = std::shared_ptr<dynamic_metric_manager<Tag>>(
+        new dynamic_metric_manager<Tag>(),
+        [](dynamic_metric_manager<Tag>* ptr) {
+          std::atomic_thread_fence(std::memory_order_seq_cst);
+          delete ptr;
+        });
     return inst;
   }
 
