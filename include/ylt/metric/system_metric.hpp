@@ -375,7 +375,8 @@ inline void ylt_stat() {
   stat_metric();
 }
 
-inline void start_stat(std::weak_ptr<coro_io::period_timer> weak) {
+inline void start_stat(std::weak_ptr<coro_io::period_timer> weak, auto manager,
+                       auto label_count) {
   auto timer = weak.lock();
   if (timer == nullptr) {
     return;
@@ -384,12 +385,12 @@ inline void start_stat(std::weak_ptr<coro_io::period_timer> weak) {
   ylt_stat();
 
   timer->expires_after(std::chrono::seconds(1));
-  timer->async_wait([timer](std::error_code ec) {
+  timer->async_wait([timer, manager, label_count](std::error_code ec) {
     if (ec) {
       return;
     }
 
-    start_stat(timer);
+    start_stat(timer, manager, label_count);
   });
 }
 }  // namespace detail
@@ -448,7 +449,9 @@ inline bool start_system_metric() {
   static auto exucutor = coro_io::create_io_context_pool(1);
   auto timer =
       std::make_shared<coro_io::period_timer>(exucutor->get_executor());
-  detail::start_stat(timer);
+  auto mgr = system_metric_manager::instance();
+  auto label_count = dynamic_metric::g_user_metric_label_count;
+  detail::start_stat(timer, mgr, label_count);
 
   return true;
 }
