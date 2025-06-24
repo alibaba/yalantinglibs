@@ -201,9 +201,6 @@ class ib_device_t {
 
     for (int i = 0; i < attr_.gid_tbl_len; i++) {
       if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
-        auto ec = std::make_error_code((std::errc)ret);
-        ELOG_ERROR << "IBDevice failed to query gid ex " << port_
-                   << " of device " << name_ << " error msg: " << ec.message();
         continue;
       }
 
@@ -217,8 +214,8 @@ class ib_device_t {
   }
 
   std::string name_;
-  std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
+  std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;
