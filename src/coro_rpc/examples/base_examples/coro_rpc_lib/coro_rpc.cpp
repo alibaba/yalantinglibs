@@ -89,7 +89,7 @@ void *create_client_pool(char *addr, client_config conf) {
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::ibverbs_config ib_conf{};
+    coro_io::ib_socket_t::config_t ib_conf{};
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif

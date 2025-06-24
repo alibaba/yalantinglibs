@@ -7,11 +7,14 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <unordered_map>
 
 #include "asio/ip/address.hpp"
+#include "ib_buffer.hpp"
 #include "ylt/easylog.hpp"
 
 namespace coro_io {
+namespace detail {
 class ib_devices_t {
  public:
   static auto& instance() {
@@ -59,69 +62,6 @@ class ib_devices_t {
   int size_;
   ibv_device** dev_list_;
 };
-
-struct ib_config_t {
-  std::string dev_name;
-  uint16_t port = 1;
-};
-
-struct ib_deleter {
-  void operator()(ibv_pd* pd) const noexcept {
-    if (pd) {
-      auto ret = ibv_dealloc_pd(pd);
-      if (ret != 0) {
-        ELOG_ERROR << "ibv_dealloc_pd failed: "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-  void operator()(ibv_context* context) const noexcept {
-    if (context) {
-      auto ret = ibv_close_device(context);
-      if (ret != 0) {
-        ELOG_ERROR << "ibv_close_device failed "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-  void operator()(ibv_cq* cq) const noexcept {
-    if (cq) {
-      auto ret = ibv_destroy_cq(cq);
-      if (ret != 0) {
-        ELOG_ERROR << "ibv_destroy_cq failed "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-  void operator()(ibv_qp* qp) const noexcept {
-    if (qp) {
-      auto ret = ibv_destroy_qp(qp);
-      if (ret != 0) {
-        ELOG_ERROR << "ibv_destroy_qp failed "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-  void operator()(ibv_comp_channel* channel) const noexcept {
-    if (channel) {
-      auto ret = ibv_destroy_comp_channel(channel);
-      if (ret != 0) {
-        ELOG_ERROR << "ibv_destroy_comp_channel failed "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-  void operator()(ibv_mr* ptr) const noexcept {
-    if (ptr) {
-      if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
-        ELOG_ERROR << "ibv_dereg_mr failed: "
-                   << std::make_error_code(std::errc{ret}).message();
-      }
-    }
-  }
-};
-
-namespace detail {
 inline std::string gid_to_string(uint8_t (&a)[16]) noexcept {
   std::string ret;
   ret.resize(40);
@@ -159,10 +99,27 @@ inline std::string mtu_str(ibv_mtu mtu) {
 }  // namespace detail
 class ib_device_t {
  public:
-  ib_device_t(const ib_config_t& conf) {
-    auto& inst = ib_devices_t::instance();
+  friend class ib_device_manager_t;
+  struct config_t {
+    std::string dev_name;
+    uint16_t port = 1;
+    ib_buffer_pool_t::config_t buffer_pool_config;
+  };
+  static std::shared_ptr<ib_device_t> create(const config_t& conf) {
+    return std::make_shared<ib_device_t>(private_construct_token{}, conf);
+  }
+
+ private:
+  struct private_construct_token {};
+
+ public:
+  ib_device_t(private_construct_token, const config_t& conf,
+              ibv_device* dev = nullptr) {
+    auto& inst = detail::ib_devices_t::instance();
     port_ = conf.port;
-    auto dev = inst.at(conf.dev_name);
+    if (dev == nullptr) {
+      dev = inst.at(conf.dev_name);
+    }
     name_ = ibv_get_device_name(dev);
     ctx_.reset(ibv_open_device(dev));
     pd_.reset(ibv_alloc_pd(ctx_.get()));
@@ -174,11 +131,12 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    ELOG_TRACE << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
-               << ", "
-               << "Max MTU: " << detail::mtu_str(attr_.max_mtu);
-
     find_best_gid_index();
+
+    ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
+              << ", "
+              << "Max MTU: " << detail::mtu_str(attr_.max_mtu)
+              << ", best gid index: " << gid_index_;
 
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
@@ -206,6 +164,7 @@ class ib_device_t {
           "gid index should greater than zero, now is: " +
           std::to_string(gid_index_)};
     }
+    buffer_pool_ = ib_buffer_pool_t::create(*this, conf.buffer_pool_config);
   }
 
   std::string_view name() const noexcept { return name_; }
@@ -222,6 +181,10 @@ class ib_device_t {
   bool is_support_inline_data() const noexcept { return support_inline_data_; }
   void set_support_inline_data(bool flag) noexcept {
     support_inline_data_ = flag;
+  }
+
+  std::shared_ptr<ib_buffer_pool_t> get_buffer_pool() const noexcept {
+    return buffer_pool_;
   }
 
  private:
@@ -256,6 +219,7 @@ class ib_device_t {
   std::string name_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
+  std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;
   ibv_gid gid_;
@@ -264,5 +228,97 @@ class ib_device_t {
 
   uint16_t port_;
 };
+
+inline std::unique_ptr<ibv_mr> ib_buffer_t::regist(ib_device_t& dev, void* ptr,
+                                                   uint32_t size,
+                                                   int ib_flags) {
+  auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
+  ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
+  if (mr != nullptr) [[unlikely]] {
+    ELOG_TRACE << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
+               << ", sge.length: " << mr->length;
+    return std::unique_ptr<ibv_mr>{mr};
+  }
+  else {
+    throw std::make_error_code(std::errc{errno});
+  }
+};
+
+inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
+                                       std::unique_ptr<char[]> data,
+                                       std::size_t size, int ib_flags) {
+  auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
+  if (mr != nullptr) [[unlikely]] {
+    ELOG_DEBUG << "ibv_reg_mr regist: " << mr
+               << " with pd:" << pool.device_.pd();
+    pool.modify_memory_usage(size);
+    return ib_buffer_t{std::unique_ptr<ibv_mr, ib_deleter>{mr}, std::move(data),
+                       pool};
+  }
+  else {
+    throw std::make_error_code(std::errc{errno});
+  }
+};
+class ib_device_manager_t {
+  ib_device_manager_t(const ib_device_manager_t&) = delete;
+  ib_device_manager_t& operator=(const ib_device_manager_t&) = delete;
+  std::unordered_map<std::string, std::shared_ptr<ib_device_t>> device_map_;
+  std::shared_ptr<ib_device_t> default_device_;
+
+ public:
+  std::unordered_map<std::string, std::shared_ptr<ib_device_t>> get_dev_list() {
+    return device_map_;
+  }
+  ib_device_manager_t(const ib_device_t::config_t& conf = {}) {
+    auto& devices = detail::ib_devices_t::instance();
+    for (auto& native_dev : devices.get_devices()) {
+      try {
+        auto [iter, is_ok] = device_map_.emplace(
+            native_dev->dev_name,
+            std::make_shared<ib_device_t>(
+                ib_device_t::private_construct_token{}, conf, native_dev));
+        if (is_ok && default_device_ == nullptr) {
+          default_device_ = iter->second;
+        }
+      } catch (const std::system_error& error) {
+        // discard the exception if ib_device_t construct failed
+      }
+    }
+    if (!default_device_) {
+      ELOG_ERROR << "get rdma device failed, there is no available device";
+    }
+  }
+  std::shared_ptr<ib_device_t> find_device(std::string name) {
+    if (!default_device_) [[unlikely]] {
+      ELOG_ERROR << "get rdma device failed, there is no available device";
+      return nullptr;
+    }
+    if (name.empty()) {
+      return default_device_;
+    }
+    else {
+      auto iter = device_map_.find(name);
+      if (iter != device_map_.end()) {
+        return iter->second;
+      }
+      else {
+        ELOG_ERROR << "get device failed, cant found device:" << name;
+        return nullptr;
+      }
+    }
+  }
+};
+
+inline std::shared_ptr<ib_device_manager_t> g_ib_device_manager(
+    const ib_device_t::config_t& conf = {}) {
+  static auto dev_map = std::make_shared<ib_device_manager_t>(conf);
+  return dev_map;
+}
+
+inline std::shared_ptr<ib_device_t> g_ib_device(
+    const ib_device_t::config_t& conf = {}) {
+  static auto dev_map = g_ib_device_manager(conf);
+  return dev_map->find_device(conf.dev_name);
+}
 
 }  // namespace coro_io

@@ -5,7 +5,7 @@
 using namespace coro_io;
 
 TEST_CASE("test device list") {
-  auto& inst = ib_devices_t::instance();
+  auto& inst = detail::ib_devices_t::instance();
   auto list = inst.get_devices();
   CHECK(!list.empty());
   CHECK(inst.size());
@@ -23,20 +23,20 @@ TEST_CASE("test device list") {
 }
 
 TEST_CASE("test device") {
-  ib_device_t dev({});
+  auto dev = ib_device_t::create({});
 
-  auto name = dev.name();
+  auto name = dev->name();
   CHECK(!name.empty());
-  auto ctx = dev.context();
+  auto ctx = dev->context();
   CHECK(ctx);
-  auto pd = dev.pd();
+  auto pd = dev->pd();
   CHECK(pd);
-  CHECK(dev.port() == 1);
-  CHECK(dev.gid_index() >= 0);
-  auto& attr = dev.attr();
+  CHECK(dev->port() == 1);
+  CHECK(dev->gid_index() >= 0);
+  auto& attr = dev->attr();
 }
 
 TEST_CASE("test device invalid") {
-  CHECK_THROWS_AS(ib_device_t dev({"", 3}), std::system_error);
-  CHECK_THROWS_AS(ib_device_t dev({"no such"}), std::out_of_range);
+  CHECK_THROWS_AS(ib_device_t::create({"", 3}), std::system_error);
+  CHECK_THROWS_AS(ib_device_t::create({"no such"}), std::out_of_range);
 }

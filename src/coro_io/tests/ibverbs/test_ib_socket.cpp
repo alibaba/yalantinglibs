@@ -477,7 +477,8 @@ TEST_CASE("test socket io") {
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
     CHECK_MESSAGE(ec3.value(), "time out failed");
   }
-  ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+  ELOG_WARN << "memory size:"
+            << coro_io::ib_buffer_pool_t::global_memory_usage();
 }
 
 async_simple::coro::Lazy<std::error_code> rpc_like_recv(
@@ -528,7 +529,8 @@ TEST_CASE("test rpc-like io") {
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
   {
     ELOG_WARN << "test medium size";
@@ -539,7 +541,8 @@ TEST_CASE("test rpc-like io") {
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
   {
     ELOG_WARN << "test large size";
@@ -550,6 +553,7 @@ TEST_CASE("test rpc-like io") {
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
-    ELOG_WARN << "memory size:" << coro_io::g_ib_buffer_pool()->total_memory();
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
 }

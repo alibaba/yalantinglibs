@@ -401,7 +401,7 @@ After enabling SSL support, the server will reject all non-SSL connections.
 
 ```cpp
 coro_rpc_server server;
-server.init_ibv(ibverbs_config{});
+server.init_ibv(ib_socket_t::config_t{});
 ```
 
 After enabling RDMA support, the server will reject all non-rdma connections.
@@ -421,7 +421,7 @@ struct config_base {
   /* The following settings are only applicable if SSL is enabled */
   std::optional<ssl_configure> ssl_config = std::nullopt; // Configure whether to enable ssl
   /* The following settings are only applicable if rdma is enabled */
-  std::optional<coro_io::ibverbs_config> ibv_config = std::nullopt; // Configure whether to enable rdma
+  std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // Configure whether to enable rdma
 };
 struct ssl_configure {
   std::string base_path;  // Base path of ssl files.

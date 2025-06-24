@@ -10,6 +10,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
@@ -121,7 +122,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::ibverbs_config ib_conf{};
+    coro_io::ib_socket_t::config_t ib_conf{};
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
     pool_conf.client_config.socket_config = ib_conf;
@@ -177,7 +178,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
     auto client = std::make_shared<coro_rpc::coro_rpc_client>();
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
-      coro_io::ibverbs_config ib_conf{};
+      coro_io::ib_socket_t::config_t ib_conf{};
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
       [[maybe_unused]] bool is_ok = client->init_ibv(ib_conf);
@@ -256,7 +257,8 @@ int main(int argc, char** argv) {
 
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::g_ib_buffer_pool({.buffer_size = conf.buffer_size});
+    coro_io::g_ib_device(
+        {.buffer_pool_config = {.buffer_size = conf.buffer_size}});
   }
 #endif
 
@@ -274,7 +276,7 @@ int main(int argc, char** argv) {
     server.register_handler<echo>();
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
-      coro_io::ibverbs_config ib_conf{};
+      coro_io::ib_socket_t::config_t ib_conf{};
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
       server.init_ibv(ib_conf);

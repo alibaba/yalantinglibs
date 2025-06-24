@@ -204,7 +204,7 @@ class coro_rpc_client {
 #endif
 #ifdef YLT_ENABLE_IBV
                  ,
-                 coro_io::ibverbs_config
+                 coro_io::ib_socket_t::config_t
 #endif
                  >
         socket_config;
@@ -254,9 +254,8 @@ class coro_rpc_client {
   }
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_socket_wrapper(
-      const coro_io::ibverbs_config &config) {
-    control_->socket_wrapper_.init_client(config, config.device,
-                                          config.buffer_pool);
+      const coro_io::ib_socket_t::config_t &config) {
+    control_->socket_wrapper_.init_client(config);
     return true;
   }
 #endif
@@ -397,13 +396,10 @@ class coro_rpc_client {
 #endif
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_ibv(
-      const coro_io::ibverbs_config &config = {},
-      std::shared_ptr<coro_io::ib_device_t> device = nullptr,
-      std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool = nullptr) {
-    config_.socket_config = coro_io::ibverbs_config{
-        .device = std::move(device), .buffer_pool = std::move(buffer_pool)};
+      const coro_io::ib_socket_t::config_t &config = {}) {
+    config_.socket_config = config;
     return init_socket_wrapper(
-        std::get<coro_io::ibverbs_config>(config_.socket_config));
+        std::get<coro_io::ib_socket_t::config_t>(config_.socket_config));
   }
 #endif
 

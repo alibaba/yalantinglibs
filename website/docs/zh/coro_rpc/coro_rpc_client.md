@@ -113,7 +113,7 @@ void set_config(coro_rpc_client& client) {
     .local_ip = "", // 本地ip，用于指定本地通信的ip地址。
     .socket_config=std::variant<tcp_config,
                  tcp_with_ssl_config,
-                 coro_io::ibverbs_config>{tcp_config{}}; // 指定底层的协议及其底层配置，目前支持tcp, ssl over tcp, rdma三种协议。
+                 coro_io::ib_socket_t::config_t>{tcp_config{}}; // 指定底层的协议及其底层配置，目前支持tcp, ssl over tcp, rdma三种协议。
   });
 }
 ```
@@ -123,7 +123,7 @@ void set_config(coro_rpc_client& client) {
 
 ibverbs协议的配置如下：
 ```cpp
-struct ibverbs_config {
+struct ib_socket_t::config_t {
   uint32_t cq_size = 128; // 事件通知队列的最大长度
   uint32_t recv_buffer_cnt = 4;                 // 默认提交到接受队列的缓冲数目，一个缓冲区默认2m，因此一个rdma在连接成功后即占用8MB的内存。积压的接收数据越多，队列中的缓冲区也会越多，最多可以缓冲max_recv_wr*buffer_size这么多的数据(buffer_size为buffer_pool配置的缓冲区大小），此后如果上层仍不消费数据，则发送端会收到rnr错误，不断重试并等待对端消费。
   ibv_qp_type qp_type = IBV_QPT_RC;             // 默认的qp类型。
@@ -142,46 +142,46 @@ struct ibverbs_config {
 ```cpp
   coro_rpc_client cli;
   cli.init_ibv(); //使用默认配置
-  cli.init_ibv(ibverbs_config{}); //使用用户指定的配置
+  cli.init_ibv(ib_socket_t::config_t{}); //使用用户指定的配置
 ```
 
 也可以在配置中启用rdma：
 
 ```cpp
   coro_rpc_client cli;
-  cli.init_config(config{.socket_config=ibverbs_config{}})
+  cli.init_config(config{.socket_config=ib_socket_t::config_t{}})
 ```
 
-#### rdma buffer池
 
-用户可以手动选择buffer_pool：
+#### ib_device_t
 
+`ib_device_t`管理了ibverbs传输过程中需要使用到的连接上下文和缓冲区。默认使用全局设备`coro_io::g_ib_device()`，用户也可以指定使用自己的设备。
+
+通过修改ib_device_t的配置，可以给rpc连接配置不同的网卡，使用独立的缓冲区。
+
+1.可以修改全局默认设备的配置：
 ```cpp
-  
-  coro_io::g_ib_buffer_pool({.buffer_size=1024}); // 修改默认的全局buffer_pool的配置
-  // 手动创建连接池
-  auto pool = coro_io::ib_buffer_pool_t::create(coro_io::g_ib_device(),{.buffer_size = 3* 1024 * 1024,/* 缓冲大小*/
-                            .max_memory_usage = 20 * 1024 * 1024,/*最大内存占用，超过后内存分配会失败，并导致连接关闭*/
-                            .idle_timeout = 5s /* 长时间未使用的buffer会被回收*/});
-  coro_rpc_client cli;
-  cli.init_ibv(coro_io::ibverbs_config{
-    .buffer_pool=pool;
-  };);
+// must run before rmda service start
+coro_io::g_ib_device({.dev_name= "my_dev" }); // Specify default RDMA device
+// ...
 ```
-
-#### rdma设备
-
-用户可以手动选择rdma设备：
+2.也可以手动选择rdma设备：
 
 ```cpp
-  coro_io::g_ib_device({.dev_name= "my_dev" }); // 指定默认的rdma设备
-  // 手动指定rdma设备
-  auto dev = std::make_shared<coro_io::ib_device_t>(coro_io::ib_config_t{.dev_name="my_dev"});
+  auto dev = coro_io::ib_device_t::create({
+    .dev_name="my_dev",
+    .buffer_pool_config = {
+      .buffer_size = 3 * 1024 * 1024,  // Buffer size
+      .max_memory_usage = 20 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
+      .memory_usage_recorder = nullptr; // nullopt means use global memory_usage_recorder, otherwise you can pass a std::shared_ptr<std::atomic<std::size_t>> as recorder;
+      .idle_timeout = 5s // Buffers unused for this duration will be reclaimed}
+    }
+  });
   coro_rpc_client cli;
-  coro_rpc
-  cli.init_ibv(coro_io::ibverbs_config{
-    .device = dev
-  };);
+  // specify buffer pool for client
+  cli.init_ibv({
+    .device = dev;
+  };)
 ```
 
 
