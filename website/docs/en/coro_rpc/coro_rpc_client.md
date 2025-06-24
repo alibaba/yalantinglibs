@@ -152,30 +152,56 @@ RDMA activation through config:
 
 The `ib_device_t` manages the connection context and buffers required during the ibverbs transmission process. By default, it uses the global device `coro_io::g_ib_device()`, but users can also specify their own device.
 
-By modifying the configuration of `ib_device_t`, users can assign different network interfaces (NICs) to RPC connections and use separate buffers.
+By modifying the configuration of `ib_device_t`, users can assign different network interfaces to RPC connections and use separate buffers.
 
-1. change global device config
+以下是该 Markdown 文档的英文翻译，包括注释内容：
+
+---
+
+1. Modify the default device configuration
 ```cpp
-  // must run before rmda service start
-  coro_io::g_ib_device({.dev_name= "my_dev" }); // Specify RDMA device name
-  // ...
-```
-2. specify device for client
-```cpp
-  auto dev = coro_io::ib_device_t::create({
-    .dev_name="my_dev",
+  // The configuration only takes effect on the first invocation
+  coro_io::g_ib_device({ 
     .buffer_pool_config = {
       .buffer_size = 3 * 1024 * 1024,  // Buffer size
       .max_memory_usage = 20 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
-      .memory_usage_recorder = nullptr; // nullopt means use global memory_usage_recorder, otherwise you can pass a std::shared_ptr<std::atomic<std::size_t>> as recorder;
-      .idle_timeout = 5s // Buffers unused for this duration will be reclaimed}
+      .memory_usage_recorder = nullptr; // nullopt means that memory usage across different devices will be counted together. If you want the memory pool to have independent memory usage tracking, you should assign a non-null std::shared_ptr<std::atomic<std::size_t>> as the recorder.
+      .idle_timeout = 5s // Buffers unused for this duration will be reclaimed
     }
-  );
+  }); 
+  // ...
+```
+
+2. Specify the RDMA NIC to use when initializing the connection
+```cpp
   coro_rpc_client cli;
-  // specify buffer pool for client
+  cli.init_ibv({
+    .device = coro_io::g_ib_device({.dev_name = "my_rmda_network_device_name"});
+  });
+```
+
+3. Create and use your own `ib_device_t`
+```cpp
+  auto dev = coro_io::ib_device_t::create({
+    .dev_name = nullptr,  // If dev_name is nullptr, it will use the first device in list
+    .buffer_pool_config = {
+      // ...
+    }
+  });
+  coro_rpc_client cli;
   cli.init_ibv({
     .device = dev
-  };)
+  });
+```
+
+4. Query all currently successfully registered RDMA global devices
+```cpp
+  // Get all devices
+  auto devices = coro_io::g_ib_device_manager();
+  for (auto &dev: devices.get_dev_list()) {
+    std::cout << "name:" << dev.first;
+    // dev.second is a global std::shared_ptr<ib_device_t>
+  }
 ```
 
 ## Calling Model

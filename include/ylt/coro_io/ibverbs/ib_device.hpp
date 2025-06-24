@@ -263,7 +263,8 @@ class ib_device_manager_t {
   std::shared_ptr<ib_device_t> default_device_;
 
  public:
-  std::unordered_map<std::string, std::shared_ptr<ib_device_t>> get_dev_list() {
+  std::unordered_map<std::string, std::shared_ptr<ib_device_t>>&
+  get_dev_list() {
     return device_map_;
   }
   ib_device_manager_t(const ib_device_t::config_t& conf = {}) {

@@ -159,31 +159,51 @@ struct ib_socket_t::config_t {
 
 通过修改ib_device_t的配置，可以给rpc连接配置不同的网卡，使用独立的缓冲区。
 
-1.可以修改全局默认设备的配置：
+1. 修改默认的设备配置
 ```cpp
-// must run before rmda service start
-coro_io::g_ib_device({.dev_name= "my_dev" }); // Specify default RDMA device
-// ...
+  // 配置只有在第一次调用时才会生效
+  coro_io::g_ib_device({ 
+    .buffer_pool_config = {
+      .buffer_size = 3 * 1024 * 1024,  // 缓冲区大小
+      .max_memory_usage = 20 * 1024 * 1024, // 最大内存使用量（超过此限制将分配失败）
+      .memory_usage_recorder = nullptr; // nullopt 表示不同设备的内存占用会被一起统计，如果想要让内存池具有独立的内存占用记录，请分配一个非空的std::shared_ptr<std::atomic<std::size_t>>作为记录
+      .idle_timeout = 5s // 空闲时间超过这个时长的缓冲区将被回收
+    }
+  }); 
+  // ...
 ```
-2.也可以手动选择rdma设备：
 
+2. 初始化连接时，指定需要使用的 RDMA 网卡
+```cpp
+  coro_rpc_client cli;
+  cli.init_ibv({
+    .device = coro_io::g_ib_device({.dev_name = "my_rmda_network_device_name"});
+  });
+```
+
+3. 创建并使用自己的 `ib_device_t`
 ```cpp
   auto dev = coro_io::ib_device_t::create({
-    .dev_name="my_dev",
+    .dev_name=nullptr,  // 如果 dev_name 为 nullptr，则会使用设备列表中的第一个设备
     .buffer_pool_config = {
-      .buffer_size = 3 * 1024 * 1024,  // Buffer size
-      .max_memory_usage = 20 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
-      .memory_usage_recorder = nullptr; // nullopt means use global memory_usage_recorder, otherwise you can pass a std::shared_ptr<std::atomic<std::size_t>> as recorder;
-      .idle_timeout = 5s // Buffers unused for this duration will be reclaimed}
+      // ...
     }
   });
   coro_rpc_client cli;
-  // specify buffer pool for client
   cli.init_ibv({
     .device = dev
-  };)
+  });
 ```
 
+4. 查询当前所有成功注册的全局 RDMA 设备
+```cpp
+  // 获取所有设备
+  auto devices = coro_io::g_ib_device_manager();
+  for (auto &dev: devices.get_dev_list()) {
+    std::cout<<"name:"<<dev.first;
+    // dev.second 是一个全局的 std::shared_ptr<ib_device_t>
+  }
+```
 
 ## 调用模型
 

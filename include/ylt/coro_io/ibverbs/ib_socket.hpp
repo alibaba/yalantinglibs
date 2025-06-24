@@ -544,10 +544,10 @@ class ib_socket_t {
               state->soc_.close(ec);
               return;
             }
-            ELOG_WARN << "rmda connection failed by exception:"
+            ELOG_WARN << "rdma connection failed by exception:"
                       << ec.value().first.message();
           } catch (const std::exception& e) {
-            ELOG_WARN << "rmda connection failed by exception:" << e.what();
+            ELOG_WARN << "rdma connection failed by exception:" << e.what();
           }
           state->close();
         });
