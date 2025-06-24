@@ -174,7 +174,7 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
   coro_rpc_client cli;
   // specify buffer pool for client
   cli.init_ibv({
-    .device = dev;
+    .device = dev
   };)
 ```
 

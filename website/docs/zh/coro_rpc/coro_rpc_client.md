@@ -180,7 +180,7 @@ coro_io::g_ib_device({.dev_name= "my_dev" }); // Specify default RDMA device
   coro_rpc_client cli;
   // specify buffer pool for client
   cli.init_ibv({
-    .device = dev;
+    .device = dev
   };)
 ```
 
