@@ -170,9 +170,10 @@ class static_metric_manager {
   static_metric_manager& operator=(static_metric_manager const&) = delete;
   static_metric_manager& operator=(static_metric_manager&&) = delete;
 
-  static static_metric_manager<Tag>& instance() {
-    static auto* inst = new static_metric_manager<Tag>();
-    return *inst;
+  static std::shared_ptr<static_metric_manager<Tag>> instance() {
+    static auto inst = std::shared_ptr<static_metric_manager<Tag>>(
+        new static_metric_manager<Tag>());
+    return inst;
   }
 
   template <typename T, typename... Args>
@@ -280,9 +281,15 @@ class dynamic_metric_manager {
   dynamic_metric_manager& operator=(dynamic_metric_manager const&) = delete;
   dynamic_metric_manager& operator=(dynamic_metric_manager&&) = delete;
 
-  static dynamic_metric_manager<Tag>& instance() {
-    static auto* inst = new dynamic_metric_manager<Tag>();
-    return *inst;
+  static std::shared_ptr<dynamic_metric_manager<Tag>> instance() {
+    static auto inst = std::shared_ptr<dynamic_metric_manager<Tag>>(
+        new dynamic_metric_manager<Tag>());
+    std::call_once(once_, [self = inst] {
+      if (ylt_label_max_age.count() > 0) {
+        self->clean_label_expired(self);
+      }
+    });
+    return inst;
   }
 
   template <typename T, typename... Args>
@@ -464,18 +471,18 @@ class dynamic_metric_manager {
   }
 
  private:
-  void clean_label_expired() {
+  void clean_label_expired(auto self) {
     executor_ = coro_io::create_io_context_pool(1);
     auto sp = executor_;
     timer_ = std::make_shared<coro_io::period_timer>(executor_->get_executor());
-    check_label_expired(timer_)
+    check_label_expired(timer_, self)
         .via(executor_->get_executor())
         .start([sp](auto&&) {
         });
   }
 
   async_simple::coro::Lazy<void> check_label_expired(
-      std::weak_ptr<coro_io::period_timer> weak) {
+      std::weak_ptr<coro_io::period_timer> weak, auto self) {
     while (true) {
       auto timer = weak.lock();
       if (timer == nullptr) {
@@ -494,11 +501,7 @@ class dynamic_metric_manager {
 
   dynamic_metric_manager()
       : metric_map_(
-            std::min<unsigned>(std::thread::hardware_concurrency(), 128u)) {
-    if (ylt_label_max_age.count() > 0) {
-      clean_label_expired();
-    }
-  }
+            std::min<unsigned>(std::thread::hardware_concurrency(), 128u)) {}
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label_value(
       const std::vector<std::string>& label_value) {
@@ -533,6 +536,7 @@ class dynamic_metric_manager {
       metric_map_;
   std::shared_ptr<coro_io::period_timer> timer_ = nullptr;
   std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
+  inline static std::once_flag once_;
 };
 
 struct ylt_default_metric_tag_t {};
@@ -586,7 +590,7 @@ struct metric_collector_t {
  private:
   template <typename T>
   static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
-    auto v = T::instance().collect();
+    auto v = T::instance()->collect();
     vec.insert(vec.end(), v.begin(), v.end());
   }
 };

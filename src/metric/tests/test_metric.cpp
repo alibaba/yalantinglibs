@@ -99,60 +99,60 @@ TEST_CASE("serialize zero") {
 TEST_CASE("test metric manager") {
   auto c = std::make_shared<counter_t>("test1", "");
   auto g = std::make_shared<gauge_t>("test2", "");
-  auto& inst_s = static_metric_manager<metrc_tag>::instance();
-  static_metric_manager<metrc_tag>::instance().register_metric(c);
-  static_metric_manager<metrc_tag>::instance().register_metric(g);
-  auto pair = inst_s.create_metric_static<counter_t>("test1", "");
+  auto inst_s = static_metric_manager<metrc_tag>::instance();
+  static_metric_manager<metrc_tag>::instance()->register_metric(c);
+  static_metric_manager<metrc_tag>::instance()->register_metric(g);
+  auto pair = inst_s->create_metric_static<counter_t>("test1", "");
   CHECK(pair.first == std::errc::invalid_argument);
-  auto v1 = inst_s.get_metric_by_label({});
+  auto v1 = inst_s->get_metric_by_label({});
   CHECK(v1.size() == 2);
-  auto v2 = inst_s.get_metric_by_name("test1");
+  auto v2 = inst_s->get_metric_by_name("test1");
   CHECK(v2 != nullptr);
 
-  v2 = inst_s.get_metric_by_name("test111");
+  v2 = inst_s->get_metric_by_name("test111");
   CHECK(v2 == nullptr);
 
   c->inc();
   g->inc();
 
-  inst_s.create_metric_static<counter_t>(
+  inst_s->create_metric_static<counter_t>(
       "test_counter", "", std::map<std::string, std::string>{{"url", "/"}});
-  auto ms = inst_s.filter_metrics_by_label_value(std::regex("/"));
+  auto ms = inst_s->filter_metrics_by_label_value(std::regex("/"));
   CHECK(ms.size() == 1);
 
   {
-    std::string str = inst_s.serialize_static();
+    std::string str = inst_s->serialize_static();
     std::cout << str << "\n";
 
-    std::string json = inst_s.serialize_to_json_static();
+    std::string json = inst_s->serialize_to_json_static();
     std::cout << json << "\n";
   }
 
   {
     metric_filter_options options;
     options.name_regex = ".*test.*";
-    auto v5 = inst_s.filter_metrics_static(options);
+    auto v5 = inst_s->filter_metrics_static(options);
     CHECK(v5.size() == 3);
     options.label_regex = "url";
-    auto v6 = inst_s.filter_metrics_static(options);
+    auto v6 = inst_s->filter_metrics_static(options);
     CHECK(v6.size() == 1);
   }
 
   auto dc = std::make_shared<dynamic_counter_t>(
       std::string("test3"), std::string(""),
       std::array<std::string, 2>{"url", "code"});
-  dynamic_metric_manager<metrc_tag>::instance().register_metric(dc);
-  auto& inst_d = dynamic_metric_manager<metrc_tag>::instance();
-  auto pair1 = inst_d.create_metric_dynamic<dynamic_counter_t>(
+  dynamic_metric_manager<metrc_tag>::instance()->register_metric(dc);
+  auto inst_d = dynamic_metric_manager<metrc_tag>::instance();
+  auto pair1 = inst_d->create_metric_dynamic<dynamic_counter_t>(
       std::string("test3"), std::string(""), std::array<std::string, 2>{});
   CHECK(pair1.first == std::errc::invalid_argument);
   dc->inc({"/", "200"});
 
   {
-    std::string str = inst_d.serialize_dynamic();
+    std::string str = inst_d->serialize_dynamic();
     std::cout << str << "\n";
 
-    std::string json = inst_d.serialize_to_json_dynamic();
+    std::string json = inst_d->serialize_to_json_dynamic();
     std::cout << json << "\n";
 
     using root_manager = metric_collector_t<static_metric_manager<metrc_tag>,
@@ -163,80 +163,80 @@ TEST_CASE("test metric manager") {
     std::cout << json << "\n";
   }
 
-  auto v3 = inst_d.get_metric_by_label({{"url", "/"}, {"code", "200"}});
+  auto v3 = inst_d->get_metric_by_label({{"url", "/"}, {"code", "200"}});
   CHECK(v3.size() == 1);
 
-  auto v4 = inst_d.get_metric_by_label_name({"url", "code"});
+  auto v4 = inst_d->get_metric_by_label_name({"url", "code"});
   CHECK(v4.size() == 1);
 
-  inst_d.remove_metric(dc);
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric(dc);
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric(dc->str_name());
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric(dc->str_name());
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric(std::vector<std::shared_ptr<dynamic_metric>>{dc});
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric(std::vector<std::shared_ptr<dynamic_metric>>{dc});
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric({dc->str_name()});
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric({dc->str_name()});
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric_by_label({{"code", "400"}});
-  CHECK(inst_d.metric_count() == 1);
-  inst_d.remove_metric_by_label({{"code", "200"}});
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric_by_label({{"code", "400"}});
+  CHECK(inst_d->metric_count() == 1);
+  inst_d->remove_metric_by_label({{"code", "200"}});
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_label_value({{"code", "400"}});
-  CHECK(inst_d.metric_count() == 1);
-  inst_d.remove_label_value({{"code", "200"}});
+  inst_d->remove_label_value({{"code", "400"}});
+  CHECK(inst_d->metric_count() == 1);
+  inst_d->remove_label_value({{"code", "200"}});
   CHECK(dc->label_value_count() == 0);
   dc->inc({"/", "200"});
 
   CHECK(dc->label_value_count() == 1);
-  inst_d.remove_label_value({{"url", "/"}});
+  inst_d->remove_label_value({{"url", "/"}});
   CHECK(dc->label_value_count() == 0);
   dc->inc({"/", "200"});
 
   CHECK(dc->label_value_count() == 1);
-  inst_d.remove_label_value({{"url", "/"}, {"code", "200"}});
+  inst_d->remove_label_value({{"url", "/"}, {"code", "200"}});
   CHECK(dc->label_value_count() == 0);
   dc->inc({"/", "200"});
 
-  inst_d.remove_metric_by_label_name(std::vector<std::string>{"url", "code"});
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric_by_label_name(std::vector<std::string>{"url", "code"});
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric_by_label_name("url");
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric_by_label_name("url");
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  inst_d.remove_metric_by_label_name("code");
-  CHECK(inst_d.metric_count() == 0);
-  inst_d.register_metric(dc);
+  inst_d->remove_metric_by_label_name("code");
+  CHECK(inst_d->metric_count() == 0);
+  inst_d->register_metric(dc);
 
-  auto pair2 = inst_d.create_metric_dynamic<dynamic_counter_t>(
+  auto pair2 = inst_d->create_metric_dynamic<dynamic_counter_t>(
       "test4", "", std::array<std::string, 2>{"method", "code"});
 
   metric_filter_options options;
   options.name_regex = ".*test.*";
-  auto v5 = inst_d.filter_metrics_dynamic(options);
+  auto v5 = inst_d->filter_metrics_dynamic(options);
   CHECK(v5.size() == 2);
   options.label_regex = "method";
-  auto v6 = inst_d.filter_metrics_dynamic(options);
+  auto v6 = inst_d->filter_metrics_dynamic(options);
   CHECK(v6.size() == 1);
 
   options.label_value_regex = "200";
 
-  auto v7 = inst_d.filter_metrics_dynamic(options);
+  auto v7 = inst_d->filter_metrics_dynamic(options);
   CHECK(v7.size() == 0);
 
   pair2.second->inc({"200"});
-  auto v8 = inst_d.filter_metrics_dynamic(options);
+  auto v8 = inst_d->filter_metrics_dynamic(options);
   CHECK(v8.size() == 1);
 }
 
@@ -247,13 +247,13 @@ TEST_CASE("test metric manager remove") {
       std::string("test3"), std::string(""),
       std::array<std::string, 2>{"url", "code"});
   dc->inc(std::array<std::string, 2>{"/", "200"});
-  dynamic_metric_manager<remove_tag>::instance().register_metric(dc);
-  auto& inst_d = dynamic_metric_manager<remove_tag>::instance();
+  dynamic_metric_manager<remove_tag>::instance()->register_metric(dc);
+  auto inst_d = dynamic_metric_manager<remove_tag>::instance();
   std::map<std::string, std::string> map{
       {"url", "/"}, {"code", "200"}, {"method", "GET"}};
-  CHECK(inst_d.metric_count() == 1);
-  inst_d.remove_metric_by_label(map);
-  CHECK(inst_d.metric_count() == 1);
+  CHECK(inst_d->metric_count() == 1);
+  inst_d->remove_metric_by_label(map);
+  CHECK(inst_d->metric_count() == 1);
 
   std::vector<std::shared_ptr<metric_t>> filtered_metrics;
   metric_filter_options options;
@@ -274,32 +274,32 @@ TEST_CASE("test metric manager remove") {
   CHECK(filtered_metrics.size() == 1);
 
   std::map<std::string, std::string> map1{{"url", "/test"}, {"code", "200"}};
-  inst_d.remove_metric_by_label(map1);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->remove_metric_by_label(map1);
+  CHECK(inst_d->metric_count() == 1);
   std::map<std::string, std::string> map2{{"url", "/"}, {"code", "400"}};
-  inst_d.remove_metric_by_label(map2);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->remove_metric_by_label(map2);
+  CHECK(inst_d->metric_count() == 1);
   std::map<std::string, std::string> map3{{"url1", "/"}, {"code", "200"}};
-  inst_d.remove_metric_by_label(map3);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->remove_metric_by_label(map3);
+  CHECK(inst_d->metric_count() == 1);
   std::map<std::string, std::string> map4{{"url", "/"}, {"code", "200"}};
-  inst_d.remove_metric_by_label(map4);
-  CHECK(inst_d.metric_count() == 0);
+  inst_d->remove_metric_by_label(map4);
+  CHECK(inst_d->metric_count() == 0);
 
-  inst_d.register_metric(dc);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->register_metric(dc);
+  CHECK(inst_d->metric_count() == 1);
 
   std::map<std::string, std::string> map5{{"url", "/get"}};
-  inst_d.remove_metric_by_label(map5);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->remove_metric_by_label(map5);
+  CHECK(inst_d->metric_count() == 1);
 
   std::map<std::string, std::string> map6{{"url1", "/"}};
-  inst_d.remove_metric_by_label(map6);
-  CHECK(inst_d.metric_count() == 1);
+  inst_d->remove_metric_by_label(map6);
+  CHECK(inst_d->metric_count() == 1);
 
   std::map<std::string, std::string> map7{{"url", "/"}};
-  inst_d.remove_metric_by_label(map7);
-  CHECK(inst_d.metric_count() == 0);
+  inst_d->remove_metric_by_label(map7);
+  CHECK(inst_d->metric_count() == 0);
 }
 
 TEST_CASE("test dynamic counter") {
@@ -519,8 +519,8 @@ TEST_CASE("test dynamic histogram") {
 struct my_tag {};
 using my_manager = static_metric_manager<my_tag>;
 
-auto g_pair = my_manager::instance().create_metric_static<counter_t>(
-    "test_g_counter", "");
+auto g_pair = my_manager::instance()
+                  -> create_metric_static<counter_t>("test_g_counter", "");
 
 TEST_CASE("test no label") {
   {
@@ -1027,45 +1027,45 @@ TEST_CASE("test summary refresh") {
 TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"));
-  default_static_metric_manager::instance().register_metric(c);
-  CHECK_FALSE(default_static_metric_manager::instance().register_metric(c));
+  default_static_metric_manager::instance()->register_metric(c);
+  CHECK_FALSE(default_static_metric_manager::instance()->register_metric(c));
 
   auto g = std::make_shared<gauge_t>(std::string("get_guage_count"),
                                      std::string("get counter"));
-  default_static_metric_manager::instance().register_metric(g);
+  default_static_metric_manager::instance()->register_metric(g);
 
-  auto map1 = default_static_metric_manager::instance().metric_map();
+  auto map1 = default_static_metric_manager::instance()->metric_map();
   for (auto& [k, v] : map1) {
     bool r = k == "get_count" || k == "get_guage_count";
     break;
   }
 
-  CHECK(default_static_metric_manager::instance().metric_count() >= 2);
+  CHECK(default_static_metric_manager::instance()->metric_count() >= 2);
 
   c->inc();
   g->inc();
 
-  auto map = default_static_metric_manager::instance().metric_map();
+  auto map = default_static_metric_manager::instance()->metric_map();
   CHECK(map["get_count"]->as<counter_t>()->value() == 1);
   CHECK(map["get_guage_count"]->as<gauge_t>()->value() == 1);
 
-  auto s = default_static_metric_manager::instance().serialize_static();
+  auto s = default_static_metric_manager::instance()->serialize_static();
   std::cout << s << "\n";
   CHECK(s.find("get_count 1") != std::string::npos);
   CHECK(s.find("get_guage_count 1") != std::string::npos);
 
   auto m =
-      default_static_metric_manager::instance().get_metric_static<counter_t>(
+      default_static_metric_manager::instance()->get_metric_static<counter_t>(
           "get_count");
   CHECK(m->as<counter_t>()->value() == 1);
 
   auto m1 =
-      default_static_metric_manager::instance().get_metric_static<gauge_t>(
+      default_static_metric_manager::instance()->get_metric_static<gauge_t>(
           "get_guage_count");
   CHECK(m1->as<gauge_t>()->value() == 1);
 
   auto m2 =
-      default_static_metric_manager::instance().get_metric_static<counter_t>(
+      default_static_metric_manager::instance()->get_metric_static<counter_t>(
           "not_exist");
   CHECK(m2 == nullptr);
 }
@@ -1076,58 +1076,58 @@ struct test_id_t {};
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = dynamic_metric_manager<test_id_t<1>>;
 
-  metric_mgr::instance().create_metric_dynamic<dynamic_counter_2t>(
+  metric_mgr::instance()->create_metric_dynamic<dynamic_counter_2t>(
       "test_counter", "", std::array<std::string, 2>{});
-  metric_mgr::instance().create_metric_dynamic<dynamic_counter_2t>(
+  metric_mgr::instance()->create_metric_dynamic<dynamic_counter_2t>(
       "test_counter2", "", std::array<std::string, 2>{});
 
-  size_t count = metric_mgr::instance().metric_count();
+  size_t count = metric_mgr::instance()->metric_count();
   CHECK(count == 2);
 
-  metric_mgr::instance().remove_metric("test_counter");
-  count = metric_mgr::instance().metric_count();
+  metric_mgr::instance()->remove_metric("test_counter");
+  count = metric_mgr::instance()->metric_count();
   CHECK(count == 1);
 
-  metric_mgr::instance().remove_metric(std::vector<std::string>{});
-  count = metric_mgr::instance().metric_count();
+  metric_mgr::instance()->remove_metric(std::vector<std::string>{});
+  count = metric_mgr::instance()->metric_count();
   CHECK(count == 1);
 
   std::shared_ptr<dynamic_metric> ptr = nullptr;
-  metric_mgr::instance().remove_metric(ptr);
-  count = metric_mgr::instance().metric_count();
+  metric_mgr::instance()->remove_metric(ptr);
+  count = metric_mgr::instance()->metric_count();
   CHECK(count == 1);
 
-  metric_mgr::instance().remove_metric(
+  metric_mgr::instance()->remove_metric(
       std::vector<std::shared_ptr<dynamic_metric>>{});
-  count = metric_mgr::instance().metric_count();
+  count = metric_mgr::instance()->metric_count();
   CHECK(count == 1);
 
-  metric_mgr::instance().remove_metric("test_counter2");
-  count = metric_mgr::instance().metric_count();
+  metric_mgr::instance()->remove_metric("test_counter2");
+  count = metric_mgr::instance()->metric_count();
   CHECK(count == 0);
 
   using metric_mgr2 = static_metric_manager<test_id_t<2>>;
-  auto c = metric_mgr2::instance().create_metric_static<counter_t>(
+  auto c = metric_mgr2::instance()->create_metric_static<counter_t>(
       "test_static_counter", "");
-  auto c2 = metric_mgr2::instance().create_metric_static<counter_t>(
+  auto c2 = metric_mgr2::instance()->create_metric_static<counter_t>(
       "test_static_counter2", "");
   c.second->inc();
   c2.second->inc();
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  auto s = metric_mgr2::instance().serialize_to_json_static();
+  auto s = metric_mgr2::instance()->serialize_to_json_static();
   std::cout << s << "\n";
 #endif
-  count = metric_mgr2::instance().metric_count();
+  count = metric_mgr2::instance()->metric_count();
   CHECK(count == 2);
 }
 
 TEST_CASE("test filter metrics static") {
   using metric_mgr = static_metric_manager<test_id_t<3>>;
-  auto c = metric_mgr::instance().create_metric_static<counter_t>(
+  auto c = metric_mgr::instance()->create_metric_static<counter_t>(
       "test_static_counter", "",
       std::map<std::string, std::string>{{"method", "GET"}});
-  auto c2 = metric_mgr::instance().create_metric_static<counter_t>(
+  auto c2 = metric_mgr::instance()->create_metric_static<counter_t>(
       "test_static_counter2", "",
       std::map<std::string, std::string>{{"url", "/"}});
   c.second->inc();
@@ -1136,7 +1136,7 @@ TEST_CASE("test filter metrics static") {
   metric_filter_options options;
   options.name_regex = ".*counter.*";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.size() == 2);
 
     auto s = manager_helper::serialize(metrics);
@@ -1146,7 +1146,7 @@ TEST_CASE("test filter metrics static") {
 
   options.label_regex = ".*ur.*";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_static_counter2") != std::string::npos);
@@ -1155,7 +1155,7 @@ TEST_CASE("test filter metrics static") {
 
   options.name_regex = "no_such_name";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
@@ -1164,7 +1164,7 @@ TEST_CASE("test filter metrics static") {
   options = {};
   options.label_regex = "no_such_label";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
@@ -1186,7 +1186,7 @@ TEST_CASE("test filter metrics static") {
   // don't filter
   options = {};
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.size() == 2);
   }
 
@@ -1194,7 +1194,7 @@ TEST_CASE("test filter metrics static") {
   options.label_regex = ".*ur.*";
   options.is_white = false;
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_static_counter") != std::string::npos);
@@ -1205,7 +1205,7 @@ TEST_CASE("test filter metrics static") {
   options.label_regex = ".*ur.*";
   options.is_white = false;
   {
-    auto metrics = metric_mgr::instance().filter_metrics_static(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_static(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_static_counter") != std::string::npos);
@@ -1218,10 +1218,10 @@ TEST_CASE("test filter metrics static") {
 TEST_CASE("test filter metrics dynamic") {
   using metric_mgr = dynamic_metric_manager<test_id_t<4>>;
   auto [ec, c] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_1t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_1t>(
           "test_dynamic_counter", "", std::array<std::string, 1>{"method"});
   auto [ec2, c2] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_1t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_1t>(
           "test_dynamic_counter2", "", std::array<std::string, 1>{"url"});
   c->inc({"GET"});
   c->inc({"POST"});
@@ -1231,7 +1231,7 @@ TEST_CASE("test filter metrics dynamic") {
   metric_filter_options options;
   options.name_regex = ".*counter.*";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 2);
 
     auto s = manager_helper::serialize(metrics);
@@ -1241,7 +1241,7 @@ TEST_CASE("test filter metrics dynamic") {
 
   options.label_regex = ".*ur.*";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_dynamic_counter2") != std::string::npos);
@@ -1250,7 +1250,7 @@ TEST_CASE("test filter metrics dynamic") {
 
   options.name_regex = "no_such_name";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
@@ -1259,7 +1259,7 @@ TEST_CASE("test filter metrics dynamic") {
   options = {};
   options.label_regex = "no_such_label";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.empty());
     auto s = manager_helper::serialize(metrics);
     CHECK(s.empty());
@@ -1268,7 +1268,7 @@ TEST_CASE("test filter metrics dynamic") {
   // don't filter
   options = {};
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 2);
   }
 
@@ -1276,7 +1276,7 @@ TEST_CASE("test filter metrics dynamic") {
   options.label_regex = ".*ur.*";
   options.is_white = false;
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
@@ -1287,7 +1287,7 @@ TEST_CASE("test filter metrics dynamic") {
   options.label_regex = ".*ur.*";
   options.is_white = false;
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
     auto s = manager_helper::serialize(metrics);
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
@@ -1299,25 +1299,25 @@ TEST_CASE("test filter metrics dynamic") {
 
 TEST_CASE("test get metric by static labels and label") {
   using metric_mgr = static_metric_manager<test_id_t<9>>;
-  metric_mgr::instance().create_metric_static<counter_t>(
+  metric_mgr::instance()->create_metric_static<counter_t>(
       "http_req_test", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
-  metric_mgr::instance().create_metric_static<gauge_t>(
+  metric_mgr::instance()->create_metric_static<gauge_t>(
       "http_req_test1", "",
       std::map<std::string, std::string>{{"method", "POST"}, {"url", "/"}});
-  metric_mgr::instance().create_metric_static<counter_t>(
+  metric_mgr::instance()->create_metric_static<counter_t>(
       "http_req_test2", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
 
-  auto v = metric_mgr::instance().get_metric_by_label(
+  auto v = metric_mgr::instance()->get_metric_by_label(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
   CHECK(v[0]->name() == "http_req_test2");
 
-  v = metric_mgr::instance().get_metric_by_label(
+  v = metric_mgr::instance()->get_metric_by_label(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   CHECK(v[0]->name() == "http_req_test");
 
-  auto [ec, h1] = metric_mgr::instance().create_metric_static<histogram_t>(
+  auto [ec, h1] = metric_mgr::instance()->create_metric_static<histogram_t>(
       "http_req_static_hist", "help",
       std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
@@ -1331,22 +1331,22 @@ TEST_CASE("test get metric by static labels and label") {
 
   auto map =
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}};
-  auto [ec1, s1] = metric_mgr::instance().create_metric_static<summary_t>(
+  auto [ec1, s1] = metric_mgr::instance()->create_metric_static<summary_t>(
       "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   s1->observe(23);
 
-  auto vec = metric_mgr::instance().get_metric_by_label(map);
+  auto vec = metric_mgr::instance()->get_metric_by_label(map);
   CHECK(vec.size() == 3);
 
   {
     using metric_mgr2 = static_metric_manager<test_id_t<19>>;
-    auto [ec, s2] = metric_mgr2::instance().create_metric_static<summary_t>(
+    auto [ec, s2] = metric_mgr2::instance()->create_metric_static<summary_t>(
         "http_req_static_summary2", "help", std::vector{0.5, 0.9, 0.95, 0.99},
         map);
     s2->observe(23);
 
-    auto vec = metric_mgr2::instance().get_metric_by_label(map);
+    auto vec = metric_mgr2::instance()->get_metric_by_label(map);
     CHECK(vec.size() == 1);
   }
 }
@@ -1354,19 +1354,19 @@ TEST_CASE("test get metric by static labels and label") {
 TEST_CASE("test get metric by dynamic labels") {
   using metric_mgr = dynamic_metric_manager<test_id_t<10>>;
   auto [ec, c] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static", "", std::array<std::string, 2>{"method", "code"});
 
   auto [ec1, c1] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static1", "", std::array<std::string, 2>{"method", "code"});
 
   auto [ec2, c2] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static2", "", std::array<std::string, 2>{"method", "code"});
 
   auto [ec3, c3] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static3", "", std::array<std::string, 2>{"method", "code"});
 
   c->inc({"POST", "200"});
@@ -1375,44 +1375,45 @@ TEST_CASE("test get metric by dynamic labels") {
   c3->inc({"POST", "400"});
 
   auto [ec4, c4] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static4", "", std::array<std::string, 2>{"host", "url"});
 
   auto [ec5, c5] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "http_req_static5", "", std::array<std::string, 2>{"host", "url"});
 
   c4->inc({"shanghai", "/"});
   c5->inc({"shanghai", "/test"});
 
   auto vec =
-      metric_mgr::instance().filter_metrics_by_label_value(std::regex("POST"));
+      metric_mgr::instance()->filter_metrics_by_label_value(std::regex("POST"));
   CHECK(vec.size() == 3);
 
-  vec = metric_mgr::instance().filter_metrics_by_label_value(std::regex("GET"));
+  vec =
+      metric_mgr::instance()->filter_metrics_by_label_value(std::regex("GET"));
   CHECK(vec.size() == 1);
 
-  vec = metric_mgr::instance().filter_metrics_by_label_value(
+  vec = metric_mgr::instance()->filter_metrics_by_label_value(
       std::regex("shanghai"));
   CHECK(vec.size() == 2);
 
-  vec = metric_mgr::instance().filter_metrics_by_label_value(std::regex("/"));
+  vec = metric_mgr::instance()->filter_metrics_by_label_value(std::regex("/"));
   CHECK(vec.size() == 1);
 
-  vec =
-      metric_mgr::instance().filter_metrics_by_label_value(std::regex("/test"));
+  vec = metric_mgr::instance()->filter_metrics_by_label_value(
+      std::regex("/test"));
   CHECK(vec.size() == 1);
 
-  vec =
-      metric_mgr::instance().filter_metrics_by_label_value(std::regex("/none"));
+  vec = metric_mgr::instance()->filter_metrics_by_label_value(
+      std::regex("/none"));
   CHECK(vec.size() == 0);
 
   vec =
-      metric_mgr::instance().filter_metrics_by_label_value(std::regex("HEAD"));
+      metric_mgr::instance()->filter_metrics_by_label_value(std::regex("HEAD"));
   CHECK(vec.size() == 0);
 
   auto [ec6, h1] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_histogram_2t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_histogram_2t>(
           "http_req_static_hist", "help",
           std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
           std::array<std::string, 2>{"method", "url"});
@@ -1420,19 +1421,20 @@ TEST_CASE("test get metric by dynamic labels") {
   h1->observe({"GET", "/"}, 23);
 
   auto [ec7, s1] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_summary_2>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_summary_2>(
           "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
           std::array<std::string, 2>{"method", "url"});
   s1->observe({"GET", "/"}, 23);
 
-  vec = metric_mgr::instance().filter_metrics_by_label_value(std::regex("GET"));
+  vec =
+      metric_mgr::instance()->filter_metrics_by_label_value(std::regex("GET"));
   CHECK(vec.size() >= 2);
 
-  auto str = metric_mgr::instance().serialize_dynamic();
+  auto str = metric_mgr::instance()->serialize_dynamic();
   std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  auto json_str = metric_mgr::instance().serialize_to_json_dynamic();
+  auto json_str = metric_mgr::instance()->serialize_to_json_dynamic();
   std::cout << json_str << "\n";
 #endif
 }
@@ -1759,13 +1761,13 @@ TEST_CASE("test serialize with multiple threads") {
 
   using test_metric_manager = dynamic_metric_manager<test_id_t<20>>;
 
-  test_metric_manager::instance().register_metric({c, g, h1, c1});
+  test_metric_manager::instance()->register_metric({c, g, h1, c1});
 
   c->inc({"POST"}, 1);
   g->inc({"GET"}, 1);
   h1->observe({"HEAD"}, 1);
 
-  auto s = test_metric_manager::instance().serialize_dynamic();
+  auto s = test_metric_manager::instance()->serialize_dynamic();
   std::cout << s;
   CHECK(!s.empty());
   CHECK(s.find("get_count") != std::string::npos);
@@ -1774,7 +1776,7 @@ TEST_CASE("test serialize with multiple threads") {
   CHECK(s.find("get_count3") == std::string::npos);
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  auto json = test_metric_manager::instance().serialize_to_json_dynamic();
+  auto json = test_metric_manager::instance()->serialize_to_json_dynamic();
   std::cout << json << "\n";
   CHECK(!json.empty());
   CHECK(json.find("get_count") != std::string::npos);
@@ -1787,19 +1789,20 @@ TEST_CASE("test serialize with multiple threads") {
 TEST_CASE("test system metric") {
   start_system_metric();
 
-  auto s = system_metric_manager::instance().serialize_static();
+  auto s = system_metric_manager::instance()->serialize_static();
   std::cout << s;
   CHECK(!s.empty());
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  auto json = system_metric_manager::instance().serialize_to_json_static();
+  auto json = system_metric_manager::instance()->serialize_to_json_static();
   std::cout << json << "\n";
   CHECK(!json.empty());
 #endif
 
   using metric_manager = dynamic_metric_manager<test_id_t<21>>;
-  auto c = metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-      std::string("test_qps"), "", std::array<std::string, 1>{"url"});
+  auto c =
+      metric_manager::instance()->create_metric_dynamic<dynamic_counter_1t>(
+          std::string("test_qps"), "", std::array<std::string, 1>{"url"});
   c.second->inc({"/"}, 42);
   using root = metric_collector_t<metric_manager, default_static_metric_manager,
                                   system_metric_manager>;
@@ -1820,27 +1823,27 @@ TEST_CASE("test metric capacity") {
   std::cout << ylt::metric::metric_t::g_user_metric_count << "\n";
   using test_metric_manager = dynamic_metric_manager<test_id_t<21>>;
   set_metric_capacity(ylt::metric::metric_t::g_user_metric_count + 2);
-  auto c =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter"), "", std::array<std::string, 1>{});
+  auto c = test_metric_manager::instance()
+               ->create_metric_dynamic<dynamic_counter_1t>(
+                   std::string("counter"), "", std::array<std::string, 1>{});
   CHECK(c.second != nullptr);
-  auto c1 =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter1"), "", std::array<std::string, 1>{});
+  auto c1 = test_metric_manager::instance()
+                ->create_metric_dynamic<dynamic_counter_1t>(
+                    std::string("counter1"), "", std::array<std::string, 1>{});
   CHECK(c1.second != nullptr);
-  auto c2 =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter2"), "", std::array<std::string, 1>{});
+  auto c2 = test_metric_manager::instance()
+                ->create_metric_dynamic<dynamic_counter_1t>(
+                    std::string("counter2"), "", std::array<std::string, 1>{});
   CHECK(c2.second == nullptr);
   set_metric_capacity(10000000);
 
   auto process_memory_resident =
-      system_metric_manager::instance().get_metric_static<gauge_t>(
+      system_metric_manager::instance()->get_metric_static<gauge_t>(
           "ylt_process_memory_resident");
   std::cout << (int64_t)process_memory_resident->value() << "\n";
 
   auto process_memory_virtual =
-      system_metric_manager::instance().get_metric_static<gauge_t>(
+      system_metric_manager::instance()->get_metric_static<gauge_t>(
           "ylt_process_memory_virtual");
   std::cout << (int64_t)process_memory_virtual->value() << "\n";
 }
@@ -1848,59 +1851,61 @@ TEST_CASE("test metric capacity") {
 
 TEST_CASE("test remove dynamic metric") {
   using test_metric_manager = dynamic_metric_manager<test_id_t<22>>;
-  auto pair =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter"), "", std::array<std::string, 1>{});
+  auto pair = test_metric_manager::instance()
+                  ->create_metric_dynamic<dynamic_counter_1t>(
+                      std::string("counter"), "", std::array<std::string, 1>{});
   CHECK(pair.second != nullptr);
   auto pair1 =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter1"), "", std::array<std::string, 1>{});
+      test_metric_manager::instance()
+          ->create_metric_dynamic<dynamic_counter_1t>(
+              std::string("counter1"), "", std::array<std::string, 1>{});
   CHECK(pair1.second != nullptr);
   auto pair2 =
-      test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
-          std::string("counter2"), "", std::array<std::string, 1>{});
+      test_metric_manager::instance()
+          ->create_metric_dynamic<dynamic_counter_1t>(
+              std::string("counter2"), "", std::array<std::string, 1>{});
   CHECK(pair2.second != nullptr);
 
   auto c = pair.second;
   auto c1 = pair1.second;
   auto c2 = pair2.second;
 
-  test_metric_manager::instance().remove_metric(c);
-  CHECK(test_metric_manager::instance().metric_count() == 2);
-  test_metric_manager::instance().remove_metric(c1);
-  CHECK(test_metric_manager::instance().metric_count() == 1);
-  test_metric_manager::instance().remove_metric(c2);
-  CHECK(test_metric_manager::instance().metric_count() == 0);
+  test_metric_manager::instance()->remove_metric(c);
+  CHECK(test_metric_manager::instance()->metric_count() == 2);
+  test_metric_manager::instance()->remove_metric(c1);
+  CHECK(test_metric_manager::instance()->metric_count() == 1);
+  test_metric_manager::instance()->remove_metric(c2);
+  CHECK(test_metric_manager::instance()->metric_count() == 0);
 
-  test_metric_manager::instance().register_metric({c, c1, c2});
-  CHECK(test_metric_manager::instance().metric_count() == 3);
-  test_metric_manager::instance().remove_metric("counter");
-  CHECK(test_metric_manager::instance().metric_count() == 2);
-  test_metric_manager::instance().remove_metric(
+  test_metric_manager::instance()->register_metric({c, c1, c2});
+  CHECK(test_metric_manager::instance()->metric_count() == 3);
+  test_metric_manager::instance()->remove_metric("counter");
+  CHECK(test_metric_manager::instance()->metric_count() == 2);
+  test_metric_manager::instance()->remove_metric(
       std::vector<std::string>{"counter1", "counter2"});
-  CHECK(test_metric_manager::instance().metric_count() == 0);
+  CHECK(test_metric_manager::instance()->metric_count() == 0);
 
-  test_metric_manager::instance().register_metric({c, c1, c2});
-  CHECK(test_metric_manager::instance().metric_count() == 3);
-  test_metric_manager::instance().remove_metric({c1, c2});
-  CHECK(test_metric_manager::instance().metric_count() == 1);
-  auto r = test_metric_manager::instance().register_metric({c, c1});
+  test_metric_manager::instance()->register_metric({c, c1, c2});
+  CHECK(test_metric_manager::instance()->metric_count() == 3);
+  test_metric_manager::instance()->remove_metric({c1, c2});
+  CHECK(test_metric_manager::instance()->metric_count() == 1);
+  auto r = test_metric_manager::instance()->register_metric({c, c1});
   CHECK(!r);
-  CHECK(test_metric_manager::instance().metric_count() == 1);
+  CHECK(test_metric_manager::instance()->metric_count() == 1);
 
-  r = test_metric_manager::instance().register_metric({c1, c});
+  r = test_metric_manager::instance()->register_metric({c1, c});
   CHECK(!r);
-  CHECK(test_metric_manager::instance().metric_count() == 2);
+  CHECK(test_metric_manager::instance()->metric_count() == 2);
 }
 
 TEST_CASE("testFilterMetricsDynamicWithMultiLabel") {
   using metric_mgr = dynamic_metric_manager<test_id_t<31>>;
   auto [ec, c] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "test_dynamic_counter", "",
           std::array<std::string, 2>{"method", "bucket"});
   auto [ec2, c2] =
-      metric_mgr::instance().create_metric_dynamic<dynamic_counter_t>(
+      metric_mgr::instance()->create_metric_dynamic<dynamic_counter_t>(
           "test_dynamic_counter2", "",
           std::array<std::string, 2>{"url", "bucket"});
   c->inc({"GET", "bucket1"});
@@ -1908,44 +1913,44 @@ TEST_CASE("testFilterMetricsDynamicWithMultiLabel") {
   c2->inc({"/", "bucket1"});
   c2->inc({"/test", "bucket3"});
 
-  auto counter = metric_mgr::instance().get_metric_dynamic<dynamic_counter_t>(
+  auto counter = metric_mgr::instance()->get_metric_dynamic<dynamic_counter_t>(
       "test_dynamic_counter");
   CHECK(counter != nullptr);
 
   metric_filter_options options;
   options.name_regex = ".*counter.*";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 2);
 
-    auto s = metric_mgr::instance().serialize(metrics);
+    auto s = metric_mgr::instance()->serialize(metrics);
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
     std::cout << s << "\n";
   }
 
   options.label_regex = "bucket";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 2);
-    auto s = metric_mgr::instance().serialize(metrics);
+    auto s = metric_mgr::instance()->serialize(metrics);
     CHECK(s.find("test_dynamic_counter2") != std::string::npos);
     std::cout << s << "\n";
   }
 
   options.label_regex = "method";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
-    auto s = metric_mgr::instance().serialize(metrics);
+    auto s = metric_mgr::instance()->serialize(metrics);
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
     std::cout << s << "\n";
   }
 
   options.label_regex = "url";
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
-    auto s = metric_mgr::instance().serialize(metrics);
+    auto s = metric_mgr::instance()->serialize(metrics);
     CHECK(s.find("test_dynamic_counter2") != std::string::npos);
     std::cout << s << "\n";
   }
@@ -1954,15 +1959,15 @@ TEST_CASE("testFilterMetricsDynamicWithMultiLabel") {
   options.label_regex = ".*bucket.*";
   options.is_white = false;
   {
-    auto metrics = metric_mgr::instance().filter_metrics_dynamic(options);
+    auto metrics = metric_mgr::instance()->filter_metrics_dynamic(options);
     CHECK(metrics.size() == 0);
   }
 }
 
 TEST_CASE("test metric manager clean expired label") {
   set_label_max_age(std::chrono::seconds(1), std::chrono::seconds(1));
-  auto& inst = dynamic_metric_manager<test_tag>::instance();
-  auto pair = inst.create_metric_dynamic<dynamic_counter_1t>(
+  auto inst = dynamic_metric_manager<test_tag>::instance();
+  auto pair = inst->create_metric_dynamic<dynamic_counter_1t>(
       std::string("some_counter"), "", std::array<std::string, 1>{"url"});
   auto summary = std::make_shared<basic_dynamic_summary<2>>(
       std::string("test_summary"), std::string("summary help"),
@@ -1972,8 +1977,8 @@ TEST_CASE("test metric manager clean expired label") {
       std::string("test"), std::string("help"),
       std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
       std::array<std::string, 2>{"method", "url"});
-  inst.register_metric(summary);
-  inst.register_metric(h);
+  inst->register_metric(summary);
+  inst->register_metric(h);
   auto c = pair.second;
   c->inc({"/"});
   c->inc({"/test"});
