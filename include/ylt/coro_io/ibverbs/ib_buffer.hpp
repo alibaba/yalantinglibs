@@ -164,7 +164,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
         self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
                                   (ssize_t)self->buffer_size());
-        ELOG_INFO << "finish ib_buffer timeout free of pool{" << self.get()
+        ELOG_WARN << "finish ib_buffer timeout free of pool{" << self.get()
                   << "}, now ib_buffer cnt: " << self->free_buffers_.size()
                   << " mem usage:"
                   << (int64_t)(std::round(self->memory_usage() /
@@ -213,15 +213,16 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
   void collect_free(ib_buffer_t& buffer) {
     if (buffer) {
-      if (check_usage_out_of_limit()) {
+      if (!memory_out_of_limit()) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
         enqueue(buffer);
       }
       else {
-        ELOG_TRACE << "out of max connection limit <<" << max_memory_usage()
-                   << "buffer{data:" << buffer->addr << ",len" << buffer->length
-                   << "} wont be collect";
+        ELOG_TRACE << "out of max connection limit " << max_memory_usage()
+                   << "now usage:" << buffer_size()
+                   << ",buffer{data:" << buffer->addr << ",len"
+                   << buffer->length << "} wont be collect";
       }
     }
     return;
@@ -257,8 +258,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   std::size_t modify_memory_usage(ssize_t count) {
     return memory_usage_recorder_->fetch_add(count, std::memory_order_release);
   }
-  bool check_usage_out_of_limit() {
-    return max_memory_usage() <= buffer_size() + memory_usage();
+  bool memory_out_of_limit() {
+    return max_memory_usage() < buffer_size() + memory_usage();
   }
   ib_buffer_t get_buffer() {
     std::unique_ptr<ib_buffer_impl_t> buffer;
@@ -267,7 +268,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     if (!buffer) {
       ELOG_TRACE
           << "There is no free buffer. Allocate and regist new buffer now";
-      if (check_usage_out_of_limit()) [[unlikely]] {
+      if (memory_out_of_limit()) [[unlikely]] {
         ELOG_WARN << "Memory out of pool limit";
         return ib_buffer_t{};
       }
