@@ -17,6 +17,11 @@ template <typename T, typename View,
 IGUANA_INLINE void from_json(T &value, const View &view);
 
 namespace detail {
+template <typename U, typename It, std::enable_if_t<optional_v<U>, int> = 0>
+IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
+
+template <typename U, typename It, std::enable_if_t<tuple_v<U>, int> = 0>
+IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 
 template <typename U, typename It,
           std::enable_if_t<sequence_container_v<U>, int> = 0>
@@ -423,7 +428,7 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   }
 }
 
-template <typename U, typename It, std::enable_if_t<tuple_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<tuple_v<U>, int>>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   skip_ws(it, end);
   match<'['>(it, end);
@@ -447,7 +452,7 @@ IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   match<']'>(it, end);
 }
 
-template <typename U, typename It, std::enable_if_t<optional_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<optional_v<U>, int>>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   skip_ws(it, end);
   using T = std::remove_reference_t<U>;
