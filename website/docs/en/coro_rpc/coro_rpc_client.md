@@ -154,10 +154,6 @@ The `ib_device_t` manages the connection context and buffers required during the
 
 By modifying the configuration of `ib_device_t`, users can assign different network interfaces to RPC connections and use separate buffers.
 
-以下是该 Markdown 文档的英文翻译，包括注释内容：
-
----
-
 1. Modify the default device configuration
 ```cpp
   // The configuration only takes effect on the first invocation
