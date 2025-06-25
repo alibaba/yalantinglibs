@@ -133,7 +133,7 @@ target_compile_features(main PRIVATE cxx_std_20)
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install ylt by cmake).
 3. Add `include/ylt/standalone` to include path(skip it if you have install ylt by cmake).
 4. Enable `c++20` standard by option `-std=c++20`(g++/clang++) or `/std:c++20`(msvc). The serialization and log libraries need at least c++17, the network and coroutine libraries need at least c++20.
-5. If you use any header with `coro_` prefix, add link option `-pthread` in linux, add option `-fcoroutines` when you use g++10.
+5. Add link option `-pthread`,`-ldl` in linux, add option `-fcoroutines` when you use coroutine in g++10.
 
 ### More Details:
 For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/blob/main/CMakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).

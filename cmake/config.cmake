@@ -1,4 +1,8 @@
 message(STATUS "-------------YLT CONFIG SETTING-------------")
+target_link_libraries(yalantinglibs INTERFACE Threads::Threads)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_libraries(yalantinglibs INTERFACE dl)
+endif()
 option(YLT_ENABLE_SSL "Enable ssl support" OFF)
 message(STATUS "YLT_ENABLE_SSL: ${YLT_ENABLE_SSL}")
 if (YLT_ENABLE_SSL)

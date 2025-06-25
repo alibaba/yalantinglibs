@@ -112,7 +112,7 @@ cmake --build .
 2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
 3. 将 `include/ylt/standalone` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
 4. 通过选项`-std=c++20`(g++/clang++) or `/std:c++20`(msvc)启用C++20标准。（序列化库和日志库至少需要c++17，网络库与协程至少需要C++20）
-5. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++10`编译器需要添加选项 `-fcoroutines`。
+5. 使用g++时需要添加选项 `-pthread`,`-ldl` . 在`g++10`编译器下使用协程需要添加选项 `-fcoroutines`。
 
 - 更多细节:
 如需查看更多细节, 除了`example/cmakelist.txt`，你还可以参考 [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
