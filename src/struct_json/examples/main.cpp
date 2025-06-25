@@ -108,7 +108,25 @@ void test_optional() {
   assert(v.name == v1.name);
 }
 
+struct Foo {
+  std::vector<std::tuple<int, std::string>> i;
+};
+YLT_REFL(Foo, i);
+
 int main() {
+  Foo f;
+  f.i.emplace_back(1, "2");
+  f.i.emplace_back(3, "4");
+  std::string json_str;
+  struct_json::to_json(f, json_str);
+  std::cout << "Serialized: " << json_str << " \n";
+  assert(!json_str.empty());
+
+  Foo loaded_config;
+  struct_json::from_json(loaded_config, json_str);
+
+  assert(loaded_config.i == f.i);
+
   person p{"tom", 20};
   std::string str;
 
