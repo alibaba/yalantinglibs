@@ -109,18 +109,6 @@ cmake ..
 cmake --build . --config debug # add -j, if you have enough memory to parallel compile
 ctest . # run tests
 
-```
-
-- Build in bazel:
-```shell
-bazel build ylt # Please make sure bazel in you bin path.
-bazel build coro_http_example # Or replace in anyone you want to build and test.
-# Actually you might take it in other project in prefix @com_alibaba_yalangtinglibs, like
-bazel build @com_alibaba_yalangtinglibs://ylt
-
-bazel version > 7
-bazel build ylt --enable_bzlmod
-```
 
 You can see the test/example/benchmark executable file in `./build/output/`.
 
@@ -139,7 +127,7 @@ cmake --install . # --prefix ./user_defined_install_path
 
 4. start develop
 
-- Use Cmake:
+- start by example:
 
 After install ylt, copy then open the directory `src/*/examples`, then:
 
@@ -150,7 +138,15 @@ cmake ..
 cmake --build .
 ```
 
-#### Use ylt in your project Manually:
+- import ylt to your project by cmake
+
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+
+- import ylt in your project Manually if you don't want to use cmake:
 
 1. Add `include/` directory to include path(skip it if you have install ylt into default include path).
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install ylt by cmake).
