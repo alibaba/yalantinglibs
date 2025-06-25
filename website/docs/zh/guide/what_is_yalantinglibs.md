@@ -105,7 +105,7 @@ git clone https://github.com/alibaba/yalantinglibs.git
 
 ```shell
 cmake ..
-cmake --build . --config debug # 可以在末尾加上`-j 选项, 通过并行编译加速
+cmake --build . --config debug # 可以在末尾加上-j 选项, 通过并行编译加速
 ctest . # 执行测试
 ```
 
@@ -129,7 +129,7 @@ cmake --install . # --prefix ./user_defined_install_path
 
 4. 开始编程
 
-- 使用CMAKE:
+- 从example开始开发:
 
 安装完成后，你可以直接拷贝并打开文件夹`src/*/examples`，然后执行以下命令：
 
@@ -140,7 +140,15 @@ cmake ..
 cmake --build .
 ```
 
-- 手动编译:
+- 使用cmake，将ylt导入到你的项目:
+
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+
+- 如果不使用cmake，需要手动导入依赖:
 
 1. 将 `include/`加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
 2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
