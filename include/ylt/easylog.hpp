@@ -66,7 +66,7 @@ class logger {
     }
 
     if (record.get_severity() == Severity::CRITICAL) {
-#ifdef __cpp_lib_stacktrace
+#if __cpp_lib_stacktrace && __cplusplus >= 202302L
       std::cerr << std::stacktrace::current() << std::endl;
 #else
       auto str = ylt::util::b_stacktrace_get_string();

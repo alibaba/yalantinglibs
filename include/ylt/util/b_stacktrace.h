@@ -340,6 +340,9 @@ inline char* b_stacktrace_to_string(b_stacktrace_handle h) {
 }
 }
 
+#undef max 
+#undef min
+
 #elif defined(__linux__)
 
 #include <execinfo.h>
