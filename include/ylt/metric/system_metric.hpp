@@ -395,6 +395,11 @@ inline void start_stat(std::weak_ptr<coro_io::period_timer> weak, auto manager,
 }
 }  // namespace detail
 
+static std::shared_ptr<coro_io::io_context_pool> g_system_metric_exucutor;
+static std::shared_ptr<coro_io::period_timer> g_system_metric_timer;
+static std::once_flag g_start_system_metric_flag;
+static std::once_flag g_stop_system_metric_flag;
+
 inline bool start_system_metric() {
   system_metric_manager::instance()->create_metric_static<gauge_t>(
       "ylt_process_cpu_usage", "");
@@ -446,14 +451,29 @@ inline bool start_system_metric() {
   system_metric_manager::instance()->create_metric_static<gauge_t>(
       "ylt_process_io_write_second", "");
 
-  static auto exucutor = coro_io::create_io_context_pool(1);
-  auto timer =
-      std::make_shared<coro_io::period_timer>(exucutor->get_executor());
+  std::call_once(g_start_system_metric_flag, [] {
+    g_system_metric_exucutor = coro_io::create_io_context_pool(1);
+    g_system_metric_timer = std::make_shared<coro_io::period_timer>(
+        g_system_metric_exucutor->get_executor());
+  });
+
   auto mgr = system_metric_manager::instance();
   auto label_count = dynamic_metric::g_user_metric_label_count;
-  detail::start_stat(timer, mgr, label_count);
+  detail::start_stat(g_system_metric_timer, mgr, label_count);
 
   return true;
+}
+
+inline void stop_system_metric() {
+  std::call_once(g_stop_system_metric_flag, [] {
+    if (g_system_metric_timer) {
+      asio::error_code ignore_ec;
+      g_system_metric_timer->cancel(ignore_ec);
+    }
+    if (g_system_metric_exucutor) {
+      g_system_metric_exucutor->stop();
+    }
+  });
 }
 }  // namespace ylt::metric
 #endif
