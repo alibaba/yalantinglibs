@@ -45,7 +45,17 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 
 ## 安装&编译
 
-### 通过包管理器安装
+### 通过HomeBrew安装
+
+1. 安装 [homebrew](https://brew.sh/)
+2. 运行 `brew install yalantinglibs`
+3. 如果使用cmake，添加如下代码:
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+### 通过vcpkg包管理器安装
 
 1. 下载[vcpkg](https://github.com/microsoft/vcpkg)
 2. 执行命令：`./vcpkg install yalantinglibs`
@@ -53,6 +63,30 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 ```cmake
 find_package(yalantinglibs CONFIG REQUIRED)
 target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+### Cmake FetchContent
+
+也可以使用Cmake FetchContent来安装yalantinglibs。
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    yalantinglibs
+    GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
+    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_SHALLOW 1 # optional ( --depth=1 )
+)
+
+FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
 ```
 
 ### 手动安装
