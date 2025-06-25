@@ -31,7 +31,7 @@
 #endif
 #endif
 
-#if __has_include(<stacktrace>)
+#if __has_include(<stacktrace>) && __cplusplus >= 202302L
 #include <stacktrace>
 #endif
 
