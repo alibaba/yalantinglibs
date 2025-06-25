@@ -10,7 +10,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
@@ -257,7 +256,7 @@ int main(int argc, char** argv) {
 
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::g_ib_device(
+    coro_io::get_global_ib_device(
         {.buffer_pool_config = {.buffer_size = conf.buffer_size}});
   }
 #endif

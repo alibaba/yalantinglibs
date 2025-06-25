@@ -65,7 +65,7 @@ void basic_example() {
 // This example is about how to configure the detail ibverbs option.
 void set_option() {
   /* init global buffer pool, should call before any other call*/
-  coro_io::g_ib_device(
+  coro_io::get_global_ib_device(
       {.dev_name = "" /*rdma device name, default is empty, which means choice
                          the first rdma device*/
        ,

@@ -269,8 +269,8 @@ struct ib_socket_shared_state_t
     // assert(r >= 0);
     std::error_code ec;
     if (r) {
-      ELOG_ERROR << std::make_error_code(std::errc{r}).message();
-      return std::make_error_code(std::errc{r});
+      ELOG_INFO << "there isn't any Completion event to read";
+      return std::make_error_code(std::errc{std::errc::io_error});
     }
     ibv_ack_cq_events(cq, 1);
     r = ibv_req_notify_cq(cq, 0);
@@ -709,8 +709,9 @@ class ib_socket_t {
   void init(const config_t& config) {
     conf_ = config;
     if (conf_.device == nullptr) {
-      conf_.device = coro_io::g_ib_device();
+      conf_.device = coro_io::get_global_ib_device();
     }
+    ELOG_INFO << "device name: " << conf_.device->name();
     conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
     conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
     conf_.cap.max_send_sge = std::max<uint32_t>(conf_.cap.max_send_sge, 1);

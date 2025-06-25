@@ -271,10 +271,9 @@ class ib_device_manager_t {
     auto& devices = detail::ib_devices_t::instance();
     for (auto& native_dev : devices.get_devices()) {
       try {
-        auto [iter, is_ok] = device_map_.emplace(
-            native_dev->dev_name,
-            std::make_shared<ib_device_t>(
-                ib_device_t::private_construct_token{}, conf, native_dev));
+        auto dev = std::make_shared<ib_device_t>(
+            ib_device_t::private_construct_token{}, conf, native_dev);
+        auto [iter, is_ok] = device_map_.emplace(dev->name(), dev);
         if (is_ok && default_device_ == nullptr) {
           default_device_ = iter->second;
         }
@@ -313,7 +312,7 @@ inline std::shared_ptr<ib_device_manager_t> g_ib_device_manager(
   return dev_map;
 }
 
-inline std::shared_ptr<ib_device_t> g_ib_device(
+inline std::shared_ptr<ib_device_t> get_global_ib_device(
     const ib_device_t::config_t& conf = {}) {
   static auto dev_map = g_ib_device_manager(conf);
   return dev_map->find_device(conf.dev_name);

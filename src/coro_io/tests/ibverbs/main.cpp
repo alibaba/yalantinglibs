@@ -25,7 +25,8 @@ DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) {
   // easylog::logger<>::instance().init(easylog::Severity::TRACE, false, true,
   //                                  "1.log", 1000000000, 1000, true);
-  coro_io::g_ib_device({.buffer_pool_config = {.buffer_size = 8 * 1024}});
+  coro_io::get_global_ib_device(
+      {.buffer_pool_config = {.buffer_size = 8 * 1024}});
   return doctest::Context(argc, argv).run();
 }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

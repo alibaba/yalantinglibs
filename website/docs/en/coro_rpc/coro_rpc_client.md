@@ -150,14 +150,14 @@ RDMA activation through config:
 
 #### RDMA Device Configuration
 
-The `ib_device_t` manages the connection context and buffers required during the ibverbs transmission process. By default, it uses the global device `coro_io::g_ib_device()`, but users can also specify their own device.
+The `ib_device_t` manages the connection context and buffers required during the ibverbs transmission process. By default, it uses the global device `coro_io::get_global_ib_device()`, but users can also specify their own device.
 
 By modifying the configuration of `ib_device_t`, users can assign different network interfaces to RPC connections and use separate buffers.
 
 1. Modify the default device configuration
 ```cpp
   // The configuration only takes effect on the first invocation
-  coro_io::g_ib_device({ 
+  coro_io::get_global_ib_device({ 
     .buffer_pool_config = {
       .buffer_size = 3 * 1024 * 1024,  // Buffer size
       .max_memory_usage = 20 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
@@ -172,7 +172,7 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
 ```cpp
   coro_rpc_client cli;
   cli.init_ibv({
-    .device = coro_io::g_ib_device({.dev_name = "my_rmda_network_device_name"});
+    .device = coro_io::get_global_ib_device({.dev_name = "my_rmda_network_device_name"});
   });
 ```
 

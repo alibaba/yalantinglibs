@@ -155,14 +155,14 @@ struct ib_socket_t::config_t {
 
 #### ib_device_t
 
-`ib_device_t`管理了ibverbs传输过程中需要使用到的连接上下文和缓冲区。默认使用全局设备`coro_io::g_ib_device()`，用户也可以指定使用自己的设备。
+`ib_device_t`管理了ibverbs传输过程中需要使用到的连接上下文和缓冲区。默认使用全局设备`coro_io::get_global_ib_device()`，用户也可以指定使用自己的设备。
 
 通过修改ib_device_t的配置，可以给rpc连接配置不同的网卡，使用独立的缓冲区。
 
 1. 修改默认的设备配置
 ```cpp
   // 配置只有在第一次调用时才会生效
-  coro_io::g_ib_device({ 
+  coro_io::get_global_ib_device({ 
     .buffer_pool_config = {
       .buffer_size = 3 * 1024 * 1024,  // 缓冲区大小
       .max_memory_usage = 20 * 1024 * 1024, // 最大内存使用量（超过此限制将分配失败）
@@ -177,7 +177,7 @@ struct ib_socket_t::config_t {
 ```cpp
   coro_rpc_client cli;
   cli.init_ibv({
-    .device = coro_io::g_ib_device({.dev_name = "my_rmda_network_device_name"});
+    .device = coro_io::get_global_ib_device({.dev_name = "my_rmda_network_device_name"});
   });
 ```
 
