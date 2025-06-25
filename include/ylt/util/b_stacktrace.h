@@ -301,6 +301,9 @@ inline char* b_stacktrace_to_string(b_stacktrace_handle h) {
     free(symbol);
     return out.buf;
 }
+
+#undef max 
+#undef min
 }
 #elif defined(__APPLE__)
 
@@ -340,8 +343,6 @@ inline char* b_stacktrace_to_string(b_stacktrace_handle h) {
 }
 }
 
-#undef max 
-#undef min
 
 #elif defined(__linux__)
 
