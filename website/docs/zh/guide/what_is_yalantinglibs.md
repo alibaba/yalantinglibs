@@ -212,6 +212,7 @@ auto person2 = deserialize<person>(buffer);
 更多示例[请见](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%BA%8F%E5%88%97%E5%8C%96).
 
 ## struct_json
+
 基于反射的json库，轻松实现结构体和json之间的映射。
 
 ### 快速开始
@@ -223,7 +224,8 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
+// C++17下反射功能不完善，需要使用宏：
+// YLT_REFL(person, name, age);
 
 int main() {
   person p{.name = "tom", .age = 20};
@@ -247,7 +249,8 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
+// C++17下反射功能不完善，需要使用宏：
+// YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -378,11 +381,11 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 
 ## 配置选项
 
-yalantinglibs工程自身支持如下配置项，如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。
+yalantinglibs工程自身支持如下配置项，值可以是`ON`或`OFF`。如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。否则，你需要手动添加相关的宏并导入相关的依赖。
 
 |工程选项|默认值|描述|
 |----------|------------|------|
-|YLT_ENABLE_SSL|OFF|为rpc/http启用可选的ssl支持|
+|YLT_ENABLE_SSL|automatic|为rpc/http启用可选的ssl支持,如果你已经安装了ssl，它会自动启用|
 |YLT_ENABLE_PMR|OFF|启用pmr优化|
 |YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
 |YLT_ENABLE_FILE_IO_URING|OFF|启用io_uring优化|
