@@ -406,7 +406,7 @@ server.init_ssl({
 coro_rpc支持使用rdma：
 ```cpp
 coro_rpc_server server;
-server.init_ibverbs(ibverbs_config{});
+server.init_ibverbs(ib_socket_t::config_t{});
 ```
 
 启用rdma后，服务器将拒接一切非rdma连接。
@@ -426,7 +426,7 @@ struct config_base {
   /*下面设置只有启用SSL才有*/
   std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
   /*下面设置只有启用rdma才有*/
-  std::optional<coro_io::ibverbs_config> ibv_config = std::nullopt; // 配置是否启用rdma
+  std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // 配置是否启用rdma
 };
 struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径

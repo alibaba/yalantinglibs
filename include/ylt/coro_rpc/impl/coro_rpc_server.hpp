@@ -132,7 +132,7 @@ class coro_rpc_server_base {
   }
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_ibv(const coro_io::ibverbs_config &conf = {}) {
+  void init_ibv(const coro_io::ib_socket_t::config_t &conf = {}) {
     ibv_config_ = conf;
   }
 #endif
@@ -451,8 +451,7 @@ class coro_rpc_server_base {
 #ifdef YLT_ENABLE_IBV
         if (ibv_config_.has_value()) {
           try {
-            wrapper = {std::move(socket), executor, *ibv_config_, nullptr,
-                       nullptr};
+            wrapper = {std::move(socket), executor, *ibv_config_};
           } catch (...) {
             init_failed = true;
           }
@@ -544,7 +543,7 @@ class coro_rpc_server_base {
   bool use_ssl_ = false;
 #endif
 #ifdef YLT_ENABLE_IBV
-  std::optional<coro_io::ibverbs_config> ibv_config_;
+  std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
 };
 }  // namespace coro_rpc
