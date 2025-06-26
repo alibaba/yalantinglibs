@@ -395,10 +395,11 @@ inline void start_stat(std::weak_ptr<coro_io::period_timer> weak, auto manager,
 }
 }  // namespace detail
 
-static std::shared_ptr<coro_io::io_context_pool> g_system_metric_exucutor;
-static std::shared_ptr<coro_io::period_timer> g_system_metric_timer;
-static std::once_flag g_start_system_metric_flag;
-static std::once_flag g_stop_system_metric_flag;
+inline static std::shared_ptr<coro_io::io_context_pool>
+    g_system_metric_exucutor;
+inline static std::shared_ptr<coro_io::period_timer> g_system_metric_timer;
+inline static std::once_flag g_start_system_metric_flag;
+inline static std::once_flag g_stop_system_metric_flag;
 
 inline bool start_system_metric() {
   system_metric_manager::instance()->create_metric_static<gauge_t>(
