@@ -307,7 +307,12 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
-    if (!client->has_closed()) {
+    auto tp=client->get_tp();
+    if (std::chrono::steady_clock::now()-tp>std::chrono::hours{1}) {
+      ELOG_WARN << "client{" << client.get()
+                 << "} live too long, wo won't collect it";
+    }
+    else if (!client->has_closed()) {
       if (free_clients_.size() < pool_config_.max_connection) {
         ELOG_TRACE << "collect free client{" << client.get() << "} enqueue";
         enqueue(free_clients_, std::move(client), pool_config_.idle_timeout);
