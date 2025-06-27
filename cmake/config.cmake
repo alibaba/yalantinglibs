@@ -1,6 +1,6 @@
 message(STATUS "-------------YLT CONFIG SETTING-------------")
 target_link_libraries(yalantinglibs INTERFACE Threads::Threads)
-if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(yalantinglibs INTERFACE dl)
 endif()
 option(YLT_ENABLE_SSL "Enable ssl support" OFF)
