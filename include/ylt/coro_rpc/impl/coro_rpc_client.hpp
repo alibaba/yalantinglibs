@@ -326,13 +326,11 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-
-    if (config_.host.empty()) {
+    if (!host.empty())
       config_.host = std::move(host);
-    }
-    if (config_.port.empty()) {
+    if (!port.empty())
       config_.port = std::move(port);
-    }
+
     auto ret = co_await control_->socket_wrapper_.visit([&,
                                                          this](auto &socket) {
       return connect_impl(socket,
@@ -548,7 +546,7 @@ class coro_rpc_client {
     control_->has_closed_ = false;
 
     ELOG_INFO << "client_id " << config_.client_id << " begin to connect "
-              << config_.port;
+              << config_.host << ":" << config_.port;
     if (conn_timeout_dur.count() >= 0) {
       timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
           .start([](auto &&) {
@@ -579,7 +577,7 @@ class coro_rpc_client {
         co_return errc::not_connected;
       }
     }
-    ELOG_TRACE << "start connect to endpoint lists. total endpoint count:F"
+    ELOG_TRACE << "start connect to endpoint lists. total endpoint count:"
                << eps->size()
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
                << ":" << std::to_string((*eps)[0].port());
