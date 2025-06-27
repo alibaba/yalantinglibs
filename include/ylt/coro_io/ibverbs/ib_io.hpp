@@ -139,6 +139,9 @@ async_simple::coro::
   if (io_size == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, 0};
   }
+  if (!ib_socket.is_open()) {
+    co_return std::pair{std::make_error_code(std::errc::not_connected), 0};
+  }
   ibv_sge socket_buffer;
   std::unique_ptr<char[]> zero_copy_buffer;
   std::span<ibv_sge> list;
@@ -272,10 +275,6 @@ template <ib_socket_t::io_type io, typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                     bool read_some) {
-  if (!ib_socket.is_open()) {
-    co_return std::pair{std::make_error_code(std::errc::not_connected),
-                        std::size_t{0}};
-  }
   std::vector<ibv_sge> sge_list;
   make_sge(sge_list, raw_buffer);
   std::span<ibv_sge> sge_span = sge_list;

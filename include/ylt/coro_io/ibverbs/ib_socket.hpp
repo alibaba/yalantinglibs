@@ -247,19 +247,20 @@ struct ib_socket_shared_state_t
   }
 
   void post_recv_impl(callback_t&& handler) {
-    if (has_close_) [[unlikely]] {
-      ib_socket_shared_state_t::resume(
-          std::pair{std::make_error_code(std::errc::io_error), 0}, handler);
-      return;
-    }
-    recv_cb_ = std::move(handler);
     if (!recv_result.empty()) {
       auto result = recv_result.front();
       recv_result.pop();
       recv_buf_ = std::move(recv_queue_.pop());
       add_recv_buffer({}, recv_buffer_cnt_ / 2);
-      ib_socket_shared_state_t::resume(std::move(result), recv_cb_);
+      ib_socket_shared_state_t::resume(std::move(result), handler);
+      return;
     }
+    else if (has_close_) [[unlikely]] {
+      ib_socket_shared_state_t::resume(
+          std::pair{std::make_error_code(std::errc::io_error), 0}, handler);
+      return;
+    }
+    recv_cb_ = std::move(handler);
   }
 
   std::error_code poll_completion() {
