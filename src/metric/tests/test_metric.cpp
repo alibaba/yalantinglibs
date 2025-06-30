@@ -1817,6 +1817,7 @@ TEST_CASE("test system metric") {
   std::cout << json << "\n";
   CHECK(!json.empty());
 #endif
+  stop_system_metric();
 }
 
 TEST_CASE("test metric capacity") {
