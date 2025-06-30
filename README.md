@@ -62,7 +62,32 @@ target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
 find_package(yalantinglibs CONFIG REQUIRED)
 target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
 ```
-### Manually Install
+
+### Cmake FetchContent
+
+You can also import ylt by cmake FetchContent
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    yalantinglibs
+    GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
+    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_SHALLOW 1 # optional ( --depth=1 )
+)
+
+FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
+### Manually Install & Import
 
 Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
 
@@ -84,18 +109,6 @@ cmake ..
 cmake --build . --config debug # add -j, if you have enough memory to parallel compile
 ctest . # run tests
 
-```
-
-- Build in bazel:
-```shell
-bazel build ylt # Please make sure bazel in you bin path.
-bazel build coro_http_example # Or replace in anyone you want to build and test.
-# Actually you might take it in other project in prefix @com_alibaba_yalangtinglibs, like
-bazel build @com_alibaba_yalangtinglibs://ylt
-
-bazel version > 7
-bazel build ylt --enable_bzlmod
-```
 
 You can see the test/example/benchmark executable file in `./build/output/`.
 
@@ -114,7 +127,7 @@ cmake --install . # --prefix ./user_defined_install_path
 
 4. start develop
 
-- Use Cmake:
+- start by example:
 
 After install ylt, copy then open the directory `src/*/examples`, then:
 
@@ -125,39 +138,22 @@ cmake ..
 cmake --build .
 ```
 
-### Cmake FetchContent
-
-You can also import ylt by cmake FetchContent
+- import ylt to your project(cmake):
 
 ```cmake
-cmake_minimum_required(VERSION 3.15)
-project(ylt_test)
-
-include(FetchContent)
-
-FetchContent_Declare(
-    yalantinglibs
-    GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
-    GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
-    GIT_SHALLOW 1 # optional ( --depth=1 )
-)
-
-FetchContent_MakeAvailable(yalantinglibs)
-add_executable(main main.cpp)
-
-target_link_libraries(main yalantinglibs::yalantinglibs)
-target_compile_features(main PRIVATE cxx_std_20)
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
 ```
 
-### Compile Manually:
+- import ylt in your project Manually if you don't want to use cmake:
 
 1. Add `include/` directory to include path(skip it if you have install ylt into default include path).
 2. Add `include/ylt/thirdparty` to include path(skip it if you have install ylt by cmake).
 3. Add `include/ylt/standalone` to include path(skip it if you have install ylt by cmake).
 4. Enable `c++20` standard by option `-std=c++20`(g++/clang++) or `/std:c++20`(msvc)
-5. If you use any header with `coro_` prefix, add link option `-pthread` in linux, add option `-fcoroutines` when you use g++10.
+5. Add link option `-pthread`,`-ldl` when you use g++, add option `-fcoroutines` when you use g++10.
 
-### More Details:
+#### More Details:
 For more details, see the cmake file [here](https://github.com/alibaba/yalantinglibs/blob/main/CMakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
 
 # Introduction
@@ -273,6 +269,9 @@ struct person {
   int age;
 };
 
+// static reflection works in C++20. In C++17 we need add macro manually
+// YLT_REFL(person, name, age);
+
 int main() {
   person p{.name = "tom", .age = 20};
   std::string str;
@@ -295,6 +294,9 @@ struct person {
   std::string name;
   int age;
 };
+
+// static reflection works in C++20. In C++17 we need add macro manually
+// YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -328,6 +330,9 @@ struct person {
   std::string name;
   int age;
 };
+
+// static reflection works in C++20. In C++17 we need add macro manually
+// YLT_REFL(person, name, age);
 
 void basic_usage() {
     // serialization the structure to the string
@@ -457,11 +462,11 @@ See [async_simple](https://github.com/alibaba/async_simple)
 
 ## config option
 
-These option maybe useful for your project. You can enable it in your project if you import ylt by cmake fetchContent or find_package. 
+These option maybe useful for your project. The value could be `ON` or `OFF`. You can enable it in your project if you import ylt by cmake fetchContent or find_package. 
 
 |option|default value|description|
 |----------|------------|------|
-|YLT_ENABLE_SSL|OFF|enable optional ssl support for rpc/http|
+|YLT_ENABLE_SSL|automatic|enable optional ssl support for rpc/htt, if you install openssl, it will be enabled by default|
 |YLT_ENABLE_PMR|OFF|enable pmr optimize|
 |YLT_ENABLE_IO_URING|OFF|enable io_uring in linux|
 |YLT_ENABLE_FILE_IO_URING|OFF|enable file io_uring as backend in linux|

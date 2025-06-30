@@ -14,7 +14,6 @@
 #include <system_error>
 
 #include "async_simple/coro/Lazy.h"
-#include "ib_device.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/detail/client_queue.hpp"
 #include "ylt/easylog.hpp"
@@ -22,6 +21,64 @@
 namespace coro_io {
 
 class ib_buffer_pool_t;
+
+class ib_device_t;
+
+struct ib_deleter {
+  void operator()(ibv_pd* pd) const noexcept {
+    if (pd) {
+      auto ret = ibv_dealloc_pd(pd);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_dealloc_pd failed: "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_context* context) const noexcept {
+    if (context) {
+      auto ret = ibv_close_device(context);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_close_device failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_cq* cq) const noexcept {
+    if (cq) {
+      auto ret = ibv_destroy_cq(cq);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_cq failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_qp* qp) const noexcept {
+    if (qp) {
+      auto ret = ibv_destroy_qp(qp);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_qp failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_comp_channel* channel) const noexcept {
+    if (channel) {
+      auto ret = ibv_destroy_comp_channel(channel);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_comp_channel failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_mr* ptr) const noexcept {
+    if (ptr) {
+      if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
+        ELOG_ERROR << "ibv_dereg_mr failed: "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+};
 
 struct ib_buffer_t {
  private:
@@ -51,22 +108,11 @@ struct ib_buffer_t {
   ibv_mr& operator*() noexcept { return *mr_.get(); }
   ibv_mr& operator*() const noexcept { return *mr_.get(); }
   operator bool() const noexcept { return mr_.get() != nullptr; }
-  static std::unique_ptr<ibv_mr> regist(
-      ib_device_t& dev, void* ptr, uint32_t size,
-      int ib_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                     IBV_ACCESS_REMOTE_WRITE) {
-    auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
-    ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
-    if (mr != nullptr) [[unlikely]] {
-      ELOG_TRACE << "regist sge.lkey: " << mr->lkey
-                 << ", sge.addr: " << mr->addr
-                 << ", sge.length: " << mr->length;
-      return std::unique_ptr<ibv_mr>{mr};
-    }
-    else {
-      throw std::make_error_code(std::errc{errno});
-    }
-  };
+  static std::unique_ptr<ibv_mr> regist(ib_device_t& dev, void* ptr,
+                                        uint32_t size,
+                                        int ib_flags = IBV_ACCESS_LOCAL_WRITE |
+                                                       IBV_ACCESS_REMOTE_READ |
+                                                       IBV_ACCESS_REMOTE_WRITE);
   static ib_buffer_t regist(ib_buffer_pool_t& pool,
                             std::unique_ptr<char[]> data, std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
@@ -77,10 +123,12 @@ struct ib_buffer_t {
   ~ib_buffer_t();
 };
 
-std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf = {});
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
  private:
-  friend struct ib_buffer_t;
+  static std::shared_ptr<std::atomic<std::size_t>> g_memory_usage_recorder() {
+    static auto used_memory = std::make_shared<std::atomic<std::size_t>>(0);
+    return used_memory;
+  }
 
   struct ib_buffer_impl_t {
     std::unique_ptr<ibv_mr, ib_deleter> mr_;
@@ -114,11 +162,12 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         ELOG_TRACE << "start ib_buffer timeout free of pool{" << self.get()
                    << "}, now ib_buffer count: " << self->free_buffers_.size();
         std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
-        self->total_memory_ -= clear_cnt * self->buffer_size();
-        ELOG_INFO << "finish ib_buffer timeout free of pool{" << self.get()
+        self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
+                                  (ssize_t)self->buffer_size());
+        ELOG_WARN << "finish ib_buffer timeout free of pool{" << self.get()
                   << "}, now ib_buffer cnt: " << self->free_buffers_.size()
                   << " mem usage:"
-                  << (int64_t)(std::round(self->total_memory_ /
+                  << (int64_t)(std::round(self->memory_usage() /
                                           (1.0 * 1024 * 1024)))
                   << " MB";
         if (clear_cnt != 0) {
@@ -164,26 +213,53 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
   void collect_free(ib_buffer_t& buffer) {
     if (buffer) {
-      if (free_buffers_.size() * buffer_size() <
-          pool_config_.max_memory_usage) {
+      if (!memory_out_of_limit()) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
         enqueue(buffer);
       }
       else {
-        ELOG_TRACE << "out of max connection limit <<"
-                   << pool_config_.max_memory_usage
-                   << "buffer{data:" << buffer->addr << ",len" << buffer->length
-                   << "} wont be collect";
+        ELOG_TRACE << "out of max connection limit " << max_memory_usage()
+                   << "now usage:" << buffer_size()
+                   << ",buffer{data:" << buffer->addr << ",len"
+                   << buffer->length << "} wont be collect";
       }
     }
     return;
   };
 
  public:
+  static std::size_t global_memory_usage() {
+    return g_memory_usage_recorder()->load(std::memory_order_relaxed);
+  }
+
+  struct config_t {
+    size_t buffer_size = 2 * 1024 * 1024;  // 2MB
+    uint64_t max_memory_usage = UINT32_MAX;
+    std::shared_ptr<std::atomic<uint64_t>> memory_usage_recorder =
+        nullptr;  // nullopt means use global memory_usage_recorder
+    std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
+  };
+  std::size_t max_memory_usage() { return pool_config_.max_memory_usage; }
+
+ private:
+  static std::shared_ptr<ib_buffer_pool_t> create(ib_device_t& device,
+                                                  const config_t& pool_config) {
+    return std::make_shared<ib_buffer_pool_t>(private_construct_token{}, device,
+                                              pool_config);
+  }
+
+ public:
   friend struct ib_buffer_t;
+  friend struct ib_device_t;
   std::size_t buffer_size() const noexcept {
     return this->pool_config_.buffer_size;
+  }
+  std::size_t modify_memory_usage(ssize_t count) {
+    return memory_usage_recorder_->fetch_add(count, std::memory_order_release);
+  }
+  bool memory_out_of_limit() {
+    return max_memory_usage() < buffer_size() + memory_usage();
   }
   ib_buffer_t get_buffer() {
     std::unique_ptr<ib_buffer_impl_t> buffer;
@@ -192,9 +268,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     if (!buffer) {
       ELOG_TRACE
           << "There is no free buffer. Allocate and regist new buffer now";
-      if (pool_config_.max_memory_usage <
-          buffer_size() + total_memory_.load(std::memory_order_acquire))
-          [[unlikely]] {
+      if (memory_out_of_limit()) [[unlikely]] {
         ELOG_WARN << "Memory out of pool limit";
         return ib_buffer_t{};
       }
@@ -209,65 +283,25 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                << ib_buffer->length << "} from queue";
     return ib_buffer;
   }
-  struct config_t {
-    size_t buffer_size = 2 * 1024 * 1024;                   // 2MB
-    uint64_t max_memory_usage = 4ull * 1024 * 1024 * 1024;  // 4GB
-    std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
-  };
-  ib_buffer_pool_t(private_construct_token t,
-                   std::shared_ptr<ib_device_t> device,
+  ib_buffer_pool_t(private_construct_token, ib_device_t& device,
                    const config_t& pool_config)
-      : device_(device ? std::move(device) : coro_io::g_ib_device()),
+      : device_(device),
+        memory_usage_recorder_(pool_config.memory_usage_recorder
+                                   ? pool_config.memory_usage_recorder
+                                   : g_memory_usage_recorder()),
         pool_config_(std::move(pool_config)) {}
-  static std::shared_ptr<ib_buffer_pool_t> create(
-      std::shared_ptr<ib_device_t> device, const config_t& pool_config) {
-    return std::make_shared<ib_buffer_pool_t>(private_construct_token{},
-                                              std::move(device), pool_config);
-  }
-  static std::shared_ptr<ib_buffer_pool_t> create(
-      std::shared_ptr<ib_device_t> device) {
-    return std::make_shared<ib_buffer_pool_t>(private_construct_token{},
-                                              std::move(device), config_t{});
-  }
-  std::atomic<uint64_t> total_memory_ = 0;
-  std::size_t total_memory() const noexcept {
-    return total_memory_.load(std::memory_order_acquire);
+  std::size_t memory_usage() const noexcept {
+    return memory_usage_recorder_->load(std::memory_order_relaxed);
   }
   std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
+
+ private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
       free_buffers_;
-  std::shared_ptr<ib_device_t> device_;
+  std::shared_ptr<std::atomic<uint64_t>> memory_usage_recorder_;
+  ib_device_t& device_;
   config_t pool_config_;
 };
-
-inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
-                                       std::unique_ptr<char[]> data,
-                                       std::size_t size, int ib_flags) {
-  auto mr = ibv_reg_mr(pool.device_->pd(), data.get(), size, ib_flags);
-  if (mr != nullptr) [[unlikely]] {
-    ELOG_DEBUG << "ibv_reg_mr regist: " << mr
-               << " with pd:" << pool.device_->pd();
-    std::unique_ptr<int> a;
-    a.release();
-    pool.total_memory_.fetch_add(size, std::memory_order_relaxed);
-    return ib_buffer_t{std::unique_ptr<ibv_mr, ib_deleter>{mr}, std::move(data),
-                       pool};
-  }
-  else {
-    throw std::make_error_code(std::errc{errno});
-  }
-};
-
-inline std::shared_ptr<ib_device_t> g_ib_device(ib_config_t conf) {
-  static auto dev = std::make_shared<ib_device_t>(conf);
-  return dev;
-}
-
-inline std::shared_ptr<ib_buffer_pool_t> g_ib_buffer_pool(
-    const ib_buffer_pool_t::config_t& pool_config = {}) {
-  static auto pool = ib_buffer_pool_t::create(g_ib_device(), pool_config);
-  return pool;
-}
 
 inline ib_buffer_t::ib_buffer_t(std::unique_ptr<ibv_mr, ib_deleter> mr,
                                 std::unique_ptr<char[]> memory_owner,
@@ -292,7 +326,7 @@ inline void ib_buffer_t::release_resource() {
       ptr->collect_free(*this);
       // if buffer not collect by pool, we need dec total memory here.
       if (mr_) [[unlikely]] {
-        ptr->total_memory_ -= mr_->length;
+        ptr->modify_memory_usage(-1 * (ssize_t)mr_->length);
       }
     }
   }

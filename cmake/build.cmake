@@ -84,16 +84,18 @@ if (USE_CCACHE)
     endif ()
 endif ()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    link_libraries(dl)
+endif()
+
 # --------------------- GCC
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    if (ENABLE_CPP_20)
+    if (ENABLE_CPP_20 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
     endif()
     #-ftree-slp-vectorize with coroutine cause link error. disable it util gcc fix.
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 endif()
-# --------------------- Clang
-
 # --------------------- Msvc
 # Resolves C1128 complained by MSVC: number of sections exceeded object file format limit: compile with /bigobj.
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/bigobj>")

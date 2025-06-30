@@ -57,12 +57,9 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
                    coro_io::ExecutorWrapper<> *executor,
-                   const coro_io::ibverbs_config &config,
-                   std::shared_ptr<coro_io::ib_device_t> dev,
-                   std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool)
+                   const coro_io::ib_socket_t::config_t &config)
       : executor_(executor),
-        ib_socket_(std::make_unique<ib_socket_t>(executor_, dev, config,
-                                                 buffer_pool)) {
+        ib_socket_(std::make_unique<ib_socket_t>(executor_, config)) {
     ib_socket_->prepare_accpet(std::move(soc));
   }
 #endif
@@ -80,16 +77,12 @@ struct socket_wrapper_t {
   }
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_client(const coro_io::ibverbs_config &config,
-                   std::shared_ptr<coro_io::ib_device_t> device,
-                   std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool) {
+  void init_client(const coro_io::ib_socket_t::config_t &config) {
     if (ib_socket_) {
-      *ib_socket_ = ib_socket_t(executor_, std::move(device), config,
-                                std::move(buffer_pool));
+      *ib_socket_ = ib_socket_t(executor_, config);
     }
     else {
-      ib_socket_ = std::make_unique<ib_socket_t>(
-          executor_, std::move(device), config, std::move(buffer_pool));
+      ib_socket_ = std::make_unique<ib_socket_t>(executor_, config);
     }
   }
 #endif

@@ -65,18 +65,22 @@ void basic_example() {
 // This example is about how to configure the detail ibverbs option.
 void set_option() {
   /* init global buffer pool, should call before any other call*/
-  coro_io::g_ib_device({.dev_name= ""/*rdma device name, default is empty, which means choice the first rdma device*/});
-  auto pool = coro_io::ib_buffer_pool_t::create(
-      coro_io::g_ib_device(),
-      {.buffer_size = 3 * 1024 * 1024,       /*buffer size*/
-       .max_memory_usage = 20 * 1024 * 1024, /*max memory usage*/
-       .idle_timeout = 5s});
+  coro_io::get_global_ib_device(
+      {.dev_name = "" /*rdma device name, default is empty, which means choice
+                         the first rdma device*/
+       ,
+       .buffer_pool_config = {
+           .buffer_size = 3 * 1024 * 1024,       /*buffer size*/
+           .max_memory_usage = 20 * 1024 * 1024, /*max memory usage*/
+           .idle_timeout = 5s}});
+  // Or, you can create your own device by this code:
+  // auto device = coro_io::ib_device_t::create({});
   coro_rpc_client client;
   coro_rpc_client::config conf;
-  auto ibv_config = coro_io::ibverbs_config{
-      .recv_buffer_cnt = 4,    // buffer cnt of recv queue
-      .device = nullptr,       // rmda device, default is g_ib_device()
-      .buffer_pool = nullptr,  // rmda mem pool, default is g_ib_buffer_pool()
+  auto ibv_config = coro_io::ib_socket_t::config_t{
+      .recv_buffer_cnt = 4,  // buffer cnt of recv queue
+      .device = nullptr  // nullptr means use global device and buffer pool, or
+                         // you can use your own device
   };
   conf.socket_config = ibv_config;
   [[maybe_unused]] bool _ = client.init_config(conf);

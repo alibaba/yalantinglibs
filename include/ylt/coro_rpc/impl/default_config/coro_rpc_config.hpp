@@ -41,7 +41,7 @@ struct config_base {
   std::optional<ssl_configure> ssl_config = std::nullopt;
 #endif
 #ifdef YLT_ENABLE_IBV
-  std::optional<coro_io::ibverbs_config> ibv_config = std::nullopt;
+  std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt;
 #endif
 };
 

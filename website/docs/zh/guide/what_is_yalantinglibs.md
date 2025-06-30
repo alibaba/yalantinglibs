@@ -45,7 +45,17 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 
 ## 安装&编译
 
-### 通过包管理器安装
+### 通过HomeBrew安装
+
+1. 安装 [homebrew](https://brew.sh/)
+2. 运行 `brew install yalantinglibs`
+3. 如果使用cmake，添加如下代码:
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+### 通过vcpkg包管理器安装
 
 1. 下载[vcpkg](https://github.com/microsoft/vcpkg)
 2. 执行命令：`./vcpkg install yalantinglibs`
@@ -53,6 +63,30 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 ```cmake
 find_package(yalantinglibs CONFIG REQUIRED)
 target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+### Cmake FetchContent
+
+也可以使用Cmake FetchContent来安装yalantinglibs。
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    yalantinglibs
+    GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
+    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_SHALLOW 1 # optional ( --depth=1 )
+)
+
+FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
 ```
 
 ### 手动安装
@@ -71,7 +105,7 @@ git clone https://github.com/alibaba/yalantinglibs.git
 
 ```shell
 cmake ..
-cmake --build . --config debug # 可以在末尾加上`-j 选项, 通过并行编译加速
+cmake --build . --config debug # 可以在末尾加上-j 选项, 通过并行编译加速
 ctest . # 执行测试
 ```
 
@@ -95,7 +129,7 @@ cmake --install . # --prefix ./user_defined_install_path
 
 4. 开始编程
 
-- 使用CMAKE:
+- 从example开始开发:
 
 安装完成后，你可以直接拷贝并打开文件夹`src/*/examples`，然后执行以下命令：
 
@@ -106,13 +140,21 @@ cmake ..
 cmake --build .
 ```
 
-- 手动编译:
+- 使用cmake，将ylt导入到你的项目:
+
+```cmake
+find_package(yalantinglibs CONFIG REQUIRED)
+target_link_libraries(main PRIVATE yalantinglibs::yalantinglibs)
+```
+
+
+- 如果不使用cmake，需要手动导入依赖:
 
 1. 将 `include/`加入到头文件包含路径中(如果已安装到系统默认路径，可跳过该步骤)
 2. 将 `include/ylt/thirdparty` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
 3. 将 `include/ylt/standalone` 加入到头文件包含路径中(如果已通过cmake安装了yalantinglibs，可跳过该步骤)
 4. 通过选项`-std=c++20`(g++/clang++) or `/std:c++20`(msvc)启用C++20标准。（序列化库和日志库至少需要c++17，网络库与协程至少需要C++20）
-5. 如果你使用了 `coro_` 开头的任何头文件, 在linux系统下需要添加选项 `-pthread` . 使用`g++10`编译器需要添加选项 `-fcoroutines`。
+5. 使用g++时需要添加选项 `-pthread`,`-ldl` . 在`g++10`编译器下使用协程需要添加选项 `-fcoroutines`。
 
 - 更多细节:
 如需查看更多细节, 除了`example/cmakelist.txt`，你还可以参考 [here](https://github.com/alibaba/yalantinglibs/tree/main/CmakeLists.txt) and [there](https://github.com/alibaba/yalantinglibs/tree/main/cmake).
@@ -212,6 +254,7 @@ auto person2 = deserialize<person>(buffer);
 更多示例[请见](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%BA%8F%E5%88%97%E5%8C%96).
 
 ## struct_json
+
 基于反射的json库，轻松实现结构体和json之间的映射。
 
 ### 快速开始
@@ -223,7 +266,8 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
+// C++17下反射功能不完善，需要使用宏：
+// YLT_REFL(person, name, age);
 
 int main() {
   person p{.name = "tom", .age = 20};
@@ -247,7 +291,8 @@ struct person {
   std::string name;
   int age;
 };
-YLT_REFL(person, name, age);
+// C++17下反射功能不完善，需要使用宏：
+// YLT_REFL(person, name, age);
 
 void basic_usage() {
   std::string xml = R"(
@@ -378,11 +423,11 @@ async_simple是一个C++20协程库，提供各种轻量且易用的组件，帮
 
 ## 配置选项
 
-yalantinglibs工程自身支持如下配置项，如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。
+yalantinglibs工程自身支持如下配置项，值可以是`ON`或`OFF`。如果你使用cmake find_package或者fetchContent来导入yalantinglibs，你的工程也可以使用下面这些配置项。否则，你需要手动添加相关的宏并导入相关的依赖。
 
 |工程选项|默认值|描述|
 |----------|------------|------|
-|YLT_ENABLE_SSL|OFF|为rpc/http启用可选的ssl支持|
+|YLT_ENABLE_SSL|automatic|为rpc/http启用可选的ssl支持,如果你已经安装了ssl，它会自动启用|
 |YLT_ENABLE_PMR|OFF|启用pmr优化|
 |YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
 |YLT_ENABLE_FILE_IO_URING|OFF|启用io_uring优化|
