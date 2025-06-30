@@ -861,8 +861,6 @@ class coro_rpc_client {
     }
     asio::dispatch(control->socket_wrapper_.get_executor()->get_asio_executor(),
                    [control]() {
-                     control->has_closed_ = true;
-                     asio::error_code ec;
                      control->socket_wrapper_.close();
                    });
     return;
@@ -872,11 +870,13 @@ class coro_rpc_client {
       std::shared_ptr<coro_rpc_client::control_t> control) {
     bool expected = false;
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
-      co_return;
+      co_await coro_io::post(
+          []() {
+          },
+          control->executor_);  // post to control ioc
     }
     co_await coro_io::post(
         [control = control.get()]() {
-          control->has_closed_ = true;
           control->socket_wrapper_.close();
         },
         control->executor_);
@@ -1220,38 +1220,27 @@ class coro_rpc_client {
     }
     else {
 #endif
-      if (req_attachment.empty()) {
-        while (true) {
-          bool expected = false;
-          if (write_mutex_.compare_exchange_weak(expected, true)) {
-            break;
-          }
-          co_await coro_io::post(
-              []() {
-              },
-              control_->executor_);
+      while (true) {
+        bool expected = false;
+        if (write_mutex_.compare_exchange_weak(expected, true)) {
+          break;
         }
+        co_await coro_io::post(
+            []() {
+            },
+            control_->executor_);
+      }
+      if (req_attachment.empty()) {
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
-        write_mutex_ = false;
       }
       else {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
             asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-        while (true) {
-          bool expected = false;
-          if (write_mutex_.compare_exchange_weak(expected, true)) {
-            break;
-          }
-          co_await coro_io::post(
-              []() {
-              },
-              control_->executor_);
-        }
         ret = co_await coro_io::async_write(socket, iov);
-        write_mutex_ = false;
       }
+      write_mutex_ = false;
 #ifdef UNIT_TEST_INJECT
     }
 #endif
