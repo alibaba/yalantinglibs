@@ -249,14 +249,12 @@ class coro_rpc_client {
   config &get_config() { return config_; }
 
   [[nodiscard]] bool init_socket_wrapper(const tcp_config &config) {
-    control_->socket_wrapper_.init_client(config.enable_tcp_no_delay);
-    return true;
+    return control_->socket_wrapper_.init_client(config.enable_tcp_no_delay);
   }
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_socket_wrapper(
       const coro_io::ib_socket_t::config_t &config) {
-    control_->socket_wrapper_.init_client(config);
-    return true;
+    return control_->socket_wrapper_.init_client(config);
   }
 #endif
 #ifdef YLT_ENABLE_SSL
@@ -277,10 +275,13 @@ class coro_rpc_client {
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
       ssl_ctx_.set_verify_callback(
           asio::ssl::host_name_verification(config.ssl_domain));
-      control_->socket_wrapper_.init_client(ssl_ctx_,
-                                            config.enable_tcp_no_delay);
+      auto init_result = control_->socket_wrapper_.init_client(
+          ssl_ctx_, config.enable_tcp_no_delay);
+      if (!init_result) {
+        return false;
+      }
       ssl_init_ret_ = true;
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
       ELOG_ERROR << "init ssl failed: " << e.what();
     }
     return ssl_init_ret_;
@@ -514,16 +515,16 @@ class coro_rpc_client {
     bool value = false;
   };
 
-  async_simple::coro::Lazy<void> reset() {
+  async_simple::coro::Lazy<bool> reset() {
     co_await close_socket(control_);
-    std::visit(
+    bool reset_ok = std::visit(
         [this](auto &socket_config) {
           return init_socket_wrapper(socket_config);
         },
         config_.socket_config);
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
-    co_return;
+    co_return reset_ok;
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
 
@@ -532,7 +533,10 @@ class coro_rpc_client {
       Socket &soc, std::chrono::milliseconds conn_timeout_dur,
       std::vector<asio::ip::tcp::endpoint> *eps) {
     if (should_reset_) {
-      co_await reset();
+      auto reset_ok = co_await reset();
+      if (!reset_ok) {
+        co_return errc::not_connected;
+      }
     }
     else {
       should_reset_ = true;

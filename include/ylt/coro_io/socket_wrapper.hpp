@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <exception>
 #ifdef YLT_ENABLE_IBV
 #include "ibverbs/ib_io.hpp"
 #include "ibverbs/ib_socket.hpp"
@@ -25,21 +26,7 @@ struct socket_wrapper_t {
   socket_wrapper_t() {};
   socket_wrapper_t(coro_io::ExecutorWrapper<> *executor,
                    const std::string &local_ip = "")
-      : executor_(executor) {
-    if (local_ip.empty()) {
-      socket_ = std::make_unique<asio::ip::tcp::socket>(
-          executor->get_asio_executor());
-    }
-    else {
-      asio::error_code ec;
-      socket_ = std::make_unique<asio::ip::tcp::socket>(
-          executor->get_asio_executor(),
-          asio::ip::tcp::endpoint(asio::ip::address::from_string(local_ip, ec),
-                                  0));
-    }
-
-    init_client(true);
-  };
+      : executor_(executor), local_ip_(local_ip){};
   socket_wrapper_t(asio::ip::tcp::socket &&soc,
                    coro_io::ExecutorWrapper<> *executor)
       : socket_(std::make_unique<asio::ip::tcp::socket>(std::move(soc))),
@@ -63,33 +50,69 @@ struct socket_wrapper_t {
     ib_socket_->prepare_accpet(std::move(soc));
   }
 #endif
+  void init_tcp_socket() {
+    asio::ip::address addr;
+    if (!local_ip_.empty()) {
+      addr = asio::ip::address::from_string(local_ip_);
+    }
+    if (!socket_) {
+      socket_ = std::make_unique<asio::ip::tcp::socket>(
+          executor_->get_asio_executor(),
+          asio::ip::tcp::endpoint(std::move(addr), 0));
+    }
+    else {
+      *socket_ =
+          asio::ip::tcp::socket{executor_->get_asio_executor(),
+                                asio::ip::tcp::endpoint(std::move(addr), 0)};
+    }
+  }
   // tcp client init
-  void init_client(bool enable_tcp_no_delay) {
-    std::error_code ec;
-    socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay), ec);
+  bool init_client(bool enable_tcp_no_delay) {
+    try {
+      init_tcp_socket();
+      socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay));
+    } catch (const std::exception &e) {
+      ELOG_WARN << "init client failed:" << e.what();
+      return false;
+    }
+    return true;
   }
 #ifdef YLT_ENABLE_SSL
   // ssl client init
-  void init_client(asio::ssl::context &ssl_ctx, bool enable_tcp_no_delay) {
-    std::error_code ec;
-    socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay), ec);
-    init_ssl(ssl_ctx);
+  bool init_client(asio::ssl::context &ssl_ctx, bool enable_tcp_no_delay) {
+    try {
+      init_tcp_socket();
+      socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay));
+      init_ssl(ssl_ctx);
+    } catch (const std::exception &e) {
+      ELOG_WARN << "init client failed:" << e.what();
+      return false;
+    }
+    return true;
   }
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_client(const coro_io::ib_socket_t::config_t &config) {
-    if (ib_socket_) {
-      *ib_socket_ = ib_socket_t(executor_, config);
+  bool init_client(const coro_io::ib_socket_t::config_t &config) {
+    try {
+      init_tcp_socket();
+      if (ib_socket_) {
+        *ib_socket_ = ib_socket_t(executor_, config);
+      }
+      else {
+        ib_socket_ = std::make_unique<ib_socket_t>(executor_, config);
+      }
+    } catch (const std::exception &e) {
+      ELOG_WARN << "init client failed:" << e.what();
+      return false;
     }
-    else {
-      ib_socket_ = std::make_unique<ib_socket_t>(executor_, config);
-    }
+    return true;
   }
 #endif
 
  private:
   std::unique_ptr<asio::ip::tcp::socket> socket_;
   coro_io::ExecutorWrapper<> *executor_;
+  std::string local_ip_;
 #ifdef YLT_ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
 #endif
