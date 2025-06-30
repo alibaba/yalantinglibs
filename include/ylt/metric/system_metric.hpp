@@ -202,7 +202,7 @@ inline void stat_io() {
 #if defined(__APPLE__)
 #else
   auto stream_file =
-      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE *ptr) {
+      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE* ptr) {
         fclose(ptr);
       });
   if (stream_file == nullptr) {
@@ -336,7 +336,7 @@ inline void process_status() {
   if (read_command_output_through_popen(oss, cmdbuf) != 0) {
     return;
   }
-  const std::string &result = oss.str();
+  const std::string& result = oss.str();
   if (sscanf(result.c_str(),
              "%d %d %d %d"
              "%d %u %ld %ld",
@@ -375,18 +375,17 @@ inline void ylt_stat() {
   stat_metric();
 }
 
-inline void start_stat(std::weak_ptr<coro_io::period_timer> weak, auto manager,
+inline bool g_timer_has_cancel = false;
+inline void start_stat(coro_io::period_timer& timer, auto manager,
                        auto label_count) {
-  auto timer = weak.lock();
-  if (timer == nullptr) {
-    return;
-  }
-
   ylt_stat();
 
-  timer->expires_after(std::chrono::seconds(1));
-  timer->async_wait([timer, manager, label_count](std::error_code ec) {
+  timer.expires_after(std::chrono::seconds(1));
+  timer.async_wait([&timer, manager, label_count](std::error_code ec) {
     if (ec) {
+      return;
+    }
+    if (g_timer_has_cancel) {
       return;
     }
 
@@ -447,8 +446,16 @@ inline bool start_system_metric() {
       "ylt_process_io_write_second", "");
 
   static auto exucutor = coro_io::create_io_context_pool(1);
-  auto timer =
-      std::make_shared<coro_io::period_timer>(exucutor->get_executor());
+  static auto timer = coro_io::period_timer(exucutor->get_executor());
+  static std::shared_ptr<int> guard(nullptr, [](auto ptr) {
+    asio::post(exucutor->get_executor()->get_asio_executor(), [] {
+      std::error_code ec;
+      timer.cancel(ec);
+      detail::g_timer_has_cancel = true;
+    });
+    exucutor->stop();
+  });
+
   auto mgr = system_metric_manager::instance();
   auto label_count = dynamic_metric::g_user_metric_label_count;
   detail::start_stat(timer, mgr, label_count);

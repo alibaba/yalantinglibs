@@ -284,12 +284,20 @@ class dynamic_metric_manager {
   static std::shared_ptr<dynamic_metric_manager<Tag>> instance() {
     static auto inst = std::shared_ptr<dynamic_metric_manager<Tag>>(
         new dynamic_metric_manager<Tag>());
-    std::call_once(once_, [self = inst] {
-      if (ylt_label_max_age.count() > 0) {
-        self->clean_label_expired(self);
-      }
-    });
+    if (ylt_label_max_age.count() > 0) {
+      inst->clean_label_expired();
+    }
     return inst;
+  }
+
+  ~dynamic_metric_manager() {
+    asio::post(executor_->get_executor()->get_asio_executor(), [this] {
+      std::error_code ec;
+      timer_.cancel(ec);
+      has_cancel_ = true;
+    });
+
+    executor_->stop();
   }
 
   template <typename T, typename... Args>
@@ -471,25 +479,20 @@ class dynamic_metric_manager {
   }
 
  private:
-  void clean_label_expired(auto self) {
-    executor_ = coro_io::create_io_context_pool(1);
-    auto sp = executor_;
-    timer_ = std::make_shared<coro_io::period_timer>(executor_->get_executor());
-    check_label_expired(timer_, self)
+  void clean_label_expired() {
+    check_label_expired(timer_)
         .via(executor_->get_executor())
-        .start([sp](auto&&) {
+        .start([](auto&&) {
         });
   }
 
-  async_simple::coro::Lazy<void> check_label_expired(
-      std::weak_ptr<coro_io::period_timer> weak, auto self) {
+  async_simple::coro::Lazy<void> check_label_expired(auto& timer) {
     while (true) {
-      auto timer = weak.lock();
-      if (timer == nullptr) {
+      if (has_cancel_) {
         co_return;
       }
-      timer->expires_after(ylt_label_check_expire_duration);
-      bool r = co_await timer->async_await();
+      timer.expires_after(ylt_label_check_expire_duration);
+      bool r = co_await timer.async_await();
       if (!r) {
         co_return;
       }
@@ -501,7 +504,9 @@ class dynamic_metric_manager {
 
   dynamic_metric_manager()
       : metric_map_(
-            std::min<unsigned>(std::thread::hardware_concurrency(), 128u)) {}
+            std::min<unsigned>(std::thread::hardware_concurrency(), 128u)),
+        executor_(coro_io::create_io_context_pool(1)),
+        timer_(executor_->get_executor()) {}
 
   std::vector<std::shared_ptr<dynamic_metric>> get_metric_by_label_value(
       const std::vector<std::string>& label_value) {
@@ -534,8 +539,9 @@ class dynamic_metric_manager {
       std::unordered_map<std::string, std::shared_ptr<dynamic_metric>>,
       my_hash<>>
       metric_map_;
-  std::shared_ptr<coro_io::period_timer> timer_ = nullptr;
   std::shared_ptr<coro_io::io_context_pool> executor_ = nullptr;
+  bool has_cancel_ = false;
+  coro_io::period_timer timer_;
   inline static std::once_flag once_;
 };
 
