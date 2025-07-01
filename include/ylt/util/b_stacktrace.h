@@ -381,9 +381,8 @@ inline char* b_stacktrace_to_string(b_stacktrace_handle h) {
 
         /* calculate load offset */
         Dl_info info;
-        // if you see an link error here, please link ld by `-ldl`, or add
-        // define YLT_DISBALE_DLADDR to disable it
-#ifndef YLT_DISABLE_DLADDR
+        // if stacktrace dont work well in linux share library, please define YLT_ENABLE_LD and link ld
+#ifdef YLT_ENABLE_LD
         dladdr(tracei, &info);
 #endif
         //if (info.dli_fbase == (void*)0x400000) {

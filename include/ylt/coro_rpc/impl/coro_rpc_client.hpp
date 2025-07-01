@@ -874,6 +874,7 @@ class coro_rpc_client {
           []() {
           },
           control->executor_);  // post to control ioc
+      co_return;
     }
     co_await coro_io::post(
         [control = control.get()]() {
