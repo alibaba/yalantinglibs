@@ -381,7 +381,9 @@ class client_pool : public std::enable_shared_from_this<
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
         free_clients_(pool_config.max_connection),
-        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()){};
+        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()) {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+  };
 
   client_pool(private_construct_token t, client_pools_t* pools_manager_,
               std::string_view host_name, const pool_config& pool_config,
@@ -391,7 +393,9 @@ class client_pool : public std::enable_shared_from_this<
         pool_config_(pool_config),
         io_context_pool_(io_context_pool),
         free_clients_(pool_config.max_connection),
-        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()){};
+        eps_(std::make_shared<std::vector<asio::ip::tcp::endpoint>>()) {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+  };
 
   template <typename T>
   async_simple::coro::Lazy<return_type<T>> send_request(

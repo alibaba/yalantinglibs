@@ -2,6 +2,7 @@
 #include <concepts>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -35,7 +36,7 @@ namespace detail {
 constexpr inline uint64_t magic_poison_value = 0xECFD'A8B9'6475'2031;
 inline bool is_poisoned(void* ptr) {
   if (ptr) [[likely]]
-    return *(uint64_t*)ptr == magic_poison_value;
+    return memcmp((char*)ptr, (char*)&magic_poison_value, sizeof(uint64_t))==0;
   else
     return false;
 }
@@ -43,10 +44,10 @@ template<typename T>
 inline void poisoned(T* ptr) {
   if (ptr) [[likely]] {
     if constexpr (sizeof(T)<12) {
-      *(uint64_t*)(ptr) = magic_poison_value;
+      memcpy((char*)ptr, (char*)&magic_poison_value, sizeof(uint64_t));
     }
     else {
-      *(uint64_t*)(ptr+4) = magic_poison_value;
+      memcpy(((char*)ptr), (char*)&magic_poison_value, sizeof(uint64_t));
     }
   }
 }
@@ -71,9 +72,9 @@ inline std::shared_ptr<std::function<void(ff_ptr_error_type, void*)>> get_error_
 }
 
 template<typename T>
-inline T* get_pointer_offset(T* raw_pointer) noexcept {
+inline void* get_pointer_offset(T* raw_pointer) noexcept {
   if (sizeof(T) >= 12) {
-    return raw_pointer + 4;
+    return ((char*)raw_pointer);
   }
   return raw_pointer;
 }

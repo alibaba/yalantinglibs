@@ -15,19 +15,23 @@
  */
 #include <cstdint>
 #include <memory>
-#include "ylt/util/ff_ptr.hpp"
+
 #include "doctest.h"
+#include "ylt/util/ff_ptr.hpp"
 using namespace doctest;
 static std::string err_string;
-int initer=(ylt::util::regist_ff_ptr_error_handler([](ylt::util::ff_ptr_error_type error, void* raw_pointer){
-    auto str = ylt::util::b_stacktrace_get_string();
-    err_string = to_string(error) +'\n' + str;
-    free(str);
-  }),1);
-int64_t hi;
-template<typename T>
+int initer = (ylt::util::regist_ff_ptr_error_handler(
+                  [](ylt::util::ff_ptr_error_type error, void* raw_pointer) {
+                    auto str = ylt::util::b_stacktrace_get_string();
+                    err_string = to_string(error) + '\n' + str;
+                    free(str);
+                  }),
+              1);
+volatile char hi;
+template <typename T>
 void read(ylt::util::ff_ptr<T> ptr) {
-  hi=*ptr;
+  auto tmp = *ptr;
+  hi = *(char*)&tmp;
 }
 TEST_CASE("testing shared_ptr heap-use-after-free") {
   err_string = "";
@@ -39,57 +43,67 @@ TEST_CASE("testing shared_ptr heap-use-after-free") {
     CHECK(err_string.empty());
   }
   read<int64_t>(raw_ptr);
-  std::cout <<err_string<<std::endl;
-  CHECK(err_string.find("read")!=std::string::npos);
-  CHECK(err_string.find("heap use after free")!=std::string::npos);
-} 
+  std::cout << err_string << std::endl;
+  CHECK(err_string.find("heap use after free") != std::string::npos);
+}
 TEST_CASE("testing shared_ptr double-free") {
   err_string = "";
   int64_t hi;
   {
-    auto ptr = ylt::util::ff_shared_ptr<int64_t>(&hi,[](int64_t*){});
-    ylt::util::ff_shared_ptr<int64_t> ptr2(ptr.get(),[](int64_t*){});
+    auto ptr = ylt::util::ff_shared_ptr<int64_t>(&hi, [](int64_t*) {
+    });
+    ylt::util::ff_shared_ptr<int64_t> ptr2(ptr.get(), [](int64_t*) {
+    });
   }
-  std::cout <<err_string<<std::endl;
-  CHECK(err_string.find("double free")!=std::string::npos);
-} 
+  std::cout << err_string << std::endl;
+  CHECK(err_string.find("double free") != std::string::npos);
+}
 TEST_CASE("testing unique_ptr heap-use-after free") {
- err_string = "";
+  err_string = "";
   ylt::util::ff_ptr<int64_t> raw_ptr;
   int64_t hi;
   {
-    auto ptr = ylt::util::ff_unique_ptr<int64_t,decltype([](int64_t*){})>(&hi);
+    auto ptr = ylt::util::ff_unique_ptr<int64_t, decltype([](int64_t*) {
+                                        })>(&hi);
     raw_ptr = ptr.get();
     read<int64_t>(raw_ptr);
     CHECK(err_string.empty());
   }
   read<int64_t>(raw_ptr);
-  std::cout <<err_string<<std::endl;
-  CHECK(err_string.find("read")!=std::string::npos);
-  CHECK(err_string.find("heap use after free")!=std::string::npos);
-} 
+  std::cout << err_string << std::endl;
+  CHECK(err_string.find("heap use after free") != std::string::npos);
+}
 TEST_CASE("testing unique_ptr heap-use-after free2") {
- err_string = "";
-  ylt::util::ff_ptr<__int128> raw_ptr;
-  __int128 hi;
+  err_string = "";
+  ylt::util::ff_ptr<std::pair<int64_t, int64_t>> raw_ptr;
+  std::pair<int64_t, int64_t> hi;
   {
-    auto ptr = ylt::util::ff_unique_ptr<__int128,decltype([](__int128*){})>(&hi);
+    auto ptr =
+        ylt::util::ff_unique_ptr<std::pair<int64_t, int64_t>,
+                                 decltype([](std::pair<int64_t, int64_t>*) {
+                                 })>(&hi);
     raw_ptr = ptr.get();
-    read<__int128>(raw_ptr);
+    read<std::pair<int64_t, int64_t>>(raw_ptr);
     CHECK(err_string.empty());
   }
-  read<__int128>(raw_ptr);
+  read<std::pair<int64_t, int64_t>>(raw_ptr);
   std::cout << err_string << std::endl;
-  CHECK(err_string.find("read")!=std::string::npos);
-  CHECK(err_string.find("heap use after free")!=std::string::npos);
-} 
+  CHECK(err_string.find("heap use after free") != std::string::npos);
+}
 TEST_CASE("testing unique_ptr double-free") {
   err_string = "";
-  int64_t hi;
+
+  std::shared_ptr<int64_t> hi;
+  hi = std::make_shared<int64_t>(0);
+  auto deleter = [hi](int64_t*) {
+    std::cout << "hi" << std::endl;
+  };
   {
-    auto ptr = ylt::util::ff_unique_ptr<int64_t,decltype([](int64_t*){})>(&hi);
-    ylt::util::ff_unique_ptr<int64_t,decltype([](int64_t*){})> ptr2(ptr.get());
+    [[maybe_unused]] auto ptr =
+        ylt::util::ff_unique_ptr<int64_t, decltype(deleter)>(hi.get(), deleter);
+    [[maybe_unused]] ylt::util::ff_unique_ptr<int64_t, decltype(deleter)> ptr2(
+        hi.get(), deleter);
   }
-  std::cout <<err_string<<std::endl;
-  CHECK(err_string.find("double free")!=std::string::npos);
-} 
+  std::cout << err_string << std::endl;
+  CHECK(err_string.find("double free") != std::string::npos);
+}
