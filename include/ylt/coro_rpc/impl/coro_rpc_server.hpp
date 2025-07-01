@@ -189,7 +189,7 @@ class coro_rpc_server_base {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
       accept().start([this, p = std::move(promise)](auto &&res) mutable {
-        ELOG_ERROR << "server quit!";
+        ELOG_INFO << "server quit!";
         if (res.hasError()) {
           stop();
           errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};

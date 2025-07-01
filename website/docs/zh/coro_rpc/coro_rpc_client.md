@@ -133,7 +133,6 @@ struct ib_socket_t::config_t {
                     .max_recv_sge = 1,          // 接受的最大地址分段数，目前的缓冲区配置下只需要1个即可。
                     .max_inline_data = 256};    // 如果发送的数据包小于inline data，且底层网卡支持该设置，则小数据包不会被拷贝到缓冲中，而是直接交给网卡发送。
   std::shared_ptr<coro_io::ib_device_t> device; // rpc使用的底层ib网卡。默认选择设备列表第一个网卡。
-  std::shared_ptr<coro_io::ib_buffer_pool_t> buffer_pool; // socket使用的缓冲池，默认使用全局缓冲池。
 };
 ```
 

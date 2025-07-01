@@ -249,14 +249,12 @@ class coro_rpc_client {
   config &get_config() { return config_; }
 
   [[nodiscard]] bool init_socket_wrapper(const tcp_config &config) {
-    control_->socket_wrapper_.init_client(config.enable_tcp_no_delay);
-    return true;
+    return control_->socket_wrapper_.init_client(config.enable_tcp_no_delay);
   }
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_socket_wrapper(
       const coro_io::ib_socket_t::config_t &config) {
-    control_->socket_wrapper_.init_client(config);
-    return true;
+    return control_->socket_wrapper_.init_client(config);
   }
 #endif
 #ifdef YLT_ENABLE_SSL
@@ -277,10 +275,13 @@ class coro_rpc_client {
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
       ssl_ctx_.set_verify_callback(
           asio::ssl::host_name_verification(config.ssl_domain));
-      control_->socket_wrapper_.init_client(ssl_ctx_,
-                                            config.enable_tcp_no_delay);
+      auto init_result = control_->socket_wrapper_.init_client(
+          ssl_ctx_, config.enable_tcp_no_delay);
+      if (!init_result) {
+        return false;
+      }
       ssl_init_ret_ = true;
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
       ELOG_ERROR << "init ssl failed: " << e.what();
     }
     return ssl_init_ret_;
@@ -326,13 +327,11 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-
-    if (config_.host.empty()) {
+    if (!host.empty())
       config_.host = std::move(host);
-    }
-    if (config_.port.empty()) {
+    if (!port.empty())
       config_.port = std::move(port);
-    }
+
     auto ret = co_await control_->socket_wrapper_.visit([&,
                                                          this](auto &socket) {
       return connect_impl(socket,
@@ -516,16 +515,16 @@ class coro_rpc_client {
     bool value = false;
   };
 
-  async_simple::coro::Lazy<void> reset() {
+  async_simple::coro::Lazy<bool> reset() {
     co_await close_socket(control_);
-    std::visit(
+    bool reset_ok = std::visit(
         [this](auto &socket_config) {
           return init_socket_wrapper(socket_config);
         },
         config_.socket_config);
     control_->is_timeout_ = false;
     control_->has_closed_ = false;
-    co_return;
+    co_return reset_ok;
   }
   static bool is_ok(coro_rpc::err_code ec) noexcept { return !ec; }
 
@@ -534,7 +533,10 @@ class coro_rpc_client {
       Socket &soc, std::chrono::milliseconds conn_timeout_dur,
       std::vector<asio::ip::tcp::endpoint> *eps) {
     if (should_reset_) {
-      co_await reset();
+      auto reset_ok = co_await reset();
+      if (!reset_ok) {
+        co_return errc::not_connected;
+      }
     }
     else {
       should_reset_ = true;
@@ -548,7 +550,7 @@ class coro_rpc_client {
     control_->has_closed_ = false;
 
     ELOG_INFO << "client_id " << config_.client_id << " begin to connect "
-              << config_.port;
+              << config_.host << ":" << config_.port;
     if (conn_timeout_dur.count() >= 0) {
       timeout(*this->timer_, conn_timeout_dur, "connect timer canceled")
           .start([](auto &&) {
@@ -579,7 +581,7 @@ class coro_rpc_client {
         co_return errc::not_connected;
       }
     }
-    ELOG_TRACE << "start connect to endpoint lists. total endpoint count:F"
+    ELOG_TRACE << "start connect to endpoint lists. total endpoint count:"
                << eps->size()
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
                << ":" << std::to_string((*eps)[0].port());
@@ -859,8 +861,6 @@ class coro_rpc_client {
     }
     asio::dispatch(control->socket_wrapper_.get_executor()->get_asio_executor(),
                    [control]() {
-                     control->has_closed_ = true;
-                     asio::error_code ec;
                      control->socket_wrapper_.close();
                    });
     return;
@@ -870,11 +870,13 @@ class coro_rpc_client {
       std::shared_ptr<coro_rpc_client::control_t> control) {
     bool expected = false;
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
-      co_return;
+      co_await coro_io::post(
+          []() {
+          },
+          control->executor_);  // post to control ioc
     }
     co_await coro_io::post(
         [control = control.get()]() {
-          control->has_closed_ = true;
           control->socket_wrapper_.close();
         },
         control->executor_);
@@ -1218,38 +1220,27 @@ class coro_rpc_client {
     }
     else {
 #endif
-      if (req_attachment.empty()) {
-        while (true) {
-          bool expected = false;
-          if (write_mutex_.compare_exchange_weak(expected, true)) {
-            break;
-          }
-          co_await coro_io::post(
-              []() {
-              },
-              control_->executor_);
+      while (true) {
+        bool expected = false;
+        if (write_mutex_.compare_exchange_weak(expected, true)) {
+          break;
         }
+        co_await coro_io::post(
+            []() {
+            },
+            control_->executor_);
+      }
+      if (req_attachment.empty()) {
         ret = co_await coro_io::async_write(
             socket, asio::buffer(buffer.data(), buffer.size()));
-        write_mutex_ = false;
       }
       else {
         std::array<asio::const_buffer, 2> iov{
             asio::const_buffer{buffer.data(), buffer.size()},
             asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-        while (true) {
-          bool expected = false;
-          if (write_mutex_.compare_exchange_weak(expected, true)) {
-            break;
-          }
-          co_await coro_io::post(
-              []() {
-              },
-              control_->executor_);
-        }
         ret = co_await coro_io::async_write(socket, iov);
-        write_mutex_ = false;
       }
+      write_mutex_ = false;
 #ifdef UNIT_TEST_INJECT
     }
 #endif

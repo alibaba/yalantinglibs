@@ -31,6 +31,8 @@
 #include "doctest.h"
 #include "rpc_api.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 using namespace coro_rpc;
 using namespace std::chrono_literals;
@@ -696,6 +698,45 @@ TEST_CASE("testing client call timeout") {
   }
 #endif
   g_action = {};
+}
+static std::string_view echo(std::string_view data) { return data; }
+TEST_CASE("testing client reconnect") {
+  coro_rpc_server s1(1, 9002), s2(1, 9003);
+  s1.async_start();
+  s2.async_start();
+  s2.register_handler<echo>();
+  SUBCASE("test client reconnect") {
+    coro_rpc_client cli;
+    auto result = syncAwait(cli.connect("127.0.0.1", "9002"));
+    CHECK_MESSAGE(!result, result.message());
+    result = syncAwait(cli.connect("127.0.0.1", "9003"));
+    CHECK_MESSAGE(!result, result.message());
+    auto result2 = syncAwait(cli.call<echo>("hi"));
+    REQUIRE_MESSAGE(result2.has_value(), result2.error().msg);
+    CHECK_MESSAGE(result2.value() == "hi", result2.value());
+  }
+  SUBCASE("test client reconnect if client close") {
+    coro_rpc_client cli;
+    auto result = syncAwait(cli.connect("127.0.0.1", "9002"));
+    CHECK_MESSAGE(!result, result.message());
+    cli.close();
+    result = syncAwait(cli.connect("127.0.0.1", "9003"));
+    CHECK_MESSAGE(!result, result.message());
+    auto result2 = syncAwait(cli.call<echo>("hi"));
+    REQUIRE_MESSAGE(result2.has_value(), result2.error().msg);
+    CHECK_MESSAGE(result2.value() == "hi", result2.value());
+  }
+  SUBCASE("test client reconnect if server close") {
+    coro_rpc_client cli;
+    auto result = syncAwait(cli.connect("127.0.0.1", "9002"));
+    CHECK_MESSAGE(!result, result.message());
+    s1.stop();
+    result = syncAwait(cli.connect("127.0.0.1", "9003"));
+    CHECK_MESSAGE(!result, result.message());
+    auto result2 = syncAwait(cli.call<echo>("hi"));
+    REQUIRE_MESSAGE(result2.has_value(), result2.error().msg);
+    CHECK_MESSAGE(result2.value() == "hi", result2.value());
+  }
 }
 std::errc init_acceptor(auto& acceptor_, auto port_) {
   using asio::ip::tcp;

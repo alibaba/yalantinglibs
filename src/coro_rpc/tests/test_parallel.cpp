@@ -11,7 +11,7 @@
 #include "ylt/easylog.hpp"
 #include "ylt/easylog/record.hpp"
 using namespace async_simple::coro;
-std::string_view echo(std::string_view data) { return data; }
+static std::string_view echo(std::string_view data) { return data; }
 TEST_CASE("test parall coro_rpc call") {
   auto s = easylog::logger<>::instance().get_min_severity();
   easylog::logger<>::instance().set_min_severity(easylog::Severity::WARNING);
