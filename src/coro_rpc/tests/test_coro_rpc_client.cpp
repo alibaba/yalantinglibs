@@ -699,7 +699,7 @@ TEST_CASE("testing client call timeout") {
 #endif
   g_action = {};
 }
-std::string_view echo(std::string_view data);
+static std::string_view echo(std::string_view data) { return data; }
 TEST_CASE("testing client reconnect") {
   coro_rpc_server s1(1, 9002), s2(1, 9003);
   s1.async_start();
