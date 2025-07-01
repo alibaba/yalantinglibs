@@ -8,8 +8,6 @@
 <img alt="last commit" src="https://img.shields.io/github/last-commit/alibaba/async_simple?style=flat-square">
 </p>
 
-[中文版](./website/docs/zh/guide/what_is_yalantinglibs.md)
-
 yaLanTingLibs is a collection of modern c++ util libraries, now it contains struct_pack, struct_json, struct_xml, struct_yaml, struct_pb, easylog, coro_rpc, coro_io, coro_http and async_simple, more and more cool libraries will be added into yaLanTingLibs in the future.
 
 The target of yaLanTingLibs: provide very easy and high performance modern C++ libraries for developers, it can help to quickly build high performance applications.
