@@ -116,7 +116,6 @@ public:
   }
 };
 
-// 如果需要检测stack-use-after-free: 需要CRTP继承该对象。
 template <typename Derived>
 struct ff_Base {
   ff_Base() {
@@ -126,7 +125,7 @@ struct ff_Base {
   }
   ~ff_Base() {
     if constexpr (sizeof(Derived) >= 8) {
-      size_t* data = (uint64_t*)this;
+      uint64_t* data = (uint64_t*)this;
       if (detail::ptr_check(ff_ptr_error_type::use_after_scope, data)) [[unlikely]] {
         detail::poisoned(this);
       }
@@ -135,8 +134,6 @@ struct ff_Base {
 };
 
 
-// 析构T时需要调用该函数，该函数能检测double-free，
-// 如果未调用该函数析构，且T未继承自ff_base<T>，则无法检测到use-after-free
 template <typename T>
 void ff_delete(ff_ptr<T> p) {
   if constexpr (!std::derived_from<T, ff_Base<T>> && sizeof(T) >= sizeof(uint64_t)) { 
@@ -168,9 +165,6 @@ ff_ptr<T> ff_new(Args&&... args) {
     return new T{std::forward<Args>(args)...};
   }
 }
-
-
-
 
 
 template<typename T>
