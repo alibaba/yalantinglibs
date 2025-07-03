@@ -89,6 +89,22 @@ target_link_libraries(main yalantinglibs::yalantinglibs)
 target_compile_features(main PRIVATE cxx_std_20)
 ```
 
+### Cake add_subdirectory
+
+1. 下载yalantinglibs的源代码，将文件夹放到你的工程下。
+2. 将yalantinglibs的根目录加入到你的工程中。
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+add_subdirectory(yalantinglibs)  # 你可能需要根据实际情况修改这里的相对路径
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
 ### 手动安装
 
 Yalantinglibs 是一个head-only的库，这意味着你可以简单粗暴的直接将`./include/ylt`拷贝走。但是更推荐的做法还是用Cmake安装。

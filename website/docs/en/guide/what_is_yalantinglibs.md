@@ -85,6 +85,22 @@ target_link_libraries(main yalantinglibs::yalantinglibs)
 target_compile_features(main PRIVATE cxx_std_20)
 ```
 
+### Cmake add_subdirectory
+
+1. download ylt source code and put it in your project
+2. add ylt to your project as subdirectory:
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+add_subdirectory(yalantinglibs)  # you may modify the path as the real relative path in your project
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
 ### Manually Install & Import
 
 Yalantinglibs is a head-only library. You can just copy `./include/ylt` directory into your project. But we suggest you use cmake to install it.
