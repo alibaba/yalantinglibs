@@ -251,7 +251,6 @@ struct ib_socket_shared_state_t
       auto result = recv_result.front();
       recv_result.pop();
       recv_buf_ = std::move(recv_queue_.pop());
-      add_recv_buffer({}, recv_buffer_cnt_ / 2);
       ib_socket_shared_state_t::resume(std::move(result), handler);
       return;
     }
@@ -309,13 +308,13 @@ struct ib_socket_shared_state_t
           if (recv_cb_) {
             assert(recv_result.empty());
             recv_buf_ = recv_queue_.pop();
-            add_recv_buffer({}, recv_buffer_cnt_ / 2);
+            add_recv_buffer({}, recv_buffer_cnt_);
             tmp_recv_callback = std::move(recv_cb_);
             vec.push_back({ec, wc.byte_len, 0});
           }
           else {
             recv_result.push(std::pair{ec, (std::size_t)wc.byte_len});
-            add_recv_buffer({}, recv_buffer_cnt_ / 2);
+            add_recv_buffer({}, recv_buffer_cnt_);
           }
         }
         else {
@@ -431,7 +430,7 @@ class ib_socket_t {
       if (remain_data_.empty()) {
         assert(state_->recv_buf_);
         state_->add_recv_buffer(std::move(state_->recv_buf_),
-                                state_->recv_buffer_cnt_ / 2 + 1);
+                                state_->recv_buffer_cnt_ + 1);
       }
     }
     return len;
@@ -443,7 +442,7 @@ class ib_socket_t {
         (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
       state_->add_recv_buffer(std::move(state_->recv_buf_),
-                              state_->recv_buffer_cnt_ / 2 + 1);
+                              state_->recv_buffer_cnt_ + 1);
     }
   }
 
