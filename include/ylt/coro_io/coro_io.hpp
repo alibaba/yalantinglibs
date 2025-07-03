@@ -459,6 +459,44 @@ async_write_at(uint64_t offset, Socket &socket, AsioBuffer buffer) noexcept {
       socket);
 }
 
+template <typename Type>
+concept is_container_v = requires(Type container) {
+                           typename std::remove_cvref_t<Type>::value_type;
+                           container.size();
+                           container.begin();
+                           container.end();
+                         };
+
+template <typename EndPointSeq>
+inline async_simple::coro::Lazy<std::error_code> async_connect(
+    asio::ip::tcp::socket &socket, const EndPointSeq &endpoint) noexcept {
+  auto connect_impl =
+      [&](auto beg, auto end) -> async_simple::coro::Lazy<std::error_code> {
+    std::error_code result{};
+    while (beg != end) {
+      result = co_await async_io<std::error_code>(
+          [&](auto &&cb) {
+            socket.async_connect(*beg, std::move(cb));
+          },
+          socket);
+      if (!result) {
+        break;
+      }
+      beg++;
+    }
+    co_return result;
+  };
+
+  using T = std::decay_t<EndPointSeq>;
+  if constexpr (is_container_v<T>) {
+    co_return co_await connect_impl(endpoint.begin(), endpoint.end());
+  }
+  else {
+    // iterator
+    co_return co_await connect_impl(endpoint, T());
+  }
+}
+
 template <typename executor_t>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     executor_t *executor, asio::ip::tcp::socket &socket,
@@ -480,12 +518,7 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     if (result.first) {
       co_return result.first;
     }
-    co_return co_await async_io<std::error_code>(
-        [&](auto &&cb) {
-          ELOG_INFO << "call asio socket.async_connect";
-          asio::async_connect(socket, result.second, std::move(cb));
-        },
-        socket);
+    co_return co_await async_connect(socket, result.second);
   }
   else {
     ELOG_INFO << "direct call without resolve";
@@ -496,24 +529,8 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
       co_return std::make_error_code(result.ec);
     }
     asio::ip::tcp::endpoint ep{address, port_v};
-    co_return co_await async_io<std::error_code>(
-        [&](auto &&cb) {
-          ELOG_INFO << "call asio socket.async_connect";
-          asio::async_connect(socket, std::span{&ep, 1}, std::move(cb));
-        },
-        socket);
+    co_return co_await async_connect(socket, std::span{&ep, 1});
   }
-}
-
-template <typename EndPointSeq>
-inline async_simple::coro::Lazy<std::error_code> async_connect(
-    asio::ip::tcp::socket &socket, const EndPointSeq &endpoint) noexcept {
-  auto result = co_await async_io<std::error_code>(
-      [&](auto &&cb) {
-        asio::async_connect(socket, endpoint, std::move(cb));
-      },
-      socket);
-  co_return result;
 }
 
 template <typename executor_t>

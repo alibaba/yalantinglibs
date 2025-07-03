@@ -57,14 +57,15 @@ struct socket_wrapper_t {
     }
     if (!socket_) {
       socket_ = std::make_unique<asio::ip::tcp::socket>(
-          executor_->get_asio_executor(),
-          asio::ip::tcp::endpoint(std::move(addr), 0));
+          executor_->get_asio_executor());
     }
     else {
-      *socket_ =
-          asio::ip::tcp::socket{executor_->get_asio_executor(),
-                                asio::ip::tcp::endpoint(std::move(addr), 0)};
+      *socket_ = asio::ip::tcp::socket{executor_->get_asio_executor()};
     }
+
+    asio::ip::tcp::endpoint local_ep(addr, 0);
+    socket_->open(local_ep.protocol());
+    socket_->bind(local_ep);
   }
   // tcp client init
   bool init_client(bool enable_tcp_no_delay) {
