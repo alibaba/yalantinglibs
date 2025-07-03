@@ -78,11 +78,27 @@ include(FetchContent)
 FetchContent_Declare(
     yalantinglibs
     GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
-    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_TAG main
     GIT_SHALLOW 1 # optional ( --depth=1 )
 )
 
 FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
+### Cake add_subdirectory
+
+1. 下载yalantinglibs的源代码，将文件夹放到你的工程下。
+2. 将yalantinglibs的根目录加入到你的工程中。
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+add_subdirectory(yalantinglibs)  # 你可能需要根据实际情况修改这里的相对路径
 add_executable(main main.cpp)
 
 target_link_libraries(main yalantinglibs::yalantinglibs)
@@ -115,7 +131,7 @@ ctest . # 执行测试
 
 ```shell
 # 可以通过这些选项来跳过编译样例/压测/测试程序
-cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF -DGENERATE_BENCHMARK_DATA=OFF
 cmake --build .
 ```
 

@@ -76,11 +76,27 @@ include(FetchContent)
 FetchContent_Declare(
     yalantinglibs
     GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
-    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_TAG main 
     GIT_SHALLOW 1 # optional ( --depth=1 )
 )
 
 FetchContent_MakeAvailable(yalantinglibs)
+add_executable(main main.cpp)
+
+target_link_libraries(main yalantinglibs::yalantinglibs)
+target_compile_features(main PRIVATE cxx_std_20)
+```
+
+### Cmake add_subdirectory
+
+1. download ylt source code and put it in your project
+2. add ylt to your project as subdirectory:
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(ylt_test)
+
+add_subdirectory(yalantinglibs)  # you may modify the path as the real relative path in your project
 add_executable(main main.cpp)
 
 target_link_libraries(main yalantinglibs::yalantinglibs)
@@ -116,7 +132,7 @@ You can see the test/example/benchmark executable file in `./build/output/`.
 
 ```shell
 # You can use those option to skip build unit-test & benchmark & example: 
-cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF -DGENERATE_BENCHMARK_DATA=OFF
 ```
 
 3. install

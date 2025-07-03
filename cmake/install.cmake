@@ -35,6 +35,7 @@ install(TARGETS yalantinglibs
 
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/yalantinglibsConfig.cmake"
        "include(\$\{CMAKE_CURRENT_LIST_DIR\}/yalantinglibsConfigImpl.cmake)\n"
+       "set(YLT_IS_IMPORTED_BY_FIND_PACKAGE true)\n"
        "include(\$\{CMAKE_CURRENT_LIST_DIR\}/config.cmake)\n"
 )
 
