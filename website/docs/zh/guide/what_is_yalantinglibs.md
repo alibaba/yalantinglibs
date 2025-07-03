@@ -115,7 +115,7 @@ ctest . # 执行测试
 
 ```shell
 # 可以通过这些选项来跳过编译样例/压测/测试程序
-cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF -DGENERATE_BENCHMARK_DATA=OFF
 cmake --build .
 ```
 

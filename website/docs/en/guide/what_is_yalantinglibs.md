@@ -114,7 +114,7 @@ You can see the test/example/benchmark executable file in `./build/output/`.
 
 ```shell
 # You can use those option to skip build unit-test & benchmark & example: 
-cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF
+cmake .. -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF -DBUILD_UNIT_TESTS=OFF -DGENERATE_BENCHMARK_DATA=OFF
 ```
 
 3. install
