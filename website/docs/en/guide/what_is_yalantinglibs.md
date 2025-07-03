@@ -74,7 +74,7 @@ include(FetchContent)
 FetchContent_Declare(
     yalantinglibs
     GIT_REPOSITORY https://github.com/alibaba/yalantinglibs.git
-    # GIT_TAG 0766d839fe52eb12ac7ecd34bc39a76399cfde41 # optional ( default master / main )
+    GIT_TAG main
     GIT_SHALLOW 1 # optional ( --depth=1 )
 )
 
