@@ -75,6 +75,7 @@ struct socket_wrapper_t {
       socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay));
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
@@ -88,6 +89,7 @@ struct socket_wrapper_t {
       init_ssl(ssl_ctx);
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
@@ -105,6 +107,7 @@ struct socket_wrapper_t {
       }
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
@@ -122,6 +125,7 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
   std::unique_ptr<ib_socket_t> ib_socket_;
 #endif
+  bool init_ok_ = true;
 
  public:
   bool use_ssl() const noexcept {
@@ -159,6 +163,8 @@ struct socket_wrapper_t {
 #endif
     return op(*socket_);
   }
+
+  bool init_ok() const { return init_ok_; }
 
   void close() noexcept {
     std::error_code ignored_ec;

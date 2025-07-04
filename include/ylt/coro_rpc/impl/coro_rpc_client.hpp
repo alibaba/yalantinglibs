@@ -332,6 +332,9 @@ class coro_rpc_client {
     if (!port.empty())
       config_.port = std::move(port);
 
+    if (!control_->socket_wrapper_.init_ok()) {
+      co_return coro_rpc::err_code(coro_rpc::errc::not_connected);
+    }
     auto ret = co_await control_->socket_wrapper_.visit([&,
                                                          this](auto &socket) {
       return connect_impl(socket,
