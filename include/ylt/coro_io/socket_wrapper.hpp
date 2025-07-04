@@ -23,7 +23,7 @@
 namespace coro_io {
 struct socket_wrapper_t {
   // construct by listen tcp
-  socket_wrapper_t() {};
+  socket_wrapper_t(){};
   socket_wrapper_t(coro_io::ExecutorWrapper<> *executor,
                    const std::string &local_ip = "")
       : executor_(executor), local_ip_(local_ip){};
@@ -55,15 +55,17 @@ struct socket_wrapper_t {
     if (!local_ip_.empty()) {
       addr = asio::ip::address::from_string(local_ip_);
     }
+    auto ep = asio::ip::tcp::endpoint(std::move(addr), 0);
     if (!socket_) {
       socket_ = std::make_unique<asio::ip::tcp::socket>(
-          executor_->get_asio_executor(),
-          asio::ip::tcp::endpoint(std::move(addr), 0));
+          executor_->get_asio_executor());
     }
     else {
-      *socket_ =
-          asio::ip::tcp::socket{executor_->get_asio_executor(),
-                                asio::ip::tcp::endpoint(std::move(addr), 0)};
+      *socket_ = asio::ip::tcp::socket{executor_->get_asio_executor()};
+    }
+    socket_->open(ep.protocol());
+    if (!local_ip_.empty()) {
+      socket_->bind(ep);
     }
   }
   // tcp client init
@@ -73,6 +75,7 @@ struct socket_wrapper_t {
       socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay));
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
@@ -86,6 +89,7 @@ struct socket_wrapper_t {
       init_ssl(ssl_ctx);
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
@@ -103,11 +107,14 @@ struct socket_wrapper_t {
       }
     } catch (const std::exception &e) {
       ELOG_WARN << "init client failed:" << e.what();
+      init_ok_ = false;
       return false;
     }
     return true;
   }
 #endif
+
+  void set_local_ip(const std::string &local_ip) { local_ip_ = local_ip; }
 
  private:
   std::unique_ptr<asio::ip::tcp::socket> socket_;
@@ -120,6 +127,7 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
   std::unique_ptr<ib_socket_t> ib_socket_;
 #endif
+  bool init_ok_ = true;
 
  public:
   bool use_ssl() const noexcept {
@@ -157,6 +165,8 @@ struct socket_wrapper_t {
 #endif
     return op(*socket_);
   }
+
+  bool init_ok() const { return init_ok_; }
 
   void close() noexcept {
     std::error_code ignored_ec;
@@ -201,8 +211,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
-  ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+      &ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;

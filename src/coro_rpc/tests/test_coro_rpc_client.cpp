@@ -217,6 +217,22 @@ TEST_CASE("testing client with local ip") {
 
   ret = client.sync_call<hello>();
   CHECK(ret.value() == "hello"s);
+
+  std::vector<asio::ip::tcp::endpoint> eps;
+  eps.push_back(asio::ip::tcp::endpoint(
+      asio::ip::address::from_string("192.0.2.1"), 8901));
+  eps.push_back(asio::ip::tcp::endpoint(
+      asio::ip::address::from_string("127.0.0.1"), 8901));
+
+  auto local_ep =
+      asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 0);
+  asio::ip::tcp::socket socket(client.get_executor().get_asio_executor());
+  socket.open(local_ep.protocol());
+  socket.bind(local_ep);
+
+  auto ec1 = async_simple::coro::syncAwait(coro_io::async_connect(socket, eps));
+  CHECK(!ec1);
+  CHECK(socket.local_endpoint().address().to_string() == "127.0.0.1");
 }
 
 TEST_CASE("testing client with inject server") {
