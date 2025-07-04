@@ -55,6 +55,7 @@ struct socket_wrapper_t {
     if (!local_ip_.empty()) {
       addr = asio::ip::address::from_string(local_ip_);
     }
+    auto ep = asio::ip::tcp::endpoint(std::move(addr), 0);
     if (!socket_) {
       socket_ = std::make_unique<asio::ip::tcp::socket>(
           executor_->get_asio_executor());
@@ -62,10 +63,10 @@ struct socket_wrapper_t {
     else {
       *socket_ = asio::ip::tcp::socket{executor_->get_asio_executor()};
     }
-
-    asio::ip::tcp::endpoint local_ep(addr, 0);
-    socket_->open(local_ep.protocol());
-    socket_->bind(local_ep);
+    socket_->open(ep.protocol());
+    if (!local_ip_.empty()) {
+      socket_->bind(ep);
+    }
   }
   // tcp client init
   bool init_client(bool enable_tcp_no_delay) {
