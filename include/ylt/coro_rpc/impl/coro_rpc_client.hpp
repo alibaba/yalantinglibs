@@ -289,6 +289,7 @@ class coro_rpc_client {
 #endif
   [[nodiscard]] bool init_config(const config &conf) {
     config_ = conf;
+    control_->socket_wrapper_.set_local_ip(config_.local_ip);
     return std::visit(
         [this](auto &socket_config) {
           return init_socket_wrapper(socket_config);
