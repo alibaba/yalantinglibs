@@ -508,6 +508,24 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename EndPointSeq>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
     asio::ip::tcp::socket &socket, const EndPointSeq &endpoint) noexcept {
+  std::error_code ec;
+  auto local_ep = socket.local_endpoint(ec);
+  if (!ec && local_ep.address() != asio::ip::address()) {
+    ELOG_INFO << "get local ip: " << local_ep.address().to_string();
+    std::error_code result{};
+    for (auto &ep : endpoint) {
+      result = co_await async_io<std::error_code>(
+          [&](auto &&cb) {
+            socket.async_connect(ep, std::move(cb));
+          },
+          socket);
+      if (!result) {
+        break;
+      }
+    }
+    co_return result;
+  }
+
   auto result = co_await async_io<std::error_code>(
       [&](auto &&cb) {
         asio::async_connect(socket, endpoint, std::move(cb));
