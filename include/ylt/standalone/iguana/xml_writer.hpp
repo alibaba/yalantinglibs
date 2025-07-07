@@ -255,6 +255,8 @@ IGUANA_INLINE void render_xml_value(Stream &ss, T &&t, std::string_view name) {
   }
   ylt::reflection::for_each(t, [&](auto &field, auto tag_name, auto index) {
     using value_type = underline_type_t<decltype(field)>;
+    static_assert(!std::is_pointer_v<value_type>,
+                  "don't use raw pointer, please use smart pointer");
     if constexpr (sequence_container_v<value_type>) {
       render_xml_value<pretty, spaces + 1>(ss, field, tag_name);
     }

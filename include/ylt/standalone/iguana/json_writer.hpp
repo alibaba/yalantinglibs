@@ -276,6 +276,9 @@ IGUANA_INLINE void to_json(T &&t, Stream &s) {
   constexpr auto Count = ylt::reflection::members_count_v<U>;
   if constexpr (Count > 0) {
     ylt::reflection::for_each(t, [&](auto &field, auto name, auto index) {
+      static_assert(
+          !std::is_pointer_v<std::remove_reference_t<decltype(field)>>,
+          "don't use raw pointer, please use smart pointer");
       write_json_key(s, name);
       s.push_back(':');
       to_json_impl<Is_writing_escape>(s, field);

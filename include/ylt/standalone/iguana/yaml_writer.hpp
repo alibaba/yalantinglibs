@@ -170,10 +170,13 @@ template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<ylt_refletable_v<T>, int>>
 IGUANA_INLINE void to_yaml(T &&t, Stream &s, size_t min_spaces) {
   ylt::reflection::for_each(t, [&](auto &field, auto field_name, auto index) {
+    using field_type = std::remove_reference_t<decltype(field)>;
+    static_assert(!std::is_pointer_v<field_type>,
+                  "don't use raw pointer, please use smart pointer");
     s.append(min_spaces, ' ');
     s.append(field_name);
     s.append(": ");
-    if constexpr (!ylt_refletable_v<std::decay_t<decltype(field)>>) {
+    if constexpr (!ylt_refletable_v<field_type>) {
       render_yaml_value<Is_writing_escape>(s, field, min_spaces + 1);
     }
     else {
