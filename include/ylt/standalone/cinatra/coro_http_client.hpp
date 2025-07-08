@@ -184,7 +184,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   ~coro_http_client() { close(); }
 
-  auto get_tp() const noexcept { return std::chrono::steady_clock::now(); }
+  auto get_create_time_point() const noexcept {
+    return std::chrono::steady_clock::now();
+  }
 
   void close() {
     if (socket_ == nullptr || socket_->has_closed_)

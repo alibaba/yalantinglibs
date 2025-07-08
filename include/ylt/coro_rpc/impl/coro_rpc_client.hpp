@@ -298,7 +298,7 @@ class coro_rpc_client {
         conf.socket_config);
   };
 
-  auto get_tp() const noexcept { return create_tp_; }
+  auto get_create_time_point() const noexcept { return create_tp_; }
   /*!
    * Check the client closed or not
    *

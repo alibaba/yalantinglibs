@@ -307,11 +307,10 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
-    if (pool_config_.max_connection_life_time < std::chrono::seconds::max())
-        [[unlikely]] {
-      auto tp = client->get_tp();
+    if (pool_config_.max_connection_life_time < std::chrono::seconds::max()) {
+      auto tp = client->get_create_time_point();
       if (std::chrono::steady_clock::now() - tp >
-          pool_config_.max_connection_life_time) {
+          pool_config_.max_connection_life_time) [[unlikely]] {
         ELOG_INFO << "client{" << client.get()
                   << "} live too long, we won't collect it";
         return;
