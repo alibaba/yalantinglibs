@@ -345,3 +345,18 @@ TEST_CASE("test client pools dns don't refresh") {
     CHECK(eps->empty());
   }());
 }
+
+TEST_CASE("test client pools client pool") {
+  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+    auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
+        "http://www.baidu.com",
+        coro_io::client_pool<coro_http::coro_http_client>::pool_config{
+            .max_connection_life_time = 0s});
+    co_await pool->send_request(
+        [](coro_http::coro_http_client &cli) -> Lazy<void> {
+          cli.close();
+          co_return;
+        });
+    CHECK(pool->free_client_count() == 0);
+  }());
+}

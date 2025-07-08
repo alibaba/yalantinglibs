@@ -307,6 +307,16 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
+    if (pool_config_.max_connection_life_time < std::chrono::seconds::max())
+        [[unlikely]] {
+      auto tp = client->get_tp();
+      if (std::chrono::steady_clock::now() - tp >
+          pool_config_.max_connection_life_time) {
+        ELOG_INFO << "client{" << client.get()
+                  << "} live too long, we won't collect it";
+        return;
+      }
+    }
     if (!client->has_closed()) {
       if (free_clients_.size() < pool_config_.max_connection) {
         ELOG_TRACE << "collect free client{" << client.get() << "} enqueue";
@@ -361,6 +371,7 @@ class client_pool : public std::enable_shared_from_this<
         30000}; /* zero means wont detect */
     typename client_t::config client_config;
     std::chrono::seconds dns_cache_update_duration{5 * 60};  // 5mins
+    std::chrono::seconds max_connection_life_time = std::chrono::seconds::max();
   };
 
  private:

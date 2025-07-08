@@ -164,12 +164,12 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         std::size_t clear_cnt = self->free_buffers_.clear_old(1000);
         self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
                                   (ssize_t)self->buffer_size());
-        ELOG_WARN << "finish ib_buffer timeout free of pool{" << self.get()
-                  << "}, now ib_buffer cnt: " << self->free_buffers_.size()
-                  << " mem usage:"
-                  << (int64_t)(std::round(self->memory_usage() /
-                                          (1.0 * 1024 * 1024)))
-                  << " MB";
+        ELOG_TRACE << "finish ib_buffer timeout free of pool{" << self.get()
+                   << "}, now ib_buffer cnt: " << self->free_buffers_.size()
+                   << " mem usage:"
+                   << (int64_t)(std::round(self->memory_usage() /
+                                           (1.0 * 1024 * 1024)))
+                   << " MB";
         if (clear_cnt != 0) {
           try {
             co_await async_simple::coro::Yield{};
