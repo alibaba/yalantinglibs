@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cassert>
 #include <charconv>
+#include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -142,7 +143,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         timer_(&executor_wrapper_),
         socket_(std::make_shared<socket_t>(executor)),
         head_buf_(socket_->head_buf_),
-        chunked_buf_(socket_->chunked_buf_) {}
+        chunked_buf_(socket_->chunked_buf_),
+        create_tp_(std::chrono::steady_clock::now()) {}
 
   coro_http_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor())
@@ -181,6 +183,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   ~coro_http_client() { close(); }
+
+  auto get_create_time_point() const noexcept {
+    return std::chrono::steady_clock::now();
+  }
 
   void close() {
     if (socket_ == nullptr || socket_->has_closed_)
@@ -2463,6 +2469,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::chrono::seconds(30);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
+  std::chrono::steady_clock::time_point create_tp_;
   bool enable_tcp_no_delay_ = true;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;

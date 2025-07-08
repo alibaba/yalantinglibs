@@ -293,7 +293,7 @@ struct ib_socket_shared_state_t
       }
       ec = make_error_code(wc.status);
       if (wc.status != IBV_WC_SUCCESS) {
-        ELOG_WARN << "rdma failed with error code: " << wc.status;
+        ELOG_WARN << "rdma failed with error: " << ec.message();
       }
       else {
         ELOG_TRACE << "rdma op success, id:" << (callback_t*)wc.wr_id

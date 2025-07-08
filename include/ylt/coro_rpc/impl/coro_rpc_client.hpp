@@ -288,6 +288,7 @@ class coro_rpc_client {
   }
 #endif
   [[nodiscard]] bool init_config(const config &conf) {
+    create_tp_ = std::chrono::steady_clock::now();
     config_ = conf;
     control_->socket_wrapper_.set_local_ip(config_.local_ip);
     return std::visit(
@@ -297,6 +298,7 @@ class coro_rpc_client {
         conf.socket_config);
   };
 
+  auto get_create_time_point() const noexcept { return create_tp_; }
   /*!
    * Check the client closed or not
    *
@@ -1291,5 +1293,6 @@ class coro_rpc_client {
   asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
   bool ssl_init_ret_ = true;
 #endif
+  std::chrono::time_point<std::chrono::steady_clock> create_tp_;
 };
 }  // namespace coro_rpc
