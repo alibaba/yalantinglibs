@@ -179,8 +179,11 @@ struct ib_socket_shared_state_t
   }
 
   void add_recv_buffer(ib_buffer_t buffer, std::size_t free_buffer_limit) {
+    auto free_buffer_cnt = recv_queue_.size() - recv_result.size();
+    ELOG_TRACE << "total buffer:" << recv_queue_.size()
+               << ",free buffer:" << free_buffer_cnt
+               << "used buffer:" << recv_result.size();
     if (!peer_close_ && !recv_queue_.full()) {
-      auto free_buffer_cnt = recv_queue_.size() - recv_result.size();
       if (free_buffer_cnt < free_buffer_limit) {
         if (!buffer) {
           buffer = device_->get_buffer_pool()->get_buffer();
