@@ -177,10 +177,8 @@ class logger {
 #endif
   bool async_ = false;
   bool enable_console_ = true;
-  std::atomic<std::chrono::milliseconds> log_sample_interval_ =
-      std::atomic<std::chrono::milliseconds>{std::chrono::seconds{7200}};
-  std::atomic<std::chrono::milliseconds> log_sample_duration_ =
-      std::atomic<std::chrono::milliseconds>{std::chrono::seconds{3}};
+  std::atomic<std::chrono::milliseconds> log_sample_interval_;
+  std::atomic<std::chrono::milliseconds> log_sample_duration_;
   std::chrono::system_clock::time_point init_time_{};
   appender *appender_ = nullptr;
   std::vector<std::function<void(std::string_view)>> appenders_;
