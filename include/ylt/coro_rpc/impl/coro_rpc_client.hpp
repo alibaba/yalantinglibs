@@ -1270,6 +1270,8 @@ class coro_rpc_client {
         co_return rpc_error{errc::timed_out};
       }
       else {
+        ELOG_ERROR << "write error: " << ret.first.value() << ", "
+                   << ret.first.message();
         co_return rpc_error{errc::io_error, ret.first.message()};
       }
     }
