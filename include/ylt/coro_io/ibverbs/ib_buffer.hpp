@@ -255,8 +255,13 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   std::size_t buffer_size() const noexcept {
     return this->pool_config_.buffer_size;
   }
-  std::size_t modify_memory_usage(ssize_t count) {
-    return memory_usage_recorder_->fetch_add(count, std::memory_order_release);
+  void modify_memory_usage(ssize_t count) {
+    auto ret =
+        memory_usage_recorder_->fetch_add(count, std::memory_order_release);
+    max_memory_usage_.store(
+        std::max(max_memory_usage_.load(std::memory_order_relaxed),
+                 ret + count),
+        std::memory_order_relaxed);
   }
   bool memory_out_of_limit() {
     return max_memory_usage() < buffer_size() + memory_usage();
