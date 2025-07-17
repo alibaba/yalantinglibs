@@ -293,12 +293,19 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   std::size_t memory_usage() const noexcept {
     return memory_usage_recorder_->load(std::memory_order_relaxed);
   }
+  std::size_t max_recorded_memory_usage() const noexcept {
+    auto ret = std::max(max_memory_usage_.load(std::memory_order_relaxed),
+                        memory_usage());
+    max_memory_usage_.store(ret, std::memory_order_relaxed);
+    return ret;
+  }
   std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
 
  private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
       free_buffers_;
   std::shared_ptr<std::atomic<uint64_t>> memory_usage_recorder_;
+  mutable std::atomic<uint64_t> max_memory_usage_;
   ib_device_t& device_;
   config_t pool_config_;
 };
