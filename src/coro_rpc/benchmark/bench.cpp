@@ -12,8 +12,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/ibverbs/ib_device.hpp"
-#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
