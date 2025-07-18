@@ -118,32 +118,43 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
     if (conf.client_concurrency != 0) {
       std::cout << "qps: " << qps << ",";
     }
-    std::cout
-        << "Throughput: " << thp_MB << " Gb/s "
-        << "mem usage: "
-        << coro_io::get_global_ib_device()->get_buffer_pool()->memory_usage() /
-               (1.0 * 1024 * 1024)
-        << "MB, max mem usage: "
-        << coro_io::get_global_ib_device()
-                   ->get_buffer_pool()
-                   ->max_recorded_memory_usage() /
-               (1.0 * 1024 * 1024)
-        << "MB\n";
+    std::cout << "Throughput: " << thp_MB << " Gb/s ";
+#ifdef YLT_ENABLE_IBV
+    if (conf.enable_ib) {
+      std::cout << "ibv mem usage: "
+                << coro_io::get_global_ib_device()
+                           ->get_buffer_pool()
+                           ->memory_usage() /
+                       (1.0 * 1024 * 1024)
+                << "MB, max ibv mem usage: "
+                << coro_io::get_global_ib_device()
+                           ->get_buffer_pool()
+                           ->max_recorded_memory_usage() /
+                       (1.0 * 1024 * 1024)
+                << "MB";
+    }
+#endif
+    std::cout << std::endl;
   }
 
   std::cout << "# Benchmark result \n";
   double avg_thp = (8.0 * total) / (1000'000'000ll * conf.duration);
   std::cout << "avg qps: " << total_qps / (conf.duration)
             << " and throughput: " << avg_thp << " Gb/s in duration "
-            << conf.duration << "\n history max memory usage:"
-            << coro_io::get_global_ib_device()
-                       ->get_buffer_pool()
-                       ->max_recorded_memory_usage() /
-                   (1.0 * 1024 * 1024)
-            << "MB\n";
+            << conf.duration << "\n";
+#ifdef YLT_ENABLE_IBV
+  if (conf.enable_ib) {
+    std::cout << "history max ibv memory usage:"
+              << coro_io::get_global_ib_device()
+                         ->get_buffer_pool()
+                         ->max_recorded_memory_usage() /
+                     (1.0 * 1024 * 1024)
+              << "MB\n";
+  }
+#endif
   std::string str_rate;
   g_latency.serialize(str_rate);
-  std::cout << str_rate << "\n";
+  std::cout << str_rate << std::endl;
   co_return;
 }
 
