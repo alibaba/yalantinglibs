@@ -60,7 +60,10 @@ extern void *create_client_pool(char *addr, client_config conf);
 extern void free_client_pool(void *pool);
 extern rpc_result load(void *pool, uint64_t req_id, char *dest,
                        uint64_t dest_len);
+#ifdef YLT_ENABLE_IBV
 extern uint64_t global_memory_usage();
+extern uint64_t global_history_max_memory_usage();
+#endif
 /*
 enum log_level {
   NONE = 0,

@@ -231,6 +231,9 @@ rpc_result load(void *pool, uint64_t req_id, char *dest, uint64_t dest_len) {
 uint64_t global_memory_usage() {
   return coro_io::ib_buffer_pool_t::global_memory_usage();
 }
+uint64_t global_history_max_memory_usage() {
+  return coro_io::ib_buffer_pool_t::global_history_max_memory_usage();
+}
 #endif
 
 // log
