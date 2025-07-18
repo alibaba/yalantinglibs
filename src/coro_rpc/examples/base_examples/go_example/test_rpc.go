@@ -9,7 +9,7 @@ import(
 /*
 #cgo CXXFLAGS: -std=c++20
 #cgo CFLAGS: -I../coro_rpc_lib
-#cgo LDFLAGS: -L./ -lcoro_rpc -lm -lstdc++
+#cgo LDFLAGS: -L../coro_rpc_lib -lcoro_rpc -lm -lstdc++
 #include "coro_rpc.h"
 */
 import "C"
@@ -91,7 +91,12 @@ func main()  {
   flag.Parse()
   fmt.Println(*addr, "thread number,", *thds, ", response data len:", *resp_len)
   g_resp_buf = make([]byte, *resp_len)
-  var server = C.start_rpc_server(C.CString(*addr), 96, C.bool(true))
+
+	conf := C.server_config{
+		parallel:           4,
+		enable_ib:          C.bool(false),
+	}
+  var server = C.start_rpc_server(C.CString(*addr), conf)
   init_response_buf()
 
   // var quit1 string

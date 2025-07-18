@@ -1,9 +1,11 @@
 #include "coro_rpc.h"
 
 #include <asio/ip/host_name.hpp>
-#include <ylt/coro_io/load_balancer.hpp>
+#include <system_error>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
+
+#include "ylt/coro_io/load_balancer.hpp"
 
 inline char *create_copy_cstr(std::string msg) {
   char *buf = (char *)malloc(msg.size() + 1);
@@ -47,9 +49,9 @@ void *response_msg(void *ctx, char *msg, uint64_t size) {
 }
 
 rpc_result wait_response_finish(void *p) {
-  auto promis = (std::promise<std::error_code> *)p;
-  auto ec = promis->get_future().get();
-  delete promis;
+  auto promise = (std::promise<std::error_code> *)p;
+  auto ec = promise->get_future().get();
+  delete promise;
   if (!ec) {
     return {};
   }
@@ -58,14 +60,37 @@ rpc_result wait_response_finish(void *p) {
   return rpc_result{0, buf, 0};
 }
 
-void *start_rpc_server(char *addr, int parallel, bool enable_ib) {
+void *start_rpc_server(char *addr, server_config conf) {
   auto server = std::make_unique<coro_rpc::coro_rpc_server>(
-      parallel, addr, std::chrono::seconds(600));
+      conf.parallel, addr, std::chrono::seconds(600));
   server->register_handler<ylt_load_service>();
 #ifdef YLT_ENABLE_IBV
-  if (enable_ib)
-    server->init_ibv();
+  if (conf.enable_ib) {
+    coro_io::ib_socket_t::config_t ib_conf{};
+    if (conf.min_recv_buf_count != 0)
+      ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+
+    if (conf.max_recv_buf_count != 0) {
+      ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    }
+
+    ib_conf.cap.max_recv_wr =
+        (std::max)(ib_conf.cap.max_recv_wr, ib_conf.recv_buffer_cnt + 1);
+
+    std::string nic_name;
+    if (conf.device_name != nullptr) {
+      nic_name = conf.device_name;
+    }
+    auto dev = coro_io::get_global_ib_device({.dev_name = nic_name});
+    if (dev == nullptr) {
+      return nullptr;
+    }
+    ib_conf.device = dev;
+
+    server->init_ibv(ib_conf);
+  }
 #endif
+
   auto res = server->async_start();
   if (res.hasResult()) {
     ELOG_ERROR << "start server failed";
@@ -83,38 +108,67 @@ void stop_rpc_server(void *server) {
   }
 }
 
+#ifdef YLT_ENABLE_IBV
+void config_buffer_pool(pool_config conf) {
+  coro_io::ib_buffer_pool_t::config_t pool_conf{};
+  if (conf.buffer_size != 0) {
+    pool_conf.buffer_size = conf.buffer_size;
+  }
+
+  if (conf.max_memory_usage != 0) {
+    pool_conf.max_memory_usage = conf.max_memory_usage;
+  }
+
+  coro_io::get_global_ib_device({.buffer_pool_config = pool_conf});
+}
+#endif
+
 // rpc client
 void *create_client_pool(char *addr, client_config conf) {
   std::vector<std::string_view> hosts{std::string_view(addr)};
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+  pool_conf.max_connection_life_time = std::chrono::seconds(3600);
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
     coro_io::ib_socket_t::config_t ib_conf{};
+    if (conf.min_recv_buf_count != 0)
+      ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+
+    if (conf.max_recv_buf_count != 0) {
+      ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    }
+
+    ib_conf.cap.max_recv_wr =
+        (std::max)(ib_conf.cap.max_recv_wr, ib_conf.recv_buffer_cnt + 1);
+
+    std::string device_name;
+    if (conf.local_ip != nullptr) {
+      device_name = conf.local_ip;
+    }
+    auto dev = coro_io::get_global_ib_device({.dev_name = device_name});
+    if (dev == nullptr) {
+      return nullptr;
+    }
+    ib_conf.device = dev;
+
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
-  if (conf.connect_timeout_sec != 0) {
-    pool_conf.client_config.connect_timeout_duration =
-        std::chrono::seconds{conf.connect_timeout_sec};
-  }
 
-  if (conf.req_timeout_sec != 0) {
-    pool_conf.client_config.request_timeout_duration =
-        std::chrono::seconds{conf.req_timeout_sec};
-  }
+  pool_conf.client_config.connect_timeout_duration =
+      std::chrono::seconds{conf.connect_timeout_sec};
 
-  if (conf.local_ip == nullptr) {
-    pool_conf.client_config.local_ip = "localhost";
-  }
-  else {
+  pool_conf.client_config.request_timeout_duration =
+      std::chrono::seconds{conf.req_timeout_sec};
+
+  if (conf.local_ip != nullptr && !conf.enable_ib) {
     pool_conf.client_config.local_ip = conf.local_ip;
   }
 
   ELOG_INFO << "client config connect timeout seconds: "
             << conf.connect_timeout_sec
             << ", request timeout seconds: " << conf.req_timeout_sec
-            << ", local_ip: " << pool_conf.client_config.local_ip
-            << ", enable ibverbs: " << conf.enable_ib;
+            << ", local_ip: " << pool_conf.client_config.local_ip;
 
   auto ld = coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(
       hosts, {pool_conf});
@@ -155,6 +209,17 @@ rpc_result load(void *pool, uint64_t req_id, char *dest, uint64_t dest_len) {
           }
           ret.len = client.get_resp_attachment().size();
         });
+    if (!result) {
+      if (result.error() == std::errc::connection_refused) {
+        set_rpc_result(ret, coro_rpc::rpc_error(coro_rpc::errc::not_connected));
+      }
+      else {
+        set_rpc_result(ret,
+                       coro_rpc::rpc_error(
+                           coro_rpc::errc::io_error,
+                           std::make_error_code(result.error()).message()));
+      }
+    }
   };
 
   syncAwait(lazy());
@@ -162,20 +227,26 @@ rpc_result load(void *pool, uint64_t req_id, char *dest, uint64_t dest_len) {
   return ret;
 }
 
+#ifdef YLT_ENABLE_IBV
+uint64_t global_memory_usage() {
+  return coro_io::ib_buffer_pool_t::global_memory_usage();
+}
+#endif
+
 // log
 void init_rpc_log(char *log_filename, int log_level, uint64_t max_file_size,
                   uint64_t max_file_num, bool async) {
   if (log_filename == nullptr) {
     easylog::set_min_severity((easylog::Severity)log_level);
-    ELOG_INFO << "init log, log_level: " << log_level;
+    ELOG_DEBUG << "init log, log_level: " << log_level;
     return;
   }
 
   std::string filename(log_filename);
   easylog::init_log((easylog::Severity)log_level, filename, async, true,
                     max_file_size, max_file_num, false);
-  ELOG_INFO << "init log " << log_level << ", " << filename << ","
-            << max_file_size << "," << max_file_num;
+  ELOG_DEBUG << "init log " << log_level << ", " << filename << ","
+             << max_file_size << "," << max_file_num;
 }
 
 void flush_rpc_log() { easylog::flush(); }
