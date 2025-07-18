@@ -109,6 +109,9 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
       break;
     }
     auto thp = g_throughput_count.exchange(0);
+    if (thp == 0) {
+      continue;
+    }
     total += thp;
     auto qps = g_qps_count.exchange(0);
     total_qps += qps;
