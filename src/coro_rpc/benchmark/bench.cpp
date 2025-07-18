@@ -1,4 +1,6 @@
+#include <atomic>
 #include <chrono>
+#include <system_error>
 #include <vector>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
@@ -69,14 +71,21 @@ bench_config init_conf(const cmdline::parser& parser) {
 
 size_t g_resp_len = 0;
 std::string_view g_resp_str;
-std::atomic<size_t> g_count = 0;
+std::atomic<size_t> g_throughput_count = 0;
+std::atomic<size_t> g_qps_count = 0;
 
 inline std::string_view echo() {
   auto str = coro_rpc::get_context()->get_request_attachment();
   if (g_resp_len == 0) {
     return str;
   }
-
+  coro_rpc::get_context()->set_complete_handler(
+      [sz = str.size()](std::error_code ec, std::size_t) {
+        if (!ec) {
+          g_throughput_count.fetch_add(sz, std::memory_order::relaxed);
+          g_qps_count.fetch_add(1, std::memory_order_relaxed);
+        }
+      });
   return g_resp_str;
 }
 
@@ -86,32 +95,66 @@ ylt::metric::summary_t g_latency{"Latency(us) of rpc call", "help",
 
 async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
   size_t total = 0;
-
+  size_t total_qps = 0;
   std::cout << std::fixed << std::setprecision(2);
-  g_count = 0;
-  for (uint32_t i = 0; i < conf.duration; i++) {
+  g_throughput_count = 0;
+  auto test_time = conf.duration;
+  if (conf.client_concurrency == 0) {
+    test_time = UINT32_MAX;
+  }
+  for (uint32_t i = 0; i < test_time; i++) {
     auto start = std::chrono::system_clock::now();
     auto is_ok = co_await coro_io::sleep_for(std::chrono::seconds{1});
     if (!is_ok) {
       break;
     }
-    auto c = g_count.exchange(0);
-    total += c;
+    auto thp = g_throughput_count.exchange(0);
+    total += thp;
+    auto qps = g_qps_count.exchange(0);
+    total_qps += qps;
     auto end = std::chrono::system_clock::now();
     auto dur = (end - start) / std::chrono::milliseconds(1);
-    double val = (8.0 * c * 1000) / (1000'000'000ll * dur);
-    std::cout << "qps " << c / conf.send_data_len << ", Throughput:" << val
-              << " Gb/s\n";
+    double thp_MB = (8.0 * thp * 1000) / (1000'000'000ll * dur);
+    if (conf.client_concurrency != 0) {
+      std::cout << "qps: " << qps << ",";
+    }
+    std::cout << "Throughput: " << thp_MB << " Gb/s ";
+#ifdef YLT_ENABLE_IBV
+    if (conf.enable_ib) {
+      std::cout << "ibv mem usage: "
+                << coro_io::get_global_ib_device()
+                           ->get_buffer_pool()
+                           ->memory_usage() /
+                       (1.0 * 1024 * 1024)
+                << "MB, max ibv mem usage: "
+                << coro_io::get_global_ib_device()
+                           ->get_buffer_pool()
+                           ->max_recorded_memory_usage() /
+                       (1.0 * 1024 * 1024)
+                << "MB";
+    }
+#endif
+    std::cout << std::endl;
   }
 
   std::cout << "# Benchmark result \n";
-  double val = (8.0 * total) / (1000'000'000ll * conf.duration);
-  std::cout << "avg qps " << total / (conf.send_data_len * conf.duration)
-            << " and throughput:" << val << " Gb/s in duration "
+  double avg_thp = (8.0 * total) / (1000'000'000ll * conf.duration);
+  std::cout << "avg qps: " << total_qps / (conf.duration)
+            << " and throughput: " << avg_thp << " Gb/s in duration "
             << conf.duration << "\n";
+#ifdef YLT_ENABLE_IBV
+  if (conf.enable_ib) {
+    std::cout << "history max ibv memory usage:"
+              << coro_io::get_global_ib_device()
+                         ->get_buffer_pool()
+                         ->max_recorded_memory_usage() /
+                     (1.0 * 1024 * 1024)
+              << "MB\n";
+  }
+#endif
   std::string str_rate;
   g_latency.serialize(str_rate);
-  std::cout << str_rate << "\n";
+  std::cout << str_rate << std::endl;
   co_return;
 }
 
@@ -149,7 +192,9 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
                 std::chrono::duration_cast<std::chrono::microseconds>(now -
                                                                       start)
                     .count());
-            g_count += send_str_view.length();
+            g_throughput_count.fetch_add(send_str_view.length(),
+                                         std::memory_order_relaxed);
+            g_qps_count.fetch_add(1, std::memory_order_relaxed);
             co_return true;
           });
       if (!ec.has_value()) {
@@ -208,7 +253,9 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
       g_latency.observe(
           std::chrono::duration_cast<std::chrono::microseconds>(now - start)
               .count());
-      g_count += send_str_view.length();
+      g_throughput_count.fetch_add(send_str_view.length(),
+                                   std::memory_order_relaxed);
+      g_qps_count.fetch_add(1, std::memory_order_relaxed);
     }
   };
   std::vector<async_simple::coro::Lazy<void>> works;
@@ -281,6 +328,8 @@ int main(int argc, char** argv) {
       server.init_ibv(ib_conf);
     }
 #endif
+    watcher(conf).start([](auto&&) {
+    });
     [[maybe_unused]] auto ret = server.start();
   }
   else {
