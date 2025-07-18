@@ -124,9 +124,14 @@ struct ib_buffer_t {
 };
 
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
+  struct ib_buffer_mem_control_t {
+    std::atomic<std::size_t> now_usage;
+    std::atomic<std::size_t> history_max_usage;
+  };
+
  private:
-  static std::shared_ptr<std::atomic<std::size_t>> g_memory_usage_recorder() {
-    static auto used_memory = std::make_shared<std::atomic<std::size_t>>(0);
+  static std::shared_ptr<ib_buffer_mem_control_t> g_memory_usage_recorder() {
+    static auto used_memory = std::make_shared<ib_buffer_mem_control_t>();
     return used_memory;
   }
 
@@ -230,13 +235,17 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 
  public:
   static std::size_t global_memory_usage() {
-    return g_memory_usage_recorder()->load(std::memory_order_relaxed);
+    return g_memory_usage_recorder()->now_usage.load(std::memory_order_relaxed);
+  }
+  static std::size_t global_history_max_memory_usage() {
+    return g_memory_usage_recorder()->history_max_usage.load(
+        std::memory_order_relaxed);
   }
 
   struct config_t {
     size_t buffer_size = 2 * 1024 * 1024;  // 2MB
     uint64_t max_memory_usage = UINT32_MAX;
-    std::shared_ptr<std::atomic<uint64_t>> memory_usage_recorder =
+    std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder =
         nullptr;  // nullopt means use global memory_usage_recorder
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
   };
@@ -256,12 +265,17 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return this->pool_config_.buffer_size;
   }
   void modify_memory_usage(ssize_t count) {
-    auto ret =
-        memory_usage_recorder_->fetch_add(count, std::memory_order_release);
-    max_memory_usage_.store(
-        std::max(max_memory_usage_.load(std::memory_order_relaxed),
-                 ret + count),
-        std::memory_order_relaxed);
+    auto ret = memory_usage_recorder_->now_usage.fetch_add(
+        count, std::memory_order_release);
+    auto old = memory_usage_recorder_->history_max_usage.load(
+        std::memory_order_acquire);
+    while (ret + count > old) [[likely]] {
+      if (memory_usage_recorder_->history_max_usage.compare_exchange_strong(
+              old, ret + count, std::memory_order_acq_rel)) [[likely]] {
+        break;
+      }
+    }
+    return;
   }
   bool memory_out_of_limit() {
     return max_memory_usage() < buffer_size() + memory_usage();
@@ -296,21 +310,18 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
                                    : g_memory_usage_recorder()),
         pool_config_(std::move(pool_config)) {}
   std::size_t memory_usage() const noexcept {
-    return memory_usage_recorder_->load(std::memory_order_relaxed);
+    return memory_usage_recorder_->now_usage.load(std::memory_order_relaxed);
   }
   std::size_t max_recorded_memory_usage() const noexcept {
-    auto ret = std::max(max_memory_usage_.load(std::memory_order_relaxed),
-                        memory_usage());
-    max_memory_usage_.store(ret, std::memory_order_relaxed);
-    return ret;
+    return memory_usage_recorder_->history_max_usage.load(
+        std::memory_order_relaxed);
   }
   std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
 
  private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
       free_buffers_;
-  std::shared_ptr<std::atomic<uint64_t>> memory_usage_recorder_;
-  mutable std::atomic<uint64_t> max_memory_usage_;
+  std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder_;
   ib_device_t& device_;
   config_t pool_config_;
 };
