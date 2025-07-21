@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <stdexcept>
 #include <system_error>
@@ -20,6 +21,7 @@
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
 #include "async_simple/Signal.h"
+#include "async_simple/Future.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/util/move_only_function.h"
 #include "ib_device.hpp"
@@ -674,6 +676,8 @@ class ib_socket_t {
       });
     }
   }
+  auto& write_waiter() noexcept { return write_waiter_; }
+  const auto& write_waiter() const noexcept { return write_waiter_; }
 
   async_simple::coro::Lazy<std::error_code> connect(
       const std::string& host, const std::string& port) noexcept {
@@ -901,6 +905,7 @@ class ib_socket_t {
   uint32_t remote_qp_num_{};
   std::string_view remain_data_;
   std::shared_ptr<detail::ib_socket_shared_state_t> state_;
+  std::optional<async_simple::Future<std::error_code>> write_waiter_;
   coro_io::ExecutorWrapper<>* executor_;
   config_t conf_;
   uint32_t buffer_size_ = 0;

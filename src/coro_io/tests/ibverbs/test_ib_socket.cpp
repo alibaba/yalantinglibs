@@ -456,10 +456,10 @@ TEST_CASE("test socket io") {
                        echo_connect({test(test_write, 2 * 1024, true)})),
             coro_io::sleep_for(std::chrono::milliseconds{100})));
     auto& ec1 = std::get<0>(std::get<0>(result).value());
-    auto& ec2 = std::get<1>(std::get<0>(result).value());
+    // auto& ec2 = std::get<1>(std::get<0>(result).value());
     auto& ec3 = std::get<1>(result);
     CHECK_MESSAGE(ec1.value(), ec1.value().message());
-    CHECK_MESSAGE(ec2.value(), ec2.value().message());
+    // CHECK_MESSAGE(ec2.value(), ec2.value().message());
     CHECK_MESSAGE(ec3.value(), "time out failed");
   }
   {

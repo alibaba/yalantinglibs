@@ -134,7 +134,7 @@ async_simple::coro::
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size,
         std::optional<
-            async_simple::Future<std::pair<std::error_code, std::size_t>>>&
+            async_simple::Future<std::error_code>>&
             prev_op) {
   if (io_size == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, 0};
@@ -173,12 +173,12 @@ async_simple::coro::
     list = {&socket_buffer, 1};
   }
 
-  async_simple::Promise<std::pair<std::error_code, std::size_t>> promise;
-  std::pair<std::error_code, std::size_t> result{};
+  async_simple::Promise<std::error_code> promise;
+  std::error_code ec{};
   if (prev_op) {
     bool is_canceled = false;
     try {
-      result = co_await std::move(*prev_op);
+      ec = co_await std::move(*prev_op);
     } catch (const async_simple::SignalException& e) {
       is_canceled = true;
     }
@@ -190,7 +190,7 @@ async_simple::coro::
   }
   prev_op = promise.getFuture();
   ib_socket.post_send(list, is_enable_inline_send,
-                      [p = std::move(promise), io_size = io_size,
+                      [p = std::move(promise),
                        buffer = std::move(send_buffer),
                        zero_copy_buffer = std::move(zero_copy_buffer),
                        state = ib_socket.get_state()](auto&& result) mutable {
@@ -200,12 +200,14 @@ async_simple::coro::
                         if (zero_copy_buffer) {
                           zero_copy_buffer = {};
                         }
-                        if (!result.first) [[likely]] {
-                          result.second = io_size;
-                        }
-                        p.setValue(std::move(result));
+                        p.setValue(std::move(result.first));
                       });
-  co_return std::pair{result.first, result.second};
+  if (ec) {
+    co_return std::pair{ec, 0};
+  }
+  else {
+    co_return std::pair{ec, io_size};
+  }
 }
 
 template <typename T>
@@ -292,8 +294,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 
   std::size_t block_size;
   uint32_t now_split_size = 0;
-  std::optional<async_simple::Future<std::pair<std::error_code, std::size_t>>>
-      future;
+  auto& future = ib_socket.write_waiter();
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
@@ -327,30 +328,24 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         if (ec) {
           co_return std::pair{ec, io_completed_size};
         }
-
         if constexpr (io == ib_socket_t::io_type::recv) {
           if (read_some) {
             co_return std::pair{ec, io_completed_size};
           }
-          if (len < now_split_size) [[unlikely]] {
-            reset_buffer(split_sge_block, len);
-          }
-          else {
-            split_sge_block.clear();
-          }
-          now_split_size -= len;
+        }
+        if (len < now_split_size) [[unlikely]] {
+          reset_buffer(split_sge_block, len);
         }
         else {
           split_sge_block.clear();
-          now_split_size = 0;
         }
+        now_split_size -= len;
       }
     }
   }
 
   std::error_code ec;
-  std::size_t len = 0;
-  while (now_split_size > 0) {
+  for (std::size_t len = 0;now_split_size > 0;) {
     if constexpr (io == ib_socket_t::io_type::recv) {
       reset_buffer(split_sge_block, len);
       std::tie(ec, len) =
@@ -362,25 +357,22 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     }
 
     io_completed_size += len;
+    now_split_size -= len;
     if (ec) {
       co_return std::pair{ec, io_completed_size};
     }
-
     if constexpr (io == ib_socket_t::io_type::recv) {
       if (read_some) {
         co_return std::pair{ec, io_completed_size};
       }
-      now_split_size -= len;
-    }
-    else {
-      now_split_size = 0;
     }
   }
   if constexpr (io == ib_socket_t::io_type::send) {
-    if (future) {
+    if (future && future->hasResult()) {
+      auto tmp = std::move(future);
       bool is_canceled = false;
       try {
-        std::tie(ec, len) = co_await std::move(*future);
+        ec = co_await std::move(*tmp);
       } catch (const async_simple::SignalException& e) {
         is_canceled = true;
       }
@@ -389,7 +381,6 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         co_return std::pair{std::make_error_code(std::errc::operation_canceled),
                             std::size_t{0}};
       }
-      io_completed_size += len;
       if (ec) [[unlikely]] {
         co_return std::pair{ec, io_completed_size};
       }
