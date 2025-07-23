@@ -85,6 +85,9 @@ inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
       sge_buffer = sge_buffer.subspan(1);
     }
   }
+  if (transfer_total) {
+    ELOG_TRACE << "has completed size:" << transfer_total;
+  }
   return transfer_total;
 }
 
@@ -129,13 +132,33 @@ async_simple::coro::
   co_return std::pair{result.first, recved_len};
 }
 
+struct async_send_callback_helper {
+  async_simple::Promise<std::error_code> p;
+  ib_buffer_t buffer;
+  std::unique_ptr<char[]> zero_copy_buffer;
+  std::shared_ptr<ib_socket_shared_state_t> state;
+  void operator()(std::pair<std::error_code, std::size_t> result) {
+    if (buffer) {
+      state->return_send_buffer(std::move(buffer));
+    }
+    zero_copy_buffer = {};
+    auto sz = state->write_buffer_data_size_;
+    if (!result.first && sz) {
+      buffer = state->get_send_buffer();
+      auto sge = buffer.subview(0, sz);
+      state->post_send_impl(sge, std::move(*this));
+    }
+    else {
+      p.setValue(std::move(result.first));
+    }
+  }
+};
+
 async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size,
-        std::optional<
-            async_simple::Future<std::error_code>>&
-            prev_op) {
+        std::optional<async_simple::Future<std::error_code>>& prev_op) {
   if (io_size == 0) [[unlikely]] {
     co_return std::pair{std::error_code{}, 0};
   }
@@ -144,35 +167,43 @@ async_simple::coro::
   }
   ibv_sge socket_buffer;
   std::unique_ptr<char[]> zero_copy_buffer;
-  std::span<ibv_sge> list;
-  bool is_enable_inline_send = false;
+  bool send_buffer_full = false;
+  bool is_enable_inline_send =
+      ib_socket.get_config().cap.max_inline_data >= io_size;
   ib_buffer_t send_buffer;
-  if (ib_socket.get_config().cap.max_inline_data >= io_size) {
-    is_enable_inline_send = true;
-    if (sge_list.size() <= ib_socket.get_config().cap.max_send_sge) {
-      list = sge_list;
-    }
-    else {
-      zero_copy_buffer = std::make_unique<char[]>(io_size);
-      socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
-                       .length = (uint32_t)io_size,
-                       .lkey = 0};
-      copy(sge_list, socket_buffer);
-    }
+  if (is_enable_inline_send && !prev_op.has_value()) {
+    zero_copy_buffer = std::make_unique<char[]>(io_size);
+    socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
+                     .length = (uint32_t)io_size,
+                     .lkey = 0};
   }
   else {
-    send_buffer = ib_socket.get_send_buffer();
-    if (!send_buffer || send_buffer->length < io_size) [[unlikely]] {
+    auto sv = ib_socket.get_send_buffer_view();
+    if (!sv) [[unlikely]] {
       co_return std::pair{std::make_error_code(std::errc::no_buffer_space),
                           std::size_t{0}};
     }
-    socket_buffer = send_buffer.subview();
-    auto len = copy(sge_list, socket_buffer);
-    assert(len == io_size);
+    socket_buffer = *sv;
+    // we make sure it when split
+    assert(socket_buffer.length >= io_size);
+    send_buffer_full = (socket_buffer.length <= io_size);
     socket_buffer.length = io_size;
-    list = {&socket_buffer, 1};
+    ib_socket.consume_send_buffer(io_size);
   }
-
+  auto len = copy(sge_list, socket_buffer);
+  assert(len == io_size);
+  auto now_buffer_data =
+      ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size();
+  if (now_buffer_data < 64 * 1024 && !send_buffer_full && prev_op &&
+      !prev_op->hasResult()) {
+    ELOG_INFO << "combine small message, now buffer size:" << now_buffer_data;
+    co_return std::pair{std::error_code{}, io_size};
+  }
+  if (!zero_copy_buffer) {
+    send_buffer = std::move(ib_socket.get_send_buffer());
+    socket_buffer.length += socket_buffer.addr - (size_t)send_buffer->addr;
+    socket_buffer.addr = (size_t)send_buffer->addr;
+  }
   async_simple::Promise<std::error_code> promise;
   std::error_code ec{};
   if (prev_op) {
@@ -189,19 +220,11 @@ async_simple::coro::
     }
   }
   prev_op = promise.getFuture();
-  ib_socket.post_send(list, is_enable_inline_send,
-                      [p = std::move(promise),
-                       buffer = std::move(send_buffer),
-                       zero_copy_buffer = std::move(zero_copy_buffer),
-                       state = ib_socket.get_state()](auto&& result) mutable {
-                        if (buffer) {
-                          state->return_send_buffer(std::move(buffer));
-                        }
-                        if (zero_copy_buffer) {
-                          zero_copy_buffer = {};
-                        }
-                        p.setValue(std::move(result.first));
-                      });
+
+  ib_socket.post_send(socket_buffer,
+                      async_send_callback_helper{
+                          std::move(promise), std::move(send_buffer),
+                          std::move(zero_copy_buffer), ib_socket.get_state()});
   if (ec) {
     co_return std::pair{ec, 0};
   }
@@ -286,15 +309,21 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
 
   std::vector<ibv_sge> split_sge_block;
   split_sge_block.reserve(sge_span.size());
-  uint32_t max_size = ib_socket.get_buffer_size();
-  std::size_t io_completed_size = consume_buffer(ib_socket, sge_span);
-  if (sge_span.empty()) {
-    co_return std::pair{std::error_code{}, io_completed_size};
+  std::size_t io_completed_size = 0;
+  if constexpr (io==ib_socket_t::io_type::recv) {
+    io_completed_size = consume_buffer(ib_socket, sge_span);
+    if (sge_span.empty()) {
+      co_return std::pair{std::error_code{}, io_completed_size};
+    }
   }
 
   std::size_t block_size;
   uint32_t now_split_size = 0;
   auto& future = ib_socket.write_waiter();
+  uint32_t max_size = ib_socket.get_buffer_size();
+  if constexpr (io == ib_socket_t::io_type::send) {
+    max_size = ib_socket.get_free_send_buffer_size();
+  }
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
@@ -322,6 +351,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
         else {
           std::tie(ec, len) = co_await async_send_impl(
               ib_socket, split_sge_block, now_split_size, future);
+          max_size = ib_socket.get_buffer_size();
         }
         io_completed_size += len;
         ELOG_TRACE << "has completed size:" << io_completed_size;
@@ -345,7 +375,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   }
 
   std::error_code ec;
-  for (std::size_t len = 0;now_split_size > 0;) {
+  for (std::size_t len = 0; now_split_size > 0;) {
     if constexpr (io == ib_socket_t::io_type::recv) {
       reset_buffer(split_sge_block, len);
       std::tie(ec, len) =
@@ -355,6 +385,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       std::tie(ec, len) = co_await async_send_impl(ib_socket, split_sge_block,
                                                    now_split_size, future);
     }
+    ELOG_TRACE << "now piece io_size:" << len;
 
     io_completed_size += len;
     now_split_size -= len;

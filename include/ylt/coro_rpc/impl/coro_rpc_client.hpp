@@ -678,7 +678,7 @@ class coro_rpc_client {
    * └────────────────┴────────────────┘
    */
   template <auto func, typename... Args>
-  std::vector<std::byte> prepare_buffer(uint32_t &id, Args &&...args) {
+  std::vector<std::byte> prepare_buffer(uint32_t &id, std::size_t attachment_length, Args &&...args) {
     std::vector<std::byte> buffer;
     std::size_t offset = coro_rpc_protocol::REQ_HEAD_LEN;
     if constexpr (sizeof...(Args) > 0) {
@@ -693,7 +693,7 @@ class coro_rpc_client {
 
     header.magic = coro_rpc_protocol::magic_number;
     header.function_id = func_id<func>();
-    header.attach_length = req_attachment_.size();
+    header.attach_length = attachment_length;
     id = request_id_++;
     ELOG_TRACE << "send request ID:" << id << ".";
     header.seq_num = id;
@@ -1174,7 +1174,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
                                                 std::string_view req_attachment,
                                                 Args &&...args) {
-    auto buffer = prepare_buffer<func>(id, std::forward<Args>(args)...);
+    auto buffer = prepare_buffer<func>(id, req_attachment.size(), std::forward<Args>(args)...);
     if (buffer.empty()) {
       co_return rpc_error{errc::message_too_large};
     }

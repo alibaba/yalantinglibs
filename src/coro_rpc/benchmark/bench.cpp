@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <ctime>
 #include <system_error>
 #include <vector>
 #include <ylt/coro_io/client_pool.hpp>
@@ -12,6 +13,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
 struct bench_config {
@@ -28,6 +30,7 @@ struct bench_config {
   uint32_t min_recv_buf_count;
   uint32_t max_recv_buf_count;
   bool use_client_pool;
+  bool reuse_client_pool;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -45,6 +48,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.min_recv_buf_count = parser.get<uint32_t>("min_recv_buf_count");
   conf.max_recv_buf_count = parser.get<uint32_t>("max_recv_buf_count");
   conf.use_client_pool = parser.get<bool>("use_client_pool");
+  conf.reuse_client_pool = parser.get<bool>("reuse_client_pool");
 
   if (conf.client_concurrency == 0) {
     ELOG_WARN << "port: " << conf.port << ", "
@@ -56,6 +60,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   }
   else {
     ELOG_WARN << "url: " << conf.url << ", "
+              << "reuse_client_pool: " << conf.reuse_client_pool << ", "
               << "use_client_pool: " << conf.use_client_pool << ", "
               << "buffer_size: " << conf.buffer_size << ", "
               << "client concurrency: " << conf.client_concurrency << ", "
@@ -160,7 +165,6 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
 
 async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
-
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
@@ -177,28 +181,83 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
     std::string send_str(conf.send_data_len, 'A');
     std::string_view send_str_view(send_str);
     for (size_t i = 0; i < conf.max_request_count; i++) {
+      auto start = std::chrono::steady_clock::now();
       auto ec =
           co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
                                           -> async_simple::coro::Lazy<bool> {
             client.set_req_attachment(send_str_view);
-            auto start = std::chrono::steady_clock::now();
             auto result = co_await client.call<echo>();
             if (!result.has_value()) {
               ELOG_WARN << result.error().msg;
               co_return false;
             }
-            auto now = std::chrono::steady_clock::now();
-            g_latency.observe(
-                std::chrono::duration_cast<std::chrono::microseconds>(now -
-                                                                      start)
-                    .count());
-            g_throughput_count.fetch_add(send_str_view.length(),
-                                         std::memory_order_relaxed);
-            g_qps_count.fetch_add(1, std::memory_order_relaxed);
             co_return true;
           });
       if (!ec.has_value()) {
+        std::cout<<"BREAK"<<std::endl;
         break;
+      }
+      if (ec.value()) {
+        auto now = std::chrono::steady_clock::now();
+        g_latency.observe(
+            std::chrono::duration_cast<std::chrono::microseconds>(now -
+                                                                  start)
+                .count());
+        g_throughput_count.fetch_add(send_str_view.length(),
+                                      std::memory_order_relaxed);
+        g_qps_count.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
+  };
+  std::vector<async_simple::coro::Lazy<void>> works;
+  works.reserve(conf.client_concurrency);
+  for (size_t i = 0; i < conf.client_concurrency; i++) {
+    works.push_back(lazy());
+  }
+  co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(
+      async_simple::coro::collectAll(std::move(works)), watcher(conf));
+
+  co_return std::error_code{};
+}
+
+async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config& conf) {
+  ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
+  coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+#ifdef YLT_ENABLE_IBV
+  if (conf.enable_ib) {
+    coro_io::ib_socket_t::config_t ib_conf{};
+    ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
+    ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    pool_conf.client_config.socket_config = ib_conf;
+  }
+#endif
+
+  auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
+      conf.url, pool_conf);
+  auto lazy = [pool, conf]() -> async_simple::coro::Lazy<void> {
+    std::string send_str(conf.send_data_len, 'A');
+    std::string_view send_str_view(send_str);
+    for (size_t i = 0; i < conf.max_request_count; i++) {
+      auto start = std::chrono::steady_clock::now();
+      auto ret =
+          co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
+                                          -> async_simple::coro::Lazy<async_simple::coro::Lazy<coro_rpc::async_rpc_result<std::string_view>>> {
+            auto result = co_await client.send_request_with_attachment<echo>(send_str_view);
+            co_return std::move(result);
+          });
+      if (!ret.has_value()) {
+        break;
+      }
+      auto result =co_await std::move(ret.value());
+      if (result.has_value()) {
+        auto now = std::chrono::steady_clock::now();
+        g_latency.observe(
+            std::chrono::duration_cast<std::chrono::microseconds>(now -
+                                                                  start)
+                .count());
+        g_throughput_count.fetch_add(send_str_view.length(),
+                                      std::memory_order_relaxed);
+        g_qps_count.fetch_add(1, std::memory_order_relaxed);
       }
     }
   };
@@ -293,6 +352,7 @@ int main(int argc, char** argv) {
   parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
+  parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, false);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -334,7 +394,10 @@ int main(int argc, char** argv) {
   }
   else {
     std::cout << "will start client\n";
-    if (conf.use_client_pool) {
+    if (conf.reuse_client_pool) {
+      async_simple::coro::syncAwait(request_with_reuse(conf));
+    }
+    else if (conf.use_client_pool) {
       async_simple::coro::syncAwait(request(conf));
     }
     else {

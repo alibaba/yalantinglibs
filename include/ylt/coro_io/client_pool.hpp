@@ -83,9 +83,12 @@ class client_pool : public std::enable_shared_from_this<
                    << self->host_name_
                    << "}, now client count: " << clients.size();
         std::size_t is_all_cleared = clients.clear_old(clear_cnt);
-        ELOG_TRACE << "finish collect timeout client of pool{"
-                   << self->host_name_
-                   << "}, now client cnt: " << clients.size();
+        auto free_client_cnt = clients.size();
+        ELOG_WARN << "finish collect timeout client of pool{"
+                  << self->host_name_
+                  << "}, now free client cnt: " << free_client_cnt
+                  << " total client cnt:"
+                  << self->unfree_client_cnt_ + free_client_cnt;
         if (is_all_cleared != 0) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
@@ -282,6 +285,7 @@ class client_pool : public std::enable_shared_from_this<
     else {
       ELOG_TRACE << "get free client{" << client.get() << "}. from queue";
     }
+    unfree_client_cnt_.fetch_add(1,std::memory_order_relaxed);
     co_return std::move(client);
   }
 
@@ -307,6 +311,7 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
+    unfree_client_cnt_.fetch_sub(1,std::memory_order_relaxed);
     if (pool_config_.max_connection_life_time < std::chrono::seconds::max()) {
       auto tp = client->get_create_time_point();
       if (std::chrono::steady_clock::now() - tp >
@@ -364,7 +369,7 @@ class client_pool : public std::enable_shared_from_this<
     uint32_t connect_retry_count = 3;
     uint32_t idle_queue_per_max_clear_count = 1000;
     std::chrono::milliseconds reconnect_wait_time{1000};
-    std::chrono::milliseconds idle_timeout{30000};
+    std::chrono::milliseconds idle_timeout{3000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
     std::chrono::milliseconds host_alive_detect_duration{
         30000}; /* zero means wont detect */
@@ -512,6 +517,7 @@ class client_pool : public std::enable_shared_from_this<
   io_context_pool_t& io_context_pool_;
   std::atomic<bool> is_alive_ = true;
   std::atomic<uint64_t> timepoint_;
+  std::atomic<uint64_t> unfree_client_cnt_;
   ylt::util::atomic_shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_;
 };
 
