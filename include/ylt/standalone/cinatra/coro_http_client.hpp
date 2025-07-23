@@ -367,6 +367,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   bool has_closed() { return socket_->has_closed_; }
 
+  [[nodiscard]] std::size_t waiting_request_count() const noexcept { return 0; }
+
   const auto &get_headers() { return req_headers_; }
 
   void set_headers(std::unordered_map<std::string, std::string> req_headers) {

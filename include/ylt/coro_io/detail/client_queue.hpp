@@ -64,6 +64,22 @@ class client_queue {
   bool try_dequeue(client_t& c) {
     const int_fast16_t index = selected_index_;
     if (queue_[index].try_dequeue(c)) {
+      if constexpr (requires { c->waiting_request_count(); }) {
+        if (c->waiting_request_count()) {
+          client_t c2;
+          if (size_[index ^ 1] && queue_[index ^ 1].try_dequeue(c2)) {
+            if (c2->waiting_request_count() < c->waiting_request_count()) {
+              queue_[index].enqueue(std::move(c));
+              --size_[index ^ 1];
+              c = std::move(c2);
+              return true;
+            }
+            else {
+              queue_[index ^ 1].enqueue(std::move(c2));
+            }
+          }
+        }
+      }
       --size_[index];
       return true;
     }

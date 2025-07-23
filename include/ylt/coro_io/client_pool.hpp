@@ -272,7 +272,6 @@ class client_pool : public std::enable_shared_from_this<
       short_connect_clients_.try_dequeue(client);
     }
     if (client == nullptr) {
-      std::unique_ptr<client_t> cli;
       auto executor = io_context_pool_.get_executor();
       client = std::make_unique<client_t>(executor);
       if (!client->init_config(client_config))
@@ -441,12 +440,20 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   /**
-   * @brief approx connection of client pools
+   * @brief approx free connection of client pools
    *
    * @return std::size_t
    */
   std::size_t free_client_count() const noexcept {
     return free_clients_.size() + short_connect_clients_.size();
+  }
+  /**
+   * @brief approx connection of client pools
+   *
+   * @return std::size_t
+   */
+  std::size_t total_client_count() const noexcept {
+    return free_client_count() + unfree_client_cnt_;
   }
   /**
    * @brief if host may not useable now.
