@@ -311,7 +311,7 @@ class coro_rpc_client {
    *
    * @return std::size_t, the waiting request count. zero if not request waiting
    */
-  [[nodiscard]] std::size_t waiting_request_count() const noexcept { return control_->table_cnt_.load(std::memory_order_relaxed); }
+  [[nodiscard]] std::size_t waiting_request_count() const noexcept { return control_->table_cnt_.load(std::memory_order_acquire); }
 
   /*!
    * Connect server
@@ -950,7 +950,7 @@ class coro_rpc_client {
       e.second.local_error(errc);
     }
     controller->response_handler_table_.clear();
-    controller->table_cnt_.store(0,std::memory_order_relaxed);
+    controller->table_cnt_.store(0,std::memory_order_release);
   }
   template <typename Socket>
   static async_simple::coro::Lazy<void> recv(
@@ -1031,9 +1031,9 @@ class coro_rpc_client {
       file.close();
 #endif
       --controller->recving_cnt_;
+      controller->table_cnt_.fetch_sub(1,std::memory_order_release);
       iter->second(std::move(controller->resp_buffer_), header.err_code);
       controller->response_handler_table_.erase(iter);
-      controller->table_cnt_.fetch_sub(1,std::memory_order_relaxed);
       if (controller->response_handler_table_.empty()) {
         co_return;
       }
@@ -1161,7 +1161,7 @@ class coro_rpc_client {
             rpc_error{coro_rpc::errc::serial_number_conflict});
       }
       else {
-        control_->table_cnt_.fetch_add(1,std::memory_order_relaxed);
+        control_->table_cnt_.fetch_add(1,std::memory_order_release);
         if (is_empty) {
           control_->socket_wrapper_.visit([control_ = control_](auto &socket) {
             recv(control_, socket).start([](auto &&) {
