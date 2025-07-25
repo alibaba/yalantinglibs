@@ -271,17 +271,21 @@ struct ib_socket_shared_state_t
     int r = ibv_get_cq_event(channel_.get(), &cq, &ev_ctx);
     // assert(r >= 0);
     std::error_code ec;
-    if (r) {
-      ELOG_INFO << "there isn't any Completion event to read";
-      return std::make_error_code(std::errc{std::errc::io_error});
+    if (r) [[unlikely]] {
+      ELOG_WARN << "there isn't any Completion event to read, errno" << errno;
+      if (errno != EAGAIN && errno != EWOULDBLOCK) [[unlikely]] {
+        ELOG_WARN << "failed to get comp_channel event";
+        return std::make_error_code(std::errc{std::errc::io_error});
+      }
+      return {};
     }
     ibv_ack_cq_events(cq, 1);
     r = ibv_req_notify_cq(cq, 0);
-    if (r) {
+    if (r) [[unlikely]] {
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
