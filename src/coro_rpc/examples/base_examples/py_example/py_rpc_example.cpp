@@ -2,7 +2,7 @@
 #include <pybind11/pytypes.h>
 
 #include <chrono>
-// #include <rest_rpc.hpp>
+#include <rest_rpc.hpp>
 #include <string>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
@@ -31,41 +31,50 @@ class py_coro_rpc_server {
   coro_rpc::coro_rpc_server server_;
 };
 
-// class py_rest_rpc_server {
-//  public:
-//   py_rest_rpc_server(size_t port, size_t thd_num) : server_(port, thd_num) {}
+class py_rest_conn {
+ public:
+  int64_t conn_id() { return conn_->conn_id(); }
+  rest_rpc::rpc_service::connection* conn_;
+};
 
-//   void async_start() { server_.async_run(); }
+class py_rest_rpc_server {
+ public:
+  py_rest_rpc_server(size_t port, size_t thd_num) : server_(port, thd_num) {}
 
-//   void start() { server_.run(); }
+  void async_start() { server_.async_run(); }
 
-//   void register_handler(std::string name, py::function func) {
-//     server_.register_handler(name,
-//                              [func](rest_rpc::rpc_service::rpc_conn conn,
-//                                     std::string arg) -> std::string {
-//                                py::gil_scoped_acquire acquire;
-//                                auto result = func(arg);
-//                                return result.cast<std::string>();
-//                              });
-//   }
+  void start() { server_.run(); }
 
-//  private:
-//   rest_rpc::rpc_service::rpc_server server_;
-// };
+  void register_handler(std::string name, py::function func) {
+    server_.register_handler(name,
+                             [func](rest_rpc::rpc_service::rpc_conn conn,
+                                    std::string arg) -> std::string {
+                               py::gil_scoped_acquire acquire;
+                               auto sp = conn.lock();
+                               py_rest_conn t{};
+                               t.conn_ = sp.get();
+                               auto result = func(t, arg);
+                               return result.cast<std::string>();
+                             });
+  }
 
-// class py_rest_rpc_client {
-//  public:
-//   py_rest_rpc_client(std::string host, uint16_t port) : client_(host, port) {}
+ private:
+  rest_rpc::rpc_service::rpc_server server_;
+};
 
-//   bool connect() { return client_.connect(); }
+class py_rest_rpc_client {
+ public:
+  py_rest_rpc_client(std::string host, uint16_t port) : client_(host, port) {}
 
-//   std::string call(std::string func_name, std::string arg) {
-//     return client_.call<std::string>(func_name, arg);
-//   }
+  bool connect() { return client_.connect(); }
 
-//  private:
-//   rest_rpc::rpc_client client_;
-// };
+  std::string call(std::string func_name, std::string arg) {
+    return client_.call<std::string>(func_name, arg);
+  }
+
+ private:
+  rest_rpc::rpc_client client_;
+};
 
 PYBIND11_MODULE(py_coro_rpc, m) {
   m.def("hello", [] {
@@ -78,16 +87,19 @@ PYBIND11_MODULE(py_coro_rpc, m) {
       .def("async_start", &py_coro_rpc_server::async_start)
       .def("stop", &py_coro_rpc_server::stop);
 
-  // py::class_<py_rest_rpc_server>(m, "rest_rpc_server")
-  //     .def(py::init<size_t, size_t>())
-  //     .def("start", &py_rest_rpc_server::start)
-  //     .def("async_start", &py_rest_rpc_server::async_start)
-  //     .def("register_handler", &py_rest_rpc_server::register_handler,
-  //          py::arg("name"), py::arg("func"));
+  py::class_<py_rest_rpc_server>(m, "rest_rpc_server")
+      .def(py::init<size_t, size_t>())
+      .def("start", &py_rest_rpc_server::start)
+      .def("async_start", &py_rest_rpc_server::async_start)
+      .def("register_handler", &py_rest_rpc_server::register_handler);
 
-  // py::class_<py_rest_rpc_client>(m, "rest_rpc_client")
-  //     .def(py::init<std::string, uint16_t>())
-  //     .def("connect", &py_rest_rpc_client::connect)
-  //     .def("call", &py_rest_rpc_client::call,
-  //          py::call_guard<py::gil_scoped_release>());
+  py::class_<py_rest_rpc_client>(m, "rest_rpc_client")
+      .def(py::init<std::string, uint16_t>())
+      .def("connect", &py_rest_rpc_client::connect)
+      .def("call", &py_rest_rpc_client::call,
+           py::call_guard<py::gil_scoped_release>());
+
+  py::class_<py_rest_conn>(m, "py_rest_conn")
+      .def(py::init<>())
+      .def("conn_id", &py_rest_conn::conn_id);
 }

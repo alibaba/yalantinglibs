@@ -44,6 +44,10 @@ if(ENABLE_go)
   )
 endif()
 
+# add_definitions(-DMSGPACK_NO_BOOST)
+# include_directories(rest_rpc/include)
+# include_directories(rest_rpc/thirdparty/msgpack-c/include)
+
 option(ENABLE_rpc_pybind11 "Enable pybind11 " OFF)
 if(ENABLE_rpc_pybind11)
   message(STATUS "enable rpc pybind")
@@ -64,6 +68,13 @@ if(ENABLE_rpc_pybind11)
 
   pybind11_add_module(py_coro_rpc py_example/py_rpc_example.cpp)
   set_target_properties(py_coro_rpc PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
+  )
+
+  pybind11_add_module(zero_copy py_example/zero_copy.cpp)
+  set_target_properties(zero_copy PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/py_example
