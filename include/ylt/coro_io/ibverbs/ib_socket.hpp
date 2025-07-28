@@ -272,7 +272,7 @@ struct ib_socket_shared_state_t
     // assert(r >= 0);
     std::error_code ec;
     if (r) [[unlikely]] {
-      ELOG_WARN << "there isn't any Completion event to read, errno" << errno;
+      ELOG_INFO << "there isn't any Completion event to read, errno" << errno;
       if (errno != EAGAIN && errno != EWOULDBLOCK) [[unlikely]] {
         ELOG_WARN << "failed to get comp_channel event";
         return std::make_error_code(std::errc{std::errc::io_error});
