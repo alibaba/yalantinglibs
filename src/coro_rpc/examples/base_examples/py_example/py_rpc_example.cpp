@@ -14,19 +14,18 @@ namespace py = pybind11;
 class py_rpc_context {
  public:
   void response_msg(std::string msg, py::handle done) {
-    context_->get_context_info()->set_response_attachment(
-        std::string_view(msg));
+    context_.get_context_info()->set_response_attachment(std::string_view(msg));
     done.inc_ref();
-    context_->get_context_info()->set_complete_handler(
+    context_.get_context_info()->set_complete_handler(
         [done](const std::error_code &ec, std::size_t) {
           py::gil_scoped_acquire acquire;
           done(!ec);
           done.dec_ref();
         });
-    context_->response_msg();
+    context_.response_msg();
   }
 
-  std::unique_ptr<coro_rpc::context<void>> context_;
+  coro_rpc::context<void> context_;
 };
 
 class py_coro_rpc_client_pool;
@@ -53,7 +52,7 @@ class py_coro_rpc_server {
   friend class py_coro_rpc_client_pool;
   void handle_msg(coro_rpc::context<void> context, std::string_view msg) {
     py_rpc_context t{};
-    t.context_ = std::make_unique<coro_rpc::context<void>>(std::move(context));
+    t.context_ = std::move(context);
     py::gil_scoped_acquire acquire;
     callback_(std::move(t), msg);
   }
@@ -65,7 +64,7 @@ class py_coro_rpc_server {
 class py_coro_rpc_client_pool {
  public:
   py_coro_rpc_client_pool(std::string url)
-      : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)){};
+      : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)) {};
 
   pybind11::object async_send_msg(py::handle loop, std::string msg) {
     auto local_future = loop.attr("create_future")();
