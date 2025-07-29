@@ -13,8 +13,11 @@ namespace py = pybind11;
 
 class py_rpc_context {
  public:
-  void response_msg(std::string msg, py::handle done) {
-    context_.get_context_info()->set_response_attachment(std::string_view(msg));
+  void response_msg(py::buffer msg, py::handle done) {
+    py::buffer_info info = msg.request();
+    const char *data = static_cast<char *>(info.ptr);
+    context_.get_context_info()->set_response_attachment(
+        std::string_view(data, info.size));
     done.inc_ref();
     context_.get_context_info()->set_complete_handler(
         [done](const std::error_code &ec, std::size_t) {
@@ -31,10 +34,10 @@ class py_rpc_context {
 class py_coro_rpc_client_pool;
 class py_coro_rpc_server {
  public:
-  py_coro_rpc_server(size_t thd_num, std::string address, py::handle func,
-                     size_t seconds)
+  py_coro_rpc_server(size_t thd_num, std::string address,
+                     py::handle py_callback, size_t seconds)
       : server_(thd_num, address, std::chrono::seconds(seconds)),
-        callback_(func) {
+        py_callback_(py_callback) {
     server_.register_handler<&py_coro_rpc_server::handle_msg>(this);
   }
 
@@ -54,11 +57,13 @@ class py_coro_rpc_server {
     py_rpc_context t{};
     t.context_ = std::move(context);
     py::gil_scoped_acquire acquire;
-    callback_(std::move(t), msg);
+    auto view = py::memoryview::from_buffer(msg.data(), {msg.size()},
+                                            {sizeof(uint8_t)});
+    py_callback_(std::move(t), view);
   }
 
   coro_rpc::coro_rpc_server server_;
-  py::handle callback_;
+  py::handle py_callback_;
 };
 
 class py_coro_rpc_client_pool {

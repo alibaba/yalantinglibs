@@ -5,7 +5,7 @@ def handle_msg(con, msg):
     # begin to handle msg from client, do business
 
     # after finish business, response result
-    con.response_msg(msg, lambda r: print("done", msg))
+    con.response_msg(msg, lambda r: print("done", len(msg)))
 
 async def async_request(pool):
     loop = asyncio.get_event_loop()
