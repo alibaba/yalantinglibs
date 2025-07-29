@@ -13,7 +13,7 @@ async def async_request(pool):
     for i in range(3):
         print("Python is doing other work while C++ runs...")
         # await the result from C++
-        result = await pool.async_send_msg(loop, "hello world")
+        result = await pool.async_send_msg(loop, b"hello world")
         print(f"Python received result from C++: {result}")
     
 
