@@ -2,16 +2,42 @@
 #include <pybind11/pytypes.h>
 
 #include <chrono>
-#include <rest_rpc.hpp>
+#include <memory>
 #include <string>
+#include <thread>
+#include <ylt/coro_io/client_pool.hpp>
+#include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 namespace py = pybind11;
 
+class py_rpc_context {
+ public:
+  void response_msg(std::string msg, py::handle done) {
+    context_->get_context_info()->set_response_attachment(
+        std::string_view(msg));
+    done.inc_ref();
+    context_->get_context_info()->set_complete_handler(
+        [done](const std::error_code &ec, std::size_t) {
+          py::gil_scoped_acquire acquire;
+          done(!ec);
+          done.dec_ref();
+        });
+    context_->response_msg();
+  }
+
+  std::unique_ptr<coro_rpc::context<void>> context_;
+};
+
+class py_coro_rpc_client_pool;
 class py_coro_rpc_server {
  public:
-  py_coro_rpc_server(size_t thd_num, std::string address, size_t seconds = 0)
-      : server_(thd_num, address, std::chrono::seconds(seconds)) {}
+  py_coro_rpc_server(size_t thd_num, std::string address, py::handle func,
+                     size_t seconds)
+      : server_(thd_num, address, std::chrono::seconds(seconds)),
+        callback_(func) {
+    server_.register_handler<&py_coro_rpc_server::handle_msg>(this);
+  }
 
   bool start() {
     auto ec = server_.start();
@@ -23,57 +49,44 @@ class py_coro_rpc_server {
     return !ec.hasResult();
   }
 
-  void stop() { server_.stop(); }
-
-  void register_handler(std::string name, py::function func) {}
-
  private:
+  friend class py_coro_rpc_client_pool;
+  void handle_msg(coro_rpc::context<void> context, std::string_view msg) {
+    py_rpc_context t{};
+    t.context_ = std::make_unique<coro_rpc::context<void>>(std::move(context));
+    py::gil_scoped_acquire acquire;
+    callback_(std::move(t), msg);
+  }
+
   coro_rpc::coro_rpc_server server_;
+  py::handle callback_;
 };
 
-class py_rest_conn {
+class py_coro_rpc_client_pool {
  public:
-  int64_t conn_id() { return conn_->conn_id(); }
-  rest_rpc::rpc_service::connection* conn_;
-};
+  py_coro_rpc_client_pool(std::string url)
+      : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)){};
 
-class py_rest_rpc_server {
- public:
-  py_rest_rpc_server(size_t port, size_t thd_num) : server_(port, thd_num) {}
+  pybind11::object async_send_msg(py::handle loop, std::string msg) {
+    auto local_future = loop.attr("create_future")();
+    py::handle future = local_future;
+    pool_
+        ->send_request([msg, loop, future](coro_rpc::coro_rpc_client &client)
+                           -> async_simple::coro::Lazy<void> {
+          auto result =
+              co_await client.call<&py_coro_rpc_server::handle_msg>(msg);
+          py::gil_scoped_acquire acquire;
+          loop.attr("call_soon_threadsafe")(future.attr("set_result"),
+                                            result.has_value());
+        })
+        .start([](auto &&) {
+        });
 
-  void async_start() { server_.async_run(); }
-
-  void start() { server_.run(); }
-
-  void register_handler(std::string name, py::function func) {
-    server_.register_handler(name,
-                             [func](rest_rpc::rpc_service::rpc_conn conn,
-                                    std::string arg) -> std::string {
-                               py::gil_scoped_acquire acquire;
-                               auto sp = conn.lock();
-                               py_rest_conn t{};
-                               t.conn_ = sp.get();
-                               auto result = func(t, arg);
-                               return result.cast<std::string>();
-                             });
+    return local_future;
   }
 
  private:
-  rest_rpc::rpc_service::rpc_server server_;
-};
-
-class py_rest_rpc_client {
- public:
-  py_rest_rpc_client(std::string host, uint16_t port) : client_(host, port) {}
-
-  bool connect() { return client_.connect(); }
-
-  std::string call(std::string func_name, std::string arg) {
-    return client_.call<std::string>(func_name, arg);
-  }
-
- private:
-  rest_rpc::rpc_client client_;
+  std::shared_ptr<coro_io::client_pool<coro_rpc::coro_rpc_client>> pool_;
 };
 
 PYBIND11_MODULE(py_coro_rpc, m) {
@@ -81,25 +94,20 @@ PYBIND11_MODULE(py_coro_rpc, m) {
     return std::string("hello");
   });
 
-  py::class_<py_coro_rpc_server>(m, "coro_rpc_server")
-      .def(py::init<size_t, std::string, size_t>())
-      .def("start", &py_coro_rpc_server::start)
-      .def("async_start", &py_coro_rpc_server::async_start)
-      .def("stop", &py_coro_rpc_server::stop);
-
-  py::class_<py_rest_rpc_server>(m, "rest_rpc_server")
-      .def(py::init<size_t, size_t>())
-      .def("start", &py_rest_rpc_server::start)
-      .def("async_start", &py_rest_rpc_server::async_start)
-      .def("register_handler", &py_rest_rpc_server::register_handler);
-
-  py::class_<py_rest_rpc_client>(m, "rest_rpc_client")
-      .def(py::init<std::string, uint16_t>())
-      .def("connect", &py_rest_rpc_client::connect)
-      .def("call", &py_rest_rpc_client::call,
-           py::call_guard<py::gil_scoped_release>());
-
-  py::class_<py_rest_conn>(m, "py_rest_conn")
+  py::class_<py_rpc_context>(m, "py_rpc_context")
       .def(py::init<>())
-      .def("conn_id", &py_rest_conn::conn_id);
+      .def("response_msg", &py_rpc_context::response_msg);
+
+  py::class_<py_coro_rpc_server>(m, "coro_rpc_server")
+      .def(py::init<size_t, std::string, py::function, size_t>())
+      .def("start", &py_coro_rpc_server::start)
+      .def("async_start", &py_coro_rpc_server::async_start);
+
+  py::class_<py_coro_rpc_client_pool>(m, "py_coro_rpc_client_pool")
+      .def(py::init<std::string>())
+      .def("async_send_msg", &py_coro_rpc_client_pool::async_send_msg);
+
+  m.def("log", [](std::string str) {
+    ELOG_INFO << str;
+  });
 }

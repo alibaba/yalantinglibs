@@ -44,10 +44,6 @@ if(ENABLE_go)
   )
 endif()
 
-# add_definitions(-DMSGPACK_NO_BOOST)
-# include_directories(rest_rpc/include)
-# include_directories(rest_rpc/thirdparty/msgpack-c/include)
-
 option(ENABLE_rpc_pybind11 "Enable pybind11 " OFF)
 if(ENABLE_rpc_pybind11)
   message(STATUS "enable rpc pybind")
