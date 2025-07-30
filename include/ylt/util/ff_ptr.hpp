@@ -267,17 +267,21 @@ class ff_ptr {
     detail::ptr_check(ff_ptr_error_type::heap_use_after_free, raw_pointer);
     return (const U*)raw_pointer;
   }
-  ff_ptr& operator+=(ssize_t index) noexcept {
+  ff_ptr& operator+=(std::ptrdiff_t index) noexcept {
     raw_pointer += index;
     return *this;
   }
-  ff_ptr& operator-=(ssize_t index) noexcept {
+  ff_ptr& operator-=(std::ptrdiff_t index) noexcept {
     raw_pointer -= index;
     return *this;
   }
-  ff_ptr operator+(ssize_t index) const noexcept { return raw_pointer + index; }
+  ff_ptr operator+(std::ptrdiff_t index) const noexcept {
+    return raw_pointer + index;
+  }
 
-  ff_ptr operator-(ssize_t index) const noexcept { return raw_pointer - index; }
+  ff_ptr operator-(std::ptrdiff_t index) const noexcept {
+    return raw_pointer - index;
+  }
   ff_ptr& operator++() noexcept {
     raw_pointer++;
     return *this;
