@@ -524,4 +524,4 @@ struct is_pointer<ylt::util::ff_ptr<T>> : public std::true_type {};
 }  // namespace std
 
 template <typename T>
-using ff_ptr = ylt::util::detail::ff_ptr_impl<T>::type;
+using ff_ptr = typename ylt::util::detail::ff_ptr_impl<T>::type;
