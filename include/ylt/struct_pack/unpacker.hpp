@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -112,6 +113,8 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       data_len_ += buffer_len;
+      // clear old compatible info if exist;
+      get_compatible_member_order_in_hash_map().clear();
     }
     switch (size_type_) {
       case 0:
@@ -148,11 +151,15 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
       err_code = deserialize_compatibles<T, Args...>(
           t, std::make_index_sequence<sz>{}, args...);
+      if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
+      }
     }
     return err_code;
   }
@@ -173,6 +180,8 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       data_len_ += buffer_len;
+      // clear old compatible info if exist;
+      get_compatible_member_order_in_hash_map().clear();
     }
     switch (size_type_) {
       case 0:
@@ -208,11 +217,15 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
       err_code = deserialize_compatibles<T, Args...>(
           t, std::make_index_sequence<sz>{}, args...);
+      if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
+      }
     }
     return err_code;
   }
@@ -235,6 +248,7 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       data_len_ += buffer_len;
+      get_compatible_member_order_in_hash_map().clear();
     }
     switch (size_type_) {
       case 0:
@@ -270,11 +284,16 @@ class unpacker {
     }
     if constexpr (has_compatible) {
       if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
         return err_code;
       }
       constexpr std::size_t sz = compatible_version_number<Type>.size();
       err_code = deserialize_compatible_fields<U, I>(
           field, std::make_index_sequence<sz>{});
+      if SP_UNLIKELY (err_code) {
+        get_compatible_member_order_in_hash_map().clear();
+        return err_code;
+      }
     }
     return err_code;
   }
@@ -747,6 +766,12 @@ class unpacker {
     }
   }
 
+  static std::deque<std::vector<void *>> &
+  get_compatible_member_order_in_hash_map() {
+    static thread_local std::deque<std::vector<void *>> compatible_order_queue;
+    return compatible_order_queue;
+  }
+
   template <size_t size_type, uint64_t version, bool NotSkip,
             uint64_t parent_tag = 0, typename T>
   constexpr struct_pack::err_code inline deserialize_one(T &item) {
@@ -964,15 +989,58 @@ class unpacker {
                                                         : errc::no_buffer_space;
           }
           else {
-            item.clear();
-            for (uint64_t i = 0; i < size; ++i) {
-              code = deserialize_one<size_type, version, NotSkip>(value);
-              if SP_UNLIKELY (code) {
-                return code;
+            constexpr bool has_compatible = check_if_compatible_element_exist<
+                decltype(get_types<type>())>();
+            if constexpr (!has_compatible || !NotSkip) {
+              for (uint64_t i = 0; i < size; ++i) {
+                code = deserialize_one<size_type, version, NotSkip>(value);
+                if SP_UNLIKELY (code) {
+                  return code;
+                }
+                if constexpr (NotSkip) {
+                  item.emplace(std::move(value));
+                  // TODO: mapped_type can deserialize without be moved
+                }
               }
-              if constexpr (NotSkip) {
+            }
+            else if constexpr (is_std_unordered_map_v<type>) {
+              auto &que = get_compatible_member_order_in_hash_map();
+              que.emplace_back();
+              auto &vec = que.back();
+              vec.reserve(size);
+              for (uint64_t i = 0; i < size; ++i) {
+                code = deserialize_one<size_type, version, NotSkip>(value);
+                if SP_UNLIKELY (code) {
+                  return code;
+                }
+                auto result = item.emplace(std::move(value));
+                if constexpr (pair<decltype(result)>) {
+                  vec.push_back(&*result.first);
+                }
+                else {
+                  vec.push_back(&*result);
+                }
+              }
+            }
+            else {
+              std::vector<typename type::key_type> key_copy;
+              key_copy.reserve(size);
+              for (uint64_t i = 0; i < size; ++i) {
+                code = deserialize_one<size_type, version, NotSkip>(value);
+                if SP_UNLIKELY (code) {
+                  return code;
+                }
+                key_copy.push_back(value.first);
                 item.emplace(std::move(value));
-                // TODO: mapped_type can deserialize without be moved
+              }
+              assert(key_copy.size() == size);
+              auto &que = get_compatible_member_order_in_hash_map();
+              que.emplace_back();
+              auto &vec = que.back();
+              vec.reserve(size);
+              for (auto &key : key_copy) {
+                auto iter = item.find(key);
+                vec.push_back(&*iter);
               }
             }
           }
@@ -1299,10 +1367,51 @@ class unpacker {
               !exist_compatible_member<typename type::key_type>,
               "we don't support compatible field in map's key_type now.");
           if constexpr (NotSkip) {
-            for (auto &e : item) {
-              code = deserialize_one<size_type, version, NotSkip>(e.second);
-              if SP_UNLIKELY (code) {
-                return code;
+            if (item.size() == 0) {
+              return {};
+            }
+            if constexpr (hash_map_container<type>) {
+              assert(get_compatible_member_order_in_hash_map().size());
+              std::vector<void *> &real_order =
+                  get_compatible_member_order_in_hash_map().front();
+              auto iter = item.end();
+              auto iter_now = iter;
+              for (std::size_t i = 0; i < real_order.size(); ++i) {
+                if constexpr (is_std_unordered_map_v<type>) {
+                  code = deserialize_one<size_type, version, NotSkip>(
+                      static_cast<typename type::value_type *>(real_order[i])
+                          ->second);
+                  if SP_UNLIKELY (code) {
+                    return code;
+                  }
+                }
+                else {
+                  auto &key =
+                      static_cast<typename type::value_type *>(real_order[i])
+                          ->first;
+                  auto iter2 = item.find(key);
+                  assert(iter2 != item.end());
+                  if (iter2 != iter) {
+                    iter = iter2;
+                    iter_now = iter;
+                  }
+                  else {
+                    ++iter_now;
+                    assert(iter->first == iter_now->first);
+                  }
+                  code = deserialize_one<size_type, version, NotSkip>(
+                      iter_now->second);
+                }
+              }
+              assert(get_compatible_member_order_in_hash_map().size());
+              get_compatible_member_order_in_hash_map().pop_front();
+            }
+            else {
+              for (auto &e : item) {
+                code = deserialize_one<size_type, version, NotSkip>(e.second);
+                if SP_UNLIKELY (code) {
+                  return code;
+                }
               }
             }
           }

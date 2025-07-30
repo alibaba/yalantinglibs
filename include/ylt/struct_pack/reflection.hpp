@@ -24,6 +24,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -45,6 +46,7 @@
 #if __cpp_concepts >= 201907L
 #include <concepts>
 #endif
+
 
 namespace struct_pack {
 
@@ -483,6 +485,34 @@ template <typename T, typename = void>
   template <typename T>
   constexpr bool map_container = container<T> && map_container_impl<T>::value;
 #endif
+
+#if __cpp_concepts >= 201907L
+  template <typename Type>
+  concept hash_map_container = map_container<Type> && requires(Type container) {
+    typename remove_cvref_t<Type>::hasher;
+  };
+#else
+template <typename T, typename = void>
+  struct hash_map_container_impl : std::false_type {};
+
+  template <typename T>
+  struct hash_map_container_impl<T, std::void_t<
+    typename remove_cvref_t<T>::hasher>> 
+      : std::true_type {};
+
+  template <typename T>
+  constexpr bool hash_map_container = map_container<T> && hash_map_container_impl<T>::value;
+#endif
+
+  template <typename Type>
+  constexpr inline bool is_std_unordered_map_v = false;
+
+  template <typename... args>
+  constexpr inline bool is_std_unordered_map_v<std::unordered_map<args...>> = true;
+
+  template <typename... args>
+  constexpr inline bool is_std_unordered_map_v<std::unordered_multimap<args...>> = true;
+
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
