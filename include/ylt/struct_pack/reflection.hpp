@@ -514,16 +514,6 @@ template <typename T, typename = void>
   constexpr inline bool is_std_unordered_map_v<std::unordered_multimap<args...>> = true;
 
 
-#if __cpp_lib_memory_resource >= 201603L
-
-  template <typename... args>
-  constexpr inline bool is_std_unordered_map_v<std::pmr::unordered_multimap<args...>> = true;
-  
-  template <typename... args>
-  constexpr inline bool is_std_unordered_map_v<std::pmr::unordered_map<args...>> = true;
-#endif
-
-
 #if __cpp_concepts >= 201907L
   template <typename Type>
   concept set_container = container<Type> && requires {
