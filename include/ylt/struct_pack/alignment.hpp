@@ -89,8 +89,11 @@ constexpr std::size_t pack_alignment_v = pack_alignment_impl<T>();
 
 template <typename T>
 constexpr std::size_t alignment_impl() {
-  if constexpr (struct_pack::alignment_v<T> == 0 &&
-                struct_pack::pack_alignment_v<T> == 0) {
+  if constexpr (struct_pack::detail::is_compatible_v<T>) {
+    return 0;
+  }
+  else if constexpr (struct_pack::alignment_v<T> == 0 &&
+                     struct_pack::pack_alignment_v<T> == 0) {
     return default_alignment_v<T>;
   }
   else if constexpr (struct_pack::alignment_v<T> != 0) {
@@ -136,10 +139,15 @@ struct calculate_padding_size_impl {
                                                                   padding_size);
     }
     else {
-      if (offset % align::alignment_v<T>) {
-        padding_size[I] =
-            (std::min)(align::pack_alignment_v<P> - 1,
-                       align::alignment_v<T> - offset % align::alignment_v<T>);
+      if constexpr (align::alignment_v<T>) {
+        if (offset % align::alignment_v<T>) {
+          padding_size[I] = (std::min)(
+              align::pack_alignment_v<P> - 1,
+              align::alignment_v<T> - offset % align::alignment_v<T>);
+        }
+        else {
+          padding_size[I] = 0;
+        }
       }
       else {
         padding_size[I] = 0;
@@ -160,13 +168,14 @@ constexpr auto calculate_padding_size() {
   std::array<std::size_t, struct_pack::members_count<T> + 1> padding_size{};
   std::size_t offset = 0;
   for_each<T, calculate_padding_size_impl>(offset, padding_size);
-  if (align::alignment_v < T >> 0 && offset % align::alignment_v<T>) {
-    padding_size[struct_pack::members_count<T>] =
-        align::alignment_v<T> - offset % align::alignment_v<T>;
+  if constexpr (align::alignment_v<T> > 0) {
+    if (offset % align::alignment_v<T>) {
+      padding_size[struct_pack::members_count<T>] =
+          align::alignment_v<T> - offset % align::alignment_v<T>;
+      return padding_size;
+    }
   }
-  else {
-    padding_size[struct_pack::members_count<T>] = 0;
-  }
+  padding_size[struct_pack::members_count<T>] = 0;
   return padding_size;
 }
 template <typename T>

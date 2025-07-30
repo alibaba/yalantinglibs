@@ -1320,3 +1320,30 @@ TEST_CASE("test only_compatible") {
   CHECK(result.has_value());
   CHECK(result->hi == o.hi);
 }
+
+struct compatible_in_unordered_map {
+  struct_pack::compatible<int> hi;
+};
+TEST_CASE("test only_compatible") {
+  // {
+  //   std::unordered_map<int, struct_pack::compatible<int>> map;
+  //   for (int i = 0; i < 100; ++i) {
+  //     map.insert({i, i});
+  //   }
+  //   auto buffer = struct_pack::serialize(map);
+  //   auto result = struct_pack::deserialize<decltype(map)>(buffer);
+  //   CHECK(result.has_value());
+  //   CHECK(result.value() == map);
+  // }
+  {
+    std::unordered_multimap<int, struct_pack::compatible<int>> map;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map)>(buffer);
+    CHECK(result.has_value());
+    auto& e = result.value();
+    CHECK(e == map);
+  }
+}
