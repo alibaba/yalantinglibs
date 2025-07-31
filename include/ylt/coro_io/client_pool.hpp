@@ -90,7 +90,9 @@ class client_pool : public std::enable_shared_from_this<
                   << self->host_name_
                   << "}, now free client cnt: " << free_client_cnt
                   << " total client cnt:"
-                  << self->unfree_client_cnt_.load(std::memory_order::relaxed) + free_client_cnt;
+                  << self->unfree_client_cnt_.load(std::memory_order::relaxed) + free_client_cnt
+                  << " parallel request cnt:"
+                  << self->parallel_request_cnt_.load(std::memory_order::relaxed);
         if (is_all_cleared != 0) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
@@ -500,10 +502,14 @@ public:
         limit=tcp_use_limit;
       }
     }
+    // watcher_weak<uint64_t, std::remove_cvref_t<decltype(*this)>,std::memory_order_release>(parallel_request_cnt_,this->weak_from_this())
     if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
-      co_return [](async_simple::coro::Lazy<T> lazy, auto w)->async_simple::coro::Lazy<T> {
-        co_return co_await std::move(lazy);
-      }(std::move(lazy),watcher_weak<uint64_t, std::remove_cvref_t<decltype(*this)>,std::memory_order_release>(parallel_request_cnt_,this->weak_from_this()));
+      ++parallel_request_cnt_;
+      co_return [](async_simple::coro::Lazy<T> lazy,auto self)->async_simple::coro::Lazy<T> {
+        auto ret=co_await std::move(lazy);
+        --self->parallel_request_cnt_;
+co_return std::move(ret);
+      }(std::move(lazy),this->shared_from_this());
     }
     else {
       co_return make_ready_lazy(co_await std::move(lazy));
