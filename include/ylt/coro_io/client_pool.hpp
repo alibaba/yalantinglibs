@@ -494,13 +494,14 @@ public:
     constexpr int tcp_use_limit = 160;
     if (limit<0) {
       // rdma
-      if (get_pool_config().client_config.socket_config.index()==2) {
+      ELOG_INFO << get_pool_config().client_config.socket_config.index();
+      // if (get_pool_config().client_config.socket_config.index()==2) {
         limit=rdma_use_limit;
-      }
-      // tcp
-      else {
-        limit=tcp_use_limit;
-      }
+      // }
+      // // tcp
+      // else {
+      //   limit=tcp_use_limit;
+      // }
     }
     // watcher_weak<uint64_t, std::remove_cvref_t<decltype(*this)>,std::memory_order_release>(parallel_request_cnt_,this->weak_from_this())
     if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
