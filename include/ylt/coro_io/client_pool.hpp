@@ -438,9 +438,9 @@ class client_pool : public std::enable_shared_from_this<
       T op, typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
     ELOG_TRACE << "try send request to " << host_name_;
+    auto client = co_await get_client(client_config);
     watcher<uint64_t,std::memory_order_relaxed> w(unfree_client_cnt_);
     watcher<uint64_t,std::memory_order_release> w2(parallel_request_cnt_);
-    auto client = co_await get_client(client_config);
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
                 << " failed. connection refused.";
@@ -501,7 +501,6 @@ public:
       }
     }
     if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
-      ++parallel_request_cnt_;
       co_return [](async_simple::coro::Lazy<T> lazy, auto w)->async_simple::coro::Lazy<T> {
         co_return co_await std::move(lazy);
       }(std::move(lazy),watcher_weak<uint64_t, std::remove_cvref_t<decltype(*this)>,std::memory_order_release>(parallel_request_cnt_,this->weak_from_this()));
