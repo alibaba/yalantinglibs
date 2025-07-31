@@ -78,15 +78,15 @@ class client_queue {
               queue_[index ^ 1].enqueue(std::move(c2));
             }
           }
-          else if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
-            if (c2->waiting_request_count() < c->waiting_request_count()) {
-              queue_[index].enqueue(std::move(c));
-              c = std::move(c2);
-            }
-            else {
-              queue_[index].enqueue(std::move(c2));
-            }
-          }
+          // else if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
+          //   if (c2->waiting_request_count() < c->waiting_request_count()) {
+          //     queue_[index].enqueue(std::move(c));
+          //     c = std::move(c2);
+          //   }
+          //   else {
+          //     queue_[index].enqueue(std::move(c2));
+          //   }
+          // }
         }
       }
       --size_[index];
