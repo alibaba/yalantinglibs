@@ -68,7 +68,8 @@ class client_queue {
         auto waiting_count =c->waiting_request_count();
         if (waiting_count>=10) {
           client_t c2;
-          if (size_[index ^ 1] && queue_[index ^ 1].try_dequeue(c2)) {
+          std::size_t size_now=size_[index];
+          if (size_[index ^ 1] >= size_now && queue_[index ^ 1].try_dequeue(c2)) {
             if (c2->waiting_request_count() < waiting_count) {
               queue_[index].enqueue(std::move(c));
               --size_[index ^ 1];
@@ -79,7 +80,7 @@ class client_queue {
               queue_[index ^ 1].enqueue(std::move(c2));
             }
           }
-          else if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
+          else if (size_now> 1 && queue_[index].try_dequeue(c2)) {
             if (c2->waiting_request_count() < c->waiting_request_count()) {
               queue_[index].enqueue(std::move(c));
               c = std::move(c2);
