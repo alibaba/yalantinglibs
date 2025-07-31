@@ -44,7 +44,9 @@
 #include <ylt/util/expected.hpp>
 
 #include "async_simple/Common.h"
+#include "async_simple/Future.h"
 #include "async_simple/coro/Collect.h"
+#include "async_simple/coro/DetachedCoroutine.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
@@ -284,7 +286,7 @@ class client_pool : public std::enable_shared_from_this<
     else {
       ELOG_TRACE << "get free client{" << client.get() << "}. from queue";
     }
-    unfree_client_cnt_.fetch_add(1,std::memory_order_relaxed);
+    unfree_client_cnt_.fetch_add(1,std::memory_order::acquire);
     co_return std::move(client);
   }
 
@@ -310,7 +312,7 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   void collect_free_client(std::unique_ptr<client_t> client) {
-    unfree_client_cnt_.fetch_sub(1,std::memory_order_relaxed);
+    unfree_client_cnt_.fetch_sub(1,std::memory_order_acquire);
     if (pool_config_.max_connection_life_time < std::chrono::seconds::max()) {
       auto tp = client->get_create_time_point();
       if (std::chrono::steady_clock::now() - tp >
@@ -367,8 +369,9 @@ class client_pool : public std::enable_shared_from_this<
     uint32_t max_connection = 100;
     uint32_t connect_retry_count = 3;
     uint32_t idle_queue_per_max_clear_count = 1000;
+    int32_t reuse_limit = -1; // -1 means auto limit
     std::chrono::milliseconds reconnect_wait_time{1000};
-    std::chrono::milliseconds idle_timeout{3000};
+    std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
     std::chrono::milliseconds host_alive_detect_duration{
         30000}; /* zero means wont detect */
@@ -453,7 +456,43 @@ class client_pool : public std::enable_shared_from_this<
    * @return std::size_t
    */
   std::size_t total_client_count() const noexcept {
-    return free_client_count() + unfree_client_cnt_;
+    return free_client_count() + unfree_client_cnt_.load(std::memory_order::release);
+  }
+private:
+template<typename T>
+  async_simple::coro::Lazy<T> make_ready_lazy(T t) {
+    co_return std::move(t);
+  }
+public:
+  template<typename T>
+  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T>&& lazy) {
+    auto limit =get_pool_config().reuse_limit;
+    constexpr int rdma_use_limit = 32;
+    constexpr int tcp_use_limit = 160;
+    if (limit<0) {
+      // rdma
+      if (get_pool_config().client_config.socket_config.index()==2) {
+        limit=rdma_use_limit;
+      }
+      // tcp
+      else {
+        limit=tcp_use_limit;
+      }
+    }
+    if (limit < busy_client_count()) {
+      co_return std::move(lazy);
+    }
+    else {
+      co_return make_ready_lazy(co_await std::move(lazy));
+    }
+  }
+  /**
+   * @brief approx unfree connection of client pools
+   *
+   * @return std::size_t
+   */
+  std::size_t busy_client_count() const noexcept {
+    return unfree_client_cnt_.load(std::memory_order::release);
   }
   /**
    * @brief if host may not useable now.
@@ -474,6 +513,11 @@ class client_pool : public std::enable_shared_from_this<
   std::shared_ptr<std::vector<asio::ip::tcp::endpoint>> get_remote_endpoints()
       const noexcept {
     return eps_.load(std::memory_order_acquire);
+  }
+
+  
+  const pool_config& get_pool_config() const noexcept {
+    return pool_config_;
   }
 
  private:
@@ -513,6 +557,7 @@ class client_pool : public std::enable_shared_from_this<
   decltype(auto) send_request(T op, std::string_view sv) {
     return send_request(std::move(op), sv, pool_config_.client_config);
   }
+
 
   coro_io::detail::client_queue<std::unique_ptr<client_t>> free_clients_;
   coro_io::detail::client_queue<std::unique_ptr<client_t>>

@@ -9,6 +9,7 @@
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 #include <ylt/metric/summary.hpp>
 
+#include "async_simple/Future.h"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
@@ -243,42 +244,24 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config&
     std::string_view send_str_view(send_str);
     for (size_t i = 0; i < conf.max_request_count; i++) {
       auto start = std::chrono::steady_clock::now();
-      auto old_value = cnter.fetch_add(1,std::memory_order_acquire);
-      std::string_view result="";
-      if (old_value>32) {
-        auto ret =
-            co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
-                                            -> async_simple::coro::Lazy<async_simple::coro::Lazy<coro_rpc::async_rpc_result<std::string_view>>> {
-              auto result = co_await client.send_request_with_attachment<echo>(send_str_view);
-              co_return std::move(result);
-            });
-        if (ret.has_value()) {
-          result = (co_await std::move(ret.value()))->result();
-        }
-      }
-      else {
-        auto ret =  co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
-                                          -> async_simple::coro::Lazy<std::string_view> {
-            client.set_req_attachment(send_str_view);
-            auto result = co_await client.call<echo>();
-            if (!result.has_value()) {
-              ELOG_WARN << result.error().msg;
-              co_return "";
-            }
-            co_return result.value();
+      auto ret =
+          co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
+                                          -> async_simple::coro::Lazy<async_simple::coro::Lazy<coro_rpc::async_rpc_result<std::string_view>>> {
+            auto result = co_await client.send_request_with_attachment<echo>(send_str_view);
+            co_return co_await pool->client_reuse_limiter(std::move(result));
           });
-        result = ret.value_or("");
-      }
-      cnter.fetch_sub(1,std::memory_order_acquire);
-      if (result.size()) {
-        auto now = std::chrono::steady_clock::now();
-        g_latency.observe(
-            std::chrono::duration_cast<std::chrono::microseconds>(now -
-                                                                  start)
-                .count());
-        g_throughput_count.fetch_add(send_str_view.length(),
-                                      std::memory_order_relaxed);
-        g_qps_count.fetch_add(1, std::memory_order_relaxed);
+      if (ret.has_value()) {
+        auto result = co_await std::move(ret.value());
+        if (result.has_value()) {
+          auto now = std::chrono::steady_clock::now();
+          g_latency.observe(
+              std::chrono::duration_cast<std::chrono::microseconds>(now -
+                                                                    start)
+                  .count());
+          g_throughput_count.fetch_add(send_str_view.length(),
+                                        std::memory_order_relaxed);
+          g_qps_count.fetch_add(1, std::memory_order_relaxed);
+        }
       }
       else {
         break;
