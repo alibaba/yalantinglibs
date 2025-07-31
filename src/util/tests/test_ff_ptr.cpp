@@ -107,3 +107,66 @@ TEST_CASE("testing unique_ptr double-free") {
   std::cout << err_string << std::endl;
   CHECK(err_string.find("double free") != std::string::npos);
 }
+
+TEST_CASE("testing invaild ptr compare") {
+  err_string = "";
+  ff_ptr<int64_t> v1, v2;
+  int64_t* w1;
+  bool val = false;
+  CHECK(v1 == v2);
+  CHECK(v1 == nullptr);
+  CHECK(nullptr == v2);
+  {
+    auto hi = ylt::util::ff_make_shared<int64_t>(0),
+         hi2 = ylt::util::ff_make_shared<int64_t>(0);
+    v1 = hi.get();
+    v2 = hi2.get();
+    w1 = v1.get();
+    val = v1 < v2;
+  }
+  CHECK(w1 == v1);
+  CHECK(w1 <= v1);
+  CHECK(w1 >= v1);
+  CHECK(!(w1 != v1));
+  CHECK(!(w1 > v1));
+  CHECK(!(w1 < v1));
+  CHECK(v1 == v1);
+  CHECK(v1 <= v1);
+  CHECK(v1 >= v1);
+  CHECK(!(v1 != v1));
+  CHECK(!(v1 > v1));
+  CHECK(!(v1 < v1));
+  CHECK(v1 == w1);
+  CHECK(v1 <= w1);
+  CHECK(v1 >= w1);
+  CHECK(!(v1 != w1));
+  CHECK(!(v1 > w1));
+  CHECK(!(v1 < w1));
+  CHECK(val == (v1 < v2));
+  CHECK(v1 != v2);
+  CHECK(v1);
+  std::cout << err_string << std::endl;
+  CHECK(err_string.empty());
+}
+TEST_CASE("testing invaild ptr add") {
+  err_string = "";
+  ff_ptr<int64_t> v1;
+  {
+    auto hi = ylt::util::ff_make_shared<int64_t>(42);
+    v1 = hi.get();
+  }
+  v1++;
+  CHECK(v1);
+  ++v1;
+  CHECK(v1);
+  v1 += 1;
+  CHECK(v1);
+  v1 -= 1;
+  CHECK(v1);
+  --v1;
+  CHECK(v1);
+  v1--;
+  CHECK(v1);
+  std::cout << err_string << std::endl;
+  CHECK(err_string.empty());
+}

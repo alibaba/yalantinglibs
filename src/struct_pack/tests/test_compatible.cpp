@@ -1320,3 +1320,65 @@ TEST_CASE("test only_compatible") {
   CHECK(result.has_value());
   CHECK(result->hi == o.hi);
 }
+
+struct compatible_in_unordered_map {
+  std::unordered_map<
+      int, struct_pack::compatible<std::unordered_map<int, std::string>>>
+      values;
+};
+struct compatible_in_unordered_map2 {
+  struct nested {
+    struct_pack::compatible<int, 20140101> a;
+    struct_pack::compatible<int, 20140201> b;
+    friend inline bool operator==(const nested& lhs, const nested& rhs) {
+      return lhs.a == rhs.a && lhs.b == rhs.b;
+    }
+  };
+
+  std::unordered_map<int, nested> values;
+};
+TEST_CASE("test unordered_map_in_compatible") {
+  {
+    std::unordered_map<int, struct_pack::compatible<int>> map;
+    for (int i = 0; i < 100; ++i) {
+      map.insert({i, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map)>(buffer);
+    CHECK(result.has_value());
+    CHECK(result.value() == map);
+  }
+  {
+    std::unordered_multimap<int, struct_pack::compatible<int>> map;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map)>(buffer);
+    CHECK(result.has_value());
+    auto& e = result.value();
+    CHECK(e == map);
+  }
+  {
+    compatible_in_unordered_map m;
+    for (int i = 0; i < 1000; ++i) {
+      auto iter = m.values.insert({i, std::unordered_map<int, std::string>{}});
+      for (int j = 0; j < 100 - i % 100; ++j) {
+        iter.first->second.value().insert({j, std::to_string(j)});
+      }
+    }
+    auto buffer = struct_pack::serialize(m);
+    auto result = struct_pack::deserialize<decltype(m)>(buffer);
+    CHECK(result.value().values == m.values);
+  }
+  {
+    compatible_in_unordered_map2 m;
+    for (int i = 0; i < 1000; ++i) {
+      auto iter = m.values.insert(
+          {i, compatible_in_unordered_map2::nested{i, 1000 - i}});
+    }
+    auto buffer = struct_pack::serialize(m);
+    auto result = struct_pack::deserialize<decltype(m)>(buffer);
+    CHECK(result.value().values == m.values);
+  }
+}
