@@ -141,11 +141,14 @@ struct compatible : public std::optional<T> {
   constexpr compatible &operator=(const compatible &other) = default;
   constexpr compatible &operator=(compatible &&other) = default;
   using std::optional<T>::optional;
-  friend bool operator==(const compatible<T, version> &self,
-                         const compatible<T, version> &other) {
-    return static_cast<bool>(self) == static_cast<bool>(other) &&
-           (!self || *self == *other);
-  }
+
   static constexpr uint64_t version_number = version;
 };
+
+template <typename T, uint64_t version1, uint64_t version2>
+inline bool operator==(const compatible<T, version1> &lhs,
+                       const compatible<T, version2> &rhs) {
+  return static_cast<bool>(lhs) == static_cast<bool>(rhs) &&
+         (!lhs || *lhs == *rhs);
+}
 }  // namespace struct_pack
