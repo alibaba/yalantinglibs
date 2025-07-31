@@ -1306,4 +1306,10 @@ class coro_rpc_client {
 #endif
   std::chrono::time_point<std::chrono::steady_clock> create_tp_;
 };
+
+// template<auto func, template<typename> typename client_pool, typename... Args>
+// async_simple::coro::Lazy<async_rpc_result<decltype(get_return_type<func>())>> send_request(client_pool<coro_rpc_client> &pool, const coro_rpc_client::config& config, std::string_view attachment, std::chrono::steady_clock::duration timeout_duration, Args&&... args) {
+//   pool.send_
+// }
+
 }  // namespace coro_rpc
