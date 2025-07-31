@@ -71,24 +71,32 @@ class py_coro_rpc_client_pool {
   py_coro_rpc_client_pool(std::string url)
       : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)){};
 
-  pybind11::object async_send_msg(py::handle loop, py::handle py_bytes) {
+  pybind11::object async_send_msg(py::handle loop, py::handle py_bytes,
+                                  py::buffer out_buf) {
     auto local_future = loop.attr("create_future")();
     py::handle future = local_future;
+
+    py::buffer_info info = out_buf.request(true);
+    char *data = static_cast<char *>(info.ptr);
+    std::span<char> buf(data, info.size);
 
     py_bytes.inc_ref();
 
     pool_
-        ->send_request([py_bytes, loop,
-                        future](coro_rpc::coro_rpc_client &client)
+        ->send_request([py_bytes, loop, future,
+                        buf](coro_rpc::coro_rpc_client &client)
                            -> async_simple::coro::Lazy<void> {
           char *data;
           ssize_t length;
           PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+          client.set_resp_attachment_buf(buf);
           auto result = co_await client.call<&py_coro_rpc_server::handle_msg>(
               std::string_view(data, length));
           py::gil_scoped_acquire acquire;
-          loop.attr("call_soon_threadsafe")(future.attr("set_result"),
-                                            result.has_value());
+          loop.attr("call_soon_threadsafe")(
+              future.attr("set_result"),
+              py::make_tuple(result.has_value(),
+                             client.get_resp_attachment().size()));
           py_bytes.dec_ref();
         })
         .start([](auto &&) {

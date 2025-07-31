@@ -39,20 +39,7 @@ endif()
 
 option(ENABLE_pybind11 "Enable pybind11 " OFF)
 if(ENABLE_pybind11)
-  cmake_minimum_required(VERSION 3.14)
-  project(MyPybind11Project)
-
-  include(FetchContent)
-
-  FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v2.13.6
-  )
-
-  FetchContent_MakeAvailable(pybind11)
-
-  include_directories(${CMAKE_CURRENT_BINARY_DIR}/_deps/pybind11-src/include)
+  find_package(pybind11 REQUIRED)
 
   pybind11_add_module(py_example py_example/py_example.cpp)
   set_target_properties(py_example PROPERTIES

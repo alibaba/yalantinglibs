@@ -9,12 +9,13 @@ def handle_msg(con, msg):
 
 async def async_request(pool):
     loop = asyncio.get_event_loop()
-
+    buf = bytearray(2 * 1024)
     for i in range(3):
         print("Python is doing other work while C++ runs...")
         # await the result from C++
-        result = await pool.async_send_msg(loop, b"hello world")
-        print(f"Python received result from C++: {result}")
+        result, len = await pool.async_send_msg(loop, b"hello world", buf)
+        print(result)
+        print(f"Python received result from C++: {buf[:len]}")
     
 
 if __name__ == "__main__":
