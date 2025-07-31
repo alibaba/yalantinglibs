@@ -1181,6 +1181,10 @@ class coro_rpc_client {
   uint32_t get_pipeline_size() { return control_->recving_cnt_; }
 
  private:
+  bool& reuse_client_hint() noexcept {
+    return reuse_client_hint_;
+  }
+
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
                                                 std::string_view req_attachment,
@@ -1288,7 +1292,7 @@ class coro_rpc_client {
   }
 
  private:
-  bool should_reset_ = false;
+  bool should_reset_ = false, reuse_client_hint_ = false;
   async_simple::coro::Mutex connect_mutex_;
   std::atomic<bool> write_mutex_ = false;
   std::atomic<uint32_t> request_id_{0};
