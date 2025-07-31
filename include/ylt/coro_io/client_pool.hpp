@@ -392,7 +392,7 @@ class client_pool : public std::enable_shared_from_this<
     uint32_t idle_queue_per_max_clear_count = 1000;
     int32_t reuse_limit = -1; // -1 means auto limit
     std::chrono::milliseconds reconnect_wait_time{1000};
-    std::chrono::milliseconds idle_timeout{3000};
+    std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
     std::chrono::milliseconds host_alive_detect_duration{
         30000}; /* zero means wont detect */

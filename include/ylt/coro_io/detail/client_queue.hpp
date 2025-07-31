@@ -61,41 +61,33 @@ class client_queue {
       return 0;
     }
   }
-  bool try_dequeue(client_t& c) {
-    const int_fast16_t index = selected_index_;
-    if (queue_[index].try_dequeue(c)) {
-      if constexpr (requires { c->waiting_request_count(); }) {
-        auto waiting_count =c->waiting_request_count();
-        if (waiting_count>=10) {
-          client_t c2;
-          std::size_t size_now=size_[index];
-          // if (size_[index ^ 1] >= size_now && queue_[index ^ 1].try_dequeue(c2)) {
-          //   if (c2->waiting_request_count() < waiting_count) {
-          //     queue_[index].enqueue(std::move(c));
-          //     --size_[index ^ 1];
-          //     c = std::move(c2);
-          //     return true;
-          //   }
-          //   else {
-          //     queue_[index ^ 1].enqueue(std::move(c2));
-          //   }
-          // }
-          // else 
-          if (size_now> 1 && queue_[index].try_dequeue(c2)) {
-            if (c2->waiting_request_count() < c->waiting_request_count()) {
-              queue_[index].enqueue(std::move(c));
-              c = std::move(c2);
-            }
-            else {
-              queue_[index].enqueue(std::move(c2));
-            }
+  void try_dequeue_connect_reuse_impl(client_t&c, std::size_t index) {
+    if constexpr (requires { c->waiting_request_count(); }) {
+      auto waiting_count = c->waiting_request_count();
+      if (waiting_count>=10) {
+        client_t c2;
+        if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
+          if (c2->waiting_request_count() < c->waiting_request_count()) {
+            queue_[index].enqueue(std::move(c));
+            c = std::move(c2);
+          }
+          else {
+            queue_[index].enqueue(std::move(c2));
           }
         }
       }
-      --size_[index];
+    }
+    --size_[index];
+  }
+  bool try_dequeue(client_t& c) {
+    const int_fast16_t index = selected_index_;
+    if (queue_[index].try_dequeue(c)) {
+      try_dequeue_connect_reuse_impl(c, index);
+      --size_[index ^ 1];
       return true;
     }
-    if (queue_[index ^ 1].try_dequeue(c)) {
+    else if (queue_[index ^ 1].try_dequeue(c)) {
+      try_dequeue_connect_reuse_impl(c, index ^ 1);
       --size_[index ^ 1];
       return true;
     }
