@@ -228,6 +228,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
 async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config& conf) {
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
   coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+  pool_conf.max_connection=1024;
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
     coro_io::ib_socket_t::config_t ib_conf{};
