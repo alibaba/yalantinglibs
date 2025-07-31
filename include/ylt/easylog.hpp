@@ -167,6 +167,23 @@ class logger {
         appender_->write_record<true, false>(record);
       }
     }
+
+    if (appenders_.size() > 0) {
+        std::string text;
+        text.append("[");
+        text.append(std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+            record.get_time_point().time_since_epoch()).count()));
+        text.append("] [");
+        text.append(severity_str(record.get_severity()));
+        text.append("] ");
+        text.append(record.get_file_str());
+        text.append(": ");
+        text.append(record.get_message());
+    
+        for (auto &appender : appenders_) {
+            appender(text);
+        }
+    }
   }
 
   std::atomic<Severity> min_severity_ =
