@@ -65,10 +65,11 @@ class client_queue {
     const int_fast16_t index = selected_index_;
     if (queue_[index].try_dequeue(c)) {
       if constexpr (requires { c->waiting_request_count(); }) {
-        if (c->waiting_request_count()) {
+        auto waiting_count =c->waiting_request_count();
+        if (waiting_count>=10) {
           client_t c2;
           if (size_[index ^ 1] && queue_[index ^ 1].try_dequeue(c2)) {
-            if (c2->waiting_request_count() < c->waiting_request_count()) {
+            if (c2->waiting_request_count() < waiting_count) {
               queue_[index].enqueue(std::move(c));
               --size_[index ^ 1];
               c = std::move(c2);
@@ -78,15 +79,15 @@ class client_queue {
               queue_[index ^ 1].enqueue(std::move(c2));
             }
           }
-          // else if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
-          //   if (c2->waiting_request_count() < c->waiting_request_count()) {
-          //     queue_[index].enqueue(std::move(c));
-          //     c = std::move(c2);
-          //   }
-          //   else {
-          //     queue_[index].enqueue(std::move(c2));
-          //   }
-          // }
+          else if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
+            if (c2->waiting_request_count() < c->waiting_request_count()) {
+              queue_[index].enqueue(std::move(c));
+              c = std::move(c2);
+            }
+            else {
+              queue_[index].enqueue(std::move(c2));
+            }
+          }
         }
       }
       --size_[index];
