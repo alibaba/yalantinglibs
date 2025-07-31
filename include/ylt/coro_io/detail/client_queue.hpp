@@ -83,12 +83,10 @@ class client_queue {
     const int_fast16_t index = selected_index_;
     if (queue_[index].try_dequeue(c)) {
       try_dequeue_connect_reuse_impl(c, index);
-      --size_[index ^ 1];
       return true;
     }
     else if (queue_[index ^ 1].try_dequeue(c)) {
       try_dequeue_connect_reuse_impl(c, index ^ 1);
-      --size_[index ^ 1];
       return true;
     }
     return false;
