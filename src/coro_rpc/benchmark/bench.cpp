@@ -245,7 +245,7 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config&
       auto start = std::chrono::steady_clock::now();
       auto old_value = cnter.fetch_add(1,std::memory_order_acquire);
       std::string_view result="";
-      if (old_value<32) {
+      if (old_value>32) {
         auto ret =
             co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
                                             -> async_simple::coro::Lazy<async_simple::coro::Lazy<coro_rpc::async_rpc_result<std::string_view>>> {
