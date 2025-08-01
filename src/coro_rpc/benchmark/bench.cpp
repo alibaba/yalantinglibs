@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
   parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
-  parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, false);
+  parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, true);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
