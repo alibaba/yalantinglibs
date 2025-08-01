@@ -307,13 +307,6 @@ class coro_rpc_client {
   [[nodiscard]] bool has_closed() const noexcept { return control_->has_closed_; }
 
   /*!
-   * get the waiting request count
-   *
-   * @return std::size_t, the waiting request count. zero if not request waiting
-   */
-  [[nodiscard]] std::size_t waiting_request_count() const noexcept { return control_->table_cnt_.load(std::memory_order_acquire); }
-
-  /*!
    * Connect server
    *
    * If socket hasn't been closed, it will be closed first then connect to
@@ -856,7 +849,6 @@ class coro_rpc_client {
     coro_io::ExecutorWrapper<> *executor_;
     coro_io::socket_wrapper_t socket_wrapper_;
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
-    std::atomic<std::size_t> table_cnt_ = 0;
     resp_body resp_buffer_;
     std::atomic<uint32_t> recving_cnt_ = 0;
     control_t(coro_io::ExecutorWrapper<> *executor, bool is_timeout,
@@ -950,7 +942,6 @@ class coro_rpc_client {
       e.second.local_error(errc);
     }
     controller->response_handler_table_.clear();
-    controller->table_cnt_.store(0,std::memory_order_release);
   }
   template <typename Socket>
   static async_simple::coro::Lazy<void> recv(
@@ -1030,8 +1021,6 @@ class coro_rpc_client {
       file << controller->resp_buffer_.resp_attachment_buf_;
       file.close();
 #endif
-      --controller->recving_cnt_;
-      controller->table_cnt_.fetch_sub(1,std::memory_order_release);
       iter->second(std::move(controller->resp_buffer_), header.err_code);
       controller->response_handler_table_.erase(iter);
       if (controller->response_handler_table_.empty()) {
@@ -1043,12 +1032,31 @@ class coro_rpc_client {
     co_return;
   }
 
+  struct recving_guard {
+    recving_guard(control_t *ctrl) noexcept : ctrl_(ctrl) {
+      ctrl_->recving_cnt_.fetch_add(1, std::memory_order_release);
+    }
+    recving_guard(recving_guard &&o) noexcept : ctrl_(o.ctrl_) {
+      o.ctrl_ = nullptr;
+    };
+    recving_guard(const recving_guard &) = delete;
+    void release() noexcept {
+      if (ctrl_) {
+        ctrl_->recving_cnt_.fetch_sub(1, std::memory_order_release);
+        ctrl_ = nullptr;
+      }
+    }
+
+    ~recving_guard() noexcept { release(); }
+    control_t *ctrl_;
+  };
+
   template <typename T>
   static async_simple::coro::Lazy<async_rpc_result<T>> deserialize_rpc_result(
       async_simple::Future<async_rpc_raw_result> future,
-      std::weak_ptr<control_t> watcher) {
+      std::weak_ptr<control_t> watcher,recving_guard guard) {
     auto ret_ = co_await std::move(future);
-
+    guard.release();
     if (ret_.index() == 1) [[unlikely]] {  // local error
       auto &ret = std::get<1>(ret_);
       if (ret.value() == static_cast<int>(std::errc::operation_canceled) ||
@@ -1112,16 +1120,7 @@ class coro_rpc_client {
                               std::string_view{}, std::forward<Args>(args)...);
   }
 
-  struct recving_guard {
-    recving_guard(control_t *ctrl) : ctrl_(ctrl) { ctrl_->recving_cnt_++; }
-    void release() { ctrl_ = nullptr; }
-    ~recving_guard() {
-      if (ctrl_) {
-        --ctrl_->recving_cnt_;
-      }
-    }
-    control_t *ctrl_;
-  };
+
 
  private:
   template <typename T>
@@ -1161,16 +1160,14 @@ class coro_rpc_client {
             rpc_error{coro_rpc::errc::serial_number_conflict});
       }
       else {
-        control_->table_cnt_.fetch_add(1,std::memory_order_release);
         if (is_empty) {
           control_->socket_wrapper_.visit([control_ = control_](auto &socket) {
             recv(control_, socket).start([](auto &&) {
             });
           });
         }
-        guard.release();
         co_return deserialize_rpc_result<rpc_return_t>(
-            std::move(future), std::weak_ptr<control_t>{control_});
+            std::move(future), std::weak_ptr<control_t>{control_},std::move(guard));
       }
     }
     else {
@@ -1178,7 +1175,7 @@ class coro_rpc_client {
     }
   }
 
-  uint32_t get_pipeline_size() { return control_->recving_cnt_; }
+  uint32_t get_pipeline_size() { return control_->recving_cnt_.load(std::memory_order_acquire); }
 
  private:
   bool& reuse_client_hint() noexcept {
