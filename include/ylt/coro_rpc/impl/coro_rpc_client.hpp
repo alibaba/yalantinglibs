@@ -503,7 +503,7 @@ class coro_rpc_client {
   }
 
   std::string release_resp_attachment() {
-    if (is_resp_attachment_in_external_buf()) {
+    if (!is_resp_attachment_in_external_buf()) {
       return std::move(control_->resp_buffer_.resp_attachment_buf_);
     }
     else {
