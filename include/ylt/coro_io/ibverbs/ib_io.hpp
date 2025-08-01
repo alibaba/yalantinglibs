@@ -194,8 +194,9 @@ async_simple::coro::
   assert(len == io_size);
   auto now_buffer_data =
       ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size();
-  if (now_buffer_data < 64 * 1024 && !send_buffer_full && prev_op &&
-      !prev_op->hasResult()) {
+  if (now_buffer_data <
+          std::min<std::size_t>(2 * 1024 * 1024, ib_socket.get_buffer_size()) &&
+      !send_buffer_full && prev_op && !prev_op->hasResult()) {
     ELOG_INFO << "combine small message, now buffer size:" << now_buffer_data;
     co_return std::pair{std::error_code{}, io_size};
   }
