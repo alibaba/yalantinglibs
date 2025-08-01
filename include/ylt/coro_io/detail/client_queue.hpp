@@ -91,16 +91,28 @@ class client_queue {
     }
     return false;
   }
-  std::size_t clear_old(std::size_t max_clear_cnt) {
+  bool clear_old(std::size_t max_clear_cnt) {
     const int_fast16_t index = selected_index_ ^ 1;
-    if (size_[index]) {
-      std::size_t result =
-          queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
-
-      size_[index] -= result;
-      return result;
+    std::vector<client_t> using_clients;
+    std::size_t clear_cnt = 0;
+    for (;clear_cnt<max_clear_cnt;++clear_cnt) {
+      client_t c;
+      if (queue_[index].try_dequeue(c)) {
+        if constexpr (requires { c->waiting_request_count(); }) {
+          auto waiting_count = c->waiting_request_count();
+          if (waiting_count) {
+            using_clients.push_back(std::move(c));
+          }
+        }
+      }
+      else {
+        break;
+      }
     }
-    return 0;
+    for (auto &cli: using_clients) {
+      queue_[index].enqueue(std::move(cli));
+    }
+    return clear_cnt<max_clear_cnt; // all cleared
   }
 };
 };  // namespace coro_io::detail

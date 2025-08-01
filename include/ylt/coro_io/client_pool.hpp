@@ -88,7 +88,7 @@ class client_pool : public std::enable_shared_from_this<
         ELOG_TRACE << "start collect timeout client of pool{"
                    << self->host_name_
                    << "}, now client count: " << clients.size();
-        std::size_t is_all_cleared = clients.clear_old(clear_cnt);
+        bool is_all_cleared = clients.clear_old(clear_cnt);
         auto free_client_cnt = clients.size();
         ELOG_WARN << "finish collect timeout client of pool{"
                   << self->host_name_
@@ -97,7 +97,7 @@ class client_pool : public std::enable_shared_from_this<
                   << self->unfree_client_cnt_.load(std::memory_order::relaxed) + free_client_cnt
                   << " parallel request cnt:"
                   << self->parallel_request_cnt_.load(std::memory_order::relaxed);
-        if (is_all_cleared != 0) [[unlikely]] {
+        if (!is_all_cleared) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
           } catch (std::exception& e) {
