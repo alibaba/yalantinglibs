@@ -91,7 +91,7 @@ class client_queue {
     }
     return false;
   }
-  bool clear_old(std::size_t max_clear_cnt) {
+  std::pair<bool,std::size_t> clear_old(std::size_t max_clear_cnt) {
     const int_fast16_t index = selected_index_ ^ 1;
     std::vector<client_t> using_clients;
     std::size_t clear_cnt = 0;
@@ -112,7 +112,7 @@ class client_queue {
     for (auto &cli: using_clients) {
       queue_[index].enqueue(std::move(cli));
     }
-    return clear_cnt<max_clear_cnt; // all cleared
+    return {clear_cnt<max_clear_cnt,clear_cnt-using_clients.size()}; // all cleared
   }
 };
 };  // namespace coro_io::detail

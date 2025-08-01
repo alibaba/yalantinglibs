@@ -88,7 +88,7 @@ class client_pool : public std::enable_shared_from_this<
         ELOG_TRACE << "start collect timeout client of pool{"
                    << self->host_name_
                    << "}, now client count: " << clients.size();
-        bool is_all_cleared = clients.clear_old(clear_cnt);
+        auto [is_all_cleared, _] = clients.clear_old(clear_cnt);
         auto free_client_cnt = clients.size();
         ELOG_WARN << "finish collect timeout client of pool{"
                   << self->host_name_
