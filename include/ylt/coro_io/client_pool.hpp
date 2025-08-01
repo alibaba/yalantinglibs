@@ -500,7 +500,7 @@ public:
   template<typename T>
   async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T>&& lazy,client_t& cli) {
     auto limit = get_pool_config().reuse_limit;
-    constexpr int rdma_reuse_limit = 32;
+    constexpr int rdma_reuse_limit = 24;
     constexpr int tcp_reuse_limit = 160;
     if (limit<0) {
       // rdma

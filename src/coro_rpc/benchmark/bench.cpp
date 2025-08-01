@@ -237,6 +237,10 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config&
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
+  if (pool_conf.client_config.socket_config==coro_rpc_client::tcp_config{}) {
+    ELOG_INFO<<"enable tcp pipeline speedup";
+    std::get<coro_rpc_client::tcp_config>(pool_conf.client_config.socket_config).enable_tcp_no_delay=false;
+  }
 
   auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf);

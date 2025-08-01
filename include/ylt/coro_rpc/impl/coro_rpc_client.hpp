@@ -1175,7 +1175,7 @@ class coro_rpc_client {
     }
   }
 
-  uint32_t get_pipeline_size() { return control_->recving_cnt_.load(std::memory_order_acquire); }
+  uint32_t get_pipeline_size() const noexcept { return control_->recving_cnt_.load(std::memory_order_acquire); }
 
  private:
   bool& reuse_client_hint() noexcept {
