@@ -62,12 +62,12 @@ class client_queue {
     }
   }
   void try_dequeue_connect_reuse_impl(client_t&c, std::size_t index) {
-    if constexpr (requires { c->waiting_request_count(); }) {
-      auto waiting_count = c->waiting_request_count();
+    if constexpr (requires { c->get_pipeline_size(); }) {
+      auto waiting_count = c->get_pipeline_size();
       if (waiting_count>=10) {
         client_t c2;
         if (size_[index]> 1 && queue_[index].try_dequeue(c2)) {
-          if (c2->waiting_request_count() < c->waiting_request_count()) {
+          if (c2->get_pipeline_size() < c->get_pipeline_size()) {
             queue_[index].enqueue(std::move(c));
             c = std::move(c2);
           }
@@ -98,8 +98,8 @@ class client_queue {
     for (;clear_cnt<max_clear_cnt;++clear_cnt) {
       client_t c;
       if (queue_[index].try_dequeue(c)) {
-        if constexpr (requires { c->waiting_request_count(); }) {
-          auto waiting_count = c->waiting_request_count();
+        if constexpr (requires { c->get_pipeline_size(); }) {
+          auto waiting_count = c->get_pipeline_size();
           if (waiting_count) {
             using_clients.push_back(std::move(c));
           }

@@ -367,7 +367,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   bool has_closed() { return socket_->has_closed_; }
 
-  [[nodiscard]] std::size_t waiting_request_count() const noexcept { return 0; }
+  [[nodiscard]] std::size_t get_pipeline_size() const noexcept { return 0; }
 
   const auto &get_headers() { return req_headers_; }
 
