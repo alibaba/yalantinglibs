@@ -58,6 +58,8 @@
 #endif
 namespace coro_io {
 
+struct client_reuse_hint{};
+
 template <typename client_t, typename io_context_pool_t>
 class client_pools;
 
@@ -380,15 +382,7 @@ class client_pool : public std::enable_shared_from_this<
     using type = T;
   };
   template <typename T>
-  using return_type =
-      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                        std::declval<client_t&>()))>::type,
-                    std::errc>;
-
-  template <typename T>
-  using return_type_with_host =
-      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                        std::declval<client_t&>(), std::string_view{}))>::type,
+  using return_type = ylt::expected<typename lazy_hacker<util::function_return_type_t<T>>::type,
                     std::errc>;
 
  public:
@@ -460,9 +454,18 @@ class client_pool : public std::enable_shared_from_this<
       co_return return_type<T>{};
     }
     else {
-      auto ret = co_await op(*client);
-      collect_free_client(std::move(client));
-      co_return std::move(ret);
+      // enable reuse client limiter
+      if constexpr (requires{op(client_reuse_hint{},*client);}) {
+        auto ret = co_await op(client_reuse_hint{},*client);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret),*client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret2);
+      }
+      else {
+        auto ret = co_await op(*client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret);
+      }
     }
   }
 
@@ -492,13 +495,12 @@ template<typename T>
   async_simple::coro::Lazy<T> make_ready_lazy(T t) {
     co_return std::move(t);
   }
-public:
-  template<typename T>
+template<typename T>
   async_simple::coro::Lazy<T> client_reuse_limiter_impl(async_simple::coro::Lazy<T> lazy,watcher_weak<uint64_t, client_pool,std::memory_order_release>) {
     co_return co_await std::move(lazy);
   }
   template<typename T>
-  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T>&& lazy,client_t& cli) {
+  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T> lazy,client_t& cli) {
     auto limit = get_pool_config().reuse_limit;
     constexpr int rdma_reuse_limit = 24;
     constexpr int tcp_reuse_limit = 160;
@@ -520,6 +522,8 @@ public:
       co_return make_ready_lazy(co_await std::move(lazy));
     }
   }
+public:
+  
   /**
    * @brief approx unfree connection of client pools
    *
@@ -562,7 +566,7 @@ public:
   friend class load_balancer;
 
   template <typename T>
-  async_simple::coro::Lazy<return_type_with_host<T>> send_request(
+  async_simple::coro::Lazy<return_type<T>> send_request(
       T op, std::string_view endpoint,
       typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
@@ -571,19 +575,27 @@ public:
     if (!client) {
       ELOG_WARN << "send request to " << endpoint
                 << " failed. connection refused.";
-      co_return return_type_with_host<T>{ylt::unexpect,
+      co_return return_type<T>{ylt::unexpect,
                                          std::errc::connection_refused};
     }
-    if constexpr (std::is_same_v<typename return_type_with_host<T>::value_type,
+    if constexpr (std::is_same_v<typename return_type<T>::value_type,
                                  void>) {
       co_await op(*client, endpoint);
       collect_free_client(std::move(client));
-      co_return return_type_with_host<T>{};
+      co_return return_type<T>{};
     }
     else {
-      auto ret = co_await op(*client, endpoint);
-      collect_free_client(std::move(client));
-      co_return std::move(ret);
+      if constexpr (requires{op(client_reuse_hint{},*client, endpoint);}) {
+        auto ret = co_await op(client_reuse_hint{},*client, endpoint);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret),*client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret2);
+      }
+      else {
+        auto ret = co_await op(*client, endpoint);
+        collect_free_client(std::move(client));
+        co_return std::move(ret);
+      }
     }
   }
 
