@@ -66,13 +66,36 @@ class py_coro_rpc_server {
   py::handle py_callback_;
 };
 
+class string_holder {
+ public:
+  string_holder(std::string val) : value(std::move(val)) {}
+
+  py::object str_view() {
+    auto view = py::memoryview::from_buffer(value.data(), {value.size()},
+                                            {sizeof(uint8_t)});
+    return view;
+  }
+
+ private:
+  std::string value;
+};
+
+struct rpc_result {
+  int code;
+  std::string err_msg;
+  std::shared_ptr<string_holder> data_ptr;
+  uint64_t data_size;
+  py::object str_view() { return data_ptr->str_view(); }
+};
+
 class py_coro_rpc_client_pool {
  public:
   py_coro_rpc_client_pool(std::string url)
       : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)){};
 
-  pybind11::object async_send_msg(py::handle loop, py::handle py_bytes,
-                                  py::buffer out_buf) {
+  pybind11::object async_send_msg_with_outbuf(py::handle loop,
+                                              py::handle py_bytes,
+                                              py::buffer out_buf) {
     auto local_future = loop.attr("create_future")();
     py::handle future = local_future;
 
@@ -105,6 +128,44 @@ class py_coro_rpc_client_pool {
     return local_future;
   }
 
+  pybind11::object async_send_msg(py::handle loop, py::handle py_bytes) {
+    auto local_future = loop.attr("create_future")();
+    py::handle future = local_future;
+
+    py_bytes.inc_ref();
+
+    pool_
+        ->send_request([py_bytes, loop,
+                        future](coro_rpc::coro_rpc_client &client)
+                           -> async_simple::coro::Lazy<void> {
+          char *data;
+          ssize_t length;
+          PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+          auto r = co_await client.call<&py_coro_rpc_server::handle_msg>(
+              std::string_view(data, length));
+          rpc_result result{};
+          ELOG_INFO << "rpc result: " << client.get_resp_attachment();
+          if (!r.has_value()) {
+            ELOG_INFO << "rpc call failed: " << r.error().msg;
+            result.code = r.error().val();
+            result.err_msg = r.error().msg;
+          }
+          else {
+            result.data_ptr = std::make_shared<string_holder>(
+                std::move(client.release_resp_attachment()));
+            result.data_size = client.get_resp_attachment().size();
+          }
+
+          py::gil_scoped_acquire acquire;
+          loop.attr("call_soon_threadsafe")(future.attr("set_result"), result);
+          py_bytes.dec_ref();
+        })
+        .start([](auto &&) {
+        });
+
+    return local_future;
+  }
+
  private:
   std::shared_ptr<coro_io::client_pool<coro_rpc::coro_rpc_client>> pool_;
 };
@@ -125,7 +186,21 @@ PYBIND11_MODULE(py_coro_rpc, m) {
 
   py::class_<py_coro_rpc_client_pool>(m, "py_coro_rpc_client_pool")
       .def(py::init<std::string>())
-      .def("async_send_msg", &py_coro_rpc_client_pool::async_send_msg);
+      .def("async_send_msg", &py_coro_rpc_client_pool::async_send_msg)
+      .def("async_send_msg_with_outbuf",
+           &py_coro_rpc_client_pool::async_send_msg_with_outbuf);
+
+  py::class_<string_holder, std::shared_ptr<string_holder>>(m, "Holder")
+      .def(py::init<std::string>())
+      .def("str_view", &string_holder::str_view);
+
+  py::class_<rpc_result>(m, "rpc_result")
+      .def(py::init<>())
+      .def_readonly("code", &rpc_result::code)
+      .def_readonly("err_msg", &rpc_result::err_msg)
+      .def_readwrite("data_ptr", &rpc_result::data_ptr)
+      .def_readonly("data_size", &rpc_result::data_size)
+      .def("str_view", &rpc_result::str_view);
 
   m.def("log", [](std::string str) {
     ELOG_INFO << str;
