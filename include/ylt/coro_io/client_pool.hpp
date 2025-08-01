@@ -41,6 +41,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <ylt/util/expected.hpp>
 
 #include "async_simple/Common.h"
@@ -52,6 +53,9 @@
 #include "io_context_pool.hpp"
 #include "ylt/easylog.hpp"
 #include "ylt/util/atomic_shared_ptr.hpp"
+#ifdef YLT_ENABLE_IBV
+#include "ylt/coro_io/ibverbs/ib_socket.hpp"
+#endif
 namespace coro_io {
 
 template <typename client_t, typename io_context_pool_t>
@@ -277,9 +281,11 @@ class client_pool : public std::enable_shared_from_this<
   };  
   template<typename T,typename U,std::memory_order order>
   struct watcher_weak{
-    watcher_weak(std::atomic<T>& atomic_value,std::weak_ptr<U> w):atomic_value(atomic_value),w(std::move(w)){
+    watcher_weak(std::atomic<T>& atomic_value,std::weak_ptr<U> w) noexcept  :atomic_value(atomic_value),w(std::move(w)) {
         atomic_value.fetch_add(1,order);
     }
+    watcher_weak(const watcher_weak&)=delete;
+    watcher_weak(watcher_weak&&) noexcept=default;
     std::atomic<T>& atomic_value;
     std::weak_ptr<U> w;
     ~watcher_weak() { 
@@ -488,29 +494,27 @@ template<typename T>
   }
 public:
   template<typename T>
-  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T>&& lazy) {
+  async_simple::coro::Lazy<T> client_reuse_limiter_impl(async_simple::coro::Lazy<T> lazy,watcher_weak<uint64_t, client_pool,std::memory_order_release>) {
+    co_return co_await std::move(lazy);
+  }
+  template<typename T>
+  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T>&& lazy,client_t& cli) {
     auto limit = get_pool_config().reuse_limit;
-    constexpr int rdma_use_limit = 32;
-    constexpr int tcp_use_limit = 160;
+    constexpr int rdma_reuse_limit = 32;
+    constexpr int tcp_reuse_limit = 160;
     if (limit<0) {
       // rdma
-      ELOG_INFO << get_pool_config().client_config.socket_config.index();
-      // if (get_pool_config().client_config.socket_config.index()==2) {
-        limit=rdma_use_limit;
-      // }
-      // // tcp
-      // else {
-      //   limit=tcp_use_limit;
-      // }
+#ifdef YLT_ENABLE_IBV
+      if (std::holds_alternative<coro_io::ib_socket_t::config_t>(cli.get_config().socket_config)) {
+        limit=rdma_reuse_limit;
+      }
+#endif
+      if (limit != rdma_reuse_limit) {
+        limit = tcp_reuse_limit;
+      }
     }
-    // watcher_weak<uint64_t, std::remove_cvref_t<decltype(*this)>,std::memory_order_release>(parallel_request_cnt_,this->weak_from_this())
     if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
-      ++parallel_request_cnt_;
-      co_return [](async_simple::coro::Lazy<T> lazy,auto self)->async_simple::coro::Lazy<T> {
-        auto ret=co_await std::move(lazy);
-        --self->parallel_request_cnt_;
-co_return std::move(ret);
-      }(std::move(lazy),this->shared_from_this());
+      co_return client_reuse_limiter_impl(std::move(lazy), {parallel_request_cnt_,this->weak_from_this()});
     }
     else {
       co_return make_ready_lazy(co_await std::move(lazy));

@@ -250,7 +250,7 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(const bench_config&
           co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
                                           -> async_simple::coro::Lazy<async_simple::coro::Lazy<coro_rpc::async_rpc_result<std::string_view>>> {
             auto result = co_await client.send_request_with_attachment<echo>(send_str_view);
-            co_return co_await pool->client_reuse_limiter(std::move(result));
+            co_return co_await pool->client_reuse_limiter(std::move(result),                                               client);
           });
       if (ret.has_value()) {
         auto result = co_await std::move(ret.value());
