@@ -163,7 +163,6 @@ async_simple::coro::Lazy<std::error_code> test_write(coro_io::ib_socket_t& soc,
   }
   std::tie(ec, len) = co_await coro_io::async_write(
       soc, asio::buffer(buffer.data(), data_size));
-  ELOG_TRACE << "END WRITE";
   if (!ec) {
     CHECK(len == data_size);
   }
@@ -559,18 +558,22 @@ TEST_CASE("test rpc-like io") {
   }
 }
 
-async_simple::coro::Lazy<std::error_code> sleep(coro_io::ib_socket_t& soc, std::chrono::milliseconds ms) {
-  co_await coro_io::sleep_for(ms,soc.get_coro_executor());
-  co_return std::error_code{}; 
+async_simple::coro::Lazy<std::error_code> sleep(coro_io::ib_socket_t& soc,
+                                                std::chrono::milliseconds ms) {
+  co_await coro_io::sleep_for(ms, soc.get_coro_executor());
+  co_return std::error_code{};
 }
 
 TEST_CASE("test small package combine write") {
   {
     ELOG_WARN << "test small package combine write1";
     auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept({test(test_read_some, 3 * 1024), test(test_read_some, 8 * 1024),test(test_read_some, 1 * 1024)}),
+        echo_accept({test(test_read_some, 3 * 1024),
+                     test(test_read_some, 8 * 1024),
+                     test(test_read_some, 1 * 1024)}),
         echo_connect({test(test_write, 3 * 1024), test(test_write, 3 * 1024),
-                      test(test_write, 3 * 1024),test(test_write, 3 * 1024)})));
+                      test(test_write, 3 * 1024),
+                      test(test_write, 3 * 1024)})));
     auto& ec1 = std::get<0>(result);
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
@@ -579,7 +582,8 @@ TEST_CASE("test small package combine write") {
   {
     ELOG_WARN << "test small package combine write2";
     auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept({test(test_read_some, 3 * 1024), test(test_read_some, 6 * 1024)}),
+        echo_accept(
+            {test(test_read_some, 3 * 1024), test(test_read_some, 6 * 1024)}),
         echo_connect({test(test_write, 3 * 1024), test(test_write, 3 * 1024),
                       test(test_write, 3 * 1024)})));
     auto& ec1 = std::get<0>(result);
@@ -589,9 +593,12 @@ TEST_CASE("test small package combine write") {
   }
   {
     ELOG_WARN << "test small package combine write3";
-    auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept({test(test_read_some, 8 * 1024), test(test_read_some, 8 * 1024),test(test_read_some, 8 * 1024)}),
-        echo_connect({test(test_write, 11 * 1024), test(test_write, 13 * 1024)})));
+    auto result = async_simple::coro::syncAwait(
+        collectAll(echo_accept({test(test_read_some, 8 * 1024),
+                                test(test_read_some, 8 * 1024),
+                                test(test_read_some, 8 * 1024)}),
+                   echo_connect({test(test_write, 11 * 1024),
+                                 test(test_write, 13 * 1024)})));
     auto& ec1 = std::get<0>(result);
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());

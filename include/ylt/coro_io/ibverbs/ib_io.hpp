@@ -194,8 +194,9 @@ async_simple::coro::
   assert(len == io_size);
   auto now_buffer_data =
       ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size();
-  if (now_buffer_data <
-          std::min<std::size_t>(2 * 1024 * 1024, ib_socket.get_buffer_size()) &&
+  constexpr std::size_t max_buffer_length = 256 * 1024;
+  if (now_buffer_data < std::min<std::size_t>(max_buffer_length,
+                                              ib_socket.get_buffer_size()) &&
       !send_buffer_full && prev_op && !prev_op->hasResult()) {
     ELOG_INFO << "combine small message, now buffer size:" << now_buffer_data;
     co_return std::pair{std::error_code{}, io_size};
@@ -311,7 +312,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   std::vector<ibv_sge> split_sge_block;
   split_sge_block.reserve(sge_span.size());
   std::size_t io_completed_size = 0;
-  if constexpr (io==ib_socket_t::io_type::recv) {
+  if constexpr (io == ib_socket_t::io_type::recv) {
     io_completed_size = consume_buffer(ib_socket, sge_span);
     if (sge_span.empty()) {
       co_return std::pair{std::error_code{}, io_completed_size};

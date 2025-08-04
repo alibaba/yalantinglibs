@@ -1,5 +1,5 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/benchmark)
-#find_package(Protobuf QUIET)
+find_package(Protobuf QUIET)
 add_executable(struct_pack_benchmark benchmark.cpp no_op.cpp)
 if (Protobuf_FOUND)
     message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")

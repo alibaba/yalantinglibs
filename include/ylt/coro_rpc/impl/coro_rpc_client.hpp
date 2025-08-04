@@ -304,7 +304,9 @@ class coro_rpc_client {
    *
    * @return true if client closed, otherwise false.
    */
-  [[nodiscard]] bool has_closed() const noexcept { return control_->has_closed_; }
+  [[nodiscard]] bool has_closed() const noexcept {
+    return control_->has_closed_;
+  }
 
   /*!
    * Connect server
@@ -678,7 +680,9 @@ class coro_rpc_client {
    * └────────────────┴────────────────┘
    */
   template <auto func, typename... Args>
-  std::vector<std::byte> prepare_buffer(uint32_t &id, std::size_t attachment_length, Args &&...args) {
+  std::vector<std::byte> prepare_buffer(uint32_t &id,
+                                        std::size_t attachment_length,
+                                        Args &&...args) {
     std::vector<std::byte> buffer;
     std::size_t offset = coro_rpc_protocol::REQ_HEAD_LEN;
     if constexpr (sizeof...(Args) > 0) {
@@ -1054,7 +1058,7 @@ class coro_rpc_client {
   template <typename T>
   static async_simple::coro::Lazy<async_rpc_result<T>> deserialize_rpc_result(
       async_simple::Future<async_rpc_raw_result> future,
-      std::weak_ptr<control_t> watcher,recving_guard guard) {
+      std::weak_ptr<control_t> watcher, recving_guard guard) {
     auto ret_ = co_await std::move(future);
     guard.release();
     if (ret_.index() == 1) [[unlikely]] {  // local error
@@ -1120,8 +1124,6 @@ class coro_rpc_client {
                               std::string_view{}, std::forward<Args>(args)...);
   }
 
-
-
  private:
   template <typename T>
   static async_simple::coro::Lazy<async_rpc_result<T>> build_failed_rpc_result(
@@ -1167,7 +1169,8 @@ class coro_rpc_client {
           });
         }
         co_return deserialize_rpc_result<rpc_return_t>(
-            std::move(future), std::weak_ptr<control_t>{control_},std::move(guard));
+            std::move(future), std::weak_ptr<control_t>{control_},
+            std::move(guard));
       }
     }
     else {
@@ -1175,18 +1178,17 @@ class coro_rpc_client {
     }
   }
 
-  uint32_t get_pipeline_size() const noexcept { return control_->recving_cnt_.load(std::memory_order_acquire); }
-
- private:
-  bool& reuse_client_hint() noexcept {
-    return reuse_client_hint_;
+  uint32_t get_pipeline_size() const noexcept {
+    return control_->recving_cnt_.load(std::memory_order_acquire);
   }
 
+ private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
                                                 std::string_view req_attachment,
                                                 Args &&...args) {
-    auto buffer = prepare_buffer<func>(id, req_attachment.size(), std::forward<Args>(args)...);
+    auto buffer = prepare_buffer<func>(id, req_attachment.size(),
+                                       std::forward<Args>(args)...);
     if (buffer.empty()) {
       co_return rpc_error{errc::message_too_large};
     }
@@ -1289,7 +1291,7 @@ class coro_rpc_client {
   }
 
  private:
-  bool should_reset_ = false, reuse_client_hint_ = false;
+  bool should_reset_ = false;
   async_simple::coro::Mutex connect_mutex_;
   std::atomic<bool> write_mutex_ = false;
   std::atomic<uint32_t> request_id_{0};
@@ -1307,10 +1309,5 @@ class coro_rpc_client {
 #endif
   std::chrono::time_point<std::chrono::steady_clock> create_tp_;
 };
-
-// template<auto func, template<typename> typename client_pool, typename... Args>
-// async_simple::coro::Lazy<async_rpc_result<decltype(get_return_type<func>())>> send_request(client_pool<coro_rpc_client> &pool, const coro_rpc_client::config& config, std::string_view attachment, std::chrono::steady_clock::duration timeout_duration, Args&&... args) {
-//   pool.send_
-// }
 
 }  // namespace coro_rpc

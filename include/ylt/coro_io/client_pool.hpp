@@ -29,7 +29,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -37,17 +36,13 @@
 #include <shared_mutex>
 #include <string_view>
 #include <system_error>
-#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
 #include <ylt/util/expected.hpp>
 
-#include "async_simple/Common.h"
 #include "async_simple/Future.h"
-#include "async_simple/coro/Collect.h"
-#include "async_simple/coro/DetachedCoroutine.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
@@ -58,7 +53,7 @@
 #endif
 namespace coro_io {
 
-struct client_reuse_hint{};
+struct client_reuse_hint {};
 
 template <typename client_t, typename io_context_pool_t>
 class client_pools;
@@ -92,13 +87,15 @@ class client_pool : public std::enable_shared_from_this<
                    << "}, now client count: " << clients.size();
         auto [is_all_cleared, _] = clients.clear_old(clear_cnt);
         auto free_client_cnt = clients.size();
-        ELOG_WARN << "finish collect timeout client of pool{"
+        ELOG_INFO << "finish collect timeout client of pool{"
                   << self->host_name_
                   << "}, now free client cnt: " << free_client_cnt
                   << " total client cnt:"
-                  << self->unfree_client_cnt_.load(std::memory_order::relaxed) + free_client_cnt
+                  << self->unfree_client_cnt_.load(std::memory_order::relaxed) +
+                         free_client_cnt
                   << " parallel request cnt:"
-                  << self->parallel_request_cnt_.load(std::memory_order::relaxed);
+                  << self->parallel_request_cnt_.load(
+                         std::memory_order::relaxed);
         if (!is_all_cleared) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
@@ -273,29 +270,30 @@ class client_pool : public std::enable_shared_from_this<
       }
     }
   }
-  template<typename T,std::memory_order order>
-  struct watcher{
-    watcher(std::atomic<T>& atomic_value):atomic_value(atomic_value){
-        atomic_value.fetch_add(1,order);
+  template <typename T, std::memory_order order>
+  struct watcher {
+    watcher(std::atomic<T>& atomic_value) : atomic_value(atomic_value) {
+      atomic_value.fetch_add(1, order);
     }
     std::atomic<T>& atomic_value;
     ~watcher() { atomic_value.fetch_sub(1, order); }
-  };  
-  template<typename T,typename U,std::memory_order order>
-  struct watcher_weak{
-    watcher_weak(std::atomic<T>& atomic_value,std::weak_ptr<U> w) noexcept  :atomic_value(atomic_value),w(std::move(w)) {
-        atomic_value.fetch_add(1,order);
+  };
+  template <typename T, typename U, std::memory_order order>
+  struct watcher_weak {
+    watcher_weak(std::atomic<T>& atomic_value, std::weak_ptr<U> w) noexcept
+        : atomic_value(atomic_value), w(std::move(w)) {
+      atomic_value.fetch_add(1, order);
     }
-    watcher_weak(const watcher_weak&)=delete;
-    watcher_weak(watcher_weak&&) noexcept=default;
+    watcher_weak(const watcher_weak&) = delete;
+    watcher_weak(watcher_weak&&) noexcept = default;
     std::atomic<T>& atomic_value;
     std::weak_ptr<U> w;
-    ~watcher_weak() { 
+    ~watcher_weak() {
       if (auto ptr = w.lock()) {
         atomic_value.fetch_sub(1, order);
       }
     }
-  };  
+  };
 
   async_simple::coro::Lazy<std::unique_ptr<client_t>> get_client(
       const typename client_t::config& client_config) {
@@ -382,7 +380,8 @@ class client_pool : public std::enable_shared_from_this<
     using type = T;
   };
   template <typename T>
-  using return_type = ylt::expected<typename lazy_hacker<util::function_return_type_t<T>>::type,
+  using return_type =
+      ylt::expected<typename lazy_hacker<util::function_return_type_t<T>>::type,
                     std::errc>;
 
  public:
@@ -390,7 +389,7 @@ class client_pool : public std::enable_shared_from_this<
     uint32_t max_connection = 100;
     uint32_t connect_retry_count = 3;
     uint32_t idle_queue_per_max_clear_count = 1000;
-    int32_t reuse_limit = -1; // -1 means auto limit
+    int32_t reuse_limit = -1;  // -1 means auto limit
     std::chrono::milliseconds reconnect_wait_time{1000};
     std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
@@ -441,8 +440,8 @@ class client_pool : public std::enable_shared_from_this<
     // return type: Lazy<expected<T::returnType,std::errc>>
     ELOG_TRACE << "try send request to " << host_name_;
     auto client = co_await get_client(client_config);
-    watcher<uint64_t,std::memory_order_relaxed> w(unfree_client_cnt_);
-    watcher<uint64_t,std::memory_order_release> w2(parallel_request_cnt_);
+    watcher<uint64_t, std::memory_order_relaxed> w(unfree_client_cnt_);
+    watcher<uint64_t, std::memory_order_release> w2(parallel_request_cnt_);
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
                 << " failed. connection refused.";
@@ -455,9 +454,9 @@ class client_pool : public std::enable_shared_from_this<
     }
     else {
       // enable reuse client limiter
-      if constexpr (requires{op(client_reuse_hint{},*client);}) {
-        auto ret = co_await op(client_reuse_hint{},*client);
-        auto ret2 = co_await client_reuse_limiter(std::move(ret),*client);
+      if constexpr (requires { op(client_reuse_hint{}, *client); }) {
+        auto ret = co_await op(client_reuse_hint{}, *client);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret), *client);
         collect_free_client(std::move(client));
         co_return std::move(ret2);
       }
@@ -488,27 +487,33 @@ class client_pool : public std::enable_shared_from_this<
    * @return std::size_t
    */
   std::size_t total_client_count() const noexcept {
-    return free_client_count() + unfree_client_cnt_.load(std::memory_order::relaxed);
+    return free_client_count() +
+           unfree_client_cnt_.load(std::memory_order::relaxed);
   }
-private:
-template<typename T>
+
+ private:
+  template <typename T>
   async_simple::coro::Lazy<T> make_ready_lazy(T t) {
     co_return std::move(t);
   }
-template<typename T>
-  async_simple::coro::Lazy<T> client_reuse_limiter_impl(async_simple::coro::Lazy<T> lazy,watcher_weak<uint64_t, client_pool,std::memory_order_release>) {
+  template <typename T>
+  async_simple::coro::Lazy<T> client_reuse_limiter_impl(
+      async_simple::coro::Lazy<T> lazy,
+      watcher_weak<uint64_t, client_pool, std::memory_order_release>) {
     co_return co_await std::move(lazy);
   }
-  template<typename T>
-  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(async_simple::coro::Lazy<T> lazy,client_t& cli) {
+  template <typename T>
+  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(
+      async_simple::coro::Lazy<T> lazy, client_t& cli) {
     auto limit = get_pool_config().reuse_limit;
     constexpr int rdma_reuse_limit = 24;
     constexpr int tcp_reuse_limit = 160;
-    if (limit<0) {
+    if (limit < 0) {
       // rdma
 #ifdef YLT_ENABLE_IBV
-      if (std::holds_alternative<coro_io::ib_socket_t::config_t>(cli.get_config().socket_config)) {
-        limit=rdma_reuse_limit;
+      if (std::holds_alternative<coro_io::ib_socket_t::config_t>(
+              cli.get_config().socket_config)) {
+        limit = rdma_reuse_limit;
       }
 #endif
       if (limit != rdma_reuse_limit) {
@@ -516,14 +521,15 @@ template<typename T>
       }
     }
     if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
-      co_return client_reuse_limiter_impl(std::move(lazy), {parallel_request_cnt_,this->weak_from_this()});
+      co_return client_reuse_limiter_impl(
+          std::move(lazy), {parallel_request_cnt_, this->weak_from_this()});
     }
     else {
       co_return make_ready_lazy(co_await std::move(lazy));
     }
   }
-public:
-  
+
+ public:
   /**
    * @brief approx unfree connection of client pools
    *
@@ -553,10 +559,7 @@ public:
     return eps_.load(std::memory_order_acquire);
   }
 
-  
-  const pool_config& get_pool_config() const noexcept {
-    return pool_config_;
-  }
+  const pool_config& get_pool_config() const noexcept { return pool_config_; }
 
  private:
   template <typename, typename>
@@ -575,19 +578,17 @@ public:
     if (!client) {
       ELOG_WARN << "send request to " << endpoint
                 << " failed. connection refused.";
-      co_return return_type<T>{ylt::unexpect,
-                                         std::errc::connection_refused};
+      co_return return_type<T>{ylt::unexpect, std::errc::connection_refused};
     }
-    if constexpr (std::is_same_v<typename return_type<T>::value_type,
-                                 void>) {
+    if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
       co_await op(*client, endpoint);
       collect_free_client(std::move(client));
       co_return return_type<T>{};
     }
     else {
-      if constexpr (requires{op(client_reuse_hint{},*client, endpoint);}) {
-        auto ret = co_await op(client_reuse_hint{},*client, endpoint);
-        auto ret2 = co_await client_reuse_limiter(std::move(ret),*client);
+      if constexpr (requires { op(client_reuse_hint{}, *client, endpoint); }) {
+        auto ret = co_await op(client_reuse_hint{}, *client, endpoint);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret), *client);
         collect_free_client(std::move(client));
         co_return std::move(ret2);
       }
@@ -604,13 +605,12 @@ public:
     return send_request(std::move(op), sv, pool_config_.client_config);
   }
 
-
   coro_io::detail::client_queue<std::unique_ptr<client_t>> free_clients_;
   coro_io::detail::client_queue<std::unique_ptr<client_t>>
       short_connect_clients_;
   client_pools_t* pools_manager_ = nullptr;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
-  std::atomic<uint64_t> unfree_client_cnt_,parallel_request_cnt_;
+  std::atomic<uint64_t> unfree_client_cnt_, parallel_request_cnt_;
   std::string host_name_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
