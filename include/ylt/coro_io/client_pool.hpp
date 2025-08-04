@@ -357,7 +357,7 @@ class client_pool : public std::enable_shared_from_this<
         enqueue(free_clients_, std::move(client), pool_config_.idle_timeout);
       }
       else {
-        ELOG_TRACE << "out of max connection limit <<"
+        ELOG_TRACE << "out of max connection limit "
                    << pool_config_.max_connection << ", collect free client{"
                    << client.get() << "} enqueue short connect queue";
         enqueue(short_connect_clients_, std::move(client),

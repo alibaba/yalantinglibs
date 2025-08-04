@@ -112,7 +112,9 @@ class client_queue {
     for (auto &cli: using_clients) {
       queue_[index].enqueue(std::move(cli));
     }
-    return {clear_cnt<max_clear_cnt,clear_cnt-using_clients.size()}; // all cleared
+    std::size_t real_clear_cnt = clear_cnt - using_clients.size();
+    size_[selected_index_]-=real_clear_cnt;
+    return {clear_cnt<max_clear_cnt,real_clear_cnt}; // all cleared
   }
 };
 };  // namespace coro_io::detail
