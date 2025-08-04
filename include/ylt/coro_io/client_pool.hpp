@@ -87,15 +87,14 @@ class client_pool : public std::enable_shared_from_this<
                    << "}, now client count: " << clients.size();
         auto [is_all_cleared, _] = clients.clear_old(clear_cnt);
         auto free_client_cnt = clients.size();
-        ELOG_INFO << "finish collect timeout client of pool{"
-                  << self->host_name_
-                  << "}, now free client cnt: " << free_client_cnt
-                  << " total client cnt:"
-                  << self->unfree_client_cnt_.load(std::memory_order::relaxed) +
-                         free_client_cnt
-                  << " parallel request cnt:"
-                  << self->parallel_request_cnt_.load(
-                         std::memory_order::relaxed);
+        ELOG_INFO
+            << "finish collect timeout client of pool{" << self->host_name_
+            << "}, now free client cnt: " << free_client_cnt
+            << " total client cnt:"
+            << self->inusing_client_cnt_.load(std::memory_order::relaxed) +
+                   free_client_cnt
+            << " parallel request cnt:"
+            << self->parallel_request_cnt_.load(std::memory_order::relaxed);
         if (!is_all_cleared) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
@@ -440,7 +439,7 @@ class client_pool : public std::enable_shared_from_this<
     // return type: Lazy<expected<T::returnType,std::errc>>
     ELOG_TRACE << "try send request to " << host_name_;
     auto client = co_await get_client(client_config);
-    watcher<uint64_t, std::memory_order_relaxed> w(unfree_client_cnt_);
+    watcher<uint64_t, std::memory_order_relaxed> w(inusing_client_cnt_);
     watcher<uint64_t, std::memory_order_release> w2(parallel_request_cnt_);
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
@@ -488,7 +487,7 @@ class client_pool : public std::enable_shared_from_this<
    */
   std::size_t total_client_count() const noexcept {
     return free_client_count() +
-           unfree_client_cnt_.load(std::memory_order::relaxed);
+           inusing_client_cnt_.load(std::memory_order::relaxed);
   }
 
  private:
@@ -536,7 +535,7 @@ class client_pool : public std::enable_shared_from_this<
    * @return std::size_t
    */
   std::size_t busy_client_count() const noexcept {
-    return unfree_client_cnt_.load(std::memory_order::relaxed);
+    return inusing_client_cnt_.load(std::memory_order::relaxed);
   }
   /**
    * @brief if host may not useable now.
@@ -610,7 +609,7 @@ class client_pool : public std::enable_shared_from_this<
       short_connect_clients_;
   client_pools_t* pools_manager_ = nullptr;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
-  std::atomic<uint64_t> unfree_client_cnt_, parallel_request_cnt_;
+  std::atomic<uint64_t> inusing_client_cnt_, parallel_request_cnt_;
   std::string host_name_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;
