@@ -166,7 +166,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       while (true) {
         ELOG_TRACE << "start ib_buffer timeout free of pool{" << self.get()
                    << "}, now ib_buffer count: " << self->free_buffers_.size();
-        auto [is_all_cleared,clear_cnt] = self->free_buffers_.clear_old(1000);
+        auto [is_all_cleared, clear_cnt] = self->free_buffers_.clear_old(1000);
         self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
                                   (ssize_t)self->buffer_size());
         ELOG_TRACE << "finish ib_buffer timeout free of pool{" << self.get()

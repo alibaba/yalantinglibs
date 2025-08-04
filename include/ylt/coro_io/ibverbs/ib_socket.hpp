@@ -20,8 +20,8 @@
 #include "asio/ip/address.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
-#include "async_simple/Signal.h"
 #include "async_simple/Future.h"
+#include "async_simple/Signal.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/util/move_only_function.h"
 #include "ib_device.hpp"
@@ -67,9 +67,7 @@ struct ib_buffer_queue {
     may_empty = true;
     return std::move(queue[end_]);
   }
-  ib_buffer_t& back() {
-    return queue[(end_+1)%queue.size()];
-  }
+  ib_buffer_t& back() { return queue[(end_ + 1) % queue.size()]; }
   bool full() const noexcept { return front_ == end_ && !may_empty; }
   bool empty() const noexcept { return front_ == end_ && may_empty; }
   std::size_t size() {
@@ -211,13 +209,17 @@ struct ib_socket_shared_state_t
     co_await collectAll<async_simple::SignalType::Terminate>(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
-              auto sz=write_buffer_data_size_;
+              auto sz = write_buffer_data_size_;
               if (sz) {
-                auto buffer=get_send_buffer();
-                auto view =buffer.subview(0, sz);
-                post_send_impl(view, [buffer=std::move(buffer)](auto&&){},true);
+                auto buffer = get_send_buffer();
+                auto view = buffer.subview(0, sz);
+                post_send_impl(
+                    view,
+                    [buffer = std::move(buffer)](auto&&) {
+                    },
+                    true);
               }
-              post_send_impl({}, std::move(cb),true);
+              post_send_impl({}, std::move(cb), true);
             },
             *this),
         coro_io::sleep_for(std::chrono::seconds{1}, executor_));
@@ -236,10 +238,10 @@ struct ib_socket_shared_state_t
     return send_queue_.pop();
   }
 
-  void post_send_impl(ibv_sge sge,
-                      callback_t&& handler, bool skip_check_close = false) {
+  void post_send_impl(ibv_sge sge, callback_t&& handler,
+                      bool skip_check_close = false) {
     ELOG_TRACE << "post send sge length:" << sge.length
-                << ", address:" << sge.addr << ",lkey:" << sge.lkey;
+               << ", address:" << sge.addr << ",lkey:" << sge.lkey;
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
     if (max_inline_send_limit_ && sge.length <= max_inline_send_limit_) {
@@ -263,7 +265,8 @@ struct ib_socket_shared_state_t
       err = std::make_error_code(std::errc{std::abs(ec)});
       ELOG_ERROR << "ibv post send failed: " << err.message();
       ELOG_ERROR << "post send sge length:" << sge.length
-            << ", address:" << sge.addr << ",lkey:" << sge.lkey <<"flags:"<< sr.send_flags;
+                 << ", address:" << sge.addr << ",lkey:" << sge.lkey
+                 << "flags:" << sr.send_flags;
     }
     if (err) [[unlikely]] {
       ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}}, handler);
@@ -481,9 +484,8 @@ class ib_socket_t {
 
   void post_recv(callback_t&& cb) { state_->post_recv_impl(std::move(cb)); }
 
-  void post_send(ibv_sge buffer,
-                 callback_t&& cb) {
-    state_->post_send_impl(buffer,std::move(cb));
+  void post_send(ibv_sge buffer, callback_t&& cb) {
+    state_->post_send_impl(buffer, std::move(cb));
   }
 
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
@@ -716,9 +718,7 @@ class ib_socket_t {
     co_return co_await connect_impl();
   }
 
-  ib_buffer_t get_send_buffer() noexcept {
-    return state_->get_send_buffer();
-  }
+  ib_buffer_t get_send_buffer() noexcept { return state_->get_send_buffer(); }
 
   std::optional<ibv_sge> get_send_buffer_view() noexcept {
     if (state_->send_queue_.empty()) {
@@ -735,10 +735,9 @@ class ib_socket_t {
     return buffer_size_ - state_->write_buffer_data_size_;
   }
 
-  void consume_send_buffer(std::size_t sz) noexcept  {
-    state_->write_buffer_data_size_+=sz;
+  void consume_send_buffer(std::size_t sz) noexcept {
+    state_->write_buffer_data_size_ += sz;
   }
-  
 
   std::shared_ptr<detail::ib_socket_shared_state_t> get_state() noexcept {
     return state_;
@@ -761,7 +760,8 @@ class ib_socket_t {
       conf_.cap.max_inline_data = 0;
     }
     state_ = std::make_shared<detail::ib_socket_shared_state_t>(
-        conf_.device, executor_, conf_.recv_buffer_cnt, conf_.cap.max_recv_wr,conf_.cap.max_inline_data);
+        conf_.device, executor_, conf_.recv_buffer_cnt, conf_.cap.max_recv_wr,
+        conf_.cap.max_inline_data);
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
       auto err_code = std::make_error_code(std::errc{errno});

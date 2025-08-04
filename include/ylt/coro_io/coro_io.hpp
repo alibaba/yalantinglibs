@@ -644,9 +644,10 @@ inline async_simple::coro::Lazy<bool> sleep_for(Duration d) {
     }
     co_return true;
   }
-  else if (auto ioc=coro_io::get_current();ioc!=nullptr&&*ioc!=nullptr) {
+  else if (auto ioc = coro_io::get_current();
+           ioc != nullptr && *ioc != nullptr) {
     coro_io::ExecutorWrapper<> e((**ioc).get_executor());
-    co_return co_await sleep_for(d,&e);
+    co_return co_await sleep_for(d, &e);
   }
   else {
     co_return co_await sleep_for(d,
