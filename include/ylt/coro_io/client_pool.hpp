@@ -29,7 +29,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -37,20 +36,24 @@
 #include <shared_mutex>
 #include <string_view>
 #include <system_error>
-#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <ylt/util/expected.hpp>
 
-#include "async_simple/Common.h"
-#include "async_simple/coro/Collect.h"
+#include "async_simple/Future.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
 #include "ylt/easylog.hpp"
 #include "ylt/util/atomic_shared_ptr.hpp"
+#ifdef YLT_ENABLE_IBV
+#include "ylt/coro_io/ibverbs/ib_socket.hpp"
+#endif
 namespace coro_io {
+
+struct client_reuse_hint {};
 
 template <typename client_t, typename io_context_pool_t>
 class client_pools;
@@ -82,11 +85,17 @@ class client_pool : public std::enable_shared_from_this<
         ELOG_TRACE << "start collect timeout client of pool{"
                    << self->host_name_
                    << "}, now client count: " << clients.size();
-        std::size_t is_all_cleared = clients.clear_old(clear_cnt);
-        ELOG_TRACE << "finish collect timeout client of pool{"
-                   << self->host_name_
-                   << "}, now client cnt: " << clients.size();
-        if (is_all_cleared != 0) [[unlikely]] {
+        auto [is_all_cleared, _] = clients.clear_old(clear_cnt);
+        auto free_client_cnt = clients.size();
+        ELOG_INFO
+            << "finish collect timeout client of pool{" << self->host_name_
+            << "}, now free client cnt: " << free_client_cnt
+            << " total client cnt:"
+            << self->inusing_client_cnt_.load(std::memory_order::relaxed) +
+                   free_client_cnt
+            << " parallel request cnt:"
+            << self->parallel_request_cnt_.load(std::memory_order::relaxed);
+        if (!is_all_cleared) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
           } catch (std::exception& e) {
@@ -260,6 +269,30 @@ class client_pool : public std::enable_shared_from_this<
       }
     }
   }
+  template <typename T, std::memory_order order>
+  struct watcher {
+    watcher(std::atomic<T>& atomic_value) : atomic_value(atomic_value) {
+      atomic_value.fetch_add(1, order);
+    }
+    std::atomic<T>& atomic_value;
+    ~watcher() { atomic_value.fetch_sub(1, order); }
+  };
+  template <typename T, typename U, std::memory_order order>
+  struct watcher_weak {
+    watcher_weak(std::atomic<T>& atomic_value, std::weak_ptr<U> w) noexcept
+        : atomic_value(atomic_value), w(std::move(w)) {
+      atomic_value.fetch_add(1, order);
+    }
+    watcher_weak(const watcher_weak&) = delete;
+    watcher_weak(watcher_weak&&) noexcept = default;
+    std::atomic<T>& atomic_value;
+    std::weak_ptr<U> w;
+    ~watcher_weak() {
+      if (auto ptr = w.lock()) {
+        atomic_value.fetch_sub(1, order);
+      }
+    }
+  };
 
   async_simple::coro::Lazy<std::unique_ptr<client_t>> get_client(
       const typename client_t::config& client_config) {
@@ -269,7 +302,6 @@ class client_pool : public std::enable_shared_from_this<
       short_connect_clients_.try_dequeue(client);
     }
     if (client == nullptr) {
-      std::unique_ptr<client_t> cli;
       auto executor = io_context_pool_.get_executor();
       client = std::make_unique<client_t>(executor);
       if (!client->init_config(client_config))
@@ -322,7 +354,7 @@ class client_pool : public std::enable_shared_from_this<
         enqueue(free_clients_, std::move(client), pool_config_.idle_timeout);
       }
       else {
-        ELOG_TRACE << "out of max connection limit <<"
+        ELOG_TRACE << "out of max connection limit "
                    << pool_config_.max_connection << ", collect free client{"
                    << client.get() << "} enqueue short connect queue";
         enqueue(short_connect_clients_, std::move(client),
@@ -348,14 +380,7 @@ class client_pool : public std::enable_shared_from_this<
   };
   template <typename T>
   using return_type =
-      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                        std::declval<client_t&>()))>::type,
-                    std::errc>;
-
-  template <typename T>
-  using return_type_with_host =
-      ylt::expected<typename lazy_hacker<decltype(std::declval<T>()(
-                        std::declval<client_t&>(), std::string_view{}))>::type,
+      ylt::expected<typename lazy_hacker<util::function_return_type_t<T>>::type,
                     std::errc>;
 
  public:
@@ -363,6 +388,7 @@ class client_pool : public std::enable_shared_from_this<
     uint32_t max_connection = 100;
     uint32_t connect_retry_count = 3;
     uint32_t idle_queue_per_max_clear_count = 1000;
+    int32_t reuse_limit = -1;  // -1 means auto limit
     std::chrono::milliseconds reconnect_wait_time{1000};
     std::chrono::milliseconds idle_timeout{30000};
     std::chrono::milliseconds short_connect_idle_timeout{1000};
@@ -413,6 +439,8 @@ class client_pool : public std::enable_shared_from_this<
     // return type: Lazy<expected<T::returnType,std::errc>>
     ELOG_TRACE << "try send request to " << host_name_;
     auto client = co_await get_client(client_config);
+    watcher<uint64_t, std::memory_order_relaxed> w(inusing_client_cnt_);
+    watcher<uint64_t, std::memory_order_release> w2(parallel_request_cnt_);
     if (!client) {
       ELOG_WARN << "send request to " << host_name_
                 << " failed. connection refused.";
@@ -424,9 +452,18 @@ class client_pool : public std::enable_shared_from_this<
       co_return return_type<T>{};
     }
     else {
-      auto ret = co_await op(*client);
-      collect_free_client(std::move(client));
-      co_return std::move(ret);
+      // enable reuse client limiter
+      if constexpr (requires { op(client_reuse_hint{}, *client); }) {
+        auto ret = co_await op(client_reuse_hint{}, *client);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret), *client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret2);
+      }
+      else {
+        auto ret = co_await op(*client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret);
+      }
     }
   }
 
@@ -436,12 +473,69 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   /**
-   * @brief approx connection of client pools
+   * @brief approx free connection of client pools
    *
    * @return std::size_t
    */
   std::size_t free_client_count() const noexcept {
     return free_clients_.size() + short_connect_clients_.size();
+  }
+  /**
+   * @brief approx connection of client pools
+   *
+   * @return std::size_t
+   */
+  std::size_t total_client_count() const noexcept {
+    return free_client_count() +
+           inusing_client_cnt_.load(std::memory_order::relaxed);
+  }
+
+ private:
+  template <typename T>
+  async_simple::coro::Lazy<T> make_ready_lazy(T t) {
+    co_return std::move(t);
+  }
+  template <typename T>
+  async_simple::coro::Lazy<T> client_reuse_limiter_impl(
+      async_simple::coro::Lazy<T> lazy,
+      watcher_weak<uint64_t, client_pool, std::memory_order_release>) {
+    co_return co_await std::move(lazy);
+  }
+  template <typename T>
+  async_simple::coro::Lazy<async_simple::coro::Lazy<T>> client_reuse_limiter(
+      async_simple::coro::Lazy<T> lazy, client_t& cli) {
+    auto limit = get_pool_config().reuse_limit;
+    constexpr int rdma_reuse_limit = 24;
+    constexpr int tcp_reuse_limit = 160;
+    if (limit < 0) {
+      // rdma
+#ifdef YLT_ENABLE_IBV
+      if (std::holds_alternative<coro_io::ib_socket_t::config_t>(
+              cli.get_config().socket_config)) {
+        limit = rdma_reuse_limit;
+      }
+#endif
+      if (limit != rdma_reuse_limit) {
+        limit = tcp_reuse_limit;
+      }
+    }
+    if (limit < parallel_request_cnt_.load(std::memory_order_acquire)) {
+      co_return client_reuse_limiter_impl(
+          std::move(lazy), {parallel_request_cnt_, this->weak_from_this()});
+    }
+    else {
+      co_return make_ready_lazy(co_await std::move(lazy));
+    }
+  }
+
+ public:
+  /**
+   * @brief approx unfree connection of client pools
+   *
+   * @return std::size_t
+   */
+  std::size_t busy_client_count() const noexcept {
+    return inusing_client_cnt_.load(std::memory_order::relaxed);
   }
   /**
    * @brief if host may not useable now.
@@ -464,6 +558,8 @@ class client_pool : public std::enable_shared_from_this<
     return eps_.load(std::memory_order_acquire);
   }
 
+  const pool_config& get_pool_config() const noexcept { return pool_config_; }
+
  private:
   template <typename, typename>
   friend class client_pools;
@@ -472,7 +568,7 @@ class client_pool : public std::enable_shared_from_this<
   friend class load_balancer;
 
   template <typename T>
-  async_simple::coro::Lazy<return_type_with_host<T>> send_request(
+  async_simple::coro::Lazy<return_type<T>> send_request(
       T op, std::string_view endpoint,
       typename client_t::config& client_config) {
     // return type: Lazy<expected<T::returnType,std::errc>>
@@ -481,19 +577,25 @@ class client_pool : public std::enable_shared_from_this<
     if (!client) {
       ELOG_WARN << "send request to " << endpoint
                 << " failed. connection refused.";
-      co_return return_type_with_host<T>{ylt::unexpect,
-                                         std::errc::connection_refused};
+      co_return return_type<T>{ylt::unexpect, std::errc::connection_refused};
     }
-    if constexpr (std::is_same_v<typename return_type_with_host<T>::value_type,
-                                 void>) {
+    if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
       co_await op(*client, endpoint);
       collect_free_client(std::move(client));
-      co_return return_type_with_host<T>{};
+      co_return return_type<T>{};
     }
     else {
-      auto ret = co_await op(*client, endpoint);
-      collect_free_client(std::move(client));
-      co_return std::move(ret);
+      if constexpr (requires { op(client_reuse_hint{}, *client, endpoint); }) {
+        auto ret = co_await op(client_reuse_hint{}, *client, endpoint);
+        auto ret2 = co_await client_reuse_limiter(std::move(ret), *client);
+        collect_free_client(std::move(client));
+        co_return std::move(ret2);
+      }
+      else {
+        auto ret = co_await op(*client, endpoint);
+        collect_free_client(std::move(client));
+        co_return std::move(ret);
+      }
     }
   }
 
@@ -507,6 +609,7 @@ class client_pool : public std::enable_shared_from_this<
       short_connect_clients_;
   client_pools_t* pools_manager_ = nullptr;
   async_simple::Promise<async_simple::Unit> idle_timeout_waiter;
+  std::atomic<uint64_t> inusing_client_cnt_, parallel_request_cnt_;
   std::string host_name_;
   pool_config pool_config_;
   io_context_pool_t& io_context_pool_;

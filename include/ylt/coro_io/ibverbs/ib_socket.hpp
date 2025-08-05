@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <stdexcept>
 #include <system_error>
@@ -19,6 +20,7 @@
 #include "asio/ip/address.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/posix/stream_descriptor.hpp"
+#include "async_simple/Future.h"
 #include "async_simple/Signal.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/util/move_only_function.h"
@@ -36,7 +38,7 @@ namespace detail {
 struct ib_socket_shared_state_t;
 struct ib_buffer_queue {
   std::vector<ib_buffer_t> queue;
-  uint32_t front = 0, end = 0;
+  uint32_t front_ = 0, end_ = 0;
   bool may_empty = true;
   ib_buffer_queue(uint16_t size) {
     assert(size > 0);
@@ -57,25 +59,26 @@ struct ib_buffer_queue {
   }
   void push(ib_buffer_t buf) {
     may_empty = false;
-    front = (front + 1) % queue.size();
-    queue[front] = std::move(buf);
+    front_ = (front_ + 1) % queue.size();
+    queue[front_] = std::move(buf);
   }
   ib_buffer_t pop() {
-    end = (end + 1) % queue.size();
+    end_ = (end_ + 1) % queue.size();
     may_empty = true;
-    return std::move(queue[end]);
+    return std::move(queue[end_]);
   }
-  bool full() const noexcept { return front == end && !may_empty; }
-  bool empty() const noexcept { return front == end && may_empty; }
+  ib_buffer_t& back() { return queue[(end_ + 1) % queue.size()]; }
+  bool full() const noexcept { return front_ == end_ && !may_empty; }
+  bool empty() const noexcept { return front_ == end_ && may_empty; }
   std::size_t size() {
-    if (end > front) {
-      return queue.size() + front - end;
+    if (end_ > front_) {
+      return queue.size() + front_ - end_;
     }
-    else if (end == front) {
+    else if (end_ == front_) {
       return empty() ? 0 : queue.size();
     }
     else {
-      return front - end;
+      return front_ - end_;
     }
   }
 };
@@ -105,6 +108,8 @@ struct ib_socket_shared_state_t
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
   std::unique_ptr<ibv_qp, ib_deleter> qp_;
 
+  uint32_t write_buffer_data_size_ = 0;
+  uint32_t max_inline_send_limit_ = 0;
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
@@ -112,13 +117,15 @@ struct ib_socket_shared_state_t
   ib_socket_shared_state_t(std::shared_ptr<ib_device_t> device,
                            coro_io::ExecutorWrapper<>* executor,
                            std::size_t recv_buffer_cnt,
-                           std::size_t max_recv_buffer_cnt)
+                           std::size_t max_recv_buffer_cnt,
+                           std::size_t max_inline_data)
       : device_(device),
         executor_(executor),
         soc_(executor->get_asio_executor()),
         recv_buffer_cnt_(recv_buffer_cnt),
         recv_queue_(max_recv_buffer_cnt),
-        send_queue_(2) {}
+        send_queue_(2),
+        max_inline_send_limit_(max_inline_data) {}
 
   ib_socket_shared_state_t(ib_socket_shared_state_t&&) = delete;
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
@@ -202,7 +209,17 @@ struct ib_socket_shared_state_t
     co_await collectAll<async_simple::SignalType::Terminate>(
         coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             [this](auto&& cb) mutable {
-              post_send_impl({}, false, std::move(cb));
+              auto sz = write_buffer_data_size_;
+              if (sz) {
+                auto buffer = get_send_buffer();
+                auto view = buffer.subview(0, sz);
+                post_send_impl(
+                    view,
+                    [buffer = std::move(buffer)](auto&&) {
+                    },
+                    true);
+              }
+              post_send_impl({}, std::move(cb), true);
             },
             *this),
         coro_io::sleep_for(std::chrono::seconds{1}, executor_));
@@ -216,21 +233,28 @@ struct ib_socket_shared_state_t
     uint64_t wr_id;
   };
 
-  void post_send_impl(std::span<ibv_sge> sge, bool enable_inline_send,
-                      callback_t&& handler) {
+  ib_buffer_t get_send_buffer() noexcept {
+    write_buffer_data_size_ = 0;
+    return send_queue_.pop();
+  }
+
+  void post_send_impl(ibv_sge sge, callback_t&& handler,
+                      bool skip_check_close = false) {
+    ELOG_TRACE << "post send sge length:" << sge.length
+               << ", address:" << sge.addr << ",lkey:" << sge.lkey;
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
-    if (enable_inline_send) {
+    if (max_inline_send_limit_ && sge.length <= max_inline_send_limit_) {
       sr.send_flags = IBV_SEND_INLINE;
     }
     sr.next = NULL;
     sr.wr_id = 1;
-    sr.sg_list = sge.data();
-    sr.num_sge = sge.size();
+    sr.sg_list = &sge;
+    sr.num_sge = sge.length ? 1 : 0;
     sr.opcode = IBV_WR_SEND;
     sr.send_flags |= IBV_SEND_SIGNALED;
     std::error_code err;
-    if ((sge.size() && has_close_))
+    if (!skip_check_close && has_close_)
         [[unlikely]] {  // if sge is empty, client don't real close, it's trying
                         // to notify peer to close
       err = std::make_error_code(std::errc::operation_canceled);
@@ -240,6 +264,9 @@ struct ib_socket_shared_state_t
         [[unlikely]] {
       err = std::make_error_code(std::errc{std::abs(ec)});
       ELOG_ERROR << "ibv post send failed: " << err.message();
+      ELOG_ERROR << "post send sge length:" << sge.length
+                 << ", address:" << sge.addr << ",lkey:" << sge.lkey
+                 << "flags:" << sr.send_flags;
     }
     if (err) [[unlikely]] {
       ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}}, handler);
@@ -461,14 +488,8 @@ class ib_socket_t {
 
   void post_recv(callback_t&& cb) { state_->post_recv_impl(std::move(cb)); }
 
-  void post_send(std::span<ibv_sge> buffer, bool enable_inline_send,
-                 callback_t&& cb) {
-    if (buffer.size()) {
-      ELOG_TRACE << "post send sge cnt:" << buffer.size()
-                 << ", address:" << buffer[0].addr
-                 << ",length:" << buffer[0].length;
-    }
-    state_->post_send_impl(buffer, enable_inline_send, std::move(cb));
+  void post_send(ibv_sge buffer, callback_t&& cb) {
+    state_->post_send_impl(buffer, std::move(cb));
   }
 
   uint32_t get_buffer_size() const noexcept { return buffer_size_; }
@@ -678,6 +699,8 @@ class ib_socket_t {
       });
     }
   }
+  auto& write_waiter() noexcept { return write_waiter_; }
+  const auto& write_waiter() const noexcept { return write_waiter_; }
 
   async_simple::coro::Lazy<std::error_code> connect(
       const std::string& host, const std::string& port) noexcept {
@@ -699,13 +722,25 @@ class ib_socket_t {
     co_return co_await connect_impl();
   }
 
-  ib_buffer_t get_send_buffer() noexcept {
+  ib_buffer_t get_send_buffer() noexcept { return state_->get_send_buffer(); }
+
+  std::optional<ibv_sge> get_send_buffer_view() noexcept {
     if (state_->send_queue_.empty()) {
-      return buffer_pool()->get_buffer();
+      auto buffer = buffer_pool()->get_buffer();
+      if (!buffer) {
+        return std::nullopt;
+      }
+      state_->send_queue_.push(std::move(buffer));
     }
-    else {
-      return state_->send_queue_.pop();
-    }
+    return state_->send_queue_.back().subview(state_->write_buffer_data_size_);
+  }
+
+  std::size_t get_free_send_buffer_size() noexcept {
+    return buffer_size_ - state_->write_buffer_data_size_;
+  }
+
+  void consume_send_buffer(std::size_t sz) noexcept {
+    state_->write_buffer_data_size_ += sz;
   }
 
   std::shared_ptr<detail::ib_socket_shared_state_t> get_state() noexcept {
@@ -729,7 +764,8 @@ class ib_socket_t {
       conf_.cap.max_inline_data = 0;
     }
     state_ = std::make_shared<detail::ib_socket_shared_state_t>(
-        conf_.device, executor_, conf_.recv_buffer_cnt, conf_.cap.max_recv_wr);
+        conf_.device, executor_, conf_.recv_buffer_cnt, conf_.cap.max_recv_wr,
+        conf_.cap.max_inline_data);
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
     if (!state_->channel_) [[unlikely]] {
       auto err_code = std::make_error_code(std::errc{errno});
@@ -774,6 +810,7 @@ class ib_socket_t {
     if (qp_init_attr.cap.max_inline_data == 0 &&
         conf_.cap.max_inline_data != 0) {
       get_device()->set_support_inline_data(false);
+      state_->max_inline_send_limit_ = 0;
       conf_.cap.max_inline_data = 0;
     }
     state_->qp_.reset(qp);
@@ -905,6 +942,7 @@ class ib_socket_t {
   uint32_t remote_qp_num_{};
   std::string_view remain_data_;
   std::shared_ptr<detail::ib_socket_shared_state_t> state_;
+  std::optional<async_simple::Future<std::error_code>> write_waiter_;
   coro_io::ExecutorWrapper<>* executor_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
