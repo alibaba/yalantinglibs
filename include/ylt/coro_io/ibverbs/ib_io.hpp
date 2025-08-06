@@ -169,7 +169,9 @@ async_simple::coro::
   bool is_enable_inline_send =
       ib_socket.get_config().cap.max_inline_data >= io_size;
   ib_buffer_t send_buffer;
-  if (is_enable_inline_send) {
+  
+  std::size_t send_request_count = ib_socket.sent_request_count();
+  if (is_enable_inline_send && send_request_count == 0) {
     zero_copy_buffer = std::make_unique<char[]>(io_size);
     socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
                      .length = (uint32_t)io_size,
@@ -193,7 +195,6 @@ async_simple::coro::
   auto now_buffer_data =
       ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size();
   constexpr std::size_t max_buffer_length = 256 * 1024;
-  std::size_t send_request_count = ib_socket.sent_request_count();
   if (now_buffer_data < std::min<std::size_t>(max_buffer_length,
                                               ib_socket.get_buffer_size()) &&
       !send_buffer_full && send_request_count > 0) {
