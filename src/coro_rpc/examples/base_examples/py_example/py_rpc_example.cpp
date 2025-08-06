@@ -177,11 +177,16 @@ class py_coro_rpc_client_pool {
         ->send_request([py_bytes, p = std::move(p)](
                            coro_rpc::coro_rpc_client &client) mutable
                        -> async_simple::coro::Lazy<void> {
-          char *data;
-          ssize_t length;
-          PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
-          auto r = co_await client.call<&py_coro_rpc_server::handle_msg>(
-              std::string_view(data, length));
+          std::string_view send_msg;
+          {
+            char *data;
+            ssize_t length;
+            py::gil_scoped_acquire acquire;
+            PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+            send_msg = std::string_view(data, length);
+          }
+          auto r =
+              co_await client.call<&py_coro_rpc_server::handle_msg>(send_msg);
           rpc_result result{};
           ELOG_INFO << "rpc result: " << client.get_resp_attachment();
           if (!r.has_value()) {
@@ -206,11 +211,15 @@ class py_coro_rpc_client_pool {
   rpc_result sync_send_msg1(py::handle py_bytes) {
     auto task = [this,
                  py_bytes]() mutable -> async_simple::coro::Lazy<rpc_result> {
-      char *data;
-      ssize_t length;
-      PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
-      auto r = co_await client_.call<&py_coro_rpc_server::handle_msg>(
-          std::string_view(data, length));
+      std::string_view send_msg;
+      {
+        char *data;
+        ssize_t length;
+        py::gil_scoped_acquire acquire;
+        PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+        send_msg = std::string_view(data, length);
+      }
+      auto r = co_await client_.call<&py_coro_rpc_server::handle_msg>(send_msg);
       rpc_result result{};
       ELOG_INFO << "rpc result: " << client_.get_resp_attachment();
       if (!r.has_value()) {
