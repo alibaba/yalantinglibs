@@ -235,11 +235,11 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 
  public:
   static std::size_t global_memory_usage() {
-    return g_memory_usage_recorder()->now_usage.load(std::memory_order_relaxed);
+    return g_memory_usage_recorder()->now_usage.load(std::memory_order_acquire);
   }
   static std::size_t global_history_max_memory_usage() {
     return g_memory_usage_recorder()->history_max_usage.load(
-        std::memory_order_relaxed);
+        std::memory_order_acquire);
   }
 
   struct config_t {
