@@ -24,6 +24,12 @@ async def async_request(pool):
     print(result)
     print(f"Python received result with out buffer from C++: {buf[:len]}")
 
+def send_request(pool):
+    result = pool.sync_send_msg(b"hello world")
+    print(result.str_view().tobytes())
+    result = pool.sync_send_msg1(b"hello world")
+    print(result.str_view().tobytes())
+
 if __name__ == "__main__":
     # init server and client pool
     server = py_coro_rpc.coro_rpc_server(2, "0.0.0.0:9004", handle_msg, 10)
@@ -31,5 +37,6 @@ if __name__ == "__main__":
     print("server start", r)
 
     pool = py_coro_rpc.py_coro_rpc_client_pool("0.0.0.0:9004")
-
+    send_request(pool)
+    
     asyncio.run(async_request(pool))

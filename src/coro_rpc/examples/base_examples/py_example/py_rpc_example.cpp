@@ -9,6 +9,8 @@
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
+#include "async_simple/coro/SyncAwait.h"
+
 namespace py = pybind11;
 
 class py_rpc_context {
@@ -70,8 +72,8 @@ class string_holder {
  public:
   string_holder(std::string val) : value(std::move(val)) {}
 
-  py::object str_view() {
-    auto view = py::memoryview::from_buffer(value.data(), {value.size()},
+  py::object str_view(uint64_t data_size) {
+    auto view = py::memoryview::from_buffer(value.data(), {data_size},
                                             {sizeof(uint8_t)});
     return view;
   }
@@ -85,13 +87,15 @@ struct rpc_result {
   std::string err_msg;
   std::shared_ptr<string_holder> data_ptr;
   uint64_t data_size;
-  py::object str_view() { return data_ptr->str_view(); }
+  py::object str_view() { return data_ptr->str_view(data_size); }
 };
 
 class py_coro_rpc_client_pool {
  public:
   py_coro_rpc_client_pool(std::string url)
-      : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)){};
+      : pool_(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(url)) {
+    async_simple::coro::syncAwait(client_.connect(url));
+  };
 
   pybind11::object async_send_msg_with_outbuf(py::handle loop,
                                               py::handle py_bytes,
@@ -166,8 +170,69 @@ class py_coro_rpc_client_pool {
     return local_future;
   }
 
+  rpc_result sync_send_msg(py::handle py_bytes) {
+    std::promise<rpc_result> p;
+    auto future = p.get_future();
+    pool_
+        ->send_request([py_bytes, p = std::move(p)](
+                           coro_rpc::coro_rpc_client &client) mutable
+                       -> async_simple::coro::Lazy<void> {
+          char *data;
+          ssize_t length;
+          PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+          auto r = co_await client.call<&py_coro_rpc_server::handle_msg>(
+              std::string_view(data, length));
+          rpc_result result{};
+          ELOG_INFO << "rpc result: " << client.get_resp_attachment();
+          if (!r.has_value()) {
+            ELOG_INFO << "rpc call failed: " << r.error().msg;
+            result.code = r.error().val();
+            result.err_msg = r.error().msg;
+          }
+          else {
+            result.data_ptr = std::make_shared<string_holder>(
+                std::move(client.release_resp_attachment()));
+            result.data_size = client.get_resp_attachment().size();
+          }
+
+          p.set_value(result);
+        })
+        .start([](auto &&) {
+        });
+
+    return future.get();
+  }
+
+  rpc_result sync_send_msg1(py::handle py_bytes) {
+    auto task = [this,
+                 py_bytes]() mutable -> async_simple::coro::Lazy<rpc_result> {
+      char *data;
+      ssize_t length;
+      PyBytes_AsStringAndSize(py_bytes.ptr(), &data, &length);
+      auto r = co_await client_.call<&py_coro_rpc_server::handle_msg>(
+          std::string_view(data, length));
+      rpc_result result{};
+      ELOG_INFO << "rpc result: " << client_.get_resp_attachment();
+      if (!r.has_value()) {
+        ELOG_INFO << "rpc call failed: " << r.error().msg;
+        result.code = r.error().val();
+        result.err_msg = r.error().msg;
+      }
+      else {
+        result.data_ptr = std::make_shared<string_holder>(
+            std::move(client_.release_resp_attachment()));
+        result.data_size = client_.get_resp_attachment().size();
+      }
+
+      co_return result;
+    };
+
+    return async_simple::coro::syncAwait(task());
+  }
+
  private:
   std::shared_ptr<coro_io::client_pool<coro_rpc::coro_rpc_client>> pool_;
+  coro_rpc::coro_rpc_client client_;
 };
 
 PYBIND11_MODULE(py_coro_rpc, m) {
@@ -187,6 +252,10 @@ PYBIND11_MODULE(py_coro_rpc, m) {
   py::class_<py_coro_rpc_client_pool>(m, "py_coro_rpc_client_pool")
       .def(py::init<std::string>())
       .def("async_send_msg", &py_coro_rpc_client_pool::async_send_msg)
+      .def("sync_send_msg", &py_coro_rpc_client_pool::sync_send_msg,
+           py::call_guard<py::gil_scoped_release>())
+      .def("sync_send_msg1", &py_coro_rpc_client_pool::sync_send_msg1,
+           py::call_guard<py::gil_scoped_release>())
       .def("async_send_msg_with_outbuf",
            &py_coro_rpc_client_pool::async_send_msg_with_outbuf);
 
