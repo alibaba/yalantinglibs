@@ -243,7 +243,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
 
   struct config_t {
-    size_t buffer_size = 2 * 1024 * 1024;  // 2MB
+    size_t buffer_size = 256 * 1024;  // 256KB
     uint64_t max_memory_usage = UINT32_MAX;
     std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder =
         nullptr;  // nullopt means use global memory_usage_recorder

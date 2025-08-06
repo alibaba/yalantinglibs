@@ -352,8 +352,8 @@ int main(int argc, char** argv) {
   parser.add<bool>("enable_ib", 'i', "enable ib", false, true);
   parser.add<uint32_t>("duration", 'd', "duration seconds", false, 100000);
   parser.add<uint32_t>("min_recv_buf_count", 'e', "min recieve buffer count",
-                       false, 4);
-  parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
+                       false, 8);
+  parser.add<uint32_t>("max_recv_buf_count", 'f', "max recieve buffer count",
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
   parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, true);
