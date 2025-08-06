@@ -789,6 +789,7 @@ class ib_socket_t {
     }
     ELOG_INFO << "device name: " << conf_.device->name();
     conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
+    conf_.send_buffer_cnt = std::max<uint32_t>(conf_.send_buffer_cnt, 1);
     conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
     conf_.cap.max_send_sge = std::max<uint32_t>(conf_.cap.max_send_sge, 1);
     conf_.cap.max_send_wr = std::max<uint32_t>(conf_.cap.max_send_wr, 1);

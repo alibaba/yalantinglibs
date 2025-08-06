@@ -165,13 +165,17 @@ async_simple::coro::
   }
   ibv_sge socket_buffer;
   std::unique_ptr<char[]> zero_copy_buffer;
-  bool send_buffer_full = false;
-  bool is_enable_inline_send =
-      ib_socket.get_config().cap.max_inline_data >= io_size;
-  ib_buffer_t send_buffer;
-  
+  std::size_t max_buffer_length =
+      std::min<std::size_t>(256 * 1024, ib_socket.get_buffer_size());
   std::size_t send_request_count = ib_socket.sent_request_count();
-  if (is_enable_inline_send && send_request_count == 0) {
+  auto now_buffer_data =
+      ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size() + io_size;
+  bool enable_small_message_combine =
+      now_buffer_data < max_buffer_length && send_request_count >= ib_socket.get_config().send_buffer_cnt;
+  bool is_enable_inline_send =
+      ib_socket.get_config().cap.max_inline_data >= io_size && !enable_small_message_combine;
+  ib_buffer_t send_buffer;
+  if (is_enable_inline_send) {
     zero_copy_buffer = std::make_unique<char[]>(io_size);
     socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
                      .length = (uint32_t)io_size,
@@ -186,18 +190,12 @@ async_simple::coro::
     socket_buffer = *sv;
     // we make sure it when split
     assert(socket_buffer.length >= io_size);
-    send_buffer_full = (socket_buffer.length <= io_size);
     socket_buffer.length = io_size;
     ib_socket.consume_send_buffer(io_size);
   }
   auto len = copy(sge_list, socket_buffer);
   assert(len == io_size);
-  auto now_buffer_data =
-      ib_socket.get_buffer_size() - ib_socket.get_free_send_buffer_size();
-  constexpr std::size_t max_buffer_length = 256 * 1024;
-  if (now_buffer_data < std::min<std::size_t>(max_buffer_length,
-                                              ib_socket.get_buffer_size()) &&
-      !send_buffer_full && send_request_count > 0) {
+  if (enable_small_message_combine) {
     ELOG_TRACE << "combine small message, now buffer size:" << now_buffer_data;
     co_return std::pair{std::error_code{}, io_size};
   }
