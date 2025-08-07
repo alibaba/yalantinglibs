@@ -106,13 +106,6 @@ class client_pool : public std::enable_shared_from_this<
           break;
         }
       }
-      clients.collecter_cnt_ = 0;
-      if (clients.size() == 0) {
-        break;
-      }
-      std::size_t expected = 0;
-      if (!clients.collecter_cnt_.compare_exchange_strong(expected, 1))
-        break;
     }
     co_return;
   }
