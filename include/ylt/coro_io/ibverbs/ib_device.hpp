@@ -226,15 +226,16 @@ class ib_device_t {
   uint16_t port_;
 };
 
-inline std::unique_ptr<ibv_mr> ib_buffer_t::regist(ib_device_t& dev, void* ptr,
-                                                   uint32_t size,
-                                                   int ib_flags) {
+inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
+                                                               void* ptr,
+                                                               uint32_t size,
+                                                               int ib_flags) {
   auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
   ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
   if (mr != nullptr) [[unlikely]] {
     ELOG_TRACE << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
                << ", sge.length: " << mr->length;
-    return std::unique_ptr<ibv_mr>{mr};
+    return std::unique_ptr<ibv_mr, ib_deleter>{mr};
   }
   else {
     throw std::make_error_code(std::errc{errno});
