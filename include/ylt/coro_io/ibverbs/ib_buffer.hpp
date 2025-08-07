@@ -108,7 +108,7 @@ struct ib_buffer_t {
   ibv_mr& operator*() noexcept { return *mr_.get(); }
   ibv_mr& operator*() const noexcept { return *mr_.get(); }
   operator bool() const noexcept { return mr_.get() != nullptr; }
-  static std::unique_ptr<ibv_mr> regist(ib_device_t& dev, void* ptr,
+  static std::unique_ptr<ibv_mr, ib_deleter> regist(ib_device_t& dev, void* ptr,
                                         uint32_t size,
                                         int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                                        IBV_ACCESS_REMOTE_READ |
@@ -186,7 +186,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
           break;
         }
       }
-      --self->free_buffers_.collecter_cnt_;
+      self->free_buffers_.collecter_cnt_ = 0;
       if (self->free_buffers_.size() == 0) {
         break;
       }
@@ -316,7 +316,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return memory_usage_recorder_->history_max_usage.load(
         std::memory_order_relaxed);
   }
-  std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
+  std::size_t free_buffer_size() const noexcept { return free_buffers_.size(); }
 
  private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>

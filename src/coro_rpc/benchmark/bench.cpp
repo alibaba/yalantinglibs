@@ -141,7 +141,9 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
                            ->get_buffer_pool()
                            ->max_recorded_memory_usage() /
                        (1.0 * 1024 * 1024)
-                << "MB";
+                << "MB, free buffer cnt: " << coro_io::get_global_ib_device()
+                           ->get_buffer_pool()
+                           ->free_buffer_size();
     }
 #endif
     std::cout << std::endl;

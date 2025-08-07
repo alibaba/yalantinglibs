@@ -106,7 +106,7 @@ class client_pool : public std::enable_shared_from_this<
           break;
         }
       }
-      --clients.collecter_cnt_;
+      clients.collecter_cnt_ = 0;
       if (clients.size() == 0) {
         break;
       }
