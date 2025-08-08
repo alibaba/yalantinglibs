@@ -42,7 +42,6 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
-#include "ylt/coro_io/ip_whitelist.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
 /*!
@@ -350,41 +349,12 @@ class coro_rpc_server_base {
   auto &get_io_context_pool() noexcept { return pool_; }
 
   /*!
-   * Get IP whitelist reference
-   * @return reference to the IP whitelist
+   * Set client filter callback
+   * @param filter callback function that takes endpoint and returns bool
+   *               true to allow connection, false to reject
    */
-  coro_io::ip_whitelist& get_ip_whitelist() noexcept { return ip_whitelist_; }
-
-  /*!
-   * Set IP whitelist (copy)
-   * @param whitelist the IP whitelist to copy
-   */
-  void set_ip_whitelist(const coro_io::ip_whitelist& whitelist) {
-    ip_whitelist_ = whitelist;
-  }
-
-  /*!
-   * Set IP whitelist (move)
-   * @param whitelist the IP whitelist to move
-   */
-  void set_ip_whitelist(coro_io::ip_whitelist&& whitelist) noexcept {
-    ip_whitelist_ = std::move(whitelist);
-  }
-
-  /*!
-   * Enable IP whitelist filtering
-   * @param enable true to enable, false to disable
-   */
-  void enable_ip_whitelist(bool enable = true) noexcept {
-    ip_whitelist_enabled_ = enable;
-  }
-
-  /*!
-   * Check if IP whitelist is enabled
-   * @return true if enabled, false otherwise
-   */
-  bool is_ip_whitelist_enabled() const noexcept {
-    return ip_whitelist_enabled_;
+  void client_filter(std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
+    client_filter_ = std::move(filter);
   }
 
  private:
@@ -473,25 +443,24 @@ class coro_rpc_server_base {
         continue;
       }
 
-      // IP whitelist check
-      if (ip_whitelist_enabled_) {
+      // Client filter check
+      if (client_filter_) {
         try {
           auto remote_endpoint = socket.remote_endpoint();
-          auto client_ip = remote_endpoint.address();
           
-          if (!ip_whitelist_.is_allowed(client_ip)) {
-            ELOG_WARN << "Connection from " << client_ip.to_string()
-                     << " rejected by IP whitelist";
+          if (!client_filter_(remote_endpoint)) {
+            ELOG_WARN << "Connection from " << remote_endpoint.address().to_string()
+                     << " rejected by client filter";
             asio::error_code ignored_ec;
             socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
             socket.close(ignored_ec);
             continue;
           }
           
-          ELOG_INFO << "Connection from " << client_ip.to_string()
-                   << " allowed by IP whitelist";
+          ELOG_INFO << "Connection from " << remote_endpoint.address().to_string()
+                   << " allowed by client filter";
         } catch (const std::exception& e) {
-          ELOG_ERROR << "Error checking IP whitelist: " << e.what();
+          ELOG_ERROR << "Error in client filter: " << e.what();
           asio::error_code ignored_ec;
           socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
           socket.close(ignored_ec);
@@ -611,7 +580,6 @@ class coro_rpc_server_base {
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
 
-   coro_io::ip_whitelist ip_whitelist_;
-   bool ip_whitelist_enabled_ = false;
+  std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
 };
 }  // namespace coro_rpc

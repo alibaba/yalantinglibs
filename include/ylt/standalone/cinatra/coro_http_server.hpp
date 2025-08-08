@@ -13,7 +13,6 @@
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/load_balancer.hpp"
-#include "ylt/coro_io/ip_whitelist.hpp"
 
 namespace cinatra {
 enum class file_resp_format_type {
@@ -606,34 +605,14 @@ class coro_http_server {
   std::string_view address() { return address_; }
   std::error_code get_errc() { return errc_; }
 
-  coro_io::ip_whitelist& get_ip_whitelist() { return ip_whitelist_; }
-
   /*!
-   * Set IP whitelist (copy)
-   * @param whitelist the IP whitelist to copy
+   * Set client filter callback
+   * @param filter callback function that takes endpoint and returns bool
+   *               true to allow connection, false to reject
    */
-  void set_ip_whitelist(const coro_io::ip_whitelist& whitelist) {
-    ip_whitelist_ = whitelist;
+  void client_filter(std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
+    client_filter_ = std::move(filter);
   }
-
-  /*!
-   * Set IP whitelist (move)
-   * @param whitelist the IP whitelist to move
-   */
-  void set_ip_whitelist(coro_io::ip_whitelist&& whitelist) noexcept {
-    ip_whitelist_ = std::move(whitelist);
-  }
-  
-  void enable_ip_whitelist(bool enable) {
-    ip_whitelist_enabled_ = enable;
-    if (enable) {
-      CINATRA_LOG_INFO << "HTTP Server IP whitelist enabled";
-    } else {
-      CINATRA_LOG_INFO << "HTTP Server IP whitelist disabled";
-    }
-  }
-  
-  bool is_ip_whitelist_enabled() const { return ip_whitelist_enabled_; }
 
  private:
   std::error_code listen() {
@@ -780,8 +759,8 @@ class coro_http_server {
         continue;
       }
 
-      // IP whitelist check
-      if (ip_whitelist_enabled_) {
+      // Client filter check
+      if (client_filter_) {
         auto remote_endpoint = socket.remote_endpoint(error);
         if (error) {
           CINATRA_LOG_WARNING << "Failed to get remote endpoint: " << error.message();
@@ -789,16 +768,23 @@ class coro_http_server {
           continue;
         }
         
-        std::string client_ip = remote_endpoint.address().to_string();
-        if (!ip_whitelist_.is_allowed(client_ip)) {
-          CINATRA_LOG_WARNING << "HTTP connection rejected from IP: " << client_ip
-                           << " (not in whitelist)";
+        try {
+          if (!client_filter_(remote_endpoint)) {
+            CINATRA_LOG_WARNING << "HTTP connection rejected from "
+                               << remote_endpoint.address().to_string()
+                               << " by client filter";
+            socket.close(error);
+            continue;
+          }
+          
+          CINATRA_LOG_DEBUG << "HTTP connection accepted from "
+                            << remote_endpoint.address().to_string()
+                            << " (client filter passed)";
+        } catch (const std::exception& e) {
+          CINATRA_LOG_ERROR << "Error in client filter: " << e.what();
           socket.close(error);
           continue;
         }
-        
-        CINATRA_LOG_DEBUG << "HTTP connection accepted from IP: " << client_ip
-                          << " (whitelist check passed)";
       }
 
       auto conn =
@@ -1097,8 +1083,7 @@ class coro_http_server {
   bool read_failed_forever_ = false;
 #endif
 
-  coro_io::ip_whitelist ip_whitelist_;
-  std::atomic<bool> ip_whitelist_enabled_{false};
+  std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
 };
 
 using http_server = coro_http_server;
