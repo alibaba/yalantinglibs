@@ -1,4 +1,5 @@
 import asyncio
+import torch
 import py_coro_rpc
 
 def handle_msg(con, msg):
@@ -24,6 +25,15 @@ async def async_request(pool):
     print(result)
     print(f"Python received result with out buffer from C++: {buf[:len]}")
 
+async def async_send_tensor(pool):
+    loop = asyncio.get_event_loop()
+    t = torch.tensor([1, 2, 3], dtype=torch.int32)
+    print(t)
+    result = await pool.async_send_tensor(loop, t)
+    mem_view = result.str_view()
+    tensor = torch.frombuffer(mem_view, dtype=torch.int32)
+    print("tensor result:", tensor)
+
 def send_request(pool):
     result = pool.sync_send_msg(b"hello world")
     print(result.str_view().tobytes())
@@ -39,4 +49,5 @@ if __name__ == "__main__":
     pool = py_coro_rpc.py_coro_rpc_client_pool("0.0.0.0:9004")
     send_request(pool)
     
+    asyncio.run(async_send_tensor(pool))
     asyncio.run(async_request(pool))

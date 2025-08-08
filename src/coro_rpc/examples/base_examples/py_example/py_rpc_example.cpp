@@ -40,7 +40,8 @@ class py_coro_rpc_server {
                      py::handle py_callback, size_t seconds)
       : server_(thd_num, address, std::chrono::seconds(seconds)),
         py_callback_(py_callback) {
-    server_.register_handler<&py_coro_rpc_server::handle_msg>(this);
+    server_.register_handler<&py_coro_rpc_server::handle_msg,
+                             &py_coro_rpc_server::handle_tensor>(this);
   }
 
   bool start() {
@@ -62,6 +63,12 @@ class py_coro_rpc_server {
     auto view = py::memoryview::from_buffer(msg.data(), {msg.size()},
                                             {sizeof(uint8_t)});
     py_callback_(std::move(t), view);
+  }
+
+  void handle_tensor(coro_rpc::context<void> context) {
+    auto ctx_info = context.get_context_info();
+    ctx_info->set_response_attachment(ctx_info->get_request_attachment());
+    context.response_msg();
   }
 
   coro_rpc::coro_rpc_server server_;
@@ -170,6 +177,58 @@ class py_coro_rpc_client_pool {
     return local_future;
   }
 
+  pybind11::object async_send_tensor(py::handle loop,
+                                     py::handle tensor_handle) {
+    py::object local_future;
+    py::handle future;
+
+    {
+      py::gil_scoped_acquire acquire;
+      local_future = loop.attr("create_future")();
+      future = local_future;
+      tensor_handle.inc_ref();
+    }
+
+    pool_
+        ->send_request([tensor_handle, loop,
+                        future](coro_rpc::coro_rpc_client &client)
+                           -> async_simple::coro::Lazy<void> {
+          {
+            py::gil_scoped_acquire acquire;
+            uintptr_t data_ptr =
+                tensor_handle.attr("data_ptr")().cast<uintptr_t>();
+            size_t numel = tensor_handle.attr("numel")().cast<size_t>();
+            size_t element_size =
+                tensor_handle.attr("element_size")().cast<size_t>();
+            size_t tensor_size = numel * element_size;
+            client.set_req_attachment(
+                std::string_view((char *)data_ptr, tensor_size));
+          }
+
+          auto r = co_await client.call<&py_coro_rpc_server::handle_tensor>();
+          rpc_result result{};
+          ELOG_INFO << "rpc result: " << client.get_resp_attachment();
+          if (!r.has_value()) {
+            ELOG_INFO << "rpc call failed: " << r.error().msg;
+            result.code = r.error().val();
+            result.err_msg = r.error().msg;
+          }
+          else {
+            result.data_ptr = std::make_shared<string_holder>(
+                std::move(client.release_resp_attachment()));
+            result.data_size = client.get_resp_attachment().size();
+          }
+
+          py::gil_scoped_acquire acquire;
+          loop.attr("call_soon_threadsafe")(future.attr("set_result"), result);
+          tensor_handle.dec_ref();
+        })
+        .start([](auto &&) {
+        });
+
+    return local_future;
+  }
+
   rpc_result sync_send_msg(py::handle py_bytes) {
     std::promise<rpc_result> p;
     auto future = p.get_future();
@@ -264,6 +323,8 @@ PYBIND11_MODULE(py_coro_rpc, m) {
       .def("sync_send_msg", &py_coro_rpc_client_pool::sync_send_msg,
            py::call_guard<py::gil_scoped_release>())
       .def("sync_send_msg1", &py_coro_rpc_client_pool::sync_send_msg1,
+           py::call_guard<py::gil_scoped_release>())
+      .def("async_send_tensor", &py_coro_rpc_client_pool::async_send_tensor,
            py::call_guard<py::gil_scoped_release>())
       .def("async_send_msg_with_outbuf",
            &py_coro_rpc_client_pool::async_send_msg_with_outbuf);
