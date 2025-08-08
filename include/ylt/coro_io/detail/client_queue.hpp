@@ -61,28 +61,60 @@ class client_queue {
       return 0;
     }
   }
+  void try_dequeue_connect_reuse_impl(client_t& c, std::size_t index) {
+    if constexpr (requires { c->get_pipeline_size(); }) {
+      auto waiting_count = c->get_pipeline_size();
+      if (waiting_count >= 10) {
+        client_t c2;
+        if (size_[index] > 1 && queue_[index].try_dequeue(c2)) {
+          if (c2->get_pipeline_size() < c->get_pipeline_size()) {
+            queue_[index].enqueue(std::move(c));
+            c = std::move(c2);
+          }
+          else {
+            queue_[index].enqueue(std::move(c2));
+          }
+        }
+      }
+    }
+    --size_[index];
+  }
   bool try_dequeue(client_t& c) {
     const int_fast16_t index = selected_index_;
     if (queue_[index].try_dequeue(c)) {
-      --size_[index];
+      try_dequeue_connect_reuse_impl(c, index);
       return true;
     }
-    if (queue_[index ^ 1].try_dequeue(c)) {
-      --size_[index ^ 1];
+    else if (queue_[index ^ 1].try_dequeue(c)) {
+      try_dequeue_connect_reuse_impl(c, index ^ 1);
       return true;
     }
     return false;
   }
-  std::size_t clear_old(std::size_t max_clear_cnt) {
+  std::pair<bool, std::size_t> clear_old(std::size_t max_clear_cnt) {
     const int_fast16_t index = selected_index_ ^ 1;
-    if (size_[index]) {
-      std::size_t result =
-          queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
-
-      size_[index] -= result;
-      return result;
+    std::vector<client_t> using_clients;
+    std::size_t clear_cnt = 0;
+    for (; clear_cnt < max_clear_cnt; ++clear_cnt) {
+      client_t c;
+      if (queue_[index].try_dequeue(c)) {
+        if constexpr (requires { c->get_pipeline_size(); }) {
+          auto waiting_count = c->get_pipeline_size();
+          if (waiting_count) {
+            using_clients.push_back(std::move(c));
+          }
+        }
+      }
+      else {
+        break;
+      }
     }
-    return 0;
+    for (auto& cli : using_clients) {
+      queue_[index].enqueue(std::move(cli));
+    }
+    std::size_t real_clear_cnt = clear_cnt - using_clients.size();
+    size_[selected_index_] -= real_clear_cnt;
+    return {clear_cnt < max_clear_cnt, real_clear_cnt};  // all cleared
   }
 };
 };  // namespace coro_io::detail
