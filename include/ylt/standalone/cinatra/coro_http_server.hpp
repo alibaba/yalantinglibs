@@ -610,7 +610,8 @@ class coro_http_server {
    * @param filter callback function that takes endpoint and returns bool
    *               true to allow connection, false to reject
    */
-  void client_filter(std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
+  void client_filter(
+      std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
     client_filter_ = std::move(filter);
   }
 

@@ -172,7 +172,7 @@ class coro_rpc_server_base {
       }
       errc_ = listen();
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t & pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
@@ -353,7 +353,8 @@ class coro_rpc_server_base {
    * @param filter callback function that takes endpoint and returns bool
    *               true to allow connection, false to reject
    */
-  void client_filter(std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
+  void client_filter(
+      std::function<bool(const asio::ip::tcp::endpoint &)> filter) {
     client_filter_ = std::move(filter);
   }
 
@@ -447,19 +448,21 @@ class coro_rpc_server_base {
       if (client_filter_) {
         try {
           auto remote_endpoint = socket.remote_endpoint();
-          
+
           if (!client_filter_(remote_endpoint)) {
-            ELOG_WARN << "Connection from " << remote_endpoint.address().to_string()
-                     << " rejected by client filter";
+            ELOG_WARN << "Connection from "
+                      << remote_endpoint.address().to_string()
+                      << " rejected by client filter";
             asio::error_code ignored_ec;
             socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
             socket.close(ignored_ec);
             continue;
           }
-          
-          ELOG_INFO << "Connection from " << remote_endpoint.address().to_string()
-                   << " allowed by client filter";
-        } catch (const std::exception& e) {
+
+          ELOG_INFO << "Connection from "
+                    << remote_endpoint.address().to_string()
+                    << " allowed by client filter";
+        } catch (const std::exception &e) {
           ELOG_ERROR << "Error in client filter: " << e.what();
           asio::error_code ignored_ec;
           socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
@@ -580,6 +583,6 @@ class coro_rpc_server_base {
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
 
-  std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
+  std::function<bool(const asio::ip::tcp::endpoint &)> client_filter_;
 };
 }  // namespace coro_rpc
