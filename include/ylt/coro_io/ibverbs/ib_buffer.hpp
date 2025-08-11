@@ -108,11 +108,10 @@ struct ib_buffer_t {
   ibv_mr& operator*() noexcept { return *mr_.get(); }
   ibv_mr& operator*() const noexcept { return *mr_.get(); }
   operator bool() const noexcept { return mr_.get() != nullptr; }
-  static std::unique_ptr<ibv_mr> regist(ib_device_t& dev, void* ptr,
-                                        uint32_t size,
-                                        int ib_flags = IBV_ACCESS_LOCAL_WRITE |
-                                                       IBV_ACCESS_REMOTE_READ |
-                                                       IBV_ACCESS_REMOTE_WRITE);
+  static std::unique_ptr<ibv_mr, ib_deleter> regist(
+      ib_device_t& dev, void* ptr, uint32_t size,
+      int ib_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                     IBV_ACCESS_REMOTE_WRITE);
   static ib_buffer_t regist(ib_buffer_pool_t& pool,
                             std::unique_ptr<char[]> data, std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
@@ -169,12 +168,12 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         auto [is_all_cleared, clear_cnt] = self->free_buffers_.clear_old(1000);
         self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
                                   (ssize_t)self->buffer_size());
-        ELOG_TRACE << "finish ib_buffer timeout free of pool{" << self.get()
-                   << "}, now ib_buffer cnt: " << self->free_buffers_.size()
-                   << " mem usage:"
-                   << (int64_t)(std::round(self->memory_usage() /
-                                           (1.0 * 1024 * 1024)))
-                   << " MB";
+        ELOG_INFO << "finish ib_buffer timeout free of pool{" << self.get()
+                  << "}, now ib_buffer cnt: " << self->free_buffers_.size()
+                  << " mem usage:"
+                  << (int64_t)(std::round(self->memory_usage() /
+                                          (1.0 * 1024 * 1024)))
+                  << " MB";
         if (!is_all_cleared) {
           try {
             co_await async_simple::coro::Yield{};
@@ -186,14 +185,6 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
           break;
         }
       }
-      --self->free_buffers_.collecter_cnt_;
-      if (self->free_buffers_.size() == 0) {
-        break;
-      }
-      std::size_t expected = 0;
-      if (!self->free_buffers_.collecter_cnt_.compare_exchange_strong(expected,
-                                                                      1))
-        break;
     }
     co_return;
   }
@@ -235,15 +226,15 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 
  public:
   static std::size_t global_memory_usage() {
-    return g_memory_usage_recorder()->now_usage.load(std::memory_order_relaxed);
+    return g_memory_usage_recorder()->now_usage.load(std::memory_order_acquire);
   }
   static std::size_t global_history_max_memory_usage() {
     return g_memory_usage_recorder()->history_max_usage.load(
-        std::memory_order_relaxed);
+        std::memory_order_acquire);
   }
 
   struct config_t {
-    size_t buffer_size = 2 * 1024 * 1024;  // 2MB
+    size_t buffer_size = 256 * 1024;  // 256KB
     uint64_t max_memory_usage = UINT32_MAX;
     std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder =
         nullptr;  // nullopt means use global memory_usage_recorder
@@ -316,7 +307,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     return memory_usage_recorder_->history_max_usage.load(
         std::memory_order_relaxed);
   }
-  std::size_t free_client_size() const noexcept { return free_buffers_.size(); }
+  std::size_t free_buffer_size() const noexcept { return free_buffers_.size(); }
 
  private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>

@@ -34,7 +34,7 @@
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
 struct config_t {
-  std::size_t buffer_size = 2 * 1024 * 1024;
+  std::size_t buffer_size = 256 * 1024;
   std::size_t request_size = 20 * 1024 * 1024 + 1;
   int concurrency = 50;
   int test_type = 0;
