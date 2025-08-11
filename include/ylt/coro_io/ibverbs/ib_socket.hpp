@@ -339,7 +339,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << std::make_error_code(std::errc{r}).message();
       return std::make_error_code(std::errc{r});
     }
-    struct ibv_wc wc{};
+    struct ibv_wc wc {};
     int ne = 0;
     std::vector<resume_struct> vec;
     callback_t tmp_recv_callback;
@@ -796,7 +796,8 @@ class ib_socket_t {
     conf_.send_buffer_cnt = std::max<uint32_t>(conf_.send_buffer_cnt, 1);
     conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
     conf_.cap.max_send_sge = std::max<uint32_t>(conf_.cap.max_send_sge, 1);
-    conf_.cap.max_send_wr = std::max<uint32_t>(conf_.cap.max_send_wr, 1);
+    conf_.cap.max_send_wr =
+        std::max<uint32_t>(conf_.cap.max_send_wr, conf_.send_buffer_cnt + 2);
     conf_.cap.max_recv_wr =
         std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
     if (!conf_.device->is_support_inline_data()) {
