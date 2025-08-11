@@ -125,9 +125,10 @@ ibverbs协议的配置如下：
 ```cpp
 struct ib_socket_t::config_t {
   uint32_t cq_size = 128; // 事件通知队列的最大长度
-  uint32_t recv_buffer_cnt = 4;                 // 默认提交到接受队列的缓冲数目，一个缓冲区默认2m，因此一个rdma在连接成功后即占用8MB的内存。积压的接收数据越多，队列中的缓冲区也会越多，最多可以缓冲max_recv_wr*buffer_size这么多的数据(buffer_size为buffer_pool配置的缓冲区大小），此后如果上层仍不消费数据，则发送端会收到rnr错误，不断重试并等待对端消费。
+  uint32_t recv_buffer_cnt = 8;                 // 默认提交到接受队列的缓冲数目，一个缓冲区默认256KB。积压的接收数据越多，队列中的缓冲区也会越多，最多可以缓冲max_recv_wr*buffer_size这么多的数据(buffer_size为buffer_pool配置的缓冲区大小），此后如果上层仍不消费数据，则发送端会收到rnr错误，不断重试并等待对端消费。
+  uint32_t send_buffer_cnt = 2;                 // 默认的发送缓冲区队列长度上限。代表最多积压的发送缓冲区数目。
   ibv_qp_type qp_type = IBV_QPT_RC;             // 默认的qp类型。
-  ibv_qp_cap cap = {.max_send_wr = 1,           // 发送队列的最大长度。
+  ibv_qp_cap cap = {.max_send_wr = 32,           // 发送队列的最大长度。
                     .max_recv_wr = 32,          // 接受队列的最大长度
                     .max_send_sge = 3,          // 发送的最大地址分段数，在不启用inline data时只需要1个。使用inline data时数据可能不经过拷贝直接从原始分段地址发送，因此设置为3段（默认支持3段分散地址）。
                     .max_recv_sge = 1,          // 接受的最大地址分段数，目前的缓冲区配置下只需要1个即可。
@@ -163,8 +164,8 @@ struct ib_socket_t::config_t {
   // 配置只有在第一次调用时才会生效
   coro_io::get_global_ib_device({ 
     .buffer_pool_config = {
-      .buffer_size = 3 * 1024 * 1024,  // 缓冲区大小
-      .max_memory_usage = 20 * 1024 * 1024, // 最大内存使用量（超过此限制将分配失败）
+      .buffer_size = 256 * 1024,  // 缓冲区大小
+      .max_memory_usage = 4 * 1024 * 1024, // 最大内存使用量（超过此限制将分配失败）
       .memory_usage_recorder = nullptr; // nullopt 表示不同设备的内存占用会被一起统计，如果想要让内存池具有独立的内存占用记录，请分配一个非空的std::shared_ptr<std::atomic<std::size_t>>作为记录
       .idle_timeout = 5s // 空闲时间超过这个时长的缓冲区将被回收
     }
@@ -278,6 +279,24 @@ Lazy<void> example(coro_rpc_client& client) {
 }
 ```
 
+在使用连接池发送数据时，我们也可以复用连接，此时需要在添加`coro_io_client_reuse_hint`参数，提示连接池启用连接复用。详见连接池文档。（TODO）
+
+```cpp
+auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
+    conf.url, pool_conf);
+auto ret = co_await pool->send_request(
+    [&](coro_io::client_reuse_hint, coro_rpc::coro_rpc_client& client) {
+        return client.send_request<echo>("hello");
+    });
+if (ret.has_value()) {
+    auto result = co_await std::move(ret.value());
+    if (result.has_value()) {
+        assert(result.value()=="hello"); 
+    }
+}
+```
+
+
 ### Attachment
 
 使用`send_request`方法时，由于可能同时发送多个请求，因此我们不能调用`set_req_attachment`方法向服务器发送attachment，同样也不能调用`get_resp_attachment`和`release_resp_attachment`方法来获取服务器返回的attachment。
@@ -366,7 +385,7 @@ options:
   -m, --max_request_count     max request count (unsigned long [=100000000])
   -p, --port                  server port (unsigned short [=9000])
   -r, --resp_len              response data length (unsigned long [=13])
-  -b, --buffer_size           buffer size (unsigned int [=2097152])
+  -b, --buffer_size           buffer size (unsigned int [=262144])
   -o, --log_level             Severity::INFO 1 as default, WARN is 4 (int [=1])
   -i, --enable_ib             enable ib (bool [=1])
   -d, --duration              duration seconds (unsigned int [=100000])
@@ -383,7 +402,7 @@ client测命令行：
 
 含义：启动100个client去压测，每次请求发送8MB数据，日志级别为error，持续时间30秒。
 
-默认会启用ibverbs，如果希望只测试tcp则添加`-i 0`
+如果安装了ibverbs环境，则默认会启用ibverbs，如果希望只测试tcp则添加`-i 0`
 
 性能测试完成之后将输出qps，吞吐和latency数据，测试结果类似于：
 ```

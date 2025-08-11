@@ -141,7 +141,10 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
                            ->get_buffer_pool()
                            ->max_recorded_memory_usage() /
                        (1.0 * 1024 * 1024)
-                << "MB";
+                << "MB, free buffer cnt: "
+                << coro_io::get_global_ib_device()
+                       ->get_buffer_pool()
+                       ->free_buffer_size();
     }
 #endif
     std::cout << std::endl;
@@ -348,15 +351,18 @@ int main(int argc, char** argv) {
 
   parser.add<unsigned short>("port", 'p', "server port", false, 9000);
   parser.add<size_t>("resp_len", 'r', "response data length", false, 13);
-  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false,
-                       1024 * 1024 * 2);
+  parser.add<uint32_t>("buffer_size", 'b', "buffer size", false, 256 * 1024);
   parser.add<int>("log_level", 'o', "Severity::INFO 1 as default, WARN is 4",
                   false, 1);
+#ifdef YLT_ENABLE_IBV
   parser.add<bool>("enable_ib", 'i', "enable ib", false, true);
+#else
+  parser.add<bool>("enable_ib", 'i', "enable ib", false, false);
+#endif
   parser.add<uint32_t>("duration", 'd', "duration seconds", false, 100000);
   parser.add<uint32_t>("min_recv_buf_count", 'e', "min recieve buffer count",
-                       false, 4);
-  parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
+                       false, 8);
+  parser.add<uint32_t>("max_recv_buf_count", 'f', "max recieve buffer count",
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
   parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, true);

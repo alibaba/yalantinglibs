@@ -122,9 +122,10 @@ The configuration for IBVerbs socket protocol is shown below:
 ```cpp
 struct ib_socket_t::config_t {
   uint32_t cq_size = 128; // Maximum length of event notification queue
-  uint32_t recv_buffer_cnt = 4;                 // Number of buffers pre-submitted to receive queue. Each buffer defaults to 2MB, so a RDMA connection occupies 8MB memory immediately after establishment. More pending receive data will result in more buffers in the queue, up to max_recv_wr*buffer_size (where buffer_size is configured in buffer_pool). If upper layer doesn't consume data, sender will receive RNR (Receiver Not Ready) errors and retry continuously.
+  uint32_t recv_buffer_cnt = 8;                 // Number of buffers pre-submitted to receive queue. Each buffer defaults to 256KB, so a RDMA connection occupies 8MB memory immediately after establishment. More pending receive data will result in more buffers in the queue, up to max_recv_wr*buffer_size (where buffer_size is configured in buffer_pool). If upper layer doesn't consume data, sender will receive RNR (Receiver Not Ready) errors and retry continuously.
+  uint32_t send_buffer_cnt = 2;                 // default send buffer queue max size,
   ibv_qp_type qp_type = IBV_QPT_RC;             // Default QP type
-  ibv_qp_cap cap = {.max_send_wr = 1,           // Maximum send queue length
+  ibv_qp_cap cap = {.max_send_wr = 32,           // Maximum send queue length
                     .max_recv_wr = 32,          // Maximum receive queue length
                     .max_send_sge = 3,          // Maximum send scatter/gather elements. Only 1 needed without inline data. Use 3 segments when using inline data (default supports 3 scattered addresses)
                     .max_recv_sge = 1,          // Maximum receive scatter/gather elements. 1 suffices with current buffer configuration
@@ -159,8 +160,8 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
   // The configuration only takes effect on the first invocation
   coro_io::get_global_ib_device({ 
     .buffer_pool_config = {
-      .buffer_size = 3 * 1024 * 1024,  // Buffer size
-      .max_memory_usage = 20 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
+      .buffer_size = 256 * 1024,  // Buffer size
+      .max_memory_usage = 4 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
       .memory_usage_recorder = nullptr; // nullopt means that memory usage across different devices will be counted together. If you want the memory pool to have independent memory usage tracking, you should assign a non-null std::shared_ptr<std::atomic<std::size_t>> as the recorder.
       .idle_timeout = 5s // Buffers unused for this duration will be reclaimed
     }
@@ -273,6 +274,23 @@ Lazy<void> example(coro_rpc_client& client) {
 }
 ```
 
+When sending data using the connection pool, we can also reuse a connection. To do this, you need to add the `coro_io::client_reuse_hint` parameter to instruct the connection pool to enable connection reuse. For more details, see the connection pool documentation. (TODO)
+
+```cpp
+auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
+    conf.url, pool_conf);
+auto ret = co_await pool->send_request(
+    [&](coro_io::client_reuse_hint, coro_rpc::coro_rpc_client& client) {
+        return client.send_request<echo>("hello");
+    });
+if (ret.has_value()) {
+    auto result = co_await std::move(ret.value());
+    if (result.has_value()) {
+        assert(result.value()=="hello"); 
+    }
+}
+```
+
 ### Attachment
 
 When using the `send_request` method, since multiple requests might be sent simultaneously, we should not call the `set_req_attachment` method to send an attachment to the server, nor should we call the `get_resp_attachment` and `release_resp_attachment` methods to get the attachment returned by the server.
@@ -350,3 +368,46 @@ For multiple coro_rpc_client instances, they do not interfere with each other an
 When calling a single `coro_rpc_client` simultaneously in multiple threads, it is necessary to note that only some member functions are thread-safe, including `send_request()`, `close()`, `connect()`, `get_executor()`, `get_pipeline_size()`, `get_client_id()`, `get_config()`, etc. If the user has not called the `connect()` function again with an endpoint or hostname, then the `get_port()` and `get_host()` functions are also thread-safe.
 
 It is important to note that the `call`, `get_resp_attachment`, `set_req_attachment`, `release_resp_attachment`, and `init_config` functions are not thread-safe and must not be called by multiple threads simultaneously. In this case, only `send_request` can be used for multiple threads to make concurrent requests over a single connection.
+
+# coro_rpc Performance Testing
+First, compile the coro_rpc benchmark and then execute the `bench` command-line tool. The command-line options are as follows:
+```
+options:
+  -u, --url                   URL (string [=0.0.0.0:9000])
+  -s, --send_data_len         Send data length (unsigned long [=8388608])
+  -c, --client_concurrency    Total number of clients (unsigned int [=0])
+  -m, --max_request_count     Max request count (unsigned long [=100000000])
+  -p, --port                  Server port (unsigned short [=9000])
+  -r, --resp_len              Response data length (unsigned long [=13])
+  -b, --buffer_size           Buffer size (unsigned int [=262144])
+  -o, --log_level             Log level. Severity::INFO=1 (default), WARN is 4, etc. (int [=1])
+  -i, --enable_ib             Enable ibverbs (RDMA) (bool [=1])
+  -d, --duration              Duration in seconds (unsigned int [=100000])
+  -?, --help                  Print this message
+```
+
+Server-side command:
+`./bench -p 9004 -r 13 -o 5`
+
+Meaning: Start the server, set the response data length to 13, and set the log level to error (the log levels correspond to those in easylog).
+
+Client-side command:
+`./bench -u 0.0.0.0:9004 -c 100 -s 8388608 -o 5 -d 30`
+
+Meaning: Start 100 clients for stress testing, sending 8MB of data per request, with the log level set to error, and a duration of 30 seconds.
+
+If user install ibverbs environment, ibverbs is enabled default. To test only TCP, add the flag `-i 0`.
+
+After the performance test completes, it will output QPS, throughput, and latency data. The test results will look similar to this:
+```
+# Benchmark result
+avg qps 2757 and throughput:185.04 Gb/s in duration 30
+# HELP Latency(us) of rpc call help
+# TYPE Latency(us) of rpc call summary
+rpc call latency(us){quantile="0.500000"} 3616.000000
+rpc call latency(us){quantile="0.900000"} 3712.000000
+rpc call latency(us){quantile="0.950000"} 3776.000000
+rpc call latency(us){quantile="0.990000"} 3872.000000
+rpc call latency(us)_sum 298707968.000000
+rpc call latency(us)_count 82761
+```
