@@ -9,6 +9,7 @@ set(TEST_SRCS
         test_function_name.cpp
         test_variadic.cpp
         test_parallel.cpp
+        test_client_filter.cpp
         )
 set(TEST_COMMON
         rpc_api.cpp

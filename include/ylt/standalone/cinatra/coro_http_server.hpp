@@ -605,6 +605,16 @@ class coro_http_server {
   std::string_view address() { return address_; }
   std::error_code get_errc() { return errc_; }
 
+  /*!
+   * Set client filter callback
+   * @param filter callback function that takes endpoint and returns bool
+   *               true to allow connection, false to reject
+   */
+  void client_filter(
+      std::function<bool(const asio::ip::tcp::endpoint &)> filter) {
+    client_filter_ = std::move(filter);
+  }
+
  private:
   std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen " << port_;
@@ -749,6 +759,28 @@ class coro_http_server {
         }
         continue;
       }
+
+      // Client filter check
+      if (client_filter_) {
+        auto remote_endpoint = socket.remote_endpoint(error);
+        if (error) {
+          CINATRA_LOG_WARNING << "Failed to get remote endpoint: "
+                              << error.message();
+          continue;
+        }
+
+        if (!client_filter_(remote_endpoint)) {
+          CINATRA_LOG_WARNING << "HTTP connection rejected from "
+                              << remote_endpoint.address().to_string()
+                              << " by client filter";
+          continue;
+        }
+
+        CINATRA_LOG_DEBUG << "HTTP connection accepted from "
+                          << remote_endpoint.address().to_string()
+                          << " (client filter passed)";
+      }
+
       auto conn =
           accept_impl(coro_io::socket_wrapper_t{std::move(socket), executor});
       start_one(conn).via(conn->get_executor()).detach();
@@ -1044,6 +1076,8 @@ class coro_http_server {
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
 #endif
+
+  std::function<bool(const asio::ip::tcp::endpoint &)> client_filter_;
 };
 
 using http_server = coro_http_server;
