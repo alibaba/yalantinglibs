@@ -317,8 +317,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
     {
-      auto time_out_guard =
-          timer_guard(this, conn_timeout_duration_, "connect timer");
       if (u.is_websocket()) {
         // build websocket http header
         add_header("Upgrade", "websocket");
@@ -1090,10 +1088,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<bool> reconnect(resp_data &data, uri_t u) {
-    {
-      auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
-      data = co_await connect(u);
-    }
+    data = co_await connect(u);
     if (socket_->is_timeout_) {
       data = resp_data{std::make_error_code(std::errc::timed_out), 404};
     }
@@ -2020,6 +2015,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       eps = &eps_tmp;
     }
     if (socket_->has_closed_) {
+      auto time_out_guard =
+          timer_guard(this, conn_timeout_duration_, "connect timer");
       socket_->is_timeout_ = false;
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;

@@ -118,6 +118,19 @@ TEST_CASE("test for gzip") {
 
   {
     coro_http_client client{};
+    client.set_conn_timeout(100ms);
+    auto start = std::chrono::steady_clock::now();
+    auto result =
+        async_simple::coro::syncAwait(client.async_get("192.168.31.96:7080"));
+    auto end = std::chrono::steady_clock::now();
+    auto dur =
+        std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+    CHECK(result.net_err);
+    assert(dur < 5);
+  }
+
+  {
+    coro_http_client client{};
     std::string uri = "http://127.0.0.1:8090/none";
     client.add_header("Content-Encoding", "none");
     auto result = async_simple::coro::syncAwait(client.async_get(uri));

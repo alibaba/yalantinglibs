@@ -20,6 +20,7 @@ export const struct_pack_Links = [
 export const coro_rpc_Links = [
     { text: 'coro_rpc简介', link: '/zh/coro_rpc/coro_rpc_introduction' },
     { text: 'coro_rpc客户端介绍', link: '/zh/coro_rpc/coro_rpc_client' },
+    { text: 'coro_rpc rdma设计', link: '/zh/coro_rpc/coro_rpc_rdma' },
     { text: 'coro_rpc服务端介绍', link: '/zh/coro_rpc/coro_rpc_server' },
 ];
 
