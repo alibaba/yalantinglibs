@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#define DOCTEST_CONFIG_IMPLEMENT
 
-#include <iguana/json_writer.hpp>
-#include <iguana/prettify.hpp>
+#include "doctest.h"
 
-namespace struct_json = iguana;
+// doctest comments
+// 'function' : must be 'attribute' - see issue #182
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
+int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
+DOCTEST_MSVC_SUPPRESS_WARNING_POP

@@ -14,41 +14,136 @@ struct metrc_tag {};
 
 struct test_tag {};
 
+TEST_CASE("summary test zero") {
+  std::map<std::string, std::string> customMap = {};
+  summary_t summary{"test_summary",
+                    "summary help",
+                    {0.5, 0.9, 0.95, 0.99},
+                    customMap,
+                    std::chrono::seconds(2)};
+  summary.observe(1);
+  std::string str;
+  summary.serialize_to_json(str);
+
+  basic_dynamic_summary<2> dy_summary(
+      std::string("test_summary"), std::string("summary help"),
+      std::vector<double>{0.5, 0.9, 0.95, 0.99},
+      std::array<std::string, 2>{"method", "url"}, std::chrono::seconds(1));
+  dy_summary.observe({"GET", "test"}, 10);
+  std::string str2;
+  dy_summary.serialize_to_json(str2);
+
+  std::cout << str << "\n";
+  std::cout << str2 << "\n";
+  double sum{};
+  uint64_t count{};
+  summary.get_rates(sum, count);
+  CHECK(sum > 0);
+  CHECK(count > 0);
+  sum = 0;
+  count = 0;
+  dy_summary.get_rates({"GET", "test"}, sum, count);
+  CHECK(sum > 0);
+  CHECK(count > 0);
+
+  std::this_thread::sleep_for(3s);
+
+  str.clear();
+  str2.clear();
+
+  summary.serialize_to_json(str);
+  dy_summary.serialize_to_json(str2);
+
+  std::cout << str << "\n";
+  std::cout << str2 << "\n";
+  sum = 0;
+  count = 0;
+  summary.get_rates(sum, count);
+  CHECK(sum == 0);
+  CHECK(count == 0);
+}
+
 TEST_CASE("serialize zero") {
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(0);
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+    str.clear();
+    gauge_t g("test1", "");
+    g.dec(0);
+    g.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(-1);
+    c.serialize_to_json(str);
+    CHECK(str.empty());
+    c.inc(0);
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+  {
+    std::string str;
+    counter_t c("test", "");
+    c.inc(2);
+    c.update(0);  // now zero
+    c.serialize_to_json(str);
+    CHECK(!str.empty());
+    str.clear();
+    gauge_t g("test1", "");
+    g.inc(2);
+    g.dec(2);  // now zero
+    g.serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
   counter_t c("test", "");
   gauge_t g("test1", "");
   std::string str;
-  c.serialize(str);
+  c.serialize_to_json(str);
   CHECK(str.empty());
-  g.serialize(str);
+  g.serialize_to_json(str);
   CHECK(str.empty());
   c.inc();
-  c.serialize(str);
+  c.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
   g.inc();
-  g.serialize(str);
-  CHECK(!str.empty());
-  c.update(0);
-  c.serialize(str);
+  g.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
+  c.update(0);
+  c.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+  // dec to zero
   g.dec();
-  g.serialize(str);
+  g.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
 
   dynamic_counter_1t c1("test", "", {"url"});
   c1.serialize(str);
   CHECK(str.empty());
+  c1.update({"/test"}, 0);
+  c1.serialize_to_json(str);
+  CHECK(!str.empty());
+  str.clear();
+
   dynamic_gauge_1t g1("test", "", {"url"});
   g1.serialize(str);
   CHECK(str.empty());
   c1.inc({"/test"});
-  c1.serialize(str);
+  c1.update({"/test"}, 0);
+  c1.serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
   g1.inc({"/test"});
+  g1.dec({"/test"});
   g1.serialize(str);
   CHECK(!str.empty());
   str.clear();
@@ -1527,10 +1622,9 @@ TEST_CASE("test summary with dynamic labels") {
                                    {"method", "url"}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distr(1, 100);
-  for (int i = 0; i < 50; i++) {
-    summary.observe({"GET", "/"}, distr(gen));
-    summary.observe({"POST", "/test"}, distr(gen));
+  for (int i = 0; i < 100; i++) {
+    summary.observe({"GET", "/"}, i);
+    summary.observe({"POST", "/test"}, i);
   }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1548,6 +1642,7 @@ TEST_CASE("test summary with dynamic labels") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
   summary.serialize_to_json(json_str);
+  CHECK(json_str.size() == 302);
   std::cout << json_str << "\n";
 #endif
 

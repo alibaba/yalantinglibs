@@ -51,8 +51,11 @@ class basic_static_counter : public static_metric {
         default_label_value_(dupli_count_) {}
 
   void inc(value_type val = 1) {
-    if (val <= 0) {
+    if (val < 0) {
       return;
+    }
+    if (!has_change_.load(std::memory_order::relaxed)) [[unlikely]] {
+      has_change_.store(true, std::memory_order::relaxed);
     }
     default_label_value_.inc(val);
   }

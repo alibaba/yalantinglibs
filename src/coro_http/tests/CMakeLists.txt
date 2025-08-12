@@ -22,6 +22,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_executable(coro_http_test
+        test_mixed.cpp
         test_coro_http_server.cpp
         test_cinatra.cpp
         test_cinatra_websocket.cpp

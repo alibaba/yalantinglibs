@@ -614,3 +614,14 @@ test_summary{quantile="0.990000"} 99.000000
 test_summary_sum 5050.000000
 test_summary_count 100
 ```
+
+## 配置prometheus 前端
+安装[prometheus](https://github.com/prometheus/prometheus)之后，打开其配置文件：prometheus.yml
+
+修改要连接的服务端地址：
+```
+- targets: ["127.0.0.1:9001"]
+```
+然后启动prometheus，prometheus会定时访问`http://127.0.0.1:9001/metrics` 拉取所有指标数据。
+
+在本地浏览器输入:127.0.0.1:9090, 打开prometheus前端，在前端页面的搜索框中输入指标的名称request_count之后就能看到table和graph 结果了。
