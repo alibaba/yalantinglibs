@@ -611,7 +611,7 @@ class coro_http_server {
    *               true to allow connection, false to reject
    */
   void client_filter(
-      std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
+      std::function<bool(const asio::ip::tcp::endpoint &)> filter) {
     client_filter_ = std::move(filter);
   }
 
@@ -764,28 +764,21 @@ class coro_http_server {
       if (client_filter_) {
         auto remote_endpoint = socket.remote_endpoint(error);
         if (error) {
-          CINATRA_LOG_WARNING << "Failed to get remote endpoint: " << error.message();
-          socket.close(error);
+          CINATRA_LOG_WARNING << "Failed to get remote endpoint: "
+                              << error.message();
           continue;
         }
-        
-        try {
-          if (!client_filter_(remote_endpoint)) {
-            CINATRA_LOG_WARNING << "HTTP connection rejected from "
-                               << remote_endpoint.address().to_string()
-                               << " by client filter";
-            socket.close(error);
-            continue;
-          }
-          
-          CINATRA_LOG_DEBUG << "HTTP connection accepted from "
-                            << remote_endpoint.address().to_string()
-                            << " (client filter passed)";
-        } catch (const std::exception& e) {
-          CINATRA_LOG_ERROR << "Error in client filter: " << e.what();
-          socket.close(error);
+
+        if (!client_filter_(remote_endpoint)) {
+          CINATRA_LOG_WARNING << "HTTP connection rejected from "
+                              << remote_endpoint.address().to_string()
+                              << " by client filter";
           continue;
         }
+
+        CINATRA_LOG_DEBUG << "HTTP connection accepted from "
+                          << remote_endpoint.address().to_string()
+                          << " (client filter passed)";
       }
 
       auto conn =
@@ -1084,7 +1077,7 @@ class coro_http_server {
   bool read_failed_forever_ = false;
 #endif
 
-  std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
+  std::function<bool(const asio::ip::tcp::endpoint &)> client_filter_;
 };
 
 using http_server = coro_http_server;

@@ -446,29 +446,22 @@ class coro_rpc_server_base {
 
       // Client filter check
       if (client_filter_) {
-        try {
-          auto remote_endpoint = socket.remote_endpoint();
-
-          if (!client_filter_(remote_endpoint)) {
-            ELOG_WARN << "Connection from "
-                      << remote_endpoint.address().to_string()
-                      << " rejected by client filter";
-            asio::error_code ignored_ec;
-            socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-            socket.close(ignored_ec);
-            continue;
-          }
-
-          ELOG_INFO << "Connection from "
-                    << remote_endpoint.address().to_string()
-                    << " allowed by client filter";
-        } catch (const std::exception &e) {
-          ELOG_ERROR << "Error in client filter: " << e.what();
-          asio::error_code ignored_ec;
-          socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
-          socket.close(ignored_ec);
+        asio::error_code ec;
+        auto remote_endpoint = socket.remote_endpoint(ec);
+        if (ec) {
+          ELOG_WARN << "Failed to get remote endpoint: " << ec.message();
           continue;
         }
+
+        if (!client_filter_(remote_endpoint)) {
+          ELOG_WARN << "Connection from "
+                    << remote_endpoint.address().to_string()
+                    << " rejected by client filter";
+          continue;
+        }
+
+        ELOG_INFO << "Connection from " << remote_endpoint.address().to_string()
+                  << " allowed by client filter";
       }
 
       int64_t conn_id = ++conn_id_;
