@@ -26,7 +26,7 @@
 
 #include "async_simple/coro/SyncAwait.h"
 #include "io_context_pool.hpp"
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
 #endif
@@ -121,7 +121,7 @@ constexpr inline flags to_flags(std::ios::ios_base::openmode mode) {
   return access;
 }
 
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
 template <bool seq, typename File, typename Executor>
 inline bool open_native_async_file(File &file, Executor &executor,
                                    std::string_view filepath,
@@ -184,7 +184,7 @@ class basic_seq_coro_file {
       return open_stream_file_in_pool(filepath, open_flags);
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       return open_native_async_file<true>(async_seq_file_, executor_wrapper_,
                                           filepath, to_flags(open_flags));
 #else
@@ -199,7 +199,7 @@ class basic_seq_coro_file {
       co_return co_await async_read_write({buf, size});
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       if (async_seq_file_ == nullptr) {
         co_return std::make_pair(
             std::make_error_code(std::errc::invalid_argument), 0);
@@ -253,7 +253,7 @@ class basic_seq_coro_file {
           std::span(const_cast<char *>(buf.data()), buf.size()));
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       if (async_seq_file_ == nullptr) {
         co_return std::make_pair(
             std::make_error_code(std::errc::invalid_argument), 0);
@@ -268,7 +268,7 @@ class basic_seq_coro_file {
     }
   }
 
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   std::shared_ptr<asio::stream_file> get_async_stream_file() {
     return async_seq_file_;
   }
@@ -277,7 +277,7 @@ class basic_seq_coro_file {
   std::fstream &get_stream_file() { return frw_seq_file_; }
 
   bool is_open() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_seq_file_ && async_seq_file_->is_open()) {
       return true;
     }
@@ -288,7 +288,7 @@ class basic_seq_coro_file {
   bool eof() { return eof_; }
 
   void close() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_seq_file_ && async_seq_file_->is_open()) {
       std::error_code ec;
       async_seq_file_->close(ec);
@@ -300,7 +300,7 @@ class basic_seq_coro_file {
   }
 
   bool seek(size_t offset, std::ios_base::seekdir dir) {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_seq_file_ && async_seq_file_->is_open()) {
       int whence = SEEK_SET;
       if (dir == std::ios_base::cur)
@@ -327,7 +327,7 @@ class basic_seq_coro_file {
   }
 
   execution_type get_execution_type() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_seq_file_ && async_seq_file_->is_open()) {
       return execution_type::native_async;
     }
@@ -370,7 +370,7 @@ class basic_seq_coro_file {
   }
 
   coro_io::ExecutorWrapper<> executor_wrapper_;
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   std::shared_ptr<asio::stream_file> async_seq_file_;  // seq
 #endif
   std::fstream frw_seq_file_;  // fread/fwrite seq file
@@ -411,7 +411,7 @@ class basic_random_coro_file {
       return open_fd(filepath, to_flags(open_flags));
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       return open_native_async_file<false>(async_random_file_,
                                            executor_wrapper_, filepath,
                                            to_flags(open_flags));
@@ -427,7 +427,7 @@ class basic_random_coro_file {
       co_return co_await async_pread(offset, buf, size);
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       if (async_random_file_ == nullptr) {
         co_return std::make_pair(
             std::make_error_code(std::errc::invalid_argument), 0);
@@ -453,7 +453,7 @@ class basic_random_coro_file {
       co_return co_await async_pwrite(offset, buf.data(), buf.size());
     }
     else {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
       if (async_random_file_ == nullptr) {
         co_return std::make_pair(
             std::make_error_code(std::errc::invalid_argument), 0);
@@ -468,7 +468,7 @@ class basic_random_coro_file {
     }
   }
 
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   std::shared_ptr<asio::random_access_file> get_async_stream_file() {
     return async_random_file_;
   }
@@ -477,7 +477,7 @@ class basic_random_coro_file {
   std::shared_ptr<int> get_pread_file() { return prw_random_file_; }
 
   bool is_open() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_random_file_ && async_random_file_->is_open()) {
       return true;
     }
@@ -488,7 +488,7 @@ class basic_random_coro_file {
   bool eof() { return eof_; }
 
   execution_type get_execution_type() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     if (async_random_file_ && async_random_file_->is_open()) {
       return execution_type::native_async;
     }
@@ -501,7 +501,7 @@ class basic_random_coro_file {
   }
 
   void close() {
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
     std::error_code ec;
     if (async_random_file_) {
       async_random_file_->close(ec);
@@ -653,7 +653,7 @@ class basic_random_coro_file {
 #endif
 
   coro_io::ExecutorWrapper<> executor_wrapper_;
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   std::shared_ptr<asio::random_access_file> async_random_file_;  // random file
 #endif
   std::shared_ptr<int> prw_random_file_ = nullptr;  // pread/pwrite random file

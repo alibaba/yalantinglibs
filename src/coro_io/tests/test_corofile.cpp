@@ -76,7 +76,7 @@ void test_random_read_write(std::string_view filename) {
   create_files({std::string(filename)}, 190);
   coro_io::basic_random_coro_file<execute_type> file(filename, std::ios::in);
   CHECK(file.is_open());
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   if (execute_type == coro_io::execution_type::native_async) {
     CHECK(file.get_execution_type() == coro_io::execution_type::native_async);
   }
@@ -117,7 +117,7 @@ void test_seq_read_write(std::string_view filename) {
   coro_io::basic_seq_coro_file<execute_type> file(filename,
                                                   std::ios::in | std::ios::out);
   CHECK(file.is_open());
-#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+#if defined(ASIO_HAS_FILE)
   if (execute_type == coro_io::execution_type::native_async) {
     CHECK(file.get_execution_type() == coro_io::execution_type::native_async);
   }
