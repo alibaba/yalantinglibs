@@ -226,8 +226,8 @@ IGUANA_INLINE void to_json_impl(Stream &ss, const T &v) {
   ss.push_back(post);
 }
 
-template <bool Is_writing_escape = true, typename Stream, typename T,
-          std::enable_if_t<pair_v<T>, int> = 0>
+template <bool Is_writing_escape, typename Stream, typename T,
+          std::enable_if_t<pair_v<T>, int>>
 IGUANA_INLINE void to_json_impl(Stream &ss, const T &v) {
   render_key<Is_writing_escape>(ss, v.first);
   ss.push_back(':');

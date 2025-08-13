@@ -3095,7 +3095,7 @@ TEST_CASE("test coro http request timeout") {
 
   client.set_req_timeout(500ms);
   result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(result.net_err == http_errc::request_timeout); // TODO: use http_errc
+  CHECK(result.net_err == http_errc::request_timeout);  // TODO: use http_errc
 
   // after timeout, the socket in client has been closed, so use a new client
   // to test.
