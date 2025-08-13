@@ -17,22 +17,31 @@
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_summary_metric_t {
-  std::vector<std::string_view> labels;
-  std::vector<float> quantiles_value;
+  std::vector<std::pair<std::string_view, std::string_view>> labels;
+  std::vector<std::pair<float, float>> quantiles;
   uint64_t count;
   double sum;
 };
-YLT_REFL(json_summary_metric_t, labels, quantiles_value, count, sum);
+YLT_REFL(json_summary_metric_t, labels, quantiles, count, sum);
 struct json_summary_t {
   std::string_view name;
   std::string_view help;
   std::string_view type;
-  const std::vector<std::string>& labels_name;
-  const std::vector<double>& quantiles_key;
   std::vector<json_summary_metric_t> metrics;
 };
-YLT_REFL(json_summary_t, name, help, type, labels_name, quantiles_key, metrics);
+YLT_REFL(json_summary_t, name, help, type, metrics);
 #endif
+
+namespace detail {
+template <typename O, typename K, typename V>
+inline void vector_combine(O& result, const K& vec1, const V& vec2) {
+  assert(vec1.size() == vec2.size());
+  result.reserve(vec1.size());
+  for (std::size_t i = 0; i < vec1.size(); ++i) {
+    result.emplace_back(vec1[i], vec2[i]);
+  }
+}
+}  // namespace detail
 
 class summary_t : public static_metric {
  public:
@@ -42,8 +51,11 @@ class summary_t : public static_metric {
         quantiles_(std::move(quantiles)),
         impl_(quantiles_,
               std::chrono::duration_cast<std::chrono::seconds>(max_age)) {
-    if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
+    if (!std::is_sorted(quantiles_.begin(), quantiles_.end())) {
       std::sort(quantiles_.begin(), quantiles_.end());
+    }
+    auto iter = std::unique(quantiles_.begin(), quantiles_.end());
+    quantiles_.erase(iter, quantiles_.end());
   }
 
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
@@ -54,8 +66,11 @@ class summary_t : public static_metric {
         quantiles_(std::move(quantiles)),
         impl_(quantiles_,
               std::chrono::duration_cast<std::chrono::seconds>(max_age)) {
-    if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
+    if (!std::is_sorted(quantiles_.begin(), quantiles_.end())) {
       std::sort(quantiles_.begin(), quantiles_.end());
+    }
+    auto iter = std::unique(quantiles_.begin(), quantiles_.end());
+    quantiles_.erase(iter, quantiles_.end());
   }
 
   void observe(float value) {
@@ -119,16 +134,14 @@ class summary_t : public static_metric {
       return;
     }
 
-    json_summary_t summary{name_, help_, metric_name(), labels_name(),
-                           quantiles_};
+    json_summary_t summary{name_, help_, metric_name()};
     json_summary_metric_t metric;
-
-    metric.quantiles_value = get_rates(metric.sum, metric.count);
+    auto rates = get_rates(metric.sum, metric.count);
+    detail::vector_combine(metric.quantiles, quantiles_, rates);
     if (metric.count == 0 && !has_refreshed_.load(std::memory_order_relaxed)) {
       return;
     }
-    metric.labels.reserve(labels_value_.size());
-    for (auto& e : labels_value_) metric.labels.emplace_back(e);
+    detail::vector_combine(metric.labels, labels_name(), labels_value_);
     summary.metrics.push_back(std::move(metric));
     iguana::to_json(summary, str);
   }
@@ -229,8 +242,7 @@ class basic_dynamic_summary
     if (map.empty()) {
       return;
     }
-    json_summary_t summary{Base::name_, Base::help_, Base::metric_name(),
-                           Base::labels_name(), quantiles_};
+    json_summary_t summary{Base::name_, Base::help_, Base::metric_name()};
     summary.metrics.reserve(map.size());
     for (size_t i = 0; i < map.size(); ++i) {
       auto& labels_value = map[i]->label;
@@ -244,9 +256,8 @@ class basic_dynamic_summary
       json_summary_metric_t& metric = summary.metrics.back();
       metric.count = count;
       metric.sum = sum;
-      metric.quantiles_value = std::move(rates);
-      metric.labels.reserve(labels_value.size());
-      for (auto& e : labels_value) metric.labels.emplace_back(e);
+      detail::vector_combine(metric.quantiles, quantiles_, rates);
+      detail::vector_combine(metric.labels, Base::labels_name(), labels_value);
     }
     iguana::to_json(summary, str);
   }

@@ -864,7 +864,7 @@ TEST_CASE("test gauge") {
     g.serialize_to_json(str_json);
     std::cout << str_json << "\n";
     std::cout << str_json.size() << std::endl;
-    CHECK(str_json.size() == 185);
+    CHECK(str_json.size() == 191);
 #endif
 
     std::string str;
@@ -964,7 +964,7 @@ TEST_CASE("test summary with INF") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 238);
+  CHECK(str_json.size() == 205);
 #endif
 }
 
@@ -994,7 +994,7 @@ TEST_CASE("test summary with NAN") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 238);
+  CHECK(str_json.size() == 205);
 #endif
 }
 
@@ -1028,7 +1028,7 @@ TEST_CASE("test summary with illegal quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 222);
+  CHECK(str_json.size() == 186);
 #endif
 }
 
@@ -1064,7 +1064,7 @@ TEST_CASE("test summary with many quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 8857);
+  CHECK(str_json.size() == 10818);
 #endif
 }
 
@@ -1642,7 +1642,7 @@ TEST_CASE("test summary with dynamic labels") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
   summary.serialize_to_json(json_str);
-  CHECK(json_str.size() == 302);
+  CHECK(json_str.size() == 305);
   std::cout << json_str << "\n";
 #endif
 
