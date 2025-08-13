@@ -114,10 +114,6 @@ class logger {
             log_sample_duration_.load(std::memory_order::relaxed).count());
   }
 
-  void add_appender(std::function<void(std::string_view)> fn) {
-    appenders_.emplace_back(std::move(fn));
-  }
-
   void stop_async_log() { appender_->stop(); }
 
   // set and get
@@ -181,7 +177,6 @@ class logger {
   std::atomic<std::chrono::milliseconds> log_sample_duration_;
   std::chrono::system_clock::time_point init_time_{};
   appender *appender_ = nullptr;
-  std::vector<std::function<void(std::string_view)>> appenders_;
   inline static std::atomic<bool> has_destruct_ = false;
 };
 
