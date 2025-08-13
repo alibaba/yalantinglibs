@@ -270,6 +270,7 @@ TEST_CASE("appender") {
     receivedMessage = msg;
   });
 
+#if __has_include(<fmt/format.h>) || (__has_include(<format>) && !defined(__APPLE__))
   SUBCASE("message is received") {
     ELOGFMT(INFO, "test message 123");
 
@@ -282,4 +283,5 @@ TEST_CASE("appender") {
 
     CHECK(receivedMessage.find("WARNING") != std::string::npos);
   }
+#endif
 }
