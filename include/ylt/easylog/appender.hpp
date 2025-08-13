@@ -196,7 +196,7 @@ class appender {
     auto time_str = std::string_view(buf, 36);
     auto tid_str = get_tid_buf(record.get_tid());
     auto file_str = record.get_file_str();
-    auto msg = record.get_message();
+    auto msg = record.get_message_inner();
 
     write_file(time_str);
     write_file(tid_str);

@@ -58,11 +58,21 @@ class logger {
     write(record);
   }
 
+  void apply_extra_appenders(record_t &record) {
+    if (!appenders_.empty()) [[unlikely]] {
+      for (auto &app : appenders_) {
+        app(record);
+      }
+    }
+  }
+
   void write(record_t &record) {
     if (async_ && appender_) {
+      apply_extra_appenders(record);
       append_record(std::move(record));
     }
     else {
+      apply_extra_appenders(record);
       append_format(record);
     }
 
@@ -114,7 +124,7 @@ class logger {
             log_sample_duration_.load(std::memory_order::relaxed).count());
   }
 
-  void add_appender(std::function<void(std::string_view)> fn) {
+  void add_appender(std::function<void(record_t &)> fn) {
     appenders_.emplace_back(std::move(fn));
   }
 
@@ -181,7 +191,7 @@ class logger {
   std::atomic<std::chrono::milliseconds> log_sample_duration_;
   std::chrono::system_clock::time_point init_time_{};
   appender *appender_ = nullptr;
-  std::vector<std::function<void(std::string_view)>> appenders_;
+  std::vector<std::function<void(record_t &record)>> appenders_;
   inline static std::atomic<bool> has_destruct_ = false;
 };
 
@@ -207,6 +217,11 @@ inline Severity get_min_severity() {
 template <size_t Id = 0>
 inline void set_sample_duration(std::chrono::milliseconds ms) {
   logger<Id>::instance().set_sample_duration(ms);
+}
+
+template <size_t Id = 0>
+inline Severity add_appenders(std::function<void(record_t &record)> app) {
+  return logger<Id>::instance().add_appender(std::move(app));
 }
 
 template <size_t Id = 0>
@@ -245,7 +260,7 @@ inline void stop_async_log() {
 }
 
 template <size_t Id = 0>
-inline void add_appender(std::function<void(std::string_view)> fn) {
+inline void add_appender(std::function<void(record_t &)> fn) {
   logger<Id>::instance().add_appender(std::move(fn));
 }
 }  // namespace easylog
