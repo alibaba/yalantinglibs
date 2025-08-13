@@ -260,3 +260,26 @@ TEST_CASE("async_file") {
   CHECK(s.rfind("he string that should be saved in the file 7.") !=
         std::string::npos);
 }
+
+TEST_CASE("appender") {
+    bool messageReceived = false;
+    std::string receivedMessage;
+  
+    easylog::add_appender([&](const auto &msg) {
+        messageReceived = true;
+        receivedMessage = msg;
+    });
+    
+    SUBCASE("message is received") {
+        ELOGFMT(INFO, "test message 123");
+        
+        CHECK(messageReceived == true);
+        CHECK(receivedMessage.find("test message 123") != std::string::npos);
+    }
+    
+    SUBCASE("log level is included") {
+        ELOGFMT(WARNING, "another message");
+        
+        CHECK(receivedMessage.find("WARNING") != std::string::npos);
+    }
+}
