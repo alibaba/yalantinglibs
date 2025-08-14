@@ -854,6 +854,12 @@ static const char *parse_headers(const char *buf, const char *buf_end,
           // has_close
           has_close = true;
         }
+        else if (ch == 'k' || ch == 'K') {
+          std::string_view val_str{value, value_len};
+          if (val_str.find("pgrade") != std::string_view::npos) {
+            has_upgrade = true;
+          }
+        }
       }
     }
     headers[*num_headers] = {std::string_view{name, name_len},

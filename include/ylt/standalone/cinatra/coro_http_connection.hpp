@@ -779,6 +779,8 @@ class coro_http_connection
 
   auto &tcp_socket() { return *socket_wrapper_.socket(); }
 
+  uint64_t conn_id() const { return conn_id_; }
+
   void set_quit_callback(std::function<void(const uint64_t &conn_id)> callback,
                          uint64_t conn_id) {
     quit_cb_ = std::move(callback);
