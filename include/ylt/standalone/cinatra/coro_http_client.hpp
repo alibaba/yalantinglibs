@@ -33,6 +33,7 @@
 #include "brzip.hpp"
 #endif
 #include "cinatra_log_wrapper.hpp"
+#include "error.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
 #include "picohttpparser.h"
@@ -294,12 +295,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
    */
   async_simple::coro::Lazy<resp_data> connect(
       std::string uri, std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    if (should_reset_) {
-      reset();
-    }
-    else {
-      should_reset_ = true;
-    }
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
@@ -355,7 +350,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       data = co_await connect(u, eps);
     }
     if (socket_->is_timeout_) {
-      co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
+      co_return resp_data{make_error_code(http_errc::connect_timeout), 404};
     }
     if (!data.net_err) {
       data.status = 200;
@@ -1090,7 +1085,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<bool> reconnect(resp_data &data, uri_t u) {
     data = co_await connect(u);
     if (socket_->is_timeout_) {
-      data = resp_data{std::make_error_code(std::errc::timed_out), 404};
+      data = resp_data{make_error_code(http_errc::connect_timeout), 404};
     }
     if (data.net_err) {
       co_return false;
@@ -1106,7 +1101,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #endif
     if (socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
+      ec = make_error_code(http_errc::request_timeout);
     }
   }
 
@@ -1377,7 +1372,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
     } while (0);
     if (ec && socket_->is_timeout_) {
-      ec = std::make_error_code(std::errc::timed_out);
+      ec = make_error_code(http_errc::request_timeout);
     }
     handle_result(data, ec, is_keep_alive);
     co_return data;
@@ -2014,6 +2009,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (eps == nullptr) {
       eps = &eps_tmp;
     }
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = true;
+    }
     if (socket_->has_closed_) {
       auto time_out_guard =
           timer_guard(this, conn_timeout_duration_, "connect timer");
@@ -2054,7 +2055,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 #endif
       if (socket_->is_timeout_) {
-        ec = std::make_error_code(std::errc::timed_out);
+        ec = make_error_code(http_errc::connect_timeout);
         co_return resp_data{ec, 404};
       }
 
@@ -2199,7 +2200,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
               sock, read_buf, ws.left_header_len(), has_init_ssl);
           ec) {
         if (socket_->is_timeout_) {
-          co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
+          co_return resp_data{make_error_code(http_errc::request_timeout), 404};
         }
         data.net_err = ec;
         data.status = 404;
@@ -2463,7 +2464,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
-  bool enable_timeout_ = false;
   std::chrono::steady_clock::duration conn_timeout_duration_ =
       std::chrono::seconds(30);
   std::chrono::steady_clock::duration req_timeout_duration_ =

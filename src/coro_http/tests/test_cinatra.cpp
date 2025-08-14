@@ -7,11 +7,13 @@
 #include <fstream>
 #include <future>
 #include <ios>
+#include <new>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
 
+#include "cinatra/error.hpp"
 #include "doctest.h"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
@@ -83,7 +85,7 @@ TEST_CASE("test for gzip") {
     auto result = async_simple::coro::syncAwait(
         client.connect(uri).via(&client.get_executor()));
     if (result.net_err)
-      CHECK(result.net_err == std::errc::timed_out);
+      CHECK(result.net_err == coro_http::http_errc::connect_timeout);
 
     client.set_conn_timeout(-1ms);
     client.set_req_timeout(0ms);
@@ -96,7 +98,7 @@ TEST_CASE("test for gzip") {
     result = async_simple::coro::syncAwait(
         client.async_get("/none").via(&client.get_executor()));
     if (result.net_err)
-      CHECK(result.net_err == std::errc::timed_out);
+      CHECK(result.net_err == coro_http::http_errc::request_timeout);
 
     client.add_header("Content-Encoding", "none");
     client.set_req_timeout(-1ms);
@@ -113,7 +115,7 @@ TEST_CASE("test for gzip") {
     result = async_simple::coro::syncAwait(
         client.async_get(uri).via(&client.get_executor()));
     if (result.net_err)
-      CHECK(result.net_err == std::errc::timed_out);
+      CHECK(result.net_err == coro_http::http_errc::request_timeout);
   }
 
   {
@@ -581,6 +583,134 @@ TEST_CASE("test request https without init_ssl") {
 }
 #endif
 
+TEST_CASE("test reconnect with different headers") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>("/", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value == "test");
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
+
+  server.set_http_handler<GET>("/test", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value.empty());
+    value = req.get_header_value("test");
+    CHECK(value == "ok");
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
+
+  server.set_http_handler<GET>("/test1", [](request &req, response &resp) {
+    auto value = req.get_header_value("hello");
+    CHECK(value.empty());
+    value = req.get_header_value("test");
+    CHECK(value.empty());
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
+  server.async_start();
+
+  coro_http_client client{};
+  client.add_header("hello", "test");
+
+  auto ret = client.get("http://127.0.0.1:9001/");
+  CHECK(ret.status == 200);
+
+  client.add_header("test", "ok");
+  ret = client.get("http://127.0.0.1:9001/test");
+  CHECK(ret.status == 200);
+
+  ret = client.get("http://127.0.0.1:9001/test1");
+  CHECK(ret.status == 200);
+
+  ret = client.get("http://127.0.0.1:9001/test", {{"test", "ok"}});
+  CHECK(ret.status == 200);
+
+  client.reset();
+  ret = client.get("http://127.0.0.1:9001/", {{"hello", "test"}});
+  CHECK(ret.status == 200);
+}
+
+TEST_CASE("test bad address") {
+  {
+    coro_http_server server(1, 9001, "127.0.0.1");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, 9001, "localhost");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, 9001, "0.0.0.0");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, 9001);
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, "0.0.0.0:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, "127.0.0.1:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+  {
+    coro_http_server server(1, "localhost:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(!ec);
+  }
+
+  {
+    coro_http_server server(1, 9001, "x.x.x.x");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec);
+  }
+  {
+    coro_http_server server(1, "localhost:aaa");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec);
+  }
+}
+
+async_simple::coro::Lazy<void> test_collect_all() {
+  asio::io_context ioc;
+  std::thread thd([&] {
+    ioc.run();
+  });
+  std::vector<std::shared_ptr<coro_http_client>> v;
+  std::vector<async_simple::coro::Lazy<resp_data>> futures;
+  for (int i = 0; i < 2; ++i) {
+    auto client = std::make_shared<coro_http_client>();
+    client->set_conn_timeout(2s);
+    client->set_req_timeout(2s);
+    v.push_back(client);
+    futures.push_back(client->async_get("http://www.baidu.com/"));
+  }
+
+  auto out = co_await async_simple::coro::collectAll(std::move(futures));
+
+  for (auto &item : out) {
+    auto result = item.value();
+    CHECK(result.status >= 200);
+  }
+  thd.join();
+}
+
 struct add_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
@@ -715,6 +845,75 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 503);
   result = async_simple::coro::syncAwait(client.async_get("/coro_throw"));
   CHECK(result.status == 503);
+}
+
+TEST_CASE("test client pool") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        // resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<GET>("/test", [&](coro_http_request &req,
+                                            coro_http_response &resp) {
+    resp.get_conn()->tcp_socket().shutdown(asio::socket_base::shutdown_receive);
+    resp.set_status_and_content(status_type::ok, "shutdown");
+  });
+  server.async_start();
+
+  std::string url = "http://127.0.0.1:9001/";
+
+  auto pool = coro_io::client_pool<coro_http_client>::create(url, {100});
+
+  std::atomic<size_t> count = 0;
+  std::promise<void> promise;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              CHECK(data.resp_body == "hello world");
+            })
+        .start([&](auto &&) {
+          if (++count == 100) {
+            promise.set_value();
+          }
+        });
+  }
+  promise.get_future().wait();
+
+  CHECK(pool->free_client_count() > 0);
+
+  count = 0;
+  std::atomic<size_t> failed_count = 0;
+  url = "http://127.0.0.1:9001/test";
+  std::promise<void> promise1;
+  for (size_t i = 0; i < 100; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              if (data.status != 200) {
+                failed_count++;
+                CHECK(data.net_err);
+              }
+              else {
+                CHECK(data.resp_body == "shutdown");
+              }
+              CINATRA_LOG_INFO << "test result: " << data.status << ", "
+                               << data.resp_body << ", " << data.net_err.value()
+                               << ", " << data.net_err.message();
+            })
+        .start([&](auto &&) {
+          if (++count == 100) {
+            promise1.set_value();
+          }
+        });
+  }
+
+  promise1.get_future().wait();
+  CINATRA_LOG_INFO << "failed request: " << failed_count << ", "
+                   << pool->free_client_count();
+  CHECK(failed_count >= 0);
+  CHECK(pool->free_client_count() <= 100 - failed_count);
 }
 
 TEST_CASE("test response") {
@@ -1253,28 +1452,6 @@ TEST_CASE("test bad address") {
   }
 }
 
-async_simple::coro::Lazy<void> test_collect_all() {
-  asio::io_context ioc;
-  std::thread thd([&] {
-    ioc.run();
-  });
-  std::vector<std::shared_ptr<coro_http_client>> v;
-  std::vector<async_simple::coro::Lazy<resp_data>> futures;
-  for (int i = 0; i < 2; ++i) {
-    auto client = std::make_shared<coro_http_client>();
-    v.push_back(client);
-    futures.push_back(client->async_get("http://www.baidu.com/"));
-  }
-
-  auto out = co_await async_simple::coro::collectAll(std::move(futures));
-
-  for (auto &item : out) {
-    auto result = item.value();
-    CHECK(result.status >= 200);
-  }
-  thd.join();
-}
-
 TEST_CASE("test default http handler") {
   coro_http_server server(1, 9001);
   server.set_default_handler(
@@ -1366,30 +1543,50 @@ TEST_CASE("test request with out buffer") {
     auto result = async_simple::coro::syncAwait(ret);
     bool ok = result.status == 200 || result.status == 301;
     CHECK(ok);
-    if (ok && result.resp_body.size() <= 1024 * 64) {
-      std::string_view sv(str.data(), result.resp_body.size());
-      //    CHECK(result.resp_body == sv);
-      CHECK(client.is_body_in_out_buf());
-    }
+    std::string_view sv(str.data(), result.resp_body.size());
+    CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
   }
 
   {
     detail::resize(str, 1024 * 64);
     coro_http_client client;
+    client.set_conn_timeout(3s);
+    client.set_req_timeout(5s);
     std::string dest = "http://www.baidu.com";
     auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
     bool ok = result.status == 200 || result.status == 301;
-    CHECK(ok);
-    std::string_view sv(str.data(), result.resp_body.size());
-    //    CHECK(result.resp_body == sv);
-    CHECK(client.is_body_in_out_buf());
+    if (ok && result.resp_body.size() <= 1024 * 64) {
+      std::string_view sv(str.data(), result.resp_body.size());
+      CHECK(client.is_body_in_out_buf());
+    }
+  }
+}
+
+TEST_CASE("test response body greater than 2GB") {
+  try {
+    coro_http_server server(1, 8090);
+    std::string resp_str;
+    size_t large_size = 1024 * 1024 * 1024 + 10;
+    detail::resize(resp_str, large_size);
+    server.set_http_handler<GET>(
+        "/test", [&](coro_http_request &req, coro_http_response &resp) {
+          resp.set_status_and_content(status_type::ok, std::move(resp_str));
+        });
+    server.async_start();
+    coro_http_client client;
+    auto result = client.get("http://127.0.0.1:8090/test");
+    CHECK(result.resp_body.length() == large_size);
+  } catch (const std::bad_alloc &e) {
+    std::cout << e.what() << std::endl;
   }
 }
 
 TEST_CASE("test pass path not entire uri") {
   coro_http_client client{};
+  client.set_conn_timeout(2s);
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CINATRA_LOG_DEBUG << r.resp_body.size() << "\n";
@@ -1459,6 +1656,7 @@ TEST_CASE("test coro_http_client async_http_connect") {
   }
 
   coro_http_client client1{};
+  client1.set_conn_timeout(2s);
   r = async_simple::coro::syncAwait(
       client1.async_http_connect("http//www.badurl.com"));
   CHECK(r.status != 200);
@@ -1579,6 +1777,32 @@ TEST_CASE("test head put and some other request") {
   result = async_simple::coro::syncAwait(client1.async_delete(
       "http://127.0.0.1:8090/delete2/json.txt", json, req_content_type::json));
   CHECK(result.status == 404);
+}
+
+TEST_CASE("test coro_http_client connect/request timeout") {
+  {
+#if !defined(_MSC_VER)
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
+    if (r.status != 200)
+      CHECK(r.net_err != std::errc{});
+#endif
+  }
+
+  {
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 10s,
+                                           .req_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.message() << "\n";
+    CHECK(r.net_err != std::errc{});
+  }
 }
 
 TEST_CASE("test upload file") {
@@ -1712,6 +1936,8 @@ TEST_CASE("test bad uri") {
 
 TEST_CASE("test multiple ranges download") {
   coro_http_client client{};
+  client.set_conn_timeout(2s);
+  client.set_req_timeout(5s);
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
 
   std::string filename = "test1.txt";
@@ -2369,8 +2595,60 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           CHECK(sz == std::filesystem::file_size(newpath));
           resp.set_status_and_content(status_type::ok, std::string(filename));
         });
-
+    server.set_http_handler<cinatra::PUT>(
+        "/upload_stream", [](coro_http_request &req, coro_http_response &resp) {
+          std::cout << "body size: " << req.get_body().size() << "\n";
+          resp.set_status_and_content(status_type::ok, "upload ok");
+        });
     server.async_start();
+    {
+      coro_http_client client{};
+      create_file("stream_file.txt", 20);
+      auto stream_file =
+          std::make_shared<std::ifstream>("stream_file.txt", std::ios::binary);
+      std::string uri = "http://127.0.0.1:8090/upload_stream";
+      std::unordered_map<std::string, std::string> headers;
+      headers.emplace("filename", "stream_file.txt");
+      auto result = async_simple::coro::syncAwait(
+          client.async_upload(uri, http_method::PUT, stream_file, 0, -1,
+                              req_content_type::text, std::move(headers)));
+      CHECK(result.status == 200);
+      stream_file =
+          std::make_shared<std::ifstream>("stream_file.txt", std::ios::binary);
+      result = async_simple::coro::syncAwait(
+          client.async_upload(uri, http_method::PUT, stream_file, 0, 100));
+      CHECK(result.status != 200);
+
+      result = async_simple::coro::syncAwait(client.async_upload(
+          uri, http_method::PUT, "stream_file.txt"sv, 0, 0));
+      CHECK(result.status == 200);
+
+      std::error_code ignore_ec;
+      fs::remove("stream_file.txt", ignore_ec);
+    }
+    {
+      coro_http_client client{};
+      std::string uri = "http://###127.0.0.1:8090/chunked_upload";
+      std::string filename = "test_chunked_upload.txt";
+      auto lazy = client.async_upload(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status != 200);
+
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      filename = "no_such.txt";
+      auto lazy1 = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy1);
+      CHECK(result.status != 200);
+
+      std::shared_ptr<std::ifstream> file = nullptr;
+      uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy2 = client.async_upload(uri, http_method::PUT, file);
+      result = async_simple::coro::syncAwait(lazy2);
+      CHECK(result.status != 200);
+
+      auto code = async_simple::coro::syncAwait(client.handle_shake());
+      CHECK(code);
+    }
     {
       coro_http_client client{};
       std::string uri = "http://###127.0.0.1:8090/chunked_upload";
@@ -2390,9 +2668,46 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       auto lazy2 = client.async_upload_chunked(uri, http_method::PUT, file);
       result = async_simple::coro::syncAwait(lazy2);
       CHECK(result.status != 200);
+      create_file("chunked_file.txt", 20);
+      std::unordered_map<std::string, std::string> headers;
+      headers.emplace("filename", "chunked_file.txt");
+      result = async_simple::coro::syncAwait(client.async_upload_chunked(
+          uri, http_method::PUT, "chunked_file.txt"sv, req_content_type::text,
+          std::move(headers)));
+      CHECK(result.status == 200);
 
-      auto code = async_simple::coro::syncAwait(client.handle_shake());
-      CHECK(code);
+      client.reset();
+      client.set_conn_timeout(0ms);
+      result = async_simple::coro::syncAwait(client.async_upload_chunked(
+          uri, http_method::PUT, "chunked_file.txt"sv));
+      CHECK(result.status != 200);
+      CHECK(result.net_err == http_errc::connect_timeout);
+
+      client.set_conn_timeout(500ms);
+      client.set_req_timeout(0ms);
+      client.add_header("filename", "chunked_file.txt");
+      result = async_simple::coro::syncAwait(client.async_upload_chunked(
+          uri, http_method::PUT, "chunked_file.txt"sv));
+      CHECK(result.status != 200);
+      CHECK(result.net_err == http_errc::request_timeout);
+
+      std::error_code ignore_ec;
+      fs::remove("chunked_file.txt", ignore_ec);
+    }
+    {
+      std::string uri = "http://127.0.0.1:8090/upload_stream";
+      std::string filename = "test_chunked_upload.txt";
+      coro_http_client client{};
+      client.set_conn_timeout(0ms);
+      auto lazy3 = client.async_upload(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy3);
+      CHECK(result.status != 200);
+      client.reset();
+      client.set_conn_timeout(500ms);
+      client.set_req_timeout(0ms);
+      auto lazy4 = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy4);
+      CHECK(result.status != 200);
     }
     auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
     for ([[maybe_unused]] auto size : sizes) {
@@ -2442,7 +2757,9 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
   client.set_conn_timeout(1s);
-  client.get("http://www.baidu.com");
+  auto r = client.get("http://www.baidu.com");
+  if (!r.net_err)
+    CHECK(r.status < 400);
 }
 
 TEST_CASE("test coro_http_client add header and url queries") {
@@ -2588,7 +2905,7 @@ TEST_CASE("test coro_http_client request timeout") {
   if (!r.net_err) {
     r = async_simple::coro::syncAwait(client.async_get("/"));
     if (r.net_err) {
-      CHECK(r.net_err == std::errc::timed_out);
+      CHECK(r.net_err == coro_http::http_errc::request_timeout);
     }
   }
 }
@@ -2783,7 +3100,7 @@ TEST_CASE("test coro http request timeout") {
 
   client.set_req_timeout(500ms);
   result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(result.net_err == std::errc::timed_out);
+  CHECK(result.net_err == http_errc::request_timeout);  // TODO: use http_errc
 
   // after timeout, the socket in client has been closed, so use a new client
   // to test.

@@ -72,6 +72,20 @@ template <typename T>
 constexpr bool optional = !expected<T> && optional_impl<T>::value;
 #endif
 
+template <typename T>
+struct pair_impl : std::false_type {};
+
+template <typename F, typename S>
+struct pair_impl<std::pair<F, S>> : std::true_type {};
+
+#if __cpp_concepts >= 201907L
+template <typename T>
+concept pair = pair_impl<T>::value;
+#else
+template <typename T>
+constexpr bool pair = pair_impl<T>::value;
+#endif
+
 namespace internal {
 #if __cpp_concepts >= 201907L
   template <typename Type>

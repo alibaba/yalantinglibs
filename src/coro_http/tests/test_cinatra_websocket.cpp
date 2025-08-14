@@ -4,6 +4,7 @@
 #include <memory>
 #include <system_error>
 
+#include "cinatra/error.hpp"
 #include "doctest.h"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
@@ -147,7 +148,7 @@ TEST_CASE("test websocket") {
     co_await client.write_websocket("hello websocket");
     auto data = co_await client.read_websocket();
     CINATRA_LOG_DEBUG << data.net_err.message();
-    CHECK(data.net_err == std::errc::timed_out);
+    CHECK(data.net_err == http_errc::request_timeout);
   };
 
   async_simple::coro::syncAwait(client_timeout());
