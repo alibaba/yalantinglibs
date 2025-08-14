@@ -776,22 +776,12 @@ class coro_rpc_client {
     constexpr bool has_conn_v = requires { typename First::return_type; };
     return util::get_args<has_conn_v, FuncArgs>();
   }
-  template <typename T, typename U>
-  static decltype(auto) add_const(U &&u) {
-    if constexpr (std::is_const_v<std::remove_reference_t<U>>) {
-      return struct_pack::detail::declval<const T>();
-    }
-    else {
-      return struct_pack::detail::declval<T>();
-    }
-  }
 
   template <typename... FuncArgs, typename Buffer, typename... Args>
   void pack_to_impl(Buffer &buffer, std::size_t offset, Args &&...args) {
     struct_pack::serialize_to_with_offset(
         buffer, offset,
-        std::forward<decltype(add_const<FuncArgs>(args))>(
-            (std::forward<Args>(args)))...);
+        std::forward<const FuncArgs>((std::forward<Args>(args)))...);
   }
 
   template <typename Tuple, size_t... Is, typename Buffer, typename... Args>
