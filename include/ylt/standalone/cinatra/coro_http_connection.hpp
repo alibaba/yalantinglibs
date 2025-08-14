@@ -433,7 +433,7 @@ class coro_http_connection
     }
 
     if (ec) {
-      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      CINATRA_LOG_INFO << "async_write error: " << ec.message();
       close();
       co_return false;
     }
