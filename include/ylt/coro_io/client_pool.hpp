@@ -43,6 +43,7 @@
 #include <ylt/util/expected.hpp>
 
 #include "async_simple/Future.h"
+#include "async_simple/coro/Mutex.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
@@ -156,7 +157,13 @@ class client_pool : public std::enable_shared_from_this<
           auto new_eps_ptr =
               std::make_shared<std::vector<asio::ip::tcp::endpoint>>(
                   std::move(eps));
-          self->eps_.store(std::move(new_eps_ptr), std::memory_order_release);
+          auto is_lock = self->dns_cache_update_mutex_.tryLock();
+          // store should'nt need lock ,but tsan show a data race here,
+          // so we add a try lock here
+          if (is_lock) [[likely]] {
+            self->eps_.store(std::move(new_eps_ptr), std::memory_order_release);
+            self->dns_cache_update_mutex_.unlock();
+          }
         }
       }
     }
@@ -609,6 +616,7 @@ class client_pool : public std::enable_shared_from_this<
   std::atomic<bool> is_alive_ = true;
   std::atomic<uint64_t> timepoint_;
   ylt::util::atomic_shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_;
+  async_simple::coro::Mutex dns_cache_update_mutex_;
 };
 
 template <typename client_t,

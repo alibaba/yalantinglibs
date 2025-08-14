@@ -874,8 +874,7 @@ TEST_CASE("test client pool") {
               CHECK(data.resp_body == "hello world");
             })
         .start([&](auto &&) {
-          count++;
-          if (count == 100) {
+          if (++count == 100) {
             promise.set_value();
           }
         });
@@ -904,8 +903,7 @@ TEST_CASE("test client pool") {
                                << ", " << data.net_err.message();
             })
         .start([&](auto &&) {
-          count++;
-          if (count == 100) {
+          if (++count == 100) {
             promise1.set_value();
           }
         });
