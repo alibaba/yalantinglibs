@@ -514,8 +514,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       if (ret.first)
         AS_UNLIKELY {
-          ELOG_ERROR << ret.first.message() << ", "
-                     << "async_write error";
+          ELOG_INFO << ret.first.message() << ", "
+                    << "async_write error";
           close();
           co_return;
         }

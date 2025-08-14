@@ -37,17 +37,29 @@ struct message_t {
 };
 YLT_REFL(message_t, type, content);
 
-async_simple::coro::Lazy<void> broadcast(auto &conn_map,
-                                         std::string &resp_str) {
-  for (auto &[conn_ptr, user_name] : conn_map) {
-    auto conn = (coro_http_connection *)conn_ptr;
+struct conn_holder {
+  std::weak_ptr<coro_http_connection> conn;
+  std::string user_name;
+};
+
+async_simple::coro::Lazy<std::vector<uint64_t>> broadcast(
+    auto &conn_map, std::string &resp_str) {
+  std::vector<uint64_t> dead_conn_ids;
+  for (auto &[id, holder] : conn_map) {
+    auto conn = holder.conn.lock();
+    if (conn == nullptr) {
+      dead_conn_ids.push_back(id);
+      continue;
+    }
     auto ec = co_await conn->write_websocket(resp_str);
     if (ec) {
       std::cout << ec.message() << "\n";
       continue;
     }
   }
+
   resp_str.clear();
+  co_return dead_conn_ids;
 }
 
 int main() {
@@ -55,21 +67,21 @@ int main() {
   coro_http::coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
   std::mutex mtx;
-  std::unordered_map<intptr_t, std::string> conn_map;
+  std::unordered_map<uint64_t, conn_holder> conn_map;
   server.set_http_handler<cinatra::GET>(
       "/",
       [&](coro_http_request &req,
           coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         websocket_result result{};
 
-        std::unordered_map<intptr_t, std::string> map;
+        std::unordered_map<uint64_t, conn_holder> map;
         std::string resp_str;
         while (true) {
           result = co_await req.get_conn()->read_websocket();
           if (result.ec) {
             {
               std::scoped_lock lock(mtx);
-              conn_map.erase((intptr_t)req.get_conn());
+              conn_map.erase(req.get_conn()->conn_id());
             }
             break;
           }
@@ -87,7 +99,7 @@ int main() {
             std::string from;
             {
               std::scoped_lock lock(mtx);
-              from = conn_map.at((intptr_t)req.get_conn());
+              from = conn_map.at(req.get_conn()->conn_id()).user_name;
               map = conn_map;
             }
 
@@ -101,11 +113,13 @@ int main() {
               std::scoped_lock lock(mtx);
               if (msg.type == "login") {
                 user_name = std::string{msg.content};
-                conn_map.emplace((intptr_t)req.get_conn(), user_name);
+                conn_map.emplace(
+                    req.get_conn()->conn_id(),
+                    conn_holder{req.get_conn()->shared_from_this(), user_name});
               }
               else {
-                user_name = conn_map.at((intptr_t)req.get_conn());
-                conn_map.erase((intptr_t)req.get_conn());
+                user_name = conn_map.at(req.get_conn()->conn_id()).user_name;
+                conn_map.erase(req.get_conn()->conn_id());
               }
               map = conn_map;
             }
@@ -114,7 +128,7 @@ int main() {
               std::vector<std::string> user_list;
               std::transform(map.begin(), map.end(),
                              std::back_inserter(user_list), [](auto &kv) {
-                               return kv.second;
+                               return kv.second.user_name;
                              });
               logout_info_t info{msg.type, user_name, std::move(user_list)};
               struct_json::to_json(info, resp_str);
@@ -123,7 +137,15 @@ int main() {
 
           std::cout << result.data << "\n";
 
-          co_await broadcast(map, resp_str);
+          auto ids = co_await broadcast(map, resp_str);
+          if (!ids.empty()) {
+            // clean dead connection
+            std::scoped_lock lock(mtx);
+            for (auto id : ids) {
+              conn_map.erase(id);
+            }
+          }
+
           if (msg.type == "logout") {
             break;
           }
