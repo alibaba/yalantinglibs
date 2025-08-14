@@ -151,6 +151,15 @@ TEST_CASE("test basic") {
         std::string::npos);
 }
 
+TEST_CASE("test appenders") {
+  easylog::set_console(false);
+  easylog::add_appender([](record_t& record) {
+    std::cout << record.get_file_str() << " " << record.get_message() << "\n";
+  });
+  ELOG_INFO << "test1";
+  easylog::set_console(true);
+}
+
 TEST_CASE("test roll files and automatic create directories") {
   std::string filename = "a/b/c/test.txt";
   std::filesystem::remove(filename);
