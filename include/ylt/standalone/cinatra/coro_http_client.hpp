@@ -295,12 +295,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
    */
   async_simple::coro::Lazy<resp_data> connect(
       std::string uri, std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    if (should_reset_) {
-      reset();
-    }
-    else {
-      should_reset_ = true;
-    }
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
@@ -2014,6 +2008,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::vector<asio::ip::tcp::endpoint> eps_tmp;
     if (eps == nullptr) {
       eps = &eps_tmp;
+    }
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = true;
     }
     if (socket_->has_closed_) {
       auto time_out_guard =
