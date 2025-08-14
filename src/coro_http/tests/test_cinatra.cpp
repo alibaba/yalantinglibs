@@ -2620,7 +2620,8 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           uri, http_method::PUT, "stream_file.txt"sv, 0, 0));
       CHECK(result.status == 200);
 
-      fs::remove("stream_file.txt");
+      std::error_code ignore_ec;
+      fs::remove("stream_file.txt", ignore_ec);
     }
     {
       coro_http_client client{};
@@ -2687,7 +2688,8 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       CHECK(result.status != 200);
       CHECK(result.net_err == http_errc::request_timeout);
 
-      fs::remove("chunked_file.txt");
+      std::error_code ignore_ec;
+      fs::remove("chunked_file.txt", ignore_ec);
     }
     {
       std::string uri = "http://127.0.0.1:8090/upload_stream";
