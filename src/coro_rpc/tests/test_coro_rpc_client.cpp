@@ -193,6 +193,21 @@ std::string get_first_local_ip() {
   return "localhost";
 }
 
+void foo(const size_t& i) {}
+
+TEST_CASE("testing const & args") {
+  coro_rpc_server server(1, 8901);
+  server.register_handler<foo>();
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+
+  coro_rpc_client client{};
+  syncAwait(client.connect("127.0.0.1:8901"));
+  const int& i = 0;
+  auto ret = syncAwait(client.call<foo>(i));
+  CHECK(ret.has_value());
+}
+
 TEST_CASE("testing client with local ip") {
   coro_rpc_server server(1, 8901);
   server.register_handler<hello>();
