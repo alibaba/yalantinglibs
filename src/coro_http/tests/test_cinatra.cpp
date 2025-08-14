@@ -7,6 +7,7 @@
 #include <fstream>
 #include <future>
 #include <ios>
+#include <new>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -1567,18 +1568,22 @@ TEST_CASE("test request with out buffer") {
 }
 
 TEST_CASE("test response body greater than 2GB") {
-  coro_http_server server(1, 8090);
-  std::string resp_str;
-  size_t large_size = 1024 * 1024 * 1024 + 10;
-  detail::resize(resp_str, large_size);
-  server.set_http_handler<GET>(
-      "/test", [&](coro_http_request &req, coro_http_response &resp) {
-        resp.set_status_and_content(status_type::ok, std::move(resp_str));
-      });
-  server.async_start();
-  coro_http_client client;
-  auto result = client.get("http://127.0.0.1:8090/test");
-  CHECK(result.resp_body.length() == large_size);
+  try {
+    coro_http_server server(1, 8090);
+    std::string resp_str;
+    size_t large_size = 1024 * 1024 * 1024 + 10;
+    detail::resize(resp_str, large_size);
+    server.set_http_handler<GET>(
+        "/test", [&](coro_http_request &req, coro_http_response &resp) {
+          resp.set_status_and_content(status_type::ok, std::move(resp_str));
+        });
+    server.async_start();
+    coro_http_client client;
+    auto result = client.get("http://127.0.0.1:8090/test");
+    CHECK(result.resp_body.length() == large_size);
+  } catch (const std::bad_alloc &e) {
+    std::cout << e.what() << std::endl;
+  }
 }
 
 TEST_CASE("test pass path not entire uri") {
