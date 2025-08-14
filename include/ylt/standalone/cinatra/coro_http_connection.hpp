@@ -433,7 +433,7 @@ class coro_http_connection
     }
 
     if (ec) {
-      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      CINATRA_LOG_INFO << "async_write error: " << ec.message();
       close();
       co_return false;
     }
@@ -778,6 +778,8 @@ class coro_http_connection
 #endif
 
   auto &tcp_socket() { return *socket_wrapper_.socket(); }
+
+  uint64_t conn_id() const { return conn_id_; }
 
   void set_quit_callback(std::function<void(const uint64_t &conn_id)> callback,
                          uint64_t conn_id) {
