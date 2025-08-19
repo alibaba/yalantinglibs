@@ -1070,6 +1070,7 @@ TEST_CASE("test summary with many quantities") {
 
 TEST_CASE("test summary refresh") {
   summary_t summary{"test_summary", "summary help", {0.5, 0.9, 0.95, 1.1}, 1s};
+
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
@@ -1116,6 +1117,59 @@ TEST_CASE("test summary refresh") {
   CHECK(str.size() > 0);
   str = "";
   summary.serialize(str);
+  CHECK(str.size() > 0);
+}
+
+TEST_CASE("test dynamic summary refresh") {
+  auto summary = std::make_shared<dynamic_summary_1>(
+      "jindosdk_testSummary_dynamic", "help", std::vector{0.5, 0.9, 0.95, 1.1},
+      std::array{std::string{"bucket"}}, 1s);
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  std::string str;
+  summary->serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary->serialize(str);
+  CHECK(str.size() == 0);
+
+  std::this_thread::sleep_for(1001ms);
+  summary->serialize_to_json(str);
+  CHECK(str.size() == 0);
+  str = "";
+  summary->serialize(str);
+  CHECK(str.size() == 0);
+
+  for (int i = 0; i < 50; i++) {
+    summary->observe(std::array{std::string{"1"}}, i);
+  }
+
+  double sum;
+  uint64_t cnt;
+  summary->get_rates(std::array{std::string{"1"}}, sum, cnt);
+  CHECK(cnt == 50);
+  std::this_thread::sleep_for(1s);
+  summary->get_rates(std::array{std::string{"1"}}, sum, cnt);
+  CHECK(cnt == 0);
+  for (int i = 0; i < 50; i++) {
+    summary->observe(std::array{std::string{"1"}}, i);
+  }
+  std::this_thread::sleep_for(500ms);
+  for (int i = 0; i < 10; i++) {
+    summary->observe(std::array{std::string{"1"}}, i);
+  }
+  summary->get_rates(std::array{std::string{"1"}}, sum, cnt);
+  CHECK(cnt == 60);
+  std::this_thread::sleep_for(500ms);
+  summary->get_rates(std::array{std::string{"1"}}, sum, cnt);
+  CHECK(cnt == 10);
+  std::this_thread::sleep_for(500ms);
+  summary->get_rates(std::array{std::string{"1"}}, sum, cnt);
+  summary->serialize_to_json(str);
+  CHECK(str.size() > 0);
+  str = "";
+  summary->serialize(str);
   CHECK(str.size() > 0);
 }
 
