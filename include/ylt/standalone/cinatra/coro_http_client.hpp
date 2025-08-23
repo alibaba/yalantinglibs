@@ -4,6 +4,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -379,6 +380,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
 
+  /**
+   * @brief Set the max http body size object, in default it's INT64_MAX
+   *
+   * @param max_size
+   */
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
   }
@@ -1658,12 +1664,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
-        [[unlikely]] {
-      CINATRA_LOG_ERROR << "invalid http content length: "
-                        << parser_.body_len();
-      head_buf_.consume(head_buf_.size());
-      return std::make_error_code(std::errc::invalid_argument);
-    }
+        [[unlikely]]
+      [[unlikely]] {
+        CINATRA_LOG_ERROR << "invalid http content length: "
+                          << parser_.body_len();
+        head_buf_.consume(head_buf_.size());
+        return std::make_error_code(std::errc::invalid_argument);
+      }
 
     head_buf_.consume(header_size);  // header size
     data.resp_headers = parser.get_headers();
@@ -2481,7 +2488,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string inflate_str_;
 #endif
   content_encoding encoding_type_ = content_encoding::none;
-  int64_t max_http_body_len_ = MAX_HTTP_BODY_SIZE;
+  int64_t max_http_body_len_ =
+      INT64_MAX;  // in default we don't limit http body len
 
 #if defined(CINATRA_ENABLE_BROTLI) || defined(CINATRA_ENABLE_GZIP)
   std::string uncompressed_str_;
