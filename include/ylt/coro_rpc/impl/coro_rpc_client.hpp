@@ -386,7 +386,7 @@ class coro_rpc_client {
                               std::string_view domain = "localhost") {
     std::string ssl_domain = std::string{domain};
     std::string ssl_cert_path =
-        std::filesystem::path(cert_base_path).append(cert_file_name);
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
     if (config_.socket_config.index() != 1) {
       config_.socket_config =
           tcp_with_ssl_config{.ssl_cert_path = std::move(ssl_cert_path),

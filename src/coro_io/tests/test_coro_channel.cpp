@@ -12,8 +12,13 @@ using namespace std::chrono_literals;
 
 #ifndef __clang__
 #ifdef __GNUC__
+#ifndef _WIN32
 #include <features.h>
 #if __GNUC_PREREQ(10, 3)  // If  gcc_version >= 10.3
+#define IS_OK
+#endif
+#else
+// Windows 环境下直接定义 IS_OK
 #define IS_OK
 #endif
 #else
