@@ -176,13 +176,14 @@ class summary_impl {
   };
 
   data_t& get_data() {
-    data_t* data = data_[frontend_data_index_];
+    auto index = frontend_data_index_.load();
+    data_t* data = data_[index];
     if (data == nullptr) [[unlikely]] {
       auto pointer = new data_t{};
-      if (!data_[frontend_data_index_].compare_exchange_strong(data, pointer)) {
+      if (!data_[index].compare_exchange_strong(data, pointer)) {
         delete pointer;
       }
-      return *data_[frontend_data_index_];
+      return *data_[index];
     }
     else {
       return *data;
