@@ -1664,8 +1664,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
-        [[unlikely]]
-      [[unlikely]] {
+        [[unlikely]] {
         CINATRA_LOG_ERROR << "invalid http content length: "
                           << parser_.body_len();
         head_buf_.consume(head_buf_.size());
