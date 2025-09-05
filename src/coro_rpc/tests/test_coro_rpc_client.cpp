@@ -178,16 +178,20 @@ TEST_CASE("testing client") {
 
 std::string get_first_local_ip() {
   using asio::ip::tcp;
-  tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
-  tcp::resolver::query query(asio::ip::host_name(), "");
-  tcp::resolver::iterator iter = resolver.resolve(query);
-  tcp::resolver::iterator end;  // End marker.
-  while (iter != end) {
-    tcp::endpoint ep = *iter++;
-    auto addr = ep.address();
-    if (addr.is_v4()) {
-      return addr.to_string();
+  try {
+    tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
+    tcp::resolver::query query(asio::ip::host_name(), "");
+    tcp::resolver::iterator iter = resolver.resolve(query);
+    tcp::resolver::iterator end;  // End marker.
+    while (iter != end) {
+      tcp::endpoint ep = *iter++;
+      auto addr = ep.address();
+      if (addr.is_v4()) {
+        return addr.to_string();
+      }
     }
+  } catch (std::exception& e) {
+    ELOG_WARN << "get_first_local_ip error: " << e.what();
   }
 
   return "localhost";
