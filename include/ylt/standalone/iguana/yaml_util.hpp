@@ -9,10 +9,10 @@ namespace iguana {
 template <typename T>
 constexpr inline bool yaml_not_support_v = variant_v<T>;
 
-// return true when it==end
+// skip non-linebreak whitespaces return true when it==end
 template <typename It>
 IGUANA_INLINE bool skip_space_till_end(It &&it, It &&end) {
-  while (it != end && (static_cast<uint8_t>(*it) < 33)) ++it;
+  while (it != end && (*it == ' ' || *it == '\t')) ++it;
   return it == end;
 }
 

@@ -30,6 +30,9 @@ IGUANA_INLINE void render_yaml_value(Stream &ss, T &&t, size_t min_spaces) {
     write_string_with_escape(t.data(), t.size(), ss);
     ss.push_back('"');
   }
+  else if (t.size() == 0) {
+    ss.push_back('~');
+  }
   else {
     ss.append(t.data(), t.size());
   }
@@ -107,11 +110,17 @@ template <bool Is_writing_escape, typename Stream, typename T,
           std::enable_if_t<sequence_container_v<T>, int> = 0>
 IGUANA_INLINE void render_yaml_value(Stream &ss, const T &t,
                                      size_t min_spaces) {
-  ss.push_back('\n');
-  for (const auto &v : t) {
-    ss.append(min_spaces, ' ');
-    ss.append("- ");
-    render_yaml_value<Is_writing_escape>(ss, v, min_spaces + 1);
+  if (t.empty()) {
+    ss.append("[]");
+    ss.push_back('\n');
+  }
+  else {
+    ss.push_back('\n');
+    for (const auto &v : t) {
+      ss.append(min_spaces, ' ');
+      ss.append("- ");
+      render_yaml_value<Is_writing_escape>(ss, v, min_spaces + 1);
+    }
   }
 }
 

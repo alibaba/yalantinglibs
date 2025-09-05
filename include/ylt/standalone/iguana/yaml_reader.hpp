@@ -32,6 +32,7 @@ IGUANA_INLINE void yaml_parse_value(U &value, It &&value_begin,
 template <typename U, typename It, std::enable_if_t<string_v<U>, int> = 0>
 IGUANA_INLINE void parse_escape_str(U &value, It &&it, It &&end) {
   auto start = it;
+  value.clear();
   while (it != end) {
     if (*(it++) == '\\')
       IGUANA_UNLIKELY {
@@ -173,6 +174,9 @@ IGUANA_INLINE void yaml_parse_value(U &value, It &&value_begin,
       IGUANA_UNLIKELY { throw std::runtime_error(R"(Expected ')"); }
   }
   value = T(&*start, static_cast<size_t>(std::distance(start, end)));
+  if ((value == "~") || (value == "null")) {
+    value = T{};
+  }
 }
 
 template <typename U, typename It, std::enable_if_t<char_v<U>, int> = 0>
@@ -251,10 +255,16 @@ IGUANA_INLINE void yaml_parse_item(U &value, It &&it, It &&end,
       }
     }
     else {
-      skip_space_and_lines(it, end, min_spaces);
-      auto start = it;
-      auto value_end = skip_till_newline(it, end);
-      yaml_parse_value(value, start, value_end);
+      auto indent = skip_space_and_lines<false>(it, end, min_spaces);
+      // in case of a string field it is valid for the field to have no content
+      if (indent < min_spaces) {
+        value = "";
+      }
+      else {
+        auto start = it;
+        auto value_end = skip_till_newline(it, end);
+        yaml_parse_value(value, start, value_end);
+      }
     }
   }
   else {
