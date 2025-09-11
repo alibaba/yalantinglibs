@@ -114,7 +114,7 @@ class client_pool : public std::enable_shared_from_this<
   static auto rand_time(std::chrono::milliseconds ms) {
     static thread_local std::default_random_engine r;
     std::uniform_real_distribution e(1.0f, 1.2f);
-    return std::chrono::milliseconds{static_cast<long>(e(r) * ms.count())};
+    return std::chrono::milliseconds{static_cast<int64_t>(e(r) * ms.count())};
   }
 
   static async_simple::coro::Lazy<std::pair<bool, std::chrono::milliseconds>>

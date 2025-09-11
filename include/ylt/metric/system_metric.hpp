@@ -166,9 +166,9 @@ inline void stat_memory() {
   static auto process_memory_shared =
       system_metric_manager::instance()->get_metric_static<gauge_t>(
           "ylt_process_memory_shared");
-  long virtual_size = 0;
-  long resident = 0;
-  long share = 0;
+  int64_t virtual_size = 0;
+  int64_t resident = 0;
+  int64_t share = 0;
 
 #ifdef _WIN32
   // Windows 下的空实现，不统计内存使用
