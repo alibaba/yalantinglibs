@@ -537,3 +537,23 @@ TEST_CASE("test fast varint tag") {
   static_assert(type_info3 != type_info4);
   static_assert(type_info1 == fast_varint_info);
 }
+
+struct int_key {
+  int kKey;
+  YLT_REFL(int_key, kKey);
+};
+
+struct int_key2 {
+  int kKey;
+};
+
+TEST_CASE("test const in trivial serializable") {
+  static_assert(!struct_pack::detail::is_trivial_serializable<
+                std::pair<int_key const, int>>::value);
+  static_assert(!struct_pack::detail::is_trivial_serializable<
+                std::pair<int_key, int>>::value);
+  static_assert(struct_pack::detail::is_trivial_serializable<
+                std::pair<int_key2 const, int>>::value);
+  static_assert(struct_pack::detail::is_trivial_serializable<
+                std::pair<int_key2, int>>::value);
+}
