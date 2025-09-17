@@ -49,7 +49,7 @@ struct ssl_configure {
 //  relative path of SM2 encryption private key file std::string ca_cert_file;
 //  //!< relative path of CA certificate file (optional) bool
 //  enable_client_verify = false; //!< enable client certificate verification
-//  bool enable_ntls = true;         //!< enable NTLS mode (国密SSL)
+//  bool enable_ntls = true;         //!< enable NTLS mode
 //};
 
 /*!
@@ -300,84 +300,6 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
     return false;
   }
 }
-
-///*!
-// * Initialize SSL Context with extended SSL/NTLS config
-// *
-// * @param context instance of asio::ssl::context
-// * @param conf object of ssl_ntls_configure
-// * @return true if init success, otherwise false
-// */
-// inline bool init_ssl_ntls_context_helper(asio::ssl::context &context,
-//                                         const ssl_ntls_configure &conf) {
-//  if (conf.enable_ntls) {
-//    // Convert to ntls_configure and use NTLS initialization
-//    ntls_configure ntls_conf;
-//    ntls_conf.base_path = conf.base_path;
-//    ntls_conf.sign_cert_file = conf.sign_cert_file;
-//    ntls_conf.sign_key_file = conf.sign_key_file;
-//    ntls_conf.enc_cert_file = conf.enc_cert_file;
-//    ntls_conf.enc_key_file = conf.enc_key_file;
-//    ntls_conf.ca_cert_file = conf.ca_cert_file;
-//    ntls_conf.enable_client_verify = conf.enable_client_verify;
-//    ntls_conf.enable_ntls = conf.enable_ntls;
-//
-//    return init_ntls_context_helper(context, ntls_conf);
-//  } else {
-//    // Use traditional SSL initialization
-//    ssl_configure ssl_conf;
-//    ssl_conf.base_path = conf.base_path;
-//    ssl_conf.cert_file = conf.cert_file;
-//    ssl_conf.key_file = conf.key_file;
-//    ssl_conf.dh_file = conf.dh_file;
-//
-//    return init_ssl_context_helper(context, ssl_conf);
-//  }
-//}
-//
-///*!
-// * Initialize SSL Context with TLCP method for NTLS
-// *
-// * @param conf object of ntls_configure
-// * @return initialized asio::ssl::context for NTLS
-// */
-// inline std::unique_ptr<asio::ssl::context> create_ntls_context(const
-// ntls_configure &conf) {
-//  try {
-//    // Create SSL context with TLCP server method
-//    auto context =
-//    std::make_unique<asio::ssl::context>(asio::ssl::context::tlcp_server);
-//
-//    if (init_ntls_context_helper(*context, conf)) {
-//      return context;
-//    }
-//  } catch (const std::exception &e) {
-//    ELOG_ERROR << "Failed to create NTLS context: " << e.what();
-//  }
-//  return nullptr;
-//}
-//
-///*!
-// * Initialize SSL Context with TLCP client method for NTLS
-// *
-// * @param conf object of ntls_configure
-// * @return initialized asio::ssl::context for NTLS client
-// */
-// inline std::unique_ptr<asio::ssl::context> create_ntls_client_context(const
-// ntls_configure &conf) {
-//  try {
-//    // Create SSL context with TLCP client method
-//    auto context =
-//    std::make_unique<asio::ssl::context>(asio::ssl::context::tlcp_client);
-//
-//    if (init_ntls_context_helper(*context, conf)) {
-//      return context;
-//    }
-//  } catch (const std::exception &e) {
-//    ELOG_ERROR << "Failed to create NTLS client context: " << e.what();
-//  }
-//  return nullptr;
-//}
 #endif  // OPENSSL_NO_NTLS
 #endif
 }  // namespace coro_rpc
