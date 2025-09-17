@@ -114,13 +114,53 @@ class coro_http_server {
                  const std::string &enc_cert_file,
                  const std::string &enc_key_file,
                  const std::string &ca_cert_file = "",
-                 bool enable_client_verify = false) {
+                 bool enable_client_verify = false,
+                 const std::string &cipher_suites = "",
+                 coro_http_connection::ntls_mode mode = coro_http_connection::ntls_mode::tlcp_dual_cert) {
     ntls_config_.base_path = base_path;
-    ntls_config_.sign_cert_file = sign_cert_file;
-    ntls_config_.sign_key_file = sign_key_file;
-    ntls_config_.enc_cert_file = enc_cert_file;
-    ntls_config_.enc_key_file = enc_key_file;
+    ntls_config_.mode = mode;
+    
+    if (mode == coro_http_connection::ntls_mode::tls13_single_cert) {
+      // RFC 8998 TLS 1.3 + GM single certificate mode
+      ntls_config_.gm_cert_file = sign_cert_file;
+      ntls_config_.gm_key_file = sign_key_file;
+      ntls_config_.cipher_suites = cipher_suites.empty() 
+          ? "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3" 
+          : cipher_suites;
+    } else {
+      // GB/T 38636-2020 TLCP dual certificate mode (default)
+      ntls_config_.sign_cert_file = sign_cert_file;
+      ntls_config_.sign_key_file = sign_key_file;
+      ntls_config_.enc_cert_file = enc_cert_file;
+      ntls_config_.enc_key_file = enc_key_file;
+      ntls_config_.cipher_suites = cipher_suites.empty() 
+          ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3" 
+          : cipher_suites;
+    }
+    
     ntls_config_.ca_cert_file = ca_cert_file;
+    ntls_config_.enable_client_verify = enable_client_verify;
+    ntls_config_.enable_ntls = true;
+    use_ntls_ = true;
+  }
+
+  /*!
+   * Initialize NTLS with RFC 8998 TLS 1.3 + GM single certificate mode
+   */
+  void init_ntls(const std::string &base_path,
+                 const std::string &gm_cert_file,
+                 const std::string &gm_key_file,
+                 const std::string &ca_cert_file = "",
+                 bool enable_client_verify = false,
+                 const std::string &cipher_suites = "") {
+    ntls_config_.base_path = base_path;
+    ntls_config_.mode = coro_http_connection::ntls_mode::tls13_single_cert;
+    ntls_config_.gm_cert_file = gm_cert_file;
+    ntls_config_.gm_key_file = gm_key_file;
+    ntls_config_.ca_cert_file = ca_cert_file;
+    ntls_config_.cipher_suites = cipher_suites.empty() 
+        ? "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3" 
+        : cipher_suites;
     ntls_config_.enable_client_verify = enable_client_verify;
     ntls_config_.enable_ntls = true;
     use_ntls_ = true;
@@ -1132,12 +1172,21 @@ class coro_http_server {
   // NTLS configuration
   struct {
     std::string base_path;
+    
+    // TLCP dual certificate configuration (GB/T 38636-2020)
     std::string sign_cert_file;
     std::string sign_key_file;
     std::string enc_cert_file;
     std::string enc_key_file;
+    
+    // TLS 1.3 + GM single certificate configuration (RFC 8998)
+    std::string gm_cert_file;
+    std::string gm_key_file;
+    
+    // Common configuration
     std::string ca_cert_file;
     std::string cipher_suites = "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3";
+    coro_http_connection::ntls_mode mode = coro_http_connection::ntls_mode::tlcp_dual_cert;
     bool enable_client_verify = false;
     bool enable_ntls = false;
   } ntls_config_;

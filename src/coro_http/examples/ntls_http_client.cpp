@@ -33,6 +33,10 @@ const std::string CLIENT_ENC_KEY =
     CERT_PATH + "client_enc.key";  // SM2 client encryption private key
 const std::string CA_CERT = CERT_PATH + "chain-ca.crt";  // CA certificate
 
+// Single certificate paths for RFC 8998 TLS 1.3 + GM mode
+const std::string CLIENT_GM_CERT = CERT_PATH + "client_sign.crt";  // GM single certificate
+const std::string CLIENT_GM_KEY = CERT_PATH + "client_sign.key";   // GM single private key
+
 // Test one-way authentication NTLS client (server certificate only)
 async_simple::coro::Lazy<void> test_ntls_http_client_one_way() {
   std::cout << "\n=== One-way Authentication NTLS Client (8801) ==="
@@ -124,23 +128,134 @@ async_simple::coro::Lazy<void> test_ntls_http_client_mutual_auth() {
   }
 }
 
-int main() {
-  std::cout << "Starting NTLS HTTP Client Examples..." << std::endl;
-  std::cout << "Testing NTLS/TLCP protocol with SM2/SM3/SM4 algorithms"
+// Test one-way authentication TLS 1.3 + GM client (single certificate)
+async_simple::coro::Lazy<void> test_tls13_gm_client_one_way() {
+  std::cout << "\n=== TLS 1.3 + GM One-way Authentication Client (8803) ==="
             << std::endl;
 
-  try {
-    // Test one-way authentication NTLS client (port 8801)
-    // async_simple::coro::syncAwait(test_ntls_http_client_one_way());
+  coro_http_client client{};
 
-    // Test mutual authentication NTLS client (port 8802)
+  // Initialize TLS 1.3 + GM client for one-way authentication
+  // Use empty certificates for one-way mode, but specify TLS 1.3 + GM mode
+  bool init_ok = client.init_ntls_tls13_gm_client(
+      "",                     // No client certificate needed for one-way
+      "",                     // No client key needed for one-way
+      CA_CERT,                // CA certificate to verify server
+      asio::ssl::verify_peer, // Verify server certificate
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3"  // TLS 1.3 GM cipher suites
+  );
+
+  if (!init_ok) {
+    std::cout << "Failed to initialize TLS 1.3 + GM one-way client" << std::endl;
+    co_return;
+  }
+
+  std::cout << "TLS 1.3 + GM HTTP Client initialized (one-way auth mode)" << std::endl;
+
+  // Send GET request to root endpoint
+  auto response = co_await client.async_get("https://localhost:8803/");
+  if (response.net_err) {
+    std::cout << "GET / request failed: " << response.net_err.message()
+              << std::endl;
+  }
+  else {
+    std::cout << "GET / Response status: " << response.status << std::endl;
+    std::cout << "GET / Response body: " << response.resp_body << std::endl;
+  }
+
+  // Send POST request to echo endpoint
+  auto post_response = co_await client.async_post(
+      "https://localhost:8803/echo", "TLS 1.3 + GM test message", req_content_type::text);
+  if (post_response.net_err) {
+    std::cout << "POST /echo request failed: "
+              << post_response.net_err.message() << std::endl;
+  }
+  else {
+    std::cout << "POST /echo Response status: " << post_response.status
+              << std::endl;
+    std::cout << "POST /echo Response body: " << post_response.resp_body
+              << std::endl;
+  }
+}
+
+// Test mutual authentication TLS 1.3 + GM client (single certificate)
+async_simple::coro::Lazy<void> test_tls13_gm_client_mutual_auth() {
+  std::cout << "\n=== TLS 1.3 + GM Mutual Authentication Client (8804) ==="
+            << std::endl;
+
+  coro_http_client client{};
+
+  // Initialize TLS 1.3 + GM client with mutual authentication (single certificate)
+  bool init_ok = client.init_ntls_tls13_gm_client(
+      CLIENT_GM_CERT,         // Client GM single certificate
+      CLIENT_GM_KEY,          // Client GM single private key
+      CA_CERT,                // CA certificate
+      asio::ssl::verify_peer, // Verify server certificate
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3"  // TLS 1.3 GM cipher suites
+  );
+
+  if (!init_ok) {
+    std::cout << "Failed to initialize TLS 1.3 + GM client with mutual authentication"
+              << std::endl;
+    co_return;
+  }
+
+  std::cout << "TLS 1.3 + GM HTTP Client initialized (mutual authentication mode)"
+            << std::endl;
+
+  // Send GET request to root endpoint (requires client certificate)
+  auto response = co_await client.async_get("https://localhost:8804/");
+  if (response.net_err) {
+    std::cout << "GET / request failed: " << response.net_err.message()
+              << std::endl;
+  }
+  else {
+    std::cout << "GET / Response status: " << response.status << std::endl;
+    std::cout << "GET / Response body: " << response.resp_body << std::endl;
+  }
+
+  // Send POST request to echo endpoint (requires client certificate)
+  auto post_response = co_await client.async_post(
+      "https://localhost:8804/echo", "TLS 1.3 + GM mutual auth test message",
+      req_content_type::text);
+  if (post_response.net_err) {
+    std::cout << "POST /echo request failed: "
+              << post_response.net_err.message() << std::endl;
+  }
+  else {
+    std::cout << "POST /echo Response status: " << post_response.status
+              << std::endl;
+    std::cout << "POST /echo Response body: " << post_response.resp_body
+              << std::endl;
+  }
+}
+
+int main() {
+  std::cout << "Starting NTLS HTTP Client Examples..." << std::endl;
+  std::cout << "Testing both TLCP and TLS 1.3 + GM protocols" << std::endl;
+
+  try {
+    std::cout << "TLCP Dual Certificate Mode Tests" << std::endl;
+    
+    // Test TLCP one-way authentication client (port 8801)
+    async_simple::coro::syncAwait(test_ntls_http_client_one_way());
+
+    // Test TLCP mutual authentication client (port 8802)
     async_simple::coro::syncAwait(test_ntls_http_client_mutual_auth());
+
+    std::cout << "TLS 1.3 + GM Single Certificate Mode Tests" << std::endl;
+    
+    // Test TLS 1.3 + GM one-way authentication client (port 8803)
+    async_simple::coro::syncAwait(test_tls13_gm_client_one_way());
+
+    // Test TLS 1.3 + GM mutual authentication client (port 8804)
+    async_simple::coro::syncAwait(test_tls13_gm_client_mutual_auth());
 
   } catch (const std::exception& e) {
     std::cout << "Exception: " << e.what() << std::endl;
     return 1;
   }
 
-  std::cout << "\nNTLS HTTP Client Examples completed." << std::endl;
+  std::cout << "NTLS HTTP Client Examples completed." << std::endl;
   return 0;
 }

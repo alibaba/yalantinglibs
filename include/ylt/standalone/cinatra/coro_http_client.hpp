@@ -1582,6 +1582,91 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       return false;
     }
   }
+  /*!
+   * Initialize NTLS client with TLS 1.3 + GM single certificate mode (RFC 8998)
+   */
+  bool init_ntls_tls13_gm_client(const std::string &gm_cert_file = "",
+                                  const std::string &gm_key_file = "",
+                                  const std::string &ca_cert_file = "",
+                                  int verify_mode = asio::ssl::verify_none,
+                                  const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
+                                  const std::string &passwd = "") {
+    if (has_init_ssl_) {
+      return true;
+    }
+
+    try {
+      ssl_ctx_ = std::make_unique<asio::ssl::context>(
+          SSL_CTX_new(TLS_client_method()));
+
+      // Configure TLS 1.3 + GM mode (RFC 8998)
+      SSL_CTX_set_min_proto_version(ssl_ctx_->native_handle(), TLS1_3_VERSION);
+      SSL_CTX_set_max_proto_version(ssl_ctx_->native_handle(), TLS1_3_VERSION);
+
+      // Enable strict SM TLS 1.3 mode (Tongsuo specific)
+      SSL_CTX_enable_sm_tls13_strict(ssl_ctx_->native_handle());
+
+      // Set TLS 1.3 GM cipher suites
+      if (!SSL_CTX_set_ciphersuites(ssl_ctx_->native_handle(), cipher_suites.c_str())) {
+        CINATRA_LOG_WARNING << "failed to set TLS 1.3 GM cipher suites";
+      }
+
+      // Set GM signature algorithms (required for SM TLS 1.3 strict mode)
+      if (!SSL_CTX_set1_sigalgs_list(ssl_ctx_->native_handle(), "sm2sig_sm3")) {
+        CINATRA_LOG_WARNING << "failed to set GM signature algorithms";
+      }
+
+      // Set GM curves (required for SM TLS 1.3 strict mode)
+      if (!SSL_CTX_set1_curves_list(ssl_ctx_->native_handle(), "SM2")) {
+        CINATRA_LOG_WARNING << "failed to set GM curves";
+      }
+
+      if (!passwd.empty()) {
+        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+          return pwd;
+        });
+      }
+
+      // Load client certificate if provided (for mutual authentication)
+      if (!gm_cert_file.empty() && !gm_key_file.empty()) {
+        if (!SSL_CTX_use_certificate_file(ssl_ctx_->native_handle(),
+                                          gm_cert_file.c_str(),
+                                          SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR << "failed to load client GM certificate";
+          return false;
+        }
+
+        if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_->native_handle(),
+                                         gm_key_file.c_str(),
+                                         SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR << "failed to load client GM private key";
+          return false;
+        }
+      }
+
+      // Load CA certificate if provided
+      if (!ca_cert_file.empty()) {
+        if (!SSL_CTX_load_verify_locations(ssl_ctx_->native_handle(),
+                                           ca_cert_file.c_str(), nullptr)) {
+          CINATRA_LOG_WARNING << "failed to load CA certificate";
+        }
+      }
+
+      ssl_ctx_->set_verify_mode(verify_mode);
+
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+
+      has_init_ssl_ = true;
+      use_ntls_ = true;
+      return true;
+    } catch (std::exception &e) {
+      CINATRA_LOG_ERROR << "init TLS 1.3 + GM client failed: " << e.what();
+      return false;
+    }
+  }
+
 #endif  // OPENSSL_NO_NTLS
 #endif
 

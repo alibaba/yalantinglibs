@@ -100,6 +100,14 @@ class coro_http_connection
 
 #ifndef OPENSSL_NO_NTLS
   /*!
+   * NTLS mode enumeration for HTTP connection
+   */
+  enum class ntls_mode {
+    tlcp_dual_cert,      //!< GB/T 38636-2020 TLCP with dual certificates (signing + encryption)
+    tls13_single_cert    //!< RFC 8998 TLS 1.3 + GM with single certificate
+  };
+
+  /*!
    * Initialize NTLS SSL context with dual certificates (Tongsuo native API)
    */
   // bool init_ntls(const std::string &sign_cert_file,
@@ -115,31 +123,89 @@ class coro_http_connection
   //}
   bool init_ntls(const auto &ntls_config, std::string passwd) {
     try {
-      // Create SSL context with TLCP server method
-      ssl_ctx_ =
-          std::make_unique<asio::ssl::context>(SSL_CTX_new(NTLS_method()));
+      SSL_CTX *ctx = NULL;
+      // Configure based on NTLS mode
+      if (ntls_config.mode == ntls_mode::tls13_single_cert) {
+        // Create SSL context with TLCP server method
+        ssl_ctx_ =
+            std::make_unique<asio::ssl::context>(SSL_CTX_new(TLS_method()));
 
-      // Enable NTLS using Tongsuo native API
-      SSL_CTX *ctx = ssl_ctx_->native_handle();
-      if (!ctx) {
-        CINATRA_LOG_ERROR << "SSL_CTX native_handle is null";
-        return false;
-      }
+        // Enable NTLS using Tongsuo native API
+        ctx = ssl_ctx_->native_handle();
+        if (!ctx) {
+          CINATRA_LOG_ERROR << "SSL_CTX native_handle is null";
+          return false;
+        }
+        // RFC 8998 TLS 1.3 + GM single certificate mode
+        CINATRA_LOG_INFO << "Configuring RFC 8998 TLS 1.3 + GM single certificate mode";
+        
+        // Enable strict SM TLS 1.3 (Tongsuo)
+        SSL_CTX_enable_sm_tls13_strict(ctx);
 
-      // Enable NTLS mode for Tongsuo
-      SSL_CTX_enable_ntls(ctx);
-      CINATRA_LOG_INFO << "NTLS mode enabled successfully";
+        CINATRA_LOG_INFO << "TLS 1.3 strict mode enabled successfully";
 
-      // Set NTLS cipher suites
-      std::string cipher_suites =
-          ntls_config.cipher_suites.empty()
-              ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
-              : ntls_config.cipher_suites;
-      if (SSL_CTX_set_cipher_list(ctx, cipher_suites.c_str()) != 1) {
-        unsigned long err = ::ERR_get_error();
-        CINATRA_LOG_WARNING << "Failed to set NTLS cipher suites '"
+        // Enforce TLS 1.3 only
+        if (SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) != 1) {
+          CINATRA_LOG_ERROR << "Failed to set minimum TLS version to 1.3";
+          return false;
+        }
+        if (SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) != 1) {
+          CINATRA_LOG_ERROR << "Failed to set maximum TLS version to 1.3";
+          return false;
+        }
+
+        // Set TLS 1.3 GM cipher suites (align with s_client)
+        std::string cipher_suites = ntls_config.cipher_suites.empty()
+                                        ? "TLS_SM4_GCM_SM3"
+                                        : ntls_config.cipher_suites;
+        if (SSL_CTX_set_ciphersuites(ctx, cipher_suites.c_str()) != 1) {
+          unsigned long err = ::ERR_get_error();
+          CINATRA_LOG_ERROR << "Failed to set TLS 1.3 GM cipher suites '"
                             << cipher_suites
                             << "': " << ::ERR_error_string(err, nullptr);
+          return false;
+        }
+        CINATRA_LOG_INFO << "TLS 1.3 GM cipher suites set to: " << cipher_suites;
+
+        //// Set supported curves for SM2 (strict mode requires only SM2)
+        //if (SSL_CTX_set1_curves_list(ctx, "SM2:X25519:prime256v1") != 1) {
+        //  unsigned long err = ::ERR_get_error();
+        //  CINATRA_LOG_ERROR << "Failed to set SM2 curves: "
+        //                    << ::ERR_error_string(err, nullptr);
+        //  return false;
+        //}
+        CINATRA_LOG_INFO << "SM2 curves configured for strict mode";
+      } else {
+        // Create SSL context with TLCP server method
+        ssl_ctx_ =
+            std::make_unique<asio::ssl::context>(SSL_CTX_new(NTLS_method()));
+
+        // Enable NTLS using Tongsuo native API
+        ctx = ssl_ctx_->native_handle();
+        if (!ctx) {
+          CINATRA_LOG_ERROR << "SSL_CTX native_handle is null";
+          return false;
+        }
+
+        // Enable NTLS mode for Tongsuo
+        SSL_CTX_enable_ntls(ctx);
+        CINATRA_LOG_INFO << "NTLS mode enabled successfully";
+
+        // GB/T 38636-2020 TLCP dual certificate mode (default)
+        CINATRA_LOG_INFO << "Configuring GB/T 38636-2020 TLCP dual certificate mode";
+        
+        // Set TLCP cipher suites
+        std::string cipher_suites = ntls_config.cipher_suites.empty()
+                                        ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
+                                        : ntls_config.cipher_suites;
+        if (SSL_CTX_set_cipher_list(ctx, cipher_suites.c_str()) != 1) {
+          unsigned long err = ::ERR_get_error();
+          CINATRA_LOG_WARNING << "Failed to set TLCP cipher suites '"
+                              << cipher_suites
+                              << "': " << ::ERR_error_string(err, nullptr);
+        } else {
+          CINATRA_LOG_INFO << "TLCP cipher suites set to: " << cipher_suites;
+        }
       }
 
       // Set context options
@@ -152,91 +218,143 @@ class coro_http_connection
         });
       }
       namespace fs = std::filesystem;
-
-      // Build full paths
-      auto sign_cert_path = ntls_config.base_path.empty()
-                                ? ntls_config.sign_cert_file
-                                : fs::path(ntls_config.base_path)
-                                      .append(ntls_config.sign_cert_file);
-      auto sign_key_path = ntls_config.base_path.empty()
-                               ? ntls_config.sign_key_file
-                               : fs::path(ntls_config.base_path)
-                                     .append(ntls_config.sign_key_file);
-      auto enc_cert_path = ntls_config.base_path.empty()
-                               ? ntls_config.enc_cert_file
-                               : fs::path(ntls_config.base_path)
-                                     .append(ntls_config.enc_cert_file);
-      auto enc_key_path = ntls_config.base_path.empty()
-                              ? ntls_config.enc_key_file
-                              : fs::path(ntls_config.base_path)
-                                    .append(ntls_config.enc_key_file);
-
       std::error_code file_ec;
 
-      // Load SM2 signing certificate and key
-      if (fs::exists(sign_cert_path, file_ec)) {
-        if (SSL_CTX_use_sign_certificate_file(
-                ctx, sign_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
-          unsigned long err = ::ERR_get_error();
-          CINATRA_LOG_ERROR << "failed to load SM2 signing certificate: "
-                            << sign_cert_path.string()
-                            << ", err: " << ::ERR_error_string(err, nullptr);
-          return false;
-        }
-      }
-      else {
-        CINATRA_LOG_ERROR << "SM2 signing certificate file not found: "
-                          << sign_cert_path.string();
-        return false;
-      }
+      // Load certificates based on NTLS mode
+      if (ntls_config.mode == ntls_mode::tls13_single_cert) {
+        // RFC 8998 TLS 1.3 + GM single certificate mode
+        auto gm_cert_path = ntls_config.base_path.empty()
+                                ? ntls_config.gm_cert_file
+                                : fs::path(ntls_config.base_path)
+                                      .append(ntls_config.gm_cert_file);
+        auto gm_key_path = ntls_config.base_path.empty()
+                               ? ntls_config.gm_key_file
+                               : fs::path(ntls_config.base_path)
+                                     .append(ntls_config.gm_key_file);
 
-      if (fs::exists(sign_key_path, file_ec)) {
-        if (SSL_CTX_use_sign_PrivateKey_file(
-                ctx, sign_key_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
-          unsigned long err = ::ERR_get_error();
-          CINATRA_LOG_ERROR << "failed to load SM2 signing private key: "
-                            << sign_key_path.string()
-                            << ", err: " << ::ERR_error_string(err, nullptr);
+        // Load single GM certificate
+        if (fs::exists(gm_cert_path, file_ec)) {
+          if (SSL_CTX_use_certificate_file(ctx, gm_cert_path.string().c_str(),
+                                           SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load GM certificate: "
+                              << gm_cert_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded GM certificate: " << gm_cert_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "GM certificate file not found: "
+                            << gm_cert_path.string();
           return false;
         }
-      }
-      else {
-        CINATRA_LOG_ERROR << "SM2 signing key file not found: "
-                          << sign_key_path.string();
-        return false;
-      }
 
-      // Load SM2 encryption certificate and key
-      if (fs::exists(enc_cert_path, file_ec)) {
-        if (SSL_CTX_use_enc_certificate_file(
-                ctx, enc_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
-          unsigned long err = ::ERR_get_error();
-          CINATRA_LOG_ERROR << "failed to load SM2 encryption certificate: "
-                            << enc_cert_path.string()
-                            << ", err: " << ::ERR_error_string(err, nullptr);
+        // Load single GM private key
+        if (fs::exists(gm_key_path, file_ec)) {
+          if (SSL_CTX_use_PrivateKey_file(ctx, gm_key_path.string().c_str(),
+                                          SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load GM private key: "
+                              << gm_key_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded GM private key: " << gm_key_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "GM private key file not found: "
+                            << gm_key_path.string();
           return false;
         }
-      }
-      else {
-        CINATRA_LOG_ERROR << "SM2 encryption certificate file not found: "
-                          << enc_cert_path.string();
-        return false;
-      }
+      } else {
+        // GB/T 38636-2020 TLCP dual certificate mode
+        auto sign_cert_path = ntls_config.base_path.empty()
+                                  ? ntls_config.sign_cert_file
+                                  : fs::path(ntls_config.base_path)
+                                        .append(ntls_config.sign_cert_file);
+        auto sign_key_path = ntls_config.base_path.empty()
+                                 ? ntls_config.sign_key_file
+                                 : fs::path(ntls_config.base_path)
+                                       .append(ntls_config.sign_key_file);
+        auto enc_cert_path = ntls_config.base_path.empty()
+                                 ? ntls_config.enc_cert_file
+                                 : fs::path(ntls_config.base_path)
+                                       .append(ntls_config.enc_cert_file);
+        auto enc_key_path = ntls_config.base_path.empty()
+                                ? ntls_config.enc_key_file
+                                : fs::path(ntls_config.base_path)
+                                      .append(ntls_config.enc_key_file);
 
-      if (fs::exists(enc_key_path, file_ec)) {
-        if (SSL_CTX_use_enc_PrivateKey_file(ctx, enc_key_path.string().c_str(),
-                                            SSL_FILETYPE_PEM) != 1) {
-          unsigned long err = ::ERR_get_error();
-          CINATRA_LOG_ERROR << "failed to load SM2 encryption private key: "
-                            << enc_key_path.string()
-                            << ", err: " << ::ERR_error_string(err, nullptr);
+        // Load SM2 signing certificate and key
+        if (fs::exists(sign_cert_path, file_ec)) {
+          if (SSL_CTX_use_sign_certificate_file(
+                  ctx, sign_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load SM2 signing certificate: "
+                              << sign_cert_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded SM2 signing certificate: " << sign_cert_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "SM2 signing certificate file not found: "
+                            << sign_cert_path.string();
           return false;
         }
-      }
-      else {
-        CINATRA_LOG_ERROR << "SM2 encryption key file not found: "
-                          << enc_key_path.string();
-        return false;
+
+        if (fs::exists(sign_key_path, file_ec)) {
+          if (SSL_CTX_use_sign_PrivateKey_file(
+                  ctx, sign_key_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load SM2 signing private key: "
+                              << sign_key_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded SM2 signing private key: " << sign_key_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "SM2 signing key file not found: "
+                            << sign_key_path.string();
+          return false;
+        }
+
+        // Load SM2 encryption certificate and key
+        if (fs::exists(enc_cert_path, file_ec)) {
+          if (SSL_CTX_use_enc_certificate_file(
+                  ctx, enc_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load SM2 encryption certificate: "
+                              << enc_cert_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded SM2 encryption certificate: " << enc_cert_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "SM2 encryption certificate file not found: "
+                            << enc_cert_path.string();
+          return false;
+        }
+
+        if (fs::exists(enc_key_path, file_ec)) {
+          if (SSL_CTX_use_enc_PrivateKey_file(ctx, enc_key_path.string().c_str(),
+                                              SSL_FILETYPE_PEM) != 1) {
+            unsigned long err = ::ERR_get_error();
+            CINATRA_LOG_ERROR << "failed to load SM2 encryption private key: "
+                              << enc_key_path.string()
+                              << ", err: " << ::ERR_error_string(err, nullptr);
+            return false;
+          }
+          CINATRA_LOG_INFO << "loaded SM2 encryption private key: " << enc_key_path.string();
+        }
+        else {
+          CINATRA_LOG_ERROR << "SM2 encryption key file not found: "
+                            << enc_key_path.string();
+          return false;
+        }
       }
       // Load CA certificate if provided
       if (!ntls_config.ca_cert_file.empty()) {
