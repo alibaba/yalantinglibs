@@ -57,8 +57,9 @@ struct ssl_configure {
  * NTLS mode enumeration
  */
 enum class ntls_mode {
-  tlcp_dual_cert,      //!< GB/T 38636-2020 TLCP with dual certificates (signing + encryption)
-  tls13_single_cert    //!< RFC 8998 TLS 1.3 + GM with single certificate
+  tlcp_dual_cert,    //!< GB/T 38636-2020 TLCP with dual certificates (signing +
+                     //!< encryption)
+  tls13_single_cert  //!< RFC 8998 TLS 1.3 + GM with single certificate
 };
 #endif
 
@@ -82,11 +83,13 @@ struct ssl_ntls_configure {
       enc_cert_file;  //!< relative path of SM2 encryption certificate file
   std::string
       enc_key_file;  //!< relative path of SM2 encryption private key file
-  
+
   // TLS 1.3 + GM single certificate configuration (RFC 8998)
-  std::string gm_cert_file;   //!< relative path of single SM2 certificate file (for TLS 1.3 + GM)
-  std::string gm_key_file;    //!< relative path of single SM2 private key file (for TLS 1.3 + GM)
-  
+  std::string gm_cert_file;  //!< relative path of single SM2 certificate file
+                             //!< (for TLS 1.3 + GM)
+  std::string gm_key_file;   //!< relative path of single SM2 private key file
+                             //!< (for TLS 1.3 + GM)
+
   // Common NTLS configuration
   std::string
       ca_cert_file;  //!< relative path of CA certificate file (optional)
@@ -211,7 +214,7 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
 
       // RFC 8998 TLS 1.3 + GM single certificate mode
       ELOG_INFO << "Configuring RFC 8998 TLS 1.3 + GM single certificate mode";
-      
+
       // Set TLS 1.3 version
       if (SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) != 1) {
         ELOG_ERROR << "Failed to set minimum TLS version to 1.3";
@@ -228,7 +231,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                                       : conf.cipher_suites;
       if (SSL_CTX_set_ciphersuites(ctx, cipher_suites.c_str()) != 1) {
         unsigned long err = ::ERR_get_error();
-        ELOG_ERROR << "Failed to set TLS 1.3 GM cipher suites '" << cipher_suites
+        ELOG_ERROR << "Failed to set TLS 1.3 GM cipher suites '"
+                   << cipher_suites
                    << "': " << ::ERR_error_string(err, nullptr);
         return false;
       }
@@ -249,18 +253,19 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                    << ::ERR_error_string(err, nullptr);
         return false;
       }
-    } else {
+    }
+    else {
       // Enable NTLS mode for Tongsuo
       SSL_CTX_enable_ntls(ctx);
       ELOG_INFO << "NTLS mode enabled successfully";
 
       // GB/T 38636-2020 TLCP dual certificate mode (default)
       ELOG_INFO << "Configuring GB/T 38636-2020 TLCP dual certificate mode";
-      
+
       // Set TLCP cipher suites (SM2/SM3/SM4)
-      std::string cipher_suites = conf.cipher_suites.empty()
-                                      ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
-                                      : conf.cipher_suites;
+      std::string cipher_suites =
+          conf.cipher_suites.empty() ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
+                                     : conf.cipher_suites;
       if (SSL_CTX_set_cipher_list(ctx, cipher_suites.c_str()) != 1) {
         unsigned long err = ::ERR_get_error();
         ELOG_WARN << "Failed to set TLCP cipher suites '" << cipher_suites
@@ -315,9 +320,11 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
         ELOG_ERROR << "no GM private key file " << gm_key_file.string();
         return false;
       }
-    } else {
+    }
+    else {
       // GB/T 38636-2020 TLCP dual certificate mode
-      auto sign_cert_file = fs::path(conf.base_path).append(conf.sign_cert_file);
+      auto sign_cert_file =
+          fs::path(conf.base_path).append(conf.sign_cert_file);
       auto sign_key_file = fs::path(conf.base_path).append(conf.sign_key_file);
       auto enc_cert_file = fs::path(conf.base_path).append(conf.enc_cert_file);
       auto enc_key_file = fs::path(conf.base_path).append(conf.enc_key_file);
@@ -331,7 +338,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                      << ::ERR_error_string(err, nullptr);
           return false;
         }
-        ELOG_INFO << "loaded SM2 signing certificate: " << sign_cert_file.string();
+        ELOG_INFO << "loaded SM2 signing certificate: "
+                  << sign_cert_file.string();
       }
       else {
         ELOG_ERROR << "no SM2 signing certificate file "
@@ -340,14 +348,15 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
       }
 
       if (file_exists(sign_key_file)) {
-        if (SSL_CTX_use_sign_PrivateKey_file(ctx, sign_key_file.string().c_str(),
-                                             SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_sign_PrivateKey_file(
+                ctx, sign_key_file.string().c_str(), SSL_FILETYPE_PEM) != 1) {
           unsigned long err = ::ERR_get_error();
           ELOG_ERROR << "failed to load SM2 signing private key: "
                      << ::ERR_error_string(err, nullptr);
           return false;
         }
-        ELOG_INFO << "loaded SM2 signing private key: " << sign_key_file.string();
+        ELOG_INFO << "loaded SM2 signing private key: "
+                  << sign_key_file.string();
       }
       else {
         ELOG_ERROR << "no SM2 signing key file " << sign_key_file.string();
@@ -356,14 +365,15 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
 
       // Load SM2 encryption certificate and key
       if (file_exists(enc_cert_file)) {
-        if (SSL_CTX_use_enc_certificate_file(ctx, enc_cert_file.string().c_str(),
-                                             SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_enc_certificate_file(
+                ctx, enc_cert_file.string().c_str(), SSL_FILETYPE_PEM) != 1) {
           unsigned long err = ::ERR_get_error();
           ELOG_ERROR << "failed to load SM2 encryption certificate: "
                      << ::ERR_error_string(err, nullptr);
           return false;
         }
-        ELOG_INFO << "loaded SM2 encryption certificate: " << enc_cert_file.string();
+        ELOG_INFO << "loaded SM2 encryption certificate: "
+                  << enc_cert_file.string();
       }
       else {
         ELOG_ERROR << "no SM2 encryption certificate file "
@@ -379,7 +389,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                      << ::ERR_error_string(err, nullptr);
           return false;
         }
-        ELOG_INFO << "loaded SM2 encryption private key: " << enc_key_file.string();
+        ELOG_INFO << "loaded SM2 encryption private key: "
+                  << enc_key_file.string();
       }
       else {
         ELOG_ERROR << "no SM2 encryption key file " << enc_key_file.string();

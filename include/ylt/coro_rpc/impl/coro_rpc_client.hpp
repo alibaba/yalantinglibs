@@ -189,17 +189,17 @@ class coro_rpc_client {
   struct tcp_with_ntls_config {
     bool enable_tcp_no_delay = true;
     std::filesystem::path base_path{};
-    
+
     // TLCP dual certificate configuration (GB/T 38636-2020)
     std::filesystem::path sign_cert_path{};
     std::filesystem::path sign_key_path{};
     std::filesystem::path enc_cert_path{};
     std::filesystem::path enc_key_path{};
-    
+
     // TLS 1.3 + GM single certificate configuration (RFC 8998)
     std::filesystem::path gm_cert_path{};
     std::filesystem::path gm_key_path{};
-    
+
     // Common configuration
     std::filesystem::path ca_cert_path{};
     std::string ssl_domain{};
@@ -319,8 +319,6 @@ class coro_rpc_client {
       ssl_init_ret_ = false;
       ELOG_INFO << "init NTLS: " << config.ssl_domain;
 
-     
-
       // Configure based on NTLS mode
       if (config.mode == ntls_mode::tls13_single_cert) {
         // Create SSL context with TLCP server method
@@ -329,14 +327,17 @@ class coro_rpc_client {
         // Enable strict SM TLS 1.3 (Tongsuo)
         SSL_CTX_enable_sm_tls13_strict(ssl_ctx_.native_handle());
         // RFC 8998 TLS 1.3 + GM single certificate mode
-        ELOG_INFO << "Configuring RFC 8998 TLS 1.3 + GM single certificate mode";
-        
+        ELOG_INFO
+            << "Configuring RFC 8998 TLS 1.3 + GM single certificate mode";
+
         // Set TLS 1.3 version
-        if (SSL_CTX_set_min_proto_version(ssl_ctx_.native_handle(), TLS1_3_VERSION) != 1) {
+        if (SSL_CTX_set_min_proto_version(ssl_ctx_.native_handle(),
+                                          TLS1_3_VERSION) != 1) {
           ELOG_ERROR << "Failed to set minimum TLS version to 1.3";
           return false;
         }
-        if (SSL_CTX_set_max_proto_version(ssl_ctx_.native_handle(), TLS1_3_VERSION) != 1) {
+        if (SSL_CTX_set_max_proto_version(ssl_ctx_.native_handle(),
+                                          TLS1_3_VERSION) != 1) {
           ELOG_ERROR << "Failed to set maximum TLS version to 1.3";
           return false;
         }
@@ -345,18 +346,22 @@ class coro_rpc_client {
         std::string cipher_suites = config.cipher_suites.empty()
                                         ? "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3"
                                         : config.cipher_suites;
-        if (SSL_CTX_set_ciphersuites(ssl_ctx_.native_handle(), cipher_suites.c_str()) != 1) {
-          ELOG_ERROR << "Failed to set TLS 1.3 GM cipher suites: " << cipher_suites;
+        if (SSL_CTX_set_ciphersuites(ssl_ctx_.native_handle(),
+                                     cipher_suites.c_str()) != 1) {
+          ELOG_ERROR << "Failed to set TLS 1.3 GM cipher suites: "
+                     << cipher_suites;
           return false;
         }
         ELOG_INFO << "TLS 1.3 GM cipher suites set to: " << cipher_suites;
 
         //// Set supported curves for SM2
-        //if (SSL_CTX_set1_curves_list(ssl_ctx_.native_handle(), "SM2:X25519:prime256v1") != 1) {
+        // if (SSL_CTX_set1_curves_list(ssl_ctx_.native_handle(),
+        // "SM2:X25519:prime256v1") != 1) {
         //  ELOG_ERROR << "Failed to set SM2 curves";
         //  return false;
         //}
-      } else {
+      }
+      else {
         // Create SSL context with TLCP client method for NTLS
         ssl_ctx_ = asio::ssl::context(SSL_CTX_new(NTLS_client_method()));
 
@@ -366,14 +371,18 @@ class coro_rpc_client {
 
         // GB/T 38636-2020 TLCP dual certificate mode (default)
         ELOG_INFO << "Configuring GB/T 38636-2020 TLCP dual certificate mode";
-        
+
         // Set TLCP cipher suites for NTLS (SM2/SM3/SM4)
-        std::string cipher_suites = config.cipher_suites.empty()
-                                        ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
-                                        : config.cipher_suites;
-        if (!SSL_CTX_set_cipher_list(ssl_ctx_.native_handle(), cipher_suites.c_str())) {
-          ELOG_WARN << "failed to set TLCP cipher suites: " << cipher_suites << ", using default";
-        } else {
+        std::string cipher_suites =
+            config.cipher_suites.empty()
+                ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
+                : config.cipher_suites;
+        if (!SSL_CTX_set_cipher_list(ssl_ctx_.native_handle(),
+                                     cipher_suites.c_str())) {
+          ELOG_WARN << "failed to set TLCP cipher suites: " << cipher_suites
+                    << ", using default";
+        }
+        else {
           ELOG_INFO << "TLCP cipher suites set to: " << cipher_suites;
         }
       }
@@ -382,9 +391,11 @@ class coro_rpc_client {
         // RFC 8998 TLS 1.3 + GM single certificate mode
         if (config.enable_client_verify) {
           ELOG_INFO << "enable_client_verify: " << config.enable_client_verify;
-          if (config.gm_cert_path.empty() || !file_exists(config.gm_cert_path) ||
-              config.gm_key_path.empty() || !file_exists(config.gm_key_path)) {
-            ELOG_ERROR << "client verify enabled, but GM cert or key file is missing";
+          if (config.gm_cert_path.empty() ||
+              !file_exists(config.gm_cert_path) || config.gm_key_path.empty() ||
+              !file_exists(config.gm_key_path)) {
+            ELOG_ERROR
+                << "client verify enabled, but GM cert or key file is missing";
             return false;
           }
         }
@@ -392,9 +403,9 @@ class coro_rpc_client {
         // Load single GM certificate and key
         if (!config.gm_cert_path.empty() && file_exists(config.gm_cert_path)) {
           ELOG_INFO << "load GM certificate " << config.gm_cert_path.string();
-          if (!SSL_CTX_use_certificate_file(ssl_ctx_.native_handle(),
-                                            config.gm_cert_path.string().c_str(),
-                                            SSL_FILETYPE_PEM)) {
+          if (!SSL_CTX_use_certificate_file(
+                  ssl_ctx_.native_handle(),
+                  config.gm_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
             ELOG_ERROR << "failed to load GM certificate";
             return false;
           }
@@ -409,7 +420,8 @@ class coro_rpc_client {
             return false;
           }
         }
-      } else {
+      }
+      else {
         // GB/T 38636-2020 TLCP dual certificate mode
         if (config.enable_client_verify) {
           ELOG_INFO << "enable_client_verify: " << config.enable_client_verify;
@@ -418,7 +430,8 @@ class coro_rpc_client {
               config.sign_key_path.empty() ||
               !file_exists(config.sign_key_path) ||
               config.enc_cert_path.empty() ||
-              !file_exists(config.enc_cert_path) || config.enc_key_path.empty() ||
+              !file_exists(config.enc_cert_path) ||
+              config.enc_key_path.empty() ||
               !file_exists(config.enc_key_path)) {
             ELOG_ERROR
                 << "client verify enabled, but cert or key file is missing";
@@ -429,7 +442,8 @@ class coro_rpc_client {
         // Load dual certificates if provided
         if (!config.sign_cert_path.empty() &&
             file_exists(config.sign_cert_path)) {
-          ELOG_INFO << "load SM2 signing cert " << config.sign_cert_path.string();
+          ELOG_INFO << "load SM2 signing cert "
+                    << config.sign_cert_path.string();
           if (!SSL_CTX_use_sign_certificate_file(
                   ssl_ctx_.native_handle(),
                   config.sign_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
@@ -449,16 +463,18 @@ class coro_rpc_client {
           }
         }
 
-        if (!config.enc_cert_path.empty() && file_exists(config.enc_cert_path)) {
+        if (!config.enc_cert_path.empty() &&
+            file_exists(config.enc_cert_path)) {
           ELOG_INFO << "load SM2 encryption cert "
                     << config.enc_cert_path.string();
           if (!SSL_CTX_use_enc_certificate_file(
-                  ssl_ctx_.native_handle(), config.enc_cert_path.string().c_str(),
-                  SSL_FILETYPE_PEM)) {
+                  ssl_ctx_.native_handle(),
+                  config.enc_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
             ELOG_ERROR << "failed to load SM2 encryption certificate";
             return false;
           }
-          if (!config.enc_key_path.empty() && file_exists(config.enc_key_path)) {
+          if (!config.enc_key_path.empty() &&
+              file_exists(config.enc_key_path)) {
             ELOG_INFO << "load SM2 encryption private key "
                       << config.enc_key_path.string();
             if (!SSL_CTX_use_enc_PrivateKey_file(
@@ -627,57 +643,89 @@ class coro_rpc_client {
     if (conf.mode == ntls_mode::tls13_single_cert) {
       // RFC 8998 TLS 1.3 + GM single certificate mode
       if (config_.socket_config.index() != 2) {
-        config_.socket_config =
-            tcp_with_ntls_config{.enable_tcp_no_delay = true,
-                                 .base_path = conf.base_path,
-                                 .gm_cert_path = std::filesystem::path(conf.base_path).append(conf.gm_cert_file),
-                                 .gm_key_path = std::filesystem::path(conf.base_path).append(conf.gm_key_file),
-                                 .ca_cert_path = conf.ca_cert_file.empty() ? std::filesystem::path{} : std::filesystem::path(conf.base_path).append(conf.ca_cert_file),
-                                 .ssl_domain = conf.server_name.empty() ? "localhost" : conf.server_name,
-                                 .cipher_suites = conf.cipher_suites,
-                                 .mode = ntls_mode::tls13_single_cert,
-                                 .enable_client_verify = conf.enable_client_verify};
-      } else {
+        config_.socket_config = tcp_with_ntls_config{
+            .enable_tcp_no_delay = true,
+            .base_path = conf.base_path,
+            .gm_cert_path =
+                std::filesystem::path(conf.base_path).append(conf.gm_cert_file),
+            .gm_key_path =
+                std::filesystem::path(conf.base_path).append(conf.gm_key_file),
+            .ca_cert_path = conf.ca_cert_file.empty()
+                                ? std::filesystem::path{}
+                                : std::filesystem::path(conf.base_path)
+                                      .append(conf.ca_cert_file),
+            .ssl_domain =
+                conf.server_name.empty() ? "localhost" : conf.server_name,
+            .cipher_suites = conf.cipher_suites,
+            .mode = ntls_mode::tls13_single_cert,
+            .enable_client_verify = conf.enable_client_verify};
+      }
+      else {
         auto &config = std::get<tcp_with_ntls_config>(config_.socket_config);
         config.base_path = conf.base_path;
-        config.gm_cert_path = std::filesystem::path(conf.base_path).append(conf.gm_cert_file);
-        config.gm_key_path = std::filesystem::path(conf.base_path).append(conf.gm_key_file);
-        config.ca_cert_path = conf.ca_cert_file.empty() ? std::filesystem::path{} : std::filesystem::path(conf.base_path).append(conf.ca_cert_file);
-        config.ssl_domain = conf.server_name.empty() ? "localhost" : conf.server_name;
+        config.gm_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.gm_cert_file);
+        config.gm_key_path =
+            std::filesystem::path(conf.base_path).append(conf.gm_key_file);
+        config.ca_cert_path = conf.ca_cert_file.empty()
+                                  ? std::filesystem::path{}
+                                  : std::filesystem::path(conf.base_path)
+                                        .append(conf.ca_cert_file);
+        config.ssl_domain =
+            conf.server_name.empty() ? "localhost" : conf.server_name;
         config.cipher_suites = conf.cipher_suites;
         config.mode = ntls_mode::tls13_single_cert;
         config.enable_client_verify = conf.enable_client_verify;
       }
-    } else {
+    }
+    else {
       // GB/T 38636-2020 TLCP dual certificate mode (default)
       if (config_.socket_config.index() != 2) {
-        config_.socket_config =
-            tcp_with_ntls_config{.enable_tcp_no_delay = true,
-                                 .base_path = conf.base_path,
-                                 .sign_cert_path = std::filesystem::path(conf.base_path).append(conf.sign_cert_file),
-                                 .sign_key_path = std::filesystem::path(conf.base_path).append(conf.sign_key_file),
-                                 .enc_cert_path = std::filesystem::path(conf.base_path).append(conf.enc_cert_file),
-                                 .enc_key_path = std::filesystem::path(conf.base_path).append(conf.enc_key_file),
-                                 .ca_cert_path = conf.ca_cert_file.empty() ? std::filesystem::path{} : std::filesystem::path(conf.base_path).append(conf.ca_cert_file),
-                                 .ssl_domain = conf.server_name.empty() ? "localhost" : conf.server_name,
-                                 .cipher_suites = conf.cipher_suites,
-                                 .mode = ntls_mode::tlcp_dual_cert,
-                                 .enable_client_verify = conf.enable_client_verify};
-      } else {
+        config_.socket_config = tcp_with_ntls_config{
+            .enable_tcp_no_delay = true,
+            .base_path = conf.base_path,
+            .sign_cert_path = std::filesystem::path(conf.base_path)
+                                  .append(conf.sign_cert_file),
+            .sign_key_path = std::filesystem::path(conf.base_path)
+                                 .append(conf.sign_key_file),
+            .enc_cert_path = std::filesystem::path(conf.base_path)
+                                 .append(conf.enc_cert_file),
+            .enc_key_path =
+                std::filesystem::path(conf.base_path).append(conf.enc_key_file),
+            .ca_cert_path = conf.ca_cert_file.empty()
+                                ? std::filesystem::path{}
+                                : std::filesystem::path(conf.base_path)
+                                      .append(conf.ca_cert_file),
+            .ssl_domain =
+                conf.server_name.empty() ? "localhost" : conf.server_name,
+            .cipher_suites = conf.cipher_suites,
+            .mode = ntls_mode::tlcp_dual_cert,
+            .enable_client_verify = conf.enable_client_verify};
+      }
+      else {
         auto &config = std::get<tcp_with_ntls_config>(config_.socket_config);
         config.base_path = conf.base_path;
-        config.sign_cert_path = std::filesystem::path(conf.base_path).append(conf.sign_cert_file);
-        config.sign_key_path = std::filesystem::path(conf.base_path).append(conf.sign_key_file);
-        config.enc_cert_path = std::filesystem::path(conf.base_path).append(conf.enc_cert_file);
-        config.enc_key_path = std::filesystem::path(conf.base_path).append(conf.enc_key_file);
-        config.ca_cert_path = conf.ca_cert_file.empty() ? std::filesystem::path{} : std::filesystem::path(conf.base_path).append(conf.ca_cert_file);
-        config.ssl_domain = conf.server_name.empty() ? "localhost" : conf.server_name;
+        config.sign_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.sign_cert_file);
+        config.sign_key_path =
+            std::filesystem::path(conf.base_path).append(conf.sign_key_file);
+        config.enc_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.enc_cert_file);
+        config.enc_key_path =
+            std::filesystem::path(conf.base_path).append(conf.enc_key_file);
+        config.ca_cert_path = conf.ca_cert_file.empty()
+                                  ? std::filesystem::path{}
+                                  : std::filesystem::path(conf.base_path)
+                                        .append(conf.ca_cert_file);
+        config.ssl_domain =
+            conf.server_name.empty() ? "localhost" : conf.server_name;
         config.cipher_suites = conf.cipher_suites;
         config.mode = ntls_mode::tlcp_dual_cert;
         config.enable_client_verify = conf.enable_client_verify;
       }
     }
-    return init_socket_wrapper(std::get<tcp_with_ntls_config>(config_.socket_config));
+    return init_socket_wrapper(
+        std::get<tcp_with_ntls_config>(config_.socket_config));
   }
 
   [[nodiscard]] bool init_ntls(std::string_view base_file,

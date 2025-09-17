@@ -35,8 +35,10 @@ const std::string SERVER_ENC_KEY =
 const std::string CA_CERT = CERT_PATH + "chain-ca.crt";  // CA certificate
 
 // Single certificate paths for RFC 8998 TLS 1.3 + GM mode
-const std::string SERVER_GM_CERT = CERT_PATH + "server_sign.crt";  // GM single certificate
-const std::string SERVER_GM_KEY = CERT_PATH + "server_sign.key";   // GM single private key
+const std::string SERVER_GM_CERT =
+    CERT_PATH + "server_sign.crt";  // GM single certificate
+const std::string SERVER_GM_KEY =
+    CERT_PATH + "server_sign.key";  // GM single private key
 
 // Simple RPC service function
 std::string echo(std::string_view data) {
@@ -132,7 +134,6 @@ void start_mutual_auth_server() {
   }
 }
 
-
 // Start one-way authentication TLS 1.3 + GM server (single certificate)
 void start_tls13_gm_one_way_server() {
   try {
@@ -141,14 +142,15 @@ void start_tls13_gm_one_way_server() {
 
     // Configure TLS 1.3 + GM with single certificate (RFC 8998)
     ssl_ntls_configure ntls_conf;
-    ntls_conf.base_path = "";                   // Using full paths instead
+    ntls_conf.base_path = "";                       // Using full paths instead
     ntls_conf.mode = ntls_mode::tls13_single_cert;  // TLS 1.3 + GM mode
-    ntls_conf.gm_cert_file = SERVER_GM_CERT;    // GM single certificate
-    ntls_conf.gm_key_file = SERVER_GM_KEY;      // GM single private key
-    ntls_conf.ca_cert_file = CA_CERT;           // CA certificate
+    ntls_conf.gm_cert_file = SERVER_GM_CERT;        // GM single certificate
+    ntls_conf.gm_key_file = SERVER_GM_KEY;          // GM single private key
+    ntls_conf.ca_cert_file = CA_CERT;               // CA certificate
     ntls_conf.enable_client_verify =
         false;  // Disable client certificate verification
-    ntls_conf.cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
+    ntls_conf.cipher_suites =
+        "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
 
     // Initialize TLS 1.3 + GM
     server.init_ntls(ntls_conf);
@@ -156,23 +158,27 @@ void start_tls13_gm_one_way_server() {
     // Register RPC service function
     server.register_handler<echo>();
 
-    std::cout << "TLS 1.3 + GM RPC Server (one-way auth) starting on port 8803..."
+    std::cout
+        << "TLS 1.3 + GM RPC Server (one-way auth) starting on port 8803..."
+        << std::endl;
+    std::cout << "Using RFC 8998 TLS 1.3 + GM single certificate mode"
               << std::endl;
-    std::cout << "Using RFC 8998 TLS 1.3 + GM single certificate mode" << std::endl;
     std::cout << "Certificate path: " << CERT_PATH << std::endl;
 
     // Start server (blocking)
     auto result = server.start();
     if (result) {
-      std::cout << "TLS 1.3 + GM one-way auth server started successfully!" << std::endl;
+      std::cout << "TLS 1.3 + GM one-way auth server started successfully!"
+                << std::endl;
     }
     else {
-      std::cout << "Failed to start TLS 1.3 + GM one-way auth server: " << result.message()
-                << std::endl;
+      std::cout << "Failed to start TLS 1.3 + GM one-way auth server: "
+                << result.message() << std::endl;
     }
 
   } catch (const std::exception& e) {
-    std::cout << "TLS 1.3 + GM one-way auth server error: " << e.what() << std::endl;
+    std::cout << "TLS 1.3 + GM one-way auth server error: " << e.what()
+              << std::endl;
   }
 }
 
@@ -184,13 +190,15 @@ void start_tls13_gm_mutual_auth_server() {
 
     // Configure TLS 1.3 + GM with single certificate (RFC 8998)
     ssl_ntls_configure ntls_conf;
-    ntls_conf.base_path = "";                   // Using full paths instead
+    ntls_conf.base_path = "";                       // Using full paths instead
     ntls_conf.mode = ntls_mode::tls13_single_cert;  // TLS 1.3 + GM mode
-    ntls_conf.gm_cert_file = SERVER_GM_CERT;    // GM single certificate
-    ntls_conf.gm_key_file = SERVER_GM_KEY;      // GM single private key
-    ntls_conf.ca_cert_file = CA_CERT;           // CA certificate
-    ntls_conf.enable_client_verify = true;               // Enable client certificate verification
-    ntls_conf.cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
+    ntls_conf.gm_cert_file = SERVER_GM_CERT;        // GM single certificate
+    ntls_conf.gm_key_file = SERVER_GM_KEY;          // GM single private key
+    ntls_conf.ca_cert_file = CA_CERT;               // CA certificate
+    ntls_conf.enable_client_verify =
+        true;  // Enable client certificate verification
+    ntls_conf.cipher_suites =
+        "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
 
     // Initialize TLS 1.3 + GM
     server.init_ntls(ntls_conf);
@@ -208,15 +216,17 @@ void start_tls13_gm_mutual_auth_server() {
     // Start server (blocking)
     auto result = server.start();
     if (result) {
-      std::cout << "TLS 1.3 + GM mutual auth server started successfully!" << std::endl;
+      std::cout << "TLS 1.3 + GM mutual auth server started successfully!"
+                << std::endl;
     }
     else {
-      std::cout << "Failed to start TLS 1.3 + GM mutual auth server: " << result.message()
-                << std::endl;
+      std::cout << "Failed to start TLS 1.3 + GM mutual auth server: "
+                << result.message() << std::endl;
     }
 
   } catch (const std::exception& e) {
-    std::cout << "TLS 1.3 + GM mutual auth server error: " << e.what() << std::endl;
+    std::cout << "TLS 1.3 + GM mutual auth server error: " << e.what()
+              << std::endl;
   }
 }
 

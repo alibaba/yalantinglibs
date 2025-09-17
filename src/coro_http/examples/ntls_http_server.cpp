@@ -34,8 +34,10 @@ const std::string SERVER_ENC_KEY =
 const std::string CA_CERT = CERT_PATH + "chain-ca.crt";  // CA certificate
 
 // Single certificate paths for RFC 8998 TLS 1.3 + GM mode
-const std::string SERVER_GM_CERT = CERT_PATH + "server_sign.crt";  // GM single certificate
-const std::string SERVER_GM_KEY = CERT_PATH + "server_sign.key";   // GM single private key
+const std::string SERVER_GM_CERT =
+    CERT_PATH + "server_sign.crt";  // GM single certificate
+const std::string SERVER_GM_KEY =
+    CERT_PATH + "server_sign.key";  // GM single private key
 
 // Start one-way authentication NTLS server (server certificate only)
 void start_one_way_server() {
@@ -132,24 +134,27 @@ void start_mutual_auth_server() {
 
 // Start one-way authentication TLS 1.3 + GM server (single certificate)
 void start_tls13_gm_one_way_server() {
-  std::cout << "Starting TLS 1.3 + GM HTTP Server (one-way auth) on port 8803..."
-            << std::endl;
+  std::cout
+      << "Starting TLS 1.3 + GM HTTP Server (one-way auth) on port 8803..."
+      << std::endl;
 
   coro_http_server server(1, 8803);
 
   // Initialize TLS 1.3 + GM server with single certificate (RFC 8998)
   // One-way authentication mode (no client certificate verification)
-  server.init_ntls("", SERVER_GM_CERT, SERVER_GM_KEY, "", "", CA_CERT,
-                   false,  // false = don't verify client certificate
-                   "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",  // TLS 1.3 GM cipher suites
-                   coro_http_connection::ntls_mode::tls13_single_cert);
+  server.init_ntls(
+      "", SERVER_GM_CERT, SERVER_GM_KEY, "", "", CA_CERT,
+      false,  // false = don't verify client certificate
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",  // TLS 1.3 GM cipher suites
+      coro_http_connection::ntls_mode::tls13_single_cert);
 
   // Root endpoint
   server.set_http_handler<GET>(
       "/",
       [](coro_http_request& req,
          coro_http_response& resp) -> async_simple::coro::Lazy<void> {
-        resp.set_status_and_content(status_type::ok, "Hello from TLS 1.3 + GM Server");
+        resp.set_status_and_content(status_type::ok,
+                                    "Hello from TLS 1.3 + GM Server");
         co_return;
       });
 
@@ -158,18 +163,21 @@ void start_tls13_gm_one_way_server() {
       "/echo",
       [](coro_http_request& req,
          coro_http_response& resp) -> async_simple::coro::Lazy<void> {
-        resp.set_status_and_content(status_type::ok, "TLS 1.3 + GM Echo: " + std::string(req.get_body()));
+        resp.set_status_and_content(
+            status_type::ok,
+            "TLS 1.3 + GM Echo: " + std::string(req.get_body()));
         co_return;
       });
 
-  std::cout << "One-way TLS 1.3 + GM server ready. Test endpoints:" << std::endl;
+  std::cout << "One-way TLS 1.3 + GM server ready. Test endpoints:"
+            << std::endl;
   std::cout << "  GET  https://localhost:8803/" << std::endl;
   std::cout << "  POST https://localhost:8803/echo" << std::endl;
 
   auto result = server.sync_start();
   if (result) {
-    std::cerr << "Failed to start TLS 1.3 + GM one-way server: " << result.message()
-              << std::endl;
+    std::cerr << "Failed to start TLS 1.3 + GM one-way server: "
+              << result.message() << std::endl;
   }
 }
 
@@ -182,17 +190,19 @@ void start_tls13_gm_mutual_auth_server() {
 
   // Initialize TLS 1.3 + GM server with single certificate (RFC 8998)
   // Mutual authentication mode (client certificate verification enabled)
-  server.init_ntls("", SERVER_GM_CERT, SERVER_GM_KEY, "", "", CA_CERT,
-                   true,  // true = verify client certificate
-                   "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",  // TLS 1.3 GM cipher suites
-                   coro_http_connection::ntls_mode::tls13_single_cert);
+  server.init_ntls(
+      "", SERVER_GM_CERT, SERVER_GM_KEY, "", "", CA_CERT,
+      true,                               // true = verify client certificate
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",  // TLS 1.3 GM cipher suites
+      coro_http_connection::ntls_mode::tls13_single_cert);
 
   // Root endpoint
   server.set_http_handler<GET>(
       "/",
       [](coro_http_request& req,
          coro_http_response& resp) -> async_simple::coro::Lazy<void> {
-        resp.set_status_and_content(status_type::ok, "Hello from TLS 1.3 + GM Server (Mutual Auth)");
+        resp.set_status_and_content(
+            status_type::ok, "Hello from TLS 1.3 + GM Server (Mutual Auth)");
         co_return;
       });
 
@@ -201,11 +211,14 @@ void start_tls13_gm_mutual_auth_server() {
       "/echo",
       [](coro_http_request& req,
          coro_http_response& resp) -> async_simple::coro::Lazy<void> {
-        resp.set_status_and_content(status_type::ok, "TLS 1.3 + GM Mutual Echo: " + std::string(req.get_body()));
+        resp.set_status_and_content(
+            status_type::ok,
+            "TLS 1.3 + GM Mutual Echo: " + std::string(req.get_body()));
         co_return;
       });
 
-  std::cout << "Mutual auth TLS 1.3 + GM server ready. Test endpoints:" << std::endl;
+  std::cout << "Mutual auth TLS 1.3 + GM server ready. Test endpoints:"
+            << std::endl;
   std::cout << "  GET  https://localhost:8804/ (requires client certificate)"
             << std::endl;
   std::cout
@@ -214,8 +227,8 @@ void start_tls13_gm_mutual_auth_server() {
 
   auto result = server.sync_start();
   if (result) {
-    std::cerr << "Failed to start TLS 1.3 + GM mutual auth server: " << result.message()
-              << std::endl;
+    std::cerr << "Failed to start TLS 1.3 + GM mutual auth server: "
+              << result.message() << std::endl;
   }
 }
 

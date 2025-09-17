@@ -1585,12 +1585,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   /*!
    * Initialize NTLS client with TLS 1.3 + GM single certificate mode (RFC 8998)
    */
-  bool init_ntls_tls13_gm_client(const std::string &gm_cert_file = "",
-                                  const std::string &gm_key_file = "",
-                                  const std::string &ca_cert_file = "",
-                                  int verify_mode = asio::ssl::verify_none,
-                                  const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
-                                  const std::string &passwd = "") {
+  bool init_ntls_tls13_gm_client(
+      const std::string &gm_cert_file = "", const std::string &gm_key_file = "",
+      const std::string &ca_cert_file = "",
+      int verify_mode = asio::ssl::verify_none,
+      const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
+      const std::string &passwd = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1607,7 +1607,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       SSL_CTX_enable_sm_tls13_strict(ssl_ctx_->native_handle());
 
       // Set TLS 1.3 GM cipher suites
-      if (!SSL_CTX_set_ciphersuites(ssl_ctx_->native_handle(), cipher_suites.c_str())) {
+      if (!SSL_CTX_set_ciphersuites(ssl_ctx_->native_handle(),
+                                    cipher_suites.c_str())) {
         CINATRA_LOG_WARNING << "failed to set TLS 1.3 GM cipher suites";
       }
 

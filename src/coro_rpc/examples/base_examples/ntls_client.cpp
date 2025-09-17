@@ -38,8 +38,10 @@ const std::string CLIENT_ENC_KEY =
 const std::string CA_CERT = CERT_PATH + "chain-ca.crt";  // CA certificate
 
 // Single certificate paths for RFC 8998 TLS 1.3 + GM mode
-const std::string CLIENT_GM_CERT = CERT_PATH + "client_sign.crt";  // GM single certificate
-const std::string CLIENT_GM_KEY = CERT_PATH + "client_sign.key";   // GM single private key
+const std::string CLIENT_GM_CERT =
+    CERT_PATH + "client_sign.crt";  // GM single certificate
+const std::string CLIENT_GM_KEY =
+    CERT_PATH + "client_sign.key";  // GM single private key
 
 // RPC function declarations (should match server)
 std::string echo(std::string_view data);
@@ -164,41 +166,47 @@ Lazy<void> test_tls13_gm_one_way_auth() {
   config.ca_cert_file = CA_CERT;
   config.server_name = "localhost";
   config.mode = ntls_mode::tls13_single_cert;  // TLS 1.3 + GM mode
-  config.cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
+  config.cipher_suites =
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
   // No client certificate needed for one-way auth
 
   bool ok = client.init_ntls(config);
 
   if (!ok) {
-    std::cout << "Failed to initialize TLS 1.3 + GM one-way client" << std::endl;
-    co_return;
-  }
-
-  std::cout << "TLS 1.3 + GM one-way client initialized successfully" << std::endl;
-
-  // Connect to TLS 1.3 + GM one-way server
-  auto ec = co_await client.connect("127.0.0.1", "8803");
-  if (ec) {
-    std::cout << "Failed to connect to TLS 1.3 + GM one-way server: " << ec.message()
+    std::cout << "Failed to initialize TLS 1.3 + GM one-way client"
               << std::endl;
     co_return;
   }
 
-  std::cout << "Connected to TLS 1.3 + GM one-way server successfully!" << std::endl;
+  std::cout << "TLS 1.3 + GM one-way client initialized successfully"
+            << std::endl;
+
+  // Connect to TLS 1.3 + GM one-way server
+  auto ec = co_await client.connect("127.0.0.1", "8803");
+  if (ec) {
+    std::cout << "Failed to connect to TLS 1.3 + GM one-way server: "
+              << ec.message() << std::endl;
+    co_return;
+  }
+
+  std::cout << "Connected to TLS 1.3 + GM one-way server successfully!"
+            << std::endl;
 
   try {
     // Test echo function
-    auto result = co_await client.call<echo>("TLS 1.3 + GM test message to one-way server");
+    auto result = co_await client.call<echo>(
+        "TLS 1.3 + GM test message to one-way server");
     if (result) {
-      std::cout << "Echo result from TLS 1.3 + GM one-way server: " << result.value()
-                << std::endl;
+      std::cout << "Echo result from TLS 1.3 + GM one-way server: "
+                << result.value() << std::endl;
     }
     else {
       std::cout << "Echo failed: " << result.error().msg << std::endl;
     }
 
   } catch (const std::exception& e) {
-    std::cout << "RPC call error (TLS 1.3 + GM one-way): " << e.what() << std::endl;
+    std::cout << "RPC call error (TLS 1.3 + GM one-way): " << e.what()
+              << std::endl;
   }
 }
 
@@ -218,22 +226,25 @@ Lazy<void> test_tls13_gm_mutual_auth() {
   config.ca_cert_file = CA_CERT;
   config.server_name = "localhost";
   config.mode = ntls_mode::tls13_single_cert;  // TLS 1.3 + GM mode
-  config.cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
+  config.cipher_suites =
+      "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3";  // TLS 1.3 GM cipher suites
 
   bool ok = client.init_ntls(config);
 
   if (!ok) {
-    std::cout << "Failed to initialize TLS 1.3 + GM mutual auth client" << std::endl;
+    std::cout << "Failed to initialize TLS 1.3 + GM mutual auth client"
+              << std::endl;
     co_return;
   }
 
-  std::cout << "TLS 1.3 + GM mutual auth client initialized successfully" << std::endl;
+  std::cout << "TLS 1.3 + GM mutual auth client initialized successfully"
+            << std::endl;
 
   // Connect to TLS 1.3 + GM mutual auth server
   auto ec = co_await client.connect("127.0.0.1", "8804");
   if (ec) {
-    std::cout << "Failed to connect to TLS 1.3 + GM mutual auth server: " << ec.message()
-              << std::endl;
+    std::cout << "Failed to connect to TLS 1.3 + GM mutual auth server: "
+              << ec.message() << std::endl;
     co_return;
   }
 
@@ -242,18 +253,19 @@ Lazy<void> test_tls13_gm_mutual_auth() {
 
   try {
     // Test echo function
-    auto result =
-        co_await client.call<echo>("TLS 1.3 + GM test message to mutual auth server");
+    auto result = co_await client.call<echo>(
+        "TLS 1.3 + GM test message to mutual auth server");
     if (result) {
-      std::cout << "Echo result from TLS 1.3 + GM mutual auth server: " << result.value()
-                << std::endl;
+      std::cout << "Echo result from TLS 1.3 + GM mutual auth server: "
+                << result.value() << std::endl;
     }
     else {
       std::cout << "Echo failed: " << result.error().msg << std::endl;
     }
 
   } catch (const std::exception& e) {
-    std::cout << "RPC call error (TLS 1.3 + GM mutual auth): " << e.what() << std::endl;
+    std::cout << "RPC call error (TLS 1.3 + GM mutual auth): " << e.what()
+              << std::endl;
   }
 }
 
@@ -265,22 +277,24 @@ int main() {
               << std::endl;
     std::cout << "2. Mutual authentication (8802) - Requires client certificate"
               << std::endl;
-    std::cout << "TLS 1.3 + GM Single Certificate Mode (RFC 8998):" << std::endl;
+    std::cout << "TLS 1.3 + GM Single Certificate Mode (RFC 8998):"
+              << std::endl;
     std::cout << "3. One-way authentication (8803) - Server certificate only"
               << std::endl;
     std::cout << "4. Mutual authentication (8804) - Requires client certificate"
               << std::endl;
 
     std::cout << "\n=== TLCP Dual Certificate Mode Tests ===" << std::endl;
-    
+
     // Test TLCP one-way authentication client
     syncAwait(test_one_way_auth());
 
     // Test TLCP mutual authentication client
     syncAwait(test_mutual_auth());
 
-    std::cout << "\n=== TLS 1.3 + GM Single Certificate Mode Tests ===" << std::endl;
-    
+    std::cout << "\n=== TLS 1.3 + GM Single Certificate Mode Tests ==="
+              << std::endl;
+
     // Test TLS 1.3 + GM one-way authentication client
     syncAwait(test_tls13_gm_one_way_auth());
 
