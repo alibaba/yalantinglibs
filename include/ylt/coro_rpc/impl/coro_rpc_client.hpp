@@ -383,7 +383,8 @@ class coro_rpc_client {
       if (!config.ca_cert_path.empty() && file_exists(config.ca_cert_path)) {
         ELOG_INFO << "load CA cert " << config.ca_cert_path.string();
         if (!SSL_CTX_load_verify_locations(ssl_ctx_.native_handle(),
-                                           config.ca_cert_path.string().c_str(), nullptr)) {
+                                           config.ca_cert_path.string().c_str(),
+                                           nullptr)) {
           ELOG_WARN << "failed to load CA certificate";
         }
       }
@@ -391,9 +392,9 @@ class coro_rpc_client {
       // Set verification mode - use same approach as HTTP client
       if (config.enable_client_verify) {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-        // Note: Skip host_name_verification for NTLS as it may not be compatible
-        // The server certificate will still be verified against CA
-        //ssl_ctx_.set_verify_callback(
+        // Note: Skip host_name_verification for NTLS as it may not be
+        // compatible The server certificate will still be verified against CA
+        // ssl_ctx_.set_verify_callback(
         //    asio::ssl::host_name_verification(config.ssl_domain));
       }
       else {
@@ -533,7 +534,7 @@ class coro_rpc_client {
   //[[nodiscard]] bool init_ntls(const ssl_ntls_configure &conf) {
   //  return init_ntls(conf.base_path, conf.sign_cert_file, conf.sign_key_file,
   //                   conf.enc_cert_file, conf.enc_key_file, conf.ca_cert_file,
-  //                   conf..empty() ? "localhost" : conf.server_name, 
+  //                   conf..empty() ? "localhost" : conf.server_name,
   //                   conf.enable_client_verify);
   //}
 
@@ -555,7 +556,7 @@ class coro_rpc_client {
     std::string enc_key_path =
         std::filesystem::path(base_file).append(enc_key_file).string();
     std::string ca_cert_path;
-      
+
     if (!ca_cert_file.empty()) {
       ca_cert_path =
           std::filesystem::path(base_file).append(ca_cert_file).string();

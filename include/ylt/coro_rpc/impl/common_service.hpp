@@ -178,9 +178,9 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
     context.set_options(asio::ssl::context::default_workarounds |
                         asio::ssl::context::no_sslv2 |
                         asio::ssl::context::single_dh_use);
-    
+
     // Configure NTLS via Tongsuo native APIs
-    SSL_CTX* ctx = context.native_handle();
+    SSL_CTX *ctx = context.native_handle();
     if (!ctx) {
       ELOG_ERROR << "SSL_CTX native_handle is null";
       return false;
@@ -197,7 +197,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
       unsigned long err = ::ERR_get_error();
       ELOG_WARN << "Failed to set NTLS cipher suites '" << cipher_suites
                 << "': " << ::ERR_error_string(err, nullptr);
-    } else {
+    }
+    else {
       ELOG_INFO << "NTLS cipher suites set to: " << cipher_suites;
     }
     context.set_password_callback(
@@ -206,22 +207,23 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
           return "test";
         });
     auto sign_cert_file = fs::path(conf.base_path).append(conf.sign_cert_file);
-    auto sign_key_file  = fs::path(conf.base_path).append(conf.sign_key_file);
-    auto enc_cert_file  = fs::path(conf.base_path).append(conf.enc_cert_file);
-    auto enc_key_file   = fs::path(conf.base_path).append(conf.enc_key_file);
+    auto sign_key_file = fs::path(conf.base_path).append(conf.sign_key_file);
+    auto enc_cert_file = fs::path(conf.base_path).append(conf.enc_cert_file);
+    auto enc_key_file = fs::path(conf.base_path).append(conf.enc_key_file);
 
     ELOG_INFO << "current path " << fs::current_path().string();
 
     // Load SM2 signing certificate and key
     if (file_exists(sign_cert_file)) {
-      if (SSL_CTX_use_sign_certificate_file(ctx, sign_cert_file.string().c_str(),
-                                            SSL_FILETYPE_PEM) != 1) {
+      if (SSL_CTX_use_sign_certificate_file(
+              ctx, sign_cert_file.string().c_str(), SSL_FILETYPE_PEM) != 1) {
         unsigned long err = ::ERR_get_error();
         ELOG_ERROR << "failed to load SM2 signing certificate: "
                    << ::ERR_error_string(err, nullptr);
         return false;
       }
-    } else {
+    }
+    else {
       ELOG_ERROR << "no SM2 signing certificate file "
                  << sign_cert_file.string();
       return false;
@@ -235,9 +237,9 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                    << ::ERR_error_string(err, nullptr);
         return false;
       }
-    } else {
-      ELOG_ERROR << "no SM2 signing key file "
-                 << sign_key_file.string();
+    }
+    else {
+      ELOG_ERROR << "no SM2 signing key file " << sign_key_file.string();
       return false;
     }
 
@@ -250,7 +252,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                    << ::ERR_error_string(err, nullptr);
         return false;
       }
-    } else {
+    }
+    else {
       ELOG_ERROR << "no SM2 encryption certificate file "
                  << enc_cert_file.string();
       return false;
@@ -264,9 +267,9 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
                    << ::ERR_error_string(err, nullptr);
         return false;
       }
-    } else {
-      ELOG_ERROR << "no SM2 encryption key file "
-                 << enc_key_file.string();
+    }
+    else {
+      ELOG_ERROR << "no SM2 encryption key file " << enc_key_file.string();
       return false;
     }
 
@@ -277,8 +280,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
       if (file_exists(ca_cert_file)) {
         context.load_verify_file(ca_cert_file.string(), ec);
         if (ec) {
-          ELOG_WARN << "failed to load CA certificate: "
-                    << ec.message() << ", continuing without it";
+          ELOG_WARN << "failed to load CA certificate: " << ec.message()
+                    << ", continuing without it";
         }
       }
     }
@@ -286,7 +289,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
     // Set verification mode
     if (conf.enable_client_verify) {
       context.set_verify_mode(asio::ssl::verify_peer, ec);
-    } else {
+    }
+    else {
       context.set_verify_mode(asio::ssl::verify_none, ec);
     }
     if (ec) {

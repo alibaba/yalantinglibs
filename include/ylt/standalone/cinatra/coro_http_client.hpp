@@ -140,7 +140,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifndef OPENSSL_NO_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif          // OPENSSL_NO_NTLS
+#endif  // OPENSSL_NO_NTLS
 #endif
   };
 
@@ -1519,7 +1519,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
       }
 
-       if (!passwd.empty()) {
+      if (!passwd.empty()) {
         ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
           return pwd;
         });
@@ -1559,7 +1559,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           return false;
         }
       }
-     
+
       // Load CA certificate if provided
       if (!ca_cert_file.empty()) {
         if (!SSL_CTX_load_verify_locations(ssl_ctx_->native_handle(),

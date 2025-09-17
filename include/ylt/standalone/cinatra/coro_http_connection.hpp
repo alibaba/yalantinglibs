@@ -102,7 +102,7 @@ class coro_http_connection
   /*!
    * Initialize NTLS SSL context with dual certificates (Tongsuo native API)
    */
-  //bool init_ntls(const std::string &sign_cert_file,
+  // bool init_ntls(const std::string &sign_cert_file,
   //               const std::string &sign_key_file,
   //               const std::string &enc_cert_file,
   //               const std::string &enc_key_file,
@@ -114,14 +114,13 @@ class coro_http_connection
   //
   //}
   bool init_ntls(const auto &ntls_config, std::string passwd) {
-    
     try {
       // Create SSL context with TLCP server method
       ssl_ctx_ =
           std::make_unique<asio::ssl::context>(SSL_CTX_new(NTLS_method()));
 
       // Enable NTLS using Tongsuo native API
-      SSL_CTX* ctx = ssl_ctx_->native_handle();
+      SSL_CTX *ctx = ssl_ctx_->native_handle();
       if (!ctx) {
         CINATRA_LOG_ERROR << "SSL_CTX native_handle is null";
         return false;
@@ -143,7 +142,7 @@ class coro_http_connection
                             << "': " << ::ERR_error_string(err, nullptr);
       }
 
-     // Set context options
+      // Set context options
       ssl_ctx_->set_options(asio::ssl::context::default_workarounds |
                             asio::ssl::context::no_sslv2 |
                             asio::ssl::context::single_dh_use);
@@ -176,30 +175,32 @@ class coro_http_connection
 
       // Load SM2 signing certificate and key
       if (fs::exists(sign_cert_path, file_ec)) {
-        if (SSL_CTX_use_sign_certificate_file(ctx, sign_cert_path.string().c_str(),
-                                              SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_sign_certificate_file(
+                ctx, sign_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
           unsigned long err = ::ERR_get_error();
           CINATRA_LOG_ERROR << "failed to load SM2 signing certificate: "
                             << sign_cert_path.string()
                             << ", err: " << ::ERR_error_string(err, nullptr);
           return false;
         }
-      } else {
+      }
+      else {
         CINATRA_LOG_ERROR << "SM2 signing certificate file not found: "
                           << sign_cert_path.string();
         return false;
       }
 
       if (fs::exists(sign_key_path, file_ec)) {
-        if (SSL_CTX_use_sign_PrivateKey_file(ctx, sign_key_path.string().c_str(),
-                                             SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_sign_PrivateKey_file(
+                ctx, sign_key_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
           unsigned long err = ::ERR_get_error();
           CINATRA_LOG_ERROR << "failed to load SM2 signing private key: "
                             << sign_key_path.string()
                             << ", err: " << ::ERR_error_string(err, nullptr);
           return false;
         }
-      } else {
+      }
+      else {
         CINATRA_LOG_ERROR << "SM2 signing key file not found: "
                           << sign_key_path.string();
         return false;
@@ -207,15 +208,16 @@ class coro_http_connection
 
       // Load SM2 encryption certificate and key
       if (fs::exists(enc_cert_path, file_ec)) {
-        if (SSL_CTX_use_enc_certificate_file(ctx, enc_cert_path.string().c_str(),
-                                             SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_enc_certificate_file(
+                ctx, enc_cert_path.string().c_str(), SSL_FILETYPE_PEM) != 1) {
           unsigned long err = ::ERR_get_error();
           CINATRA_LOG_ERROR << "failed to load SM2 encryption certificate: "
                             << enc_cert_path.string()
                             << ", err: " << ::ERR_error_string(err, nullptr);
           return false;
         }
-      } else {
+      }
+      else {
         CINATRA_LOG_ERROR << "SM2 encryption certificate file not found: "
                           << enc_cert_path.string();
         return false;
@@ -230,7 +232,8 @@ class coro_http_connection
                             << ", err: " << ::ERR_error_string(err, nullptr);
           return false;
         }
-      } else {
+      }
+      else {
         CINATRA_LOG_ERROR << "SM2 encryption key file not found: "
                           << enc_key_path.string();
         return false;
@@ -245,9 +248,9 @@ class coro_http_connection
           asio::error_code ec;
           ssl_ctx_->load_verify_file(ca_cert_path.string(), ec);
           if (ec) {
-            CINATRA_LOG_WARNING << "failed to load CA certificate: "
-                                << ca_cert_path.string()
-                                << ", error: " << ec.message();
+            CINATRA_LOG_WARNING
+                << "failed to load CA certificate: " << ca_cert_path.string()
+                << ", error: " << ec.message();
           }
         }
       }
@@ -263,7 +266,7 @@ class coro_http_connection
       if (ec) {
         CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
       }
-      
+
       // Create SSL stream
       socket_wrapper_.ssl_stream() =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
