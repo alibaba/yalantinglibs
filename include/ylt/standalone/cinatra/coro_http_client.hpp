@@ -184,6 +184,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #ifdef CINATRA_ENABLE_SSL
     set_ssl_schema(conf.use_ssl);
+#ifndef OPENSSL_NO_NTLS
+    set_ntls_schema(conf.use_ntls);
+#endif  // OPENSSL_NO_NTLS
 #endif
     return true;
   }
@@ -1497,7 +1500,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                         const std::string &enc_cert_file,
                         const std::string &enc_key_file,
                         const std::string &ca_cert_file = "",
-                        int verify_mode = asio::ssl::verify_none) {
+                        int verify_mode = asio::ssl::verify_none,
+                        const std::string &passwd = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1513,6 +1517,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (!SSL_CTX_set_cipher_list(ssl_ctx_->native_handle(),
                                    "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
         CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+      }
+
+       if (!passwd.empty()) {
+        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+          return pwd;
+        });
       }
 
       // Load client certificates if provided (for mutual authentication)
@@ -1549,7 +1559,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           return false;
         }
       }
-
+     
       // Load CA certificate if provided
       if (!ca_cert_file.empty()) {
         if (!SSL_CTX_load_verify_locations(ssl_ctx_->native_handle(),

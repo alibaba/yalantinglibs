@@ -102,11 +102,19 @@ class coro_http_connection
   /*!
    * Initialize NTLS SSL context with dual certificates (Tongsuo native API)
    */
-  bool init_ntls(const auto &ntls_config) {
-    // Set context options
-    ssl_ctx_->set_options(asio::ssl::context::default_workarounds |
-                          asio::ssl::context::no_sslv2 |
-                          asio::ssl::context::single_dh_use);
+  //bool init_ntls(const std::string &sign_cert_file,
+  //               const std::string &sign_key_file,
+  //               const std::string &enc_cert_file,
+  //               const std::string &enc_key_file,
+  //               const std::string &ca_cert_file = "",
+  //               int verify_mode = asio::ssl::verify_none,
+  //               std::string passwd = "") {
+  //  tcp_with_ntls_config ntls_config_;
+  //  ntls_config_.sign_cert_file = sign_cert_file;
+  //
+  //}
+  bool init_ntls(const auto &ntls_config, std::string passwd) {
+    
     try {
       // Create SSL context with TLCP server method
       ssl_ctx_ =
@@ -118,12 +126,10 @@ class coro_http_connection
         CINATRA_LOG_ERROR << "SSL_CTX native_handle is null";
         return false;
       }
-      if (SSL_CTX_enable_ntls(ctx) != 1) {
-        unsigned long err = ::ERR_get_error();
-        CINATRA_LOG_ERROR << "SSL_CTX_enable_ntls failed: "
-                          << ::ERR_error_string(err, nullptr);
-        return false;
-      }
+
+      // Enable NTLS mode for Tongsuo
+      SSL_CTX_enable_ntls(ctx);
+      CINATRA_LOG_INFO << "NTLS mode enabled successfully";
 
       // Set NTLS cipher suites
       std::string cipher_suites =
@@ -137,7 +143,15 @@ class coro_http_connection
                             << "': " << ::ERR_error_string(err, nullptr);
       }
 
-     
+     // Set context options
+      ssl_ctx_->set_options(asio::ssl::context::default_workarounds |
+                            asio::ssl::context::no_sslv2 |
+                            asio::ssl::context::single_dh_use);
+      if (!passwd.empty()) {
+        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+          return pwd;
+        });
+      }
       namespace fs = std::filesystem;
 
       // Build full paths

@@ -834,6 +834,8 @@ struct memory_reader;
                                             ignore_compatible_field,parent_tag_>::value &&
                     ...);
       }
+    
+    public:
       static constexpr bool solve() {
         if constexpr (user_defined_serialization<T>) {
           return false;
@@ -893,8 +895,7 @@ struct memory_reader;
           return false;
       }
 
-    public:
-      static inline constexpr bool value = is_trivial_serializable::solve();
+      static inline constexpr bool value = is_trivial_serializable<std::remove_cv_t<T>,ignore_compatible_field,parent_tag>::solve();
   };
 
 }

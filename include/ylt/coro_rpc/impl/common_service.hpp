@@ -186,6 +186,7 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
       return false;
     }
 
+    // Enable NTLS mode for Tongsuo
     SSL_CTX_enable_ntls(ctx);
     ELOG_INFO << "NTLS mode enabled successfully";
     // Set NTLS cipher suites (SM2/SM3/SM4)

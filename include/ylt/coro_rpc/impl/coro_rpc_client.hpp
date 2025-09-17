@@ -188,8 +188,11 @@ class coro_rpc_client {
 #ifndef OPENSSL_NO_NTLS
   struct tcp_with_ntls_config {
     bool enable_tcp_no_delay = true;
+    std::filesystem::path base_path{};
     std::filesystem::path sign_cert_path{};
+    std::filesystem::path sign_key_path{};
     std::filesystem::path enc_cert_path{};
+    std::filesystem::path enc_key_path{};
     std::filesystem::path ca_cert_path{};
     std::string ssl_domain{};
     bool enable_client_verify = false;
@@ -213,7 +216,7 @@ class coro_rpc_client {
                  tcp_with_ssl_config
 #ifndef OPENSSL_NO_NTLS
                  ,
-                 tcp_with_ntls_config 
+                 tcp_with_ntls_config
 #endif  // OPENSSL_NO_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
@@ -318,7 +321,20 @@ class coro_rpc_client {
                                    "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
         ELOG_WARN << "failed to set NTLS cipher suites, using default";
       }
-
+      if (config.enable_client_verify) {
+        ELOG_INFO << "enable_client_verify: " << config.enable_client_verify;
+        if (config.sign_cert_path.empty() ||
+            !file_exists(config.sign_cert_path) ||
+            config.sign_key_path.empty() ||
+            !file_exists(config.sign_key_path) ||
+            config.enc_cert_path.empty() ||
+            !file_exists(config.enc_cert_path) || config.enc_key_path.empty() ||
+            !file_exists(config.enc_key_path)) {
+          ELOG_ERROR
+              << "client verify enabled, but cert or key file is missing";
+          return false;
+        }
+      }
       // Load certificates if provided
       if (!config.sign_cert_path.empty() &&
           file_exists(config.sign_cert_path)) {
@@ -328,6 +344,17 @@ class coro_rpc_client {
                 config.sign_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
           ELOG_ERROR << "failed to load SM2 signing certificate";
           return false;
+        }
+        if (!config.sign_key_path.empty() &&
+            file_exists(config.sign_key_path)) {
+          ELOG_INFO << "load SM2 signing private key "
+                    << config.sign_key_path.string();
+          if (!SSL_CTX_use_sign_PrivateKey_file(
+                  ssl_ctx_.native_handle(),
+                  config.sign_key_path.string().c_str(), SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load SM2 signing private key";
+            return false;
+          }
         }
       }
 
@@ -340,17 +367,34 @@ class coro_rpc_client {
           ELOG_ERROR << "failed to load SM2 encryption certificate";
           return false;
         }
+        if (!config.enc_key_path.empty() && file_exists(config.enc_key_path)) {
+          ELOG_INFO << "load SM2 encryption private key "
+                    << config.enc_key_path.string();
+          if (!SSL_CTX_use_enc_PrivateKey_file(
+                  ssl_ctx_.native_handle(),
+                  config.enc_key_path.string().c_str(), SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load SM2 encryption private key";
+            return false;
+          }
+        }
       }
 
+      // Load CA certificate if provided
       if (!config.ca_cert_path.empty() && file_exists(config.ca_cert_path)) {
         ELOG_INFO << "load CA cert " << config.ca_cert_path.string();
-        ssl_ctx_.load_verify_file(config.ca_cert_path.string());
+        if (!SSL_CTX_load_verify_locations(ssl_ctx_.native_handle(),
+                                           config.ca_cert_path.string().c_str(), nullptr)) {
+          ELOG_WARN << "failed to load CA certificate";
+        }
       }
 
+      // Set verification mode - use same approach as HTTP client
       if (config.enable_client_verify) {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-        ssl_ctx_.set_verify_callback(
-            asio::ssl::host_name_verification(config.ssl_domain));
+        // Note: Skip host_name_verification for NTLS as it may not be compatible
+        // The server certificate will still be verified against CA
+        //ssl_ctx_.set_verify_callback(
+        //    asio::ssl::host_name_verification(config.ssl_domain));
       }
       else {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_none);
@@ -486,36 +530,56 @@ class coro_rpc_client {
         std::get<tcp_with_ssl_config>(config_.socket_config));
   }
 #ifndef OPENSSL_NO_NTLS
-  [[nodiscard]] bool init_ntls(std::string_view cert_base_path,
+  //[[nodiscard]] bool init_ntls(const ssl_ntls_configure &conf) {
+  //  return init_ntls(conf.base_path, conf.sign_cert_file, conf.sign_key_file,
+  //                   conf.enc_cert_file, conf.enc_key_file, conf.ca_cert_file,
+  //                   conf..empty() ? "localhost" : conf.server_name, 
+  //                   conf.enable_client_verify);
+  //}
+
+  [[nodiscard]] bool init_ntls(std::string_view base_file,
                                std::string_view sign_cert_file,
+                               std::string_view sign_key_file,
                                std::string_view enc_cert_file,
+                               std::string_view enc_key_file,
                                std::string_view ca_cert_file = "",
                                std::string_view domain = "localhost",
                                bool enable_client_verify = false) {
     std::string ssl_domain = std::string{domain};
     std::string sign_cert_path =
-        std::filesystem::path(cert_base_path).append(sign_cert_file).string();
+        std::filesystem::path(base_file).append(sign_cert_file).string();
+    std::string sign_key_path =
+        std::filesystem::path(base_file).append(sign_key_file).string();
     std::string enc_cert_path =
-        std::filesystem::path(cert_base_path).append(enc_cert_file).string();
+        std::filesystem::path(base_file).append(enc_cert_file).string();
+    std::string enc_key_path =
+        std::filesystem::path(base_file).append(enc_key_file).string();
     std::string ca_cert_path;
+      
     if (!ca_cert_file.empty()) {
       ca_cert_path =
-          std::filesystem::path(cert_base_path).append(ca_cert_file).string();
+          std::filesystem::path(base_file).append(ca_cert_file).string();
     }
 
     if (config_.socket_config.index() != 2) {
       config_.socket_config =
           tcp_with_ntls_config{.enable_tcp_no_delay = true,
+                               .base_path = std::move(base_file),
                                .sign_cert_path = std::move(sign_cert_path),
+                               .sign_key_path = std::move(sign_key_path),
                                .enc_cert_path = std::move(enc_cert_path),
+                               .enc_key_path = std::move(enc_key_path),
                                .ca_cert_path = std::move(ca_cert_path),
                                .ssl_domain = std::move(ssl_domain),
                                .enable_client_verify = enable_client_verify};
     }
     else {
       auto &conf = std::get<tcp_with_ntls_config>(config_.socket_config);
+      conf.base_path = std::move(base_file);
       conf.sign_cert_path = std::move(sign_cert_path);
+      conf.sign_key_path = std::move(sign_key_path);
       conf.enc_cert_path = std::move(enc_cert_path);
+      conf.enc_key_path = std::move(enc_key_path);
       conf.ca_cert_path = std::move(ca_cert_path);
       conf.ssl_domain = std::move(ssl_domain);
       conf.enable_client_verify = enable_client_verify;

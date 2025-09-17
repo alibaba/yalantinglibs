@@ -92,7 +92,8 @@ class coro_http_server {
                  const std::string &enc_cert_file,
                  const std::string &enc_key_file,
                  const std::string &ca_cert_file = "",
-                 bool enable_client_verify = false) {
+                 bool enable_client_verify = false,
+                 const std::string &passwd = "") {
     ntls_config_.sign_cert_file = sign_cert_file;
     ntls_config_.sign_key_file = sign_key_file;
     ntls_config_.enc_cert_file = enc_cert_file;
@@ -101,6 +102,7 @@ class coro_http_server {
     ntls_config_.enable_client_verify = enable_client_verify;
     ntls_config_.enable_ntls = true;
     use_ntls_ = true;
+    passwd_ = passwd;
   }
 
   /*!
@@ -772,6 +774,11 @@ class coro_http_server {
     if (!is_transfer_connect && use_ssl_) {
       conn->init_ssl(cert_file_, key_file_, passwd_);
     }
+#ifndef OPENSSL_NO_NTLS
+    else if (!is_transfer_connect && use_ntls_) {
+      conn->init_ntls(ntls_config_, passwd_);
+    }
+#endif  // OPENSSL_NO_NTLS
 #endif
     std::weak_ptr<std::mutex> weak(conn_mtx_);
     conn->set_quit_callback(
