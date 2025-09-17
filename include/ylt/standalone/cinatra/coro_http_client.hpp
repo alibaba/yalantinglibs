@@ -137,6 +137,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_SSL
     bool use_ssl =
         false;  // if set use_ssl true, cinatra will add https automaticlly.
+#ifndef OPENSSL_NO_NTLS
+    bool use_ntls =
+        false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
+#endif          // OPENSSL_NO_NTLS
 #endif
   };
 
@@ -211,8 +215,26 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     try {
-      ssl_ctx_ =
-          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+#ifndef OPENSSL_NO_NTLS
+      if (use_ntls_) {
+        ssl_ctx_ = std::make_unique<asio::ssl::context>(
+            SSL_CTX_new(NTLS_client_method()));
+
+        // Enable NTLS mode for Tongsuo
+        SSL_CTX_enable_ntls(ssl_ctx_->native_handle());
+
+        // Set NTLS cipher suites
+        if (!SSL_CTX_set_cipher_list(
+                ssl_ctx_->native_handle(),
+                "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+          CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+        }
+      }
+      else {
+        ssl_ctx_ =
+            std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+      }
+#endif  // OPENSSL_NO_NTLS
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
         ssl_ctx_->load_verify_file(full_cert_file.string());
@@ -1464,6 +1486,93 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef CINATRA_ENABLE_SSL
   void set_ssl_schema(bool r) { is_ssl_schema_ = r; }
+#ifndef OPENSSL_NO_NTLS
+  void set_ntls_schema(bool r) { use_ntls_ = r; }
+
+  /*!
+   * Initialize NTLS client with dual certificates
+   */
+  bool init_ntls_client(const std::string &sign_cert_file,
+                        const std::string &sign_key_file,
+                        const std::string &enc_cert_file,
+                        const std::string &enc_key_file,
+                        const std::string &ca_cert_file = "",
+                        int verify_mode = asio::ssl::verify_none) {
+    if (has_init_ssl_) {
+      return true;
+    }
+
+    try {
+      ssl_ctx_ = std::make_unique<asio::ssl::context>(
+          SSL_CTX_new(NTLS_client_method()));
+
+      // Enable NTLS mode for Tongsuo
+      SSL_CTX_enable_ntls(ssl_ctx_->native_handle());
+
+      // Set NTLS cipher suites
+      if (!SSL_CTX_set_cipher_list(ssl_ctx_->native_handle(),
+                                   "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+        CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+      }
+
+      // Load client certificates if provided (for mutual authentication)
+      if (!sign_cert_file.empty() && !sign_key_file.empty()) {
+        if (!SSL_CTX_use_sign_certificate_file(ssl_ctx_->native_handle(),
+                                               sign_cert_file.c_str(),
+                                               SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR << "failed to load client SM2 signing certificate";
+          return false;
+        }
+
+        if (!SSL_CTX_use_sign_PrivateKey_file(ssl_ctx_->native_handle(),
+                                              sign_key_file.c_str(),
+                                              SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR << "failed to load client SM2 signing private key";
+          return false;
+        }
+      }
+
+      if (!enc_cert_file.empty() && !enc_key_file.empty()) {
+        if (!SSL_CTX_use_enc_certificate_file(ssl_ctx_->native_handle(),
+                                              enc_cert_file.c_str(),
+                                              SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR
+              << "failed to load client SM2 encryption certificate";
+          return false;
+        }
+
+        if (!SSL_CTX_use_enc_PrivateKey_file(ssl_ctx_->native_handle(),
+                                             enc_key_file.c_str(),
+                                             SSL_FILETYPE_PEM)) {
+          CINATRA_LOG_ERROR
+              << "failed to load client SM2 encryption private key";
+          return false;
+        }
+      }
+
+      // Load CA certificate if provided
+      if (!ca_cert_file.empty()) {
+        if (!SSL_CTX_load_verify_locations(ssl_ctx_->native_handle(),
+                                           ca_cert_file.c_str(), nullptr)) {
+          CINATRA_LOG_WARNING << "failed to load CA certificate";
+        }
+      }
+
+      ssl_ctx_->set_verify_mode(verify_mode);
+
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+
+      has_init_ssl_ = true;
+      use_ntls_ = true;
+      return true;
+    } catch (std::exception &e) {
+      CINATRA_LOG_ERROR << "init NTLS client failed: " << e.what();
+      return false;
+    }
+  }
+#endif  // OPENSSL_NO_NTLS
 #endif
 
   std::string get_redirect_uri() { return redirect_uri_; }
@@ -2466,6 +2575,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   bool has_init_ssl_ = false;
   bool is_ssl_schema_ = false;
+#ifndef OPENSSL_NO_NTLS
+  bool use_ntls_ = false;
+#endif  // OPENSSL_NO_NTLS
   bool need_set_sni_host_ = true;
 #endif
   std::string redirect_uri_;

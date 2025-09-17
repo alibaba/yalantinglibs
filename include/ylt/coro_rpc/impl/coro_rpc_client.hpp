@@ -185,6 +185,16 @@ class coro_rpc_client {
     std::filesystem::path ssl_cert_path{};
     std::string ssl_domain{};
   };
+#ifndef OPENSSL_NO_NTLS
+  struct tcp_with_ntls_config {
+    bool enable_tcp_no_delay = true;
+    std::filesystem::path sign_cert_path{};
+    std::filesystem::path enc_cert_path{};
+    std::filesystem::path ca_cert_path{};
+    std::string ssl_domain{};
+    bool enable_client_verify = false;
+  };
+#endif  // OPENSSL_NO_NTLS
 #endif
   struct config {
     static inline uint64_t get_global_client_id() {
@@ -201,6 +211,10 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
                  ,
                  tcp_with_ssl_config
+#ifndef OPENSSL_NO_NTLS
+                 ,
+                 tcp_with_ntls_config 
+#endif  // OPENSSL_NO_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
                  ,
@@ -286,6 +300,77 @@ class coro_rpc_client {
     }
     return ssl_init_ret_;
   }
+#ifndef OPENSSL_NO_NTLS
+  [[nodiscard]] bool init_socket_wrapper(const tcp_with_ntls_config &config) {
+    try {
+      ssl_init_ret_ = false;
+      ELOG_INFO << "init NTLS: " << config.ssl_domain;
+
+      // Create SSL context with TLCP client method for NTLS
+      ssl_ctx_ = asio::ssl::context(SSL_CTX_new(NTLS_client_method()));
+
+      // Enable NTLS mode - Tongsuo will handle protocol version automatically
+      SSL_CTX_enable_ntls(ssl_ctx_.native_handle());
+      ELOG_INFO << "NTLS mode enabled successfully";
+
+      // Set cipher suites for NTLS (SM2/SM3/SM4)
+      if (!SSL_CTX_set_cipher_list(ssl_ctx_.native_handle(),
+                                   "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+        ELOG_WARN << "failed to set NTLS cipher suites, using default";
+      }
+
+      // Load certificates if provided
+      if (!config.sign_cert_path.empty() &&
+          file_exists(config.sign_cert_path)) {
+        ELOG_INFO << "load SM2 signing cert " << config.sign_cert_path.string();
+        if (!SSL_CTX_use_sign_certificate_file(
+                ssl_ctx_.native_handle(),
+                config.sign_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
+          ELOG_ERROR << "failed to load SM2 signing certificate";
+          return false;
+        }
+      }
+
+      if (!config.enc_cert_path.empty() && file_exists(config.enc_cert_path)) {
+        ELOG_INFO << "load SM2 encryption cert "
+                  << config.enc_cert_path.string();
+        if (!SSL_CTX_use_enc_certificate_file(
+                ssl_ctx_.native_handle(), config.enc_cert_path.string().c_str(),
+                SSL_FILETYPE_PEM)) {
+          ELOG_ERROR << "failed to load SM2 encryption certificate";
+          return false;
+        }
+      }
+
+      if (!config.ca_cert_path.empty() && file_exists(config.ca_cert_path)) {
+        ELOG_INFO << "load CA cert " << config.ca_cert_path.string();
+        ssl_ctx_.load_verify_file(config.ca_cert_path.string());
+      }
+
+      if (config.enable_client_verify) {
+        ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
+        ssl_ctx_.set_verify_callback(
+            asio::ssl::host_name_verification(config.ssl_domain));
+      }
+      else {
+        ssl_ctx_.set_verify_mode(asio::ssl::verify_none);
+      }
+
+      auto init_result = control_->socket_wrapper_.init_client(
+          ssl_ctx_, config.enable_tcp_no_delay);
+      if (!init_result) {
+        return false;
+      }
+      ssl_init_ret_ = true;
+
+      ELOG_INFO << "NTLS client context initialized successfully - protocol "
+                   "version will be negotiated automatically";
+    } catch (const std::exception &e) {
+      ELOG_ERROR << "init NTLS failed: " << e.what();
+    }
+    return ssl_init_ret_;
+  }
+#endif  // OPENSSL_NO_NTLS
 #endif
   [[nodiscard]] bool init_config(const config &conf) {
     create_tp_ = std::chrono::steady_clock::now();
@@ -386,7 +471,7 @@ class coro_rpc_client {
                               std::string_view domain = "localhost") {
     std::string ssl_domain = std::string{domain};
     std::string ssl_cert_path =
-        std::filesystem::path(cert_base_path).append(cert_file_name);
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
     if (config_.socket_config.index() != 1) {
       config_.socket_config =
           tcp_with_ssl_config{.ssl_cert_path = std::move(ssl_cert_path),
@@ -400,6 +485,45 @@ class coro_rpc_client {
     return init_socket_wrapper(
         std::get<tcp_with_ssl_config>(config_.socket_config));
   }
+#ifndef OPENSSL_NO_NTLS
+  [[nodiscard]] bool init_ntls(std::string_view cert_base_path,
+                               std::string_view sign_cert_file,
+                               std::string_view enc_cert_file,
+                               std::string_view ca_cert_file = "",
+                               std::string_view domain = "localhost",
+                               bool enable_client_verify = false) {
+    std::string ssl_domain = std::string{domain};
+    std::string sign_cert_path =
+        std::filesystem::path(cert_base_path).append(sign_cert_file).string();
+    std::string enc_cert_path =
+        std::filesystem::path(cert_base_path).append(enc_cert_file).string();
+    std::string ca_cert_path;
+    if (!ca_cert_file.empty()) {
+      ca_cert_path =
+          std::filesystem::path(cert_base_path).append(ca_cert_file).string();
+    }
+
+    if (config_.socket_config.index() != 2) {
+      config_.socket_config =
+          tcp_with_ntls_config{.enable_tcp_no_delay = true,
+                               .sign_cert_path = std::move(sign_cert_path),
+                               .enc_cert_path = std::move(enc_cert_path),
+                               .ca_cert_path = std::move(ca_cert_path),
+                               .ssl_domain = std::move(ssl_domain),
+                               .enable_client_verify = enable_client_verify};
+    }
+    else {
+      auto &conf = std::get<tcp_with_ntls_config>(config_.socket_config);
+      conf.sign_cert_path = std::move(sign_cert_path);
+      conf.enc_cert_path = std::move(enc_cert_path);
+      conf.ca_cert_path = std::move(ca_cert_path);
+      conf.ssl_domain = std::move(ssl_domain);
+      conf.enable_client_verify = enable_client_verify;
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ntls_config>(config_.socket_config));
+  }
+#endif  // OPENSSL_NO_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_ibv(

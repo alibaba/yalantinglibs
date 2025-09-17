@@ -76,6 +76,61 @@ class coro_http_server {
     passwd_ = passwd;
     use_ssl_ = true;
   }
+
+#ifndef OPENSSL_NO_NTLS
+  /*!
+   * Initialize NTLS with dual certificates (signing and encryption)
+   * @param sign_cert_file SM2 signing certificate file path
+   * @param sign_key_file SM2 signing private key file path
+   * @param enc_cert_file SM2 encryption certificate file path
+   * @param enc_key_file SM2 encryption private key file path
+   * @param ca_cert_file CA certificate file path (optional)
+   * @param enable_client_verify enable client certificate verification
+   */
+  void init_ntls(const std::string &sign_cert_file,
+                 const std::string &sign_key_file,
+                 const std::string &enc_cert_file,
+                 const std::string &enc_key_file,
+                 const std::string &ca_cert_file = "",
+                 bool enable_client_verify = false) {
+    ntls_config_.sign_cert_file = sign_cert_file;
+    ntls_config_.sign_key_file = sign_key_file;
+    ntls_config_.enc_cert_file = enc_cert_file;
+    ntls_config_.enc_key_file = enc_key_file;
+    ntls_config_.ca_cert_file = ca_cert_file;
+    ntls_config_.enable_client_verify = enable_client_verify;
+    ntls_config_.enable_ntls = true;
+    use_ntls_ = true;
+  }
+
+  /*!
+   * Initialize NTLS with base path and relative file paths
+   */
+  void init_ntls(const std::string &base_path,
+                 const std::string &sign_cert_file,
+                 const std::string &sign_key_file,
+                 const std::string &enc_cert_file,
+                 const std::string &enc_key_file,
+                 const std::string &ca_cert_file = "",
+                 bool enable_client_verify = false) {
+    ntls_config_.base_path = base_path;
+    ntls_config_.sign_cert_file = sign_cert_file;
+    ntls_config_.sign_key_file = sign_key_file;
+    ntls_config_.enc_cert_file = enc_cert_file;
+    ntls_config_.enc_key_file = enc_key_file;
+    ntls_config_.ca_cert_file = ca_cert_file;
+    ntls_config_.enable_client_verify = enable_client_verify;
+    ntls_config_.enable_ntls = true;
+    use_ntls_ = true;
+  }
+
+  /*!
+   * Set NTLS cipher suites
+   */
+  void set_ntls_cipher_suites(const std::string &cipher_suites) {
+    ntls_config_.cipher_suites = cipher_suites;
+  }
+#endif  // OPENSSL_NO_NTLS
 #endif
 
   // only call once, not thread safe.
@@ -1065,6 +1120,21 @@ class coro_http_server {
   std::string key_file_;
   std::string passwd_;
   bool use_ssl_ = false;
+#ifndef OPENSSL_NO_NTLS
+  bool use_ntls_ = false;
+  // NTLS configuration
+  struct {
+    std::string base_path;
+    std::string sign_cert_file;
+    std::string sign_key_file;
+    std::string enc_cert_file;
+    std::string enc_key_file;
+    std::string ca_cert_file;
+    std::string cipher_suites = "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3";
+    bool enable_client_verify = false;
+    bool enable_ntls = false;
+  } ntls_config_;
+#endif  // OPENSSL_NO_NTLS
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
