@@ -28,7 +28,6 @@
 #include <sys/time.h>
 #endif
 
-
 // modified based on: brpc/src/bvar/default_variables.cpp
 
 namespace ylt::metric {
@@ -84,7 +83,8 @@ inline int64_t gettimeofday_us() {
 #ifdef _WIN32
   auto now = std::chrono::system_clock::now();
   auto duration = now.time_since_epoch();
-  return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+  return std::chrono::duration_cast<std::chrono::microseconds>(duration)
+      .count();
 #else
   timeval now;
   gettimeofday(&now, NULL);
@@ -93,9 +93,7 @@ inline int64_t gettimeofday_us() {
 }
 
 #ifdef _WIN32
-inline int64_t timeval_to_microseconds(int64_t dummy) {
-  return 0;
-}
+inline int64_t timeval_to_microseconds(int64_t dummy) { return 0; }
 #else
 inline int64_t timeval_to_microseconds(const timeval& tv) {
   return tv.tv_sec * 1000000L + tv.tv_usec;
