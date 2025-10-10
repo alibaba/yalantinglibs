@@ -72,11 +72,11 @@ add_executable(coro_rpc_example_concurrent_clients concurrent_clients.cpp)
 add_executable(coro_rpc_example_server server.cpp rpc_service.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-  target_link_libraries(coro_rpc_example_load_balancer wsock32 ws2_32)
-  target_link_libraries(coro_rpc_example_client_pool wsock32 ws2_32)
-  target_link_libraries(coro_rpc_example_client_pools wsock32 ws2_32)
-  target_link_libraries(coro_rpc_example_client wsock32 ws2_32)
-  target_link_libraries(coro_rpc_example_concurrent_clients wsock32 ws2_32)
-  target_link_libraries(coro_rpc_example_server wsock32 ws2_32)
+  target_link_libraries(coro_rpc_example_load_balancer PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_example_client_pool PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_example_client_pools PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_example_client PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_example_concurrent_clients PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_example_server PRIVATE ws2_32 mswsock)
 endif()
 

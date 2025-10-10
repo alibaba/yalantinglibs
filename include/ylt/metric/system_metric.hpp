@@ -1,7 +1,4 @@
 #pragma once
-#if defined(__GNUC__)
-#include <sys/resource.h>
-#include <sys/time.h>
 
 #include <chrono>
 #include <cstdint>
@@ -24,6 +21,11 @@
 #include "cinatra/ylt/metric/gauge.hpp"
 #include "cinatra/ylt/metric/metric.hpp"
 #include "cinatra/ylt/metric/metric_manager.hpp"
+#endif
+
+#if defined(__GNUC__) && !defined(_WIN32)
+#include <sys/resource.h>
+#include <sys/time.h>
 #endif
 
 // modified based on: brpc/src/bvar/default_variables.cpp
@@ -78,14 +80,25 @@ inline int64_t last_sys_time_us = 0;
 inline int64_t last_user_time_us = 0;
 
 inline int64_t gettimeofday_us() {
+#ifdef _WIN32
+  auto now = std::chrono::system_clock::now();
+  auto duration = now.time_since_epoch();
+  return std::chrono::duration_cast<std::chrono::microseconds>(duration)
+      .count();
+#else
   timeval now;
   gettimeofday(&now, NULL);
   return now.tv_sec * 1000000L + now.tv_usec;
+#endif
 }
 
+#ifdef _WIN32
+inline int64_t timeval_to_microseconds(int64_t dummy) { return 0; }
+#else
 inline int64_t timeval_to_microseconds(const timeval& tv) {
   return tv.tv_sec * 1000000L + tv.tv_usec;
 }
+#endif
 
 inline void stat_cpu() {
   static auto process_cpu_usage =
@@ -98,6 +111,11 @@ inline void stat_cpu() {
       system_metric_manager::instance()->get_metric_static<gauge_t>(
           "ylt_process_cpu_usage_user");
 
+#ifdef _WIN32
+  process_cpu_usage->update(0.0);
+  process_cpu_usage_system->update(0.0);
+  process_cpu_usage_user->update(0.0);
+#else
   rusage usage{};
   getrusage(RUSAGE_SELF, &usage);
   int64_t utime = timeval_to_microseconds(usage.ru_utime);
@@ -130,6 +148,7 @@ inline void stat_cpu() {
   last_time_us = now;
   last_sys_time_us = stime;
   last_user_time_us = utime;
+#endif
 }
 
 inline void stat_memory() {
@@ -142,9 +161,15 @@ inline void stat_memory() {
   static auto process_memory_shared =
       system_metric_manager::instance()->get_metric_static<gauge_t>(
           "ylt_process_memory_shared");
-  long virtual_size = 0;
-  long resident = 0;
-  long share = 0;
+  int64_t virtual_size = 0;
+  int64_t resident = 0;
+  int64_t share = 0;
+
+#ifdef _WIN32
+  process_memory_virtual->update(0);
+  process_memory_resident->update(0);
+  process_memory_shared->update(0);
+#else
   static long page_size = sysconf(_SC_PAGE_SIZE);
 
 #if defined(__APPLE__)
@@ -172,6 +197,7 @@ inline void stat_memory() {
   process_memory_virtual->update(virtual_size * page_size);
   process_memory_resident->update(resident * page_size);
   process_memory_shared->update(share * page_size);
+#endif
 }
 
 struct ProcIO {
@@ -199,6 +225,13 @@ inline void stat_io() {
           "ylt_process_io_write_second");
 
   ProcIO s{};
+#ifdef _WIN32
+  // Windows 下的空实现，不统计 IO
+  process_io_read_bytes_second->update(0);
+  process_io_write_bytes_second->update(0);
+  process_io_read_second->update(0);
+  process_io_write_second->update(0);
+#else
 #if defined(__APPLE__)
 #else
   auto stream_file =
@@ -221,6 +254,7 @@ inline void stat_io() {
   process_io_write_bytes_second->update(s.wchar);
   process_io_read_second->update(s.syscr);
   process_io_write_second->update(s.syscw);
+#endif
 }
 
 inline void stat_avg_load() {
@@ -238,6 +272,11 @@ inline void stat_avg_load() {
   double loadavg_5m = 0;
   double loadavg_15m = 0;
 
+#ifdef _WIN32
+  system_loadavg_1m->update(0.0);
+  system_loadavg_5m->update(0.0);
+  system_loadavg_15m->update(0.0);
+#else
 #if defined(__APPLE__)
   std::ostringstream oss;
   if (read_command_output_through_popen(oss, "sysctl -n vm.loadavg") != 0) {
@@ -260,6 +299,7 @@ inline void stat_avg_load() {
   system_loadavg_1m->update(loadavg_1m);
   system_loadavg_5m->update(loadavg_5m);
   system_loadavg_15m->update(loadavg_15m);
+#endif
 }
 
 struct ProcStat {
@@ -303,6 +343,14 @@ inline void process_status() {
           "ylt_thread_count");
 
   ProcStat stat{};
+#ifdef _WIN32
+  process_uptime->inc();
+  process_priority->update(0);
+  pid->update(0);
+  ppid->update(0);
+  pgrp->update(0);
+  thread_count->update(0);
+#else
 #if defined(__linux__)
   auto stream_file =
       std::shared_ptr<FILE>(fopen("/proc/self/stat", "r"), [](FILE* ptr) {
@@ -351,6 +399,7 @@ inline void process_status() {
   ppid->update(stat.ppid);
   pgrp->update(stat.pgrp);
   thread_count->update(stat.num_threads);
+#endif
 }
 
 inline void stat_metric() {
@@ -463,4 +512,3 @@ inline bool start_system_metric() {
   return true;
 }
 }  // namespace ylt::metric
-#endif

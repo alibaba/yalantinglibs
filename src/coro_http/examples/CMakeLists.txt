@@ -32,9 +32,9 @@ add_executable(coro_http_load_balancer load_balancer.cpp)
 add_executable(coro_chat_room chat_room.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-    target_link_libraries(coro_http_example wsock32 ws2_32)
-    target_link_libraries(coro_http_load_balancer wsock32 ws2_32)
-    target_link_libraries(coro_chat_room wsock32 ws2_32)
+    target_link_libraries(coro_http_example PRIVATE ws2_32 mswsock)
+    target_link_libraries(coro_http_load_balancer PRIVATE ws2_32 mswsock)
+    target_link_libraries(coro_chat_room PRIVATE ws2_32 mswsock)
 endif()
 
 option(ENABLE_pybind11 "Enable pybind11 " OFF)

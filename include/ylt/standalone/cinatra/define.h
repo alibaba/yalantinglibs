@@ -397,7 +397,7 @@ constexpr inline std::int64_t absolute_to_internal =
     (absolute_zero_year - internal_year) *
     std::int64_t(365.2425 * seconds_per_day);
 constexpr inline std::int64_t unix_to_internal =
-    (1969 * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * seconds_per_day;
+    (1969ll * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * seconds_per_day;
 constexpr inline std::int64_t internal_to_unix = -unix_to_internal;
 constexpr inline std::array<std::int32_t, 13> days_before = {
     0,
