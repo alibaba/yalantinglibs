@@ -18,7 +18,6 @@ using namespace std::chrono_literals;
 #define IS_OK
 #endif
 #else
-// Windows 环境下直接定义 IS_OK
 #define IS_OK
 #endif
 #else
