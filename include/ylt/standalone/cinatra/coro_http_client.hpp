@@ -142,7 +142,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   coro_http_client(asio::io_context::executor_type executor)
       : executor_wrapper_(executor),
-        timer_(&executor_wrapper_),
         socket_(std::make_shared<socket_t>(executor)),
         head_buf_(socket_->head_buf_),
         chunked_buf_(socket_->chunked_buf_),
@@ -641,29 +640,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
-
-  struct timer_guard {
-    timer_guard(coro_http_client *self,
-                std::chrono::steady_clock::duration duration, std::string msg)
-        : self(self), dur_(duration) {
-      self->socket_->is_timeout_ = false;
-
-      if (duration.count() >= 0) {
-        self->timeout(self->timer_, duration, std::move(msg))
-            .start([](auto &&) {
-            });
-      }
-      return;
-    }
-    ~timer_guard() {
-      if (dur_.count() > 0 && self->socket_->is_timeout_ == false) {
-        std::error_code ignore_ec;
-        self->timer_.cancel(ignore_ec);
-      }
-    }
-    coro_http_client *self;
-    std::chrono::steady_clock::duration dur_;
-  };
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                      std::string filename,
@@ -1496,12 +1472,39 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::atomic<bool> is_timeout_ = false;
     asio::streambuf head_buf_;
     asio::streambuf chunked_buf_;
+    coro_io::period_timer timer_;
 #ifdef CINATRA_ENABLE_SSL
     std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
 #endif
     template <typename ioc_t>
-    socket_t(ioc_t &&ioc) : impl_(std::forward<ioc_t>(ioc)) {}
+    socket_t(ioc_t &&ioc)
+        : impl_(std::forward<ioc_t>(ioc)), timer_(impl_.get_executor()) {}
   };
+
+  struct timer_guard {
+    timer_guard(coro_http_client *self,
+                std::chrono::steady_clock::duration duration, std::string msg)
+        : self(self), dur_(duration), socket_(self->socket_) {
+      self->socket_->is_timeout_ = false;
+
+      if (duration.count() >= 0) {
+        self->timeout(socket_->timer_, duration, std::move(msg))
+            .start([](auto &&) {
+            });
+      }
+      return;
+    }
+    ~timer_guard() {
+      if (dur_.count() > 0 && socket_->is_timeout_ == false) {
+        std::error_code ignore_ec;
+        socket_->timer_.cancel(ignore_ec);
+      }
+    }
+    coro_http_client *self;
+    std::chrono::steady_clock::duration dur_;
+    std::shared_ptr<socket_t> socket_;
+  };
+
   static bool is_ok(const resp_data &data) noexcept {
     return data.net_err == std::error_code{};
   }
@@ -2438,7 +2441,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   friend class multipart_reader_t<coro_http_client>;
   http_parser parser_;
   coro_io::ExecutorWrapper<> executor_wrapper_;
-  coro_io::period_timer timer_;
+
   std::shared_ptr<socket_t> socket_;
   asio::streambuf &head_buf_;
   asio::streambuf &chunked_buf_;
