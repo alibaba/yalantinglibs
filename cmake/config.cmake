@@ -60,7 +60,7 @@ if (YLT_ENABLE_IBV)
         link_libraries(-libverbs)
     else ()
         target_compile_definitions(${ylt_target_name} INTERFACE "YLT_ENABLE_IBV")
-        target_link_libraries(${ylt_target_name} -libverbs)
+        target_link_libraries(${ylt_target_name} INTERFACE -libverbs)
     endif ()
 endif ()
 
