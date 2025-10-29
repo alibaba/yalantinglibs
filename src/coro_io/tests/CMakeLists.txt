@@ -14,5 +14,5 @@ endif()
 add_test(NAME coro_io_test COMMAND coro_io_test)
 
 add_subdirectory(ibverbs)
-
+add_subdirectory(barex)
 

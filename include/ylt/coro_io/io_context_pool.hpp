@@ -147,7 +147,7 @@ get_current_executor() {
 }
 
 class io_context_pool {
- public:
+ public: 
   using executor_type = asio::io_context::executor_type;
   explicit io_context_pool(std::size_t pool_size, bool cpu_affinity = false)
       : next_io_context_(0), cpu_affinity_(cpu_affinity) {
