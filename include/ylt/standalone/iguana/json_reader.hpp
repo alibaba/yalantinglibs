@@ -24,6 +24,10 @@ template <typename U, typename It, std::enable_if_t<tuple_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 
 template <typename U, typename It,
+          std::enable_if_t<map_container_v<U>, int> = 0>
+IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
+
+template <typename U, typename It,
           std::enable_if_t<sequence_container_v<U>, int> = 0>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end);
 
@@ -390,8 +394,7 @@ IGUANA_INLINE auto get_key(It &&it, It &&end) {
   }
 }
 
-template <typename U, typename It,
-          std::enable_if_t<map_container_v<U>, int> = 0>
+template <typename U, typename It, std::enable_if_t<map_container_v<U>, int>>
 IGUANA_INLINE void from_json_impl(U &value, It &&it, It &&end) {
   using T = std::remove_reference_t<U>;
   using key_type = typename T::key_type;
