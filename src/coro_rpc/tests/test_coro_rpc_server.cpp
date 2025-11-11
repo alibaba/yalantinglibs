@@ -463,6 +463,43 @@ TEST_CASE("testing coro rpc write error") {
   g_action = inject_action::nothing;
 }
 
+TEST_CASE("testing ipv6") {
+  using namespace coro_http;
+  coro_rpc_server server(1, 8810, "::1");
+  server.register_handler<hi>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+
+  coro_rpc_client client{};
+  auto ec = syncAwait(client.connect("::1", "8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  auto ret = syncAwait(client.call<hi>());
+  CHECK(ret);
+
+  coro_rpc_client client1{};
+  ec = syncAwait(client1.connect("::1:8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  ret = syncAwait(client1.call<hi>());
+  CHECK(ret);
+
+  coro_http::coro_http_server http_server(1, 8812, "::1");
+  http_server.set_http_handler<coro_http::GET>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  http_server.async_start();
+  coro_http::coro_http_client htttp_client{};
+  auto r = syncAwait(htttp_client.connect("http://::1:8812"));
+  auto result = htttp_client.get("/test");
+  CHECK(result.status == 200);
+
+  coro_http::coro_http_client htttp_client1{};
+  result = htttp_client1.get("http://::1:8812/test");
+  CHECK(result.status == 200);
+}
+
 TEST_CASE("testing coro rpc subserver") {
   ELOGV(INFO, "run testing coro rpc subserver");
   std::string http_body = R"(

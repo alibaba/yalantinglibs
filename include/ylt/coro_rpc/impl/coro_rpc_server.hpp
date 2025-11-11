@@ -525,8 +525,20 @@ class coro_rpc_server_base {
     acceptor_close_waiter_.get_future().wait();
   }
 
+  bool is_ip_v6(std::string_view address) {
+    asio::ip::address_v6::bytes_type bytes;
+    unsigned long scope_id = 0;
+
+    struct in6_addr addr;
+    asio::error_code ec;
+    return asio::detail::socket_ops::inet_pton(ASIO_OS_DEF(AF_INET6),
+                                               address.data(), &bytes[0],
+                                               &scope_id, ec) > 0;
+  }
+
   void init_address(std::string address) {
-    if (size_t pos = address.find(':'); pos != std::string::npos) {
+    if (size_t pos = address.find(':');
+        pos != std::string::npos && !is_ip_v6(address)) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
       uint16_t port;
