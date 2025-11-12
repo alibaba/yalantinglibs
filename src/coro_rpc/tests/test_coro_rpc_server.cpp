@@ -491,7 +491,7 @@ TEST_CASE("testing ipv6") {
       });
   http_server.async_start();
   coro_http::coro_http_client htttp_client{};
-  auto r = syncAwait(htttp_client.connect("http://::1:8812"));
+  syncAwait(htttp_client.connect("http://::1:8812"));
   auto result = htttp_client.get("/test");
   CHECK(result.status == 200);
 
