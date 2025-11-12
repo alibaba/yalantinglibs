@@ -1506,8 +1506,20 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return data.net_err == std::error_code{};
   }
 
+  void strip_ipv6_brackets(std::string &url) {
+    if (auto pos1 = url.find('['); pos1 != std::string::npos) {
+      url.erase(pos1, 1);
+      if (auto pos2 = url.find(']', pos1); pos2 != std::string::npos) {
+        url.erase(pos2, 1);
+      }
+    }
+  }
+
   template <typename S>
-  std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
+  std::pair<bool, uri_t> handle_uri(resp_data &data, S &&uri) {
+    if constexpr (std::is_same_v<std::string, std::decay_t<S>>) {
+      strip_ipv6_brackets(uri);
+    }
     uri_t u;
     if (!u.parse_from(uri.data())) {
       CINATRA_LOG_WARNING
