@@ -354,7 +354,7 @@ class coro_rpc_client {
       std::string_view address,
       std::chrono::steady_clock::duration connect_timeout_duration,
       std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    auto pos = address.find(':');
+    auto pos = address.rfind(':');
     std::string host(address.substr(0, pos));
     std::string port(address.substr(pos + 1));
 
@@ -372,7 +372,7 @@ class coro_rpc_client {
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view address,
       std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    auto pos = address.find(':');
+    auto pos = address.rfind(':');
     std::string host(address.substr(0, pos));
     std::string port(address.substr(pos + 1));
 
