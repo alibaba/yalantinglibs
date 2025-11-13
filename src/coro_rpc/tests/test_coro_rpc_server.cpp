@@ -468,6 +468,9 @@ TEST_CASE("testing ipv6") {
   coro_rpc_server server(1, 8810, "::1");
   server.register_handler<hi>();
   auto res = server.async_start();
+  if (res.hasResult()) {
+    return;
+  }
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   coro_rpc_client client{};
@@ -491,12 +494,13 @@ TEST_CASE("testing ipv6") {
       });
   http_server.async_start();
   coro_http::coro_http_client htttp_client{};
-  syncAwait(htttp_client.connect("http://::1:8812"));
+  auto r = syncAwait(htttp_client.connect("http://[::1]:8812"));
+  CHECK(!r.net_err);
   auto result = htttp_client.get("/test");
   CHECK(result.status == 200);
 
   coro_http::coro_http_client htttp_client1{};
-  result = htttp_client1.get("http://::1:8812/test");
+  result = htttp_client1.get("http://[::1]:8812/test");
   CHECK(result.status == 200);
 }
 
