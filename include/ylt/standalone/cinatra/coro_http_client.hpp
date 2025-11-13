@@ -1506,20 +1506,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return data.net_err == std::error_code{};
   }
 
-  void strip_ipv6_brackets(std::string &url) {
-    if (auto pos1 = url.find('['); pos1 != std::string::npos) {
-      url.erase(pos1, 1);
-      if (auto pos2 = url.find(']', pos1); pos2 != std::string::npos) {
-        url.erase(pos2, 1);
-      }
-    }
-  }
-
   template <typename S>
-  std::pair<bool, uri_t> handle_uri(resp_data &data, S &&uri) {
-    if constexpr (std::is_same_v<std::string, std::decay_t<S>>) {
-      strip_ipv6_brackets(uri);
-    }
+  std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
       CINATRA_LOG_WARNING
@@ -1528,6 +1516,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       data.net_err = std::make_error_code(std::errc::protocol_error);
       data.status = 404;
       return {false, {}};
+    }
+
+    if (u.host.front() == '[') {  // for ipv6
+      if (u.host.size() > 2)
+        u.host = u.host.substr(1, u.host.size() - 2);
     }
 
     // construct proxy request uri
