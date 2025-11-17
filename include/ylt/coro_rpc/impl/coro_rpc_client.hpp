@@ -332,8 +332,14 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-    if (!host.empty())
+    if (!host.empty()) {
+      if (host.front() == '[') {  // for ipv6
+        if (host.size() > 2)
+          host = host.substr(1, host.size() - 2);
+      }
       config_.host = std::move(host);
+    }
+
     if (!port.empty())
       config_.port = std::move(port);
 
