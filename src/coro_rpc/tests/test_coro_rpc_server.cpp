@@ -465,7 +465,7 @@ TEST_CASE("testing coro rpc write error") {
 
 TEST_CASE("testing ipv6") {
   using namespace coro_http;
-  coro_rpc_server server(1, "[::1]:8810");
+  coro_rpc_server server(1, "[::1]:8811");
   server.register_handler<hi>();
   auto res = server.async_start();
   if (res.hasResult()) {
@@ -474,14 +474,14 @@ TEST_CASE("testing ipv6") {
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   coro_rpc_client client{};
-  auto ec = syncAwait(client.connect("[::1]:8810"));
+  auto ec = syncAwait(client.connect("[::1]:8811"));
   REQUIRE_MESSAGE(!ec,
                   std::to_string(client.get_client_id()).append(ec.message()));
   auto ret = syncAwait(client.call<hi>());
   CHECK(ret);
 
   coro_rpc_client client1{};
-  ec = syncAwait(client1.connect("::1:8810"));
+  ec = syncAwait(client1.connect("::1:8811"));
   REQUIRE_MESSAGE(!ec,
                   std::to_string(client.get_client_id()).append(ec.message()));
   ret = syncAwait(client1.call<hi>());
