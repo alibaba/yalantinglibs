@@ -168,6 +168,27 @@ class metric_t {
     str.pop_back();
   }
 
+  void build_label_string(std::string &str,
+                          const std::map<std::string, std::string> &labels) {
+    for (auto &[k, v] : labels) {
+      str.append(k).append("=\"").append(v).append("\",");
+    }
+    str.pop_back();
+  }
+
+  inline std::string join_string(const std::string &str1,
+                                    const std::string &str2) {
+    if (str1.empty())
+      return str2;
+    if (str2.empty())
+      return str1;
+
+    std::string result;
+    result.reserve(str1.size() + str2.size() + 1);
+    result.append(str1).append(",").append(str2);
+    return result;
+  }
+
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;

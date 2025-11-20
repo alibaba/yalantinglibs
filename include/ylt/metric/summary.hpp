@@ -174,6 +174,21 @@ class basic_dynamic_summary
       std::sort(quantiles_.begin(), quantiles_.end());
   }
 
+  basic_dynamic_summary(std::string name, std::string help,
+                        std::vector<double> quantiles,
+                        std::map<std::string, std::string> static_labels,
+                        std::array<std::string, N> labels_name,
+                        std::chrono::seconds max_age = std::chrono::seconds{0})
+      : Base(MetricType::Summary, std::move(name), std::move(help),
+             std::move(labels_name)),
+        quantiles_(std::move(quantiles)),
+        max_age_(max_age),
+        static_labels_(static_labels) {
+    if (!std::is_sorted(quantiles_.begin(), quantiles_.end()))
+      std::sort(quantiles_.begin(), quantiles_.end());
+    Base::build_label_string(static_labels_str_, static_labels_);
+  }
+
   void observe(const std::array<std::string, N>& labels_value, float value) {
     Base::try_emplace(labels_value, quantiles_, max_age_)
         .first->value.insert(value);
@@ -214,10 +229,15 @@ class basic_dynamic_summary
       auto& labels_value = e->label;
       auto& summary_value = e->value;
       auto rates = summary_value.stat(sum, count);
+
+      std::string dynamic_labels_str;
+      Base::build_label_string(dynamic_labels_str, Base::labels_name_,
+                               labels_value);
+
       for (size_t i = 0; i < quantiles_.size(); i++) {
         str.append(Base::name_);
         str.append("{");
-        Base::build_label_string(str, Base::labels_name_, labels_value);
+        str.append(Base::join_string(static_labels_str_, dynamic_labels_str));
         str.append(",");
         str.append("quantile=\"");
         str.append(std::to_string(quantiles_[i])).append("\"} ");
@@ -225,13 +245,13 @@ class basic_dynamic_summary
       }
       str.append(Base::name_).append("_sum ");
       str.append("{");
-      Base::build_label_string(str, Base::labels_name_, labels_value);
+      str.append(Base::join_string(static_labels_str_, dynamic_labels_str));
       str.append("} ");
       str.append(std::to_string(sum)).append("\n");
 
       str.append(Base::name_).append("_count ");
       str.append("{");
-      Base::build_label_string(str, Base::labels_name_, labels_value);
+      str.append(Base::join_string(static_labels_str_, dynamic_labels_str));
       str.append("} ");
       str.append(std::to_string((uint64_t)count)).append("\n");
     }
@@ -258,6 +278,9 @@ class basic_dynamic_summary
       metric.count = count;
       metric.sum = sum;
       detail::vector_combine(metric.quantiles, quantiles_, rates);
+      for (auto &e : static_labels_) {
+        metric.labels.emplace_back(e.first, e.second);
+      }
       detail::vector_combine(metric.labels, Base::labels_name(), labels_value);
     }
     iguana::to_json(summary, str);
@@ -267,6 +290,8 @@ class basic_dynamic_summary
  private:
   std::vector<double> quantiles_;
   std::chrono::seconds max_age_;
+  std::string static_labels_str_;
+  std::map<std::string, std::string> static_labels_;
 };
 
 using dynamic_summary_1 = basic_dynamic_summary<1>;
