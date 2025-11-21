@@ -119,7 +119,7 @@ class basic_static_counter : public static_metric {
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const std::vector<std::string> &v2) {
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
+      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
     }
     str.pop_back();
   }
@@ -143,6 +143,17 @@ class basic_dynamic_counter
                         std::array<std::string, N> labels_name)
       : Base(MetricType::Counter, std::move(name), std::move(help),
              std::move(labels_name)) {}
+
+  // hybrid labels value
+  basic_dynamic_counter(std::string name, std::string help,
+                        std::map<std::string, std::string> static_labels,
+                        std::array<std::string, N> labels_name)
+      : Base(MetricType::Counter, std::move(name), std::move(help),
+             std::move(labels_name)),
+        static_labels_(static_labels) {
+    Base::build_label_string(static_labels_str_, static_labels_);
+  }
+
   using label_key_type = const std::array<std::string, N> &;
   void inc(label_key_type labels_value, value_type value = 1) {
     detail::inc_impl(Base::try_emplace(labels_value).first->value, value);
@@ -277,6 +288,9 @@ class basic_dynamic_counter
       json_counter_metric_t metric;
       size_t index = 0;
       assert(Base::labels_name().size() == k.size());
+      for (auto &[k, v] : static_labels_) {
+        metric.labels.emplace_back(k, v);
+      }
       for (auto &label_value : k) {
         metric.labels.emplace_back(Base::labels_name()[index++], label_value);
       }
@@ -321,11 +335,18 @@ class basic_dynamic_counter
 
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const auto &v2) {
+    str.append(static_labels_str_);
+    if (!static_labels_str_.empty() && !v1.empty()) {
+      str.append(",");
+    }
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
+      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
     }
     str.pop_back();
   }
+
+  std::string static_labels_str_;
+  std::map<std::string, std::string> static_labels_;
 };
 
 using dynamic_counter_1t = basic_dynamic_counter<int64_t, 1>;
