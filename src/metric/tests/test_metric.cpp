@@ -18,7 +18,7 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
       {{"instance_id", "1.0.0.1"}, {"cluster_id", "demo"}});
 
   {
-    dynamic_counter_2t d("test_counter", "help", 
+    dynamic_counter_2t d("test_counter", "help",
                          std::array<std::string, 2>{"method", "url"});
     d.inc({"GET", "/"});
     std::string str;
@@ -33,8 +33,9 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
   }
 
   {
-    dynamic_summary_2 d("test_summary", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
-                        
+    dynamic_summary_2 d("test_summary", "help",
+                        {5.23, 10.54, 20.0, 50.0, 100.0},
+
                         std::array<std::string, 2>{"method", "url"});
     d.observe({"GET", "/"}, 23);
     d.observe({"POST", "/"}, 50);
@@ -51,8 +52,9 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
   }
 
   {
-    dynamic_histogram_2t d("test_histogram", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
-                           
+    dynamic_histogram_2t d("test_histogram", "help",
+                           {5.23, 10.54, 20.0, 50.0, 100.0},
+
                            std::array<std::string, 2>{"method", "url"});
     d.observe({"GET", "/"}, 23);
     d.observe({"POST", "/"}, 50);

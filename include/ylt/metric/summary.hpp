@@ -278,7 +278,7 @@ class basic_dynamic_summary
       metric.count = count;
       metric.sum = sum;
       detail::vector_combine(metric.quantiles, quantiles_, rates);
-      for (auto &e : static_labels_) {
+      for (auto& e : static_labels_) {
         metric.labels.emplace_back(e.first, e.second);
       }
       detail::vector_combine(metric.labels, Base::labels_name(), labels_value);

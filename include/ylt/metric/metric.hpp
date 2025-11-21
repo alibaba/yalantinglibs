@@ -168,16 +168,16 @@ class metric_t {
     str.pop_back();
   }
 
-  void build_label_string(std::string &str,
-                          const std::map<std::string, std::string> &labels) {
-    for (auto &[k, v] : labels) {
+  void build_label_string(std::string& str,
+                          const std::map<std::string, std::string>& labels) {
+    for (auto& [k, v] : labels) {
       str.append(k).append("=\"").append(v).append("\",");
     }
     str.pop_back();
   }
 
-  inline std::string join_string(const std::string &str1,
-                                    const std::string &str2) {
+  inline std::string join_string(const std::string& str1,
+                                 const std::string& str2) {
     if (str1.empty())
       return str2;
     if (str2.empty())
