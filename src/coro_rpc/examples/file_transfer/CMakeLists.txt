@@ -43,7 +43,7 @@ add_executable(coro_rpc_file_server
 add_executable(coro_rpc_file_client file_client.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-  target_link_libraries(coro_rpc_file_server wsock32 ws2_32)
-  target_link_libraries(coro_rpc_file_client wsock32 ws2_32)
+  target_link_libraries(coro_rpc_file_server PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_file_client PRIVATE ws2_32 mswsock)
 endif()
 

@@ -181,14 +181,14 @@ class basic_seq_coro_file {
             std::ios::ios_base::openmode open_flags) {
     file_path_ = std::string{filepath};
     if constexpr (execute_type == execution_type::thread_pool) {
-      return open_stream_file_in_pool(filepath, open_flags);
+      return open_stream_file_in_pool(open_flags);
     }
     else {
 #if defined(ASIO_HAS_FILE)
       return open_native_async_file<true>(async_seq_file_, executor_wrapper_,
                                           filepath, to_flags(open_flags));
 #else
-      return open_stream_file_in_pool(filepath, open_flags);
+      return open_stream_file_in_pool(open_flags);
 #endif
     }
   }
@@ -348,17 +348,16 @@ class basic_seq_coro_file {
   std::string_view file_path() const { return file_path_; }
 
  private:
-  bool open_stream_file_in_pool(std::string_view filepath,
-                                std::ios::ios_base::openmode flags) {
+  bool open_stream_file_in_pool(std::ios::ios_base::openmode flags) {
     if (frw_seq_file_.is_open()) {
       return true;
     }
     auto coro_func = coro_io::post(
-        [this, flags, filepath]() mutable {
-          frw_seq_file_.open(filepath.data(), flags);
+        [this, flags]() mutable {
+          frw_seq_file_.open(file_path_, flags);
           if (!frw_seq_file_.is_open()) {
             ELOG_INFO << "line " << __LINE__ << " coro_file open failed "
-                      << filepath << "\n";
+                      << file_path_ << "\n";
             std::cerr << "Error: " << strerror(errno);
             return false;
           }

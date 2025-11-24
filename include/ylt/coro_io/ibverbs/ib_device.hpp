@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2025, Alibaba Group Holding Limited;
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
 #include <infiniband/verbs.h>
 #include <netinet/in.h>
@@ -12,6 +27,11 @@
 #include "asio/ip/address.hpp"
 #include "ib_buffer.hpp"
 #include "ylt/easylog.hpp"
+#include "ylt/util/type_traits.h"
+
+// define ibv_gid_entry but no declare it.
+// we can use this trick to detect if it's declared.
+struct ibv_gid_entry;
 
 namespace coro_io {
 namespace detail {
@@ -131,7 +151,7 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    find_best_gid_index();
+    gid_index_ = find_best_gid_index();
 
     ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
               << ", "
@@ -196,21 +216,25 @@ class ib_device_t {
             ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
   }
 
-  void find_best_gid_index() {
-    ibv_gid_entry gid_entry;
-
-    for (int i = 0; i < attr_.gid_tbl_len; i++) {
-      if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
-        continue;
-      }
-
-      if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
-           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
-          gid_entry.gid_type == IBV_GID_TYPE_IB) {
-        gid_index_ = i;
-        break;
+  int find_best_gid_index() {
+    constexpr bool is_support_query_gid =
+        util::check_structure_declared<ibv_gid_entry>;
+    if constexpr (is_support_query_gid) {
+      ibv_gid_entry gid_entry;
+      for (int i = 0; i < attr_.gid_tbl_len; i++) {
+        if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
+          continue;
+        }
+        if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
+             gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
+            gid_entry.gid_type == IBV_GID_TYPE_IB) {
+          return i;
+        }
       }
     }
+    ELOG_DEBUG << "selected best device failed, maybe the platform don't "
+                  "support it. set default rdma device gid as 0";
+    return 0;
   }
 
   std::string name_;

@@ -541,7 +541,7 @@ class coro_rpc_server_base {
   }
 
   void init_address(std::string address) {
-    if (size_t pos = address.find(':'); pos != std::string::npos) {
+    if (size_t pos = address.rfind(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
       uint16_t port;
@@ -554,6 +554,10 @@ class coro_rpc_server_base {
 
       port_ = port;
       address = address.substr(0, pos);
+      if (address.front() == '[') {
+        if (address.size() > 2)
+          address = address.substr(1, address.size() - 2);
+      }
     }
 
     address_ = std::move(address);

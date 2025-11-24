@@ -21,6 +21,7 @@ yaLanTingLibs 的目标: 为C++开发者提供高性能，极度易用的现代C
 | macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![macos-clang](https://github.com/alibaba/yalantinglibs/actions/workflows/mac.yml/badge.svg?branch=main)         |
 | Windows Server 2022 (MSVC 19.33.31630.0)       | ![win-msvc](https://github.com/alibaba/yalantinglibs/actions/workflows/windows.yml/badge.svg?branch=main)     |
 
+[开发规范](../yalantinglibs-dev-guidelines.md)
 # 快速开始
 
 ## 编译器要求
