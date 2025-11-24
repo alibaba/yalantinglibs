@@ -69,9 +69,6 @@ jobs:
           
           # Configure and build Tongsuo
           ./config --prefix=${TONGSUO_INSTALL_PREFIX} \
-                   --openssldir=${TONGSUO_INSTALL_PREFIX}/ssl \
-                   shared \
-                   -fPIC \
                    enable-ntls \
                    enable-ec_sm2p_64_gcc_128 \
                    -Wl,-rpath,${TONGSUO_INSTALL_PREFIX}/lib
