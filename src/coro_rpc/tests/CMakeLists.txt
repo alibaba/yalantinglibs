@@ -41,8 +41,8 @@ add_executable(coro_rpc_regist_test_2 rpc_api.cpp test_register_duplication_2.cp
 add_executable(coro_rpc_regist_test_3 rpc_api.cpp test_register_duplication_3.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-  target_link_libraries(coro_rpc_test wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_1 wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_2 wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_3 wsock32 ws2_32)
+  target_link_libraries(coro_rpc_test PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_1 PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_2 PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_3 PRIVATE ws2_32 mswsock)
 endif()
