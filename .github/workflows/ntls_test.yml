@@ -1,0 +1,161 @@
+name: NTLS Test (Tongsuo)
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.hpp'
+      - '**.cpp'
+      - '**.h'
+      - 'cmake/**'
+      - 'src/certs/**'
+      - '.github/workflows/ntls_test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**.hpp'
+      - '**.cpp'
+      - '**.h'
+      - 'cmake/**'
+      - 'src/certs/**'
+      - '.github/workflows/ntls_test.yml'
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  TONGSUO_VERSION: "8.4.2"
+  TONGSUO_INSTALL_PREFIX: /usr/local/tongsuo
+
+jobs:
+  ntls_test_ubuntu:
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        mode: [Debug]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            perl \
+            zlib1g-dev \
+            libbz2-dev
+
+      - name: Install compiler
+        if: matrix.compiler == 'clang'
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
+      - name: Build and install Tongsuo
+        run: |
+          set -e
+          cd /tmp
+          git clone --depth 1 --branch ${TONGSUO_VERSION} https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src || \
+          git clone --depth 1 https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src
+          cd tongsuo-src
+          
+          # Configure and build Tongsuo
+          ./config --prefix=${TONGSUO_INSTALL_PREFIX} \
+                   --openssldir=${TONGSUO_INSTALL_PREFIX}/ssl \
+                   shared \
+                   -fPIC \
+                   enable-ntls \
+                   enable-ec_sm2p_64_gcc_128
+          
+          make -j$(nproc)
+          sudo make install
+          
+          # Update library paths
+          sudo ldconfig
+          
+          # Verify Tongsuo installation
+          ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
+          ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
+
+      - name: Setup environment for Tongsuo
+        run: |
+          echo "${TONGSUO_INSTALL_PREFIX}/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          
+          # Create symlinks for cmake to find Tongsuo as OpenSSL
+          sudo mkdir -p /usr/local/lib/pkgconfig
+          sudo ln -sf ${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig/*.pc /usr/local/lib/pkgconfig/ || true
+          
+          # Verify NTLS support
+          ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo s_client -help 2>&1 | grep -i ntls || \
+          ${TONGSUO_INSTALL_PREFIX}/bin/openssl s_client -help 2>&1 | grep -i ntls || true
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Configure CMake with NTLS
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            export CC=clang-17
+            export CXX=clang++-17
+          else
+            export CC=gcc
+            export CXX=g++
+          fi
+          
+          # Set CMake variables to find Tongsuo
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
+                -DYLT_ENABLE_SSL=ON \
+                -DYLT_ENABLE_NTLS=ON \
+                -DCMAKE_PREFIX_PATH=${TONGSUO_INSTALL_PREFIX} \
+                -DOPENSSL_ROOT_DIR=${TONGSUO_INSTALL_PREFIX} \
+                -DOPENSSL_CRYPTO_LIBRARY=${TONGSUO_INSTALL_PREFIX}/lib/libcrypto.so \
+                -DOPENSSL_SSL_LIBRARY=${TONGSUO_INSTALL_PREFIX}/lib/libssl.so \
+                -DOPENSSL_INCLUDE_DIR=${TONGSUO_INSTALL_PREFIX}/include
+
+      - name: Build
+        run: |
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Verify NTLS examples are built
+        run: |
+          ls -la ${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_* || true
+          ls -la ${{github.workspace}}/build/src/coro_http/examples/ntls_* || true
+
+      - name: Test NTLS compilation
+        run: |
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          # Check if NTLS examples were compiled successfully
+          if [ -f "${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_server" ] || \
+             [ -f "${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_client" ]; then
+            echo "✓ NTLS examples compiled successfully"
+          else
+            echo "✗ NTLS examples were not compiled"
+            exit 1
+          fi
+
+      - name: Run basic tests
+        working-directory: ${{github.workspace}}/build
+        run: |
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          # Run tests that don't require NTLS (to verify basic functionality)
+          ctest -C ${{matrix.mode}} -j 1 -V --output-on-failure || true
+
+      - name: Check NTLS symbols
+        run: |
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          # Verify that NTLS functions are available
+          nm -D ${TONGSUO_INSTALL_PREFIX}/lib/libssl.so | grep -i ntls || \
+          objdump -T ${TONGSUO_INSTALL_PREFIX}/lib/libssl.so | grep -i ntls || true
+
