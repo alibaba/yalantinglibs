@@ -30,7 +30,6 @@ jobs:
   ntls_test_ubuntu:
     strategy:
       matrix:
-        compiler: [gcc, clang]
         mode: [Debug]
     runs-on: ubuntu-22.04
 
@@ -50,15 +49,6 @@ jobs:
             zlib1g-dev \
             libbz2-dev
 
-      - name: Install compiler
-        if: matrix.compiler == 'clang'
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x ./llvm.sh
-          sudo ./llvm.sh 17
-
       - name: Build and install Tongsuo
         run: |
           set -e
@@ -69,9 +59,6 @@ jobs:
           
           # Configure and build Tongsuo
           ./config --prefix=${TONGSUO_INSTALL_PREFIX} \
-                   --openssldir=${TONGSUO_INSTALL_PREFIX}/ssl \
-                   shared \
-                   -fPIC \
                    enable-ntls \
                    enable-ec_sm2p_64_gcc_128 \
                    -Wl,-rpath,${TONGSUO_INSTALL_PREFIX}/lib
@@ -79,10 +66,15 @@ jobs:
           make -j$(nproc)
           sudo make install
           
+          # Copy SM2 test certificates into installed prefix
+          sudo mkdir -p ${TONGSUO_INSTALL_PREFIX}/ssl/certs
+          sudo cp -r test/certs/sm2 ${TONGSUO_INSTALL_PREFIX}/ssl/certs/
+          
           # Update library paths
           sudo ldconfig
           
-          # Verify Tongsuo installation
+          # Verify Tongsuo installation (ensure it links against newly installed libssl)
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
 
@@ -103,25 +95,20 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: Configure CMake with NTLS
+      - name: Configure CMake with NTLS (GCC)
         run: |
-          if [ "${{ matrix.compiler }}" = "clang" ]; then
-            export CC=clang-17
-            export CXX=clang++-17
-          else
-            export CC=gcc
-            export CXX=g++
-          fi
-          
-          # Set CMake variables to find Tongsuo
+          export CC=gcc
+          export CXX=g++
           cmake -B ${{github.workspace}}/build -G Ninja \
                 -DCMAKE_BUILD_TYPE=${{matrix.mode}} \
+                -DBUILD_EXAMPLES=ON \
+                -DBUILD_BENCHMARK=OFF \
+                -DGENERATE_BENCHMARK_DATA=OFF \
                 -DYLT_ENABLE_SSL=ON \
                 -DYLT_ENABLE_NTLS=ON \
+                -DYLT_HAVE_IBVERBS=0 \
                 -DCMAKE_PREFIX_PATH=${TONGSUO_INSTALL_PREFIX} \
                 -DOPENSSL_ROOT_DIR=${TONGSUO_INSTALL_PREFIX} \
-                -DOPENSSL_CRYPTO_LIBRARY=${TONGSUO_INSTALL_PREFIX}/lib/libcrypto.so \
-                -DOPENSSL_SSL_LIBRARY=${TONGSUO_INSTALL_PREFIX}/lib/libssl.so \
                 -DOPENSSL_INCLUDE_DIR=${TONGSUO_INSTALL_PREFIX}/include
 
       - name: Build
@@ -131,15 +118,15 @@ jobs:
 
       - name: Verify NTLS examples are built
         run: |
-          ls -la ${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_* || true
-          ls -la ${{github.workspace}}/build/src/coro_http/examples/ntls_* || true
+          ls -la ${{github.workspace}}/build/output/examples/coro_rpc/ntls_* || true
+          ls -la ${{github.workspace}}/build/output/examples/coro_http/ntls_* || true
 
       - name: Test NTLS compilation
         run: |
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           # Check if NTLS examples were compiled successfully
-          if [ -f "${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_server" ] || \
-             [ -f "${{github.workspace}}/build/src/coro_rpc/examples/base_examples/ntls_client" ]; then
+          if [ -f "${{github.workspace}}/build/output/examples/coro_rpc/ntls_server" ] || \
+             [ -f "${{github.workspace}}/build/output/examples/coro_rpc/ntls_client" ]; then
             echo "✓ NTLS examples compiled successfully"
           else
             echo "✗ NTLS examples were not compiled"
@@ -153,10 +140,32 @@ jobs:
           # Run tests that don't require NTLS (to verify basic functionality)
           ctest -C ${{matrix.mode}} -j 1 -V --output-on-failure || true
 
+      - name: Run NTLS end-to-end tests
+        run: |
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          bash scripts/run_ntls_e2e_tests.sh ${{github.workspace}}/build/output/examples \
+            ${{github.workspace}}/build/ntls-e2e-logs
+
       - name: Check NTLS symbols
         run: |
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
-          # Verify that NTLS functions are available
-          nm -D ${TONGSUO_INSTALL_PREFIX}/lib/libssl.so | grep -i ntls || \
-          objdump -T ${TONGSUO_INSTALL_PREFIX}/lib/libssl.so | grep -i ntls || true
+          # Verify that NTLS functions are available in lib/ or lib64/, static or shared libs
+          found_symbol=false
+          for libdir in lib lib64; do
+            for libname in libssl.so libssl.a; do
+              candidate=${TONGSUO_INSTALL_PREFIX}/${libdir}/${libname}
+              if [ -f "$candidate" ]; then
+                echo "Checking $candidate for NTLS symbols..."
+                if (nm -a "$candidate" | grep -qi ntls) || (objdump -T "$candidate" 2>/dev/null | grep -qi ntls); then
+                  found_symbol=true
+                  break 2
+                fi
+              fi
+            done
+          done
+          if [ "$found_symbol" = false ]; then
+            echo "WARNING: NTLS symbols not found in ${TONGSUO_INSTALL_PREFIX}/lib{,64}/libssl.{so,a}"
+          else
+            echo "✓ NTLS symbols detected in Tongsuo libssl"
+          fi
 

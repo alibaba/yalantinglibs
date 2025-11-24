@@ -230,14 +230,14 @@ class coro_http_connection
       // Load certificates based on NTLS mode
       if (ntls_config.mode == ntls_mode::tls13_single_cert) {
         // RFC 8998 TLS 1.3 + GM single certificate mode
-        auto gm_cert_path = ntls_config.base_path.empty()
-                                ? ntls_config.gm_cert_file
-                                : fs::path(ntls_config.base_path)
-                                      .append(ntls_config.gm_cert_file);
-        auto gm_key_path = ntls_config.base_path.empty()
-                               ? ntls_config.gm_key_file
-                               : fs::path(ntls_config.base_path)
-                                     .append(ntls_config.gm_key_file);
+        auto gm_cert_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.gm_cert_file)
+                : fs::path(ntls_config.base_path) / ntls_config.gm_cert_file;
+        auto gm_key_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.gm_key_file)
+                : fs::path(ntls_config.base_path) / ntls_config.gm_key_file;
 
         // Load single GM certificate
         if (fs::exists(gm_cert_path, file_ec)) {
@@ -278,22 +278,22 @@ class coro_http_connection
       }
       else {
         // GB/T 38636-2020 TLCP dual certificate mode
-        auto sign_cert_path = ntls_config.base_path.empty()
-                                  ? ntls_config.sign_cert_file
-                                  : fs::path(ntls_config.base_path)
-                                        .append(ntls_config.sign_cert_file);
-        auto sign_key_path = ntls_config.base_path.empty()
-                                 ? ntls_config.sign_key_file
-                                 : fs::path(ntls_config.base_path)
-                                       .append(ntls_config.sign_key_file);
-        auto enc_cert_path = ntls_config.base_path.empty()
-                                 ? ntls_config.enc_cert_file
-                                 : fs::path(ntls_config.base_path)
-                                       .append(ntls_config.enc_cert_file);
-        auto enc_key_path = ntls_config.base_path.empty()
-                                ? ntls_config.enc_key_file
-                                : fs::path(ntls_config.base_path)
-                                      .append(ntls_config.enc_key_file);
+        auto sign_cert_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.sign_cert_file)
+                : fs::path(ntls_config.base_path) / ntls_config.sign_cert_file;
+        auto sign_key_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.sign_key_file)
+                : fs::path(ntls_config.base_path) / ntls_config.sign_key_file;
+        auto enc_cert_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.enc_cert_file)
+                : fs::path(ntls_config.base_path) / ntls_config.enc_cert_file;
+        auto enc_key_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.enc_key_file)
+                : fs::path(ntls_config.base_path) / ntls_config.enc_key_file;
 
         // Load SM2 signing certificate and key
         if (fs::exists(sign_cert_path, file_ec)) {
@@ -372,10 +372,10 @@ class coro_http_connection
       }
       // Load CA certificate if provided
       if (!ntls_config.ca_cert_file.empty()) {
-        auto ca_cert_path = ntls_config.base_path.empty()
-                                ? ntls_config.ca_cert_file
-                                : fs::path(ntls_config.base_path)
-                                      .append(ntls_config.ca_cert_file);
+        auto ca_cert_path =
+            ntls_config.base_path.empty()
+                ? fs::path(ntls_config.ca_cert_file)
+                : fs::path(ntls_config.base_path) / ntls_config.ca_cert_file;
         if (fs::exists(ca_cert_path, file_ec)) {
           asio::error_code ec;
           ssl_ctx_->load_verify_file(ca_cert_path.string(), ec);

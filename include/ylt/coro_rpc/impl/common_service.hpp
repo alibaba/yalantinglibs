@@ -98,13 +98,13 @@ struct ssl_ntls_configure {
   std::string server_name = "localhost";  //!< server name for verification
 
   ntls_mode mode = ntls_mode::tlcp_dual_cert;  //!< NTLS mode selection
-  bool enable_ntls = false;  //!< enable NTLS mode
+  bool enable_ntls = false;                    //!< enable NTLS mode
   bool enable_client_verify =
       false;                      //!< enable client certificate verification
   bool enable_dual_mode = false;  //!< enable both SSL and NTLS support
 #endif
 };
-#endif OPENSSL_NO_NTLS
+#endif  // OPENSSL_NO_NTLS
 
 /*!
  * Check file (not a folder) exist
