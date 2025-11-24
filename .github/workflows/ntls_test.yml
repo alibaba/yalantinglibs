@@ -83,7 +83,8 @@ jobs:
           # Update library paths
           sudo ldconfig
           
-          # Verify Tongsuo installation
+          # Verify Tongsuo installation (ensure it links against newly installed libssl)
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
 
