@@ -79,6 +79,10 @@ jobs:
           make -j$(nproc)
           sudo make install
           
+          # Copy SM2 test certificates into installed prefix
+          sudo mkdir -p ${TONGSUO_INSTALL_PREFIX}/ssl/certs
+          sudo cp -r test/certs/sm2 ${TONGSUO_INSTALL_PREFIX}/ssl/certs/
+          
           # Update library paths
           sudo ldconfig
           
