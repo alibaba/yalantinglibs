@@ -73,7 +73,8 @@ jobs:
                    shared \
                    -fPIC \
                    enable-ntls \
-                   enable-ec_sm2p_64_gcc_128
+                   enable-ec_sm2p_64_gcc_128 \
+                   -Wl,-rpath,${TONGSUO_INSTALL_PREFIX}/lib
           
           make -j$(nproc)
           sudo make install

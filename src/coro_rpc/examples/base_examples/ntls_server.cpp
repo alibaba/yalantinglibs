@@ -22,8 +22,9 @@
 using namespace coro_rpc;
 using namespace std::string_literals;
 
-// Certificate paths - adjust to your environment
-const std::string CERT_PATH = "E:/vs2022workspace/yalantinglibs/src/certs/sm2/";
+// Certificate paths - point to Tongsuo source tree's test certificates
+// https://github.com/Tongsuo-Project/Tongsuo/tree/master/test/certs/sm2
+const std::string CERT_PATH = "test/certs/sm2/";
 const std::string SERVER_SIGN_CERT =
     CERT_PATH + "server_sign.crt";  // SM2 server signing certificate
 const std::string SERVER_SIGN_KEY =
