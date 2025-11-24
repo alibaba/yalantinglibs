@@ -14,13 +14,15 @@ struct metrc_tag {};
 
 struct test_tag {};
 TEST_CASE("test serialize with dynamic labels only") {
-#define VARIFY_SERIALIZE()                                         \
-  CHECK(str.find("method=\"GET\"") != std::string::npos);          \
-  CHECK(str.find("url=\"/\"") != std::string::npos);
+  auto verify_serialize = [](const std::string& str) {
+    CHECK(str.find("method=\"GET\"") != std::string::npos);
+    CHECK(str.find("url=\"/\"") != std::string::npos);
+  };
 
-#define VARIFY_SERIALIZE_JSON()                                    \
-  CHECK(str.find("method=\"GET\"") != std::string::npos);          \
-  CHECK(str.find("url=\"/\"") != std::string::npos);
+  auto verify_serialize_json = [](const std::string& str) {
+    CHECK(str.find("\"method\":\"GET\"") != std::string::npos);
+    CHECK(str.find("\"url\":\"/\"") != std::string::npos);
+  };
 
   {
     dynamic_counter_2t d("test_counter", "help",
@@ -28,13 +30,13 @@ TEST_CASE("test serialize with dynamic labels only") {
     d.inc({"GET", "/"});
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
@@ -48,13 +50,13 @@ TEST_CASE("test serialize with dynamic labels only") {
 
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
@@ -68,35 +70,35 @@ TEST_CASE("test serialize with dynamic labels only") {
 
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
-#undef VARIFY_SERIALIZE
-#undef VARIFY_SERIALIZE_JSON
 }
 
 TEST_CASE("test serialize with dynamic hybrid labels") {
   auto staticMetric = std::map<std::string, std::string>(
       {{"instance_id", "1.0.0.1"}, {"cluster_id", "demo"}});
 
-#define VARIFY_SERIALIZE()                                         \
-  CHECK(str.find("instance_id=\"1.0.0.1\"") != std::string::npos); \
-  CHECK(str.find("cluster_id=\"demo\"") != std::string::npos);     \
-  CHECK(str.find("method=\"GET\"") != std::string::npos);          \
-  CHECK(str.find("url=\"/\"") != std::string::npos);
+  auto verify_serialize = [](const std::string& str) {
+    CHECK(str.find("instance_id=\"1.0.0.1\"") != std::string::npos);
+    CHECK(str.find("cluster_id=\"demo\"") != std::string::npos);
+    CHECK(str.find("method=\"GET\"") != std::string::npos);
+    CHECK(str.find("url=\"/\"") != std::string::npos);
+  };
 
-#define VARIFY_SERIALIZE_JSON()                                    \
-  CHECK(str.find("instance_id=\"1.0.0.1\"") != std::string::npos); \
-  CHECK(str.find("cluster_id=\"demo\"") != std::string::npos);     \
-  CHECK(str.find("method=\"GET\"") != std::string::npos);          \
-  CHECK(str.find("url=\"/\"") != std::string::npos);
+  auto verify_serialize_json = [](const std::string& str) {
+    CHECK(str.find("\"instance_id\":\"1.0.0.1\"") != std::string::npos);
+    CHECK(str.find("\"cluster_id\":\"demo\"") != std::string::npos);
+    CHECK(str.find("\"method\":\"GET\"") != std::string::npos);
+    CHECK(str.find("\"url\":\"/\"") != std::string::npos);
+  };
 
   {
     dynamic_counter_2t d("test_counter", "help", staticMetric,
@@ -104,13 +106,13 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
     d.inc({"GET", "/"});
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
@@ -124,13 +126,13 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
 
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
@@ -144,18 +146,16 @@ TEST_CASE("test serialize with dynamic hybrid labels") {
 
     std::string str;
     d.serialize(str);
-    VARIFY_SERIALIZE();
+    verify_serialize(str);
     std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
     std::string str_json;
     d.serialize_to_json(str_json);
-    VARIFY_SERIALIZE_JSON();
+    verify_serialize_json(str_json);
     std::cout << str_json << "\n";
 #endif
   }
-#undef VARIFY_SERIALIZE
-#undef VARIFY_SERIALIZE_JSON
 }
 
 TEST_CASE("summary test zero") {
