@@ -1482,6 +1482,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     req_timeout_duration_ = timeout_duration;
   }
 
+  void set_chunked_callback(
+      std::function<async_simple::coro::Lazy<void>(std::string_view)> cb) {
+    chunked_cb_ = std::move(cb);
+  }
+
 #ifdef CINATRA_ENABLE_SSL
   void enable_sni_hostname(bool r) { need_set_sni_host_ = r; }
 #endif
@@ -2001,12 +2006,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-      if (ctx.resp_body_stream) {
-        std::tie(ec, size) = co_await ctx.resp_body_stream->async_write(
-            {data_ptr, (size_t)chunk_size});
+      if (chunked_cb_) {
+        co_await chunked_cb_(std::string_view(data_ptr, chunk_size));
       }
       else {
-        resp_chunk_str_.append(data_ptr, chunk_size);
+        if (ctx.resp_body_stream) {
+          std::tie(ec, size) = co_await ctx.resp_body_stream->async_write(
+              {data_ptr, (size_t)chunk_size});
+        }
+        else {
+          resp_chunk_str_.append(data_ptr, chunk_size);
+        }
       }
 
       chunked_buf_.consume(chunk_size + CRCF.size());
@@ -2495,6 +2505,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   int64_t max_http_body_len_ =
       INT64_MAX;  // in default we don't limit http body len
 
+  std::function<async_simple::coro::Lazy<void>(std::string_view)> chunked_cb_;
 #if defined(CINATRA_ENABLE_BROTLI) || defined(CINATRA_ENABLE_GZIP)
   std::string uncompressed_str_;
 #endif
