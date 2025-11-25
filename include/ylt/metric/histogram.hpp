@@ -178,6 +178,23 @@ class basic_dynamic_histogram : public dynamic_metric {
     }
   }
 
+  basic_dynamic_histogram(std::string name, std::string help,
+                          std::vector<double> buckets,
+                          std::map<std::string, std::string> static_labels,
+                          std::array<std::string, N> labels_name)
+      : bucket_boundaries_(buckets),
+        dynamic_metric(MetricType::Histogram, name, help, labels_name),
+        sum_(std::make_shared<basic_dynamic_gauge<value_type, N>>(name, help,
+                                                                  labels_name)),
+        static_labels_(static_labels) {
+    for (size_t i = 0; i < buckets.size() + 1; i++) {
+      bucket_counts_.push_back(
+          std::make_shared<basic_dynamic_counter<value_type, N>>(name, help,
+                                                                 labels_name));
+    }
+    build_label_string(static_labels_str_, static_labels_);
+  }
+
   void observe(const std::array<std::string, N> &labels_value,
                value_type value) {
     const auto bucket_index = static_cast<std::size_t>(
@@ -232,10 +249,12 @@ class basic_dynamic_histogram : public dynamic_metric {
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         value_str.append(name_).append("_bucket{");
+        std::string dynamic_labels_str;
         if (!labels_name_.empty()) {
-          build_label_string(value_str, labels_name_, labels_value);
-          value_str.append(",");
+          build_label_string(dynamic_labels_str, labels_name_, labels_value);
+          dynamic_labels_str.append(",");
         }
+        value_str.append(join_string(static_labels_str_, dynamic_labels_str));
 
         if (i == bucket_boundaries_.size()) {
           value_str.append("le=\"").append("+Inf").append("\"} ");
@@ -253,16 +272,18 @@ class basic_dynamic_histogram : public dynamic_metric {
 
       str.append(value_str);
 
+      std::string dynamic_labels_str;
+      build_label_string(dynamic_labels_str, sum_->labels_name(), labels_value);
       str.append(name_);
       str.append("_sum{");
-      build_label_string(str, sum_->labels_name(), labels_value);
+      str.append(join_string(static_labels_str_, dynamic_labels_str));
       str.append("} ");
 
       str.append(std::to_string(value));
       str.append("\n");
 
       str.append(name_).append("_count{");
-      build_label_string(str, sum_->labels_name(), labels_value);
+      str.append(join_string(static_labels_str_, dynamic_labels_str));
       str.append("} ");
       str.append(std::to_string(count));
       str.append("\n");
@@ -308,6 +329,9 @@ class basic_dynamic_histogram : public dynamic_metric {
       metric.count = (int64_t)count;
       metric.sum = sum_->value(labels_value);
 
+      for (auto &e : static_labels_) {
+        metric.labels[e.first] = e.second;
+      }
       for (size_t i = 0; i < labels_value.size(); i++) {
         metric.labels[sum_->labels_name()[i]] = labels_value[i];
       }
@@ -333,6 +357,8 @@ class basic_dynamic_histogram : public dynamic_metric {
   std::vector<std::shared_ptr<basic_dynamic_counter<value_type, N>>>
       bucket_counts_;  // readonly
   std::shared_ptr<basic_dynamic_gauge<value_type, N>> sum_;
+  std::string static_labels_str_;
+  std::map<std::string, std::string> static_labels_;
 };
 
 using dynamic_histogram_1t = basic_dynamic_histogram<int64_t, 1>;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -185,7 +186,8 @@ inline void stat_memory() {
     return;
   }
   const std::string& result = oss.str();
-  if (sscanf(result.c_str(), "%ld %ld", &resident, &virtual_size) != 2) {
+  if (sscanf(result.c_str(), "%" PRId64 " %" PRId64, &resident,
+             &virtual_size) != 2) {
     ELOG_WARN << "Fail to sscanf";
     return;
   }

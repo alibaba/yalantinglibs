@@ -13,6 +13,150 @@ using namespace ylt::metric;
 struct metrc_tag {};
 
 struct test_tag {};
+TEST_CASE("test serialize with dynamic labels only") {
+  auto verify_serialize = [](const std::string& str) {
+    CHECK(str.find("method=\"GET\"") != std::string::npos);
+    CHECK(str.find("url=\"/\"") != std::string::npos);
+  };
+
+  auto verify_serialize_json = [](const std::string& str) {
+    CHECK(str.find("\"method\":\"GET\"") != std::string::npos);
+    CHECK(str.find("\"url\":\"/\"") != std::string::npos);
+  };
+
+  {
+    dynamic_counter_2t d("test_counter", "help",
+                         std::array<std::string, 2>{"method", "url"});
+    d.inc({"GET", "/"});
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+
+  {
+    dynamic_summary_2 d("test_summary", "help",
+                        {5.23, 10.54, 20.0, 50.0, 100.0},
+                        std::array<std::string, 2>{"method", "url"});
+    d.observe({"GET", "/"}, 23);
+    d.observe({"POST", "/"}, 50);
+
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+
+  {
+    dynamic_histogram_2t d("test_histogram", "help",
+                           {5.23, 10.54, 20.0, 50.0, 100.0},
+                           std::array<std::string, 2>{"method", "url"});
+    d.observe({"GET", "/"}, 23);
+    d.observe({"POST", "/"}, 50);
+
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+}
+
+TEST_CASE("test serialize with dynamic hybrid labels") {
+  auto staticMetric = std::map<std::string, std::string>(
+      {{"instance_id", "1.0.0.1"}, {"cluster_id", "demo"}});
+
+  auto verify_serialize = [](const std::string& str) {
+    CHECK(str.find("instance_id=\"1.0.0.1\"") != std::string::npos);
+    CHECK(str.find("cluster_id=\"demo\"") != std::string::npos);
+    CHECK(str.find("method=\"GET\"") != std::string::npos);
+    CHECK(str.find("url=\"/\"") != std::string::npos);
+  };
+
+  auto verify_serialize_json = [](const std::string& str) {
+    CHECK(str.find("\"instance_id\":\"1.0.0.1\"") != std::string::npos);
+    CHECK(str.find("\"cluster_id\":\"demo\"") != std::string::npos);
+    CHECK(str.find("\"method\":\"GET\"") != std::string::npos);
+    CHECK(str.find("\"url\":\"/\"") != std::string::npos);
+  };
+
+  {
+    dynamic_counter_2t d("test_counter", "help", staticMetric,
+                         std::array<std::string, 2>{"method", "url"});
+    d.inc({"GET", "/"});
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+
+  {
+    dynamic_summary_2 d("test_summary", "help",
+                        {5.23, 10.54, 20.0, 50.0, 100.0}, staticMetric,
+                        std::array<std::string, 2>{"method", "url"});
+    d.observe({"GET", "/"}, 23);
+    d.observe({"POST", "/"}, 50);
+
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+
+  {
+    dynamic_histogram_2t d("test_histogram", "help",
+                           {5.23, 10.54, 20.0, 50.0, 100.0}, staticMetric,
+                           std::array<std::string, 2>{"method", "url"});
+    d.observe({"GET", "/"}, 23);
+    d.observe({"POST", "/"}, 50);
+
+    std::string str;
+    d.serialize(str);
+    verify_serialize(str);
+    std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    d.serialize_to_json(str_json);
+    verify_serialize_json(str_json);
+    std::cout << str_json << "\n";
+#endif
+  }
+}
 
 TEST_CASE("summary test zero") {
   std::map<std::string, std::string> customMap = {};
