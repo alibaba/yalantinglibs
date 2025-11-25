@@ -6,8 +6,6 @@ project(yaLanTingLibs
         LANGUAGES CXX
         )
 
-enable_language(C)
-
 # load pack finder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Find/)
 
