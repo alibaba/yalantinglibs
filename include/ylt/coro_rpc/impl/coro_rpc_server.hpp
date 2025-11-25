@@ -42,6 +42,7 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
 /*!
@@ -114,7 +115,9 @@ class coro_rpc_server_base {
     if (config.ssl_config) {
       init_ssl_context_helper(context_, config.ssl_config.value());
     }
-    else if (config.ibv_config) {
+#endif
+#ifdef YLT_ENABLE_IBV
+    if (config.ibv_config) {
       init_ibv(config.ibv_config);
     }
 #endif
@@ -188,14 +191,21 @@ class coro_rpc_server_base {
     if (!errc_) {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
-      accept().start([this, p = std::move(promise)](auto &&res) mutable {
+      accept().start([this, p = std::move(promise)](
+                         async_simple::Try<coro_rpc::err_code> &&res) mutable {
         ELOG_INFO << "server quit!";
         if (res.hasError()) {
+          try {
+            std::rethrow_exception(res.getException());
+          } catch (const std::exception &e) {
+            ELOG_ERROR << "server quit with exception: " << e.what();
+          }
           stop();
           errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};
           p.setValue(errc_);
         }
         else {
+          ELOG_ERROR << "server quit with error: " << res.value().message();
           p.setValue(res.value());
         }
       });
@@ -224,9 +234,10 @@ class coro_rpc_server_base {
       {
         std::unique_lock lock(conns_mtx_);
         ELOG_INFO << "total connection count: " << conns_.size();
-        for (auto &conn : conns_) {
-          if (!conn.second->has_closed()) {
-            conn.second->async_close();
+        for (auto &conn_weak : conns_) {
+          auto conn = conn_weak.second.lock();
+          if (conn && !conn->has_closed()) {
+            conn->async_close();
           }
         }
 
@@ -415,10 +426,13 @@ class coro_rpc_server_base {
   }
 
   async_simple::coro::Lazy<coro_rpc::err_code> accept() {
+    ELOG_INFO << "begin to accept looping";
     for (;;) {
       auto executor = pool_.get_executor();
       asio::ip::tcp::socket socket(executor->get_asio_executor());
+      ELOG_INFO << "start accepting";
       auto error = co_await coro_io::async_accept(acceptor_, socket);
+      ELOG_INFO << "get connection";
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::force_inject_server_accept_error) {
         asio::error_code ignored_ec;
@@ -470,28 +484,12 @@ class coro_rpc_server_base {
         socket.set_option(asio::ip::tcp::no_delay(true), error);
       }
       coro_io::socket_wrapper_t wrapper;
-      bool init_failed = false;
-      do {
-#ifdef YLT_ENABLE_SSL
-        if (use_ssl_) {
-          wrapper = {std::move(socket), executor, context_};
-          break;
-        }
-#endif
-#ifdef YLT_ENABLE_IBV
-        if (ibv_config_.has_value()) {
-          try {
-            wrapper = {std::move(socket), executor, *ibv_config_};
-          } catch (...) {
-            init_failed = true;
-          }
-          break;
-        }
-#endif
+      if (use_ssl_) {
+        wrapper = {std::move(socket), executor, context_};
+      }
+      else {
         wrapper = {std::move(socket), executor};
-      } while (false);
-      if (init_failed)
-        continue;
+      }
       auto conn = std::make_shared<coro_connection>(std::move(wrapper),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
@@ -500,20 +498,75 @@ class coro_rpc_server_base {
             conns_.erase(id);
           },
           conn_id);
-      if (connection_transfer_) {
-        conn->set_transfer_callback(&connection_transfer_);
-      }
       {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
-      start_one(conn).via(conn->get_executor()).detach();
+      ELOG_TRACE << "start new connection, conn id:" << (void *)this;
+      start_one(std::move(conn))
+          .directlyStart(
+              [id = conn_id, this](async_simple::Try<void> &&res) {
+                ELOG_INFO << "connection over, conn id:" << (void *)this;
+              },
+              executor);
     }
+    co_return coro_rpc::err_code{};
   }
 
-  async_simple::coro::Lazy<void> start_one(auto conn) noexcept {
+#ifdef YLT_ENABLE_IBV
+  async_simple::coro::Lazy<bool> update_to_rdma(coro_connection *conn) {
+    bool init_ok = true;
+    auto &wrapper = conn->socket_wrapper();
+    try {
+      wrapper = {std::move(*wrapper.socket()), wrapper.get_executor(),
+                 *ibv_config_};
+    } catch (...) {
+      ELOG_WARN << "init rdma connection failed";
+      init_ok = false;
+    }
+    co_return init_ok;
+  }
+#endif
+
+  async_simple::coro::Lazy<void> start_one(
+      std::shared_ptr<coro_connection> conn) noexcept {
+    [[maybe_unused]] bool init_failed = false;
+
+    ELOG_TRACE << "start handshake for conn:" << conn->get_connection_id();
+    auto result =
+        co_await conn->handshake<typename server_config::rpc_protocol>();
+    if (result.ec.value() &&
+        result.ec.value() != (int)std::errc::protocol_error) {
+      ELOG_WARN << "connection error:" << result.ec.message();
+      co_return;
+    }
+    ELOG_TRACE << "finish handshake for conn:" << conn->get_connection_id();
+    if (result.ec == std::errc::protocol_error) {
+      do {
+#ifdef YLT_ENABLE_IBV
+        if (ibv_config_.has_value() && result.magic_number.size() == 1 &&
+            result.magic_number[0] ==
+                coro_io::ib_socket_t::ib_md5_first_header) {
+          ELOG_TRACE << "protocol is rdma, try to update";
+          auto result = co_await update_to_rdma(conn.get());
+          if (!result) {
+            ELOG_WARN << "rdma init failed";
+            co_return;
+          }
+          break;
+        }
+#endif
+        if (connection_transfer_) {
+          ELOG_TRACE
+              << "protocol is not coro_rpc. try to transfer to other server";
+          connection_transfer_(std::move(conn->socket_wrapper()),
+                               result.magic_number);
+        }
+        co_return;
+      } while (false);
+    }
     co_await conn->template start<typename server_config::rpc_protocol>(
-        router_);
+        router_, result.magic_number);
   }
 
   void close_acceptor() {
@@ -557,7 +610,7 @@ class coro_rpc_server_base {
 
   std::mutex start_mtx_;
   uint64_t conn_id_ = 0;
-  std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
+  std::unordered_map<uint64_t, std::weak_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;
 
   typename server_config::rpc_protocol::router router_;

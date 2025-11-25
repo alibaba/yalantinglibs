@@ -371,7 +371,7 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
     asio::ip::tcp::acceptor &acceptor, asio::ip::tcp::socket &socket) noexcept {
   return async_io<std::error_code>(
       [&](auto &&cb) {
-        ELOG_INFO << "call asio acceptor.async_accept";
+        ELOG_TRACE << "call asio acceptor.async_accept";
         acceptor.async_accept(socket, cb);
       },
       acceptor);

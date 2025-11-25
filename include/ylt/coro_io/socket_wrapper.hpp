@@ -138,20 +138,6 @@ struct socket_wrapper_t {
 #endif
   }
   template <typename T>
-  auto visit_coro(T &&op) noexcept {
-#ifdef YLT_ENABLE_IBV
-    if (ib_socket_) {
-      return op(*ib_socket_);
-    }
-#endif
-#ifdef YLT_ENABLE_SSL
-    if (use_ssl()) {
-      return op(*ssl_stream_);
-    }
-#endif
-    return op(*socket_);
-  }
-  template <typename T>
   auto visit(T &&op) noexcept {
 #ifdef YLT_ENABLE_IBV
     if (ib_socket_) {
