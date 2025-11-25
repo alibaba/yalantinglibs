@@ -63,6 +63,7 @@ if (YLT_ENABLE_NTLS)
     include(CheckCSourceCompiles)
     set(CMAKE_REQUIRED_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
     set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
+    enable_language(C)
     check_c_source_compiles("
         #include <openssl/ssl.h>
         int main() {
