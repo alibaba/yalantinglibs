@@ -219,6 +219,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     try {
 #ifndef OPENSSL_NO_NTLS
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+#else
       if (use_ntls_) {
         ssl_ctx_ = std::make_unique<asio::ssl::context>(
             SSL_CTX_new(NTLS_client_method()));
@@ -234,8 +237,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
       else {
-        ssl_ctx_ =
-            std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
+        return false;
       }
 #endif  // OPENSSL_NO_NTLS
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
@@ -2677,7 +2680,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool has_init_ssl_ = false;
   bool is_ssl_schema_ = false;
 #ifndef OPENSSL_NO_NTLS
-  bool use_ntls_ = false;
+  bool use_ntls_ = true;
 #endif  // OPENSSL_NO_NTLS
   bool need_set_sni_host_ = true;
 #endif

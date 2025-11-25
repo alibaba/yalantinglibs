@@ -52,7 +52,6 @@ struct ssl_configure {
 //  bool enable_ntls = true;         //!< enable NTLS mode
 //};
 
-#ifndef OPENSSL_NO_NTLS
 /*!
  * NTLS mode enumeration
  */
@@ -61,7 +60,6 @@ enum class ntls_mode {
                      //!< encryption)
   tls13_single_cert  //!< RFC 8998 TLS 1.3 + GM with single certificate
 };
-#endif
 
 /*!
  * Extended SSL config that supports both SSL and NTLS
@@ -74,7 +72,6 @@ struct ssl_ntls_configure {
   std::string key_file;   //!< relative path of private key file
   std::string dh_file;    //!< relative path of tmp dh file (optional)
 
-#ifndef OPENSSL_NO_NTLS
   // TLCP dual certificate configuration (GB/T 38636-2020)
   std::string
       sign_cert_file;         //!< relative path of SM2 signing certificate file
@@ -102,7 +99,6 @@ struct ssl_ntls_configure {
   bool enable_client_verify =
       false;                      //!< enable client certificate verification
   bool enable_dual_mode = false;  //!< enable both SSL and NTLS support
-#endif
 };
 #endif  // OPENSSL_NO_NTLS
 
