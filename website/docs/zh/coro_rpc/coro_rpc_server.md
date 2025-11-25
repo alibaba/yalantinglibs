@@ -409,7 +409,7 @@ coro_rpc_server server;
 server.init_ibverbs(ib_socket_t::config_t{});
 ```
 
-启用rdma后，服务器将拒接一切非rdma连接。
+启用rdma后，服务器仍然可以接受非rdma请求。
 
 ## 高级设置
 
