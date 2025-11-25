@@ -627,8 +627,8 @@ class coro_rpc_server_base {
 
 #ifdef YLT_ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};
-  bool use_ssl_ = false;
 #endif
+  bool use_ssl_ = false;
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
