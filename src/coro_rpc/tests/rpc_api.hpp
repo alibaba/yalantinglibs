@@ -20,6 +20,7 @@
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
@@ -88,4 +89,6 @@ class LoginService {
   bool login(std::string username, std::string password);
 };
 }  // namespace ns_login
+std::unique_ptr<coro_rpc::coro_rpc_server> start_extern_server();
+
 #endif  // CORO_RPC_RPC_API_HPP
