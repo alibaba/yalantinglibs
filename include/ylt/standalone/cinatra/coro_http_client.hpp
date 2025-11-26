@@ -140,7 +140,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifndef OPENSSL_NO_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif  // OPENSSL_NO_NTLS
+#endif          // OPENSSL_NO_NTLS
 #endif
   };
 
