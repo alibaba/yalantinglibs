@@ -400,6 +400,59 @@ TEST_CASE("set http handler") {
   CHECK(coro_handlers.size() == 4);
 }
 
+TEST_CASE("test llm chunked stream api") {
+  std::vector<std::string> llm_msgs = {
+      R"(data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1732500000,"model":"qwen-max","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]})",
+      R"(data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1732500000,"model":"qwen-max","choices":[{"index":0,"delta":{"content":"为什么程序员总是分不清万圣节和圣诞节？"},"finish_reason":null}]})",
+      R"(data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1732500000,"model":"qwen-max","choices":[{"index":0,"delta":{"content":"因为 Oct 31 == Dec 25"}}, "finish_reason":null}]})",
+      R"(data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1732500000,"model":"qwen-max","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]})",
+      R"(data: [DONE])"};
+
+  coro_http_server server(2, 9000);
+  server.set_http_handler<POST>(
+      "/llm_api",
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_format_type(format_type::chunked);
+        resp.add_header("Content-Type", "text/event-stream");
+        resp.add_header("Cache-Control", "no-cache");
+        resp.add_header("Connection", "keep-alive");
+
+        co_await resp.get_conn()->begin_chunked();
+
+        for (auto &msg : llm_msgs) {
+          co_await resp.get_conn()->write_chunked(msg);
+        }
+        co_await resp.get_conn()->end_chunked();
+      });
+  server.async_start();
+
+  auto send_req = []() -> async_simple::coro::Lazy<void> {
+    std::string uri = "http://127.0.0.1:9000/llm_api";
+    std::string req_json =
+        R"({"model":"qwen-max",  "messages": [{"role": "user", "content": "讲个笑话"}], "stream": true})";
+
+    bool has_finished = false;
+    coro_http_client client{};
+    client.set_chunked_callback(
+        [&](std::string_view data) -> async_simple::coro::Lazy<void> {
+          auto json = data.substr(6);
+          std::cout << json << "\n";
+          if (json == "[DONE]") {
+            std::cout << "all finished\n";
+            has_finished = true;
+          }
+          co_return;
+        });
+    CHECK(client.has_chunked_callback());
+    auto r = co_await client.async_post(uri, req_json, req_content_type::json);
+    CHECK(r.status == 200);
+    CHECK(has_finished);
+  };
+
+  async_simple::coro::syncAwait(send_req());
+}
+
 TEST_CASE("test server start and stop") {
   cinatra::coro_http_server server(1, 9000);
   auto future = server.async_start();
