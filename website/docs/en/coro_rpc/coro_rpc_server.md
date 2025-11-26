@@ -444,7 +444,7 @@ int start() {
 
 coro_rpc uses the `struct_pack` serialization library internally. As long as changes to RPC parameters and return values satisfy the forward/backward compatibility constraints of `struct_pack`, the ABIs of new and old versions can remain mutually compatible. You can add `struct_pack::compatible<T,VERSION_NUMBER>` fields to the structs used for parameters and return values. `struct_pack::compatible<T>` is similar to `std::optional<T>`. When an older client version does not contain this field, the server will receive an empty value.
 
-For detailed rules, see the [struct_pack documentation](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%90%91%E5%89%8D-%E5%90%91%E5%90%8E%E5%85%BC%E5%AE%B9%E6%80%A7). If the ABI is likely to change multiple times, it is recommended to manually specify the version number in the template parameter for each change.
+For detailed rules, see the [struct_pack documentation](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#forward-backward-compatibility). If the ABI is likely to change multiple times, it is recommended to manually specify the version number in the template parameter for each change.
 
 What if the parameters or return values do not use structs? You can add new parameters and return values directly. Likewise, add several `compatible<T>` fields.
 
