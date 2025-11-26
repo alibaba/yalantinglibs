@@ -1487,6 +1487,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     chunked_cb_ = std::move(cb);
   }
 
+  bool has_chunked_callback() const { return chunked_cb_ != nullptr; }
+
 #ifdef CINATRA_ENABLE_SSL
   void enable_sni_hostname(bool r) { need_set_sni_host_ = r; }
 #endif

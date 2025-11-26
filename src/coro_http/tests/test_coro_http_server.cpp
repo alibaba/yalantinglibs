@@ -444,6 +444,7 @@ TEST_CASE("test llm chunked stream api") {
           }
           co_return;
         });
+    CHECK(client.has_chunked_callback());
     auto r = co_await client.async_post(uri, req_json, req_content_type::json);
     CHECK(r.status == 200);
     CHECK(has_finished);
