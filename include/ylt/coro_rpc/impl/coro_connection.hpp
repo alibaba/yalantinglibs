@@ -466,7 +466,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   template <typename rpc_protocol>
   async_simple::coro::Lazy<handshake_result_t<rpc_protocol>> handshake() {
-    return socket_wrapper_.visit(
+    co_return co_await socket_wrapper_.visit(
         [this]<typename Socket>(Socket &socket)
             -> async_simple::coro::Lazy<handshake_result_t<rpc_protocol>> {
           handshake_result_t<rpc_protocol> result;
