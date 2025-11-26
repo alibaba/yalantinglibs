@@ -208,5 +208,5 @@ std::unique_ptr<coro_rpc_server> start_extern_server() {
                       client_newapi_server_oldapi_ret_void,
                       client_oldapi_server_newapi_ret_void>();
   s->async_start();
-  return std::move(s);
+  return s;
 }
