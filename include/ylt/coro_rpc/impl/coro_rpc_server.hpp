@@ -484,12 +484,16 @@ class coro_rpc_server_base {
         socket.set_option(asio::ip::tcp::no_delay(true), error);
       }
       coro_io::socket_wrapper_t wrapper;
+#ifdef YLT_ENABLE_SSL
       if (use_ssl_) {
         wrapper = {std::move(socket), executor, context_};
       }
       else {
+#endif
         wrapper = {std::move(socket), executor};
+#ifdef YLT_ENABLE_SSL
       }
+#endif
       auto conn = std::make_shared<coro_connection>(std::move(wrapper),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
@@ -627,8 +631,8 @@ class coro_rpc_server_base {
 
 #ifdef YLT_ENABLE_SSL
   asio::ssl::context context_{asio::ssl::context::sslv23};
-#endif
   bool use_ssl_ = false;
+#endif
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
