@@ -122,7 +122,10 @@ class ib_device_t {
   friend class ib_device_manager_t;
   struct config_t {
     std::string dev_name;
-    uint16_t port = 1;
+    uint16_t port = 1;               // dev gid
+    uint16_t gid_index = 0;          // dev gid_index
+    bool use_best_gid_index = true;  // automatically find best gid index. If
+                                     // failed, it will use gid_index.
     ib_buffer_pool_t::config_t buffer_pool_config;
   };
   static std::shared_ptr<ib_device_t> create(const config_t& conf) {
@@ -151,12 +154,13 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    gid_index_ = find_best_gid_index();
+    gid_index_ = conf.use_best_gid_index ? find_best_gid_index(conf.gid_index)
+                                         : conf.gid_index;
 
     ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
               << ", "
               << "Max MTU: " << detail::mtu_str(attr_.max_mtu)
-              << ", best gid index: " << gid_index_;
+              << ", gid index: " << gid_index_;
 
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
@@ -216,7 +220,7 @@ class ib_device_t {
             ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
   }
 
-  int find_best_gid_index() {
+  int find_best_gid_index(int default_gid_index) {
     constexpr bool is_support_query_gid =
         util::check_structure_declared<ibv_gid_entry>;
     if constexpr (is_support_query_gid) {
@@ -233,8 +237,8 @@ class ib_device_t {
       }
     }
     ELOG_DEBUG << "selected best device failed, maybe the platform don't "
-                  "support it. set default rdma device gid as 0";
-    return 0;
+                  "support it. return default rdma device gid";
+    return default_gid_index;
   }
 
   std::string name_;
