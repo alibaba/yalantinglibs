@@ -212,6 +212,15 @@ void test_coro_http_client() {
 ```
 根据需要，一般情况下init_ssl()可以不调用。
 
+## 国密SSL（NTLS）支持
+
+yaLanTingLibs 现已全面支持国密SSL（NTLS），通过集成 Tongsuo（铜锁）密码库，`coro_http` 和 `coro_rpc` 组件现在可以支持两种国密通信协议：
+
+- **GB/T 38636-2020 TLCP**：双证书国密通信协议
+- **RFC 8998**：TLS 1.3 + 国密单证书模式
+
+详细使用说明请参考：[国密SSL（NTLS）支持文档](ntls_support.md)
+
 ## http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。
 
