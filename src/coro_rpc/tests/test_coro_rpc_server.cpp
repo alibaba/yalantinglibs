@@ -549,7 +549,7 @@ TEST_CASE("testing coro rpc subserver") {
 }
 #ifdef YLT_ENABLE_SSL
 TEST_CASE("testing coro rpc ssl subserver") {
-  ELOGV(INFO, "run testing coro rpc subserver");
+  ELOGV(INFO, "run testing coro rpc ssl subserver");
   std::string http_body = R"(
 <!DOCTYPE html>
 <html>
@@ -597,4 +597,139 @@ TEST_CASE("testing coro rpc ssl subserver") {
                 result.net_err.message());
   CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
 }
+#ifdef YLT_ENABLE_IBV
+TEST_CASE("testing coro rpc non-rdma client to rdma server") {
+  ELOGV(INFO, "run testing coro rpc non-rdma client to rdma server");
+  coro_rpc_server server(2, 8810);
+  server.init_ibv();
+  server.register_handler<hi>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(coro_io::get_global_executor());
+  auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  auto ret = syncAwait(client.call<hi>());
+  REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+}
+TEST_CASE("testing coro rpc subserver with rdma") {
+  ELOGV(INFO, "run testing coro rpc subserver with rdma");
+  std::string http_body = R"(
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Example</title>
+    </head>
+    <body>
+        <p>This is an example of a simple HTML page with one paragraph.</p>
+    </body>
+</html>)";
+  coro_rpc_server server(2, 8810);
+  server.init_ibv();
+  server.register_handler<hi>();
+  std::function dispatcher = [](coro_io::socket_wrapper_t &&soc,
+                                std::string_view magic_number,
+                                coro_http::coro_http_server &server) {
+    CHECK(magic_number == "G");
+    server.transfer_connection(std::move(soc), magic_number);
+  };
+  auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+  http_server->set_http_handler<coro_http::GET>(
+      "/index.html",
+      [&](coro_http::coro_http_request &, coro_http::coro_http_response &resp) {
+        resp.set_status_and_content(coro_http::status_type::ok, http_body);
+      });
+  server.add_subserver(std::move(dispatcher), std::move(http_server));
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(coro_io::get_global_executor());
+  bool is_ok = client.init_ibv();
+  REQUIRE_MESSAGE(is_ok, "init ibv failed");
+  auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+  REQUIRE_MESSAGE(!ec,
+                  std::to_string(client.get_client_id()).append(ec.message()));
+  auto ret = syncAwait(client.call<hi>());
+  REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+  coro_http::coro_http_client cli;
+  auto result = syncAwait(cli.connect("localhost:8810"));
+  CHECK_MESSAGE(!result.net_err, result.net_err.message());
+  result = syncAwait(cli.async_get("/index.html"));
+  CHECK_MESSAGE(result.status == (int)coro_http::status_type::ok,
+                result.status);
+  CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
+}
+#ifdef YLT_ENABLE_SSL
+
+// TODO: open it when whe support rdma client with ssl-encrypt connection
+
+// TEST_CASE("testing coro rpc non-rdma ssl client to ssl rdma server") {
+//   ELOGV(INFO, "run testing coro rpc non-rdma client to rdma server");
+//   coro_rpc_server server(2, 8810);
+//   server.init_ibv();
+//   server.init_ssl(
+//     ssl_configure{"../openssl_files", "server.crt", "server.key"});
+//   server.register_handler<hi>();
+//   auto res = server.async_start();
+//   CHECK_MESSAGE(!res.hasResult(), "server start failed");
+//   coro_rpc_client client(coro_io::get_global_executor());
+//   CHECK(client.init_ssl("../openssl_files", "server.crt"));
+//   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+//   REQUIRE_MESSAGE(!ec,
+//                   std::to_string(client.get_client_id()).append(ec.message()));
+//   auto ret = syncAwait(client.call<hi>());
+//   REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+// }
+
+// TEST_CASE("testing ssl coro rpc subserver with rdma") {
+//   ELOGV(INFO, "run testing ssl coro rpc subserver with rdma");
+//   std::string http_body = R"(
+// <!DOCTYPE html>
+// <html>
+//     <head>
+//         <title>Example</title>
+//     </head>
+//     <body>
+//         <p>This is an example of a simple HTML page with one paragraph.</p>
+//     </body>
+// </html>)";
+//   coro_rpc_server server(2, 8810);
+//   server.init_ssl(
+//     ssl_configure{"../openssl_files", "server.crt", "server.key"});
+//   server.init_ibv();
+//   server.register_handler<hi>();
+//   std::function dispatcher = [](coro_io::socket_wrapper_t &&soc,
+//                                 std::string_view magic_number,
+//                                 coro_http::coro_http_server &server) {
+//     CHECK(magic_number == "G");
+//     server.transfer_connection(std::move(soc), magic_number);
+//   };
+//   auto http_server = std::make_unique<coro_http::coro_http_server>(0, 0);
+//   http_server->set_http_handler<coro_http::GET>(
+//       "/index.html",
+//       [&](coro_http::coro_http_request &, coro_http::coro_http_response
+//       &resp) {
+//         resp.set_status_and_content(coro_http::status_type::ok, http_body);
+//       });
+//   server.add_subserver(std::move(dispatcher), std::move(http_server));
+//   auto res = server.async_start();
+//   CHECK_MESSAGE(!res.hasResult(), "server start failed");
+//   coro_rpc_client client(coro_io::get_global_executor());
+//   bool is_ok = client.init_ibv();
+//   CHECK(client.init_ssl("../openssl_files", "server.crt"));
+//   REQUIRE_MESSAGE(is_ok,"init ibv failed");
+//   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
+//   REQUIRE_MESSAGE(!ec,
+//                   std::to_string(client.get_client_id()).append(ec.message()));
+//   auto ret = syncAwait(client.call<hi>());
+//   REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
+//   coro_http::coro_http_client cli;
+//   auto result = syncAwait(cli.connect("localhost:8810"));
+//   CHECK_MESSAGE(!result.net_err, result.net_err.message());
+//   result = syncAwait(cli.async_get("/index.html"));
+//   CHECK_MESSAGE(result.status == (int)coro_http::status_type::ok,
+//                 result.status);
+//   CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
+// }
+#endif
+#endif
 #endif

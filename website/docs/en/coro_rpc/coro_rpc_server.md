@@ -394,7 +394,7 @@ server.init_ssl({
 });
 ```
 
-After enabling SSL support, the server will reject all non-SSL connections.
+After enabling RDMA support, the server still allow non-rdma connections.
 
 ## RDMA Support
 

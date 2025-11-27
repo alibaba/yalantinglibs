@@ -462,6 +462,7 @@ class ib_socket_t {
     uint16_t lid;          // LID of the IB port
     uint32_t buffer_size;  // buffer length
     uint32_t qp_num;       // QP number
+    constexpr static auto struct_pack_config = struct_pack::DISABLE_TYPE_INFO;
   };
 
   ib_socket_t(coro_io::ExecutorWrapper<>* executor, const config_t& config)
@@ -544,11 +545,16 @@ class ib_socket_t {
     return state_->waiting_write_over();
   }
 
-  async_simple::coro::Lazy<std::error_code> accept() noexcept {
+  async_simple::coro::Lazy<std::error_code> accept(
+      std::string_view magic = "") noexcept {
     ib_socket_t::ib_socket_info peer_info;
     constexpr auto sz = struct_pack::get_needed_size(peer_info);
+    assert(magic.size() < sz.size());
     char buffer[sz.size()];
-    auto [ec, _] = co_await async_read(state_->soc_, asio::buffer(buffer));
+    memcpy(buffer, magic.data(), magic.size());
+    auto [ec, _] = co_await async_read(
+        state_->soc_,
+        asio::buffer(buffer + magic.size(), sizeof(buffer) - magic.size()));
     if (ec) [[unlikely]] {
       co_return ec;
     }
@@ -648,6 +654,11 @@ class ib_socket_t {
   }
 
   uint32_t get_local_qp_num() const noexcept { return state_->qp_->qp_num; }
+
+  constexpr static uint32_t ib_md5_header =
+      struct_pack::get_type_code<ib_socket_t::ib_socket_info>();
+  constexpr static char ib_md5_first_header =
+      struct_pack::get_type_code<ib_socket_t::ib_socket_info>() % 256;
 
   async_simple::coro::Lazy<std::error_code> connect_impl() noexcept {
     try {
