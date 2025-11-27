@@ -409,7 +409,7 @@ coro_rpc_server server;
 server.init_ibverbs(ib_socket_t::config_t{});
 ```
 
-启用rdma后，服务器将拒接一切非rdma连接。
+启用rdma后，服务器仍然可以接受非rdma请求。
 
 ## 高级设置
 
@@ -444,6 +444,63 @@ int start() {
 
 
 ## 特殊rpc函数的注册与调用
+
+### rpc abi变更与兼容性
+
+coro_rpc 底层采用序列化库struct_pack，因此只要rpc参数和返回值的更改，满足struct_pack能向前/向后兼容的约束，那么新老版本的abi就可以相互兼容。你可以在参数和返回值的结构体中添加`struct_pack::compatible<T,VERSION_NUMBER>`字段。其中`struct_pack::compatible<T>`类似于`std::optional<T>`。当客户端的老版本没有该字段时，服务端将得到一个空值。
+
+具体规则详见[struct_pack文档](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%90%91%E5%89%8D-%E5%90%91%E5%90%8E%E5%85%BC%E5%AE%B9%E6%80%A7)。如果abi可能多次变更，建议每次变更都手动指定模板参数中的版本号。
+
+如果参数或者返回值没有结构体？你可以添加新的参数和返回值！同样，请增加若干个`compatible<T>`字段。
+
+例如：
+// server 端
+```server.cpp
+int client_oldapi_server_newapi(int a, struct_pack::compatible<int> b) {
+  return a + b.value_or(1);
+}
+int client_newapi_server_oldapi(int a) { return a; }
+
+std::tuple<int,struct_pack::compatible<int>> client_oldapi_server_newapi_ret() {
+    return {42,1};
+}
+int client_newapi_server_oldapi_ret() {
+    return 42;
+}
+
+```
+// client 端
+```client.cpp
+int client_oldapi_server_newapi(int a);
+int client_newapi_server_oldapi(int a, struct_pack::compatible<int> b);
+int client_oldapi_server_newapi_ret();
+std::tuple<int,struct_pack::compatible<int>> client_newapi_server_oldapi_ret();
+```
+
+我们保证server和client之间可以调用这api变更后的函数正常通信。
+
+特别的，返回值是`void`，我们同样支持，只需要将其升级为`std::tuple<std::monostate,...>` 即可。
+
+例如：
+// server 端
+```server.cpp
+std::tuple<std::monostate,struct_pack::compatible<int>> client_oldapi_server_newapi_ret_void() {
+    return {std::monostate{},1};
+}
+void client_newapi_server_oldapi_ret_void() {
+    return;
+}
+
+```
+// client 端
+```client.cpp
+void client_oldapi_server_newapi_ret_void();
+std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
+```
+
+> TODO: 自`2025/11/26`之前的老版本客户端在向单参数/单返回值函数添加新参数/新返回值时，会出现校验错误，后续将通过手动指定函数使用老版本校验值来修复这一问题。
+
+
 
 ### 成员函数的注册与调用 
 

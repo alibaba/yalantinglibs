@@ -15,10 +15,14 @@
  */
 #include "rpc_api.hpp"
 
+#include <memory>
 #include <stdexcept>
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 #include <ylt/easylog.hpp>
 
+#include "async_simple/Future.h"
+#include "ylt/coro_rpc/impl/coro_rpc_server.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 
 using namespace coro_rpc;
@@ -179,3 +183,30 @@ bool LoginService::login(std::string username, std::string password) {
   return true;
 }
 }  // namespace ns_login
+
+int client_oldapi_server_newapi(int a, struct_pack::compatible<int> b) {
+  return a + b.value_or(1);
+}
+int client_newapi_server_oldapi(int a) { return a; }
+
+std::tuple<int, struct_pack::compatible<int>>
+client_oldapi_server_newapi_ret() {
+  return {42, 1};
+}
+int client_newapi_server_oldapi_ret() { return 42; }
+
+std::tuple<std::monostate, struct_pack::compatible<int>>
+client_oldapi_server_newapi_ret_void() {
+  return {std::monostate{}, 1};
+}
+void client_newapi_server_oldapi_ret_void() { return; }
+std::unique_ptr<coro_rpc_server> start_extern_server() {
+  auto s = std::make_unique<coro_rpc_server>(1, 0);
+  s->register_handler<client_newapi_server_oldapi, client_oldapi_server_newapi,
+                      client_newapi_server_oldapi_ret,
+                      client_oldapi_server_newapi_ret,
+                      client_newapi_server_oldapi_ret_void,
+                      client_oldapi_server_newapi_ret_void>();
+  s->async_start();
+  return s;
+}

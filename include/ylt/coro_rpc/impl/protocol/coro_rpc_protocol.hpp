@@ -95,40 +95,39 @@ struct coro_rpc_protocol {
 
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
-      Socket& socket, req_header& req_head, std::string& magic) {
+      Socket& socket, req_header& req_head) {
     // TODO: add a connection-level buffer in parameter to reuse memory
     char head_buffer[sizeof(req_header)];
-    if (magic.size()) {
-      auto [ec, _] = co_await coro_io::async_read(
-          socket, asio::buffer(head_buffer, sizeof(req_header)));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
-    }
-    else [[unlikely]] {
-      auto [ec, _] =
-          co_await coro_io::async_read(socket, asio::buffer(head_buffer, 1));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
-      else if (head_buffer[0] != magic_number) {
-        magic = head_buffer[0];
-        co_return std::make_error_code(std::errc::protocol_error);
-      }
-      std::tie(ec, _) = co_await coro_io::async_read(
-          socket, asio::buffer(head_buffer + 1, sizeof(req_header) - 1));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
+    auto [ec, _] = co_await coro_io::async_read(
+        socket, asio::buffer(head_buffer, sizeof(req_header)));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
     }
     auto i = struct_pack::get_needed_size<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
-    auto ec = struct_pack::deserialize_to<
+    auto ec2 = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(
         req_head,
         std::string_view{head_buffer, head_buffer + sizeof(head_buffer)});
-    if (ec || req_head.magic != magic_number ||
+    if (ec2 || req_head.magic != magic_number ||
         req_head.version > VERSION_NUMBER) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
+    }
+    co_return std::error_code{};
+  }
+
+  // this function is used for check connection type when read first rpc head
+  template <typename Socket>
+  static async_simple::coro::Lazy<std::error_code> read_magic(
+      Socket& socket, std::string& magic) {
+    char head_buffer[sizeof(req_header)];
+    auto [ec, _] =
+        co_await coro_io::async_read(socket, asio::buffer(head_buffer, 1));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
+    }
+    magic = head_buffer[0];
+    if (head_buffer[0] != magic_number) {
       co_return std::make_error_code(std::errc::protocol_error);
     }
     co_return std::error_code{};
@@ -156,6 +155,32 @@ struct coro_rpc_protocol {
 
     auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
     co_return ec;
+  }
+
+  template <typename Socket>
+  static async_simple::coro::Lazy<std::error_code> read_first_head(
+      Socket& socket, req_header& req_head, std::string_view magic) {
+    // TODO: add a connection-level buffer in parameter to reuse memory
+    assert(magic.size() < sizeof(req_header));
+    char head_buffer[sizeof(req_header)];
+    memcpy(head_buffer, magic.data(), magic.size());
+    auto [ec, _] = co_await coro_io::async_read(
+        socket, asio::buffer(head_buffer + magic.size(),
+                             sizeof(req_header) - magic.size()));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
+    }
+    auto i = struct_pack::get_needed_size<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
+    auto ec2 = struct_pack::deserialize_to<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+        req_head,
+        std::string_view{head_buffer, head_buffer + sizeof(head_buffer)});
+    if (ec2 || req_head.magic != magic_number ||
+        req_head.version > VERSION_NUMBER) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
+    }
+    co_return std::error_code{};
   }
 
   static std::string prepare_response(std::string& rpc_result,

@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 
@@ -111,10 +113,48 @@ Lazy<void> connection_reuse() {
   co_return;
 }
 
+/*send multi request*/
+
+int client_oldapi_server_newapi(int a);
+int client_newapi_server_oldapi(int a, struct_pack::compatible<int> b);
+int client_oldapi_server_newapi_ret();
+std::tuple<int, struct_pack::compatible<int>> client_newapi_server_oldapi_ret();
+void client_oldapi_server_newapi_ret_void();
+std::tuple<std::monostate, struct_pack::compatible<int>>
+client_newapi_server_oldapi_ret_void();
+
+Lazy<void> abi_compatible() {
+  coro_rpc_client client;
+  [[maybe_unused]] auto ec = co_await client.connect("127.0.0.1", "8801");
+  assert(!ec);
+  auto ret = co_await client.call<client_oldapi_server_newapi>(42);
+  assert(ret.value() == 43);
+  ret = co_await client.call<client_newapi_server_oldapi>(42, 1);
+  assert(ret.value() == 42);
+  ret = co_await client.call<client_oldapi_server_newapi_ret>();
+  assert(ret.value() == 42);
+  auto ret2 = co_await client.call<client_newapi_server_oldapi_ret>();
+  auto expected =
+      std::tuple<int, struct_pack::compatible<int>>(42, std::nullopt);
+  assert(ret2.value() == expected);
+  {
+    auto ret = co_await client.call<client_oldapi_server_newapi_ret_void>();
+    assert(ret.has_value());
+  }
+  {
+    auto ret = co_await client.call<client_newapi_server_oldapi_ret_void>();
+    auto expected = std::tuple<std::monostate, struct_pack::compatible<int>>(
+        std::monostate{}, std::nullopt);
+    assert(ret.value() == expected);
+  }
+  co_return;
+}
+
 int main() {
   try {
     syncAwait(show_rpc_call());
     syncAwait(connection_reuse());
+    syncAwait(abi_compatible());
     std::cout << "Done!" << std::endl;
   } catch (const std::exception& e) {
     std::cout << "Error:" << e.what() << std::endl;
