@@ -40,7 +40,6 @@ struct config_base {
 #ifdef YLT_ENABLE_SSL
   std::optional<ssl_configure> ssl_config = std::nullopt;
 #ifndef OPENSSL_NO_NTLS
-  // std::optional<ntls_configure> ntls_config = std::nullopt;
   std::optional<ssl_ntls_configure> ssl_ntls_config = std::nullopt;
 #endif  // OPENSSL_NO_NTLS
 #endif
