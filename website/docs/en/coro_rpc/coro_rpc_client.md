@@ -180,14 +180,13 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
 3. Create and use your own `ib_device_t`
 ```cpp
   auto dev = coro_io::ib_device_t::create({
-    .dev_name = nullptr,  // If dev_name is nullptr, it will use the first device in list
-    .buffer_pool_config = {
-      // ...
-    }
-  });
-  coro_rpc_client cli;
-  cli.init_ibv({
-    .device = dev
+      .dev_name = "",  // If dev_name is empty, the first device in the device list will be used.
+      .buffer_pool_config = {
+        // ...
+      },
+      .port = 1,       // Manually specify the NIC port number.
+      .use_best_gid_index = true,  // Automatically find the best GID index for this device.
+      .gid_index = 0   // Manually specify the GID index; takes effect when automatic lookup is disabled or fails.
   });
 ```
 
