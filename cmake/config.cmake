@@ -52,6 +52,47 @@ if (YLT_ENABLE_SSL)
         target_link_libraries(${ylt_target_name} INTERFACE OpenSSL::SSL OpenSSL::Crypto)
     endif ()
 endif ()
+option(YLT_ENABLE_NTLS "Enable NTLS support with Tongsuo" OFF)
+message(STATUS "YLT_ENABLE_NTLS: ${YLT_ENABLE_NTLS}")
+if (YLT_ENABLE_NTLS)
+    if (NOT YLT_ENABLE_SSL)
+        message(FATAL_ERROR "YLT_ENABLE_NTLS requires YLT_ENABLE_SSL to be ON")
+    endif()
+    # Check if OpenSSL is actually Tongsuo (which supports NTLS)
+    # We check for NTLS-specific functions that only exist in Tongsuo
+    include(CheckCSourceCompiles)
+    set(CMAKE_REQUIRED_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
+    set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
+    enable_language(C)
+    check_c_source_compiles("
+        #include <openssl/ssl.h>
+        int main() {
+            SSL_CTX *ctx = NULL;
+            SSL_CTX_enable_ntls(ctx);
+            return 0;
+        }
+    " HAVE_NTLS_SUPPORT)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    unset(CMAKE_REQUIRED_INCLUDES)
+    
+    if (NOT HAVE_NTLS_SUPPORT)
+        message(WARNING "OpenSSL library does not support NTLS. Please use Tongsuo library.")
+        message(WARNING "NTLS code may not compile correctly without Tongsuo.")
+    else()
+        message(STATUS "NTLS support detected in OpenSSL/Tongsuo library")
+    endif()
+    if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs")
+        message(STATUS "NTLS code will be compiled (OPENSSL_NO_NTLS not defined)")
+    else ()
+        target_compile_definitions(${ylt_target_name} INTERFACE "YLT_ENABLE_NTLS")
+    endif ()
+else ()
+    if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs")
+        add_compile_definitions("OPENSSL_NO_NTLS")
+    else ()
+        target_compile_definitions(${ylt_target_name} INTERFACE "OPENSSL_NO_NTLS")
+    endif ()
+endif ()
 option(YLT_ENABLE_IBV "Enable ibverbs support" OFF)
 if (YLT_ENABLE_IBV)
     message(STATUS "Enable ibverbs support")
