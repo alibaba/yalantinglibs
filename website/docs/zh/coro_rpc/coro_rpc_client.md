@@ -184,10 +184,13 @@ struct ib_socket_t::config_t {
 3. 创建并使用自己的 `ib_device_t`
 ```cpp
   auto dev = coro_io::ib_device_t::create({
-    .dev_name=nullptr,  // 如果 dev_name 为 nullptr，则会使用设备列表中的第一个设备
+    .dev_name = "",  // 如果 dev_name 为 空，则会使用设备列表中的第一个设备
     .buffer_pool_config = {
       // ...
-    }
+    },
+    .port = 1, // 手动指定网卡port
+    .use_best_gid_index = true // 自动查找该设备最佳的gid_index
+    .gid_index = 0 // 手动指定gid_index，当关闭自动查找或自动查找失败时生效
   });
   coro_rpc_client cli;
   cli.init_ibv({
