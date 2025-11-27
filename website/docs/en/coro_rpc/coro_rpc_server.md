@@ -440,6 +440,61 @@ int start() {
 
 ## Registration and Invocation of Special RPC Functions
 
+### RPC ABI Changes and Compatibility
+
+coro_rpc uses the `struct_pack` serialization library internally. As long as changes to RPC parameters and return values satisfy the forward/backward compatibility constraints of `struct_pack`, the ABIs of new and old versions can remain mutually compatible. You can add `struct_pack::compatible<T,VERSION_NUMBER>` fields to the structs used for parameters and return values. `struct_pack::compatible<T>` is similar to `std::optional<T>`. When an older client version does not contain this field, the server will receive an empty value.
+
+For detailed rules, see the [struct_pack documentation](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#forward-backward-compatibility). If the ABI is likely to change multiple times, it is recommended to manually specify the version number in the template parameter for each change.
+
+What if the parameters or return values do not use structs? You can add new parameters and return values directly. Likewise, add several `compatible<T>` fields.
+
+Example:
+// server side
+```server.cpp
+int client_oldapi_server_newapi(int a, struct_pack::compatible<int> b) {
+  return a + b.value_or(1);
+}
+int client_newapi_server_oldapi(int a) { return a; }
+
+std::tuple<int,struct_pack::compatible<int>> client_oldapi_server_newapi_ret() {
+    return {42,1};
+}
+int client_newapi_server_oldapi_ret() {
+    return 42;
+}
+
+```
+// client side
+```client.cpp
+int client_oldapi_server_newapi(int a);
+int client_newapi_server_oldapi(int a, struct_pack::compatible<int> b);
+int client_oldapi_server_newapi_ret();
+std::tuple<int,struct_pack::compatible<int>> client_newapi_server_oldapi_ret();
+```
+
+We ensure that the server and client can communicate normally when calling these functions after the API changes.
+
+In particular, we also support the case where the return value is `void`; you only need to upgrade it to `std::tuple<std::monostate,...>`.
+
+Example:
+// server side
+```server.cpp
+std::tuple<std::monostate,struct_pack::compatible<int>> client_oldapi_server_newapi_ret_void() {
+    return {std::monostate{},1};
+}
+void client_newapi_server_oldapi_ret_void() {
+    return;
+}
+
+```
+// client side
+```client.cpp
+void client_oldapi_server_newapi_ret_void();
+std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
+```
+
+> TODO: For client versions earlier than `2025/11/26`, add new parameters to a single parameter / single return value function will cause a validation error. This will be fixed later by manually specifying that the function uses the old validation value.
+
 ### Registration and Invocation of Member Functions
 
 coro_rpc supports registering and invoking member functions:

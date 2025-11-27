@@ -72,7 +72,7 @@ class packer {
     using Type = get_args_type<T, Args...>;
     if constexpr (serialize_static_config<Type>::has_compatible) {
       constexpr std::size_t sz = compatible_version_number<Type>.size();
-      return serialize_expand_compatible_helper<size_type, T, Args...>(
+      return serialize_expand_compatible_helper<size_type, T>(
           t, std::make_index_sequence<sz>{}, args...);
     }
   }

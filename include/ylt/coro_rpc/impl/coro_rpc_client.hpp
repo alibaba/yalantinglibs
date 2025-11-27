@@ -744,6 +744,26 @@ class coro_rpc_client {
     if (rpc_errc == 0)
       AS_LIKELY {
         ec = struct_pack::deserialize_to(ret, buffer);
+        if SP_UNLIKELY (ec) {
+          if constexpr (requires { std::get<0>(ret); }) {
+            constexpr auto size = std::tuple_size_v<decltype(ret)>;
+            if constexpr (size > 1) {
+              if constexpr (struct_pack::get_type_code<std::tuple<
+                                std::remove_cvref_t<std::tuple_element_t<
+                                    0, decltype(ret)>>>>() ==
+                            struct_pack::get_type_code<decltype(ret)>()) {
+                ELOG_TRACE << "try deserialize de-tuple";
+                auto &args_wrapper = std::get<0>(ret);
+                ec = struct_pack::deserialize_to(args_wrapper, buffer);
+              }
+            }
+          }
+          if SP_UNLIKELY (ec) {
+            ELOG_TRACE << "try deserialize tuple";
+            std::tuple<decltype(ret) &> wrapper = ret;
+            ec = struct_pack::deserialize_to(wrapper, buffer);
+          }
+        }
         if SP_LIKELY (!ec) {
           if constexpr (std::is_same_v<T, void>) {
             return {};
