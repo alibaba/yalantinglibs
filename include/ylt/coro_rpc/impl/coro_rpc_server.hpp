@@ -140,10 +140,6 @@ class coro_rpc_server_base {
   void init_ntls(const ssl_ntls_configure &conf) {
     use_ssl_ = init_ntls_context_helper(context_, conf);
   }
-
-  // void init_ssl_ntls(const ssl_ntls_configure &conf) {
-  //   use_ssl_ = init_ssl_ntls_context_helper(context_, conf);
-  // }
 #endif  // OPENSSL_NO_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
