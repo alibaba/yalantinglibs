@@ -647,7 +647,7 @@ yaLanTingLibs 提供了完整的NTLS测试：
 - **yaLanTingLibs文档**：https://github.com/alibaba/yalantinglibs
 - **国密TLCP使用手册**：https://www.yuque.com/tsdoc/ts/hedgqf
 - **使用 Tongsuo 签发 SM2 双证书**：https://www.yuque.com/tsdoc/ts/sulazb 
-- - **在 TLS1.3 中使用商用密码算法**：https://www.yuque.com/tsdoc/ts/grur3x
+- **在 TLS1.3 中使用商用密码算法**：https://www.yuque.com/tsdoc/ts/grur3x
 ## 总结
 
 yaLanTingLibs 的NTLS支持为需要符合国密标准的应用提供了：
@@ -657,9 +657,3 @@ yaLanTingLibs 的NTLS支持为需要符合国密标准的应用提供了：
 ✅ **生产就绪**：完整的测试、文档和示例  
 
 这使得 yaLanTingLibs 成为构建符合国密标准的高性能网络应用的理想选择。
-
----
-
-**作者**：yaLanTingLibs 贡献者  
-**最后更新**：2025年11月
-
