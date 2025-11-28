@@ -282,8 +282,9 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                        pool};
   }
   else {
+    std::error_code ec = std::make_error_code(std::errc{errno});
     ELOG_WARN << "allocate ibverbs memory region failed! " << ec.message();
-    throw std::make_error_code(std::errc{errno});
+    throw ec;
   }
 };
 class ib_device_manager_t {
