@@ -115,12 +115,12 @@ class coro_rpc_server_base {
     if (config.ssl_config) {
       init_ssl_context_helper(context_, config.ssl_config.value());
     }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
     else if (config.ssl_ntls_config) {
       init_ssl_ntls_context_helper(context_, config.ssl_ntls_config.value());
       use_ssl_ = true;
     }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
     if (config.ibv_config) {
@@ -139,11 +139,11 @@ class coro_rpc_server_base {
   void init_ssl(const ssl_configure &conf) {
     use_ssl_ = init_ssl_context_helper(context_, conf);
   }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   void init_ntls(const ssl_ntls_configure &conf) {
     use_ssl_ = init_ntls_context_helper(context_, conf);
   }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   void init_ibv(const coro_io::ib_socket_t::config_t &conf = {}) {

@@ -347,7 +347,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool container = container_impl<T>::value;
-#endif  
+#endif
 
   template <typename Type>
   constexpr bool is_char_t = std::is_same_v<Type, signed char> ||
@@ -380,7 +380,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool string = string_impl<T>::value && container<T>;
-#endif  
+#endif
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
@@ -398,7 +398,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool string_view = string<T> && string_view_impl<T>::value;
-#endif  
+#endif
 
 #if __cpp_concepts >= 201907L
   template <typename Type>

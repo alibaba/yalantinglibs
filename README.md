@@ -482,7 +482,8 @@ These option maybe useful for your project. The value could be `ON` or `OFF`. Yo
 
 |option|default value|description|
 |----------|------------|------|
-|YLT_ENABLE_SSL|automatic|enable optional ssl support for rpc/htt, if you install openssl, it will be enabled by default|
+|YLT_ENABLE_SSL|automatic|enable optional ssl support for rpc/http, if you install openssl, it will be enabled by default|
+|YLT_ENABLE_NTLS|automatic|enable optional ntls support for SSL, you need enabled it manually|
 |YLT_ENABLE_PMR|OFF|enable pmr optimize|
 |YLT_ENABLE_IO_URING|OFF|enable io_uring in linux|
 |YLT_ENABLE_FILE_IO_URING|OFF|enable file io_uring as backend in linux|

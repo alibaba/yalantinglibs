@@ -98,7 +98,7 @@ class coro_http_connection
     return true;
   }
 
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   /*!
    * NTLS mode enumeration for HTTP connection
    */
@@ -411,7 +411,7 @@ class coro_http_connection
       return false;
     }
   }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 
   void add_head(std::string_view msg) {

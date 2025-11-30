@@ -401,6 +401,8 @@ server.init_ssl({
 
 启用ssl支持后，服务器将拒绝一切非ssl连接。
 
+我们同样支持国密NTLS。你需要开启CMAKE选项`YLT_ENABLE_NTLS`。
+
 ## rdma 支持
 
 coro_rpc支持使用rdma：

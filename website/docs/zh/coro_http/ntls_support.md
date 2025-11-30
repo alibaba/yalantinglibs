@@ -620,7 +620,7 @@ cmake --build build --target ntls_server ntls_client
 ### 默认行为
 
 - **NTLS功能默认关闭**：不影响现有代码，需要显式启用
-- **条件编译**：通过 `OPENSSL_NO_NTLS` 宏控制，未启用NTLS时相关代码不会编译
+- **条件编译**：通过 `YLT_ENABLE_NTLS` 宏控制，未启用NTLS时相关代码不会编译
 
 ### 与标准SSL共存
 
