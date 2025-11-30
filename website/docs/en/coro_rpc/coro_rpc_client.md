@@ -68,8 +68,9 @@ Once SSL support has been enabled, users can invoke the `init_ssl` function befo
 client.init_ssl("./","server.crt");
 ```
 
-
 The first string represents the base path where the SSL certificate is located, the second string represents the relative path of the SSL certificate relative to the base path.
+
+We also support NTLS if you enable it by CMAKE OPTION `YLT_ENABLE_NTLS`.
 
 ## Conversion and compile-time checking of RPC parameters
 

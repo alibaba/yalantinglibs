@@ -36,7 +36,7 @@ struct ssl_configure {
   std::string key_file;   //!< relative path of private key file
   std::string dh_file;    //!< relative path of tmp dh file (optional)
 };
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
 ///*!
 // * NTLS config for Tongsuo support
 // */
@@ -100,7 +100,7 @@ struct ssl_ntls_configure {
       false;                      //!< enable client certificate verification
   bool enable_dual_mode = false;  //!< enable both SSL and NTLS support
 };
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 
 /*!
  * Check file (not a folder) exist
@@ -179,7 +179,7 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
   }
 }
 
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
 /*!
  * Initialize SSL Context for NTLS with Tongsuo
  *
@@ -425,6 +425,6 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
     return false;
   }
 }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 }  // namespace coro_rpc

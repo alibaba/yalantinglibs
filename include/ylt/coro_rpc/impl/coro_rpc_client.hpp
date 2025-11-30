@@ -185,7 +185,7 @@ class coro_rpc_client {
     std::filesystem::path ssl_cert_path{};
     std::string ssl_domain{};
   };
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   struct tcp_with_ntls_config {
     bool enable_tcp_no_delay = true;
     std::filesystem::path base_path{};
@@ -207,7 +207,7 @@ class coro_rpc_client {
     ntls_mode mode = ntls_mode::tlcp_dual_cert;
     bool enable_client_verify = false;
   };
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
   struct config {
     static inline uint64_t get_global_client_id() {
@@ -224,10 +224,10 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
                  ,
                  tcp_with_ssl_config
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
                  ,
                  tcp_with_ntls_config
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
                  ,
@@ -313,7 +313,7 @@ class coro_rpc_client {
     }
     return ssl_init_ret_;
   }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   [[nodiscard]] bool init_socket_wrapper(const tcp_with_ntls_config &config) {
     try {
       ssl_init_ret_ = false;
@@ -523,7 +523,7 @@ class coro_rpc_client {
     }
     return ssl_init_ret_;
   }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
   [[nodiscard]] bool init_config(const config &conf) {
     create_tp_ = std::chrono::steady_clock::now();
@@ -644,7 +644,7 @@ class coro_rpc_client {
     return init_socket_wrapper(
         std::get<tcp_with_ssl_config>(config_.socket_config));
   }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   [[nodiscard]] bool init_ntls(const ssl_ntls_configure &conf) {
     if (conf.mode == ntls_mode::tls13_single_cert) {
       // RFC 8998 TLS 1.3 + GM single certificate mode
@@ -784,7 +784,7 @@ class coro_rpc_client {
     return init_socket_wrapper(
         std::get<tcp_with_ntls_config>(config_.socket_config));
   }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_ibv(

@@ -39,9 +39,9 @@ struct config_base {
   std::string address = "0.0.0.0";
 #ifdef YLT_ENABLE_SSL
   std::optional<ssl_configure> ssl_config = std::nullopt;
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   std::optional<ssl_ntls_configure> ssl_ntls_config = std::nullopt;
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt;
