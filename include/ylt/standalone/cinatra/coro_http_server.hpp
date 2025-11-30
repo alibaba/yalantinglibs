@@ -170,7 +170,7 @@ class coro_http_server {
   void set_ntls_cipher_suites(const std::string &cipher_suites) {
     ntls_config_.cipher_suites = cipher_suites;
   }
-#endif // YLT_ENABLE_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 
   // only call once, not thread safe.
