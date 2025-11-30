@@ -445,6 +445,7 @@ yalantinglibs工程自身支持如下配置项，值可以是`ON`或`OFF`。如�
 |工程选项|默认值|描述|
 |----------|------------|------|
 |YLT_ENABLE_SSL|automatic|为rpc/http启用可选的ssl支持,如果你已经安装了ssl，它会自动启用|
+|YLT_ENABLE_NTLS|automatic|使用国密NTLS进行加密|
 |YLT_ENABLE_PMR|OFF|启用pmr优化|
 |YLT_ENABLE_IO_URING|OFF|在linux上使用io_uring作为后端（代替epoll）|
 |YLT_ENABLE_FILE_IO_URING|OFF|启用io_uring优化|

@@ -394,7 +394,10 @@ server.init_ssl({
 });
 ```
 
-After enabling RDMA support, the server still allow non-rdma connections.
+
+After enabling SSL, the server will reject all non-ssl connections.
+
+We also support NTLS if you enable it by CMAKE OPTION `YLT_ENABLE_NTLS`.
 
 ## RDMA Support
 
@@ -435,6 +438,9 @@ int start() {
   /* Register rpc function here... */
   server.start();
 }
+
+After enabling RDMA support, the server still allow non-rdma connections.
+
 ```
 
 
