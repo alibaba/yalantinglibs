@@ -77,7 +77,7 @@ class coro_http_server {
     use_ssl_ = true;
   }
 
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   /*!
    * Initialize NTLS with dual certificates (signing and encryption)
    * @param sign_cert_file SM2 signing certificate file path
@@ -170,7 +170,7 @@ class coro_http_server {
   void set_ntls_cipher_suites(const std::string &cipher_suites) {
     ntls_config_.cipher_suites = cipher_suites;
   }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 
   // only call once, not thread safe.
@@ -812,11 +812,11 @@ class coro_http_server {
     if (!is_transfer_connect && use_ssl_) {
       conn->init_ssl(cert_file_, key_file_, passwd_);
     }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
     else if (!is_transfer_connect && use_ntls_) {
       conn->init_ntls(ntls_config_, passwd_);
     }
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
     std::weak_ptr<std::mutex> weak(conn_mtx_);
     conn->set_quit_callback(
@@ -1176,7 +1176,7 @@ class coro_http_server {
   std::string key_file_;
   std::string passwd_;
   bool use_ssl_ = false;
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   bool use_ntls_ = false;
   // NTLS configuration
   struct {
@@ -1200,7 +1200,7 @@ class coro_http_server {
     bool enable_client_verify = false;
     bool enable_ntls = false;
   } ntls_config_;
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;

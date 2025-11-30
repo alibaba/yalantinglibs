@@ -137,10 +137,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_SSL
     bool use_ssl =
         false;  // if set use_ssl true, cinatra will add https automaticlly.
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif          // OPENSSL_NO_NTLS
+#endif          // YLT_ENABLE_NTLS
 #endif
   };
 
@@ -184,9 +184,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #ifdef CINATRA_ENABLE_SSL
     set_ssl_schema(conf.use_ssl);
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
     set_ntls_schema(conf.use_ntls);
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
     return true;
   }
@@ -218,7 +218,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     try {
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
       if (use_ntls_) {
         ssl_ctx_ = std::make_unique<asio::ssl::context>(
             SSL_CTX_new(NTLS_client_method()));
@@ -240,7 +240,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #else
       ssl_ctx_ =
           std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
         ssl_ctx_->load_verify_file(full_cert_file.string());
@@ -1492,7 +1492,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef CINATRA_ENABLE_SSL
   void set_ssl_schema(bool r) { is_ssl_schema_ = r; }
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   void set_ntls_schema(bool r) { use_ntls_ = r; }
 
   /*!
@@ -1671,7 +1671,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
   }
 
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
 
   std::string get_redirect_uri() { return redirect_uri_; }
@@ -2691,9 +2691,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   bool has_init_ssl_ = false;
   bool is_ssl_schema_ = false;
-#ifndef OPENSSL_NO_NTLS
+#ifdef YLT_ENABLE_NTLS
   bool use_ntls_ = true;
-#endif  // OPENSSL_NO_NTLS
+#endif  // YLT_ENABLE_NTLS
   bool need_set_sni_host_ = true;
 #endif
   std::string redirect_uri_;
