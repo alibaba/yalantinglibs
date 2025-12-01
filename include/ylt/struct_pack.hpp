@@ -94,6 +94,18 @@ constexpr std::uint32_t get_type_code() {
 template <typename... Args>
 constexpr decltype(auto) get_type_literal() {
   static_assert(sizeof...(Args) > 0);
+#ifdef STRUCT_PACK_DISABLE_OUTER_BRACE
+  if constexpr (sizeof...(Args) == 1) {
+    using Types = decltype(detail::get_types<Args...>());
+    return detail::get_types_literal_without_outer_brace<Args..., Types>(
+        std::make_index_sequence<std::tuple_size_v<Types>>());
+  }
+  else {
+    return detail::get_types_literal_without_outer_brace<
+        std::tuple<detail::remove_cvref_t<Args>...>,
+        detail::remove_cvref_t<Args>...>();
+  }
+#else
   if constexpr (sizeof...(Args) == 1) {
     using Types = decltype(detail::get_types<Args...>());
     return detail::get_types_literal<Args..., Types>(
@@ -104,6 +116,7 @@ constexpr decltype(auto) get_type_literal() {
         std::tuple<detail::remove_cvref_t<Args>...>,
         detail::remove_cvref_t<Args>...>();
   }
+#endif
 }
 
 /*!

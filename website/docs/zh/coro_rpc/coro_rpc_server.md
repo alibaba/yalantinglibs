@@ -500,9 +500,6 @@ void client_oldapi_server_newapi_ret_void();
 std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
 ```
 
-> TODO: 自`2025/11/26`之前的老版本客户端在向单参数/单返回值函数添加新参数/新返回值时，会出现校验错误，后续将通过手动指定函数使用老版本校验值来修复这一问题。
-
-
 
 ### 成员函数的注册与调用 
 
