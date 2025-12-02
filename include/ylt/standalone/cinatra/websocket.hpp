@@ -60,22 +60,36 @@ class websocket {
     if (length_field <= 125) {
       len_bytes_ = SHORT_HEADER;
       payload_length_ = length_field;
+      left_header_len_ =
+          is_server ? SHORT_HEADER - size : CLIENT_SHORT_HEADER - size;
+      if (left_header_len_ > 0) {
+        // The frame length field or mask field was not received completely
+        return ws_header_status::incomplete;
+      }
     }
     else if (length_field == 126)  // msglen is 16bit!
     {
       len_bytes_ = MEDIUM_HEADER;
-      payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
-      pos += 2;
       left_header_len_ =
           is_server ? MEDIUM_HEADER - size : CLIENT_MEDIUM_HEADER - size;
+      if (left_header_len_ > 0) {
+        // The frame length field or mask field was not received completely
+        return ws_header_status::incomplete;
+      }
+      payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
+      pos += 2;
     }
     else if (length_field == 127)  // msglen is 64bit!
     {
       len_bytes_ = LONG_HEADER;
-      payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
-      pos += 8;
       left_header_len_ =
           is_server ? LONG_HEADER - size : CLIENT_LONG_HEADER - size;
+      if (left_header_len_ > 0) {
+        // The frame length field or mask field was not received completely
+        return ws_header_status::incomplete;
+      }
+      payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
+      pos += 8;
     }
     else {
       len_bytes_ = INVALID_HEADER;
