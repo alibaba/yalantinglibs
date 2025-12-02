@@ -372,10 +372,32 @@ constexpr decltype(auto) get_types_literal() {
   }
 }
 
+template <typename T, typename... Args>
+constexpr decltype(auto) get_types_literal_without_outer_brace() {
+  if constexpr (is_trivial_view_v<T> || user_defined_serialization<T>) {
+    return get_types_literal<T, Args...>();
+  }
+  else {
+    constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
+    if constexpr (root_id == type_id::struct_t) {
+      return get_types_literal_impl<T, Args...>();
+    }
+    else {
+      return get_types_literal_impl<void, Args...>();
+    }
+  }
+}
+
 template <typename T, typename Tuple, std::size_t... I>
 constexpr decltype(auto) get_types_literal(std::index_sequence<I...>) {
   return get_types_literal<T,
                            remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
+}
+template <typename T, typename Tuple, std::size_t... I>
+constexpr decltype(auto) get_types_literal_without_outer_brace(
+    std::index_sequence<I...>) {
+  return get_types_literal_without_outer_brace<
+      T, remove_cvref_t<std::tuple_element_t<I, Tuple>>...>();
 }
 
 template <uint64_t version, typename Args, typename... ParentArgs>
@@ -477,7 +499,12 @@ constexpr bool check_if_compatible_element_exist_impl_helper() {
 
 template <typename T, typename... Args>
 constexpr uint32_t get_types_code_impl() {
+#ifdef STRUCT_PACK_DISABLE_OUTER_BRACE
+  constexpr auto str =
+      get_types_literal_without_outer_brace<T, remove_cvref_t<Args>...>();
+#else
   constexpr auto str = get_types_literal<T, remove_cvref_t<Args>...>();
+#endif
   return MD5::MD5Hash32Constexpr(str.data(), str.size()) & 0xFFFFFFFE;
 }
 

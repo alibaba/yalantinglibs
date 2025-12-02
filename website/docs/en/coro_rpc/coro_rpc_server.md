@@ -499,8 +499,6 @@ void client_oldapi_server_newapi_ret_void();
 std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
 ```
 
-> TODO: For client versions earlier than `2025/11/26`, add new parameters to a single parameter / single return value function will cause a validation error. This will be fixed later by manually specifying that the function uses the old validation value.
-
 ### Registration and Invocation of Member Functions
 
 coro_rpc supports registering and invoking member functions:
