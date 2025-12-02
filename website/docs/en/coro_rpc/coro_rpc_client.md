@@ -182,12 +182,12 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
 ```cpp
   auto dev = coro_io::ib_device_t::create({
       .dev_name = "",  // If dev_name is empty, the first device in the device list will be used.
-      .buffer_pool_config = {
-        // ...
-      },
       .port = 1,       // Manually specify the NIC port number.
       .use_best_gid_index = true,  // Automatically find the best GID index for this device.
-      .gid_index = 0   // Manually specify the GID index; takes effect when automatic lookup is disabled or fails.
+      .gid_index = 0,   // Manually specify the GID index; takes effect when automatic lookup is disabled or fails.
+      .buffer_pool_config = {
+        // ...
+      }
   });
 ```
 
