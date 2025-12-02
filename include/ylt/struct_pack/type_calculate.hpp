@@ -380,7 +380,14 @@ constexpr decltype(auto) get_types_literal_without_outer_brace() {
   else {
     constexpr auto root_id = get_type_id<remove_cvref_t<T>>();
     if constexpr (root_id == type_id::struct_t) {
-      return get_types_literal_impl<T, Args...>();
+      constexpr auto not_compatible_cnt =
+          (!struct_pack::detail::is_compatible_v<Args> + ...);
+      if constexpr (not_compatible_cnt <= 1) {
+        return get_types_literal_impl<T, Args...>();
+      }
+      else {
+        return get_types_literal<T, Args...>();
+      }
     }
     else {
       return get_types_literal_impl<void, Args...>();
