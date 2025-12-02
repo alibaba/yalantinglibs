@@ -217,7 +217,7 @@ class ib_device_t {
   }
 
   int find_best_gid_index(int default_gid_index) {
-#ifndef YLT_IBVERBS_DONT_SUPPORT_FING_GID_INDEX
+#ifndef YLT_IBVERBS_DONT_SUPPORT_FIND_GID_INDEX
     ibv_gid_entry gid_entry;
     for (int i = 0; i < attr_.gid_tbl_len; i++) {
       if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
