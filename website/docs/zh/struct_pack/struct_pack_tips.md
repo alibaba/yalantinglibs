@@ -25,7 +25,7 @@ struct_pack即使在大端架构下，也会将数据保存为小端格式。当
 | STRUCT_PACK_OPTIMIZE               |增加模板实例化的数量，通过牺牲编译时间和二进制体积来换取更好的性能    |
 |STRUCT_PACK_ENABLE_UNPORTABLE_TYPE |允许序列化无法跨平台的类型，如wchar_t/std::wstring/std::bitset，请注意，这些类型序列化出的二进制数据可能无法正常的在其他平台下反序列化|
 | STRUCT_PACK_ENABLE_INT128 | 允许序列化128位整数，包括__uint128和__int128类型。请注意，只有部分编译器在部分架构下支持该类型。|
-| STRUCT_PACK_DISABLE_OUTER_BRACE | 类型信息将不包含最外侧的括号, 这意味着`std::tuple<T>` 和 `T` 将被认为是相同的类型。|
+| STRUCT_PACK_DISABLE_OUTER_BRACE | 当结构体只有一个非compatible成员时，类型信息将不包含最外侧的括号, 这意味着`std::tuple<int>`，`std::tuple<int,compatible<std::string>>` 和 `int` 将被认为是相同的类型。可用于方便的将一个非结构体兼容性的升级到结构体字段|
 
 ## 如何让序列化or反序列化更加高效
 1. 考虑使用string_view代替string, 使用span代替vector/array；
