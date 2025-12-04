@@ -23,7 +23,8 @@ struct_pack will save the data as little-endian even if the arch is big-endian. 
 | ----------- | ------------------ |
 | STRUCT_PACK_OPTIMIZE               | Allow more extremed loop unrolling to get better performance, but it cost more compile time.    |
 | STRUCT_PACK_ENABLE_UNPORTABLE_TYPE | Enable serialize unportable type, such as wchar_t/std::wstring/std::bitset. Deserialize them in other platform maybe an undefined bevaior. |
-| STRUCT_PACK_ENABLE_INT128 | Enable serialize __int128 and __uint128. Not all compiler support it.
+| STRUCT_PACK_ENABLE_INT128 | Enable serialize __int128 and __uint128. Not all compiler support it. |
+| STRUCT_PACK_DISABLE_OUTER_BRACE | Disable outer brace in type info format, It means that `std::tuple<int>`,`std::tuple<int,std::string>` & `int` could be same type. It could be useful to update a non-structure type to a structure type with compatible field. |
 ## How to speed up serialization/deserialization
 1. use string_view instead of string, use span instead of vector/array.
 2. move trivial field to a standlone struct, so that struct_pack could copy it faster. 

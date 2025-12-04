@@ -29,10 +29,6 @@
 #include "ylt/easylog.hpp"
 #include "ylt/util/type_traits.h"
 
-// define ibv_gid_entry but no declare it.
-// we can use this trick to detect if it's declared.
-struct ibv_gid_entry;
-
 namespace coro_io {
 namespace detail {
 class ib_devices_t {
@@ -221,21 +217,19 @@ class ib_device_t {
   }
 
   int find_best_gid_index(int default_gid_index) {
-    constexpr bool is_support_query_gid =
-        util::check_structure_declared<ibv_gid_entry>;
-    if constexpr (is_support_query_gid) {
-      ibv_gid_entry gid_entry;
-      for (int i = 0; i < attr_.gid_tbl_len; i++) {
-        if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
-          continue;
-        }
-        if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
-             gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
-            gid_entry.gid_type == IBV_GID_TYPE_IB) {
-          return i;
-        }
+#ifndef YLT_IBVERBS_DONT_SUPPORT_FIND_GID_INDEX
+    ibv_gid_entry gid_entry;
+    for (int i = 0; i < attr_.gid_tbl_len; i++) {
+      if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
+        continue;
+      }
+      if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
+           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
+          gid_entry.gid_type == IBV_GID_TYPE_IB) {
+        return i;
       }
     }
+#endif
     ELOG_DEBUG << "selected best device failed, maybe the platform don't "
                   "support it. return default rdma device gid";
     return default_gid_index;

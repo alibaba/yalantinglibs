@@ -124,7 +124,7 @@ class coro_rpc_server_base {
 #endif
 #ifdef YLT_ENABLE_IBV
     if (config.ibv_config) {
-      init_ibv(config.ibv_config);
+      init_ibv(config.ibv_config.value());
     }
 #endif
     init_address(config.address);
