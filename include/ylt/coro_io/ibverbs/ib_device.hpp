@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -184,7 +185,24 @@ class ib_device_t {
           "gid index should greater than zero, now is: " +
           std::to_string(gid_index_)};
     }
-    buffer_pool_ = ib_buffer_pool_t::create(*this, conf.buffer_pool_config);
+    ibv_device_attr attr;
+    auto pool_config = conf.buffer_pool_config;
+    if (pool_config.max_memory_usage == 0) {
+      pool_config.max_memory_usage = std::numeric_limits<uint64_t>::max();
+    }
+    if (ibv_query_device(ctx_.get(), &attr) == 0) {
+      ELOG_INFO << "max mr size of device:" << attr.max_mr_size
+                << ", user config max memory usage:"
+                << pool_config.max_memory_usage
+                << ". we will use min value as limit";
+      pool_config.max_memory_usage =
+          std::min<uint64_t>(attr.max_mr_size, pool_config.max_memory_usage);
+    }
+    else {
+      ELOG_WARN
+          << "query device info failed! We dont know the max_mr_size of device";
+    }
+    buffer_pool_ = ib_buffer_pool_t::create(*this, pool_config);
   }
 
   std::string_view name() const noexcept { return name_; }
@@ -260,7 +278,9 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
     return std::unique_ptr<ibv_mr, ib_deleter>{mr};
   }
   else {
-    throw std::make_error_code(std::errc{errno});
+    ELOG_WARN << "regist memory failed! "
+              << std::make_error_code(std::errc{errno}).message();
+    return nullptr;
   }
 };
 
@@ -278,7 +298,7 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
   else {
     std::error_code ec = std::make_error_code(std::errc{errno});
     ELOG_WARN << "allocate ibverbs memory region failed! " << ec.message();
-    throw ec;
+    return ib_buffer_t{};
   }
 };
 class ib_device_manager_t {
