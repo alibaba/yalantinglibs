@@ -231,7 +231,7 @@ struct ib_socket_shared_state_t
         if (!buffer) {
           buffer = device_->get_buffer_pool()->get_buffer();
         }
-        if (recv_queue_.push_recv(std::move(buffer), this)) {
+        if (!buffer || recv_queue_.push_recv(std::move(buffer), this)) {
           close();
         }
       }
@@ -599,8 +599,13 @@ class ib_socket_t {
     }
 
     for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-      if (auto ec = state_->recv_queue_.push_recv(
-              state_->device_->get_buffer_pool()->get_buffer(), state_.get());
+      auto buffer = state_->device_->get_buffer_pool()->get_buffer();
+      if (!buffer) {
+        ELOG_WARN << "buffer out of limit, get send buffer failed";
+        co_return std::make_error_code(std::errc::no_buffer_space);
+      }
+      if (auto ec =
+              state_->recv_queue_.push_recv(std::move(buffer), state_.get());
           ec) {
         co_return ec;
       }
@@ -665,8 +670,13 @@ class ib_socket_t {
       init_qp();
       modify_qp_to_init();
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        if (auto ec = state_->recv_queue_.push_recv(
-                state_->device_->get_buffer_pool()->get_buffer(), state_.get());
+        auto buffer = state_->device_->get_buffer_pool()->get_buffer();
+        if (!buffer) {
+          ELOG_WARN << "buffer out of limit, get send buffer failed";
+          co_return std::make_error_code(std::errc::no_buffer_space);
+        }
+        if (auto ec =
+                state_->recv_queue_.push_recv(std::move(buffer), state_.get());
             ec) {
           co_return ec;
         }
@@ -764,7 +774,11 @@ class ib_socket_t {
     if (ec) [[unlikely]] {
       co_return std::move(ec);
     }
-    co_return co_await connect_impl();
+    ec = co_await connect_impl();
+    if (ec) [[unlikely]] {
+      close();
+    }
+    co_return ec;
   }
 
   template <typename EndPointSeq>
@@ -774,7 +788,11 @@ class ib_socket_t {
     if (ec) [[unlikely]] {
       co_return std::move(ec);
     }
-    co_return co_await connect_impl();
+    ec = co_await connect_impl();
+    if (ec) [[unlikely]] {
+      close();
+    }
+    co_return ec;
   }
 
   ib_buffer_t release_send_buffer() noexcept {
@@ -789,6 +807,8 @@ class ib_socket_t {
     if (state_->send_queue_.empty()) {
       auto buffer = buffer_pool()->get_buffer();
       if (!buffer) {
+        ELOG_WARN << "buffer out of limit, get send buffer failed";
+        close();
         return std::nullopt;
       }
       state_->send_queue_.push(std::move(buffer));
