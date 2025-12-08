@@ -93,17 +93,7 @@ struct ib_buffer_queue : public circle_buffer<ib_buffer_t> {
   using circle_buffer::circle_buffer;
   std::error_code post_recv_real(ibv_sge buffer,
                                  ib_socket_shared_state_t* state);
-  std::error_code push_recv(ib_buffer_t buf, ib_socket_shared_state_t* state) {
-    if (!buf || buf->length == 0) {
-      ELOG_INFO << "Out of ib_buffer_pool limit." << size();
-      return {};
-    }
-    auto ec = post_recv_real(buf.subview(), state);
-    if (!ec) {
-      push(std::move(buf));
-    }
-    return ec;
-  }
+  std::error_code push_recv(ib_buffer_t buf, ib_socket_shared_state_t* state);
 };
 
 struct ib_socket_shared_state_t
@@ -280,7 +270,8 @@ struct ib_socket_shared_state_t
   void post_send_impl(ibv_sge sge, callback_t&& handler,
                       bool skip_check_close = false) {
     ELOG_TRACE << "post send sge length:" << sge.length
-               << ", address:" << sge.addr << ",lkey:" << sge.lkey;
+               << ", address:" << sge.addr << ",lkey:" << sge.lkey
+               << ", QP:" << qp_->qp_num;
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
     if (max_inline_send_limit_ && sge.length <= max_inline_send_limit_) {
@@ -305,7 +296,7 @@ struct ib_socket_shared_state_t
       ELOG_ERROR << "ibv post send failed: " << err.message();
       ELOG_ERROR << "post send sge length:" << sge.length
                  << ", address:" << sge.addr << ",lkey:" << sge.lkey
-                 << "flags:" << sr.send_flags;
+                 << "flags:" << sr.send_flags << ", QP:" << qp_->qp_num;
     }
     if (err) [[unlikely]] {
       ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}},
@@ -320,7 +311,7 @@ struct ib_socket_shared_state_t
     if (!recv_result_.empty()) {
       auto result = recv_result_.pop();
       ELOG_TRACE << "recv result: " << result.first.message()
-                 << ", len:" << result.second;
+                 << ", len:" << result.second << ", QP:" << qp_->qp_num;
       recv_buf_ = std::move(recv_queue_.pop());
       ib_socket_shared_state_t::resume(std::move(result), std::move(handler));
       return;
@@ -341,7 +332,8 @@ struct ib_socket_shared_state_t
     // assert(r >= 0);
     std::error_code ec;
     if (r) [[unlikely]] {
-      ELOG_INFO << "there isn't any Completion event to read, errno" << errno;
+      ELOG_INFO << "there isn't any Completion event to read, errno:" << errno
+                << ", QP:" << qp_->qp_num;
       if (errno != EAGAIN && errno != EWOULDBLOCK) [[unlikely]] {
         ELOG_WARN << "failed to get comp_channel event";
         return std::make_error_code(std::errc{std::errc::io_error});
@@ -351,7 +343,8 @@ struct ib_socket_shared_state_t
     ibv_ack_cq_events(cq, 1);
     r = ibv_req_notify_cq(cq, 0);
     if (r) [[unlikely]] {
-      ELOG_ERROR << std::make_error_code(std::errc{r}).message();
+      ELOG_ERROR << std::make_error_code(std::errc{r}).message()
+                 << ", QP:" << qp_->qp_num;
       return std::make_error_code(std::errc{r});
     }
     struct ibv_wc wc {};
@@ -360,23 +353,26 @@ struct ib_socket_shared_state_t
     callback_t tmp_recv_callback;
     while ((ne = ibv_poll_cq(cq_.get(), 1, &wc)) != 0) {
       if (ne < 0) {
-        ELOG_ERROR << "poll CQ failed:" << ne;
+        ELOG_ERROR << "poll CQ failed:" << ne << ", QP:" << qp_->qp_num;
         ec = std::make_error_code(std::errc::io_error);
         break;
       }
       if (ne > 0) {
-        ELOG_TRACE << "Completion was found in CQ with status:" << wc.status;
+        ELOG_TRACE << "Completion was found in CQ with status:" << wc.status
+                   << ", QP:" << qp_->qp_num;
       }
       ec = make_error_code(wc.status);
       if (wc.status != IBV_WC_SUCCESS) {
-        ELOG_WARN << "rdma failed with error: " << ec.message();
+        ELOG_WARN << "rdma failed with error: " << ec.message()
+                  << ", QP:" << qp_->qp_num;
       }
       else {
         ELOG_TRACE << "rdma op success, id:" << (callback_t*)wc.wr_id
-                   << ",len:" << wc.byte_len;
+                   << ",len:" << wc.byte_len << ", QP:" << qp_->qp_num;
         if (wc.wr_id == 0) {  // recv
           if (wc.byte_len == 0) {
-            ELOG_DEBUG << "close by peer";
+            ELOG_DEBUG << "close by peer"
+                       << ", QP:" << qp_->qp_num;
             peer_close_ = true;
             close();
             continue;
@@ -413,6 +409,24 @@ struct ib_socket_shared_state_t
   }
 };
 
+inline std::error_code ib_buffer_queue::push_recv(
+    ib_buffer_t buf, ib_socket_shared_state_t* state) {
+  if (!buf || buf->length == 0) {
+    ELOG_INFO << "Out of ib_buffer_pool limit." << size()
+              << "QP number:" << state->qp_->qp_num;
+    return {};
+  }
+  auto ec = post_recv_real(buf.subview(), state);
+  if (!ec) {
+    push(std::move(buf));
+  }
+  else {
+    ELOG_INFO << "add ib_buffer for qb recv failed:" << ec.message()
+              << "QP number:" << state->qp_->qp_num;
+  }
+  return ec;
+}
+
 inline std::error_code ib_buffer_queue::post_recv_real(
     ibv_sge buffer, ib_socket_shared_state_t* state) {
   ibv_recv_wr rr;
@@ -422,7 +436,7 @@ inline std::error_code ib_buffer_queue::post_recv_real(
   rr.sg_list = &buffer;
   rr.num_sge = 1;
   ELOG_TRACE << "post recv sge address:" << (void*)buffer.addr
-             << ",length:" << buffer.length;
+             << ",length:" << buffer.length << ", QP:" << state->qp_->qp_num;
   ibv_recv_wr* bad_wr = nullptr;
   // prepare the receive work request
   if (state->has_close_) {
@@ -432,7 +446,8 @@ inline std::error_code ib_buffer_queue::post_recv_real(
   // post the receive request to the RQ
   if (auto ec = ibv_post_recv(state->qp_.get(), &rr, &bad_wr); ec) {
     auto error_code = std::make_error_code(std::errc{std::abs(ec)});
-    ELOG_ERROR << "ibv post recv failed: " << error_code.message();
+    ELOG_ERROR << "ibv post recv failed: " << error_code.message()
+               << ", QP:" << state->qp_->qp_num;
     return error_code;
   }
   return {};
@@ -597,6 +612,9 @@ class ib_socket_t {
     } catch (const std::system_error& err) {
       co_return err.code();
     }
+    ELOG_DEBUG << "accept new connection local state init over";
+    ELOG_DEBUG << "Local QP number = " << state_->qp_->qp_num;
+    ELOG_DEBUG << "Local address = " << state_->device_->gid_address();
 
     for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
       auto buffer = state_->device_->get_buffer_pool()->get_buffer();
@@ -630,9 +648,11 @@ class ib_socket_t {
               return;
             }
             ELOG_WARN << "rdma connection failed by exception:"
-                      << ec.value().first.message();
+                      << ec.value().first.message()
+                      << ", QP:" << state->qp_->qp_num;
           } catch (const std::exception& e) {
-            ELOG_WARN << "rdma connection failed by exception:" << e.what();
+            ELOG_WARN << "rdma connection failed by exception:" << e.what()
+                      << ", QP:" << state->qp_->qp_num;
           }
           state->close();
         });
@@ -672,7 +692,8 @@ class ib_socket_t {
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
         auto buffer = state_->device_->get_buffer_pool()->get_buffer();
         if (!buffer) {
-          ELOG_WARN << "buffer out of limit, get send buffer failed";
+          ELOG_WARN << "buffer out of limit, get send buffer failed"
+                    << ", QP:" << state_->qp_->qp_num;
           co_return std::make_error_code(std::errc::no_buffer_space);
         }
         if (auto ec =
@@ -682,7 +703,8 @@ class ib_socket_t {
         }
       }
       if (state_->recv_queue_.empty()) {
-        ELOG_WARN << "buffer out of limit, init ib_socket failed";
+        ELOG_WARN << "buffer out of limit, init ib_socket failed"
+                  << ", QP:" << state_->qp_->qp_num;
         co_return std::make_error_code(std::errc::no_buffer_space);
       }
       ib_socket_t::ib_socket_info peer_info{};
@@ -703,18 +725,22 @@ class ib_socket_t {
       state_->soc_.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
       state_->soc_.close(ignore_ec);
       if (ec) {
-        ELOG_INFO << ec.message();
+        ELOG_INFO << "read rdma handshake info failed:" << ec.message()
+                  << ", QP:" << state_->qp_->qp_num;
         co_return std::move(ec);
       }
       else if (state_->has_close_) {
-        ELOG_INFO << "connect closed when connecting";
+        ELOG_INFO << "connect closed when connecting"
+                  << ", QP:" << state_->qp_->qp_num;
         co_return std::make_error_code(std::errc::operation_canceled);
       }
       auto ec2 = struct_pack::deserialize_to(peer_info, std::span{buffer});
       if (ec2) [[unlikely]] {
-        ELOG_INFO << "protocol error. connect to unknown protocol server";
+        ELOG_INFO << "protocol error. connect to unknown protocol server"
+                  << state_->qp_->qp_num;
         co_return std::make_error_code(std::errc::protocol_error);
       }
+      ELOG_TRACE << "Local QP number =  " << state_->qp_->qp_num;
       ELOG_TRACE << "Remote QP number =  " << peer_info.qp_num;
       remote_qp_num_ = peer_info.qp_num;
       ELOG_TRACE << "Remote LID =  " << peer_info.lid;
@@ -727,6 +753,7 @@ class ib_socket_t {
             << " error msg: " << err_code.message();
         co_return err_code;
       }
+      ELOG_TRACE << "Local address = " << state_->device_->gid_address();
       ELOG_TRACE << "Remote address = " << remote_address_;
       ELOG_TRACE << "Remote Request buffer size = " << peer_info.buffer_size;
       buffer_size_ = std::min<uint32_t>(peer_info.buffer_size,
@@ -807,7 +834,8 @@ class ib_socket_t {
     if (state_->send_queue_.empty()) {
       auto buffer = buffer_pool()->get_buffer();
       if (!buffer) {
-        ELOG_WARN << "buffer out of limit, get send buffer failed";
+        ELOG_WARN << "buffer out of limit, get send buffer failed"
+                  << state_->qp_->qp_num;
         close();
         return std::nullopt;
       }
@@ -995,11 +1023,13 @@ class ib_socket_t {
         if (!ec) {
           ec = self->poll_completion();
           if (ec) {
-            ELOG_DEBUG << "channel closed by poll_completion:" << ec.message();
+            ELOG_DEBUG << "channel closed by poll_completion:" << ec.message()
+                       << ", QP:" << self->qp_->qp_num;
           }
         }
         else {
-          ELOG_DEBUG << "channel closed by channel:" << ec.message();
+          ELOG_DEBUG << "channel closed by channel:" << ec.message()
+                     << ", QP:" << self->qp_->qp_num;
         }
 
         if (ec) {
@@ -1016,7 +1046,8 @@ class ib_socket_t {
         }
       }
       if (ec) {
-        ELOG_DEBUG << "ib_socket stop listening by error: " << ec.message();
+        ELOG_DEBUG << "ib_socket stop listening by error: " << ec.message()
+                   << ", QP:" << self->qp_->qp_num;
       }
     };
     listen_event(state_).start([](auto&& ec) {
