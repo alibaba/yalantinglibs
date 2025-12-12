@@ -213,7 +213,6 @@ inline void print_async_event(struct ibv_context* ctx,
 
 class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
  public:
-  friend class ib_device_manager_t;
   struct config_t {
     std::string dev_name;
     uint16_t port = 1;               // dev gid
@@ -222,10 +221,10 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
                                      // failed, it will use gid_index.
     ib_buffer_pool_t::config_t buffer_pool_config;
   };
-  static std::shared_ptr<ib_device_t> create(const config_t& conf) {
-    auto dev = std::make_shared<ib_device_t>(private_construct_token{}, conf);
-    dev->start_async_event_watcher();
-    return dev;
+  static std::shared_ptr<ib_device_t> create(const config_t& conf, ibv_device* dev = nullptr) {
+    auto ret = std::make_shared<ib_device_t>(private_construct_token{}, conf, dev);
+    ret->start_async_event_watcher();
+    return ret;
   }
 
  private:
@@ -480,8 +479,7 @@ class ib_device_manager_t {
     auto& devices = detail::ib_devices_t::instance();
     for (auto& native_dev : devices.get_devices()) {
       try {
-        auto dev = std::make_shared<ib_device_t>(
-            ib_device_t::private_construct_token{}, conf, native_dev);
+        auto dev = ib_device_t::create(conf, native_dev);
         auto [iter, is_ok] = device_map_.emplace(dev->name(), dev);
         if (is_ok && default_device_ == nullptr) {
           default_device_ = iter->second;
