@@ -79,11 +79,15 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
   co_return ec;
 }
 
+uint16_t g_send_buffer_cnt = 4;
+
 async_simple::coro::Lazy<std::error_code> echo_connect(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
         functions) {
-  coro_io::ib_socket_t soc{};
+  coro_io::ib_socket_t soc{
+      coro_io::get_global_executor(),
+      coro_io::ib_socket_t::config_t{.send_buffer_cnt = g_send_buffer_cnt}};
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -574,6 +578,7 @@ async_simple::coro::Lazy<std::error_code> sleep(coro_io::ib_socket_t& soc,
 }
 
 TEST_CASE("test small package combine write") {
+  g_send_buffer_cnt = 2;
   {
     ELOG_WARN << "test small package combine write1";
     auto result = async_simple::coro::syncAwait(collectAll(

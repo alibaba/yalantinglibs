@@ -96,6 +96,16 @@ struct ib_buffer_queue : public circle_buffer<ib_buffer_t> {
   std::error_code push_recv(ib_buffer_t buf, ib_socket_shared_state_t* state);
 };
 
+inline void check_qp_state(struct ibv_qp* qp, enum ibv_qp_state expected) {
+  struct ibv_qp_attr attr;
+  struct ibv_qp_init_attr init_attr;
+  ibv_query_qp(qp, &attr, IBV_QP_STATE, &init_attr);
+  if (attr.qp_state != expected) {
+    ELOG_ERROR << " QP state = " << attr.qp_state
+               << " (expected =" << (int)expected << ")\n";
+  }
+}
+
 struct ib_socket_shared_state_t
     : std::enable_shared_from_this<ib_socket_shared_state_t> {
   using callback_t = async_simple::util::move_only_function<void(
@@ -122,6 +132,8 @@ struct ib_socket_shared_state_t
   std::optional<async_simple::Promise<std::error_code>> wait_promise_;
   uint32_t send_buffer_data_size_ = 0;
   uint32_t max_inline_send_limit_ = 0;
+
+  uint64_t send_watch_id_ = 0, pre_id_ = 0;
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
@@ -172,6 +184,7 @@ struct ib_socket_shared_state_t
   }
 
   void close_impl() {
+    ELOG_TRACE << "qp " << (qp_ ? qp_->qp_num : -1) << "closed";
     std::error_code ec;
     soc_.cancel(ec);
     soc_.close(ec);
@@ -217,7 +230,7 @@ struct ib_socket_shared_state_t
                << ",free buffer:" << free_buffer_cnt
                << "used buffer:" << recv_result_.size();
     if (!peer_close_ && !recv_queue_.full()) {
-      if (free_buffer_cnt < free_buffer_limit) {
+      if (free_buffer_cnt < free_buffer_limit + recv_result_.size()) {
         if (!buffer) {
           buffer = device_->get_buffer_pool()->get_buffer();
         }
@@ -274,15 +287,18 @@ struct ib_socket_shared_state_t
                << ", QP:" << qp_->qp_num;
     ibv_send_wr sr{};
     ibv_send_wr* bad_wr = nullptr;
+    sr.send_flags = IBV_SEND_SIGNALED;
     if (max_inline_send_limit_ && sge.length <= max_inline_send_limit_) {
-      sr.send_flags = IBV_SEND_INLINE;
+      sr.send_flags |= IBV_SEND_INLINE;
     }
     sr.next = NULL;
-    sr.wr_id = 1;
+    sr.wr_id = ++send_watch_id_;
+    if (sr.wr_id == std::numeric_limits<uint64_t>::max()) [[unlikely]] {
+      ++send_watch_id_;
+    }
     sr.sg_list = &sge;
     sr.num_sge = sge.length ? 1 : 0;
     sr.opcode = IBV_WR_SEND;
-    sr.send_flags |= IBV_SEND_SIGNALED;
     std::error_code err;
     if (!skip_check_close && has_close_)
         [[unlikely]] {  // if sge is empty, client don't real close, it's trying
@@ -290,22 +306,23 @@ struct ib_socket_shared_state_t
       err = std::make_error_code(std::errc::operation_canceled);
     }
     // post the receive request to the RQ
-    else if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec)
-        [[unlikely]] {
-      err = std::make_error_code(std::errc{std::abs(ec)});
-      ELOG_ERROR << "ibv post send failed: " << err.message();
-      ELOG_ERROR << "post send sge length:" << sge.length
-                 << ", address:" << sge.addr << ",lkey:" << sge.lkey
-                 << "flags:" << sr.send_flags << ", QP:" << qp_->qp_num;
-    }
-    if (err) [[unlikely]] {
-      ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}},
-                                       std::move(handler));
-    }
     else {
-      send_cb_.push(std::move(handler));
+      check_qp_state(qp_.get(), ibv_qp_state::IBV_QPS_RTS);
+      if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) [[unlikely]] {
+        err = std::make_error_code(std::errc{std::abs(ec)});
+        ELOG_ERROR << "ibv post send failed: " << err.message();
+        ELOG_ERROR << "post send sge length:" << sge.length
+                   << ", address:" << sge.addr << ",lkey:" << sge.lkey
+                   << "flags:" << sr.send_flags << ", QP:" << qp_->qp_num;
+      }
+      if (err) [[unlikely]] {
+        ib_socket_shared_state_t::resume(std::pair{err, std::size_t{0}},
+                                         std::move(handler));
+      }
+      else {
+        send_cb_.push(std::move(handler));
+      }
     }
-  }
 
   void post_recv_impl(callback_t&& handler) {
     if (!recv_result_.empty()) {
@@ -335,7 +352,8 @@ struct ib_socket_shared_state_t
       ELOG_INFO << "there isn't any Completion event to read, errno:" << errno
                 << ", QP:" << qp_->qp_num;
       if (errno != EAGAIN && errno != EWOULDBLOCK) [[unlikely]] {
-        ELOG_WARN << "failed to get comp_channel event";
+        ELOG_WARN << "failed to get comp_channel event"
+                  << ", QP=" << qp_->qp_num;
         return std::make_error_code(std::errc{std::errc::io_error});
       }
       return {};
@@ -390,6 +408,15 @@ struct ib_socket_shared_state_t
           }
         }
         else {
+          auto now_id = pre_id_ + 1;
+          if (now_id == 0)
+            now_id = 1;
+          if (now_id != wc.wr_id) {
+            ELOG_ERROR << "wr_id is not increase by one"
+                       << ", pre_id = <<" << pre_id_ << "QP=" << qp_->qp_num;
+          }
+          pre_id_ = wc.wr_id;
+
           vec.push_back({ec, wc.byte_len, wc.wr_id});
         }
         if (cq_ == nullptr) {
@@ -442,7 +469,6 @@ inline std::error_code ib_buffer_queue::post_recv_real(
   if (state->has_close_) {
     return std::make_error_code(std::errc::operation_canceled);
   }
-
   // post the receive request to the RQ
   if (auto ec = ibv_post_recv(state->qp_.get(), &rr, &bad_wr); ec) {
     auto error_code = std::make_error_code(std::errc{std::abs(ec)});
@@ -459,12 +485,12 @@ class ib_socket_t {
   // workaround for some compiler error if we put ib_socket_config_base_t as
   // nested struct
   struct config_t {
-    uint32_t cq_size = 128;
+    uint32_t cq_size = 512;
     uint16_t recv_buffer_cnt = 8;
-    uint16_t send_buffer_cnt = 2;
+    uint16_t send_buffer_cnt = 4;
     ibv_qp_type qp_type = IBV_QPT_RC;
-    ibv_qp_cap cap = {.max_send_wr = 32,
-                      .max_recv_wr = 32,
+    ibv_qp_cap cap = {.max_send_wr = 256,
+                      .max_recv_wr = 256,
                       .max_send_sge = 3,
                       .max_recv_sge = 1,
                       .max_inline_data = 256};
@@ -574,6 +600,7 @@ class ib_socket_t {
       co_return ec;
     }
     if (state_->channel_ == nullptr) [[unlikely]] {
+      ELOG_ERROR << "channel is empty, state not correct";
       co_return std::make_error_code(std::errc::protocol_error);
     }
     auto ec2 = struct_pack::deserialize_to(peer_info, std::span{buffer});
@@ -750,7 +777,8 @@ class ib_socket_t {
       if (err_code) {
         ELOG_ERROR
             << "IBDevice failed to convert remote gid to ip address of device "
-            << " error msg: " << err_code.message();
+            << " error msg: " << err_code.message()
+            << ", QP=" << state_->qp_->qp_num;
         co_return err_code;
       }
       ELOG_TRACE << "Local address = " << state_->device_->gid_address();
@@ -761,7 +789,7 @@ class ib_socket_t {
       ELOG_TRACE << "Final buffer size = " << buffer_size_;
       if (buffer_size_ > buffer_pool()->buffer_size()) {
         ELOG_WARN << "Buffer size larger than buffer_pool limit: "
-                  << buffer_size_;
+                  << buffer_size_ << ", QP=" << state_->qp_->qp_num;
         co_return std::make_error_code(std::errc::no_buffer_space);
       }
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
@@ -834,7 +862,7 @@ class ib_socket_t {
     if (state_->send_queue_.empty()) {
       auto buffer = buffer_pool()->get_buffer();
       if (!buffer) {
-        ELOG_WARN << "buffer out of limit, get send buffer failed"
+        ELOG_WARN << "buffer out of limit, get send buffer failed, QP:"
                   << state_->qp_->qp_num;
         close();
         return std::nullopt;
@@ -874,9 +902,18 @@ class ib_socket_t {
         std::max<uint32_t>(conf_.cap.max_send_wr, conf_.send_buffer_cnt + 2);
     conf_.cap.max_recv_wr =
         std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
+    conf_.cq_size =
+        std::max(conf_.cap.max_send_wr + conf_.cap.max_recv_wr, conf_.cq_size);
     if (!conf_.device->is_support_inline_data()) {
       conf_.cap.max_inline_data = 0;
     }
+    ELOG_INFO << "send wr:" << conf_.cap.max_send_wr
+              << ",recv wr:" << conf_.cap.max_recv_wr
+              << ",cq size:" << conf_.cq_size
+              << ",send buffer cnt:" << conf_.send_buffer_cnt
+              << ",recv buffer cnt:" << conf_.recv_buffer_cnt
+              << ",inline data limit:" << conf_.cap.max_inline_data;
+
     state_ = std::make_shared<detail::ib_socket_shared_state_t>(
         conf_.device, executor_, conf_.recv_buffer_cnt, conf_.send_buffer_cnt,
         conf_.cap.max_recv_wr, conf_.cap.max_inline_data);
@@ -943,7 +980,9 @@ class ib_socket_t {
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
       auto err_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "modify qp to init failed: " << err_code.message();
+      ELOG_ERROR << "modify qp to init failed: " << err_code.message()
+                 << ", QP=" << state_->qp_->qp_num;
+      ;
       throw std::system_error(err_code);
     }
   }
@@ -975,7 +1014,9 @@ class ib_socket_t {
                 IBV_QP_MIN_RNR_TIMER;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
       auto err_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "modify qp to rtr failed: " << err_code.message();
+      ELOG_ERROR << "modify qp to rtr failed: " << err_code.message()
+                 << ", QP=" << state_->qp_->qp_num;
+      ;
       throw std::system_error(err_code);
     }
   }
@@ -992,7 +1033,9 @@ class ib_socket_t {
                 IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec != 0) {
       auto err_code = std::make_error_code(std::errc{ec});
-      ELOG_ERROR << "modify qp to rtss failed: " << err_code.message();
+      ELOG_ERROR << "modify qp to rts failed: " << err_code.message()
+                 << ", QP=" << state_->qp_->qp_num;
+      ;
       throw std::system_error(err_code);
     }
   }
