@@ -323,6 +323,7 @@ struct ib_socket_shared_state_t
         send_cb_.push(std::move(handler));
       }
     }
+  }
 
   void post_recv_impl(callback_t&& handler) {
     if (!recv_result_.empty()) {
