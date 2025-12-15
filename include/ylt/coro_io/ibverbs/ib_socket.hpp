@@ -163,14 +163,15 @@ struct ib_socket_shared_state_t
   }
   void wake_up_if_is_waiting(std::error_code ec) {
     if (wait_promise_) {
-      wait_promise_->setValue(ec);
+      auto promise = std::move(wait_promise_);
+      wait_promise_ = std::nullopt;
+      promise->setValue(ec);
     }
   }
   async_simple::coro::Lazy<std::error_code> waiting_write_over() {
     assert(send_cb_.size());
     wait_promise_ = async_simple::Promise<std::error_code>();
     auto ec = co_await wait_promise_->getFuture();
-    wait_promise_ = {};
     co_return ec;
   }
 

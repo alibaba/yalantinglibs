@@ -31,9 +31,9 @@ std::atomic<int> port;
 async_simple::coro::Lazy<std::error_code> echo_accept(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
-        functions) {
-  asio::ip::tcp::acceptor acceptor(
-      coro_io::get_global_executor()->get_asio_executor());
+        functions,
+    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor()) {
+  asio::ip::tcp::acceptor acceptor(executor->get_asio_executor());
   std::error_code ec;
   auto address = asio::ip::address_v4::from_string("0.0.0.0", ec);
   if (ec) [[unlikely]] {
@@ -69,7 +69,6 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
   }
 
   ELOG_INFO << "start new connection";
-  auto executor = soc.get_executor();
   for (auto& f : functions) {
     ec = co_await std::move(f)(soc);
     if (ec) {
@@ -84,10 +83,10 @@ uint16_t g_send_buffer_cnt = 4;
 async_simple::coro::Lazy<std::error_code> echo_connect(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
-        functions) {
-  coro_io::ib_socket_t soc{
-      coro_io::get_global_executor(),
-      coro_io::ib_socket_t::config_t{.send_buffer_cnt = g_send_buffer_cnt}};
+        functions,
+    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor()) {
+  coro_io::ib_socket_t soc{executor, coro_io::ib_socket_t::config_t{
+                                         .send_buffer_cnt = g_send_buffer_cnt}};
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -480,6 +479,22 @@ TEST_CASE("test socket io") {
   }
   ELOG_WARN << "memory size:"
             << coro_io::ib_buffer_pool_t::global_memory_usage();
+}
+
+TEST_CASE("test socket io with executor") {
+  ELOG_WARN << "test socket io with executor";
+  {
+    auto executor = coro_io::get_global_executor();
+    auto executor2 = coro_io::get_global_executor();
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({test(test_read, 350 * 1024)}, executor).via(executor),
+        echo_connect({test(test_write, 350 * 1024)}, executor2)
+            .via(executor2)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
 }
 
 async_simple::coro::Lazy<std::error_code> rpc_like_recv(
