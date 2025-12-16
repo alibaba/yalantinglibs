@@ -230,7 +230,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         enqueue(buffer);
       }
       else {
-        ELOG_TRACE << "out of max connection limit " << max_memory_usage()
+        ELOG_TRACE << "out of max buffer pool limit " << max_memory_usage()
                    << "now usage:" << buffer_size()
                    << ",buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} wont be collect";
@@ -300,6 +300,10 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
       std::unique_ptr<char[]> data;
       data.reset(new char[buffer_size()]);
       ib_buffer = ib_buffer_t::regist(*this, std::move(data), buffer_size());
+      if (!ib_buffer) {
+        ELOG_ERROR << "regist buffer failed";
+        return ib_buffer_t{};
+      }
     }
     else {
       ib_buffer = std::move(*buffer).convert_to_ib_buffer(*this);

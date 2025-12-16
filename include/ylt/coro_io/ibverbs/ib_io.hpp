@@ -63,6 +63,7 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
   auto ret = co_await ib_socket.accept(std::move(soc));
   ELOGV(INFO, "accept over:%s", ret.message().data());
   if (ret) [[unlikely]] {
+    ib_socket.close();
     co_return std::make_error_code(std::errc::protocol_error);
   }
   co_return ret;

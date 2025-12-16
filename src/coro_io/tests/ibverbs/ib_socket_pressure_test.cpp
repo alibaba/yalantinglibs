@@ -126,6 +126,9 @@ async_simple::coro::Lazy<std::error_code> echo_connect_read_some(
   ELOG_INFO << "start echo connect";
   auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), buffer,
                                          config.buffer_size);
+  if (!ib) {
+    co_return std::make_error_code(std::errc::no_buffer_space);
+  }
   ELOG_INFO << "start read from client";
   auto [ec, len] = co_await coro_io::async_read_some(soc, make_sge(*ib));
 
@@ -262,6 +265,9 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
                                           config.buffer_size);
   auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), (char *)sv.data(),
                                          sv.size());
+  if (!ib || !ib2) {
+    co_return std::make_error_code(std::errc::no_buffer_space);
+  }
   ELOG_INFO << "start echo";
   while (true) {
     ibv_sge r_view = make_sge(*ib2);
