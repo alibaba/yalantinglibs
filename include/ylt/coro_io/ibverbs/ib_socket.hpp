@@ -132,8 +132,6 @@ struct ib_socket_shared_state_t
   std::optional<async_simple::Promise<std::error_code>> wait_promise_;
   uint32_t send_buffer_data_size_ = 0;
   uint32_t max_inline_send_limit_ = 0;
-
-  uint64_t send_watch_id_ = 0, pre_id_ = 0;
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
@@ -293,10 +291,7 @@ struct ib_socket_shared_state_t
       sr.send_flags |= IBV_SEND_INLINE;
     }
     sr.next = NULL;
-    sr.wr_id = ++send_watch_id_;
-    if (sr.wr_id == std::numeric_limits<uint64_t>::max()) [[unlikely]] {
-      ++send_watch_id_;
-    }
+    sr.wr_id = 1;
     sr.sg_list = &sge;
     sr.num_sge = sge.length ? 1 : 0;
     sr.opcode = IBV_WR_SEND;
@@ -410,15 +405,6 @@ struct ib_socket_shared_state_t
           }
         }
         else {
-          auto now_id = pre_id_ + 1;
-          if (now_id == 0)
-            now_id = 1;
-          if (now_id != wc.wr_id) {
-            ELOG_ERROR << "wr_id is not increase by one"
-                       << ", pre_id = <<" << pre_id_ << "QP=" << qp_->qp_num;
-          }
-          pre_id_ = wc.wr_id;
-
           vec.push_back({ec, wc.byte_len, wc.wr_id});
         }
         if (cq_ == nullptr) {
