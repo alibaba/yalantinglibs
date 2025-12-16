@@ -547,7 +547,9 @@ class coro_rpc_server_base {
       std::shared_ptr<coro_connection> conn) noexcept {
     [[maybe_unused]] bool init_failed = false;
 
-    ELOG_TRACE << "start handshake for conn:" << conn->get_connection_id();
+    ELOG_TRACE << "start handshake for conn:" << conn->get_connection_id()
+               << ",local endpoint:" << conn->get_local_endpoint()
+               << ",remote endpoint:" << conn->get_remote_endpoint();
     auto result =
         co_await conn->handshake<typename server_config::rpc_protocol>();
     if (result.ec.value() &&
