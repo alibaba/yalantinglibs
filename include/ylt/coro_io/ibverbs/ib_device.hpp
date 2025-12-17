@@ -122,16 +122,15 @@ inline void print_async_event(struct ibv_context* ctx,
   switch (event->event_type) {
     /* QP events */
     case IBV_EVENT_QP_FATAL:
-      ELOG_ERROR << "QP fatal event for QP number:"
-                 << event->element.qp->qp_num;
+      ELOG_WARN << "QP fatal event for QP number:" << event->element.qp->qp_num;
       break;
     case IBV_EVENT_QP_REQ_ERR:
-      ELOG_ERROR << "QP Requestor error for QP number:"
-                 << event->element.qp->qp_num;
+      ELOG_WARN << "QP Requestor error for QP number:"
+                << event->element.qp->qp_num;
       break;
     case IBV_EVENT_QP_ACCESS_ERR:
-      ELOG_ERROR << "QP access error event for QP number:"
-                 << event->element.qp->qp_num;
+      ELOG_WARN << "QP access error event for QP number:"
+                << event->element.qp->qp_num;
       break;
     case IBV_EVENT_COMM_EST:
       ELOG_INFO << "QP communication established event for QP number:"
@@ -146,8 +145,8 @@ inline void print_async_event(struct ibv_context* ctx,
                 << event->element.qp->qp_num;
       break;
     case IBV_EVENT_PATH_MIG_ERR:
-      ELOG_ERROR << "QP Path migration error event for QP number:"
-                 << event->element.qp->qp_num;
+      ELOG_WARN << "QP Path migration error event for QP number:"
+                << event->element.qp->qp_num;
       break;
     case IBV_EVENT_QP_LAST_WQE_REACHED:
       ELOG_INFO << "QP last WQE reached event for QP number:"
@@ -156,12 +155,12 @@ inline void print_async_event(struct ibv_context* ctx,
 
     /* CQ events */
     case IBV_EVENT_CQ_ERR:
-      ELOG_ERROR << "CQ error for CQ with handle " << event->element.cq;
+      ELOG_WARN << "CQ error for CQ with handle " << event->element.cq;
       break;
 
     /* SRQ events */
     case IBV_EVENT_SRQ_ERR:
-      ELOG_ERROR << "SRQ error for SRQ with handle " << event->element.srq;
+      ELOG_WARN << "SRQ error for SRQ with handle " << event->element.srq;
       break;
     case IBV_EVENT_SRQ_LIMIT_REACHED:
       ELOG_INFO << "SRQ limit reached event for SRQ with handle "
@@ -174,8 +173,8 @@ inline void print_async_event(struct ibv_context* ctx,
                 << event->element.port_num;
       break;
     case IBV_EVENT_PORT_ERR:
-      ELOG_ERROR << "Port error event for port number "
-                 << event->element.port_num;
+      ELOG_WARN << "Port error event for port number "
+                << event->element.port_num;
       break;
     case IBV_EVENT_LID_CHANGE:
       ELOG_INFO << "LID change event for port number "
@@ -200,8 +199,8 @@ inline void print_async_event(struct ibv_context* ctx,
 
     /* RDMA device events */
     case IBV_EVENT_DEVICE_FATAL:
-      ELOG_ERROR << "Fatal error event for device "
-                 << ibv_get_device_name(ctx->device);
+      ELOG_WARN << "Fatal error event for device "
+                << ibv_get_device_name(ctx->device);
       break;
 
     default:

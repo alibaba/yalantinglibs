@@ -473,12 +473,12 @@ class ib_socket_t {
   // workaround for some compiler error if we put ib_socket_config_base_t as
   // nested struct
   struct config_t {
-    uint32_t cq_size = 512;
+    uint32_t cq_size = 128;
     uint16_t recv_buffer_cnt = 8;
     uint16_t send_buffer_cnt = 4;
     ibv_qp_type qp_type = IBV_QPT_RC;
-    ibv_qp_cap cap = {.max_send_wr = 256,
-                      .max_recv_wr = 256,
+    ibv_qp_cap cap = {.max_send_wr = 32,
+                      .max_recv_wr = 32,
                       .max_send_sge = 3,
                       .max_recv_sge = 1,
                       .max_inline_data = 256};
@@ -970,7 +970,6 @@ class ib_socket_t {
       auto err_code = std::make_error_code(std::errc{ec});
       ELOG_ERROR << "modify qp to init failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
-      ;
       throw std::system_error(err_code);
     }
   }
@@ -1004,7 +1003,6 @@ class ib_socket_t {
       auto err_code = std::make_error_code(std::errc{ec});
       ELOG_ERROR << "modify qp to rtr failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
-      ;
       throw std::system_error(err_code);
     }
   }
@@ -1023,7 +1021,6 @@ class ib_socket_t {
       auto err_code = std::make_error_code(std::errc{ec});
       ELOG_ERROR << "modify qp to rts failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
-      ;
       throw std::system_error(err_code);
     }
   }
