@@ -152,8 +152,11 @@ class coro_rpc_server_base {
 #endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
-  void init_ibv(const coro_io::ib_socket_t::config_t &conf = {}) {
+  void init_ibv(
+      const coro_io::ib_socket_t::config_t &conf = {},
+      std::vector<std::shared_ptr<coro_io::ib_device_t>> ib_dev_lists = {}) {
     ibv_config_ = conf;
+    ibv_dev_lists_ = std::move(ib_dev_lists);
   }
 #endif
 
@@ -446,7 +449,8 @@ class coro_rpc_server_base {
           asio::error_code ignored_ec;
           wrapper.close();
           g_action = inject_action::nothing;
-          result = ylt::unexpected{make_error_code(std::errc::io_error)};
+          result = ylt::unexpected<std::error_code>{
+              make_error_code(std::errc::io_error)};
           // only inject once
         }
       }
@@ -527,10 +531,20 @@ class coro_rpc_server_base {
   }
 
 #ifdef YLT_ENABLE_IBV
+
+  std::shared_ptr<coro_io::ib_device_t> get_rr_device() {
+    assert(ibv_dev_lists_.size());
+    return ibv_dev_lists_[rr_index_.fetch_add(1, std::memory_order_relaxed) %
+                          ibv_dev_lists_.size()];
+  }
+
   async_simple::coro::Lazy<bool> update_to_rdma(coro_connection *conn) {
     bool init_ok = true;
     auto &wrapper = conn->socket_wrapper();
     try {
+      if (!ibv_dev_lists_.empty()) {
+        ibv_config_->device = get_rr_device();
+      }
       wrapper = {std::move(*wrapper.socket()), wrapper.get_executor(),
                  *ibv_config_};
     } catch (...) {
@@ -611,6 +625,8 @@ class coro_rpc_server_base {
 #endif
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists_;
+  std::atomic<std::size_t> rr_index_ = 0;
 #endif
 
   std::function<bool(const asio::ip::tcp::endpoint &)> client_filter_;

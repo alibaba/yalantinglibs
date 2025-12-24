@@ -425,6 +425,12 @@ struct config_base {
   std::optional<ssl_configure> ssl_config = std::nullopt; // Configure whether to enable ssl
   /* The following settings are only applicable if rdma is enabled */
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // Configure whether to enable rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+// List of RDMA devices to be used by the server. 
+// If the list is empty (nullopt), the device specified in `ibv_config` will be used by default.
+// Otherwise, this list overrides the settings in `ibv_config`.
+// New connections are established using a round-robin algorithm internally.
+
 };
 struct ssl_configure {
   std::string base_path;  // Base path of ssl files.

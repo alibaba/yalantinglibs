@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
@@ -25,6 +26,22 @@
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 
 using namespace coro_rpc;
+#ifdef YLT_ENABLE_IBV
+std::string addr;
+void test_rdma_multi_dev_server() {
+  auto addr_now =
+      coro_rpc::get_context()->get_local_endpoint().address.to_string();
+  if (addr.size()) {
+    if (coro_io::g_ib_device_manager()->get_dev_list().size() > 1) {
+      CHECK(addr_now != addr);
+    }
+    else {
+      CHECK(addr_now == addr);
+    }
+  }
+  addr = addr_now;
+}
+#endif
 
 TEST_CASE("test server acceptor") {
   SUBCASE("test multi server acceptor") {
@@ -56,4 +73,38 @@ TEST_CASE("test server acceptor") {
 
     server.stop();
   }
+
+#ifdef YLT_ENABLE_IBV
+  SUBCASE("test multi rdma device for server") {
+    std::vector<std::shared_ptr<coro_io::ib_device_t>> ib_dev_lists;
+    for (auto &dev : coro_io::g_ib_device_manager()->get_dev_list()) {
+      ib_dev_lists.push_back(dev.second);
+    }
+    coro_rpc_server server(
+        coro_rpc::config_t{.port = 8824,
+                           .thread_num = 1,
+                           .ibv_config = {},
+                           .ib_dev_lists = std::move(ib_dev_lists)});
+    server.register_handler<test_rdma_multi_dev_server>();
+
+    auto res = server.async_start();
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
+
+    coro_rpc_client client;
+    auto ec = syncAwait(client.connect("127.0.0.1", "8824"));
+    CHECK_MESSAGE(!ec, ec.message());
+
+    auto result = syncAwait(client.call<test_rdma_multi_dev_server>());
+    CHECK_MESSAGE(result.has_value(), result.error().msg);
+
+    coro_rpc_client client2;
+    ec = syncAwait(client2.connect("localhost", "8824"));
+    CHECK_MESSAGE(!ec, ec.message());
+
+    result = syncAwait(client2.call<test_rdma_multi_dev_server>());
+    CHECK_MESSAGE(result.has_value(), result.error().msg);
+
+    server.stop();
+  }
+#endif
 }

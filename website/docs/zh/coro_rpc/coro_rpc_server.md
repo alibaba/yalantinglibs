@@ -429,6 +429,11 @@ struct config_base {
   std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
   /*下面设置只有启用rdma才有*/
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // 配置是否启用rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+   // 配置服务器使用的rdma设备列表
+   // 当列表为空时，默认使用ibv_config中提供的设备
+   // 否则覆盖ibv_config的设置。
+   // 内部采用round-robin算法建立新连接。
 };
 struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径
