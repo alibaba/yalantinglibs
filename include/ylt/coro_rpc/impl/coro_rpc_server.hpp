@@ -117,7 +117,8 @@ class coro_rpc_server_base {
     }
 #ifdef YLT_ENABLE_NTLS
     else if (config.ssl_ntls_config) {
-      use_ssl_ = init_ntls_context_helper(context_, config.ssl_ntls_config.value());
+      use_ssl_ =
+          init_ntls_context_helper(context_, config.ssl_ntls_config.value());
     }
 #endif  // YLT_ENABLE_NTLS
 #endif
