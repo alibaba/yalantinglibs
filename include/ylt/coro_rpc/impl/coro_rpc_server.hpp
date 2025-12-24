@@ -117,8 +117,7 @@ class coro_rpc_server_base {
     }
 #ifdef YLT_ENABLE_NTLS
     else if (config.ssl_ntls_config) {
-      init_ssl_ntls_context_helper(context_, config.ssl_ntls_config.value());
-      use_ssl_ = true;
+      use_ssl_ = init_ntls_context_helper(context_, config.ssl_ntls_config.value());
     }
 #endif  // YLT_ENABLE_NTLS
 #endif
@@ -180,8 +179,8 @@ class coro_rpc_server_base {
   }
 
  public:
-  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>> &
-  get_acceptors() const noexcept {
+  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>>
+      &get_acceptors() const noexcept {
     return acceptors_;
   }
   async_simple::Future<coro_rpc::err_code> async_start() noexcept {
