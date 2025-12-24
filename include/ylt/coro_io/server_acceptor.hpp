@@ -109,7 +109,7 @@ struct tcp_server_acceptor : public server_acceptor_base {
       return listen_errc::address_in_used;
     }
 #ifdef _MSC_VER
-    acceptor_.set_option(tcp::acceptor::reuse_address(true));
+    acceptor_->set_option(tcp::acceptor::reuse_address(true));
 #endif
     acceptor_->listen(asio::socket_base::max_listen_connections, ec);
     if (ec) {
