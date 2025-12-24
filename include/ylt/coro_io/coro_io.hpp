@@ -34,6 +34,7 @@
 #include "asio/dispatch.hpp"
 #include "asio/io_context.hpp"
 #include "asio/ip/address.hpp"
+#include "asio/ip/udp.hpp"
 #include "async_simple/Signal.h"
 #include "ylt/easylog.hpp"
 #include "ylt/util/type_traits.h"

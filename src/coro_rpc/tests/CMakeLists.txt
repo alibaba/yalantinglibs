@@ -1,6 +1,7 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
 set(TEST_SRCS
+        test_acceptor.cpp
         test_coro_rpc_server.cpp
         test_coro_rpc_client.cpp
         test_register_handler.cpp
