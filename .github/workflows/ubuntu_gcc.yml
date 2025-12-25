@@ -42,7 +42,7 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} -- -j$(($(nproc)/2 + 1))
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
@@ -78,7 +78,7 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}} -DENABLE_TSAN=ON
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} -- -j$(($(nproc)/2 + 1))
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
@@ -116,7 +116,7 @@ jobs:
                 -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} -- -j$(($(nproc)/2 + 1))
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
@@ -148,7 +148,7 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}} \
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} -- -j$(($(nproc)/2 + 1))
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build

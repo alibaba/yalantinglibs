@@ -49,8 +49,6 @@ struct config_t {
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt;
   std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists;
-  coro_io::load_balance_algorithm ib_dev_load_balance_algorithm =
-      coro_io::load_balance_algorithm::RR;
 #endif
 
   using rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
