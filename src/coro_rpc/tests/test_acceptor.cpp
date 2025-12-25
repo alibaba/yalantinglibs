@@ -76,15 +76,15 @@ TEST_CASE("test server acceptor") {
 
 #ifdef YLT_ENABLE_IBV
   SUBCASE("test multi rdma device for server") {
-    std::vector<std::shared_ptr<coro_io::ib_device_t>> ib_dev_lists;
+    std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists;
     for (auto &dev : coro_io::g_ib_device_manager()->get_dev_list()) {
-      ib_dev_lists.push_back(dev.second);
+      ibv_dev_lists.push_back(dev.second);
     }
     coro_rpc_server server(
         coro_rpc::config_t{.port = 8824,
                            .thread_num = 1,
                            .ibv_config = {},
-                           .ib_dev_lists = std::move(ib_dev_lists)});
+                           .ibv_dev_lists = std::move(ibv_dev_lists)});
     server.register_handler<test_rdma_multi_dev_server>();
 
     auto res = server.async_start();
