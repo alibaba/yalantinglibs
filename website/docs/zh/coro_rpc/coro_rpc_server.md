@@ -418,17 +418,26 @@ server.init_ibverbs(ib_socket_t::config_t{});
 我们提供了coro_rpc::config_t类，用户可以通过该类型设置server的细节：
 
 ```cpp
-struct config_base {
+struct config_t {
   bool is_enable_tcp_no_delay = true; /*tcp请求是否立即响应*/
   uint16_t port = 9001; /*监听端口*/
   unsigned thread_num = std::thread::hardware_concurrency(); /*rpc server内部使用的连接数，默认为逻辑核数*/
   std::chrono::steady_clock::duration conn_timeout_duration = 
       std::chrono::seconds{0};  /*rpc请求的超时时间，0秒代表rpc请求不会自动超时*/
   std::string address="0.0.0.0"; /*监听地址*/
+  /* RPC 服务器的 acceptor 列表，默认为空。
+  允许用户自定义从 coro_io::server_acceptor_base 派生的 acceptor，支持多个 acceptor。
+  如果该列表非空，则 config_t::port 和 config_t::address 将被忽略。 */
+    std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors; 
   /*下面设置只有启用SSL才有*/
   std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
   /*下面设置只有启用rdma才有*/
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // 配置是否启用rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+   // 配置服务器使用的rdma设备列表
+   // 当列表为空时，默认使用ibv_config中提供的设备
+   // 否则覆盖ibv_config的设置。
+   // 内部采用round-robin算法建立新连接。
 };
 struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径
@@ -442,6 +451,20 @@ int start() {
   /*regist rpc function here... */
   server.start();
 }
+```
+
+### 多地址监听
+
+`coro_rpc_server`支持多地址监听，可以利用这个功能同时使用多张tcp网卡。
+
+```cpp
+ std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", 8824));
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("localhost", 8825));
+    coro_rpc_server server(
+        coro_rpc::config_t{.acceptors = std::move(acceptors)});
 ```
 
 
