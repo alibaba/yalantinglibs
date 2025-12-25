@@ -40,7 +40,7 @@ jobs:
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
       - name: Build
-        run: cmake --build ${{github.workspace}}\build -- -j3
+        run: cmake --build ${{github.workspace}}\build
       - name: Test
         working-directory: ${{github.workspace}}\build
         run: ctest -C ${{matrix.mode}} -j 1 -V

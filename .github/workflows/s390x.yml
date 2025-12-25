@@ -24,14 +24,15 @@ jobs:
             apt-get update -q -y
             apt-get -y install cmake
             apt-get -y install make
-            apt-get -y install g++
+            apt-get -y install clang
+            apt-get -y install clang++
           run: |
             lscpu | grep Endian
-            CXX=g++ CC=gcc 
+            CXX=clang++ CC=clang 
             cmake -B ${{github.workspace}}/build \
                   -DCMAKE_BUILD_TYPE=Debug \
                   -DBUILD_METRIC=OFF -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
-            cmake --build ${{github.workspace}}/build -- -j$(($(nproc)/2 + 1))
+            cmake --build ${{github.workspace}}/build -- -j
             cd ${{github.workspace}}/build/output/tests
             ./struct_pack_test
             ./struct_pack_test_with_optimize
