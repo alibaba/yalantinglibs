@@ -15,7 +15,6 @@
  */
 #pragma once
 #include <exception>
-#include <ylt/easylog.hpp>
 #ifdef YLT_ENABLE_IBV
 #include "ibverbs/ib_io.hpp"
 #include "ibverbs/ib_socket.hpp"
@@ -176,7 +175,6 @@ struct socket_wrapper_t {
               coro_io::endpoint::rdma};
     }
 #endif
-
     return {socket_->remote_endpoint().address(),
             socket_->remote_endpoint().port(), coro_io::endpoint::tcp};
   }
