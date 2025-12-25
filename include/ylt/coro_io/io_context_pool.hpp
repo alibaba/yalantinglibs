@@ -17,10 +17,12 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
 
+#include <any>
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <future>
 #include <iostream>
@@ -28,9 +30,12 @@
 #include <mutex>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "asio/dispatch.hpp"
+#include "asio/executor.hpp"
+#include "async_simple/Common.h"
 #include "async_simple/Signal.h"
 #ifdef __linux__
 #include <pthread.h>
@@ -48,11 +53,47 @@ template <typename ExecutorImpl = asio::io_context::executor_type>
 class ExecutorWrapper : public async_simple::Executor {
  private:
   ExecutorImpl executor_;
+  std::unique_ptr<std::unordered_map<std::string, std::any>> user_defined_data_;
 
  public:
   ExecutorWrapper(ExecutorImpl executor) : executor_(executor) {}
 
   using context_t = std::remove_cvref_t<decltype(executor_.context())>;
+
+  template <typename T>
+  std::any &set_data(std::string key, T data) {
+    if (!user_defined_data_) {
+      user_defined_data_ =
+          std::make_unique<std::unordered_map<std::string, std::any>>();
+    }
+    return (*user_defined_data_)[std::move(key)] = std::move(data);
+  }
+  template <typename T>
+  T *get_data_with_default(std::string key) {
+    if (!user_defined_data_) {
+      user_defined_data_ =
+          std::make_unique<std::unordered_map<std::string, std::any>>();
+    }
+    auto [iter, _] = user_defined_data_->try_emplace(key, T{});
+    return std::any_cast<T>(&iter->second);
+  }
+  template <typename T>
+  T *get_data(const std::string &key) {
+    if (!user_defined_data_) {
+      return nullptr;
+    }
+    auto iter = (*user_defined_data_).find(key);
+    if (iter == user_defined_data_->end()) {
+      return nullptr;
+    }
+    return std::any_cast<T>(&iter->second);
+  }
+
+  void clear_all_data() {
+    if (user_defined_data_) {
+      user_defined_data_ = nullptr;
+    }
+  }
 
   virtual bool schedule(Func func) override {
     asio::post(executor_, std::move(func));
@@ -85,14 +126,11 @@ class ExecutorWrapper : public async_simple::Executor {
   operator ExecutorImpl() { return executor_; }
 
   bool currentThreadInExecutor() const override {
-    auto ctx = get_current();
-    return *ctx == &executor_.context();
+    return executor_.running_in_this_thread();
   }
 
   size_t currentContextId() const override {
-    auto ctx = get_current();
-    auto ptr = *ctx;
-    return ptr ? (size_t)ptr : 0;
+    return (size_t)&executor_.context();
   }
 
  private:
@@ -215,6 +253,12 @@ class io_context_pool {
     std::call_once(flag_, [this] {
       bool has_run_or_stop = false;
       bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+
+      for (auto &executor : executors) {
+        executor->schedule([&executor]() {
+          executor->clear_all_data();
+        });
+      }
 
       work_.clear();
 
