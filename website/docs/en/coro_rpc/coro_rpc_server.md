@@ -414,17 +414,24 @@ After enabling RDMA support, the server will reject all non-rdma connections.
 We provide the coro_rpc::config_t class, which allows users to set the details of the server:
 
 ```cpp
-struct config_base {
+struct config_t {
   bool is_enable_tcp_no_delay = true; /* Whether to respond immediately to tcp requests */
   uint16_t port = 9001; /* Listening port */
   unsigned thread_num = std::thread::hardware_concurrency(); /* Number of connections used internally by rpc server, default is the number of logical cores */
   std::chrono::steady_clock::duration conn_timeout_duration =
       std::chrono::seconds{0}; /* Timeout duration for rpc requests, 0 seconds means rpc requests will not automatically timeout */
   std::string address="0.0.0.0"; /* Listening address */
+  std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors; /* acceptor list for rpc server, default is empty, allow user defined acceptors which derived from coro_io::server_acceptor_base, support multiple acceptors. If acceptors is not empty,config_t::port, config_t::address which be ignored. */
   /* The following settings are only applicable if SSL is enabled */
   std::optional<ssl_configure> ssl_config = std::nullopt; // Configure whether to enable ssl
   /* The following settings are only applicable if rdma is enabled */
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // Configure whether to enable rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+// List of RDMA devices to be used by the server. 
+// If the list is empty (nullopt), the device specified in `ibv_config` will be used by default.
+// Otherwise, this list overrides the settings in `ibv_config`.
+// New connections are established using a round-robin algorithm internally.
+
 };
 struct ssl_configure {
   std::string base_path;  // Base path of ssl files.
@@ -440,6 +447,20 @@ int start() {
 }
 
 After enabling RDMA support, the server still allow non-rdma connections.
+
+### Listen at multiple addresses
+
+`coro_rpc_server` supports listening on multiple addresses, enabling the use of multiple TCP network interfaces simultaneously.
+
+```cpp
+ std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", 8824));
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("localhost", 8825));
+    coro_rpc_server server(
+        coro_rpc::config_t{.acceptors = std::move(acceptors)});
+```
 
 ```
 
