@@ -123,8 +123,11 @@ class coro_rpc_server_base {
 #endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
+    if (!config.ibv_config.has_value() && !config.ibv_dev_lists.empty()) {
+      ibv_config_ = coro_io::ib_socket_t::config_t{};
+    }
     if (config.ibv_config) {
-      init_ibv(config.ibv_config.value());
+      init_ibv(config.ibv_config.value(), std::move(config.ibv_dev_lists));
     }
 #endif
     if (!config.acceptors.empty()) {
@@ -154,9 +157,9 @@ class coro_rpc_server_base {
 #ifdef YLT_ENABLE_IBV
   void init_ibv(
       const coro_io::ib_socket_t::config_t &conf = {},
-      std::vector<std::shared_ptr<coro_io::ib_device_t>> ib_dev_lists = {}) {
+      std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists = {}) {
     ibv_config_ = conf;
-    ibv_dev_lists_ = std::move(ib_dev_lists);
+    ibv_dev_lists_ = std::move(ibv_dev_lists);
   }
 #endif
 
