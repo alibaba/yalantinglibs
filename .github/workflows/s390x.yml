@@ -24,10 +24,10 @@ jobs:
             apt-get update -q -y
             apt-get -y install cmake
             apt-get -y install make
-            apt-get -y install clang
-            apt-get -y install clang++
           run: |
             lscpu | grep Endian
+            apt-get -y install clang
+            apt-get -y install clang++
             CXX=clang++ CC=clang 
             cmake -B ${{github.workspace}}/build \
                   -DCMAKE_BUILD_TYPE=Debug \
