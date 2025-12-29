@@ -504,6 +504,23 @@ template <typename T, typename = void>
   constexpr bool hash_map_container = map_container<T> && hash_map_container_impl<T>::value;
 #endif
 
+#if __cpp_concepts >= 201907L
+  template <typename Type>
+  concept multi_map_container = map_container<Type> && !(requires(Type container,typename Type::key_type key) {
+    container[key];
+  });
+#else
+template <typename T, typename = void>
+  struct multi_map_container_impl : std::true_type {};
+
+  template <typename T>
+  struct multi_map_container_impl<T, std::void_t<decltype(std::declval<T>()[std::declval<typename T::key_type>()])>> 
+      : std::false_type {};
+
+  template <typename T>
+  constexpr bool multi_map_container = map_container<T> && multi_map_container_impl<T>::value;
+#endif
+
   template <typename Type>
   constexpr inline bool is_std_unordered_map_v = false;
 

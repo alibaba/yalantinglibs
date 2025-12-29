@@ -649,3 +649,78 @@ TEST_CASE("test bitset") {
         struct_pack::detail::is_trivial_serializable<decltype(ar)>::value);
   }
 }
+
+struct ProjectParam_Test {
+  std::unordered_map<std::string, std::string> params;
+  std::map<std::string, std::string> params2;
+  std::vector<std::string> params3;
+  ProjectParam_Test() = default;
+  ProjectParam_Test(ProjectParam_Test &&other) = default;
+
+  ProjectParam_Test(const ProjectParam_Test &other) = default;
+
+  ProjectParam_Test &operator=(const ProjectParam_Test &other) = default;
+  ProjectParam_Test &operator=(ProjectParam_Test &&other) {
+    *this = other;
+    return *this;
+  }
+};
+
+YLT_REFL(ProjectParam_Test, params, params2, params3);
+
+struct Project_Test {
+  std::unordered_map<int, ProjectParam_Test> boards_info;
+};
+
+TEST_CASE("test map with element that move is copy") {
+  auto pro_ptr = std::make_shared<Project_Test>();
+  // Project_Test pro;
+  pro_ptr->boards_info[0].params.emplace("test1", "test2");
+  pro_ptr->boards_info[0].params2.emplace("test3", "test5");
+  pro_ptr->boards_info[0].params3.push_back("test4");  // param init.
+  pro_ptr->boards_info[1] = ProjectParam_Test{};
+  std::string content_str = "";
+  content_str = struct_pack::serialize<std::string>(*pro_ptr);
+
+  Project_Test projectnew;
+  auto ec2 = struct_pack::deserialize_to(projectnew, content_str);
+  CHECK(ec2 == struct_pack::errc{});
+  REQUIRE(projectnew.boards_info.size() == 2);
+  CHECK(projectnew.boards_info[1].params3.empty());
+}
+
+struct ProjectParam_Test2 {
+  std::unordered_map<std::string, std::string> params;
+  std::map<std::string, std::string> params2;
+  std::vector<std::string> params3;
+  ProjectParam_Test2() = default;
+  ProjectParam_Test2(ProjectParam_Test2 &&other) = delete;
+
+  ProjectParam_Test2(const ProjectParam_Test2 &other) = default;
+
+  ProjectParam_Test2 &operator=(const ProjectParam_Test2 &other) = default;
+  ProjectParam_Test2 &operator=(ProjectParam_Test2 &&other) = delete;
+};
+
+YLT_REFL(ProjectParam_Test2, params, params2, params3);
+
+struct Project_Test2 {
+  std::unordered_map<int, ProjectParam_Test2> boards_info;
+};
+
+TEST_CASE("test map with element that move is copy 2") {
+  auto pro_ptr = std::make_shared<Project_Test2>();
+  // Project_Test pro;
+  pro_ptr->boards_info[0].params.emplace("test1", "test2");
+  pro_ptr->boards_info[0].params2.emplace("test3", "test5");
+  pro_ptr->boards_info[0].params3.push_back("test4");  // param init.
+  pro_ptr->boards_info[1];
+  std::string content_str = "";
+  content_str = struct_pack::serialize<std::string>(*pro_ptr);
+
+  Project_Test projectnew;
+  auto ec2 = struct_pack::deserialize_to(projectnew, content_str);
+  CHECK(ec2 == struct_pack::errc{});
+  REQUIRE(projectnew.boards_info.size() == 2);
+  CHECK(projectnew.boards_info[1].params3.empty());
+}
