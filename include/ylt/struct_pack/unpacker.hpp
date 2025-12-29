@@ -618,26 +618,15 @@ class unpacker {
     }
   }
 
-  template <size_t size_type, uint64_t version, bool NotSkip>
-  constexpr struct_pack::err_code STRUCT_PACK_INLINE deserialize_many() {
-    return {};
-  }
   template <size_t size_type, uint64_t version, bool NotSkip,
-            uint64_t parent_tag = 0, typename First, typename... Args>
+            uint64_t parent_tag = 0, typename... Args>
   constexpr struct_pack::err_code STRUCT_PACK_INLINE
-  deserialize_many(First &&first_item, Args &&...items) {
-    auto code =
-        deserialize_one<size_type, version, NotSkip, parent_tag>(first_item);
-    if SP_UNLIKELY (code) {
-      return code;
-    }
-    if constexpr (sizeof...(items) > 0) {
-      return deserialize_many<size_type, version, NotSkip, parent_tag>(
-          items...);
-    }
-    else {
-      return code;
-    }
+  deserialize_many(Args &&...items) {
+    struct_pack::err_code code;
+
+    ((code = deserialize_one<size_type, version, NotSkip, parent_tag>(items)) ||
+     ...);
+    return code;
   }
 
   constexpr struct_pack::err_code STRUCT_PACK_INLINE
