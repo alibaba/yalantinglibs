@@ -135,7 +135,7 @@ inline bool open_native_async_file(File &file, Executor &executor,
     
     if (use_direct_io) {
 #if defined(ASIO_WINDOWS)
-#else
+#elif defined(__linux__)
       asio_flags = static_cast<asio::file_base::flags>(
           static_cast<int>(asio_flags) | O_DIRECT);
 #endif
@@ -148,6 +148,18 @@ inline bool open_native_async_file(File &file, Executor &executor,
     else {
       file = std::make_shared<asio::random_access_file>(
           executor.get_asio_executor(), std::string(filepath), asio_flags);
+    }
+    
+    // On macOS, use F_NOCACHE as an alternative to O_DIRECT
+    if (use_direct_io && file && file->is_open()) {
+#if defined(__APPLE__) || defined(__MACH__)
+      int fd = file->native_handle();
+      if (fd >= 0 && fcntl(fd, F_NOCACHE, 1) != 0) {
+        std::error_code ec;
+        file->close(ec);
+        return false;
+      }
+#endif
     }
   } catch (std::exception &ex) {
     ELOG_INFO << "line " << __LINE__ << " coro_file open failed" << ex.what()
@@ -533,7 +545,7 @@ class basic_random_coro_file {
 
     if (use_direct_io) {
 #if defined(ASIO_WINDOWS)
-#else
+#elif defined(__linux__)
       open_flags |= O_DIRECT;
 #endif
     }
@@ -545,6 +557,16 @@ class basic_random_coro_file {
 #endif
     if (fd < 0) {
       return false;
+    }
+
+    // On macOS, use F_NOCACHE as an alternative to O_DIRECT
+    if (use_direct_io) {
+#if defined(__APPLE__) || defined(__MACH__)
+      if (fcntl(fd, F_NOCACHE, 1) != 0) {
+        ::close(fd);
+        return false;
+      }
+#endif
     }
 
     prw_random_file_ = std::shared_ptr<int>(new int(fd), [](int *ptr) {
