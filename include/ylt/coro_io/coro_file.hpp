@@ -125,21 +125,29 @@ constexpr inline flags to_flags(std::ios::ios_base::openmode mode) {
 template <bool seq, typename File, typename Executor>
 inline bool open_native_async_file(File &file, Executor &executor,
                                    std::string_view filepath,
-                                   flags open_flags) {
+                                   flags open_flags, bool use_direct_io = false) {
   if (file && file->is_open()) {
     return true;
   }
 
   try {
+    asio::file_base::flags asio_flags = static_cast<asio::file_base::flags>(open_flags);
+    
+    if (use_direct_io) {
+#if defined(ASIO_WINDOWS)
+#else
+      asio_flags = static_cast<asio::file_base::flags>(
+          static_cast<int>(asio_flags) | O_DIRECT);
+#endif
+    }
+    
     if constexpr (seq) {
       file = std::make_shared<asio::stream_file>(
-          executor.get_asio_executor(), std::string(filepath),
-          static_cast<asio::file_base::flags>(open_flags));
+          executor.get_asio_executor(), std::string(filepath), asio_flags);
     }
     else {
       file = std::make_shared<asio::random_access_file>(
-          executor.get_asio_executor(), std::string(filepath),
-          static_cast<asio::file_base::flags>(open_flags));
+          executor.get_asio_executor(), std::string(filepath), asio_flags);
     }
   } catch (std::exception &ex) {
     ELOG_INFO << "line " << __LINE__ << " coro_file open failed" << ex.what()
@@ -404,18 +412,18 @@ class basic_random_coro_file {
   }
 
   bool open(std::string_view filepath,
-            std::ios::ios_base::openmode open_flags) {
+            std::ios::ios_base::openmode open_flags, bool use_direct_io = false) {
     file_path_ = std::string{filepath};
     if constexpr (execute_type == execution_type::thread_pool) {
-      return open_fd(filepath, to_flags(open_flags));
+      return open_fd(filepath, to_flags(open_flags), use_direct_io);
     }
     else {
 #if defined(ASIO_HAS_FILE)
       return open_native_async_file<false>(async_random_file_,
                                            executor_wrapper_, filepath,
-                                           to_flags(open_flags));
+                                           to_flags(open_flags), use_direct_io);
 #else
-      return open_fd(filepath, to_flags(open_flags));
+      return open_fd(filepath, to_flags(open_flags), use_direct_io);
 #endif
     }
   }
@@ -518,9 +526,16 @@ class basic_random_coro_file {
   std::string_view file_path() const { return file_path_; }
 
  private:
-  bool open_fd(std::string_view filepath, int open_flags) {
+  bool open_fd(std::string_view filepath, int open_flags, bool use_direct_io = false) {
     if (prw_random_file_) {
       return true;
+    }
+
+    if (use_direct_io) {
+#if defined(ASIO_WINDOWS)
+#else
+      open_flags |= O_DIRECT;
+#endif
     }
 
 #if defined(ASIO_WINDOWS)
