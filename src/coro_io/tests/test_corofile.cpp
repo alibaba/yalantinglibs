@@ -1001,8 +1001,9 @@ void test_direct_io_read_write(std::string_view filename) {
 
   std::error_code write_ec;
   size_t bytes_written;
-  std::tie(write_ec, bytes_written) = async_simple::coro::syncAwait(
-      file.async_write_at(aligned_offset, std::string_view(buf, aligned_read_size)));
+  std::tie(write_ec, bytes_written) =
+      async_simple::coro::syncAwait(file.async_write_at(
+          aligned_offset, std::string_view(buf, aligned_read_size)));
 
   CHECK(!write_ec);
   CHECK(bytes_written == aligned_read_size);
