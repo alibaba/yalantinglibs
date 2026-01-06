@@ -28,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -249,8 +250,8 @@ class io_context_pool {
     promise_.set_value();
   }
 
-  void stop() {
-    std::call_once(flag_, [this] {
+  void stop(bool force = false) {
+    std::call_once(flag_, [this, force] {
       bool has_run_or_stop = false;
       bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
 
@@ -262,15 +263,16 @@ class io_context_pool {
 
       work_.clear();
 
-      if (ok) {
-        // clear all unfinished work
-        for (auto &e : io_contexts_) {
-          e->run();
+      for (auto &e : io_contexts_) {
+        if (ok) {
+          e->poll();  // clear all unfinished work
         }
-        return;
+        if (force) {
+          e->stop();
+        }
       }
-
-      promise_.get_future().wait();
+      if (!ok)
+        promise_.get_future().wait();
     });
   }
 
@@ -280,6 +282,10 @@ class io_context_pool {
   }
 
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
+
+  std::span<std::unique_ptr<coro_io::ExecutorWrapper<>>> get_all_executor() {
+    return executors;
+  }
 
   bool has_stop() const { return work_.empty(); }
 
