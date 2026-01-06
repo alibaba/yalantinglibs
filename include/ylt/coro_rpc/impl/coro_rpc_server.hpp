@@ -106,7 +106,10 @@ class coro_rpc_server_base {
         std::make_unique<coro_io::tcp_server_acceptor>(address));
   }
 
-  coro_rpc_server_base(const server_config &config)
+  coro_rpc_server_base(
+      const server_config &config,
+      std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors =
+          {})
       : pool_(config.thread_num),
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init},
@@ -130,8 +133,8 @@ class coro_rpc_server_base {
       init_ibv(config.ibv_config.value(), std::move(config.ibv_dev_lists));
     }
 #endif
-    if (!config.acceptors.empty()) {
-      acceptors_ = std::move(config.acceptors);
+    if (!acceptors.empty()) {
+      acceptors_ = std::move(acceptors);
     }
     else {
       acceptors_.push_back(std::make_unique<coro_io::tcp_server_acceptor>(

@@ -50,8 +50,7 @@ TEST_CASE("test server acceptor") {
         std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", 8824));
     acceptors.emplace_back(
         std::make_unique<coro_io::tcp_server_acceptor>("localhost", 8825));
-    coro_rpc_server server(
-        coro_rpc::config_t{.acceptors = std::move(acceptors)});
+    coro_rpc_server server(coro_rpc::config_t{}, std::move(acceptors));
     server.register_handler<hello>();
 
     auto res = server.async_start();
