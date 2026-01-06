@@ -14,9 +14,13 @@
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
+#include "ylt/coro_io/barex/barex_server_acceptor.hpp"
+#include "ylt/coro_io/barex/barex_socket.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_io/heterogeneous_buffer.hpp"
+#include "ylt/coro_io/server_acceptor.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 #include "ylt/util/tl/expected.hpp"
 #ifdef YLT_ENABLE_IBV
@@ -32,6 +36,7 @@ struct bench_config {
   uint32_t buffer_size;
   int log_level;
   bool enable_ib;
+  bool enable_barex;
   uint32_t duration;
   uint32_t min_recv_buf_count;
   uint32_t max_recv_buf_count;
@@ -78,6 +83,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.buffer_size = parser.get<uint32_t>("buffer_size");
   conf.log_level = parser.get<int>("log_level");
   conf.enable_ib = parser.get<bool>("enable_ib");
+  conf.enable_barex = parser.get<bool>("enable_barex");
   conf.duration = parser.get<uint32_t>("duration");
   conf.min_recv_buf_count = parser.get<uint32_t>("min_recv_buf_count");
   conf.max_recv_buf_count = parser.get<uint32_t>("max_recv_buf_count");
@@ -233,6 +239,14 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   pools.emplace_back(coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
       conf.url, pool_conf));
 #endif
+#ifdef YLT_ENABLE_BAREX
+  if (conf.enable_barex) {
+    coro_io::barex_socket_t::config_t barex_conf{};
+    barex_conf.max_buffer_cnt = conf.send_buffer_cnt;
+    barex_conf.buffer_size = conf.buffer_size;
+    pool_conf.client_config.socket_config = barex_conf;
+  }
+#endif
   auto lazy = [&pools, conf](int work_num) -> async_simple::coro::Lazy<void> {
     std::string send_str(conf.send_data_len, 'A');
 #ifdef YLT_ENABLE_CUDA
@@ -295,6 +309,14 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
     pool_conf.client_config.socket_config = ib_conf;
+  }
+#endif
+#ifdef YLT_ENABLE_BAREX
+  if (conf.enable_barex) {
+    coro_io::barex_socket_t::config_t barex_conf{};
+    barex_conf.max_buffer_cnt = conf.send_buffer_cnt;
+    barex_conf.buffer_size = conf.buffer_size;
+    pool_conf.client_config.socket_config = barex_conf;
   }
 #endif
   std::vector<std::shared_ptr<coro_io::client_pool<coro_rpc::coro_rpc_client>>>
@@ -372,6 +394,15 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
       assert(is_ok);
     }
 #endif
+#ifdef YLT_ENABLE_BAREX
+    if (conf.enable_barex) {
+      coro_io::barex_socket_t::config_t barex_conf{};
+      barex_conf.max_buffer_cnt = conf.send_buffer_cnt;
+      barex_conf.buffer_size = conf.buffer_size;
+      [[maybe_unused]] bool is_ok = client->init_barex(barex_conf);
+      assert(is_ok);
+    }
+#endif
     auto ec = co_await client->connect(conf.url);
     if (ec) {
       ELOG_ERROR << "connect failed";
@@ -436,6 +467,9 @@ int main(int argc, char** argv) {
 #else
   parser.add<bool>("enable_ib", 'i', "enable ib", false, false);
 #endif
+#ifdef YLT_ENABLE_BAREX
+  parser.add<bool>("enable_barex", 'x', "enable barex", false, false);
+#endif
   parser.add<uint32_t>("duration", 'd', "duration seconds", false, 100000);
   parser.add<uint32_t>("min_recv_buf_count", 'e', "min recieve buffer count",
                        false, 8);
@@ -470,9 +504,22 @@ int main(int argc, char** argv) {
       g_resp_str = resp_str;
       g_resp_len = conf.resp_len;
     }
-    coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(),
-                                     conf.port, "0.0.0.0",
-                                     std::chrono::seconds(10));
+    std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
+#ifdef YLT_ENABLE_BAREX
+    if (conf.enable_barex) {
+      coro_io::barex_socket_t::config_t barex_conf{};
+      barex_conf.max_buffer_cnt = conf.send_buffer_cnt;
+      barex_conf.buffer_size = conf.buffer_size;
+      acceptors.push_back(std::make_unique<coro_io::barex_server_acceptor>(
+          conf.port, barex_conf));
+    }
+#endif
+    coro_rpc::coro_rpc_server server(
+        coro_rpc::config_t{.port = conf.port,
+                           .thread_num = std::thread::hardware_concurrency(),
+                           .conn_timeout_duration = std::chrono::seconds(10),
+                           .address = "0.0.0.0"},
+        std::move(acceptors));
     server.register_handler<echo>();
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {

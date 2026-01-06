@@ -16,7 +16,10 @@
 #include <async_simple/coro/Collect.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <chrono>
+#include <memory>
 #include <thread>
+#include <type_traits>
 #include <variant>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -28,17 +31,39 @@
 #include "rpc_api.hpp"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
+#include "ylt/coro_io/barex/barex_acceptor.hpp"
+#include "ylt/coro_io/barex/barex_device.hpp"
+#include "ylt/coro_io/barex/barex_server_acceptor.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/server_acceptor.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
+#include "ylt/easylog.hpp"
 #include "ylt/struct_pack.hpp"
 
 async_simple::coro::Lazy<int> get_coro_value(int val) { co_return val; }
 
+std::vector<std::unique_ptr<coro_io::server_acceptor_base>> get_barex_acceptor(
+    bool use_barex, uint16_t port) {
+  std::vector<std::unique_ptr<coro_io::server_acceptor_base>> ret;
+#ifdef YLT_ENABLE_BAREX
+  if (use_barex) {
+    ELOG_INFO << "enable barex!!!";
+    ret.push_back(std::make_unique<coro_io::barex_server_acceptor>(port));
+  }
+#endif
+  return ret;
+}
+
 struct CoroServerTester : ServerTester {
   CoroServerTester(TesterConfig config)
       : ServerTester(config),
-        server(2, config.port, config.address, config.conn_timeout_duration) {
+        server(coro_rpc::config_t{.port = config.port,
+                                  .thread_num = 2,
+                                  .conn_timeout_duration =
+                                      config.conn_timeout_duration,
+                                  .address = config.address},
+               get_barex_acceptor(use_barex, config.port)) {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl) {
       server.init_ssl(
@@ -258,10 +283,18 @@ struct CoroServerTester : ServerTester {
   void test_server_send_no_body() {
     auto client = create_client(inject_action::close_socket_after_send_length);
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
+    auto tp = std::chrono::steady_clock::now();
     auto ret = this->template call<hello>(client);
-    REQUIRE_MESSAGE(
-        ret.error().code == coro_rpc::errc::io_error,
+    auto tp2 = std::chrono::steady_clock::now();
+    ELOG_INFO << "cost time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tp2 - tp)
+                     .count();
+    CHECK(!ret.has_value());
+    CHECK_MESSAGE(
+        (ret.error().code == coro_rpc::errc::io_error ||
+         ret.error().code == coro_rpc::errc::timed_out),
         std::to_string(client->get_client_id()).append(ret.error().msg));
+    CHECK((tp2 - tp) < std::chrono::milliseconds{1200});
     g_action = {};
   }
 
@@ -295,6 +328,7 @@ TEST_CASE("testing coro rpc server") {
   ELOGV(INFO, "run testing coro rpc server");
   unsigned short server_port = 8810;
   auto conn_timeout_duration = 500ms;
+  std::vector<bool> enable_heartbeat{false, true};
   std::vector<int> switch_list{0
 #ifdef YLT_ENABLE_SSL
                                ,
@@ -304,22 +338,35 @@ TEST_CASE("testing coro rpc server") {
                                ,
                                2
 #endif
+#ifdef YLT_ENABLE_BAREX
+                               ,
+                               3
+#endif
   };
-  for (auto enable_heartbeat : switch_list) {
+  for (auto enable_heartbeat : enable_heartbeat) {
     for (auto type : switch_list) {
+      ++server_port;
       TesterConfig config;
       config.enable_heartbeat = enable_heartbeat;
       if (type == 0) {
         config.use_ssl = false;
         config.use_rdma = false;
+        config.use_barex = false;
       }
       else if (type == 1) {
         config.use_ssl = true;
         config.use_rdma = false;
+        config.use_barex = false;
       }
       else if (type == 2) {
         config.use_ssl = false;
         config.use_rdma = true;
+        config.use_barex = false;
+      }
+      else if (type == 3) {
+        config.use_ssl = false;
+        config.use_rdma = false;
+        config.use_barex = true;
       }
       config.sync_client = false;
       config.use_outer_io_context = false;

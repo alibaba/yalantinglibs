@@ -63,6 +63,9 @@
 #endif
 #include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_io/heterogeneous_buffer.hpp"
+#ifdef YLT_ENABLE_BAREX
+#include "ylt/coro_io/barex/barex_socket.hpp"
+#endif
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
@@ -253,6 +256,10 @@ class coro_rpc_client {
                  ,
                  coro_io::ib_socket_t::config_t
 #endif
+#ifdef YLT_ENABLE_BAREX
+                 ,
+                 coro_io::barex_socket_t::config_t
+#endif
                  >
         socket_config;
     config()
@@ -302,6 +309,12 @@ class coro_rpc_client {
   [[nodiscard]] bool init_socket_wrapper(
       const coro_io::ib_socket_t::config_t &config) {
     return control_->socket_wrapper_.init_client(config);
+  }
+#endif
+#ifdef YLT_ENABLE_IBV
+  [[nodiscard]] bool init_socket_wrapper(
+      const coro_io::barex_socket_t::config_t &config) {
+    return control_->socket_wrapper_.init_client(control_->executor_, config);
   }
 #endif
 #ifdef YLT_ENABLE_SSL
@@ -903,7 +916,14 @@ class coro_rpc_client {
         std::get<coro_io::ib_socket_t::config_t>(config_.socket_config));
   }
 #endif
-
+#ifdef YLT_ENABLE_BAREX
+  [[nodiscard]] bool init_barex(
+      const coro_io::barex_socket_t::config_t &config = {}) {
+    config_.socket_config = config;
+    return init_socket_wrapper(
+        std::get<coro_io::barex_socket_t::config_t>(config_.socket_config));
+  }
+#endif
   ~coro_rpc_client() { close(); }
 
   /*!

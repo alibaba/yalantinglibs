@@ -21,6 +21,7 @@
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "ylt/coro_io/barex/barex_acceptor.hpp"
+#include "ylt/coro_io/barex/barex_device.hpp"
 #include "ylt/coro_io/barex/barex_io.hpp"
 #include "ylt/coro_io/barex/barex_socket.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -34,7 +35,8 @@
 
 struct config_t {
   std::size_t buffer_size = 256 * 1024;
-  std::size_t request_size = 20 * 1024 * 1024 + 1;
+  std::size_t request_size = 8 * 1024 * 1024;
+  std::size_t send_buffer_cnt = 8;
   int concurrency = 50;
   int enable_log = 0;
   bool enable_server = true;
@@ -42,11 +44,11 @@ struct config_t {
   int port = 58110;
   int test_time = 10;
 };
-YLT_REFL(config_t, buffer_size, request_size, concurrency, enable_log,
-         enable_server, enable_client, port, test_time);
+YLT_REFL(config_t, buffer_size, request_size, send_buffer_cnt, concurrency,
+         enable_log, enable_server, enable_client, port, test_time);
 
 config_t config;
-std::shared_ptr<coro_io::ib_device_t> g_dev;
+std::shared_ptr<coro_io::barex_device_t> g_dev;
 std::atomic<uint64_t> cnt[2];
 
 std::atomic<uint64_t> connect_cnt;
@@ -131,6 +133,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
       co_return ec;
     }
     soc.get_config().buffer_size = config.buffer_size;
+    soc.get_config().max_buffer_cnt = config.send_buffer_cnt;
     ELOG_INFO << "start new connection";
     auto executor = soc.get_executor();
     ++connect_cnt;
@@ -172,8 +175,10 @@ async_simple::coro::Lazy<std::error_code> echo_client(
 }
 
 async_simple::coro::Lazy<std::error_code> echo_connect() {
-  coro_io::barex_socket_t soc = coro_io::barex_socket_t(
-      coro_io::barex_socket_t::config_t{.buffer_size = config.buffer_size});
+  coro_io::barex_socket_t soc =
+      coro_io::barex_socket_t(coro_io::barex_socket_t::config_t{
+          .buffer_size = config.buffer_size,
+          .max_buffer_cnt = config.send_buffer_cnt});
   co_await coro_io::sleep_for(std::chrono::milliseconds{100},
                               soc.get_coro_executor());
   auto ec = co_await coro_io::async_connect(soc, config.enable_client,
@@ -191,19 +196,18 @@ async_simple::coro::Lazy<std::error_code> echo_connect() {
   --connect_cnt;
   co_return ec;
 }
-TEST_CASE("ib socket pressure test") {
+TEST_CASE("barex socket pressure test") {
   try {
-    struct_json::from_json_file(config, "ib_bench_config.json");
+    struct_json::from_json_file(config, "barex_bench_config.json");
   } catch (...) {
     std::ofstream fs;
-    fs.open("ib_bench_config.json");
+    fs.open("barex_bench_config.json");
     std::string s;
     struct_json::to_json(config, s);
     fs << iguana::prettify(s);
   }
   auto old_s = easylog::logger<>::instance().get_min_severity();
-  g_dev = coro_io::ib_device_t::create(
-      {.buffer_pool_config = {.buffer_size = config.buffer_size}});
+  g_dev = coro_io::get_global_barex_device();
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;

@@ -22,9 +22,6 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::barex_socket_t&)>>
         functions) {
-  // std::this_thread::sleep_for(std::chrono::milliseconds{100});
-  // asio::ip::tcp::acceptor acceptor(
-  //     coro_io::get_global_executor()->get_asio_executor());
   auto ctx = coro_io::get_barex_context(coro_io::get_global_executor(),
                                         coro_io::get_global_barex_device());
   CHECK(ctx != nullptr);

@@ -456,9 +456,8 @@ class coro_rpc_server_base {
 #ifdef UNIT_TEST_INJECT
       if (result.has_value()) {
         if (g_action == inject_action::force_inject_server_accept_error) {
-          coro_io::socket_wrapper_t &wrapper = result.value();
           asio::error_code ignored_ec;
-          wrapper.close();
+          result.value().close();
           g_action = inject_action::nothing;
           result = ylt::unexpected<std::error_code>{
               make_error_code(std::errc::io_error)};
@@ -480,7 +479,7 @@ class coro_rpc_server_base {
         }
         continue;
       }
-      coro_io::socket_wrapper_t &wrapper = result.value();
+      coro_io::socket_wrapper_t wrapper = std::move(result.value());
 
       // Client filter check
       if (client_filter_) {

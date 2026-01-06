@@ -5,6 +5,10 @@ if (YLT_HAVE_IBVERBS)
   add_subdirectory(rdma_example)
 endif()
 
+if (YLT_ENABLE_BAREX)
+  add_subdirectory(barex_example)
+endif()
+
 if (CORO_RPC_USE_OTHER_RPC)
   add_subdirectory(user_defined_rpc_protocol/rest_rpc)
 endif()

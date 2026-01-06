@@ -16,10 +16,8 @@
 #pragma once
 
 #include <queue>
+#include <stdexcept>
 
-#include "asio/io_context.hpp"
-#include "ylt/coro_io/barex/barex_device.hpp"
-#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #define CMAKE_INCLUDE
 #include <accl/barex/barex.h>
 #include <accl/barex/barex_types.h>
@@ -34,12 +32,10 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <cstring>
-#include <deque>
 #include <memory>
 #include <optional>
 #include <random>
 #include <span>
-#include <sstream>
 #include <system_error>
 #include <vector>
 #include <ylt/coro_io/client_pool.hpp>
@@ -48,8 +44,10 @@
 #include <ylt/util/random.hpp>
 
 #include "async_simple/Promise.h"
+#include "async_simple/coro/FutureAwaiter.h"
 #include "barex_context.hpp"
 #include "ylt/coro_io/barex/barex_acceptor.hpp"
+#include "ylt/coro_io/barex/barex_device.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 namespace coro_io {
 
@@ -84,11 +82,16 @@ class barex_socket_t {
     std::shared_ptr<barex_device_t> dev = nullptr;
   };
 
+  enum io_type { recv, send };
+
  public:
   barex_socket_t() {}
 
   barex_socket_t(std::shared_ptr<barex_socket_impl_t> impl)
-      : impl_(std::move(impl)) {}
+      : impl_(std::move(impl)) {};
+
+  barex_socket_t(std::shared_ptr<barex_socket_impl_t> impl,
+                 const config_t& config);
   barex_socket_t(barex_socket_t&& other) = default;
 
   barex_socket_t& operator=(barex_socket_t&&) = default;
@@ -111,7 +114,7 @@ class barex_socket_t {
                                                     channel, conf)) {}
 
   auto get_impl() const noexcept { return impl_; }
-
+  operator bool() const { return impl_ != nullptr; }
   auto get_executor();
   coro_io::ExecutorWrapper<>* get_coro_executor();
   bool has_closed() const;
@@ -256,11 +259,17 @@ class barex_socket_impl_t
     if (config_.dev == nullptr) {
       config_.dev = coro_io::get_global_barex_device();
     }
+    if (config_.dev == nullptr) {
+      throw std::runtime_error("no barex device available");
+    }
   }
   barex_socket_impl_t(barex_socket_t::config_t config)
       : executor_(coro_io::get_global_executor()), config_(std::move(config)) {
     if (config_.dev == nullptr) {
       config_.dev = coro_io::get_global_barex_device();
+    }
+    if (config_.dev == nullptr) {
+      throw std::runtime_error("no barex device available");
     }
   }
   barex_socket_impl_t(std::shared_ptr<barex_context_t> barex_context,
@@ -272,6 +281,9 @@ class barex_socket_impl_t
         config_(std::move(conf)) {
     ELOG_INFO << "create barex socket:" << this;
     config_.dev = barex_context->dev_;
+    if (config_.dev == nullptr) {
+      throw std::runtime_error("no barex device available");
+    }
   }
 
   void on_recv(std::error_code ec, std::span<char> data,
@@ -356,20 +368,24 @@ class barex_socket_impl_t
   }
 
   std::size_t consume_buffer(std::span<char>& buffer) {
+    ELOG_INFO << "read buffer cnt:" << read_buffer_.size()
+              << ",now waiting recv bytes:" << now_waiting_recv_bytes_;
     if (read_buffer_.empty()) {
       return 0;
     }
     std::size_t total = 0;
     while (buffer.size() && read_buffer_.size() &&
            read_buffer_.top().bytes_number <= now_waiting_recv_bytes_) {
+      ELOG_INFO << "before consume view size:"
+                << read_buffer_.top().view.size();
       auto sz = read_buffer_.top().consume(buffer);
       now_waiting_recv_bytes_ += sz;
+      ELOG_INFO << "after consume view size:" << read_buffer_.top().view.size();
+      ELOG_INFO << "consume a piece of buffer, len: " << sz
+                << ",now waiting recv bytes:" << now_waiting_recv_bytes_;
       total += sz;
       if (read_buffer_.top().view.empty()) {
         read_buffer_.pop();
-      }
-      else {
-        read_buffer_.top().view = read_buffer_.top().view.subspan(sz);
       }
     }
     return total;
@@ -451,6 +467,11 @@ class barex_socket_impl_t
   barex_socket_t::config_t config_;
 };
 
+inline barex_socket_t::barex_socket_t(std::shared_ptr<barex_socket_impl_t> impl,
+                                      const config_t& config)
+    : impl_(std::move(impl)) {
+  impl_->get_config() = config;
+}
 inline auto barex_socket_t::get_executor() { return impl_->get_executor(); }
 inline coro_io::ExecutorWrapper<>* barex_socket_t::get_coro_executor() {
   return impl_->get_coro_executor();
@@ -492,6 +513,7 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
     auto socket = dynamic_pointer_cast<barex_socket_impl_t>(data);
     assert(socket != nullptr);
     socket->close();
+    channel->RemoveUserData("");
     data = nullptr;
   });
   if (result) {
@@ -500,7 +522,7 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
   return result;
 }
 
-async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>>
+inline async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>>
 barex_acceptor_impl_t::accept() {
   std::shared_ptr<barex_socket_impl_t> soc;
   do {
@@ -518,7 +540,7 @@ barex_acceptor_impl_t::accept() {
       });
     }
   } while (!soc && !has_closed_);
-  co_return std::move(soc);
+  co_return soc;
 }
 
 inline void barex_recv_callback_t::OnRecvCall(

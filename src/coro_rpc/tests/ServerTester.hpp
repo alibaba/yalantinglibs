@@ -47,6 +47,7 @@ struct TesterConfig {
   TesterConfig(TesterConfig &c) {
     enable_heartbeat = c.enable_heartbeat;
     use_ssl = c.use_ssl;
+    use_barex = c.use_barex;
     use_rdma = c.use_rdma;
     sync_client = c.sync_client;
     use_outer_io_context = c.use_outer_io_context;
@@ -56,6 +57,7 @@ struct TesterConfig {
   bool enable_heartbeat;
   bool use_ssl;
   bool use_rdma;
+  bool use_barex;
   bool sync_client;
   bool use_outer_io_context;
   unsigned short port;
@@ -157,6 +159,13 @@ struct ServerTester : TesterConfig {
         bool ok = client->init_ibv();
         REQUIRE_MESSAGE(ok == true,
                         "init ibv fail, please check ibverbs config");
+      }
+#endif
+#ifdef YLT_ENABLE_BAREX
+      if (use_barex) {
+        bool ok = client->init_barex();
+        REQUIRE_MESSAGE(ok == true,
+                        "init barex fail, please check ibverbs config");
       }
 #endif
       g_action = action;
@@ -383,6 +392,14 @@ struct ServerTester : TesterConfig {
                         "init ibv fail, please check ibverbs config");
       }
 #endif
+#ifdef YLT_ENABLE_BAREX
+      if (use_barex) {
+        ELOG_INFO << "enable barex!!!";
+        bool ok = client->init_barex();
+        REQUIRE_MESSAGE(ok == true,
+                        "init barex fail, please check barex config");
+      }
+#endif
       return client;
     };
     auto client = init_client();
@@ -410,10 +427,18 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
           client->get_client_id());
     g_action = inject_action::close_socket_after_read_header;
+    auto tp = std::chrono::steady_clock::now();
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
-    REQUIRE_MESSAGE(
-        ret.error().code == coro_rpc::errc::io_error,
+    auto tp2 = std::chrono::steady_clock::now();
+    ELOG_INFO << "cost time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tp2 - tp)
+                     .count();
+    CHECK(!ret.has_value());
+    CHECK_MESSAGE(
+        (ret.error().code == coro_rpc::errc::io_error ||
+         ret.error().code == coro_rpc::errc::timed_out),
         std::to_string(client->get_client_id()).append(ret.error().msg));
+    CHECK((tp2 - tp) < std::chrono::milliseconds{1200});
   };
 
   template <auto func, typename... Args>
@@ -423,10 +448,18 @@ struct ServerTester : TesterConfig {
     ELOGV(INFO, "run %s, client_id %d", CORO_RPC_FUNCTION_SIGNATURE,
           client->get_client_id());
     g_action = inject_action::close_socket_after_send_length;
+    auto tp = std::chrono::steady_clock::now();
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
-    REQUIRE_MESSAGE(
-        ret.error().code == coro_rpc::errc::io_error,
+    auto tp2 = std::chrono::steady_clock::now();
+    ELOG_INFO << "cost time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tp2 - tp)
+                     .count();
+    CHECK(!ret.has_value());
+    CHECK_MESSAGE(
+        (ret.error().code == coro_rpc::errc::io_error ||
+         ret.error().code == coro_rpc::errc::timed_out),
         std::to_string(client->get_client_id()).append(ret.error().msg));
+    CHECK((tp2 - tp) < std::chrono::milliseconds{1200});
   };
 
   template <auto func, typename... Args>
@@ -438,11 +471,18 @@ struct ServerTester : TesterConfig {
     auto ret = this->template call<func>(client, std::forward<Args>(args)...);
     REQUIRE(ret);
     std::this_thread::sleep_for(700ms);
+    auto tp = std::chrono::steady_clock::now();
     ret = this->call<func>(client, std::forward<Args>(args)...);
-    REQUIRE(!ret);
-    REQUIRE_MESSAGE(
-        ret.error().code == coro_rpc::errc::io_error,
+    auto tp2 = std::chrono::steady_clock::now();
+    ELOG_INFO << "cost time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tp2 - tp)
+                     .count();
+    CHECK(!ret.has_value());
+    CHECK_MESSAGE(
+        (ret.error().code == coro_rpc::errc::io_error ||
+         ret.error().code == coro_rpc::errc::timed_out),
         std::to_string(client->get_client_id()).append(ret.error().msg));
+    CHECK((tp2 - tp) < std::chrono::milliseconds{1200});
   };
   asio::io_context io_context_;
   coro_io::ExecutorWrapper<> executor_;

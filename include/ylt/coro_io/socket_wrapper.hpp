@@ -16,9 +16,15 @@
 #pragma once
 #include <exception>
 #include <ylt/easylog.hpp>
+
+#include "asio/ip/address.hpp"
 #ifdef YLT_ENABLE_IBV
 #include "ibverbs/ib_io.hpp"
 #include "ibverbs/ib_socket.hpp"
+#endif
+#ifdef YLT_ENABLE_BAREX
+#include "ylt/coro_io/barex/barex_io.hpp"
+#include "ylt/coro_io/barex/barex_socket.hpp"
 #endif
 #include "io_context_pool.hpp"
 namespace coro_io {
@@ -50,6 +56,11 @@ struct socket_wrapper_t {
         ib_socket_(std::make_unique<ib_socket_t>(executor_, config)) {
     ib_socket_->prepare_accpet(std::move(soc));
   }
+#endif
+#ifdef YLT_ENABLE_BAREX
+  socket_wrapper_t(coro_io::barex_socket_t socket)
+      : barex_socket_(std::move(socket)),
+        executor_(socket.get_coro_executor()) {}
 #endif
   void init_tcp_socket() {
     asio::ip::address addr;
@@ -117,9 +128,24 @@ struct socket_wrapper_t {
 
   void set_local_ip(const std::string &local_ip) { local_ip_ = local_ip; }
 
+#ifdef YLT_ENABLE_BAREX
+  bool init_client(coro_io::ExecutorWrapper<> *exeuctor,
+                   const coro_io::barex_socket_t::config_t &config) {
+    try {
+      executor_ = exeuctor;
+      barex_socket_ = coro_io::barex_socket_t{exeuctor, config};
+    } catch (const std::exception &e) {
+      ELOG_WARN << "init barex client failed:" << e.what();
+      init_ok_ = false;
+      return false;
+    }
+    return true;
+  }
+#endif
+
  private:
   std::unique_ptr<asio::ip::tcp::socket> socket_;
-  coro_io::ExecutorWrapper<> *executor_;
+  coro_io::ExecutorWrapper<> *executor_ = nullptr;
   std::string local_ip_;
 #ifdef YLT_ENABLE_SSL
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
@@ -127,6 +153,9 @@ struct socket_wrapper_t {
 
 #ifdef YLT_ENABLE_IBV
   std::unique_ptr<ib_socket_t> ib_socket_;
+#endif
+#ifdef YLT_ENABLE_BAREX
+  barex_socket_t barex_socket_;
 #endif
   bool init_ok_ = true;
 
@@ -145,6 +174,11 @@ struct socket_wrapper_t {
       return op(*ib_socket_);
     }
 #endif
+#ifdef YLT_ENABLE_BAREX
+    if (barex_socket_) {
+      return op(barex_socket_);
+    }
+#endif
 #ifdef YLT_ENABLE_SSL
     if (use_ssl()) {
       return op(*ssl_stream_);
@@ -160,6 +194,12 @@ struct socket_wrapper_t {
 #ifdef YLT_ENABLE_IBV
     if (ib_socket_) {
       ib_socket_->close();
+      return;
+    }
+#endif
+#ifdef YLT_ENABLE_BAREX
+    if (barex_socket_) {
+      barex_socket_.close();
       return;
     }
 #endif
@@ -185,7 +225,11 @@ struct socket_wrapper_t {
               coro_io::endpoint::rdma};
     }
 #endif
-
+#ifdef YLT_ENABLE_BAREX
+    if (barex_socket_) {
+      return {asio::ip::address{}, 0, coro_io::endpoint::rdma};
+    }
+#endif
     return {socket_->remote_endpoint().address(),
             socket_->remote_endpoint().port(), coro_io::endpoint::tcp};
   }
@@ -194,6 +238,11 @@ struct socket_wrapper_t {
     if (ib_socket_) {
       return {ib_socket_->get_local_address(), ib_socket_->get_local_qp_num(),
               coro_io::endpoint::rdma};
+    }
+#endif
+#ifdef YLT_ENABLE_BAREX
+    if (barex_socket_) {
+      return {asio::ip::address{}, 0, coro_io::endpoint::rdma};
     }
 #endif
     return {socket_->local_endpoint().address(),

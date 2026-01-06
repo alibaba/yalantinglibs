@@ -38,7 +38,6 @@
 #include <unordered_map>
 
 #include "asio/posix/stream_descriptor.hpp"
-#include "async_simple/Promise.h"
 #include "barex_acceptor.hpp"
 #include "barex_device.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -102,10 +101,12 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
     return iter->second;
   }
   void close() {
+    ELOG_INFO << "close barex context";
     std::call_once(flag, [this]() {
       if (fd_) {
         std::error_code ec;
         [[maybe_unused]] auto _ = fd_->cancel(ec);
+        ELOG_INFO << "fd release";
         fd_->release();
       }
       if (auto acceptor = acceptor_.lock()) {
@@ -138,6 +139,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
   }
   void run() {
     auto fd = context_->GetEventFd();
+
     ELOG_DEBUG << "barex context event fd:" << fd;
     fd_ = std::make_unique<asio::posix::stream_descriptor>(
         executor_->get_asio_executor(), fd);
@@ -161,7 +163,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
             do {
               cnt = self->context_->ProgressEvents();
               if (cnt > 0) {
-                ELOG_DEBUG << "ib_context progress events:" << cnt
+                ELOG_DEBUG << "barex_context progress events:" << cnt
                            << " fd:" << fd;
               }
             } while (cnt > 0);
@@ -174,13 +176,11 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
         self->context_->Shutdown();
         int cnt;
         ELOG_INFO << "shutdown over,fd:" << fd;
-
-        std::this_thread::sleep_for(std::chrono::seconds{1});
         try {
           do {
             cnt = self->context_->ProgressEvents();
             if (cnt > 0) {
-              ELOG_DEBUG << "ib_context progress events:" << cnt
+              ELOG_DEBUG << "barex_context progress events:" << cnt
                          << " fd:" << fd;
             }
           } while (cnt > 0);
@@ -189,6 +189,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
         }
         ELOG_INFO << "waitstop start,fd:" << fd;
         self->context_->WaitStop();
+        ELOG_INFO << "waitstop finished,fd:" << fd;
         break;
       }
       co_return;
@@ -201,6 +202,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
             executor_);
   }
 };
+namespace detail {
 
 struct helper
     : public std::unordered_map<int, std::shared_ptr<barex_context_t>> {
@@ -208,15 +210,15 @@ struct helper
                            std::shared_ptr<barex_context_t>>::unordered_map;
   ~helper() {
     for (auto& e : *this) {
-      e.second->fd_->close();
       e.second->close();
     }
   }
 };
+}  // namespace detail
 static std::shared_ptr<barex_context_t> get_barex_context(
     coro_io::ExecutorWrapper<>* executor, std::shared_ptr<barex_device_t> dev) {
   auto* barex_ctx_map =
-      executor->get_data_with_default<helper>("barex context map");
+      executor->get_data_with_default<detail::helper>("ylt_barex_ctx");
   if (!barex_ctx_map) {
     return nullptr;
   }
