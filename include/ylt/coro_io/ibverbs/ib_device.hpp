@@ -25,6 +25,7 @@
 #include <system_error>
 #include <unordered_map>
 
+#include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
 #include "asio/posix/stream_descriptor.hpp"
 #include "ib_buffer.hpp"
@@ -334,6 +335,19 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     return buffer_pool_;
   }
 
+  struct async_event_watcher_manager_t
+      : public std::unordered_map<ib_device_t*, std::weak_ptr<ib_device_t>> {
+    ~async_event_watcher_manager_t() {
+      for (auto& [_, dev] : *this) {
+        if (auto ptr = dev.lock(); ptr) {
+          ptr->stop_async_event_watcher();
+        }
+      }
+    }
+  };
+
+  ~ib_device_t() { stop_async_event_watcher(); }
+
  private:
   int ipv6_addr_v4mapped(const struct in6_addr* a) {
     return ((a->s6_addr32[0] | a->s6_addr32[1]) |
@@ -362,6 +376,12 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     return default_gid_index;
   }
 
+  template <typename T>
+  static bool weak_ptrs_equal(const std::weak_ptr<T>& a,
+                              const std::weak_ptr<T>& b) {
+    return !a.owner_before(b) && !b.owner_before(a);
+  }
+
   void start_async_event_watcher() {
     if (!ctx_) {
       return;
@@ -373,32 +393,35 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
           << "Error, failed to change file descriptor of async event queue\n";
       return;
     }
-
-    auto fd_deleter = [](asio::posix::stream_descriptor* fd) {
-      fd->release();
-      delete fd;
-    };
-    auto fd =
-        std::unique_ptr<asio::posix::stream_descriptor, decltype(fd_deleter)>(
-            new asio::posix::stream_descriptor(
-                coro_io::get_global_executor()->get_asio_executor(),
-                ctx_->async_fd));
+    auto executor = coro_io::get_global_executor();
+    async_event_watcher_fd_ = std::unique_ptr<asio::posix::stream_descriptor>(
+        new asio::posix::stream_descriptor(executor->get_asio_executor(),
+                                           ctx_->async_fd));
     auto listen_event = [](std::weak_ptr<ib_device_t> dev,
-                           auto fd) -> async_simple::coro::Lazy<void> {
+                           coro_io::ExecutorWrapper<>* executor)
+        -> async_simple::coro::Lazy<void> {
       std::error_code ec;
-      auto name = std::string{dev.lock()->name()};
+      auto self = dev.lock();
+      if (self == nullptr) {
+        co_return;
+      }
+      auto self_raw_ptr = self.get();
+      (*executor->get_data_with_default<async_event_watcher_manager_t>(
+          "ylt_ib_watch"))[self_raw_ptr] = dev;
+      auto name = std::string{self->name()};
       ELOG_INFO << "start_async_event_watcher of device:" << name << " start";
       while (!ec) {
         coro_io::callback_awaitor<std::error_code> awaitor;
-        ec = co_await awaitor.await_resume([&fd](auto handler) {
-          fd->async_wait(asio::posix::stream_descriptor::wait_read,
-                         [handler](const std::error_code& ec) mutable {
-                           handler.set_value_then_resume(ec);
-                         });
+        ec = co_await awaitor.await_resume([&self](auto handler) {
+          self->async_event_watcher_fd_->async_wait(
+              asio::posix::stream_descriptor::wait_read,
+              [handler](const std::error_code& ec) mutable {
+                handler.set_value_then_resume(ec);
+              });
+          self = nullptr;
         });
-
         if (!ec) {
-          auto self = dev.lock();
+          self = dev.lock();
           if (!self) {
             ELOG_DEBUG
                 << "ib_device async event stop listening by close device:"
@@ -412,14 +435,28 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
                      << ec.message() << ",device:" << name;
         }
       }
+      auto* table = executor->get_data<async_event_watcher_manager_t>(
+          "ib_device_async_event_watcher");
+      if (table) {
+        auto iter = table->find(self_raw_ptr);
+        if (iter != table->end() && weak_ptrs_equal(iter->second, dev)) {
+          table->erase(iter);
+        }
+      }
     };
-    listen_event(shared_from_this(), std::move(fd)).start([](auto&& ec) {
-    });
+    listen_event(shared_from_this(), executor).via(executor).detach();
+  }
+
+  void stop_async_event_watcher() {
+    std::error_code ec;
+    [[maybe_unused]] auto _ = async_event_watcher_fd_->cancel(ec);
+    async_event_watcher_fd_->release();
   }
 
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
+  std::unique_ptr<asio::posix::stream_descriptor> async_event_watcher_fd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;

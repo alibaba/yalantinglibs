@@ -36,6 +36,8 @@
 struct config_t {
   std::size_t buffer_size = 256 * 1024;
   std::size_t request_size = 20 * 1024 * 1024 + 1;
+  std::size_t recv_buffer_cnt = 8;
+  std::size_t send_buffer_cnt = 4;
   int concurrency = 50;
   int test_type = 0;
   int enable_log = 0;
@@ -44,8 +46,9 @@ struct config_t {
   int port = 58110;
   int test_time = 10;
 };
-YLT_REFL(config_t, buffer_size, request_size, concurrency, test_type,
-         enable_log, enable_server, enable_client, port, test_time);
+YLT_REFL(config_t, buffer_size, request_size, recv_buffer_cnt, send_buffer_cnt,
+         concurrency, test_type, enable_log, enable_server, enable_client, port,
+         test_time);
 
 config_t config;
 std::shared_ptr<coro_io::ib_device_t> g_dev;
@@ -193,7 +196,11 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
 
   ELOG_INFO << "tcp listening";
   while (true) {
-    coro_io::ib_socket_t soc(coro_io::get_global_executor(), {.device = g_dev});
+    coro_io::ib_socket_t soc(
+        coro_io::get_global_executor(),
+        {.recv_buffer_cnt = (uint16_t)config.recv_buffer_cnt,
+         .send_buffer_cnt = (uint16_t)config.send_buffer_cnt,
+         .device = g_dev});
     auto ec = co_await coro_io::async_accept(acceptor, soc);
 
     if (ec) [[unlikely]] {
@@ -309,7 +316,10 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
 }
 
 async_simple::coro::Lazy<std::error_code> echo_connect() {
-  coro_io::ib_socket_t soc(coro_io::get_global_executor(), {.device = g_dev});
+  coro_io::ib_socket_t soc(coro_io::get_global_executor(),
+                           {.recv_buffer_cnt = (uint16_t)config.recv_buffer_cnt,
+                            .send_buffer_cnt = (uint16_t)config.send_buffer_cnt,
+                            .device = g_dev});
   auto ec = co_await coro_io::async_connect(soc, config.enable_client,
                                             std::to_string(config.port));
   if (ec) [[unlikely]] {
