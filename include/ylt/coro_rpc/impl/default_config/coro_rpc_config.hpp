@@ -39,7 +39,6 @@ struct config_t {
   std::chrono::steady_clock::duration conn_timeout_duration =
       std::chrono::seconds{0};
   std::string address = "0.0.0.0";
-  mutable std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
 #ifdef YLT_ENABLE_SSL
   std::optional<ssl_configure> ssl_config = std::nullopt;
 #ifdef YLT_ENABLE_NTLS
