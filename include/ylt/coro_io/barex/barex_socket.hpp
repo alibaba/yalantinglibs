@@ -353,7 +353,7 @@ class barex_socket_impl_t
   }
 
   async_simple::coro::Lazy<std::error_code> waiting_write_over() {
-    ELOG_DEBUG << "waiting promise now ";
+    ELOG_DEBUG << "waiting promise now, used buffer cnt:" << used_buffer_cnt_ << " max buffer cnt:" << config_.max_buffer_cnt;
     promise_ = async_simple::Promise<std::error_code>{};
     auto ec = co_await promise_->getFuture();
     ELOG_DEBUG << "wake up from promise";
@@ -471,6 +471,7 @@ inline barex_socket_t::barex_socket_t(std::shared_ptr<barex_socket_impl_t> impl,
                                       const config_t& config)
     : impl_(std::move(impl)) {
   impl_->get_config() = config;
+  impl_->get_config().max_buffer_cnt = std::max(config.max_buffer_cnt, std::size_t{1});
 }
 inline auto barex_socket_t::get_executor() { return impl_->get_executor(); }
 inline coro_io::ExecutorWrapper<>* barex_socket_t::get_coro_executor() {
