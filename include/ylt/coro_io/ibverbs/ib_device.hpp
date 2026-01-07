@@ -250,7 +250,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
       }
       ibv_ack_async_event(&event);
     }
-    ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit."
+    ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
   }
 
  public:
