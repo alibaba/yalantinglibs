@@ -95,18 +95,16 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
       assert(iter->second == nullptr);
       iter->second =
           std::make_shared<barex_context_t>(std::move(dev), executor);
-      ELOG_INFO << "run context";
       iter->second->run();
     }
     return iter->second;
   }
   void close() {
-    ELOG_INFO << "close barex context";
     std::call_once(flag, [this]() {
+      ELOG_DEBUG << "closing barex context";
       if (fd_) {
         std::error_code ec;
         [[maybe_unused]] auto _ = fd_->cancel(ec);
-        ELOG_INFO << "fd release";
         fd_->release();
       }
       if (auto acceptor = acceptor_.lock()) {
@@ -126,7 +124,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
         context, accl::barex::XConfigUtil::DefaultContextConfig(),
         new barex_recv_callback_t{}, dev_->device_, dev_->mempool_.get());
     if (result) {
-      ELOG_INFO << "init XContext failed:" << result;
+      ELOG_WARN << "init XContext failed:" << result;
       return result;
     }
     assert(context != nullptr);
@@ -139,14 +137,12 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
   }
   void run() {
     auto fd = context_->GetEventFd();
-
-    ELOG_DEBUG << "barex context event fd:" << fd;
     fd_ = std::make_unique<asio::posix::stream_descriptor>(
         executor_->get_asio_executor(), fd);
     auto listen_event = [](std::shared_ptr<barex_context_t> self,
                            int fd) -> async_simple::coro::Lazy<void> {
       std::error_code ec;
-      ELOG_INFO << "barex start event loop";
+      ELOG_DEBUG << "barex start event loop:" << fd;
       while (true) {
         coro_io::callback_awaitor<std::error_code> awaitor;
         // ELOG_INFO << "barex start event loop waiting:"<<fd;
@@ -158,38 +154,28 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
                                 });
         });
         if (!ec) {
-          int cnt;
+          int64_t cnt = 0;
           try {
             do {
-              cnt = self->context_->ProgressEvents();
-              if (cnt > 0) {
-                ELOG_DEBUG << "barex_context progress events:" << cnt
-                           << " fd:" << fd;
-              }
+              cnt += self->context_->ProgressEvents();
             } while (cnt > 0);
+            ELOG_TRACE << "barex_context progress events:" << cnt
+                       << " fd:" << fd;
             continue;
           } catch (std::exception& e) {
-            ELOG_INFO << "barex event loop exit by exception:" << e.what();
+            ELOG_WARN << "barex event loop exit by exception:" << e.what();
           }
         }
-        ELOG_INFO << "shutdown start,fd:" << fd;
         self->context_->Shutdown();
         int cnt;
-        ELOG_INFO << "shutdown over,fd:" << fd;
         try {
           do {
             cnt = self->context_->ProgressEvents();
-            if (cnt > 0) {
-              ELOG_DEBUG << "barex_context progress events:" << cnt
-                         << " fd:" << fd;
-            }
           } while (cnt > 0);
         } catch (std::exception& e) {
-          ELOG_INFO << "barex event loop exit by exception:" << e.what();
+          ELOG_WARN << "barex event loop exit by exception:" << e.what();
         }
-        ELOG_INFO << "waitstop start,fd:" << fd;
         self->context_->WaitStop();
-        ELOG_INFO << "waitstop finished,fd:" << fd;
         break;
       }
       co_return;
@@ -197,7 +183,7 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
     listen_event(shared_from_this(), fd)
         .directlyStart(
             [fd](auto&& ec) {
-              ELOG_INFO << "fd event loop exit:" << fd;
+              ELOG_DEBUG << "fd event loop exit:" << fd;
             },
             executor_);
   }
@@ -237,12 +223,12 @@ inline std::error_code barex_acceptor_impl_t::listen() {
   accl::barex::BarexResult result = accl::barex::XListener::NewInstance(
       listener, 1, port_, accl::barex::TIMER_30S, std::move(xctxs));
   if (result) {
-    ELOG_INFO << "init XContext failed:" << result;
+    ELOG_WARN << "init XContext failed:" << result;
     return coro_io::detail::to_std_error_code(result);
   }
   result = listener->Listen();
   if (result) {
-    ELOG_INFO << "listen failed:" << result;
+    ELOG_WARN << "listen failed:" << result;
     return coro_io::detail::to_std_error_code(result);
   }
   listener_.reset(listener);

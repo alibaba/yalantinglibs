@@ -463,7 +463,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       }
     }
   }
-  ELOG_TRACE << "has completed size:" << io_completed_size;
+  ELOG_TRACE << "total completed size:" << io_completed_size;
   co_return std::pair{ec, io_completed_size};
 }
 

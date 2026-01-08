@@ -64,11 +64,11 @@ struct barex_server_acceptor : public server_acceptor_base {
   virtual async_simple::coro::Lazy<
       ylt::expected<coro_io::socket_wrapper_t, std::error_code>>
   accept() override {
-    ELOG_INFO << "start accepting from barex acceptor: " << port_;
+    ELOG_TRACE << "start accepting from barex acceptor: " << port_;
     auto socket_impl = co_await accepter->accept();
-    ELOG_INFO << "get connection from barex acceptor: " << port_;
+    ELOG_TRACE << "get connection from barex acceptor: " << port_;
     if SP_UNLIKELY (!socket_impl) {
-      ELOG_ERROR << "barex accept error";
+      ELOG_INFO << "barex accept over, operation aborted.";
       co_return ylt::unexpected<std::error_code>{
           asio::error_code{asio::error::operation_aborted}};
     }

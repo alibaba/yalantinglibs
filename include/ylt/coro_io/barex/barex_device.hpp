@@ -66,7 +66,7 @@ struct barex_device_t {
                                 const barex_device_t::config_t& config) {
     device_ = device;
     if (device == nullptr) {
-      ELOG_INFO << "init XDevice failed";
+      ELOG_WARN << "init XDevice failed";
       return accl::barex::BarexResult::BAREX_ERR_DEVICES;
     }
     accl::barex::XSimpleMempool* mempool;
@@ -74,7 +74,7 @@ struct barex_device_t {
         mempool, "mempool of device " + device_->name_, {device},
         config.max_buffer_size);
     if (result) {
-      ELOG_INFO << "init XSimpleMempool failed:" << result;
+      ELOG_WARN << "init XSimpleMempool failed:" << result;
       return result;
     }
     assert(mempool != nullptr);
@@ -82,7 +82,6 @@ struct barex_device_t {
     return {};
   }
   ~barex_device_t() {
-    ELOG_INFO << "destruct barex device";
     if (mempool_) {
       mempool_->Shutdown();
       mempool_->WaitStop();

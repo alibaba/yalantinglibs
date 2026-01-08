@@ -52,23 +52,20 @@ struct barex_acceptor_impl_t
     if (sockets.try_enqueue(std::move(soc))) {
       ++new_connection_cnt_;
     }
-    ELOG_INFO << "notify acceptor, connection cnt: " << new_connection_cnt_;
+    ELOG_TRACE << "port: " << port_
+               << "notify acceptor, connection cnt: " << new_connection_cnt_;
     cv_.notify();
   }
   void close() {
     bool expected = false;
     if (has_closed_.compare_exchange_strong(expected, true)) {
-      ELOG_INFO << "acceptor closed";
+      ELOG_DEBUG << "acceptor closed";
       listener_->Shutdown();
       listener_->WaitStop();
       cv_.notify();
     }
   }
-  ~barex_acceptor_impl_t() {
-    ELOG_INFO << "close acceptor";
-    close();
-    ELOG_INFO << "close acceptor finish";
-  }
+  ~barex_acceptor_impl_t() { close(); }
 };
 
 using barex_acceptor_t = std::shared_ptr<barex_acceptor_impl_t>;

@@ -162,7 +162,7 @@ class barex_socket_impl_t
     if (barex_context_ == nullptr) [[unlikely]] {
       barex_context_ = get_barex_context(executor_, config_.dev);
       if (barex_context_ == nullptr) {
-        ELOG_INFO << "init XConnector failed, get nullptr ctx";
+        ELOG_ERROR << "init XConnector failed, get nullptr ctx";
         co_return std::make_error_code(std::errc::not_connected);
       }
     }
@@ -172,14 +172,15 @@ class barex_socket_impl_t
           connector, 1, accl::barex::TIMER_30S,
           {barex_context_->context_.get()});
       if (result) {
-        ELOG_INFO << "init XConnector failed:" << result;
+        ELOG_ERROR << "init XConnector failed:" << result;
         co_return detail::to_std_error_code(result);
       }
       assert(connector != nullptr);
       connector_.reset(connector);
     }
-    ELOG_DEBUG << "accl barex connect to " << endpoint.address().to_string()
-               << ":" << endpoint.port();
+    ELOG_DEBUG << "accl barex start connect to "
+               << endpoint.address().to_string() << ":" << endpoint.port()
+               << ", this=" << (void*)this;
     auto result = co_await coro_io::async_io<
         std::pair<std::error_code, accl::barex::XChannel*>>(
         [&](auto&& cb) {
@@ -198,12 +199,14 @@ class barex_socket_impl_t
         },
         *this);
     if (result.first.value() == 0) {
-      ELOG_INFO << "connection success.";
+      ELOG_DEBUG << "connection success."
+                 << " this=" << (void*)this;
       channel_ = result.second;
       channel_->SetUserData("", shared_from_this());
     }
     else {
-      ELOG_INFO << "connection failed:" << result.first.message();
+      ELOG_DEBUG << "connection failed:" << result.first.message()
+                 << ". this=" << (void*)this;
     }
     co_return result.first;
   }
@@ -219,32 +222,24 @@ class barex_socket_impl_t
     if (!has_closed_.compare_exchange_strong(expected, true)) {
       return;
     }
-    ELOG_WARN << "socket closing";
+    ELOG_DEBUG << "barex socket closing, this=" << (void*)this;
     if (channel_ && channel_->IsActive()) {
       channel_->Close();
       channel_->Destroy();
-      ELOG_WARN << "finish socket closing";
     }
     if (connector_) {
-      ELOG_INFO << "connector shutdowning";
       connector_->Shutdown();
-      ELOG_INFO << "connector waitstoping";
       connector_->WaitStop();
-      ELOG_INFO << "connector finish destruct work";
       connector_ = nullptr;
     }
     if (this->barex_context_) {
       barex_context_ = nullptr;
     }
     if (recv_cb_) {
-      ELOG_INFO << "start recv cb";
       recv_cb_(std::make_error_code(std::errc::operation_canceled), 0);
-      ELOG_INFO << "finish recv cb";
     }
     if (promise_.has_value()) {
-      ELOG_INFO << "start set value";
       promise_->setValue(std::make_error_code(std::errc::operation_canceled));
-      ELOG_INFO << "finish set value";
     }
   }
 
@@ -255,7 +250,7 @@ class barex_socket_impl_t
   barex_socket_impl_t(coro_io::ExecutorWrapper<>* executor,
                       barex_socket_t::config_t config = {})
       : executor_(executor), config_(std::move(config)) {
-    ELOG_INFO << "create barex socket:" << this;
+    ELOG_DEBUG << "create barex socket, this=" << (void*)this;
     if (config_.dev == nullptr) {
       config_.dev = coro_io::get_global_barex_device();
     }
@@ -265,6 +260,7 @@ class barex_socket_impl_t
   }
   barex_socket_impl_t(barex_socket_t::config_t config)
       : executor_(coro_io::get_global_executor()), config_(std::move(config)) {
+    ELOG_DEBUG << "create barex socket, this=" << (void*)this;
     if (config_.dev == nullptr) {
       config_.dev = coro_io::get_global_barex_device();
     }
@@ -279,7 +275,7 @@ class barex_socket_impl_t
         channel_(channel),
         executor_(barex_context->executor_),
         config_(std::move(conf)) {
-    ELOG_INFO << "create barex socket:" << this;
+    ELOG_DEBUG << "create barex socket:" << this;
     config_.dev = barex_context->dev_;
     if (config_.dev == nullptr) {
       throw std::runtime_error("no barex device available");
@@ -291,8 +287,8 @@ class barex_socket_impl_t
     assert(now_waiting_recv_bytes_ <= bytes_number);
     auto write_pos = bytes_number - now_waiting_recv_bytes_;
     auto sz = data.size();
-    ELOG_INFO << "recv " << sz << " bytes, total bytes: " << read_target_size_
-              << " bytes_number:" << bytes_number;
+    ELOG_TRACE << "recv " << sz << " bytes, total bytes: " << read_target_size_
+               << " bytes_number:" << bytes_number << ", this=" << (void*)this;
     std::size_t copy_size = 0;
     if (read_target_.size()) {
       copy_size = detail::write_to_position(data, read_target_, write_pos);
@@ -323,13 +319,14 @@ class barex_socket_impl_t
           buffer_record(bytes_number + copy_size,
                         std::vector<char>{data.begin(), data.end()}));
       if (read_buffer_.size() > 100) {
-        ELOG_WARN << "too many data in read_buffer";
-        // TODO close connection
+        ELOG_WARN << "client send too fast, too many data in read_buffer, this="
+                  << (void*)this;
+        // TODO: close connection?
       }
     }
     if (recv_cb_ && (ec || (read_target_size_ > 0 &&
                             read_target_size_ >= expected_read_size_))) {
-      ELOG_INFO << "recv over, call";
+      ELOG_TRACE << "recv data over, this=" << (void*)this;
       now_waiting_recv_bytes_ += read_target_size_;
       auto read_target_size = read_target_size_;
       read_target_size_ = 0;
@@ -346,20 +343,22 @@ class barex_socket_impl_t
       total_size += e.size();
     }
     read_target_ = std::move(mem);
-    ELOG_DEBUG << "post_recv, size:" << total_size << "this:" << (void*)this;
+    ELOG_TRACE << "start post_recv, size:" << total_size
+               << ", this=" << (void*)this;
     read_target_size_ = 0;
     expected_read_size_ = is_read_some ? 0 : total_size;
     recv_cb_ = std::move(cb);
   }
 
   async_simple::coro::Lazy<std::error_code> waiting_write_over() {
-    ELOG_DEBUG << "waiting promise now, used buffer cnt:" << used_buffer_cnt_ << " max buffer cnt:" << config_.max_buffer_cnt;
+    ELOG_TRACE << "waiting promise now, used buffer cnt:" << used_buffer_cnt_
+               << " max buffer cnt:" << config_.max_buffer_cnt
+               << ", this=" << (void*)this;
+    ;
     promise_ = async_simple::Promise<std::error_code>{};
     auto ec = co_await promise_->getFuture();
-    ELOG_DEBUG << "wake up from promise";
-    if (ec) {
-      ELOG_DEBUG << "recv data error: " << ec.message();
-    }
+    ELOG_TRACE << "wake up from promise,recv data:" << ec.message()
+               << ", this=" << (void*)this;
     co_return ec;
   }
 
@@ -368,26 +367,24 @@ class barex_socket_impl_t
   }
 
   std::size_t consume_buffer(std::span<char>& buffer) {
-    ELOG_INFO << "read buffer cnt:" << read_buffer_.size()
-              << ",now waiting recv bytes:" << now_waiting_recv_bytes_;
     if (read_buffer_.empty()) {
+      ELOG_TRACE
+          << "consume over, there is no data in barex socket buffer, this="
+          << (void*)this;
       return 0;
     }
     std::size_t total = 0;
     while (buffer.size() && read_buffer_.size() &&
            read_buffer_.top().bytes_number <= now_waiting_recv_bytes_) {
-      ELOG_INFO << "before consume view size:"
-                << read_buffer_.top().view.size();
       auto sz = read_buffer_.top().consume(buffer);
       now_waiting_recv_bytes_ += sz;
-      ELOG_INFO << "after consume view size:" << read_buffer_.top().view.size();
-      ELOG_INFO << "consume a piece of buffer, len: " << sz
-                << ",now waiting recv bytes:" << now_waiting_recv_bytes_;
       total += sz;
       if (read_buffer_.top().view.empty()) {
         read_buffer_.pop();
       }
     }
+    ELOG_TRACE << "consume over, get " << total
+               << " bytes, this=" << (void*)this;
     return total;
   }
 
@@ -397,18 +394,23 @@ class barex_socket_impl_t
     accl::barex::BarexResult result =
         channel_->AllocLimitBuffer(mem, config_.buffer_size, accl::barex::CPU);
     if (result) {
-      ELOG_WARN << "allocate write buffer failed:" << result;
+      ELOG_WARN << "allocate write buffer failed:" << result
+                << ", this=" << (void*)this;
       return detail::to_std_error_code(result);
     }
     mem.buf_len = data.size();
     memcpy(mem.buf, data.data(), data.size());
     ++used_buffer_cnt_;
-    ELOG_INFO << "send " << data.size()
-              << " bytes, flags= " << total_send_bytes_;
+    ELOG_TRACE << "send " << data.size()
+               << " bytes, flags= " << total_send_bytes_
+               << ", this=" << (void*)this;
     result = channel_->Send(
         mem, true, {.flags = total_send_bytes_},
-        [self = shared_from_this(), len = data.size()](accl::barex::Status s) {
-          ELOG_DEBUG << "send len:" << len << ", callback:" << s.ErrMsg();
+        [self = shared_from_this(), len = data.size(), flag = total_send_bytes_,
+         ptr_debug = (void*)this](accl::barex::Status s) {
+          ELOG_TRACE << "send data of " << len << "bytes with flag=" << flag
+                     << " over, status:" << s.ErrMsg()
+                     << ", this=" << ptr_debug;
           --self->used_buffer_cnt_;
           if (self->promise_.has_value()) {
             auto promise = std::move(self->promise_.value());
@@ -485,7 +487,6 @@ inline void barex_socket_t::close() { impl_->close(); }
 inline void barex_socket_t::cancel() { impl_->cancel(); }
 inline barex_socket_t::~barex_socket_t() {
   if (impl_) {
-    ELOG_INFO << "trying close socket";
     impl_->close();
   }
 }
@@ -493,7 +494,6 @@ inline barex_socket_t::~barex_socket_t() {
 inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
   auto result =
       context_->SetChannelConnectedHook([this](accl::barex::XChannel* channel) {
-        ELOG_WARN << "channel connect callback running";
         if (channel->IsServerChannel()) {
           auto soc = std::make_shared<barex_socket_impl_t>(
               this->shared_from_this(), channel);
@@ -509,10 +509,11 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
     return result;
   }
   result = context_->SetChannelClosedHook([](accl::barex::XChannel* channel) {
-    ELOG_WARN << "channel close callback running";
     auto data = channel->GetUserData("");
     auto socket = dynamic_pointer_cast<barex_socket_impl_t>(data);
     assert(socket != nullptr);
+    ELOG_TRACE << "channel close callback running, this="
+               << (void*)socket.get();
     socket->close();
     channel->RemoveUserData("");
     data = nullptr;
@@ -529,11 +530,10 @@ barex_acceptor_impl_t::accept() {
   do {
     sockets.try_dequeue(soc);
     if (soc) {
-      ELOG_INFO << "get new connection";
       new_connection_cnt_--;
     }
     else {
-      ELOG_INFO << "waiting for new connection";
+      ELOG_TRACE << "waiting for new connection";
       auto lock_guard = co_await mutex_.coScopedLock();
 
       co_await cv_.wait(mutex_, [this]() {
@@ -541,13 +541,15 @@ barex_acceptor_impl_t::accept() {
       });
     }
   } while (!soc && !has_closed_);
+  if (soc) {
+    ELOG_TRACE << "get new connection, this=" << (void*)soc.get();
+  }
   co_return soc;
 }
 
 inline void barex_recv_callback_t::OnRecvCall(
     accl::barex::XChannel* channel, char* buf, size_t len,
     accl::barex::x_msg_header header) {
-  ELOG_INFO << "recv callback running";
   auto socket =
       std::dynamic_pointer_cast<barex_socket_impl_t>(channel->GetUserData(""));
   socket->on_recv(std::error_code{}, std::span{buf, len}, header.flags);

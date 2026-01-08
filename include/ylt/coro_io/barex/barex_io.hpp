@@ -33,17 +33,14 @@ namespace detail {
 inline std::size_t consume_buffer(coro_io::barex_socket_t& barex_socket,
                                   std::vector<std::span<char>>& dst) {
   std::size_t total = 0;
-  ELOG_TRACE << "consume_buffer: total dst cnt:" << dst.size();
   for (auto iter = dst.begin(); iter != dst.end(); ++iter) {
-    ELOG_TRACE << "consume_buffer dst:" << (void*)iter->data()
-               << ",len:" << iter->size();
     auto& e = *iter;
     while (e.size()) {
       std::size_t len = barex_socket.get_impl()->consume_buffer(e);
       if (len == 0) {
         dst = std::vector<std::span<char>>{iter, dst.end()};
         ELOG_TRACE << "consume_buffer over, there still has data need to read. "
-                      "has readed. len: "
+                      "has readed len: "
                    << total;
         return total;
       }
@@ -65,7 +62,6 @@ std::vector<std::span<char>> make_barex_buffer(T&& buffer) {
   }
   else {
     std::vector<std::span<char>> ret;
-    ELOG_INFO << "buffer.size():" << buffer.size();
     ret.reserve(buffer.size());
     for (auto& e : buffer) {
       ret.emplace_back((char*)e.data(), e.size());
@@ -106,9 +102,6 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
   }
   std::size_t io_completed_size = 0;
   if constexpr (io == barex_socket_t::io_type::recv) {
-    if (buffer.size()) {
-      ELOG_TRACE << "ready recv, len:" << buffer[0].size();
-    }
     io_completed_size = consume_buffer(barex_socket, buffer);
     if (buffer.empty() || (io_completed_size && read_some)) {
       co_return std::pair{std::error_code{}, io_completed_size};
@@ -120,7 +113,8 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
   }
   if constexpr (io == barex_socket_t::io_type::recv) {
     if (buffer.size()) {
-      ELOG_TRACE << "ready recv waiting, len:" << buffer[0].size();
+      ELOG_TRACE << "ready recv waiting, len of first buffer:"
+                 << buffer[0].size();
     }
     auto [ec, len] =
         co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
@@ -130,14 +124,14 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
                                                  std::move(callback));
             },
             barex_socket);
-    ELOG_TRACE << "ready recv waiting, len:" << len << ",ec:" << ec.message();
+    ELOG_TRACE << "ready recv waiting, got len:" << len
+               << ",ec:" << ec.message();
     io_completed_size += len;
-    ELOG_TRACE << "async_read finished:" << ec.message() << ",len:" << len;
     co_return std::pair{ec, io_completed_size};
   }
   else {
     if (buffer.size()) {
-      ELOG_TRACE << "ready send, len:" << buffer[0].size();
+      ELOG_TRACE << "ready send, first buffer len:" << buffer[0].size();
     }
     buffer =
         make_split_buffer(buffer, barex_socket.get_impl()->get_buffer_size());
@@ -145,9 +139,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
     std::error_code ec;
     for (auto& e : buffer) {
       if (barex_socket.get_impl()->is_send_queue_full()) {
-        ELOG_INFO << "waiting write over";
         ec = co_await barex_socket.get_impl()->waiting_write_over();
-        ELOG_INFO << "write over";
         if (ec) {
           break;
         }
