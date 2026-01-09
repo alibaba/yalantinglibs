@@ -118,20 +118,24 @@ inline std::string mtu_str(ibv_mtu mtu) {
 }
 
 /* helper function to print the content of the async event */
-inline void print_async_event(struct ibv_context* ctx,
-                              struct ibv_async_event* event) {
+inline ibv_qp* print_async_event(struct ibv_context* ctx,
+                                 struct ibv_async_event* event) {
+  ibv_qp* qp = nullptr;
   switch (event->event_type) {
     /* QP events */
     case IBV_EVENT_QP_FATAL:
       ELOG_WARN << "QP fatal event for QP number:" << event->element.qp->qp_num;
+      qp = event->element.qp;
       break;
     case IBV_EVENT_QP_REQ_ERR:
       ELOG_WARN << "QP Requestor error for QP number:"
                 << event->element.qp->qp_num;
+      qp = event->element.qp;
       break;
     case IBV_EVENT_QP_ACCESS_ERR:
       ELOG_WARN << "QP access error event for QP number:"
                 << event->element.qp->qp_num;
+      qp = event->element.qp;
       break;
     case IBV_EVENT_COMM_EST:
       ELOG_INFO << "QP communication established event for QP number:"
@@ -148,6 +152,7 @@ inline void print_async_event(struct ibv_context* ctx,
     case IBV_EVENT_PATH_MIG_ERR:
       ELOG_WARN << "QP Path migration error event for QP number:"
                 << event->element.qp->qp_num;
+      qp = event->element.qp;
       break;
     case IBV_EVENT_QP_LAST_WQE_REACHED:
       ELOG_INFO << "QP last WQE reached event for QP number:"
@@ -207,6 +212,7 @@ inline void print_async_event(struct ibv_context* ctx,
     default:
       ELOG_WARN << "Unknown event (" << event->event_type << ")";
   }
+  return qp;
 }
 
 }  // namespace detail
@@ -234,12 +240,17 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
 
   void poll_async_events() {
     ibv_async_event event;
+    ibv_qp_attr attr{.qp_state = IBV_QPS_ERR};
     while (ibv_get_async_event(ctx_.get(), &event) == 0) {
       ELOG_INFO << "IBDevice(" << name()
                 << ") get async event: " << event.event_type;
-      detail::print_async_event(ctx_.get(), &event);
+      auto qp = detail::print_async_event(ctx_.get(), &event);
+      if (qp) {
+        ibv_modify_qp(qp, &attr, IBV_QP_STATE);
+      }
       ibv_ack_async_event(&event);
     }
+    ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
   }
 
  public:
