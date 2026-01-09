@@ -511,11 +511,11 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
   result = context_->SetChannelClosedHook([](accl::barex::XChannel* channel) {
     auto data = channel->GetUserData("");
     auto socket = dynamic_pointer_cast<barex_socket_impl_t>(data);
-    assert(socket != nullptr);
-    ELOG_TRACE << "channel close callback running, this="
-               << (void*)socket.get();
-    socket->close();
-    channel->RemoveUserData("");
+    if (socket != nullptr) {
+      ELOG_TRACE << "channel close callback running, this=" << (void*)socket.get();
+      socket->close();
+      channel->RemoveUserData("");
+    }
     data = nullptr;
   });
   if (result) {
