@@ -18,6 +18,7 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <any>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -41,6 +42,8 @@ template <typename return_msg_type, typename rpc_protocol>
 class context_base {
  protected:
   std::shared_ptr<context_info_t<rpc_protocol>> self_;
+  std::chrono::steady_clock::time_point time_point_ =
+      std::chrono::steady_clock::now();
   typename rpc_protocol::req_header &get_req_head() { return self_->req_head_; }
 
   bool check_status() {
@@ -80,10 +83,12 @@ class context_base {
     if (!check_status())
       AS_UNLIKELY { return; };
     ELOGI << "rpc error in function:" << self_->get_rpc_function_name()
-          << ". error code:" << error_code.ec << ". message : " << error_msg;
+          << ". error code:" << error_code.ec << ". message : " << error_msg
+          << "conn id" << self_->conn_->get_connection_id()
+          << "request id:" << self_->get_request_id();
     self_->conn_->template response_error<rpc_protocol>(
-        error_code, error_msg, self_->req_head_,
-        std::move(self_->complete_handler_));
+        time_point_, self_->get_request_id(), error_code, error_msg,
+        self_->req_head_, std::move(self_->complete_handler_));
   }
   void response_error(coro_rpc::err_code error_code) {
     response_error(error_code, error_code.message());
@@ -108,6 +113,7 @@ class context_base {
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
+                time_point_, self_->get_request_id(),
                 serialize_proto::serialize(),
                 std::move(self_->resp_attachment_), self_->req_head_,
                 std::move(self_->complete_handler_));
@@ -122,6 +128,7 @@ class context_base {
       std::visit(
           [&]<typename serialize_proto>(const serialize_proto &) {
             self_->conn_->template response_msg<rpc_protocol>(
+                time_point_, self_->get_request_id(),
                 serialize_proto::serialize(ret),
                 std::move(self_->resp_attachment_), self_->req_head_,
                 std::move(self_->complete_handler_));
