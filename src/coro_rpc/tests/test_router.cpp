@@ -139,7 +139,7 @@ auto test_route(auto ctx, Args &&...args) {
   ctx->req_head_.function_id = id;
 
   return router.route(
-      handler,
+      0, 0, handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
       ctx, std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id);
 }
@@ -224,7 +224,7 @@ TEST_CASE("testing coro_handler") {
   ctx->req_head_.function_id = id;
 
   async_simple::coro::syncAwait(router.route_coro(
-      handler,
+      0, 0, handler,
       std::string_view{buf.data() + g_head_offset, buf.size() - g_tail_offset},
       std::variant<coro_rpc::protocol::struct_pack_protocol>{}, id));
 }

@@ -19,6 +19,7 @@
 #include <ylt/util/function_name.h>
 #include <ylt/util/type_traits.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <sstream>
@@ -236,7 +237,8 @@ class router {
   }
 
   async_simple::coro::Lazy<std::pair<coro_rpc::err_code, std::string>>
-  route_coro(auto handler, std::string_view data,
+  route_coro(uint64_t conn_id, uint64_t req_id, auto handler,
+             std::string_view data,
              typename rpc_protocol::supported_serialize_protocols protocols,
              const typename rpc_protocol::route_key_t &route_key) {
     using namespace std::string_literals;
@@ -244,7 +246,8 @@ class router {
       AS_LIKELY {
         try {
 #ifndef NDEBUG
-          ELOG_INFO << "route function name: " << get_name(route_key);
+          ELOG_INFO << "route function name: " << get_name(route_key)
+                    << " conn_id " << conn_id << ",request ID:" << req_id;
 #endif
           // clang-format off
           co_return co_await (*handler)(data, protocols);
@@ -263,7 +266,7 @@ class router {
     }
   }
 
-  std::pair<coro_rpc::err_code, std::string> route(
+  std::pair<coro_rpc::err_code, std::string> route(uint64_t conn_id, uint64_t req_id,
       auto handler, std::string_view data,
       rpc_context<rpc_protocol> &context_info,
       typename rpc_protocol::supported_serialize_protocols protocols,
@@ -273,7 +276,7 @@ class router {
       AS_LIKELY {
         try {
 #ifndef NDEBUG
-          ELOG_INFO << "route function name: " << get_name(route_key);
+          ELOG_INFO << "route function name: " << get_name(route_key) << " conn_id " << conn_id << ",request ID:" << req_id;
 #endif
           return (*handler)(data, context_info, protocols);
         } catch (coro_rpc::rpc_error& err) {

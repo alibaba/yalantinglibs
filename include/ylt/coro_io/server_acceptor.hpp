@@ -136,9 +136,9 @@ struct tcp_server_acceptor : public server_acceptor_base {
     assert(acceptor_ != std::nullopt);
     auto executor = pool_->get_executor();
     asio::ip::tcp::socket socket(executor->get_asio_executor());
-    ELOG_INFO << "start accepting from acceptor: " << address_ << ":" << port_;
+    ELOG_TRACE << "start accepting from acceptor: " << address_ << ":" << port_;
     auto error = co_await coro_io::async_accept(*acceptor_, socket);
-    ELOG_INFO << "get connection from acceptor: " << address_ << ":" << port_;
+    ELOG_TRACE << "get connection from acceptor: " << address_ << ":" << port_;
     if (error) {
       ELOG_ERROR << "accept error: " << error.message();
       if (error == asio::error::operation_aborted ||

@@ -442,6 +442,11 @@ class coro_rpc_server_base {
               << " exit by:" << results.value();
     co_return results.value();
   }
+
+  uint64_t get_global_conn_id() {
+    static std::atomic<uint64_t> global_conn_id = 0;
+    return ++global_conn_id;
+  }
   async_simple::coro::Lazy<coro_rpc::err_code> accept_impl(
       coro_io::server_acceptor_base &acceptor) {
     ELOG_INFO << "begin to accept looping";
@@ -479,14 +484,9 @@ class coro_rpc_server_base {
 
       // Client filter check
       if (client_filter_) {
-        asio::error_code ec;
         asio::ip::tcp::endpoint remote_endpoint = {
             wrapper.remote_endpoint().address,
             (uint16_t)wrapper.remote_endpoint().port};
-        if (ec) {
-          ELOG_WARN << "Failed to get remote endpoint: " << ec.message();
-          continue;
-        }
 
         if (!client_filter_(remote_endpoint)) {
           ELOG_WARN << "Connection from "
@@ -494,13 +494,15 @@ class coro_rpc_server_base {
                     << " rejected by client filter";
           continue;
         }
-
         ELOG_INFO << "Connection from " << remote_endpoint.address().to_string()
                   << " allowed by client filter";
       }
 
-      int64_t conn_id = ++conn_id_;
-      ELOG_INFO << "new client conn_id " << conn_id << " coming";
+      uint64_t conn_id = get_global_conn_id();
+      ELOG_INFO << "new client conn_id " << conn_id << " coming, peer addr["
+                << wrapper.remote_endpoint() << "], local addr["
+                << wrapper.local_endpoint() << "]";
+
       if (auto &socket = wrapper.socket(); socket) {
         if (is_enable_tcp_no_delay_) {
           std::error_code error;
@@ -525,11 +527,11 @@ class coro_rpc_server_base {
         std::unique_lock lock(conns_mtx_);
         conns_.emplace(conn_id, conn);
       }
-      ELOG_TRACE << "start new connection, conn id:" << (void *)this;
+      ELOG_TRACE << "start new connection, conn_id:" << conn_id;
       start_one(std::move(conn))
           .directlyStart(
               [id = conn_id, this](async_simple::Try<void> &&res) {
-                ELOG_INFO << "connection over, conn id:" << (void *)this;
+                ELOG_INFO << "connection over, conn id:" << id;
               },
               wrapper.get_executor());
     }
@@ -610,7 +612,6 @@ class coro_rpc_server_base {
   stat flag_;
 
   std::mutex start_mtx_;
-  uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::weak_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;
 
