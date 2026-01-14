@@ -31,6 +31,7 @@ struct bench_config {
   uint32_t duration;
   uint32_t min_recv_buf_count;
   uint32_t max_recv_buf_count;
+  uint32_t send_buffer_cnt;
   bool use_client_pool;
   bool reuse_client_pool;
 };
@@ -49,6 +50,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.duration = parser.get<uint32_t>("duration");
   conf.min_recv_buf_count = parser.get<uint32_t>("min_recv_buf_count");
   conf.max_recv_buf_count = parser.get<uint32_t>("max_recv_buf_count");
+  conf.send_buffer_cnt = parser.get<uint32_t>("send_buffer_cnt");
   conf.use_client_pool = parser.get<bool>("use_client_pool");
   conf.reuse_client_pool = parser.get<bool>("reuse_client_pool");
 
@@ -72,7 +74,8 @@ bench_config init_conf(const cmdline::parser& parser) {
               << "log level: " << conf.log_level << ", ";
   }
   ELOG_WARN << "min_recv_buf_count: " << conf.min_recv_buf_count
-            << ", max_recv_buf_count: " << conf.max_recv_buf_count;
+            << ", max_recv_buf_count: " << conf.max_recv_buf_count
+            << ", send_buffer_cnt: " << conf.send_buffer_cnt;
   return conf;
 }
 
@@ -178,6 +181,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
     coro_io::ib_socket_t::config_t ib_conf{};
+    ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
     pool_conf.client_config.socket_config = ib_conf;
@@ -236,6 +240,7 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
     coro_io::ib_socket_t::config_t ib_conf{};
+    ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
     pool_conf.client_config.socket_config = ib_conf;
@@ -292,6 +297,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
       coro_io::ib_socket_t::config_t ib_conf{};
+      ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
       [[maybe_unused]] bool is_ok = client->init_ibv(ib_conf);
@@ -366,6 +372,7 @@ int main(int argc, char** argv) {
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
   parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, true);
+  parser.add<uint32_t>("send_buffer_cnt", 'j', "send buffer max cnt", false, 4);
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -396,6 +403,7 @@ int main(int argc, char** argv) {
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
       coro_io::ib_socket_t::config_t ib_conf{};
+      ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
       server.init_ibv(ib_conf);

@@ -14,6 +14,14 @@
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_io/io_context_pool.hpp>
 
+#if !defined(ASIO_WINDOWS)
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstdlib>
+#include <cstring>
+#endif
+
 namespace fs = std::filesystem;
 using namespace coro_io;
 
@@ -922,4 +930,166 @@ TEST_CASE("large_file_write_with_pool_test") {
   thd.join();
   file.close();
   fs::remove(fs::path(filename));
+}
+
+#if !defined(ASIO_WINDOWS)
+constexpr size_t DIRECT_IO_ALIGNMENT = 512;
+
+inline void *aligned_alloc_direct_io(size_t size) {
+  void *ptr = nullptr;
+  if (posix_memalign(&ptr, DIRECT_IO_ALIGNMENT, size) != 0) {
+    return nullptr;
+  }
+  return ptr;
+}
+
+inline void aligned_free_direct_io(void *ptr) { free(ptr); }
+
+inline size_t align_offset_for_direct_io(size_t offset) {
+  return (offset / DIRECT_IO_ALIGNMENT) * DIRECT_IO_ALIGNMENT;
+}
+
+inline size_t align_size_for_direct_io(size_t size) {
+  return ((size + DIRECT_IO_ALIGNMENT - 1) / DIRECT_IO_ALIGNMENT) *
+         DIRECT_IO_ALIGNMENT;
+}
+
+template <coro_io::execution_type execute_type>
+void test_direct_io_read_write(std::string_view filename) {
+  size_t file_size = 8 * KB;
+  create_files({std::string(filename)}, file_size);
+
+  auto executor = coro_io::get_global_block_executor();
+  coro_io::basic_random_coro_file<execute_type> file(executor);
+
+  bool opened = file.open(filename, std::ios::in | std::ios::out, true);
+  if (!opened) {
+    WARN("Direct I/O not supported on this filesystem, skipping test");
+    return;
+  }
+
+  CHECK(file.is_open());
+
+  size_t aligned_size = align_size_for_direct_io(block_size);
+  void *aligned_buf = aligned_alloc_direct_io(aligned_size);
+  REQUIRE(aligned_buf != nullptr);
+
+  struct BufferGuard {
+    void *ptr;
+    ~BufferGuard() {
+      if (ptr) {
+        aligned_free_direct_io(ptr);
+      }
+    }
+  } guard{aligned_buf};
+
+  char *buf = static_cast<char *>(aligned_buf);
+
+  size_t aligned_offset = align_offset_for_direct_io(0);
+  size_t aligned_read_size = align_size_for_direct_io(block_size);
+
+  std::error_code ec;
+  size_t bytes_read;
+  std::tie(ec, bytes_read) = async_simple::coro::syncAwait(
+      file.async_read_at(aligned_offset, buf, aligned_read_size));
+
+  CHECK(!ec);
+  CHECK(bytes_read == aligned_read_size);
+  CHECK(!file.eof());
+
+  std::memset(buf, 'X', aligned_read_size);
+
+  std::error_code write_ec;
+  size_t bytes_written;
+  std::tie(write_ec, bytes_written) =
+      async_simple::coro::syncAwait(file.async_write_at(
+          aligned_offset, std::string_view(buf, aligned_read_size)));
+
+  CHECK(!write_ec);
+  CHECK(bytes_written == aligned_read_size);
+
+  std::memset(buf, 0, aligned_read_size);
+  std::error_code read_ec;
+  size_t read_bytes;
+  std::tie(read_ec, read_bytes) = async_simple::coro::syncAwait(
+      file.async_read_at(aligned_offset, buf, aligned_read_size));
+
+  CHECK(!read_ec);
+  CHECK(read_bytes == aligned_read_size);
+
+  for (size_t i = 0; i < aligned_read_size; ++i) {
+    CHECK(buf[i] == 'X');
+  }
+
+  for (size_t offset = 0; offset < file_size - aligned_read_size;
+       offset += aligned_read_size) {
+    size_t aligned_off = align_offset_for_direct_io(offset);
+
+    std::memset(buf, 'A' + (offset / aligned_read_size) % 26,
+                aligned_read_size);
+    std::error_code w_ec;
+    size_t w_bytes;
+    std::tie(w_ec, w_bytes) = async_simple::coro::syncAwait(file.async_write_at(
+        aligned_off, std::string_view(buf, aligned_read_size)));
+    CHECK(!w_ec);
+    CHECK(w_bytes == aligned_read_size);
+
+    std::memset(buf, 0, aligned_read_size);
+    std::error_code r_ec;
+    size_t r_bytes;
+    std::tie(r_ec, r_bytes) = async_simple::coro::syncAwait(
+        file.async_read_at(aligned_off, buf, aligned_read_size));
+    CHECK(!r_ec);
+    CHECK(r_bytes == aligned_read_size);
+
+    char expected = 'A' + (offset / aligned_read_size) % 26;
+    for (size_t i = 0; i < aligned_read_size; ++i) {
+      CHECK(buf[i] == expected);
+    }
+  }
+
+  file.close();
+}
+#endif
+
+#if !defined(ASIO_WINDOWS)
+TEST_CASE("direct io read write test - thread_pool") {
+  std::string filename = "direct_io_test_thread_pool.tmp";
+  test_direct_io_read_write<coro_io::execution_type::thread_pool>(filename);
+  fs::remove(fs::path(filename));
+}
+#endif
+
+#if defined(ASIO_HAS_FILE) && !defined(ASIO_WINDOWS)
+TEST_CASE("direct io read write test - native_async") {
+  std::string filename = "direct_io_test_native_async.tmp";
+  test_direct_io_read_write<coro_io::execution_type::native_async>(filename);
+  fs::remove(fs::path(filename));
+}
+#endif
+
+TEST_CASE("direct io alignment test") {
+#if !defined(ASIO_WINDOWS)
+  CHECK(align_offset_for_direct_io(0) == 0);
+  CHECK(align_offset_for_direct_io(100) == 0);
+  CHECK(align_offset_for_direct_io(512) == 512);
+  CHECK(align_offset_for_direct_io(1000) == 512);
+  CHECK(align_offset_for_direct_io(1024) == 1024);
+
+  CHECK(align_size_for_direct_io(0) == 0);
+  CHECK(align_size_for_direct_io(100) == 512);
+  CHECK(align_size_for_direct_io(512) == 512);
+  CHECK(align_size_for_direct_io(1000) == 1024);
+  CHECK(align_size_for_direct_io(1024) == 1024);
+
+  void *ptr1 = aligned_alloc_direct_io(1024);
+  REQUIRE(ptr1 != nullptr);
+  CHECK(reinterpret_cast<uintptr_t>(ptr1) % DIRECT_IO_ALIGNMENT == 0);
+  aligned_free_direct_io(ptr1);
+
+  void *ptr2 = aligned_alloc_direct_io(4096);
+  REQUIRE(ptr2 != nullptr);
+  CHECK(reinterpret_cast<uintptr_t>(ptr2) % DIRECT_IO_ALIGNMENT == 0);
+  aligned_free_direct_io(ptr2);
+#endif
 }

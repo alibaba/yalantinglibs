@@ -31,6 +31,7 @@
 #include <utility>
 #include <ylt/easylog.hpp>
 
+#include "asio/dispatch.hpp"
 #include "async_simple/Common.h"
 #include "async_simple/util/move_only_function.h"
 #include "ylt/coro_io/coro_io.hpp"
@@ -392,11 +393,19 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                         &&complete_handler) {
     std::string header_buf = rpc_protocol::prepare_response(
         body_buf, req_head, resp_attachment().size());
-    response(std::move(header_buf), std::move(body_buf),
-             std::move(resp_attachment), std::move(complete_handler),
-             shared_from_this())
-        .via(socket_wrapper_.get_executor())
-        .detach();
+    asio::dispatch(
+        socket_wrapper_.get_executor()->get_asio_executor(),
+        [watcher = weak_from_this(), header_buf = std::move(header_buf),
+         body_buf = std::move(body_buf),
+         resp_attachment = std::move(resp_attachment),
+         handler = std::move(complete_handler)]() mutable {
+          if (auto self = watcher.lock()) {
+            self->response(std::move(header_buf), std::move(body_buf),
+                           std::move(resp_attachment), std::move(handler), self)
+                .start([](auto &&) {
+                });
+          }
+        });
   }
 
   template <typename rpc_protocol>
@@ -404,16 +413,25 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                       const typename rpc_protocol::req_header &req_head,
                       std::function<void(const std::error_code &, std::size_t)>
                           &&complete_handler) {
-    std::function<std::string_view()> attach_ment = []() -> std::string_view {
-      return {};
-    };
     std::string body_buf;
     std::string header_buf =
         rpc_protocol::prepare_response(body_buf, req_head, 0, ec, error_msg);
-    response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
-             std::move(complete_handler), shared_from_this())
-        .via(socket_wrapper_.get_executor())
-        .detach();
+    asio::dispatch(
+        socket_wrapper_.get_executor()->get_asio_executor(),
+        [watcher = weak_from_this(), header_buf = std::move(header_buf),
+         body_buf = std::move(body_buf),
+         handler = std::move(complete_handler)]() mutable {
+          if (auto self = watcher.lock()) {
+            self->response(
+                    std::move(header_buf), std::move(body_buf),
+                    []() -> std::string_view {
+                      return {};
+                    },
+                    std::move(handler), self)
+                .start([](auto &&) {
+                });
+          }
+        });
   }
 
   void set_rpc_return_by_callback() { is_rpc_return_by_callback_ = true; }

@@ -1346,7 +1346,8 @@ TEST_CASE("test unordered_map_in_compatible") {
     auto buffer = struct_pack::serialize(map);
     auto result = struct_pack::deserialize<decltype(map)>(buffer);
     CHECK(result.has_value());
-    CHECK(result.value() == map);
+    auto k = result.value();
+    CHECK(k == map);
   }
   {
     std::unordered_multimap<int, struct_pack::compatible<int>> map;
@@ -1356,8 +1357,7 @@ TEST_CASE("test unordered_map_in_compatible") {
     auto buffer = struct_pack::serialize(map);
     auto result = struct_pack::deserialize<decltype(map)>(buffer);
     CHECK(result.has_value());
-    auto& e = result.value();
-    CHECK(e == map);
+    CHECK(result.value() == map);
   }
   {
     compatible_in_unordered_map m;
@@ -1380,5 +1380,86 @@ TEST_CASE("test unordered_map_in_compatible") {
     auto buffer = struct_pack::serialize(m);
     auto result = struct_pack::deserialize<decltype(m)>(buffer);
     CHECK(result.value().values == m.values);
+  }
+}
+TEST_CASE("test map_in_compatible") {
+  {
+    std::map<int, struct_pack::compatible<int>> map;
+    for (int i = 0; i < 100; ++i) {
+      map.insert({i, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map)>(buffer);
+    CHECK(result.has_value());
+    auto k = result.value();
+    CHECK(k == map);
+  }
+  {
+    std::multimap<int, struct_pack::compatible<int>> map;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map)>(buffer);
+    CHECK(result.has_value());
+    CHECK(result.value() == map);
+  }
+}
+
+TEST_CASE("test multimap 2 map") {
+  {
+    std::unordered_multimap<int, int> map;
+    std::unordered_map<int, int> map2;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map2)>(buffer);
+    CHECK(result.has_value());
+    auto& v = result.value();
+    CHECK(v.size() == 100);
+    for (auto& e : v) {
+      CHECK(e.second % 100 == e.first);
+    }
+  }
+  {
+    std::unordered_multimap<int, struct_pack::compatible<int>> map;
+    std::unordered_map<int, struct_pack::compatible<int>> map2;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map2)>(buffer);
+    CHECK(result.has_value());
+    auto& v = result.value();
+    CHECK(v.size() == 100);
+    for (auto& e : v) {
+      CHECK(e.second.value() % 100 == e.first);
+    }
+  }
+  {
+    std::multimap<int, int> map;
+    std::map<int, int> map2;
+    for (int i = 0; i < 1000; ++i) {
+      map.insert({i % 100, i});
+      map2.try_emplace(i % 100, i);
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map2)>(buffer);
+    CHECK(result.has_value());
+    CHECK(result.value() == map2);
+  }
+  {
+    std::multimap<int, struct_pack::compatible<int>> map;
+    std::map<int, struct_pack::compatible<int>> map2;
+    for (int i = 0; i < 100; ++i) {
+      map.insert({i % 100, i});
+      map2.try_emplace(i % 100, i);
+    }
+    auto buffer = struct_pack::serialize(map);
+    auto result = struct_pack::deserialize<decltype(map2)>(buffer);
+    CHECK(result.has_value());
+    auto& e = result.value();
+    CHECK(e == map2);
   }
 }

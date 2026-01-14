@@ -25,8 +25,11 @@
 #include <system_error>
 #include <unordered_map>
 
+#include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
+#include "asio/posix/stream_descriptor.hpp"
 #include "ib_buffer.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/easylog.hpp"
 #include "ylt/util/type_traits.h"
 
@@ -113,10 +116,109 @@ inline std::string mtu_str(ibv_mtu mtu) {
   }
   return str;
 }
+
+/* helper function to print the content of the async event */
+inline ibv_qp* print_async_event(struct ibv_context* ctx,
+                                 struct ibv_async_event* event) {
+  ibv_qp* qp = nullptr;
+  switch (event->event_type) {
+    /* QP events */
+    case IBV_EVENT_QP_FATAL:
+      ELOG_WARN << "QP fatal event for QP number:" << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_REQ_ERR:
+      ELOG_WARN << "QP Requestor error for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_ACCESS_ERR:
+      ELOG_WARN << "QP access error event for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_COMM_EST:
+      ELOG_INFO << "QP communication established event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_SQ_DRAINED:
+      ELOG_INFO << "QP Send Queue drained event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_PATH_MIG:
+      ELOG_INFO << "QP Path migration loaded event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_PATH_MIG_ERR:
+      ELOG_WARN << "QP Path migration error event for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_LAST_WQE_REACHED:
+      ELOG_INFO << "QP last WQE reached event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+
+    /* CQ events */
+    case IBV_EVENT_CQ_ERR:
+      ELOG_WARN << "CQ error for CQ with handle " << event->element.cq;
+      break;
+
+    /* SRQ events */
+    case IBV_EVENT_SRQ_ERR:
+      ELOG_WARN << "SRQ error for SRQ with handle " << event->element.srq;
+      break;
+    case IBV_EVENT_SRQ_LIMIT_REACHED:
+      ELOG_INFO << "SRQ limit reached event for SRQ with handle "
+                << event->element.srq;
+      break;
+
+    /* Port events */
+    case IBV_EVENT_PORT_ACTIVE:
+      ELOG_INFO << "Port active event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_PORT_ERR:
+      ELOG_WARN << "Port error event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_LID_CHANGE:
+      ELOG_INFO << "LID change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_PKEY_CHANGE:
+      ELOG_INFO << "P_Key table change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_GID_CHANGE:
+      ELOG_INFO << "GID table change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_SM_CHANGE:
+      ELOG_INFO << "SM change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_CLIENT_REREGISTER:
+      ELOG_INFO << "Client reregister event for port number "
+                << event->element.port_num;
+      break;
+
+    /* RDMA device events */
+    case IBV_EVENT_DEVICE_FATAL:
+      ELOG_WARN << "Fatal error event for device "
+                << ibv_get_device_name(ctx->device);
+      break;
+
+    default:
+      ELOG_WARN << "Unknown event (" << event->event_type << ")";
+  }
+  return qp;
+}
+
 }  // namespace detail
-class ib_device_t {
+
+class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
  public:
-  friend class ib_device_manager_t;
   struct config_t {
     std::string dev_name;
     uint16_t port = 1;               // dev gid
@@ -125,12 +227,31 @@ class ib_device_t {
                                      // failed, it will use gid_index.
     ib_buffer_pool_t::config_t buffer_pool_config;
   };
-  static std::shared_ptr<ib_device_t> create(const config_t& conf) {
-    return std::make_shared<ib_device_t>(private_construct_token{}, conf);
+  static std::shared_ptr<ib_device_t> create(const config_t& conf,
+                                             ibv_device* dev = nullptr) {
+    auto ret =
+        std::make_shared<ib_device_t>(private_construct_token{}, conf, dev);
+    ret->start_async_event_watcher();
+    return ret;
   }
 
  private:
   struct private_construct_token {};
+
+  void poll_async_events() {
+    ibv_async_event event;
+    ibv_qp_attr attr{.qp_state = IBV_QPS_ERR};
+    while (ibv_get_async_event(ctx_.get(), &event) == 0) {
+      ELOG_INFO << "IBDevice(" << name()
+                << ") get async event: " << event.event_type;
+      auto qp = detail::print_async_event(ctx_.get(), &event);
+      if (qp) {
+        ibv_modify_qp(qp, &attr, IBV_QP_STATE);
+      }
+      ibv_ack_async_event(&event);
+    }
+    ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
+  }
 
  public:
   ib_device_t(private_construct_token, const config_t& conf,
@@ -225,6 +346,19 @@ class ib_device_t {
     return buffer_pool_;
   }
 
+  struct async_event_watcher_manager_t
+      : public std::unordered_map<ib_device_t*, std::weak_ptr<ib_device_t>> {
+    ~async_event_watcher_manager_t() {
+      for (auto& [_, dev] : *this) {
+        if (auto ptr = dev.lock(); ptr) {
+          ptr->stop_async_event_watcher();
+        }
+      }
+    }
+  };
+
+  ~ib_device_t() { stop_async_event_watcher(); }
+
  private:
   int ipv6_addr_v4mapped(const struct in6_addr* a) {
     return ((a->s6_addr32[0] | a->s6_addr32[1]) |
@@ -253,9 +387,87 @@ class ib_device_t {
     return default_gid_index;
   }
 
+  template <typename T>
+  static bool weak_ptrs_equal(const std::weak_ptr<T>& a,
+                              const std::weak_ptr<T>& b) {
+    return !a.owner_before(b) && !b.owner_before(a);
+  }
+
+  void start_async_event_watcher() {
+    if (!ctx_) {
+      return;
+    }
+    int flags = fcntl(ctx_->async_fd, F_GETFL);
+    int ret = fcntl(ctx_->async_fd, F_SETFL, flags | O_NONBLOCK);
+    if (ret < 0) {
+      ELOG_ERROR
+          << "Error, failed to change file descriptor of async event queue\n";
+      return;
+    }
+    auto executor = coro_io::get_global_executor();
+    async_event_watcher_fd_ = std::unique_ptr<asio::posix::stream_descriptor>(
+        new asio::posix::stream_descriptor(executor->get_asio_executor(),
+                                           ctx_->async_fd));
+    auto listen_event = [](std::weak_ptr<ib_device_t> dev,
+                           coro_io::ExecutorWrapper<>* executor)
+        -> async_simple::coro::Lazy<void> {
+      std::error_code ec;
+      auto self = dev.lock();
+      if (self == nullptr) {
+        co_return;
+      }
+      auto self_raw_ptr = self.get();
+      (*executor->get_data_with_default<async_event_watcher_manager_t>(
+          "ylt_ib_watch"))[self_raw_ptr] = dev;
+      auto name = std::string{self->name()};
+      ELOG_INFO << "start_async_event_watcher of device:" << name << " start";
+      while (!ec) {
+        coro_io::callback_awaitor<std::error_code> awaitor;
+        ec = co_await awaitor.await_resume([&self](auto handler) {
+          self->async_event_watcher_fd_->async_wait(
+              asio::posix::stream_descriptor::wait_read,
+              [handler](const std::error_code& ec) mutable {
+                handler.set_value_then_resume(ec);
+              });
+          self = nullptr;
+        });
+        if (!ec) {
+          self = dev.lock();
+          if (!self) {
+            ELOG_DEBUG
+                << "ib_device async event stop listening by close device:"
+                << name;
+            break;
+          }
+          self->poll_async_events();
+        }
+        else {
+          ELOG_DEBUG << "ib_device async event stop listening by error:"
+                     << ec.message() << ",device:" << name;
+        }
+      }
+      auto* table = executor->get_data<async_event_watcher_manager_t>(
+          "ib_device_async_event_watcher");
+      if (table) {
+        auto iter = table->find(self_raw_ptr);
+        if (iter != table->end() && weak_ptrs_equal(iter->second, dev)) {
+          table->erase(iter);
+        }
+      }
+    };
+    listen_event(shared_from_this(), executor).via(executor).detach();
+  }
+
+  void stop_async_event_watcher() {
+    std::error_code ec;
+    [[maybe_unused]] auto _ = async_event_watcher_fd_->cancel(ec);
+    async_event_watcher_fd_->release();
+  }
+
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
+  std::unique_ptr<asio::posix::stream_descriptor> async_event_watcher_fd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;
@@ -316,8 +528,7 @@ class ib_device_manager_t {
     auto& devices = detail::ib_devices_t::instance();
     for (auto& native_dev : devices.get_devices()) {
       try {
-        auto dev = std::make_shared<ib_device_t>(
-            ib_device_t::private_construct_token{}, conf, native_dev);
+        auto dev = ib_device_t::create(conf, native_dev);
         auto [iter, is_ok] = device_map_.emplace(dev->name(), dev);
         if (is_ok && default_device_ == nullptr) {
           default_device_ = iter->second;

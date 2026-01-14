@@ -44,13 +44,13 @@ class context_base {
   typename rpc_protocol::req_header &get_req_head() { return self_->req_head_; }
 
   bool check_status() {
-    auto old_flag = self_->status_.exchange(context_status::start_response);
-    if (old_flag != context_status::init)
+    auto expected = context_status::init;
+    if (!self_->status_.compare_exchange_strong(expected,
+                                                context_status::start_response))
       AS_UNLIKELY {
         ELOG_ERROR << "response message more than one time";
         return false;
       }
-
     if (self_->has_closed())
       AS_UNLIKELY {
         ELOG_DEBUG << "response_msg failed: connection has been closed";
