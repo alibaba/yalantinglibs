@@ -220,8 +220,16 @@ TEST_CASE("testing client with local ip") {
 
   std::string local_ip = get_first_local_ip();
   ELOG_INFO << "local ip: " << local_ip;
+
+// Due to windows strong host mode, we cant connect to localhost from specify
+// nic ip address
+#ifndef _WIN32
+  std::string target_ip = "127.0.0.1";
+#else
+  std::string target_ip = local_ip;
+#endif
   coro_rpc_client client(local_ip);
-  auto ec = client.sync_connect("127.0.0.1", "8901");
+  auto ec = client.sync_connect(target_ip, "8901");
   REQUIRE_MESSAGE(!ec, ec.message());
 
   auto ret = client.sync_call<hello>();
