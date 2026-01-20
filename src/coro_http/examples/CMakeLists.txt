@@ -38,6 +38,15 @@ if(YLT_ENABLE_NTLS)
     target_compile_definitions(ntls_http_server PRIVATE YLT_ENABLE_NTLS)
     target_compile_definitions(ntls_http_client PRIVATE YLT_ENABLE_NTLS)
 endif()
+
+if(YLT_ENABLE_SSL)
+    message(STATUS "Building SSL examples with mutual authentication support")
+    add_executable(http_ssl_server http_ssl_server.cpp)
+    add_executable(http_ssl_client http_ssl_client.cpp)
+    target_compile_definitions(http_ssl_server PRIVATE YLT_ENABLE_SSL)
+    target_compile_definitions(http_ssl_client PRIVATE YLT_ENABLE_SSL)
+endif()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
     target_link_libraries(coro_http_example PRIVATE ws2_32 mswsock)
     target_link_libraries(coro_http_load_balancer PRIVATE ws2_32 mswsock)

@@ -182,8 +182,13 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
   struct tcp_with_ssl_config {
     bool enable_tcp_no_delay = true;
-    std::filesystem::path ssl_cert_path{};
+    std::filesystem::path
+        ssl_cert_path{};  // CA certificate for server verification
     std::string ssl_domain{};
+    std::filesystem::path
+        client_cert_file{};  // Client certificate for mutual authentication
+    std::filesystem::path
+        client_key_file{};  // Client private key for mutual authentication
   };
 #ifdef YLT_ENABLE_NTLS
   struct tcp_with_ntls_config {
@@ -299,6 +304,41 @@ class coro_rpc_client {
         ELOG_INFO << "no certificate file " << cert_file.string();
         return ssl_init_ret_;
       }
+
+      // Load client certificate and key for mutual authentication
+      if (!config.client_cert_file.empty() || !config.client_key_file.empty()) {
+        // Check if both certificate and key are provided
+        if (config.client_cert_file.empty() || config.client_key_file.empty()) {
+          ELOG_ERROR << "Both client certificate and key must be provided for "
+                        "mutual authentication";
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_cert_file)) {
+          ELOG_INFO << "load client certificate: "
+                    << config.client_cert_file.string();
+          ssl_ctx_.use_certificate_chain_file(config.client_cert_file.string());
+        }
+        else {
+          ELOG_ERROR << "client certificate file not found: "
+                     << config.client_cert_file.string();
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_key_file)) {
+          ELOG_INFO << "load client private key: "
+                    << config.client_key_file.string();
+          ssl_ctx_.use_private_key_file(config.client_key_file.string(),
+                                        asio::ssl::context::pem);
+        }
+        else {
+          ELOG_ERROR << "client key file not found: "
+                     << config.client_key_file.string();
+          return ssl_init_ret_;
+        }
+        ELOG_INFO << "client certificate loaded for mutual authentication";
+      }
+
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
       ssl_ctx_.set_verify_callback(
           asio::ssl::host_name_verification(config.ssl_domain));
@@ -640,6 +680,48 @@ class coro_rpc_client {
       auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
       conf.ssl_cert_path = std::move(ssl_cert_path);
       conf.ssl_domain = domain = std::move(ssl_domain);
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ssl_config>(config_.socket_config));
+  }
+
+  /*!
+   * Initialize SSL with client certificate for mutual authentication
+   * @param cert_base_path Base path for certificate files
+   * @param cert_file_name CA certificate file name for server verification
+   * @param client_cert_file Client certificate file name for mutual
+   * authentication
+   * @param client_key_file Client private key file name for mutual
+   * authentication
+   * @param domain Server domain name
+   * @return true if initialization successful
+   */
+  [[nodiscard]] bool init_ssl(std::string_view cert_base_path,
+                              std::string_view cert_file_name,
+                              std::string_view client_cert_file,
+                              std::string_view client_key_file,
+                              std::string_view domain = "localhost") {
+    std::string ssl_domain = std::string{domain};
+    std::string ssl_cert_path =
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
+    std::string ssl_client_cert_path =
+        std::filesystem::path(cert_base_path).append(client_cert_file).string();
+    std::string ssl_client_key_path =
+        std::filesystem::path(cert_base_path).append(client_key_file).string();
+
+    if (config_.socket_config.index() != 1) {
+      config_.socket_config = tcp_with_ssl_config{
+          .ssl_cert_path = std::move(ssl_cert_path),
+          .ssl_domain = std::move(ssl_domain),
+          .client_cert_file = std::move(ssl_client_cert_path),
+          .client_key_file = std::move(ssl_client_key_path)};
+    }
+    else {
+      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      conf.ssl_cert_path = std::move(ssl_cert_path);
+      conf.ssl_domain = std::move(ssl_domain);
+      conf.client_cert_file = std::move(ssl_client_cert_path);
+      conf.client_key_file = std::move(ssl_client_key_path);
     }
     return init_socket_wrapper(
         std::get<tcp_with_ssl_config>(config_.socket_config));
