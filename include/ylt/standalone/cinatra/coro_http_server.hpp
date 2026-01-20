@@ -70,10 +70,14 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
-                const std::string &passwd) {
+                const std::string &passwd,
+                const std::string &ca_cert_file = "",
+                bool enable_client_verify = false) {
     cert_file_ = cert_file;
     key_file_ = key_file;
     passwd_ = passwd;
+    ca_cert_file_ = ca_cert_file;
+    enable_client_verify_ = enable_client_verify;
     use_ssl_ = true;
   }
 
@@ -810,7 +814,8 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
     if (!is_transfer_connect && use_ssl_) {
-      conn->init_ssl(cert_file_, key_file_, passwd_);
+      conn->init_ssl(cert_file_, key_file_, passwd_, ca_cert_file_,
+                    enable_client_verify_);
     }
 #ifdef YLT_ENABLE_NTLS
     else if (!is_transfer_connect && use_ntls_) {
@@ -1175,6 +1180,8 @@ class coro_http_server {
   std::string cert_file_;
   std::string key_file_;
   std::string passwd_;
+  std::string ca_cert_file_;
+  bool enable_client_verify_ = false;
   bool use_ssl_ = false;
 #ifdef YLT_ENABLE_NTLS
   bool use_ntls_ = false;
