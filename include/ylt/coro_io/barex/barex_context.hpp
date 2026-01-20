@@ -159,8 +159,6 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
             do {
               cnt += self->context_->ProgressEvents();
             } while (cnt > 0);
-            ELOG_TRACE << "barex_context progress events:" << cnt
-                       << " fd:" << fd;
             continue;
           } catch (std::exception& e) {
             ELOG_WARN << "barex event loop exit by exception:" << e.what();
