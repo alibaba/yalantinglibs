@@ -154,10 +154,10 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
                                 });
         });
         if (!ec) {
-          int64_t cnt = 0;
+          int cnt;
           try {
             do {
-              cnt += self->context_->ProgressEvents();
+              cnt = self->context_->ProgressEvents();
             } while (cnt > 0);
             continue;
           } catch (std::exception& e) {
