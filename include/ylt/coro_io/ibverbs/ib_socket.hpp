@@ -520,6 +520,8 @@ class ib_socket_t {
   }
   ~ib_socket_t() { close(); }
 
+  int get_gpu_id() const noexcept { return gpu_id_; }
+
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open() &&
            !state_->has_close_;
@@ -881,6 +883,7 @@ class ib_socket_t {
     if (conf_.device == nullptr) {
       conf_.device = coro_io::get_global_ib_device();
     }
+    gpu_id_ = conf_.device->get_buffer_pool()->get_config().gpu_id;
     ELOG_INFO << "device name: " << conf_.device->name();
     conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
     conf_.send_buffer_cnt = std::max<uint32_t>(conf_.send_buffer_cnt, 1);
@@ -1089,5 +1092,6 @@ class ib_socket_t {
   coro_io::ExecutorWrapper<>* executor_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
+  int gpu_id_ = -1;
 };
 }  // namespace coro_io

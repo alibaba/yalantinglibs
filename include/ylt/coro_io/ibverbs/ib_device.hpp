@@ -497,8 +497,8 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
 };
 
 inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
-                                       std::unique_ptr<char[]> data,
-                                       std::size_t size, int ib_flags) {
+                                       memory_owner_t data, std::size_t size,
+                                       int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr

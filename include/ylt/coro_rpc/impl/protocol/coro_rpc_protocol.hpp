@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <type_traits>
 #include <variant>
@@ -29,6 +30,7 @@
 #include "asio/buffer.hpp"
 #include "struct_pack_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_rpc/impl/context.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
@@ -136,20 +138,27 @@ struct coro_rpc_protocol {
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_payload(
       Socket& socket, req_header& req_head, std::string& buffer,
-      std::string& attchment) {
+      coro_io::heterogeneous_buffer& attachment) {
     struct_pack::detail::resize(buffer, req_head.length);
     if (req_head.attach_length > 0) {
-      struct_pack::detail::resize(attchment, req_head.attach_length);
-
-      if (req_head.length > 0) {
-        std::array<asio::mutable_buffer, 2> buffers{asio::buffer(buffer),
-                                                    asio::buffer(attchment)};
-        auto [ec, _] = co_await coro_io::async_read(socket, buffers);
-        co_return ec;
+      if constexpr (requires { socket.get_gpu_id(); }) {
+        if (auto id = socket.get_gpu_id(); id >= 0) {
+          if (attachment.size() < req_head.attach_length ||
+              attachment.gpu_id() != id) {
+            attachment =
+                coro_io::heterogeneous_buffer(req_head.attach_length, id);
+          }
+          std::array<coro_io::data_view, 2> buffers{
+              coro_io::data_view{std::string_view{buffer}, -1}, attachment};
+          auto [ec, _] = co_await coro_io::async_read(socket, buffers);
+          co_return ec;
+        }
       }
-
-      auto [ec, _] =
-          co_await coro_io::async_read(socket, asio::buffer(attchment));
+      struct_pack::detail::resize(*attachment.get_string(),
+                                  req_head.attach_length);
+      std::array<asio::mutable_buffer, 2> buffers{
+          asio::buffer(buffer), asio::buffer(*attachment.get_string())};
+      auto [ec, _] = co_await coro_io::async_read(socket, buffers);
       co_return ec;
     }
 
