@@ -36,6 +36,8 @@
 #include "async_simple/Common.h"
 #include "async_simple/util/move_only_function.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/util/utils.hpp"
@@ -57,9 +59,9 @@ struct context_info_t {
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
-  std::string req_attachment_;
-  std::function<std::string_view()> resp_attachment_ = [] {
-    return std::string_view{};
+  coro_io::heterogeneous_buffer req_attachment_;
+  std::function<coro_io::data_view()> resp_attachment_ = [] {
+    return coro_io::data_view{std::string_view{}, -1};
   };
   std::function<void(const std::error_code &, std::size_t)> complete_handler_;
   std::atomic<context_status> status_ = context_status::init;
@@ -73,7 +75,8 @@ struct context_info_t {
       : router_(r), conn_(std::move(conn)) {}
   context_info_t(typename rpc_protocol::router &r,
                  std::shared_ptr<coro_connection> &&conn,
-                 std::string &&req_body_buf, std::string &&req_attachment_buf)
+                 std::string &&req_body_buf,
+                 coro_io::heterogeneous_buffer &&req_attachment_buf)
       : router_(r),
         conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
@@ -85,6 +88,12 @@ struct context_info_t {
   void set_response_attachment(std::string_view attachment);
   void set_response_attachment(std::string attachment);
   void set_response_attachment(std::function<std::string_view()> attachment);
+#ifndef YLT_ENABLE_CUDA
+ private:
+  void set_response_attachment(std::string_view attachment, int gpu_id);
+#endif
+ public:
+  void set_response_attachment(std::function<coro_io::data_view()> attachment);
   /* set a handler which will be called when data was serialized and write to
    * socket*/
   /* std::error_code: socket write result*/
@@ -94,7 +103,9 @@ struct context_info_t {
     complete_handler_ = std::move(handler);
   }
   std::string_view get_request_attachment() const;
+  coro_io::data_view get_request_attachment2() const;
   std::string release_request_attachment();
+  coro_io::heterogeneous_buffer release_request_attachment2();
   std::any &tag() noexcept;
   const std::any &tag() const noexcept;
   coro_io::endpoint get_local_endpoint() const noexcept;
@@ -391,7 +402,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             std::move(context_info->resp_attachment_),
             std::move(context_info->complete_handler_));
         context_info->resp_attachment_ = [] {
-          return std::string_view{};
+          return coro_io::data_view{std::string_view{}, -1};
         };
       }
     }
@@ -409,7 +420,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       std::chrono::steady_clock::time_point start_tp, uint64_t req_id,
       coro_rpc::err_code &resp_err, std::string &resp_buf,
       const typename rpc_protocol::req_header &req_head,
-      std::function<std::string_view()> &&attachment,
+      std::function<coro_io::data_view()> &&attachment,
       std::function<void(const std::error_code &, std::size_t)>
           &&complete_handler) {
     std::string resp_error_msg;
@@ -431,7 +442,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   template <typename rpc_protocol>
   void response_msg(std::chrono::steady_clock::time_point start_tp,
                     uint64_t req_id, std::string &&body_buf,
-                    std::function<std::string_view()> &&resp_attachment,
+                    std::function<coro_io::data_view()> &&resp_attachment,
                     const typename rpc_protocol::req_header &req_head,
                     std::function<void(const std::error_code &, std::size_t)>
                         &&complete_handler) {
@@ -472,7 +483,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             self->response(
                     start_tp, req_id, std::move(header_buf),
                     std::move(body_buf),
-                    []() -> std::string_view {
+                    []() -> coro_io::data_view {
                       return {};
                     },
                     std::move(handler), self)
@@ -576,17 +587,26 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 #endif
-      auto attachment = std::get<2>(msg)();
+      coro_io::data_view attachment = std::get<2>(msg)();
       if (attachment.empty()) {
         std::array<asio::const_buffer, 2> buffers{
             asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg))};
         ret = co_await coro_io::async_write(socket, buffers);
       }
       else {
-        std::array<asio::const_buffer, 3> buffers{
-            asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg)),
-            asio::buffer(attachment)};
-        ret = co_await coro_io::async_write(socket, buffers);
+        if constexpr (requires { socket.get_gpu_id(); }) {
+          std::array<coro_io::data_view, 3> buffers{
+              coro_io::data_view{std::string_view{std::get<0>(msg)}, -1},
+              coro_io::data_view{std::string_view{std::get<1>(msg)}, -1},
+              attachment};
+          ret = co_await coro_io::async_write(socket, buffers);
+        }
+        else {
+          std::array<asio::const_buffer, 3> buffers{
+              asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg)),
+              asio::buffer(attachment)};
+          ret = co_await coro_io::async_write(socket, buffers);
+        }
       }
       auto &complete_handler = std::get<3>(msg);
       if (complete_handler) {
@@ -616,7 +636,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   async_simple::coro::Lazy<void> response(
       std::chrono::steady_clock::time_point start_tp, uint64_t req_id,
       std::string header_buf, std::string body_buf,
-      std::function<std::string_view()> resp_attachment,
+      std::function<coro_io::data_view()> resp_attachment,
       std::function<void(const std::error_code, std::size_t)> complete_handler,
       rpc_conn self) noexcept {
     if (has_closed())
@@ -702,7 +722,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   coro_io::socket_wrapper_t socket_wrapper_;
   // FIXME: queue's performance can be imporved.
   std::deque<
-      std::tuple<std::string, std::string, std::function<std::string_view()>,
+      std::tuple<std::string, std::string, std::function<coro_io::data_view()>,
                  std::function<void(const std::error_code, std::size_t)>>>
       write_queue_;
   bool is_rpc_return_by_callback_{false};
@@ -748,22 +768,36 @@ uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::string attachment) {
-  set_response_attachment([attachment = std::move(attachment)] {
-    return std::string_view{attachment};
-  });
+  resp_attachment_ = [attachment = std::move(attachment)] {
+    return coro_io::data_view{attachment, -1};
+  };
 }
 
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::string_view attachment) {
-  set_response_attachment([attachment] {
-    return attachment;
-  });
+  return set_response_attachment(attachment, -1);
 }
 
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::function<std::string_view()> attachment) {
+  resp_attachment_ = [attachment = std::move(attachment)] {
+    return coro_io::data_view{attachment(), -1};
+  };
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment(
+    std::string_view attachment, int gpu_id) {
+  set_response_attachment([attachment, gpu_id] {
+    return coro_io::data_view{attachment, gpu_id};
+  });
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment(
+    std::function<coro_io::data_view()> attachment) {
   resp_attachment_ = std::move(attachment);
 }
 
@@ -773,7 +807,27 @@ std::string_view context_info_t<rpc_protocol>::get_request_attachment() const {
 }
 
 template <typename rpc_protocol>
+coro_io::data_view context_info_t<rpc_protocol>::get_request_attachment2()
+    const {
+  return req_attachment_;
+}
+
+template <typename rpc_protocol>
 std::string context_info_t<rpc_protocol>::release_request_attachment() {
+  auto str = req_attachment_.get_string();
+#ifdef YLT_ENABLE_CUDA
+  if SP_UNLIKELY (!str) {
+    throw std::logic_error(
+        "call release_request_attachment, but attachment is in gpu memory, you "
+        "need call release_resp_attachment2()");
+  }
+#endif
+  return std::move(*str);
+}
+
+template <typename rpc_protocol>
+coro_io::heterogeneous_buffer
+context_info_t<rpc_protocol>::release_request_attachment2() {
   return std::move(req_attachment_);
 }
 

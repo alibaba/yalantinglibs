@@ -26,9 +26,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -52,9 +55,13 @@
 #include "expected.hpp"
 #include "protocol/coro_rpc_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
 #ifdef YLT_ENABLE_IBV
+#include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #endif
+#include "ylt/coro_io/data_view.hpp"
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
@@ -82,6 +89,8 @@ struct request_config_t {
   std::optional<std::chrono::milliseconds> request_timeout_duration;
   std::string_view request_attachment;
   std::span<char> resp_attachment_buf;
+  // only meaningless if YLT_ENABLE_CUDA, -1 means use memory
+  int request_attachment_gpu_id = -1, resp_attachment_buf_gpu_id = -1;
 };
 
 #ifdef GENERATE_BENCHMARK_DATA
@@ -101,19 +110,21 @@ struct rpc_return_type<void> {
 
 struct resp_body {
   std::string read_buf_;
-  std::string resp_attachment_buf_;
+  coro_io::heterogeneous_buffer resp_attachment_buf_;
 };
 namespace detail {
 struct async_rpc_result_base {
  private:
   resp_body buffer_;
-  std::string_view attachment_;
+  coro_io::data_view attachment_;
 
  public:
   async_rpc_result_base() = default;
-  async_rpc_result_base(resp_body &&buffer, std::string_view attachment)
+  async_rpc_result_base(resp_body &&buffer, coro_io::data_view attachment)
       : buffer_(std::move(buffer)), attachment_(attachment) {}
   std::string_view get_attachment() const noexcept { return attachment_; }
+
+  int get_attachment_gpu_id() const noexcept { return attachment_.gpu_id(); }
   bool is_attachment_in_external_buf() const noexcept {
     return buffer_.resp_attachment_buf_.data() == attachment_.data();
   }
@@ -128,7 +139,7 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
 
  public:
   async_rpc_result_value_t(T &&result, resp_body &&buffer,
-                           std::string_view attachment)
+                           coro_io::data_view attachment)
       : result_(std::move(result)),
         async_rpc_result_base(std::move(buffer), attachment) {}
   async_rpc_result_value_t(T &&result) : result_(std::move(result)) {}
@@ -843,7 +854,8 @@ class coro_rpc_client {
     req_attachment_ = {};
     resp_attachment_buffer_ = {};
     if (async_result) {
-      resp_attachment_ = async_result->get_attachment();
+      resp_attachment_ = {async_result->get_attachment(),
+                          async_result->get_attachment_gpu_id()};
       control_->resp_buffer_ = async_result->release_buffer();
       if constexpr (std::is_same_v<return_type, void>) {
         co_return expected<return_type, rpc_error>{};
@@ -868,20 +880,57 @@ class coro_rpc_client {
 
   void close() { close_socket_async(control_); }
 
-  bool set_req_attachment(std::string_view attachment) {
+ public:
+  /**
+   * @brief set req attachment for user
+   *
+   * @param attachment string_view for attachment
+   * @param gpu_id id for gpu device, -1 means cpu memory
+   * @return void
+   */
+  void set_req_attachment(std::string_view attachment) {
     if (attachment.size() > UINT32_MAX) {
-      ELOG_ERROR << "too large rpc attachment, client_id = "
-                 << config_.client_id;
-      return false;
+      std::stringstream s;
+      s << "too large rpc attachment, client_id = " << config_.client_id
+        << ", attachment size = " << attachment.size();
+      ELOG_WARN << s;
+      throw std::logic_error(s.str());
     }
-    req_attachment_ = attachment;
-    return true;
-  }
-  void set_resp_attachment_buf(std::span<char> buffer) {
-    resp_attachment_buffer_ = buffer;
+    return set_req_attachment(attachment, -1);
   }
 
+  /**
+   * @brief set buffer of resp attachment for user. If the buffer is not enough,
+   * attachment will be stored in new buffer allocated in coro_rpc_client.
+   *
+   * @param buffer for resp attachment
+   * @param gpu_id id for buffer , -1 means cpu memory
+   * @return void
+   */
+  void set_resp_attachment_buf(std::span<char> buffer) {
+    return set_resp_attachment_buf(buffer, -1);
+  }
+#ifndef YLT_ENABLE_CUDA
+ private:
+#endif
+  void set_req_attachment(std::string_view attachment, int gpu_id) {
+    auto data = coro_io::data_view(attachment, gpu_id);
+    if (attachment.size() > UINT32_MAX) {
+      ELOG_ERROR << "too large rpc attachment, size = " << attachment.size()
+                 << ", client id:" << config_.client_id;
+      throw std::logic_error("too large rpc attachment");
+    }
+    req_attachment_ = data;
+  }
+  void set_resp_attachment_buf(std::span<char> buffer, int gpu_id) {
+    auto data = coro_io::data_view(buffer, gpu_id);
+    resp_attachment_buffer_ = data;
+  }
+
+ public:
   std::string_view get_resp_attachment() const { return resp_attachment_; }
+
+  coro_io::data_view get_resp_attachment2() const { return resp_attachment_; }
 
   bool is_resp_attachment_in_external_buf() const {
     return resp_attachment_.data() !=
@@ -889,6 +938,21 @@ class coro_rpc_client {
   }
 
   std::string release_resp_attachment() {
+    if (!is_resp_attachment_in_external_buf()) {
+      auto *str = control_->resp_buffer_.resp_attachment_buf_.get_string();
+#ifdef YLT_ENABLE_CUDA
+      if SP_UNLIKELY (!str) {
+        throw std::logic_error(
+            "call release_resp_attachment, but attachment is in gpu memory, "
+            "you need call release_resp_attachment2()");
+      }
+#endif
+      return std::move(*str);
+    }
+    return {};
+  }
+
+  coro_io::heterogeneous_buffer release_resp_attachment2() {
     if (!is_resp_attachment_in_external_buf()) {
       return std::move(control_->resp_buffer_.resp_attachment_buf_);
     }
@@ -1211,7 +1275,7 @@ class coro_rpc_client {
 
   struct async_rpc_raw_result_value_type {
     resp_body buffer_;
-    std::string_view attachment;
+    coro_io::data_view attachment;
     uint8_t errc_;
   };
 
@@ -1223,21 +1287,18 @@ class coro_rpc_client {
   struct handler_t {
     std::unique_ptr<coro_io::period_timer> timer_;
     async_simple::Promise<async_rpc_raw_result> promise_;
-    std::span<char> response_attachment_buffer_;
+    coro_io::data_view response_attachment_buffer_;
     handler_t(std::unique_ptr<coro_io::period_timer> &&timer,
               async_simple::Promise<async_rpc_raw_result> &&promise,
-              std::span<char> buffer = {})
+              coro_io::data_view buffer = {})
         : timer_(std::move(timer)),
           promise_(std::move(promise)),
           response_attachment_buffer_(buffer) {}
-    std::span<char> &get_buffer() { return response_attachment_buffer_; }
+    coro_io::data_view &get_buffer() { return response_attachment_buffer_; }
     void operator()(resp_body &&buffer, uint8_t rpc_errc) {
       timer_->cancel();
       promise_.setValue(async_rpc_raw_result{async_rpc_raw_result_value_type{
-          std::move(buffer),
-          std::string_view{response_attachment_buffer_.data(),
-                           response_attachment_buffer_.size()},
-          rpc_errc}});
+          std::move(buffer), response_attachment_buffer_, rpc_errc}});
     }
     void local_error(std::error_code &ec) {
       timer_->cancel();
@@ -1339,8 +1400,11 @@ class coro_rpc_client {
           .start([](auto &&) {
           });
     }
-    co_return co_await send_impl<func>(soc, id, config.request_attachment,
-                                       std::forward<Args>(args)...);
+    co_return co_await send_impl<func>(
+        soc, id,
+        coro_io::data_view{config.request_attachment,
+                           config.request_attachment_gpu_id},
+        std::forward<Args>(args)...);
   }
 
   static void send_err_response(control_t *controller, std::error_code &errc) {
@@ -1404,25 +1468,57 @@ class coro_rpc_client {
         controller->resp_buffer_.resp_attachment_buf_.clear();
       }
       else {
-        std::span<char> &attachment_buffer = iter->second.get_buffer();
+        auto &attachment_buffer = iter->second.get_buffer();
         if (attachment_buffer.size() < header.attach_length) {
           // allocate attachment buffer
           if (attachment_buffer.size()) [[unlikely]] {
             ELOG_TRACE << "user's attachment buffer size is too small, instead "
                           "by inner allocated buffer";
           }
-          struct_pack::detail::resize(
-              controller->resp_buffer_.resp_attachment_buf_,
-              std::max<uint64_t>(header.attach_length, sizeof(std::string)));
-          attachment_buffer = controller->resp_buffer_.resp_attachment_buf_;
+          auto &resp_buf = controller->resp_buffer_.resp_attachment_buf_;
+          int gpu_id = -1;
+          if constexpr (requires { socket.get_gpu_id(); }) {
+            gpu_id = socket.get_gpu_id();
+            if (gpu_id >= 0) {
+              resp_buf = {header.attach_length, gpu_id};
+              assert(resp_buf.size() == header.attach_length);
+              attachment_buffer = {std::span{resp_buf.data(), resp_buf.size()},
+                                   resp_buf.gpu_id()};
+            }
+          }
+          if (gpu_id < 0) {
+            auto buffer = resp_buf.get_string();
+            assert(buffer != nullptr);
+            struct_pack::detail::resize(
+                *buffer,
+                std::max<uint64_t>(header.attach_length, sizeof(std::string)));
+            attachment_buffer = {
+                std::span<char>{buffer->data(), header.attach_length}, 0};
+          }
         }
-        attachment_buffer = attachment_buffer.subspan(0, header.attach_length);
-        std::array<asio::mutable_buffer, 2> iov{
-            asio::mutable_buffer{controller->resp_buffer_.read_buf_.data(),
-                                 body_len},
-            asio::mutable_buffer{attachment_buffer.data(),
-                                 attachment_buffer.size()}};
-        ret = co_await coro_io::async_read(socket, iov);
+        else if (attachment_buffer.size() > header.attach_length) {
+          attachment_buffer = {
+              attachment_buffer.substr(0, header.attach_length),
+              attachment_buffer.gpu_id()};
+        }
+        [[maybe_unused]] bool is_sended = false;
+        if constexpr (requires { socket.get_gpu_id(); }) {
+          std::array<coro_io::data_view, 2> iov{
+              coro_io::data_view{
+                  std::span<char>{controller->resp_buffer_.read_buf_.data(),
+                                  body_len},
+                  0},
+              attachment_buffer};
+          ret = co_await coro_io::async_read(socket, iov);
+        }
+        else {
+          std::array<asio::mutable_buffer, 2> iov{
+              asio::mutable_buffer{controller->resp_buffer_.read_buf_.data(),
+                                   body_len},
+              asio::mutable_buffer{attachment_buffer.mutable_data(),
+                                   header.attach_length}};
+          ret = co_await coro_io::async_read(socket, iov);
+        }
       }
       auto cost_time = (std::chrono::steady_clock::now() - tp) /
                        std::chrono::microseconds(1);
@@ -1576,7 +1672,9 @@ class coro_rpc_client {
       auto future = promise.getFuture();
       bool is_empty = control_->response_handler_table_.empty();
       auto &&[_, is_ok] = control_->response_handler_table_.try_emplace(
-          id, std::move(timer), std::move(promise), config.resp_attachment_buf);
+          id, std::move(timer), std::move(promise),
+          coro_io::data_view{config.resp_attachment_buf,
+                             config.resp_attachment_buf_gpu_id});
       if (!is_ok) [[unlikely]] {
         close();
         co_return build_failed_rpc_result<rpc_return_t>(
@@ -1605,9 +1703,9 @@ class coro_rpc_client {
 
  private:
   template <auto func, typename Socket, typename... Args>
-  async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
-                                                std::string_view req_attachment,
-                                                Args &&...args) {
+  async_simple::coro::Lazy<rpc_error> send_impl(
+      Socket &socket, uint32_t &id, coro_io::data_view req_attachment,
+      Args &&...args) {
     auto buffer = prepare_buffer<func>(id, req_attachment.size(),
                                        std::forward<Args>(args)...);
     if (buffer.empty()) {
@@ -1684,10 +1782,16 @@ class coro_rpc_client {
             socket, asio::buffer(buffer.data(), buffer.size()));
       }
       else {
-        std::array<asio::const_buffer, 2> iov{
-            asio::const_buffer{buffer.data(), buffer.size()},
-            asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-        ret = co_await coro_io::async_write(socket, iov);
+        if constexpr (requires { socket.get_gpu_id(); }) {
+          std::array<coro_io::data_view, 2> iov{buffer, req_attachment};
+          ret = co_await coro_io::async_write(socket, iov);
+        }
+        else {
+          std::array<asio::const_buffer, 2> iov{
+              asio::const_buffer{buffer.data(), buffer.size()},
+              asio::const_buffer{req_attachment.data(), req_attachment.size()}};
+          ret = co_await coro_io::async_write(socket, iov);
+        }
       }
       write_mutex_ = false;
 #ifdef UNIT_TEST_INJECT
@@ -1740,9 +1844,7 @@ class coro_rpc_client {
   std::unique_ptr<coro_io::period_timer> timer_;
   std::shared_ptr<control_t> control_;
   std::vector<asio::ip::tcp::endpoint> endpoints_;
-  std::string_view req_attachment_;
-  std::span<char> resp_attachment_buffer_;
-  std::string_view resp_attachment_;
+  coro_io::data_view req_attachment_, resp_attachment_, resp_attachment_buffer_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
 #ifdef YLT_ENABLE_SSL

@@ -31,6 +31,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/detail/client_queue.hpp"
+#include "ylt/coro_io/memory_owner.hpp"
 #include "ylt/easylog.hpp"
 
 namespace coro_io {
@@ -99,9 +100,9 @@ struct ib_buffer_t {
  private:
   std::unique_ptr<ibv_mr, ib_deleter> mr_;
   std::weak_ptr<ib_buffer_pool_t> owner_pool_;
-  std::unique_ptr<char[]> memory_owner_;
+  memory_owner_t memory_owner_;
   ib_buffer_t(std::unique_ptr<ibv_mr, ib_deleter> mr,
-              std::unique_ptr<char[]> memory_owner,
+              memory_owner_t memory_owner,
               ib_buffer_pool_t& owner_pool) noexcept;
   void release_resource();
 
@@ -127,8 +128,8 @@ struct ib_buffer_t {
       ib_device_t& dev, void* ptr, uint32_t size,
       int ib_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
                      IBV_ACCESS_REMOTE_WRITE);
-  static ib_buffer_t regist(ib_buffer_pool_t& pool,
-                            std::unique_ptr<char[]> data, std::size_t size,
+  static ib_buffer_t regist(ib_buffer_pool_t& pool, memory_owner_t memory,
+                            std::size_t size,
                             int ib_flags = IBV_ACCESS_LOCAL_WRITE |
                                            IBV_ACCESS_REMOTE_READ |
                                            IBV_ACCESS_REMOTE_WRITE);
@@ -151,7 +152,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 
   struct ib_buffer_impl_t {
     std::unique_ptr<ibv_mr, ib_deleter> mr_;
-    std::unique_ptr<char[]> memory_owner_;
+    memory_owner_t memory_owner_;
     ib_buffer_t convert_to_ib_buffer(ib_buffer_pool_t& pool) && {
       return ib_buffer_t{std::move(mr_), std::move(memory_owner_), pool};
     }
@@ -159,7 +160,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     ib_buffer_impl_t(ib_buffer_impl_t&& o) noexcept = default;
     ib_buffer_impl_t() noexcept = default;
     ib_buffer_impl_t(std::unique_ptr<ibv_mr, ib_deleter>&& mr,
-                     std::unique_ptr<char[]>&& memory_owner) noexcept
+                     memory_owner_t&& memory_owner) noexcept
         : mr_(std::move(mr)), memory_owner_(std::move(memory_owner)) {}
   };
   struct private_construct_token {};
@@ -254,6 +255,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
     std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder =
         nullptr;  // nullopt means use global memory_usage_recorder
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
+    int gpu_id = -1;  // use cpu memory
   };
   std::size_t max_memory_usage() { return pool_config_.max_memory_usage; }
 
@@ -297,8 +299,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         ELOG_WARN << "Memory out of pool limit";
         return ib_buffer_t{};
       }
-      std::unique_ptr<char[]> data;
-      data.reset(new char[buffer_size()]);
+      memory_owner_t data = {buffer_size(), pool_config_.gpu_id};
       ib_buffer = ib_buffer_t::regist(*this, std::move(data), buffer_size());
       if (!ib_buffer) {
         ELOG_ERROR << "regist buffer failed";
@@ -328,6 +329,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
   std::size_t free_buffer_size() const noexcept { return free_buffers_.size(); }
 
+  const config_t& get_config() const noexcept { return pool_config_; }
+
  private:
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
       free_buffers_;
@@ -337,7 +340,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
 };
 
 inline ib_buffer_t::ib_buffer_t(std::unique_ptr<ibv_mr, ib_deleter> mr,
-                                std::unique_ptr<char[]> memory_owner,
+                                memory_owner_t memory_owner,
                                 ib_buffer_pool_t& owner_pool) noexcept
     : mr_(std::move(mr)),
       memory_owner_(std::move(memory_owner)),
