@@ -127,6 +127,17 @@ class barex_socket_t {
   std::shared_ptr<barex_socket_impl_t> impl_;
 };
 
+class barex_socket_impl_t;
+namespace detail {
+struct connect_controller : public accl::barex::XChannel::UserData {
+  connect_controller() = default;
+  connect_controller(std::shared_ptr<barex_socket_impl_t>&& soc)
+      : soc(std::move(soc)) {}
+  std::shared_ptr<barex_socket_impl_t> soc;
+  std::vector<std::pair<std::vector<char>, uint64_t>> unhandle_datas;
+};
+}  // namespace detail
+
 class barex_socket_impl_t
     : public std::enable_shared_from_this<barex_socket_impl_t>,
       public accl::barex::XChannel::UserData {
@@ -202,7 +213,9 @@ class barex_socket_impl_t
       ELOG_DEBUG << "connection success."
                  << " this=" << (void*)this;
       channel_ = result.second;
-      channel_->SetUserData("", shared_from_this());
+      channel_->SetUserData(
+          "barex_soc",
+          std::make_shared<detail::connect_controller>(shared_from_this()));
     }
     else {
       ELOG_DEBUG << "connection failed:" << result.first.message()
@@ -495,12 +508,30 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
   auto result =
       context_->SetChannelConnectedHook([this](accl::barex::XChannel* channel) {
         if (channel->IsServerChannel()) {
+          auto ctrl = std::make_shared<detail::connect_controller>();
           auto soc = std::make_shared<barex_socket_impl_t>(
               this->shared_from_this(), channel);
-
-          channel->SetUserData("", soc);
+          ctrl->soc = soc;
+          auto flag = channel->SetUserData("barex_soc", ctrl);
           if (auto acceptor = this->acceptor_.lock(); acceptor) {
-            acceptor->accept_connection(std::move(soc));
+            acceptor->accept_connection(soc);
+          }
+          if (!flag) [[unlikely]] {
+            ctrl = dynamic_pointer_cast<detail::connect_controller>(
+                channel->GetUserData("barex_soc"));
+            asio::dispatch(
+                executor_->get_asio_executor(),
+                [ctrl = std::move(ctrl), soc = std::move(soc)]() mutable {
+                  ctrl->soc = std::move(soc);
+                  if (ctrl->unhandle_datas.size()) {
+                    ELOG_WARN << "has unrecv data, piece cnt="
+                              << ctrl->unhandle_datas.size();
+                    for (auto& e : ctrl->unhandle_datas) {
+                      ctrl->soc->on_recv(std::error_code{}, e.first, e.second);
+                    }
+                    ctrl->unhandle_datas.clear();
+                  }
+                });
           }
         }
       });
@@ -509,14 +540,14 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
     return result;
   }
   result = context_->SetChannelClosedHook([](accl::barex::XChannel* channel) {
-    auto data = channel->GetUserData("");
-    auto socket = dynamic_pointer_cast<barex_socket_impl_t>(data);
-    if (socket != nullptr) {
-      ELOG_TRACE << "channel close callback running, this=" << (void*)socket.get();
-      socket->close();
-      channel->RemoveUserData("");
+    auto data = channel->GetUserData("barex_soc");
+    auto ctrl = dynamic_pointer_cast<detail::connect_controller>(data);
+    if (ctrl != nullptr) {
+      ELOG_TRACE << "channel close callback running, this="
+                 << (void*)ctrl->soc.get();
+      ctrl->soc->close();
+      channel->RemoveUserData("barex_soc");
     }
-    data = nullptr;
   });
   if (result) {
     ELOG_WARN << "set channel closed callback failed:" << result;
@@ -550,9 +581,21 @@ barex_acceptor_impl_t::accept() {
 inline void barex_recv_callback_t::OnRecvCall(
     accl::barex::XChannel* channel, char* buf, size_t len,
     accl::barex::x_msg_header header) {
-  auto socket =
-      std::dynamic_pointer_cast<barex_socket_impl_t>(channel->GetUserData(""));
-  socket->on_recv(std::error_code{}, std::span{buf, len}, header.flags);
+  std::shared_ptr<detail::connect_controller> ctrl =
+      std::make_shared<detail::connect_controller>();
+  auto flag = channel->SetUserData("barex_soc", ctrl);
+  if (!flag) [[likely]] {
+    ctrl = std::dynamic_pointer_cast<detail::connect_controller>(
+        channel->GetUserData("barex_soc"));
+    if (ctrl->soc) [[likely]] {
+      ctrl->soc->on_recv(std::error_code{}, std::span{buf, len}, header.flags);
+      return;
+    }
+  }
+  ctrl->unhandle_datas.emplace_back(std::vector<char>(buf, buf + len),
+                                    header.flags);
+  ELOG_WARN << "OnRecvCall, socket not found, now piece cnt="
+            << ctrl->unhandle_datas.size();
   return;
 }
 
