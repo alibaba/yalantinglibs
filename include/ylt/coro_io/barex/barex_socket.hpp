@@ -135,6 +135,7 @@ struct connect_controller : public accl::barex::XChannel::UserData {
       : soc(std::move(soc)) {}
   std::shared_ptr<barex_socket_impl_t> soc;
   std::vector<std::pair<std::vector<char>, uint64_t>> unhandle_datas;
+  bool has_closed = false;
 };
 }  // namespace detail
 
@@ -519,6 +520,7 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
           if (!flag) [[unlikely]] {
             ctrl = dynamic_pointer_cast<detail::connect_controller>(
                 channel->GetUserData("barex_soc"));
+            assert(ctrl != nullptr);
             asio::dispatch(
                 executor_->get_asio_executor(),
                 [ctrl = std::move(ctrl), soc = std::move(soc)]() mutable {
@@ -530,6 +532,9 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
                       ctrl->soc->on_recv(std::error_code{}, e.first, e.second);
                     }
                     ctrl->unhandle_datas.clear();
+                    if (ctrl->has_closed) {
+                      ctrl->soc->close();
+                    }
                   }
                 });
           }
@@ -545,8 +550,11 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
     if (ctrl != nullptr) {
       ELOG_TRACE << "channel close callback running, this="
                  << (void*)ctrl->soc.get();
-      ctrl->soc->close();
-      channel->RemoveUserData("barex_soc");
+      ctrl->has_closed = true;
+      if (ctrl->soc) [[likely]] {
+        ctrl->soc->close();
+        channel->RemoveUserData("barex_soc");
+      }
     }
   });
   if (result) {
