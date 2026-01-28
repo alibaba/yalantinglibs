@@ -91,17 +91,16 @@ inline std::vector<std::span<char>> make_split_buffer(
   return result;
 }
 
-template <barex_socket_t::io_type io>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
-    coro_io::barex_socket_t& barex_socket, std::vector<std::span<char>> buffer,
-    bool read_some = false) {
+    barex_socket_t::io_type io, coro_io::barex_socket_t& barex_socket,
+    std::vector<std::span<char>> buffer, bool read_some = false) {
   int cnt = 0;
   if (!barex_socket.get_executor().running_in_this_thread()) {
     // switch to io_thread
     co_await dispatch(barex_socket.get_executor());
   }
   std::size_t io_completed_size = 0;
-  if constexpr (io == barex_socket_t::io_type::recv) {
+  if (io == barex_socket_t::io_type::recv) {
     io_completed_size = consume_buffer(barex_socket, buffer);
     if (buffer.empty() || (io_completed_size && read_some)) {
       co_return std::pair{std::error_code{}, io_completed_size};
@@ -111,7 +110,7 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
     co_return std::make_pair(
         std::make_error_code(std::errc::operation_canceled), 0);
   }
-  if constexpr (io == barex_socket_t::io_type::recv) {
+  if (io == barex_socket_t::io_type::recv) {
     if (buffer.size()) {
       ELOG_TRACE << "ready recv waiting, len of first buffer:"
                  << buffer[0].size();
@@ -166,23 +165,25 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
     coro_io::barex_socket_t& barex_socket, buffer_t&& buffer) {
-  return detail::async_io_impl<barex_socket_t::send>(
-      barex_socket, detail::make_barex_buffer(std::forward<buffer_t>(buffer)));
+  return detail::async_io_impl(
+      barex_socket_t::send, barex_socket,
+      detail::make_barex_buffer(std::forward<buffer_t>(buffer)));
 }
 
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_read(
     coro_io::barex_socket_t& barex_socket, buffer_t&& buffer) {
-  return detail::async_io_impl<barex_socket_t::recv>(
-      barex_socket, detail::make_barex_buffer(std::forward<buffer_t>(buffer)));
+  return detail::async_io_impl(
+      barex_socket_t::recv, barex_socket,
+      detail::make_barex_buffer(std::forward<buffer_t>(buffer)));
 }
 
 template <typename buffer_t>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_read_some(coro_io::barex_socket_t& barex_socket, buffer_t&& buffer) {
-  auto result = co_await detail::async_io_impl<barex_socket_t::recv>(
-      barex_socket, detail::make_barex_buffer(std::forward<buffer_t>(buffer)),
-      true);
+  auto result = co_await detail::async_io_impl(
+      barex_socket_t::recv, barex_socket,
+      detail::make_barex_buffer(std::forward<buffer_t>(buffer)), true);
   co_return result;
 }
 };  // namespace coro_io
