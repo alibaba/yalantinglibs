@@ -1,6 +1,6 @@
 
 include(CheckCSourceCompiles)
-set(CMAKE_REQUIRED_LIBRARIES accl_barex)
+set(CMAKE_REQUIRED_LIBRARIES /usr/lib64/libaccl_barex_static.a)
 check_cxx_source_compiles("
     #define CMAKE_INCLUDE
     #include <accl/barex/xlistener.h>

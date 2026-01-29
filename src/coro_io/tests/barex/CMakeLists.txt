@@ -12,8 +12,8 @@ if(YLT_ENABLE_BAREX)
     barex_socket_pressure_test.cpp
   )
 
-  target_link_libraries(barex_test -laccl_barex)
-  target_link_libraries(barex_socket_pressure_test -laccl_barex)
+  target_link_libraries(barex_test /usr/lib64/libaccl_barex_static.a -lrt)
+  target_link_libraries(barex_socket_pressure_test /usr/lib64/libaccl_barex_static.a -lrt)
   add_test(NAME barex_test COMMAND ibverbs_test)
   add_test(NAME barex_socket_pressure_test COMMAND barex_socket_pressure_test)
   set_property(TEST barex_test PROPERTY ENVIRONMENT "ACCL_SET_ERDMA=1")
