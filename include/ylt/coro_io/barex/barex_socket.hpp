@@ -526,7 +526,7 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
                 [ctrl = std::move(ctrl), soc = std::move(soc)]() mutable {
                   ctrl->soc = std::move(soc);
                   if (ctrl->unhandle_datas.size()) {
-                    ELOG_WARN << "has unrecv data, piece cnt="
+                    ELOG_DEBUG << "has unrecv data, piece cnt="
                               << ctrl->unhandle_datas.size();
                     for (auto& e : ctrl->unhandle_datas) {
                       ctrl->soc->on_recv(std::error_code{}, e.first, e.second);
@@ -602,7 +602,7 @@ inline void barex_recv_callback_t::OnRecvCall(
   }
   ctrl->unhandle_datas.emplace_back(std::vector<char>(buf, buf + len),
                                     header.flags);
-  ELOG_WARN << "OnRecvCall, socket not found, now piece cnt="
+  ELOG_DEBUG << "OnRecvCall, socket not found, now piece cnt="
             << ctrl->unhandle_datas.size();
   return;
 }
