@@ -33,7 +33,9 @@ const std::string CLIENT_CERT = "client.crt";
 const std::string CLIENT_KEY = "client.key";
 const std::string CA_CERT = "ca.crt";
 
-std::string hello() { return "Hello World"; }
+namespace {
+std::string hello_ssl_test() { return "Hello World"; }
+}
 
 #ifdef YLT_ENABLE_SSL
 TEST_CASE("testing RPC SSL one-way authentication") {
@@ -47,7 +49,7 @@ TEST_CASE("testing RPC SSL one-way authentication") {
   ssl_conf.enable_client_verify = false;
 
   server.init_ssl(ssl_conf);
-  server.register_handler<hello>();
+  server.register_handler<hello_ssl_test>();
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
@@ -65,7 +67,7 @@ TEST_CASE("testing RPC SSL one-way authentication") {
   auto ec = syncAwait(client.connect("127.0.0.1", "8801"));
   REQUIRE_MESSAGE(!ec, "connect failed");
 
-  auto result = syncAwait(client.call<hello>());
+  auto result = syncAwait(client.call<hello_ssl_test>());
   REQUIRE_MESSAGE(result, "call failed");
   REQUIRE_MESSAGE(result.value() == "Hello World", "result mismatch");
 
@@ -85,7 +87,7 @@ TEST_CASE("testing RPC SSL mutual authentication - success") {
   ssl_conf.enable_client_verify = true;
 
   server.init_ssl(ssl_conf);
-  server.register_handler<hello>();
+  server.register_handler<hello_ssl_test>();
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
@@ -104,7 +106,7 @@ TEST_CASE("testing RPC SSL mutual authentication - success") {
   auto ec = syncAwait(client.connect("127.0.0.1", "8802"));
   REQUIRE_MESSAGE(!ec, "connect failed");
 
-  auto result = syncAwait(client.call<hello>());
+  auto result = syncAwait(client.call<hello_ssl_test>());
   REQUIRE_MESSAGE(result, "call failed");
   REQUIRE_MESSAGE(result.value() == "Hello World", "result mismatch");
 
@@ -124,7 +126,7 @@ TEST_CASE("testing RPC SSL mutual authentication - client without cert") {
   ssl_conf.enable_client_verify = true;
 
   server.init_ssl(ssl_conf);
-  server.register_handler<hello>();
+  server.register_handler<hello_ssl_test>();
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
@@ -160,7 +162,7 @@ TEST_CASE("testing RPC SSL mutual authentication - client with invalid cert") {
   ssl_conf.enable_client_verify = true;
 
   server.init_ssl(ssl_conf);
-  server.register_handler<hello>();
+  server.register_handler<hello_ssl_test>();
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {

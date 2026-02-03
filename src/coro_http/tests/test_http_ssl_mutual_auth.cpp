@@ -53,7 +53,7 @@ TEST_CASE("testing HTTP SSL one-way authentication") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
-  init_ok =
+  bool init_ok =
       client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT, "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "client init_ssl failed");
 
@@ -83,7 +83,7 @@ TEST_CASE("testing HTTP SSL mutual authentication - success") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
-  init_ok = client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT,
+  bool init_ok = client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT,
                             CLIENT_CERT, CLIENT_KEY, "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "client init_ssl failed");
 
@@ -114,7 +114,7 @@ TEST_CASE("testing HTTP SSL mutual authentication - client without cert") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
-  init_ok =
+  bool init_ok =
       client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT, "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "client init_ssl failed");
 
@@ -144,7 +144,7 @@ TEST_CASE("testing HTTP SSL mutual authentication - client with invalid cert") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
-  init_ok =
+  bool init_ok =
       client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT,
                       "invalid_client.crt", "invalid_client.key", "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "client init_ssl should succeed");
@@ -180,7 +180,7 @@ TEST_CASE("testing HTTP SSL mutual authentication - POST request") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
-  init_ok = client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT,
+  bool init_ok = client.init_ssl(asio::ssl::verify_peer, CERT_PATH, CA_CERT,
                             CLIENT_CERT, CLIENT_KEY, "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "client init_ssl failed");
 
