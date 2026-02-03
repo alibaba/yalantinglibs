@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 
-#include <cinatra/coro_http_client.hpp>
-#include <cinatra/coro_http_server.hpp>
+#include <chrono>
 #include <iostream>
 #include <thread>
 
-using namespace cinatra;
+#include "async_simple/coro/Lazy.h"
+#include "doctest.h"
+#include "ylt/coro_http/coro_http_client.hpp"
+#include "ylt/coro_http/coro_http_server.hpp"
+
+using namespace coro_http;
+
+using namespace std::chrono_literals;
 
 const std::string CERT_PATH = "../openssl_files/";
 const std::string SERVER_CERT = "server.crt";
