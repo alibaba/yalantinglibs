@@ -97,5 +97,24 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows"
         target_link_libraries(ntls_server PRIVATE ws2_32 mswsock)
         target_link_libraries(ntls_client PRIVATE ws2_32 mswsock)
   endif()
+  if(YLT_ENABLE_SSL)
+        target_link_libraries(rpc_ssl_server PRIVATE ws2_32 mswsock)
+        target_link_libraries(rpc_ssl_client PRIVATE ws2_32 mswsock)
+  endif()
+endif()
+
+# Windows (MSVC) system libraries for SSL/TLS
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  if(YLT_ENABLE_NTLS OR YLT_ENABLE_SSL)
+    # Tongsuo on Windows requires system crypto libraries
+    if(YLT_ENABLE_NTLS)
+        target_link_libraries(ntls_server PRIVATE crypt32)
+        target_link_libraries(ntls_client PRIVATE crypt32)
+    endif()
+    if(YLT_ENABLE_SSL)
+        target_link_libraries(rpc_ssl_server PRIVATE crypt32)
+        target_link_libraries(rpc_ssl_client PRIVATE crypt32)
+    endif()
+  endif()
 endif()
 

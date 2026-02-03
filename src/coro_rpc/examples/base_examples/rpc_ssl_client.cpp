@@ -76,11 +76,11 @@ Lazy<void> test_mutual_auth() {
 
     // Initialize SSL with CA certificate AND client certificate for mutual auth
     bool init_result =
-        client.init_ssl(CERT_PATH,  // Base path
-                        CA_CERT,  // CA certificate for server verification
+        client.init_ssl(CERT_PATH,    // Base path
+                        CA_CERT,      // CA certificate for server verification
                         CLIENT_CERT,  // Client certificate
-                        CLIENT_KEY,  // Client private key
-                        "127.0.0.1"  // Server hostname
+                        CLIENT_KEY,   // Client private key
+                        "127.0.0.1"   // Server hostname
         );
 
     if (!init_result) {
