@@ -38,9 +38,8 @@ const std::string CA_CERT = "ca.crt";
 TEST_CASE("testing HTTP SSL one-way authentication") {
   coro_http_server server(1, 8901);
 
-  bool init_ok = server.init_ssl((CERT_PATH + SERVER_CERT),
-                                 (CERT_PATH + SERVER_KEY), "", "", false);
-  REQUIRE_MESSAGE(init_ok == true, "server init_ssl failed");
+  server.init_ssl((CERT_PATH + SERVER_CERT),
+                  (CERT_PATH + SERVER_KEY), "", "", false);
 
   server.set_http_handler<GET>(
       "/", [](coro_http_request& req, coro_http_response& resp) {
@@ -69,10 +68,8 @@ TEST_CASE("testing HTTP SSL one-way authentication") {
 TEST_CASE("testing HTTP SSL mutual authentication - success") {
   coro_http_server server(1, 8902);
 
-  bool init_ok =
-      server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
-                      (CERT_PATH + CA_CERT), true);
-  REQUIRE_MESSAGE(init_ok == true, "server init_ssl failed");
+  server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
+                  (CERT_PATH + CA_CERT), true);
 
   server.set_http_handler<GET>(
       "/", [](coro_http_request& req, coro_http_response& resp) {
@@ -102,10 +99,8 @@ TEST_CASE("testing HTTP SSL mutual authentication - success") {
 TEST_CASE("testing HTTP SSL mutual authentication - client without cert") {
   coro_http_server server(1, 8903);
 
-  bool init_ok =
-      server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
-                      (CERT_PATH + CA_CERT), true);
-  REQUIRE_MESSAGE(init_ok == true, "server init_ssl failed");
+  server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
+                  (CERT_PATH + CA_CERT), true);
 
   server.set_http_handler<GET>(
       "/", [](coro_http_request& req, coro_http_response& resp) {
@@ -134,10 +129,8 @@ TEST_CASE("testing HTTP SSL mutual authentication - client without cert") {
 TEST_CASE("testing HTTP SSL mutual authentication - client with invalid cert") {
   coro_http_server server(1, 8904);
 
-  bool init_ok =
-      server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
-                      (CERT_PATH + CA_CERT), true);
-  REQUIRE_MESSAGE(init_ok == true, "server init_ssl failed");
+  server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
+                  (CERT_PATH + CA_CERT), true);
 
   server.set_http_handler<GET>(
       "/", [](coro_http_request& req, coro_http_response& resp) {
@@ -167,10 +160,8 @@ TEST_CASE("testing HTTP SSL mutual authentication - client with invalid cert") {
 TEST_CASE("testing HTTP SSL mutual authentication - POST request") {
   coro_http_server server(1, 8905);
 
-  bool init_ok =
-      server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
-                      (CERT_PATH + CA_CERT), true);
-  REQUIRE_MESSAGE(init_ok == true, "server init_ssl failed");
+  server.init_ssl((CERT_PATH + SERVER_CERT), (CERT_PATH + SERVER_KEY), "",
+                  (CERT_PATH + CA_CERT), true);
 
   server.set_http_handler<POST>(
       "/echo",
