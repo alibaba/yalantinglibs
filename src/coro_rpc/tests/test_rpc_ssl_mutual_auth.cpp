@@ -23,6 +23,8 @@
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
+#include "doctest.h"
+
 using namespace coro_rpc;
 using namespace async_simple::coro;
 
