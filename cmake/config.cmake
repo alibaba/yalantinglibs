@@ -53,6 +53,14 @@ if (YLT_ENABLE_IBV)
         target_compile_definitions(${ylt_target_name} INTERFACE "YLT_ENABLE_IBV")
         target_link_libraries(${ylt_target_name} -libverbs)
     endif ()
+    if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs")
+        link_libraries(-lnuma)
+    else ()
+        target_include_directories(${ylt_target_name} INTERFACE ${NUMA_INCLUDE_DIRS})
+        target_link_libraries(${ylt_target_name}  INTERFACE ${NUMA_LIBRARIES})
+    endif ()
+
+
 endif ()
 
 option(YLT_ENABLE_PMR "Enable pmr support" OFF)

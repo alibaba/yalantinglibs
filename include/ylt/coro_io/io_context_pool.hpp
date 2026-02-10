@@ -32,10 +32,13 @@
 
 #include "asio/dispatch.hpp"
 #include "async_simple/Signal.h"
+#include "ylt/easylog.hpp"
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
 #endif
+
+#include "numa.h"
 
 namespace coro_io {
 
@@ -178,12 +181,18 @@ class io_context_pool {
     std::vector<std::shared_ptr<std::thread>> threads;
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
-          [](io_context_ptr svr) {
+          [](io_context_ptr svr, int numa_id) {
+            if (numa_max_node() > 1 && numa_id != -1) {
+              if (numa_run_on_node(numa_id) == -1) {
+                ELOG_ERROR << "bind to numa node failed";
+              }
+              numa_set_preferred(numa_id);
+            }
             auto ctx = get_current();
             *ctx = svr.get();
             svr->run();
           },
-          io_contexts_[i]));
+          io_contexts_[i],numa_id_));
 
 #ifdef __linux__
       if (cpu_affinity_) {
@@ -235,6 +244,10 @@ class io_context_pool {
       stop();
   }
 
+  void run_at_numa_node(int numa_id) {
+    numa_id_ = numa_id;
+  }
+
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
 
   bool has_stop() const { return work_.empty(); }
@@ -264,6 +277,7 @@ class io_context_pool {
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
   bool cpu_affinity_ = false;
+  int numa_id_ = -1;
   inline static std::atomic<size_t> total_thread_num_ = 0;
 };
 

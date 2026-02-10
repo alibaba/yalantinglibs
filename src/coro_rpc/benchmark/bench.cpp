@@ -1,5 +1,7 @@
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <string>
 #include <system_error>
 #include <vector>
 #include <ylt/coro_io/client_pool.hpp>
@@ -12,7 +14,9 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
+#include "ylt/easylog.hpp"
 
 struct bench_config {
   std::string url;
@@ -28,8 +32,19 @@ struct bench_config {
   uint32_t min_recv_buf_count;
   uint32_t max_recv_buf_count;
   bool use_client_pool;
+  std::vector<std::string> device_name;
 };
 
+
+std::vector<std::string> split(const std::string& s, char delimiter) {
+  std::vector<std::string> tokens;
+  std::stringstream ss(s);
+  std::string token;
+  while (std::getline(ss, token, delimiter)) {
+      tokens.push_back(token);
+  }
+  return tokens;
+}
 bench_config init_conf(const cmdline::parser& parser) {
   bench_config conf{};
   conf.url = parser.get<std::string>("url");
@@ -45,10 +60,17 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.min_recv_buf_count = parser.get<uint32_t>("min_recv_buf_count");
   conf.max_recv_buf_count = parser.get<uint32_t>("max_recv_buf_count");
   conf.use_client_pool = parser.get<bool>("use_client_pool");
+  auto name = parser.get<std::string>("device_name");
+  conf.device_name = split(name,' ');
+  
+  if (conf.device_name.empty()) {
+    conf.device_name.push_back("");
+  }
 
   if (conf.client_concurrency == 0) {
     ELOG_WARN << "port: " << conf.port << ", "
               << "buffer_size: " << conf.buffer_size << ", "
+              << "device_name: " << name << ", "
               << "resp_len: " << conf.resp_len << ", "
               << "test duration: " << conf.duration << "s, "
               << "enable ibverbs: " << conf.enable_ib << ", "
@@ -57,6 +79,7 @@ bench_config init_conf(const cmdline::parser& parser) {
   else {
     ELOG_WARN << "url: " << conf.url << ", "
               << "use_client_pool: " << conf.use_client_pool << ", "
+              << "device_name: " << name << ", "
               << "buffer_size: " << conf.buffer_size << ", "
               << "client concurrency: " << conf.client_concurrency << ", "
               << "send data_len: " << conf.send_data_len << ", "
@@ -221,18 +244,21 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
   ELOG_INFO << "bench_config buffer size " << conf.buffer_size;
 
   std::vector<std::shared_ptr<coro_rpc::coro_rpc_client>> vec;
+  std::vector<std::string> host_name = split(conf.url, ' ');
   for (size_t i = 0; i < conf.client_concurrency; i++) {
+    std::cout << "host_name:" <<host_name[i%host_name.size()] << std::endl;
     auto client = std::make_shared<coro_rpc::coro_rpc_client>();
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
       coro_io::ib_socket_t::config_t ib_conf{};
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+      ib_conf.device = coro_io::get_global_ib_device({.dev_name=conf.device_name[i%conf.device_name.size()]});
       [[maybe_unused]] bool is_ok = client->init_ibv(ib_conf);
       assert(is_ok);
     }
 #endif
-    auto ec = co_await client->connect(conf.url);
+    auto ec = co_await client->connect(host_name[i%host_name.size()]);
     if (ec) {
       ELOG_ERROR << "connect failed";
       co_return std::make_error_code(std::errc::not_connected);
@@ -272,6 +298,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
   co_return std::error_code{};
 }
 
+
 int main(int argc, char** argv) {
   cmdline::parser parser;
 
@@ -296,6 +323,7 @@ int main(int argc, char** argv) {
   parser.add<uint32_t>("max_recv_buf_count", 'f', "min recieve buffer count",
                        false, 32);
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
+  parser.add<std::string>("device_name", 0, "ibverbs device name list", false, "");
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -306,6 +334,7 @@ int main(int argc, char** argv) {
 
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
+
     coro_io::get_global_ib_device(
         {.buffer_pool_config = {.buffer_size = conf.buffer_size}});
   }
@@ -319,21 +348,35 @@ int main(int argc, char** argv) {
       g_resp_str = resp_str;
       g_resp_len = conf.resp_len;
     }
-    coro_rpc::coro_rpc_server server(std::thread::hardware_concurrency(),
-                                     conf.port, "0.0.0.0",
-                                     std::chrono::seconds(10));
-    server.register_handler<echo>();
+    std::vector<std::unique_ptr<coro_rpc::coro_rpc_server>> servers;
+    servers.emplace_back(std::make_unique<coro_rpc::coro_rpc_server>(
+        std::thread::hardware_concurrency(), conf.port, "0.0.0.0",
+        std::chrono::seconds(10)));
+    servers[0]->register_handler<echo>();
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
       coro_io::ib_socket_t::config_t ib_conf{};
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
-      server.init_ibv(ib_conf);
+      ib_conf.device= coro_io::get_global_ib_device({.dev_name = conf.device_name[0]});
+      servers[0]->init_ibv(ib_conf);
+      for (int i=1;i<conf.device_name.size();i++) {
+        servers.emplace_back(std::make_unique<coro_rpc::coro_rpc_server>(
+          std::thread::hardware_concurrency(), conf.port+i, "0.0.0.0",
+          std::chrono::seconds(10)));
+        servers.back()->register_handler<echo>();
+        ib_conf.device = coro_io::get_global_ib_device({.dev_name = conf.device_name[i]});
+        if (ib_conf.device == nullptr) {
+          ELOG_WARN << "device not found: " << conf.device_name[i];
+        }
+        servers.back()->init_ibv(ib_conf);
+        servers.back()->async_start();
+      }
     }
 #endif
     watcher(conf).start([](auto&&) {
     });
-    [[maybe_unused]] auto ret = server.start();
+    [[maybe_unused]] auto ret = servers[0]->start();
   }
   else {
     std::cout << "will start client\n";

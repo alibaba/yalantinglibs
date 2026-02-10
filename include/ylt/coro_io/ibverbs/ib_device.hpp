@@ -113,6 +113,27 @@ class ib_device_t {
   struct private_construct_token {};
 
  public:
+ 
+ static int get_device_numa_node(std::string_view ibdev_name) {
+  if (ibdev_name.empty()) return -1;
+  auto path = "/sys/class/infiniband/"+std::string{ibdev_name}+"/device/numa_node";
+ 
+  FILE *f = fopen(path.c_str(), "r");
+  if (!f) {
+      // 可能设备不存在，或非 PCI 设备
+      return -1;
+  }
+
+  int numa_node = -1;
+  if (fscanf(f, "%d", &numa_node) != 1) {
+      fclose(f);
+      return -1;
+  }
+  fclose(f);
+
+  // 内核可能返回 -1（表示无效或未绑定）
+  return (numa_node >= 0) ? numa_node : -1;
+}
   ib_device_t(private_construct_token, const config_t& conf,
               ibv_device* dev = nullptr) {
     auto& inst = detail::ib_devices_t::instance();
@@ -164,7 +185,13 @@ class ib_device_t {
           "gid index should greater than zero, now is: " +
           std::to_string(gid_index_)};
     }
-    buffer_pool_ = ib_buffer_pool_t::create(*this, conf.buffer_pool_config);
+    auto buffer_config = conf.buffer_pool_config;
+    if (buffer_config.numa_id == -1) {
+      buffer_config.numa_id = get_device_numa_node(name_);
+      ELOG_INFO << "IBDevice " << name_ << " at numa node: " << buffer_config.numa_id;
+    }
+    numa_id_ = buffer_config.numa_id;
+    buffer_pool_ = ib_buffer_pool_t::create(*this, buffer_config);
   }
 
   std::string_view name() const noexcept { return name_; }
@@ -185,6 +212,10 @@ class ib_device_t {
 
   std::shared_ptr<ib_buffer_pool_t> get_buffer_pool() const noexcept {
     return buffer_pool_;
+  }
+
+  int get_numa_id() const noexcept {
+    return numa_id_;
   }
 
  private:
@@ -222,6 +253,7 @@ class ib_device_t {
   ibv_gid gid_;
   asio::ip::address gid_address_;
   int gid_index_;
+  int numa_id_ = -1;
 
   uint16_t port_;
 };
@@ -242,7 +274,7 @@ inline std::unique_ptr<ibv_mr> ib_buffer_t::regist(ib_device_t& dev, void* ptr,
 };
 
 inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
-                                       std::unique_ptr<char[]> data,
+                                       ib_buffer_block data,
                                        std::size_t size, int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
@@ -263,6 +295,8 @@ class ib_device_manager_t {
   std::shared_ptr<ib_device_t> default_device_;
 
  public:
+
+
   std::unordered_map<std::string, std::shared_ptr<ib_device_t>>&
   get_dev_list() {
     return device_map_;
