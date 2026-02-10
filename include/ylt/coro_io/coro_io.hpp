@@ -50,6 +50,7 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 #include <asio/write_at.hpp>
+#include <asio/high_resolution_timer.hpp>
 
 #include "io_context_pool.hpp"
 #if __has_include("ylt/util/type_traits.h")
@@ -626,6 +627,23 @@ class period_timer : public asio::steady_timer {
     co_return !ec;
   }
 };
+
+class high_resolution_timer : public asio::high_resolution_timer {
+  public:
+   using asio::high_resolution_timer::high_resolution_timer;
+   template <typename T>
+   high_resolution_timer(coro_io::ExecutorWrapper<T> *executor)
+       : asio::high_resolution_timer(executor->get_asio_executor()) {}
+ 
+   async_simple::coro::Lazy<bool> async_await() noexcept {
+     auto ec = co_await async_io<std::error_code>(
+         [&](auto &&cb) {
+           this->async_wait(std::move(cb));
+         },
+         *this);
+     co_return !ec;
+   }
+ };
 
 template <typename Duration, typename Executor>
 inline async_simple::coro::Lazy<bool> sleep_for(Duration d, Executor *e) {

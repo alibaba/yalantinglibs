@@ -35,7 +35,7 @@ option(CORO_RPC_USE_OTHER_RPC "coro_rpc extend to support other rpc" OFF)
 message(STATUS "CORO_RPC_USE_OTHER_RPC: ${CORO_RPC_USE_OTHER_RPC}")
 
 # Enable address sanitizer
-option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" ON)
+option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" OFF)
 
 option(ENABLE_TSAN "Enable thread sanitizer" OFF)
 

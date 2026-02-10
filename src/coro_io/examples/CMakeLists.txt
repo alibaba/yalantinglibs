@@ -33,3 +33,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows"
     target_link_libraries(coro_io_example PRIVATE ws2_32 mswsock)
 endif()
 
+add_executable(cuda cuda.cpp)
+target_link_libraries(cuda PRIVATE CUDA::cuda_driver)
+

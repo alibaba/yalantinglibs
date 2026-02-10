@@ -1,11 +1,15 @@
 cmake_minimum_required(VERSION 3.15)
+
+
+set(CMAKE_CUDA_ARCHITECTURES 86)
 project(yaLanTingLibs
         VERSION 0.5.8
         DESCRIPTION "yaLanTingLibs"
         HOMEPAGE_URL "https://github.com/alibaba/yalantinglibs"
-        LANGUAGES CXX
+        LANGUAGES CXX CUDA
         )
 
+find_package(CUDAToolkit REQUIRED)
 # load pack finder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Find/)
 
