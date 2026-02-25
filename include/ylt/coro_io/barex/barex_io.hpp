@@ -90,7 +90,6 @@ inline std::vector<std::span<char>> make_split_buffer(
   }
   return result;
 }
-
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
     barex_socket_t::io_type io, coro_io::barex_socket_t& barex_socket,
     std::vector<std::span<char>> buffer, bool read_some = false) {
@@ -115,14 +114,15 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
       ELOG_TRACE << "ready recv waiting, len of first buffer:"
                  << buffer[0].size();
     }
+    // a workaround for gcc10(destruct lambda tmp var twice in coroutine)
+    auto func = [read_some, buffer = std::move(buffer),
+                 &barex_socket](auto&& callback) mutable {
+      barex_socket.get_impl()->post_recv(std::move(buffer), read_some,
+                                         std::move(callback));
+    };
     auto [ec, len] =
         co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
-            [read_some, buffer = std::move(buffer),
-             &barex_socket](auto&& callback) mutable {
-              barex_socket.get_impl()->post_recv(std::move(buffer), read_some,
-                                                 std::move(callback));
-            },
-            barex_socket);
+            std::move(func), barex_socket);
     ELOG_TRACE << "ready recv waiting, got len:" << len
                << ",ec:" << ec.message();
     io_completed_size += len;
