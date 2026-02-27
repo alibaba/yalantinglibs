@@ -11,9 +11,14 @@ if(YLT_HAVE_IBVERBS)
   add_executable(ibverbs_pressure_test
     ib_socket_pressure_test.cpp     
     main.cpp)
+
+  add_executable(ibverbs_gdr_test
+  test_gdr.cpp     
+  main.cpp)
   
   target_link_libraries(ibverbs_test -libverbs)
   target_link_libraries(ibverbs_pressure_test -libverbs)
   add_test(NAME ibverbs_test COMMAND ibverbs_test)
   add_test(NAME ibverbs_pressure_test COMMAND ibverbs_pressure_test)
+  add_test(NAME ibvberbs_gdr_test COMMAND ibvberbs_gdr_test)
 endif()

@@ -29,7 +29,9 @@
 #include <system_error>
 
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/FutureAwaiter.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/cuda/cuda_stream.hpp"
 #include "ylt/coro_io/detail/client_queue.hpp"
 #include "ylt/coro_io/memory_owner.hpp"
 #include "ylt/easylog.hpp"
@@ -288,7 +290,7 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   bool memory_out_of_limit() {
     return max_memory_usage() < buffer_size() + memory_usage();
   }
-  ib_buffer_t get_buffer() {
+  ib_buffer_t get_buffer(int gpu_id) {
     std::unique_ptr<ib_buffer_impl_t> buffer;
     ib_buffer_t ib_buffer;
     free_buffers_.try_dequeue(buffer);
@@ -299,8 +301,13 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
         ELOG_WARN << "Memory out of pool limit";
         return ib_buffer_t{};
       }
-      memory_owner_t data = {buffer_size(), pool_config_.gpu_id};
-      ib_buffer = ib_buffer_t::regist(*this, std::move(data), buffer_size());
+      auto length = buffer_size();
+      memory_owner_t data = memory_owner_t{length, gpu_id};
+      if (gpu_id >= 0) {
+        constexpr int GPU_PAGE_SIZE = 64 * 1024;
+        length = (length + GPU_PAGE_SIZE - 1) & ~(GPU_PAGE_SIZE - 1);
+      }
+      ib_buffer = ib_buffer_t::regist(*this, std::move(data), length);
       if (!ib_buffer) {
         ELOG_ERROR << "regist buffer failed";
         return ib_buffer_t{};

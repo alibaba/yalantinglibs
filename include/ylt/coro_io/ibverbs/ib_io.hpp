@@ -41,6 +41,9 @@
 #include "ib_buffer.hpp"
 #include "ib_socket.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/cuda/cuda_device.hpp"
+#include "ylt/coro_io/cuda/cuda_memory.hpp"
+#include "ylt/coro_io/cuda/cuda_stream.hpp"
 #include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/easylog.hpp"
@@ -90,7 +93,7 @@ inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
   if (ib_socket.remain_read_buffer_size()) {
     while (sge_buffer.size()) {
       auto length = ib_socket.consume((char*)sge_buffer.front().addr,
-                                      sge_buffer.front().length);
+                                      sge_buffer.front().length, sge_buffer.front().lkey);
 
       transfer_total += length;
       if (length < sge_buffer.front().length) {
@@ -107,19 +110,29 @@ inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
   return transfer_total;
 }
 
-inline std::size_t copy(std::span<ibv_sge> from, ibv_sge to) {
+inline std::size_t copy(cuda_stream_handler_t* handler, std::span<ibv_sge> src, ibv_sge dst) {
   std::size_t transfer_total = 0;
-  for (auto& sge : from) {
-    memcpy((void*)(to.addr + transfer_total), (void*)sge.addr, sge.length);
+  for (auto& sge : src) {
+    if (!handler) {
+      memcpy((void*)(dst.addr + transfer_total), (void*)sge.addr, sge.length);
+    }
+    else {
+      cuda_copy_async(*handler,(void*)(dst.addr + transfer_total),handler->get_device().get_gpu_id(), (void*)sge.addr, sge.lkey, sge.length);
+    }
     transfer_total += sge.length;
   }
   return transfer_total;
 }
 
-inline void copy(ibv_sge from, std::span<ibv_sge> to) {
+inline void copy(cuda_stream_handler_t* handler, ibv_sge src, std::span<ibv_sge> dst) {
   std::size_t transfer_total = 0;
-  for (auto& sge : to) {
-    memcpy((void*)sge.addr, (void*)(from.addr + transfer_total), sge.length);
+  for (auto& sge : dst) {
+    if (!handler) {
+      memcpy((void*)sge.addr, (void*)(src.addr + transfer_total), sge.length);
+    }
+    else {
+      cuda_copy_async(*handler,(void*)sge.addr,sge.lkey, (void*)(src.addr+transfer_total), handler->get_device().get_gpu_id(), sge.length);
+    }
     transfer_total += sge.length;
   }
   return;
@@ -127,6 +140,7 @@ inline void copy(ibv_sge from, std::span<ibv_sge> to) {
 
 async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_recv_impl(
+        coro_io::cuda_stream_handler_t* handler,
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size) {
   std::span<ibv_sge> io_buffer;
@@ -141,7 +155,7 @@ async_simple::coro::
   }
   ibv_sge socket_buffer = ib_socket.get_recv_buffer();
   socket_buffer.length = result.second;
-  copy(socket_buffer, sge_list);
+  copy(handler, socket_buffer, sge_list);
   size_t recved_len = std::min(result.second, io_size);
   ib_socket.set_read_buffer_len(recved_len, result.second - recved_len);
 
@@ -161,6 +175,10 @@ struct async_send_callback_helper {
     if (!result.first && sz) {  // write small package data
       buffer = state->release_send_buffer();
       auto sge = buffer.subview(0, sz);
+      if (state->handler_) {
+        // TODO: async here instead of syncwait
+        state->handler_.record().get();
+      }
       state->post_send_impl(sge, std::move(*this));
     }
     else {
@@ -171,6 +189,7 @@ struct async_send_callback_helper {
 
 async_simple::coro::
     Lazy<std::pair<std::error_code, std::size_t>> inline async_send_impl(
+        coro_io::cuda_stream_handler_t* handler,
         coro_io::ib_socket_t& ib_socket, std::span<ibv_sge> sge_list,
         std::size_t io_size) {
   if (io_size == 0) [[unlikely]] {
@@ -198,6 +217,7 @@ async_simple::coro::
     socket_buffer = {.addr = (uintptr_t)zero_copy_buffer.get(),
                      .length = (uint32_t)io_size,
                      .lkey = 0};
+    handler = nullptr;
   }
   else {
     auto sv = ib_socket.get_send_buffer_view();
@@ -211,7 +231,7 @@ async_simple::coro::
     socket_buffer.length = io_size;
     ib_socket.consume_send_buffer(io_size);
   }
-  auto len = copy(sge_list, socket_buffer);
+  auto len = copy(handler, sge_list, socket_buffer);
   assert(len == io_size);
   if (enable_small_message_combine) {
     ELOG_TRACE << "combine small message, now buffer size:" << now_buffer_data;
@@ -236,6 +256,9 @@ async_simple::coro::
                           std::size_t{0}};
     }
   }
+  if (handler) {
+    co_await handler->record(ib_socket.get_coro_executor());
+  }
   ib_socket.post_send(socket_buffer,
                       async_send_callback_helper{std::move(send_buffer),
                                                  std::move(zero_copy_buffer),
@@ -250,24 +273,19 @@ async_simple::coro::
 
 template <typename T>
 void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
-  constexpr bool is_ibv_sge = requires { buffers.begin()->lkey; };
   sge.reserve(buffers.size());
   for (auto& buffer : buffers) {
-    if constexpr (is_ibv_sge) {
-      if (buffer.length == 0) [[unlikely]] {
-        continue;
-      }
-      sge.push_back(ibv_sge{buffer.addr, buffer.length, buffer.lkey});
+    if (buffer.size() == 0) [[unlikely]] {
+      continue;
     }
-    else {
-      if (buffer.size() == 0) [[unlikely]] {
-        continue;
-      }
-      for (std::size_t i = 0; i < buffer.size(); i += UINT32_MAX) {
-        sge.push_back(ibv_sge{(uintptr_t)buffer.data() + i,
-                              std::min<uint32_t>(buffer.size() - i, UINT32_MAX),
-                              0});
-      }
+    int gpu_id = -1;
+    if constexpr (requires {buffers.gpu_id();}) {
+      gpu_id = buffer.gpu_id();
+    }
+    for (std::size_t i = 0; i < buffer.size(); i += UINT32_MAX) {
+      sge.push_back(ibv_sge{(uintptr_t)buffer.data() + i,
+                            std::min<uint32_t>(buffer.size() - i, UINT32_MAX),
+                            (uint32_t)gpu_id});
     }
   }
 }
@@ -328,6 +346,7 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   if constexpr (io == ib_socket_t::io_type::recv) {
     io_completed_size = consume_buffer(ib_socket, sge_span);
     if (sge_span.empty()) {
+      co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
       co_return std::pair{std::error_code{}, io_completed_size};
     }
   }
@@ -338,32 +357,27 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   if constexpr (io == ib_socket_t::io_type::send) {
     max_size = ib_socket.get_free_send_buffer_size();
   }
+  auto id = ib_socket.get_gpu_id();
+  cuda_stream_handler_t* stream_handler = nullptr;
+  if (id >= 0) {
+    stream_handler = &ib_socket.get_cuda_stream_handler();
+  }
   for (auto& sge : sge_span) {
     for (std::size_t i = 0; i < sge.length; i += block_size) {
       block_size =
           std::min<uint32_t>(max_size - now_split_size, sge.length - i);
-
-      if (split_sge_block.size() &&
-          split_sge_block.back().addr + split_sge_block.back().length ==
-              sge.addr + i &&
-          split_sge_block.back().lkey == sge.lkey) {  // try combine iov
-        split_sge_block.back().length += block_size;
-      }
-      else {
-        split_sge_block.push_back(
-            ibv_sge{sge.addr + i, (uint32_t)block_size, sge.lkey});
-      }
-
+      split_sge_block.push_back(
+          ibv_sge{sge.addr + i, (uint32_t)block_size, sge.lkey});
       now_split_size += block_size;
       if (now_split_size == max_size) {
         std::error_code ec;
         std::size_t len = 0;
         if constexpr (io == ib_socket_t::io_type::recv) {
-          std::tie(ec, len) = co_await async_recv_impl(
+          std::tie(ec, len) = co_await async_recv_impl(stream_handler,
               ib_socket, split_sge_block, now_split_size);
         }
         else {
-          std::tie(ec, len) = co_await async_send_impl(
+          std::tie(ec, len) = co_await async_send_impl(stream_handler,
               ib_socket, split_sge_block, now_split_size);
           max_size = ib_socket.get_buffer_size();
         }
@@ -393,11 +407,11 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
     if constexpr (io == ib_socket_t::io_type::recv) {
       reset_buffer(split_sge_block, len);
       std::tie(ec, len) =
-          co_await async_recv_impl(ib_socket, split_sge_block, now_split_size);
+          co_await async_recv_impl(stream_handler,ib_socket, split_sge_block, now_split_size);
     }
     else {
       std::tie(ec, len) =
-          co_await async_send_impl(ib_socket, split_sge_block, now_split_size);
+          co_await async_send_impl(stream_handler,ib_socket, split_sge_block, now_split_size);
     }
     ELOG_TRACE << "now piece io_size:" << len;
 
@@ -410,6 +424,11 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       if (read_some) {
         co_return std::pair{ec, io_completed_size};
       }
+    }
+  }
+  if constexpr (io == ib_socket_t::io_type::recv) {
+    if (ib_socket.get_gpu_id() >= 0) {
+      co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
     }
   }
   ELOG_TRACE << "has completed size:" << io_completed_size;

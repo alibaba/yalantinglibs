@@ -159,19 +159,31 @@ namespace coro_io {
   class cuda_stream_handler_t {
   
     cuda_stream_handler_t(const cuda_stream_handler_t&)=delete;
-    cuda_stream_handler_t& operator =(cuda_stream_handler_t&&)=delete;
+    cuda_stream_handler_t& operator =(const cuda_stream_handler_t&)=delete;
 
     public:
+
+    cuda_stream_handler_t(cuda_stream_handler_t&&)=default;
+    cuda_stream_handler_t& operator =(cuda_stream_handler_t&&)=default;
     
     cuda_stream_handler_t(std::shared_ptr<cuda_device_t> device):device_(std::move(device)) {
       device_->set_context();
       cuStreamCreate(&stream_, CU_STREAM_DEFAULT);
     }
-    cuda_stream_handler_t(int gpu_id = 0):cuda_stream_handler_t(cuda_device_t::get_cuda_device(gpu_id).shared_from_this()){
+
+    operator bool() const {
+      return stream_ != nullptr;
+    }
+    int get_gpu_id() const {
+      return device_?device_->get_gpu_id():-1;
+    }
+    cuda_stream_handler_t(int gpu_id = -1){
+      if (gpu_id >= 0) {
+        *this = cuda_stream_handler_t{cuda_device_t::get_cuda_device(gpu_id)};
+      }
     }
     async_simple::Future<CUresult> record(async_simple::Executor* executor = nullptr) {
       cuda_event_t event;
-      // CU_EVENT_DISABLE_TIMING：不记录时间戳，节省显存和开销
       event.record(stream_);
       async_simple::Promise<CUresult> p;
       auto future = p.getFuture().via(executor);
@@ -179,8 +191,10 @@ namespace coro_io {
       return std::move(future);
     }
     ~cuda_stream_handler_t() {
-      device_->set_context();
-      cuStreamDestroy(stream_);
+      if (device_) {
+        device_->set_context();
+        cuStreamDestroy(stream_);
+      }
     }
     CUstream get_stream() {
       return stream_;

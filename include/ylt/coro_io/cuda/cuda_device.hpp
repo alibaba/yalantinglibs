@@ -31,16 +31,16 @@
 namespace coro_io {
   class cuda_device_t: public std::enable_shared_from_this<cuda_device_t> {
     public:
-      static std::span<std::shared_ptr<cuda_device_t>> get_cuda_devices() {
-        static std::vector<std::shared_ptr<cuda_device_t>> device = get_cuda_devices_impl();
+      static std::shared_ptr<std::vector<std::shared_ptr<cuda_device_t>>> get_cuda_devices() {
+        static auto device = std::make_shared<std::vector<std::shared_ptr<cuda_device_t>>>(get_cuda_devices_impl());
         return device;
       }
-      static cuda_device_t& get_cuda_device(int gpu_id) {
+      static std::shared_ptr<cuda_device_t> get_cuda_device(int gpu_id) {
         static auto devices = get_cuda_devices();
-        if (gpu_id>=devices.size() || gpu_id < 0) [[unlikely]] {
+        if (gpu_id>=devices->size() || gpu_id < 0) [[unlikely]] {
           throw std::logic_error("Out of cuda devices index");
         }
-        return *devices[gpu_id];
+        return (*devices)[gpu_id];
       }
 
       static bool get_cuda_p2p_linkable(int src_gpu_id, int dst_gpu_id) {
@@ -55,6 +55,7 @@ namespace coro_io {
     cuda_device_t& operator =(const cuda_device_t&)=delete;
     cuda_device_t& operator =(cuda_device_t&&)=delete;
     ~cuda_device_t() {
+      ELOG_INFO <<"destroy cuda device:" << name_;
     }
 
     void close() {
@@ -84,7 +85,7 @@ namespace coro_io {
     }
     static std::vector<std::vector<bool>> get_cuda_p2p_topo_impl() {
       auto devices = get_cuda_devices();
-      size_t num_devices = devices.size();
+      size_t num_devices = devices->size();
       std::vector<std::vector<bool>> topo(
           num_devices, std::vector<bool>(num_devices, false));
 
@@ -96,7 +97,7 @@ namespace coro_io {
           }
           int canAccessPeer;
           YLT_CHECK_CUDA_ERR(cuDeviceCanAccessPeer(
-              &canAccessPeer, devices[i]->device_, devices[j]->device_));
+              &canAccessPeer, (*devices)[i]->device_, (*devices)[j]->device_));
           topo[i][j] = static_cast<bool>(canAccessPeer);
         }
       }
@@ -113,7 +114,17 @@ namespace coro_io {
       YLT_CHECK_CUDA_ERR(cuDevicePrimaryCtxRetain(&context_, device_));
       name_.resize(256);
       YLT_CHECK_CUDA_ERR(cuDeviceGetName(name_.data(), 256, device_));
+      auto pos = name_.find_last_not_of('\0');
+      if (pos != std::string::npos) {
+        name_.erase(pos + 1);
+      }
+      else {
+        name_.clear();
+      }
       ELOG_INFO << "Get cuda device(" << gpu_id_ << "): " << name_;
+    }
+    int get_gpu_id() const noexcept {
+      return gpu_id_;
     }
   private:
     std::string name_;

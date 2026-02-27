@@ -36,17 +36,17 @@ inline void cuda_copy(void* dst, int dst_gpu_id, void* src, int src_gpu_id,
   }
 
   if (dst_gpu_id == -1 && src_gpu_id >= 0) {
-    cuda_device_t::get_cuda_device(src_gpu_id).set_context();
+    cuda_device_t::get_cuda_device(src_gpu_id)->set_context();
     // Device -> Host
     YLT_CHECK_CUDA_ERR(cuMemcpyDtoH(dst, reinterpret_cast<CUdeviceptr>(src), len));
   }
   else if (src_gpu_id == -1 && dst_gpu_id >= 0) {
-    cuda_device_t::get_cuda_device(dst_gpu_id).set_context();
+    cuda_device_t::get_cuda_device(dst_gpu_id)->set_context();
     // Host -> Device
     YLT_CHECK_CUDA_ERR(cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(dst), src, len));
   }
   else {
-    cuda_device_t::get_cuda_device(dst_gpu_id).set_context();
+    cuda_device_t::get_cuda_device(dst_gpu_id)->set_context();
     // Device -> Device
     if (src_gpu_id == dst_gpu_id) {
       YLT_CHECK_CUDA_ERR(cuMemcpyDtoD(reinterpret_cast<CUdeviceptr>(dst),reinterpret_cast<CUdeviceptr>(src),len));
@@ -57,29 +57,43 @@ inline void cuda_copy(void* dst, int dst_gpu_id, void* src, int src_gpu_id,
         ELOG_ERROR << err_msg;
         throw std::runtime_error(err_msg);
       }
-      YLT_CHECK_CUDA_ERR(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(dst), cuda_device_t::get_cuda_device(dst_gpu_id), reinterpret_cast<CUdeviceptr>(src), cuda_device_t::get_cuda_device(src_gpu_id), len));
+      YLT_CHECK_CUDA_ERR(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(dst), *cuda_device_t::get_cuda_device(dst_gpu_id), reinterpret_cast<CUdeviceptr>(src), *cuda_device_t::get_cuda_device(src_gpu_id), len));
     }
   }
 }
 
 // 模拟 cudaMalloc 的函数（Driver API 版）
-inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0) {
+inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0, bool enable_gdr = false) {
   CUdeviceptr d_ptr;
   detail::time_guard guard("cuda_malloc");
-  cuda_device_t::get_cuda_device(gpu_id).set_context();
+  cuda_device_t::get_cuda_device(gpu_id)->set_context();
   YLT_CHECK_CUDA_ERR(cuMemAlloc(&d_ptr, size));
+  if (enable_gdr) {
+    bool enable = 1;
+    cuPointerSetAttribute(&enable, CU_POINTER_ATTRIBUTE_SYNC_MEMOPS, d_ptr);
+  }
   return d_ptr;
 }
 
 // 模拟 cudaFree
-inline void cuda_free(CUdeviceptr d_ptr, int gpu_id = 0) {
+inline void cuda_free(void* d_ptr, int gpu_id = 0) {
   detail::time_guard guard("cuda_free");
-  cuda_device_t::get_cuda_device(gpu_id).set_context();
-  YLT_CHECK_CUDA_ERR(cuMemFree(d_ptr));
+  std::cout<<"cuda_free set ctx start"<<std::endl;
+  cuda_device_t::get_cuda_device(gpu_id)->set_context();
+  std::cout<<"cuda_free set ctx over"<<std::endl;
+  YLT_CHECK_CUDA_ERR(cuMemFree((CUdeviceptr)d_ptr));
+}
+
+
+inline void cuda_free(void* d_ptr, cuda_device_t& dev) {
+  detail::time_guard guard("cuda_free");
+  dev.set_context();
+  YLT_CHECK_CUDA_ERR(cuMemFree((CUdeviceptr)d_ptr));
 }
 
 inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst, int dst_gpu_id,
                      void* src, int src_gpu_id, std::size_t len) {
+  ELOG_TRACE << "gpu operation cuda_copy_async, dst " << dst << " src " << src << " len " << len;
   detail::time_guard guard("cuda_copy_async");
   if (len == 0)
     return;
@@ -90,7 +104,7 @@ inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst, int dst_gp
   }
 
   int ctx_gpu_id = (dst_gpu_id != -1) ? dst_gpu_id : src_gpu_id;
-  cuda_device_t::get_cuda_device(ctx_gpu_id).set_context();
+  cuda_device_t::get_cuda_device(ctx_gpu_id)->set_context();
 
   CUstream cu_stream = stream.get_stream();
 
@@ -113,7 +127,7 @@ inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst, int dst_gp
       cuMemcpyDtoDAsync(d_dst, d_src, len, cu_stream);
     }
     else {
-      cuMemcpyPeerAsync(d_dst, cuda_device_t::get_cuda_device(ctx_gpu_id), d_src, cuda_device_t::get_cuda_device(src_gpu_id), len, cu_stream);
+      cuMemcpyPeerAsync(d_dst, *cuda_device_t::get_cuda_device(ctx_gpu_id), d_src, *cuda_device_t::get_cuda_device(src_gpu_id), len, cu_stream);
     }
   }
 }

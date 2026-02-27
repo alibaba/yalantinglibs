@@ -38,6 +38,7 @@
 #include "asio/executor.hpp"
 #include "async_simple/Common.h"
 #include "async_simple/Signal.h"
+#include "ylt/coro_io/cuda/cuda_device.hpp"
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
@@ -367,6 +368,9 @@ class multithread_context_pool {
 template <typename T = io_context_pool>
 inline T &g_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
+//#ifdef YLT_ENABLE_CUDA
+  // [[maybe_unused]] static auto cuda_devices = coro_io::cuda_device_t::get_cuda_devices();
+//#endif
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
   [[maybe_unused]] static bool run_helper = [](auto pool) {
     std::thread thrd{[pool] {
