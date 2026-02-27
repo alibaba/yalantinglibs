@@ -311,7 +311,7 @@ class coro_rpc_client {
     return control_->socket_wrapper_.init_client(config);
   }
 #endif
-#ifdef YLT_ENABLE_IBV
+#ifdef YLT_ENABLE_BAREX
   [[nodiscard]] bool init_socket_wrapper(
       const coro_io::barex_socket_t::config_t &config) {
     return control_->socket_wrapper_.init_client(control_->executor_, config);
