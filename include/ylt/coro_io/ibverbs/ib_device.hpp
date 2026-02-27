@@ -225,7 +225,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
                                              ibv_device* dev = nullptr) {
     auto ret =
         std::make_shared<ib_device_t>(private_construct_token{}, conf, dev);
-    // ret->start_async_event_watcher();
+    ret->start_async_event_watcher();
     return ret;
   }
 
