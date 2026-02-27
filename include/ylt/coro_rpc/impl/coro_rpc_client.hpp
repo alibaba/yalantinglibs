@@ -821,7 +821,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
     return call<func>(
-        request_config_t{{}, req_attachment_, resp_attachment_buffer_},
+        request_config_t{{}, req_attachment_, resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
 
@@ -841,7 +841,7 @@ class coro_rpc_client {
   call_for(auto request_timeout_duration, Args &&...args) {
     return call<func>(
         request_config_t{request_timeout_duration, req_attachment_,
-                         resp_attachment_buffer_},
+                         resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
 
@@ -899,6 +899,9 @@ class coro_rpc_client {
     return set_req_attachment(attachment, -1);
   }
 
+  void set_req_attachment(coro_io::data_view attachment) {
+    return set_req_attachment(std::string_view{attachment},attachment.gpu_id());
+  }
   /**
    * @brief set buffer of resp attachment for user. If the buffer is not enough,
    * attachment will be stored in new buffer allocated in coro_rpc_client.
@@ -909,6 +912,9 @@ class coro_rpc_client {
    */
   void set_resp_attachment_buf(std::span<char> buffer) {
     return set_resp_attachment_buf(buffer, -1);
+  }
+  void set_resp_attachment_buf(coro_io::data_view attachment) {
+    return set_resp_attachment_buf(std::span<char>{attachment},attachment.gpu_id());
   }
 #ifndef YLT_ENABLE_CUDA
  private:
@@ -1783,7 +1789,7 @@ class coro_rpc_client {
       }
       else {
         if constexpr (requires { socket.get_gpu_id(); }) {
-          std::array<coro_io::data_view, 2> iov{buffer, req_attachment};
+          std::array<coro_io::data_view, 2> iov{coro_io::data_view{std::string_view{(char*)buffer.data(),buffer.size()},-1}, req_attachment};
           ret = co_await coro_io::async_write(socket, iov);
         }
         else {

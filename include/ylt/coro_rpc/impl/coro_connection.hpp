@@ -88,12 +88,8 @@ struct context_info_t {
   void set_response_attachment(std::string_view attachment);
   void set_response_attachment(std::string attachment);
   void set_response_attachment(std::function<std::string_view()> attachment);
-#ifndef YLT_ENABLE_CUDA
- private:
-  void set_response_attachment(std::string_view attachment, int gpu_id);
-#endif
- public:
-  void set_response_attachment(std::function<coro_io::data_view()> attachment);
+  void set_response_attachment2(std::function<coro_io::data_view()> attachment);
+  void set_response_attachment2(coro_io::data_view attachment);
   /* set a handler which will be called when data was serialized and write to
    * socket*/
   /* std::error_code: socket write result*/
@@ -776,7 +772,9 @@ void context_info_t<rpc_protocol>::set_response_attachment(
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::string_view attachment) {
-  return set_response_attachment(attachment, -1);
+  return set_response_attachment([attachment] {
+    return attachment;
+  });
 }
 
 template <typename rpc_protocol>
@@ -788,15 +786,15 @@ void context_info_t<rpc_protocol>::set_response_attachment(
 }
 
 template <typename rpc_protocol>
-void context_info_t<rpc_protocol>::set_response_attachment(
-    std::string_view attachment, int gpu_id) {
-  set_response_attachment([attachment, gpu_id] {
-    return coro_io::data_view{attachment, gpu_id};
+void context_info_t<rpc_protocol>::set_response_attachment2(
+    coro_io::data_view attachment) {
+  set_response_attachment2([attachment] {
+    return attachment;
   });
 }
 
 template <typename rpc_protocol>
-void context_info_t<rpc_protocol>::set_response_attachment(
+void context_info_t<rpc_protocol>::set_response_attachment2(
     std::function<coro_io::data_view()> attachment) {
   resp_attachment_ = std::move(attachment);
 }

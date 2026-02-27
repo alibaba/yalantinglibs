@@ -24,7 +24,7 @@ struct time_guard {
 };
 }
 
-inline void cuda_copy(void* dst, int dst_gpu_id, void* src, int src_gpu_id,
+inline void cuda_copy(void* dst, int dst_gpu_id, const void* src, int src_gpu_id,
                std::size_t len) {
   detail::time_guard guard("cuda_copy");
   if (len == 0)
@@ -78,9 +78,7 @@ inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0, bool enable_gdr = fa
 // 模拟 cudaFree
 inline void cuda_free(void* d_ptr, int gpu_id = 0) {
   detail::time_guard guard("cuda_free");
-  std::cout<<"cuda_free set ctx start"<<std::endl;
   cuda_device_t::get_cuda_device(gpu_id)->set_context();
-  std::cout<<"cuda_free set ctx over"<<std::endl;
   YLT_CHECK_CUDA_ERR(cuMemFree((CUdeviceptr)d_ptr));
 }
 
@@ -92,7 +90,7 @@ inline void cuda_free(void* d_ptr, cuda_device_t& dev) {
 }
 
 inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst, int dst_gpu_id,
-                     void* src, int src_gpu_id, std::size_t len) {
+                     const void* src, int src_gpu_id, std::size_t len) {
   ELOG_TRACE << "gpu operation cuda_copy_async, dst " << dst << " src " << src << " len " << len;
   detail::time_guard guard("cuda_copy_async");
   if (len == 0)
@@ -153,34 +151,5 @@ inline void cuda_free_async(cuda_stream_handler_t& stream, void* mem) {
   stream.get_device().set_context();
   cuMemFreeAsync(reinterpret_cast<CUdeviceptr>(mem), stream.get_stream());
 }
-
-// // allocate pinned host memory
-// void* cuda_host_pin(std::size_t size) {
-//   if (size == 0) {
-//     return nullptr;
-//   }
-
-//   void* ptr = nullptr;
-//   CUresult res = cuMemHostAlloc(
-//       &ptr, size, CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP);
-
-//   if (res != CUDA_SUCCESS) {
-//     throw std::runtime_error("Failed to allocate pinned host memory");
-//   }
-
-//   return ptr;
-// }
-
-// // deallocate pinned host memory
-// void cuda_host_unpin(void* ptr) {
-//   if (ptr == nullptr) {
-//     return;
-//   }
-
-//   CUresult res = cuMemFreeHost(ptr);
-//   if (res != CUDA_SUCCESS) {
-//     throw std::runtime_error("Failed to free pinned host memory");
-//   }
-// }
 
 }  // namespace coro_io

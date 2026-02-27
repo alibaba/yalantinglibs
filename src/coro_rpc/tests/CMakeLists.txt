@@ -12,6 +12,7 @@ set(TEST_SRCS
         test_parallel.cpp
         test_client_filter.cpp
         test_abi_compatible.cpp
+        test_gdr.cpp
         )
 set(TEST_COMMON
         rpc_api.cpp
