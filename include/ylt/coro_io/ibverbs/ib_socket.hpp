@@ -303,7 +303,7 @@ struct ib_socket_shared_state_t
     }
     // post the receive request to the RQ
     else {
-      check_qp_state(qp_.get(), ibv_qp_state::IBV_QPS_RTS);
+      // check_qp_state(qp_.get(), ibv_qp_state::IBV_QPS_RTS);
       if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) [[unlikely]] {
         err = std::make_error_code(std::errc{std::abs(ec)});
         ELOG_ERROR << "ibv post send failed: " << err.message();
