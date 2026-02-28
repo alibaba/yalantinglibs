@@ -75,6 +75,19 @@ inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0, bool enable_gdr = fa
   return d_ptr;
 }
 
+// 模拟 cudaMalloc 的函数（Driver API 版）
+inline CUdeviceptr cuda_malloc(size_t size, cuda_device_t& dev, bool enable_gdr = false) {
+  CUdeviceptr d_ptr;
+  detail::time_guard guard("cuda_malloc");
+  dev.set_context();
+  YLT_CHECK_CUDA_ERR(cuMemAlloc(&d_ptr, size));
+  if (enable_gdr) {
+    bool enable = 1;
+    cuPointerSetAttribute(&enable, CU_POINTER_ATTRIBUTE_SYNC_MEMOPS, d_ptr);
+  }
+  return d_ptr;
+}
+
 // 模拟 cudaFree
 inline void cuda_free(void* d_ptr, int gpu_id = 0) {
   detail::time_guard guard("cuda_free");
@@ -86,6 +99,7 @@ inline void cuda_free(void* d_ptr, int gpu_id = 0) {
 inline void cuda_free(void* d_ptr, cuda_device_t& dev) {
   detail::time_guard guard("cuda_free");
   dev.set_context();
+  ELOG_TRACE << "cuda_free: " << d_ptr << ",device=" << dev.name() << "(" << dev.get_gpu_id() << ")";
   YLT_CHECK_CUDA_ERR(cuMemFree((CUdeviceptr)d_ptr));
 }
 

@@ -89,6 +89,8 @@ struct ib_deleter {
     }
   }
   void operator()(ibv_mr* ptr) const noexcept {
+    // For cuda memory, we must make sure the release order:
+    // ibv_dereg_mr -> cuda_free -> destory cuda device
     if (ptr) {
       if (auto ret = ibv_dereg_mr(ptr); ret) [[unlikely]] {
         ELOG_ERROR << "ibv_dereg_mr failed: "
@@ -100,9 +102,10 @@ struct ib_deleter {
 
 struct ib_buffer_t {
  private:
-  std::unique_ptr<ibv_mr, ib_deleter> mr_;
   std::weak_ptr<ib_buffer_pool_t> owner_pool_;
   memory_owner_t memory_owner_;
+  std::unique_ptr<ibv_mr, ib_deleter> mr_;
+
   ib_buffer_t(std::unique_ptr<ibv_mr, ib_deleter> mr,
               memory_owner_t memory_owner,
               ib_buffer_pool_t& owner_pool) noexcept;
@@ -153,8 +156,8 @@ class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
   }
 
   struct ib_buffer_impl_t {
-    std::unique_ptr<ibv_mr, ib_deleter> mr_;
     memory_owner_t memory_owner_;
+    std::unique_ptr<ibv_mr, ib_deleter> mr_;
     ib_buffer_t convert_to_ib_buffer(ib_buffer_pool_t& pool) && {
       return ib_buffer_t{std::move(mr_), std::move(memory_owner_), pool};
     }

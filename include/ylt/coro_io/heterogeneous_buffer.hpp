@@ -41,7 +41,7 @@ class heterogeneous_buffer {
       return -1;
     }
     else {
-      return std::get<memory_owner_t>(buffer_).gpu_id;
+      return std::get<memory_owner_t>(buffer_).gpu_id();
     }
   }
 

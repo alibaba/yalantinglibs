@@ -19,7 +19,7 @@
 
 #define YLT_CHECK_CUDA_ERR(err) \
     do { \
-        if (err != CUDA_SUCCESS) { \
+        if (err != CUDA_SUCCESS && err != CUDA_ERROR_DEINITIALIZED) { \
             const char *err_str; \
             cuGetErrorString(err, &err_str); \
             std::string tmp = "CUDA Driver error: " + std::string(err_str); \
@@ -55,7 +55,8 @@ namespace coro_io {
     cuda_device_t& operator =(const cuda_device_t&)=delete;
     cuda_device_t& operator =(cuda_device_t&&)=delete;
     ~cuda_device_t() {
-      ELOG_INFO <<"destroy cuda device:" << name_;
+      ELOG_INFO <<"release cuda device:" << name_ << "(" << gpu_id_ << ")";
+      cuDevicePrimaryCtxRelease(device_);
     }
 
     void close() {
@@ -125,6 +126,9 @@ namespace coro_io {
     }
     int get_gpu_id() const noexcept {
       return gpu_id_;
+    }
+    std::string_view name() const noexcept {
+      return name_;
     }
   private:
     std::string name_;

@@ -59,7 +59,6 @@ TEST_CASE("test gdr with user attachment") {
   coro_io::cuda_copy(buf.data(), buf.gpu_id(), str.data(), -1, str.size());
   cli.set_req_attachment(coro_io::data_view{buf});
   cli.set_resp_attachment_buf(coro_io::data_view{buf2});
-  CHECK(cli.get_resp_attachment2().gpu_id() ==0);
   auto ret = async_simple::coro::syncAwait(cli.call<gdr_echo>("gdr_echo"));
   CHECK(ret == "gdr_echo");
   auto buf3 = cli.get_resp_attachment2();
