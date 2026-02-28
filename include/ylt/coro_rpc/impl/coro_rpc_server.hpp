@@ -264,7 +264,7 @@ class coro_rpc_server_base {
           p.setValue(res.value());
         }
       });
-      return std::move(future);
+      return future;
     }
     else {
       return make_error_future(coro_rpc::err_code{errc_});
