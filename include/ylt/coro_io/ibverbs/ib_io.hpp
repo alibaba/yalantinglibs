@@ -156,6 +156,9 @@ async_simple::coro::
   ibv_sge socket_buffer = ib_socket.get_recv_buffer();
   socket_buffer.length = result.second;
   copy(handler, socket_buffer, sge_list);
+  if (ib_socket.get_cuda_stream_handler()) {
+    co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
+  }
   size_t recved_len = std::min(result.second, io_size);
   ib_socket.set_read_buffer_len(recved_len, result.second - recved_len);
 
@@ -346,7 +349,9 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   if constexpr (io == ib_socket_t::io_type::recv) {
     io_completed_size = consume_buffer(ib_socket, sge_span);
     if (sge_span.empty()) {
-      co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
+      if (ib_socket.get_cuda_stream_handler()) {
+        co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
+      }
       co_return std::pair{std::error_code{}, io_completed_size};
     }
   }
@@ -424,11 +429,6 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
       if (read_some) {
         co_return std::pair{ec, io_completed_size};
       }
-    }
-  }
-  if constexpr (io == ib_socket_t::io_type::recv) {
-    if (ib_socket.get_gpu_id() >= 0) {
-      co_await ib_socket.get_cuda_stream_handler().record(ib_socket.get_coro_executor());
     }
   }
   ELOG_TRACE << "has completed size:" << io_completed_size;

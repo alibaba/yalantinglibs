@@ -105,7 +105,7 @@ inline void cuda_free(void* d_ptr, cuda_device_t& dev) {
 
 inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst, int dst_gpu_id,
                      const void* src, int src_gpu_id, std::size_t len) {
-  ELOG_TRACE << "gpu operation cuda_copy_async, dst " << dst << " src " << src << " len " << len;
+  ELOG_TRACE << "gpu operation cuda_copy_async, dst " << dst << " dst gpu id " << dst_gpu_id << " src " << src << " src gpu id " << src_gpu_id << " len " << len;
   detail::time_guard guard("cuda_copy_async");
   if (len == 0)
     return;
