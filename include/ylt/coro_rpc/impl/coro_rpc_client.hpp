@@ -46,6 +46,7 @@
 #include "asio/buffer.hpp"
 #include "asio/dispatch.hpp"
 #include "asio/registered_buffer.hpp"
+#include "async_simple/Common.h"
 #include "async_simple/Executor.h"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Mutex.h"

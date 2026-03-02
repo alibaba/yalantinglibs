@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <memory>
 #include <system_error>
 #include <vector>
 #include <ylt/coro_io/client_pool.hpp>
@@ -15,9 +16,13 @@
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/cuda/cuda_memory.hpp"
+#include "ylt/coro_io/data_view.hpp"
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 #include "ylt/util/tl/expected.hpp"
-
+std::shared_ptr<coro_io::ib_device_t> ibv;
 struct bench_config {
   std::string url;
   uint32_t client_concurrency;
@@ -34,6 +39,8 @@ struct bench_config {
   uint32_t send_buffer_cnt;
   bool use_client_pool;
   bool reuse_client_pool;
+  int gpu_id;
+  std::string device_name;
 };
 
 bench_config init_conf(const cmdline::parser& parser) {
@@ -53,6 +60,8 @@ bench_config init_conf(const cmdline::parser& parser) {
   conf.send_buffer_cnt = parser.get<uint32_t>("send_buffer_cnt");
   conf.use_client_pool = parser.get<bool>("use_client_pool");
   conf.reuse_client_pool = parser.get<bool>("reuse_client_pool");
+  conf.gpu_id = parser.get<int>("gpu_id");
+  conf.device_name =parser.get<std::string>("device_name");
 
   if (conf.client_concurrency == 0) {
     ELOG_WARN << "port: " << conf.port << ", "
@@ -71,7 +80,9 @@ bench_config init_conf(const cmdline::parser& parser) {
               << "send data_len: " << conf.send_data_len << ", "
               << "max_request_count: " << conf.max_request_count << ", "
               << "enable ibverbs: " << conf.enable_ib << ", "
-              << "log level: " << conf.log_level << ", ";
+              << "log level: " << conf.log_level << ", "
+              << "gpu_id: " <<conf.gpu_id 
+              << "device name: " <<conf.device_name;
   }
   ELOG_WARN << "min_recv_buf_count: " << conf.min_recv_buf_count
             << ", max_recv_buf_count: " << conf.max_recv_buf_count
@@ -85,10 +96,7 @@ std::atomic<size_t> g_throughput_count = 0;
 std::atomic<size_t> g_qps_count = 0;
 
 inline std::string_view echo() {
-  auto str = coro_rpc::get_context()->get_request_attachment();
-  if (g_resp_len == 0) {
-    return str;
-  }
+  auto str = coro_rpc::get_context()->get_request_attachment2();
   coro_rpc::get_context()->set_complete_handler(
       [sz = str.size()](std::error_code ec, std::size_t) {
         if (!ec) {
@@ -135,17 +143,17 @@ async_simple::coro::Lazy<void> watcher(const bench_config& conf) {
 #ifdef YLT_ENABLE_IBV
     if (conf.enable_ib) {
       std::cout << "ibv mem usage: "
-                << coro_io::get_global_ib_device()
+                << ibv
                            ->get_buffer_pool()
                            ->memory_usage() /
                        (1.0 * 1024 * 1024)
                 << "MB, max ibv mem usage: "
-                << coro_io::get_global_ib_device()
+                << ibv
                            ->get_buffer_pool()
                            ->max_recorded_memory_usage() /
                        (1.0 * 1024 * 1024)
                 << "MB, free buffer cnt: "
-                << coro_io::get_global_ib_device()
+                << ibv
                        ->get_buffer_pool()
                        ->free_buffer_size();
     }
@@ -184,6 +192,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
     ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    ib_conf.device = ibv;
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
@@ -192,7 +201,9 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
       conf.url, pool_conf);
   auto lazy = [pool, conf]() -> async_simple::coro::Lazy<void> {
     std::string send_str(conf.send_data_len, 'A');
-    std::string_view send_str_view(send_str);
+    coro_io::heterogeneous_buffer buf(conf.send_data_len,conf.gpu_id);
+    coro_io::cuda_copy(buf.data(), buf.gpu_id(), send_str.data(), -1, send_str.size());
+    coro_io::data_view send_str_view(buf);
     for (size_t i = 0; i < conf.max_request_count; i++) {
       auto start = std::chrono::steady_clock::now();
       auto ec =
@@ -228,7 +239,6 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
   }
   co_await async_simple::coro::collectAll<async_simple::SignalType::Terminate>(
       async_simple::coro::collectAll(std::move(works)), watcher(conf));
-
   co_return std::error_code{};
 }
 
@@ -243,6 +253,7 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(
     ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
     ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
     ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+    ib_conf.device = ibv;
     pool_conf.client_config.socket_config = ib_conf;
   }
 #endif
@@ -252,7 +263,9 @@ async_simple::coro::Lazy<std::error_code> request_with_reuse(
   std::atomic<uint64_t> cnter;
   auto lazy = [pool, conf, &cnter]() -> async_simple::coro::Lazy<void> {
     std::string send_str(conf.send_data_len, 'A');
-    std::string_view send_str_view(send_str);
+    coro_io::heterogeneous_buffer buf(conf.send_data_len,conf.gpu_id);
+    coro_io::cuda_copy(buf.data(), buf.gpu_id(), send_str.data(), -1, send_str.size());
+    coro_io::data_view send_str_view(buf);
     for (size_t i = 0; i < conf.max_request_count; i++) {
       auto start = std::chrono::steady_clock::now();
       auto ret = co_await pool->send_request(
@@ -300,6 +313,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
       ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+      ib_conf.device = ibv;
       [[maybe_unused]] bool is_ok = client->init_ibv(ib_conf);
       assert(is_ok);
     }
@@ -314,7 +328,9 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
 
   auto lazy = [&vec, conf](size_t i) -> async_simple::coro::Lazy<void> {
     std::string send_str(conf.send_data_len, 'A');
-    std::string_view send_str_view(send_str);
+    coro_io::heterogeneous_buffer buf(conf.send_data_len,conf.gpu_id);
+    coro_io::cuda_copy(buf.data(), buf.gpu_id(), send_str.data(), -1, send_str.size());
+    coro_io::data_view send_str_view(buf);
     auto& client = *vec[i];
     for (size_t i = 0; i < conf.max_request_count; i++) {
       client.set_req_attachment(send_str_view);
@@ -373,6 +389,8 @@ int main(int argc, char** argv) {
   parser.add<bool>("use_client_pool", 'g', "use client pool", false, true);
   parser.add<bool>("reuse_client_pool", 'h', "reuse client pool", false, true);
   parser.add<uint32_t>("send_buffer_cnt", 'j', "send buffer max cnt", false, 4);
+  parser.add<int>("gpu_id", 'k', "id of gpu", false, -1);
+  parser.add<std::string>("device_name", 'l', "device name", false, "");
 
   parser.parse_check(argc, argv);
   auto conf = init_conf(parser);
@@ -383,8 +401,8 @@ int main(int argc, char** argv) {
 
 #ifdef YLT_ENABLE_IBV
   if (conf.enable_ib) {
-    coro_io::get_global_ib_device(
-        {.buffer_pool_config = {.buffer_size = conf.buffer_size}});
+    ibv = coro_io::get_global_ib_device(
+        {.dev_name = conf.device_name,.buffer_pool_config = {.buffer_size = conf.buffer_size,.gpu_id=conf.gpu_id}});
   }
 #endif
 
@@ -406,6 +424,7 @@ int main(int argc, char** argv) {
       ib_conf.send_buffer_cnt = conf.send_buffer_cnt;
       ib_conf.recv_buffer_cnt = conf.min_recv_buf_count;
       ib_conf.cap.max_recv_wr = conf.max_recv_buf_count;
+      ib_conf.device = ibv;
       server.init_ibv(ib_conf);
     }
 #endif

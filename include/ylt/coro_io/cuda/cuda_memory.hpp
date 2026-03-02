@@ -33,6 +33,7 @@ inline void cuda_copy(void* dst, int dst_gpu_id, const void* src, int src_gpu_id
   // 必须一端是 host (-1)，另一端是 device (>=0)
   if ((dst_gpu_id == -1) && (src_gpu_id == -1)) {
     memcpy(dst,src,len);
+    return;
   }
 
   if (dst_gpu_id == -1 && src_gpu_id >= 0) {
