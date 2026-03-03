@@ -70,6 +70,66 @@ We conducted some performance tests on coro_rpc between two hosts in a 180Gb RDM
 
 The specific benchmark code can be found [here](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp).
 
+## GPU-direct RDMA Support
+
+GPU-direct RDMA allows direct memory access between GPU memory and remote nodes via RDMA, eliminating the dependency on CPU during data transfers. This feature significantly reduces latency and improves throughput for GPU-related applications.
+
+### Initialization
+
+To enable GPU-direct RDMA support, you need to:
+
+1. **Initialize CUDA Environment**: First get available CUDA devices and initialize the GPU environment:
+   ```cpp
+   auto cuda_dev_list = coro_io::cuda_device_t::get_cuda_devices();
+   ```
+
+2. **Create IB Device with GPU Memory Support**: Create an InfiniBand device that supports GPU memory buffers:
+   ```cpp
+   auto dev = coro_io::ib_device_t::create(
+       {.buffer_pool_config = {.gpu_id = 0 /* GPU ID */}});
+   ```
+
+3. **Initialize Server and Client with GPU Buffer Support IB Device**:
+   - Server: `server.init_ibv({.device = dev})`
+   - Client: `client.init_ibv({.device = dev})`
+
+#### RPC Client
+
+- **Set Request Attachment**: Use set_req_attachment2 to send GPU data:
+  ```cpp
+  coro_io::data_view gpu_attachment; // = ...;
+  client.set_req_attachment2(gpu_attachment);
+  ```
+
+- **Access Response Attachment**: Use get_resp_attachment2 to retrieve GPU data sent by the server from the response:
+  ```cpp
+  coro_io::data_view resp_attachment = client.get_resp_attachment2();
+  ```
+
+- **Optional: Set Response Attachment Buffer**: Use set_resp_attachment_buf2 to pre-allocate and set the buffer address for receiving attachment response data. When the length is insufficient, an internal buffer will be automatically reallocated.
+  ```cpp
+  coro_io::data_view gpu_attachment_buf; // = ...;
+  client.set_resp_attachment2(gpu_attachment_buf);
+  ```
+
+  data_view is a data view that, in addition to traditional [data()](file:///root/lizezheng/yalantinglibs/include/ylt/thirdparty/asio/detail/is_buffer_sequence.hpp#L38-L38) and [size()](file:///root/lizezheng/yalantinglibs/include/ylt/thirdparty/asio/detail/is_buffer_sequence.hpp#L35-L35) interfaces, provides a [gpu_id()](file:///root/lizezheng/yalantinglibs/include/ylt/coro_io/memory_owner.hpp#L66-L72) interface to indicate the GPU ID where the GPU memory resides. When ID=-1, it indicates that the data is located in system memory.
+
+### RPC Server
+
+On the RPC server side, you can access request attachments and set response attachments through the context of the RPC function:
+
+```cpp
+// In the handler function
+void rpc_function() {
+    coro_io::data_view attachment = coro_rpc::get_context()->get_request_attachment2();
+    coro_rpc::get_context()->set_response_attachment2(attachment);
+}
+```
+
+### Performance Advantages
+
+GPU-direct RDMA eliminates CPU-GPU memory copying during network transmission, reducing latency and CPU overhead. Data flows directly from GPU memory to the network interface and vice versa, making it ideal for high-performance computing and AI applications where large amounts of GPU data need to be shared across nodes.
+
 ## RDMA Performance Optimization
 
 ### RDMA Memory Pool
