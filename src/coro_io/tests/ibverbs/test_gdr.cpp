@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -17,7 +18,10 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "doctest.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/cuda/cuda_memory.hpp"
+#include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_io/ibverbs/ib_buffer.hpp"
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_io/ibverbs/ib_io.hpp"
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -27,6 +31,10 @@
 
 int concurrency = 10;
 std::atomic<int> port;
+
+static auto gdr_dev =
+    coro_io::ib_device_t::create(coro_io::ib_device_t::config_t{
+        .buffer_pool_config{.buffer_size = 8 * 1024, .gpu_id = 0}});
 
 async_simple::coro::Lazy<std::error_code> echo_accept(
     std::vector<std::function<
@@ -60,7 +68,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
   }
 
   ELOG_INFO << "tcp listening port:" << port;
-  coro_io::ib_socket_t soc;
+  coro_io::ib_socket_t soc{coro_io::ib_socket_t::config_t{.device = gdr_dev}};
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -85,8 +93,9 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
         functions,
     coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor()) {
-  coro_io::ib_socket_t soc{executor, coro_io::ib_socket_t::config_t{
-                                         .send_buffer_cnt = g_send_buffer_cnt}};
+  coro_io::ib_socket_t soc{
+      executor, coro_io::ib_socket_t::config_t{
+                    .send_buffer_cnt = g_send_buffer_cnt, .device = gdr_dev}};
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -586,46 +595,108 @@ TEST_CASE("test rpc-like io") {
   }
 }
 
-TEST_CASE("test small package combine write") {
-  g_send_buffer_cnt = 2;
+async_simple::coro::Lazy<std::error_code> rpc_like_recv_gpu_attachment(
+    coro_io::ib_socket_t& soc) {
+  std::size_t size;
+  std::array<coro_io::data_view, 2> body_and_attachment;
+  std::string body;
+  std::error_code ec;
+  std::size_t len;
+  std::tie(ec, len) =
+      co_await coro_io::async_read(soc, asio::buffer(&size, sizeof(size)));
+  if (ec) {
+    co_return ec;
+  }
+  CHECK(len == sizeof(size));
+  ELOG_WARN << "got size:" << size;
+  struct_pack::detail::resize(body, size / 2);
+  body_and_attachment[0] = {std::string_view{body}, -1};
+  auto cuda_mem = coro_io::cuda_malloc(size / 2, soc.get_gpu_id());
+  body_and_attachment[1] = {std::string_view{(char*)cuda_mem, size / 2},
+                            soc.get_gpu_id()};
+  std::tie(ec, len) = co_await coro_io::async_read(soc, body_and_attachment);
+  if (!ec) {
+    CHECK(len == size);
+    CHECK(body == std::string(size / 2, 'A'));
+    coro_io::cuda_copy(body.data(), -1, (void*)body_and_attachment[1].data(),
+                       soc.get_gpu_id(), size / 2);
+    CHECK(body == std::string(size / 2, 'A'));
+  }
+  co_return ec;
+}
+
+async_simple::coro::Lazy<std::error_code> rpc_like_send_gpu_attachment(
+    coro_io::ib_socket_t& soc, std::size_t body_sz) {
+  std::array<coro_io::data_view, 2> body_and_attachment;
+  std::string body;
+  body.resize(sizeof(std::size_t));
+  auto sz = body_sz;
+  memcpy(body.data(), &sz, sizeof(sz));
+  std::error_code ec;
+  std::size_t len;
+  body_and_attachment[0] = {std::string_view{body}, -1};
+  auto cuda_mem = coro_io::cuda_malloc(body_sz, soc.get_gpu_id());
+  std::string tmp(body_sz, 'A');
+  coro_io::cuda_copy((void*)cuda_mem, soc.get_gpu_id(), tmp.data(), -1,
+                     body_sz);
+  body_and_attachment[1] = {std::string_view{(char*)cuda_mem, body_sz},
+                            soc.get_gpu_id()};
+  std::tie(ec, len) = co_await coro_io::async_write(soc, body_and_attachment);
+  if (!ec) {
+    CHECK(len == body_sz + sizeof(std::size_t));
+  }
+  co_return ec;
+}
+
+TEST_CASE("test rpc-like io with gpu attachment") {
+  ELOG_WARN << "test rpc-like io with gpu attachment";
   {
-    ELOG_WARN << "test small package combine write1";
+    ELOG_WARN << "test small size";
     auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept({test(test_read_some, 3 * 1024),
-                     test(test_read_some, 3 * 1024),
-                     test(test_read_some, 6 * 1024)}),
-        echo_connect({test(test_write, 3 * 1024), test(test_write, 3 * 1024),
-                      test(test_write, 3 * 1024),
-                      test(test_write, 3 * 1024)})));
+        echo_accept({rpc_like_recv_gpu_attachment}),
+        echo_connect({test(rpc_like_send_gpu_attachment, 5 * 1024)})));
     auto& ec1 = std::get<0>(result);
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
   {
-    ELOG_WARN << "test small package combine write2";
+    ELOG_WARN << "test medium size";
     auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept({test(test_read_some, 3 * 1024),
-                     test(test_read_some, 8 * 1024),
-                     test(test_read_some, 6 * 1024)}),
-        echo_connect({test(test_write, 3 * 1024), test(test_write, 11 * 1024),
-                      test(test_write, 3 * 1024)})));
+        echo_accept({rpc_like_recv_gpu_attachment}),
+        echo_connect({test(rpc_like_send_gpu_attachment, 50 * 1024)})));
     auto& ec1 = std::get<0>(result);
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
   {
-    ELOG_WARN << "test small package combine write3";
+    ELOG_WARN << "test large size";
     auto result = async_simple::coro::syncAwait(collectAll(
-        echo_accept(
-            {test(test_read_some, 8 * 1024), test(test_read_some, 8 * 1024),
-             test(test_read_some, 8 * 1024), test(test_read_some, 8 * 1024)}),
+        echo_accept({rpc_like_recv_gpu_attachment}),
         echo_connect(
-            {test(test_write, 19 * 1024), test(test_write, 13 * 1024)})));
+            {test(rpc_like_send_gpu_attachment, 2 * 1024 * 1024 + 10)})));
     auto& ec1 = std::get<0>(result);
     auto& ec2 = std::get<1>(result);
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
+  }
+  {
+    ELOG_WARN << "test corner case";
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({rpc_like_recv_gpu_attachment}),
+        echo_connect({test(rpc_like_send_gpu_attachment, 8 * 1024 * 1024)})));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+    ELOG_WARN << "memory size:"
+              << coro_io::ib_buffer_pool_t::global_memory_usage();
   }
 }

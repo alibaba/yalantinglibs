@@ -23,6 +23,8 @@
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
 #include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_io/ibverbs/ib_io.hpp"
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
@@ -45,10 +47,12 @@ struct config_t {
   std::string enable_client = "127.0.0.1";
   int port = 58110;
   int test_time = 10;
+  int gpu_id = -1;
+  std::string device_name = "";
 };
 YLT_REFL(config_t, buffer_size, request_size, recv_buffer_cnt, send_buffer_cnt,
          concurrency, test_type, enable_log, enable_server, enable_client, port,
-         test_time);
+         test_time, gpu_id, device_name);
 
 config_t config;
 std::shared_ptr<coro_io::ib_device_t> g_dev;
@@ -83,6 +87,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   ELOG_INFO << "read data ok:" << len;
   char ch = 'A';
   auto s_view = std::string_view{&ch, 1};
+  coro_io::heterogeneous_buffer ib;
   while (true) {
     ELOG_DEBUG << "start read from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(
@@ -100,9 +105,10 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
       co_return s.value().first;
     }
     uint64_t sz = *(uint64_t *)buffer.data();
-    buffer.resize(sz);
-    auto [ec, len] =
-        co_await coro_io::async_read(soc, std::string_view{buffer});
+    if (ib.size() != buffer.size()) {
+      ib = coro_io::heterogeneous_buffer(sz, config.gpu_id);
+    }
+    auto [ec, len] = co_await coro_io::async_read(soc, coro_io::data_view{ib});
     if (ec) [[unlikely]] {
       co_return r.value().first;
     }
@@ -127,28 +133,22 @@ async_simple::coro::Lazy<std::error_code> echo_connect_read_some(
     coro_io::ib_socket_t soc) {
   char *buffer = new char[config.buffer_size];
   ELOG_INFO << "start echo connect";
-  auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), buffer,
-                                         config.buffer_size);
-  if (!ib) {
-    co_return std::make_error_code(std::errc::no_buffer_space);
-  }
+  coro_io::heterogeneous_buffer ib(config.buffer_size, config.gpu_id);
   ELOG_INFO << "start read from client";
-  auto [ec, len] = co_await coro_io::async_read_some(soc, make_sge(*ib));
-
+  auto [ec, len] =
+      co_await coro_io::async_read_some(soc, coro_io::data_view{ib});
   if (ec) [[unlikely]] {
     ELOG_INFO << "err when read client:" << ec.message();
     co_return ec;
   }
   ELOG_INFO << "read data ok:" << len;
   while (true) {
-    auto r_view = make_sge(*ib);
-    auto s_view = make_sge(*ib);
-    s_view.length = 1;
-
     ELOG_DEBUG << "start read from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(
-        coro_io::async_read_some(soc, r_view),
-        coro_io::async_write(soc, s_view));
+        coro_io::async_read_some(soc, coro_io::data_view{ib}),
+        coro_io::async_write(
+            soc,
+            coro_io::data_view{std::string_view{ib.data(), 1}, ib.gpu_id()}));
     ELOG_DEBUG << "server waiting io for r/w from client over" << &soc;
 
     if (r.hasError() || s.hasError()) [[unlikely]] {
@@ -231,11 +231,19 @@ async_simple::coro::Lazy<std::error_code> echo_client(
   recv_buffer.resize(1);
   std::string_view recv_view = std::string_view{recv_buffer};
   ELOG_INFO << "start echo";
+  coro_io::heterogeneous_buffer ib(send_view.size(), config.gpu_id);
+#ifdef YLT_ENABLE_CUDA
+  coro_io::cuda_copy(ib.data(), ib.gpu_id(), send_view.data(), -1,
+                     send_view.size());
+#else
+  memcpy(ib.data(), send_view.data(), send_view.size());
+#endif
   while (true) {
     auto [result, time_out] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
-        async_simple::coro::collectAll(coro_io::async_read(soc, recv_view),
-                                       coro_io::async_write(soc, send_view)),
+        async_simple::coro::collectAll(
+            coro_io::async_read(soc, recv_view),
+            coro_io::async_write(soc, coro_io::data_view{ib})),
         coro_io::sleep_for(10s, soc.get_coro_executor()));
 
     if (result.hasError() || time_out.hasError()) [[unlikely]] {
@@ -268,22 +276,20 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
     coro_io::ib_socket_t &soc, std::string_view sv) {
   std::string buffer;
   buffer.resize(config.buffer_size);
-  auto ib2 = coro_io::ib_buffer_t::regist(*soc.get_device(), buffer.data(),
-                                          config.buffer_size);
-  auto ib = coro_io::ib_buffer_t::regist(*soc.get_device(), (char *)sv.data(),
-                                         sv.size());
-  if (!ib || !ib2) {
-    co_return std::make_error_code(std::errc::no_buffer_space);
-  }
+  coro_io::heterogeneous_buffer ib(sv.size(), config.gpu_id),
+      ib2(sv.size(), config.gpu_id);
+#ifdef YLT_ENABLE_CUDA
+  coro_io::cuda_copy(ib.data(), ib.gpu_id(), sv.data(), -1, sv.size());
+#else
+  memcpy(ib.data(), sv.data(), sv.size());
+#endif
   ELOG_INFO << "start echo";
   while (true) {
-    ibv_sge r_view = make_sge(*ib2);
-    ibv_sge s_view = make_sge(*ib);
-
     auto [result, time_out] = co_await async_simple::coro::collectAll<
         async_simple::SignalType::Terminate>(
-        async_simple::coro::collectAll(coro_io::async_read_some(soc, r_view),
-                                       coro_io::async_write(soc, s_view)),
+        async_simple::coro::collectAll(
+            coro_io::async_read_some(soc, coro_io::data_view{ib2}),
+            coro_io::async_write(soc, coro_io::data_view{ib})),
         coro_io::sleep_for(std::chrono::seconds{10}));
 
     if (result.hasError() || time_out.hasError()) [[unlikely]] {
@@ -303,13 +309,19 @@ async_simple::coro::Lazy<std::error_code> echo_client_read_some(
     if (s.value().first) [[unlikely]] {
       co_return s.value().first;
     }
-    auto resp = std::string_view{(char *)r_view.addr, r.value().second};
-    if (resp != "A" || s.value().second != sv.size()) [[unlikely]] {
+    char v = '\0';
+#ifdef YLT_ENABLE_CUDA
+    coro_io::cuda_copy(&v, -1, ib2.data(), ib2.gpu_id(), 1);
+#else
+    memcpy(&v, ib2.data(), 1);
+#endif
+    if (v != 'A' && r.value().second != 1 || s.value().second != sv.size())
+        [[unlikely]] {
       ELOG_ERROR << "data err";
       co_return std::make_error_code(std::errc::protocol_error);
     }
     else {
-      cnt[1] += s_view.length;
+      cnt[1] += ib.size();
     }
   }
   co_return std::error_code{};
@@ -352,7 +364,9 @@ TEST_CASE("ib socket pressure test") {
   }
   auto old_s = easylog::logger<>::instance().get_min_severity();
   g_dev = coro_io::ib_device_t::create(
-      {.buffer_pool_config = {.buffer_size = config.buffer_size}});
+      {.dev_name = config.device_name,
+       .buffer_pool_config = {.buffer_size = config.buffer_size,
+                              .gpu_id = config.gpu_id}});
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;

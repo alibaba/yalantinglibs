@@ -13,6 +13,9 @@ set(TEST_SRCS
         test_client_filter.cpp
         test_abi_compatible.cpp
         )
+if (YLT_ENABLE_IBV AND YLT_ENABLE_CUDA)
+        set(TEST_SRC ${TEST_SRCS} test_gdr.cpp)
+endif()
 set(TEST_COMMON
         rpc_api.cpp
         main.cpp
