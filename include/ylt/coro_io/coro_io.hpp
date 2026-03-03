@@ -44,6 +44,7 @@
 
 #include <asio/connect.hpp>
 #include <asio/experimental/channel.hpp>
+#include <asio/high_resolution_timer.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
 #include <asio/read_at.hpp>
@@ -616,6 +617,23 @@ class period_timer : public asio::steady_timer {
   template <typename T>
   period_timer(coro_io::ExecutorWrapper<T> *executor)
       : asio::steady_timer(executor->get_asio_executor()) {}
+
+  async_simple::coro::Lazy<bool> async_await() noexcept {
+    auto ec = co_await async_io<std::error_code>(
+        [&](auto &&cb) {
+          this->async_wait(std::move(cb));
+        },
+        *this);
+    co_return !ec;
+  }
+};
+
+class high_resolution_timer : public asio::high_resolution_timer {
+ public:
+  using asio::high_resolution_timer::high_resolution_timer;
+  template <typename T>
+  high_resolution_timer(coro_io::ExecutorWrapper<T> *executor)
+      : asio::high_resolution_timer(executor->get_asio_executor()) {}
 
   async_simple::coro::Lazy<bool> async_await() noexcept {
     auto ec = co_await async_io<std::error_code>(
