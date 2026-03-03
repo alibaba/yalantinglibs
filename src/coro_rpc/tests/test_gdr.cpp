@@ -58,7 +58,7 @@ TEST_CASE("test gdr with user attachment") {
   std::string str (data_size,'a'),str2(data_size,'b');
   coro_io::cuda_copy(buf.data(), buf.gpu_id(), str.data(), -1, str.size());
   cli.set_req_attachment(coro_io::data_view{buf});
-  cli.set_resp_attachment_buf(coro_io::data_view{buf2});
+  cli.set_resp_attachment_buf2(coro_io::data_view{buf2});
   auto ret = async_simple::coro::syncAwait(cli.call<gdr_echo>("gdr_echo"));
   CHECK(ret == "gdr_echo");
   auto buf3 = cli.get_resp_attachment2();
@@ -67,4 +67,85 @@ TEST_CASE("test gdr with user attachment") {
   CHECK(buf3.gpu_id() == coro_io::data_view{buf2}.gpu_id());
   coro_io::cuda_copy(str2.data(), -1, buf3.data(), buf3.gpu_id(), buf3.size());
   CHECK(str2 == str);
+}
+std::string rand_str(std::size_t length) {
+  const std::string charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  std::string result;
+  result.reserve(length);
+  for (std::size_t i = 0; i < length; ++i) {
+    result += charset[std::rand() % charset.length()];
+  }
+  return result;
+}
+std::string_view echo(std::string_view name) {
+  auto view = coro_rpc::get_context()->get_request_attachment2();
+  coro_rpc::get_context()->set_response_attachment2(view);
+  return name;
+};
+coro_io::heterogeneous_buffer make_gpu_buffer(std::string_view src) {
+  coro_io::heterogeneous_buffer buf(src.size(), 0);
+  coro_io::cuda_copy(buf.data(), 0, src.data(), -1, src.size());
+  return buf;
+}
+std::string make_cpu_buffer(coro_io::data_view src) {
+  std::string buf(src.size(),'\0');
+  coro_io::cuda_copy(buf.data(), -1, src.data(), src.gpu_id(), src.size());
+  return buf;
+}
+TEST_CASE("test gdr") {
+  auto dev =coro_io::ib_device_t::create({.buffer_pool_config ={.gpu_id=0}});
+  coro_rpc::coro_rpc_server server(1,9001);
+  server.init_ibv({.device = dev});
+  server.register_handler<echo>();
+  server.async_start();
+  coro_rpc::coro_rpc_client cli;
+  [[maybe_unused]] bool _ = cli.init_ibv({.device = dev});
+  auto arg = rand_str(1024*1024*16), attach = rand_str(1024*1024*16);
+  async_simple::coro::syncAwait(cli.connect("127.0.0.1", "9001"));
+  SUBCASE("test normal rpc") {
+    cli.set_req_attachment("hello2");
+    auto result = async_simple::coro::syncAwait(cli.call<echo>("hello"));
+    CHECK(result.value() == "hello");
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())=="hello2");
+  }
+  SUBCASE("test normal rpc with 16M data") {
+    cli.set_req_attachment(attach);
+    auto result = async_simple::coro::syncAwait(cli.call<echo>(arg));
+    CHECK(result.value() == arg);
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())==attach);
+  }
+  SUBCASE("test client & server attachment with gdr") {
+    auto buffer = make_gpu_buffer("hello2");
+    cli.set_req_attachment2(buffer);
+    auto result = async_simple::coro::syncAwait(cli.call<echo>("hello"));
+    CHECK(result.value() == "hello");
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())=="hello2");
+  }
+  SUBCASE("test client & server attachment with gdr 16M data") {
+    auto buffer = make_gpu_buffer(attach);
+    cli.set_req_attachment2(buffer);
+    auto result = async_simple::coro::syncAwait(cli.call<echo>(arg));
+    CHECK(result.value() == arg);
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())==attach);
+  }
+  SUBCASE("test client set attachment buf & server attachment with gdr") {
+    auto buffer = make_gpu_buffer(attach);
+    cli.set_req_attachment2(buffer);
+    coro_io::heterogeneous_buffer buf(1024*1024*16+1, 0);
+    cli.set_resp_attachment_buf2(buf);
+    auto result = async_simple::coro::syncAwait(cli.call<echo>(arg));
+    CHECK(result.value() == arg);
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())==attach);
+    CHECK(cli.get_resp_attachment2().data()== buffer.data());
+  }
+  SUBCASE("test client set attachment buf & server attachment with gdr and buffer is small than expected") {
+    auto buffer = make_gpu_buffer(attach);
+    cli.set_req_attachment2(buffer);
+    coro_io::heterogeneous_buffer buf(1024*1024*16-1, 0);
+    cli.set_resp_attachment_buf2(buf);
+    auto result = async_simple::coro::syncAwait(cli.call<echo>(arg));
+    CHECK(result.value() == arg);
+    CHECK(make_cpu_buffer(cli.get_resp_attachment2())==attach);
+    CHECK(cli.get_resp_attachment2().data() != buffer.data());
+  }
 }

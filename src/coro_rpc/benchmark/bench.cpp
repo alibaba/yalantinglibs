@@ -209,7 +209,7 @@ async_simple::coro::Lazy<std::error_code> request(const bench_config& conf) {
       auto ec =
           co_await pool->send_request([&](coro_rpc::coro_rpc_client& client)
                                           -> async_simple::coro::Lazy<bool> {
-            client.set_req_attachment(send_str_view);
+            client.set_req_attachment2(send_str_view);
             auto result = co_await client.call<echo>();
             if (!result.has_value()) {
               ELOG_WARN << result.error().msg;
@@ -333,7 +333,7 @@ async_simple::coro::Lazy<std::error_code> request_no_pool(
     coro_io::data_view send_str_view(buf);
     auto& client = *vec[i];
     for (size_t i = 0; i < conf.max_request_count; i++) {
-      client.set_req_attachment(send_str_view);
+      client.set_req_attachment2(send_str_view);
       auto start = std::chrono::steady_clock::now();
       auto result = co_await client.call<echo>();
       if (!result.has_value()) {

@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "asio/buffer.hpp"
+#include "async_simple/Common.h"
 #include "async_simple/Executor.h"
 #include "async_simple/Future.h"
 #include "async_simple/Promise.h"
@@ -362,6 +363,9 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   if constexpr (io == ib_socket_t::io_type::send) {
     max_size = ib_socket.get_free_send_buffer_size();
   }
+  async_simple::logicAssert(
+      max_size > 0,
+      "connection not connected or illegal buffer size setting!");
   auto id = ib_socket.get_gpu_id();
   cuda_stream_handler_t* stream_handler = nullptr;
   if (id >= 0) {

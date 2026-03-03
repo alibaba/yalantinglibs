@@ -47,7 +47,7 @@ class data_view : public std::string_view {
   }
 
   // Conversion operator to std::span<char>
-  operator std::span<char>() const {
+  explicit operator std::span<char>() const {
     return std::span<char>(const_cast<char*>(this->data()), this->size());
   }
 

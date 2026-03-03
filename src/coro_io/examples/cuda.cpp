@@ -19,8 +19,8 @@ void sync_memtest() {
   coro_io::cuda_copy((void*)d_ptr2, 0, (void*)d_ptr, 0, sizeof(data));
   coro_io::cuda_copy(data2, -1, (void*)d_ptr2, 0, sizeof(data));
   async_simple::logicAssert(memcmp(data, data2, sizeof(data))==0,"gpu memcheck failed");
-  coro_io::cuda_free(d_ptr);
-  coro_io::cuda_free(d_ptr2);
+  coro_io::cuda_free((void*)d_ptr);
+  coro_io::cuda_free((void*)d_ptr2);
 }
 
 void sync_memtest_p2p() {
@@ -29,7 +29,7 @@ void sync_memtest_p2p() {
   memset(data, 'A', sizeof(data));
   memset(data+sizeof(data)/2, 'B', sizeof(data)-sizeof(data)/2);
   int gpu_id = 
-  coro_io::cuda_device_t::get_cuda_devices().size() - 1;
+  coro_io::cuda_device_t::get_cuda_devices()->size() - 1;
   if (gpu_id >= 1) {
 
     auto d_ptr = coro_io::cuda_malloc(sizeof(data));
@@ -39,8 +39,8 @@ void sync_memtest_p2p() {
     coro_io::cuda_copy((void*)d_ptr1, gpu_id, (void*)d_ptr, 0, sizeof(data));
     coro_io::cuda_copy(data2, -1, (void*)d_ptr1, gpu_id, sizeof(data));
     async_simple::logicAssert(memcmp(data, data2, sizeof(data))==0,"gpu memcheck failed");
-    coro_io::cuda_free(d_ptr);
-    coro_io::cuda_free(d_ptr1);
+    coro_io::cuda_free((void*)d_ptr);
+    coro_io::cuda_free((void*)d_ptr1);
   }
 }
 
@@ -82,7 +82,7 @@ void async_memtest_p2p() {
   ELOG_DEBUG << "test async memtest p2p";
   char data[256],data2[256];
   int gpu_id = 
-  coro_io::cuda_device_t::get_cuda_devices().size() - 1; 
+  coro_io::cuda_device_t::get_cuda_devices()->size() - 1; 
   if (gpu_id >= 1) {
     memset(data, 'A', sizeof(data));
     memset(data+sizeof(data)/2, 'B', sizeof(data)-sizeof(data)/2);

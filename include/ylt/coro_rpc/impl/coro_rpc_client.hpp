@@ -822,7 +822,7 @@ class coro_rpc_client {
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
     return call<func>(
-        request_config_t{{}, req_attachment_, resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
+        request_config_t{{}, req_attachment_, (std::span<char>)resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
 
@@ -842,7 +842,7 @@ class coro_rpc_client {
   call_for(auto request_timeout_duration, Args &&...args) {
     return call<func>(
         request_config_t{request_timeout_duration, req_attachment_,
-                         resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
+          (std::span<char>)resp_attachment_buffer_,resp_attachment_.gpu_id(),resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
 
@@ -900,7 +900,7 @@ class coro_rpc_client {
     return set_req_attachment(attachment, -1);
   }
 
-  void set_req_attachment(coro_io::data_view attachment) {
+  void set_req_attachment2(coro_io::data_view attachment) {
     return set_req_attachment(std::string_view{attachment},attachment.gpu_id());
   }
   /**
@@ -914,7 +914,7 @@ class coro_rpc_client {
   void set_resp_attachment_buf(std::span<char> buffer) {
     return set_resp_attachment_buf(buffer, -1);
   }
-  void set_resp_attachment_buf(coro_io::data_view attachment) {
+  void set_resp_attachment_buf2(coro_io::data_view attachment) {
     return set_resp_attachment_buf(std::span<char>{attachment},attachment.gpu_id());
   }
 #ifndef YLT_ENABLE_CUDA
@@ -1542,7 +1542,7 @@ class coro_rpc_client {
       file << std::string_view{(char *)&header,
                                coro_rpc_protocol::RESP_HEAD_LEN};
       file << controller->resp_buffer_.read_buf_;
-      file << controller->resp_buffer_.resp_attachment_buf_;
+      file << std::string_view{controller->resp_buffer_.resp_attachment_buf_};
       file.close();
 #endif
       ELOG_DEBUG << "recv rpc response, cost time = " << cost_time
