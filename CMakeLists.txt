@@ -11,7 +11,7 @@ else()
 endif()
 
 project(yaLanTingLibs
-        VERSION 0.5.8
+        VERSION 0.6.0
         DESCRIPTION "yaLanTingLibs"
         HOMEPAGE_URL "https://github.com/alibaba/yalantinglibs"
         LANGUAGES ${PROJECT_LANGUAGES}
