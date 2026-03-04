@@ -22,6 +22,7 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <atomic>
+#include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
