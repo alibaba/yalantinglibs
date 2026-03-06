@@ -139,10 +139,10 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
   T result_;
 
  public:
-  async_rpc_result_value_t(T &&result, resp_body &&buffer,
+  async_rpc_result_value_t(T&& result, resp_body&& buffer,
                            coro_io::data_view attachment)
-      : result_(std::move(result)),
-        async_rpc_result_base(std::move(buffer), attachment) {}
+      : async_rpc_result_base(std::move(buffer), attachment),
+        result_(std::move(result)) {}
   async_rpc_result_value_t(T &&result) : result_(std::move(result)) {}
   T &result() noexcept { return result_; }
   const T &result() const noexcept { return result_; }
