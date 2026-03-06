@@ -609,7 +609,7 @@ class coro_http_server {
                     co_return;
                   }
 
-                  for (int i = 0; i < ranges.size(); i++) {
+                  for (size_t i = 0; i < ranges.size(); i++) {
                     std::string &part_header = multi_heads[i];
                     r = co_await req.get_conn()->write_data(part_header);
                     if (!r) {
