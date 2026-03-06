@@ -833,7 +833,7 @@ class coro_http_server {
       std::scoped_lock lock(*conn_mtx_);
       connections_.emplace(conn_id, conn);
     }
-    return std::move(conn);
+    return conn;
   }
 
   async_simple::coro::Lazy<std::error_code> accept() {
