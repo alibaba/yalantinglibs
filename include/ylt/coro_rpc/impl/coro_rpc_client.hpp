@@ -1388,10 +1388,8 @@ class coro_rpc_client {
  private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      Socket &soc, request_config_t &config, uint32_t &id,
-      coro_io::period_timer &timer, Args &&...args) {
-    using R = decltype(get_return_type<func>());
-
+      Socket& soc, request_config_t& config, uint32_t& id,
+      coro_io::period_timer& timer, Args&&... args) {
     if (control_->has_closed_)
       AS_UNLIKELY {
         ELOG_ERROR << "client has been closed, please re-connect"
