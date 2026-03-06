@@ -87,9 +87,9 @@ class coro_rpc_server_base {
                            conn_timeout_duration = std::chrono::seconds(0),
                        bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
-        conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init},
-        is_enable_tcp_no_delay_(is_enable_tcp_no_delay) {
+        is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
+        conn_timeout_duration_(conn_timeout_duration) {
     acceptors_.push_back(
         std::make_unique<coro_io::tcp_server_acceptor>(address, port));
   }
