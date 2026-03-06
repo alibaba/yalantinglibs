@@ -268,11 +268,11 @@ class coro_rpc_client {
    * @param executor coro_io's executor, default executor is come
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       config conf = {})
-      : control_(std::make_shared<control_t>(executor, false, conf.local_ip)),
-        timer_(std::make_unique<coro_io::period_timer>(
-            executor->get_asio_executor())) {
+      : timer_(std::make_unique<coro_io::period_timer>(
+            executor->get_asio_executor())),
+        control_(std::make_shared<control_t>(executor, false, conf.local_ip)) {
     if (!init_config(conf)) [[unlikely]] {
       close();
     }
@@ -1438,7 +1438,7 @@ class coro_rpc_client {
       char buffer[coro_rpc_protocol::RESP_HEAD_LEN];
       auto tp = std::chrono::steady_clock::now();
       ret = co_await coro_io::async_read(socket, asio::buffer(buffer));
-      auto ec = struct_pack::deserialize_to<
+      [[maybe_unused]] auto ec = struct_pack::deserialize_to<
           struct_pack::sp_config::DISABLE_ALL_META_INFO>(
           header, std::string_view{buffer, buffer + sizeof(buffer)});
       assert(!ec);
