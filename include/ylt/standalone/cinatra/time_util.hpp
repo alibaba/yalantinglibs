@@ -263,7 +263,7 @@ constexpr std::string_view YMON[12] = {"Jan", "Feb", "Mar", "Apr",
 
 template <size_t N>
 inline void to_int(int num, char c, char *p) {
-  for (int i = 0; i < N; i++) {
+  for (size_t i = 0; i < N; i++) {
     p[N - 1 - i] = digits[num % 10];
     num = num / 10;
   }
@@ -301,7 +301,7 @@ inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
 
   char *p = buf;
 
-  for (int i = 0; i < format.size(); ++i) {
+  for (size_t i = 0; i < format.size(); ++i) {
     if (format[i] == '%') {
       char c = i + 2 < format.size() ? format[i + 2] : '0';
       i++;

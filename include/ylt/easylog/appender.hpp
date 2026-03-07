@@ -38,7 +38,7 @@ constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 template <size_t N, char c>
 inline void to_int(int num, char *p, int &size) {
-  for (int i = 0; i < N; i++) {
+  for (size_t i = 0; i < N; i++) {
     p[--size] = digits[num % 10];
     num = num / 10;
   }
@@ -94,11 +94,11 @@ inline char *get_time_str(const auto &now) {
 class appender {
  public:
   appender() = default;
-  appender(const std::string &filename, bool async, bool enable_console,
+  appender(const std::string& filename, bool async, bool enable_console,
            size_t max_file_size, size_t max_files, bool flush_every_time)
       : has_init_(true),
-        flush_every_time_(flush_every_time),
         enable_console_(enable_console),
+        flush_every_time_(flush_every_time),
         max_file_size_(max_file_size) {
     filename_ = filename;
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));

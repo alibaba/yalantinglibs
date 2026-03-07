@@ -609,7 +609,7 @@ class coro_http_server {
                     co_return;
                   }
 
-                  for (int i = 0; i < ranges.size(); i++) {
+                  for (size_t i = 0; i < ranges.size(); i++) {
                     std::string &part_header = multi_heads[i];
                     r = co_await req.get_conn()->write_data(part_header);
                     if (!r) {
@@ -1109,7 +1109,6 @@ class coro_http_server {
     asio::ip::address_v6::bytes_type bytes;
     unsigned long scope_id = 0;
 
-    struct in6_addr addr;
     asio::error_code ec;
     return asio::detail::socket_ops::inet_pton(ASIO_OS_DEF(AF_INET6),
                                                address.data(), &bytes[0],

@@ -139,10 +139,10 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
   T result_;
 
  public:
-  async_rpc_result_value_t(T &&result, resp_body &&buffer,
+  async_rpc_result_value_t(T&& result, resp_body&& buffer,
                            coro_io::data_view attachment)
-      : result_(std::move(result)),
-        async_rpc_result_base(std::move(buffer), attachment) {}
+      : async_rpc_result_base(std::move(buffer), attachment),
+        result_(std::move(result)) {}
   async_rpc_result_value_t(T &&result) : result_(std::move(result)) {}
   T &result() noexcept { return result_; }
   const T &result() const noexcept { return result_; }
@@ -268,11 +268,11 @@ class coro_rpc_client {
    * @param executor coro_io's executor, default executor is come
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       config conf = {})
-      : control_(std::make_shared<control_t>(executor, false, conf.local_ip)),
-        timer_(std::make_unique<coro_io::period_timer>(
-            executor->get_asio_executor())) {
+      : timer_(std::make_unique<coro_io::period_timer>(
+            executor->get_asio_executor())),
+        control_(std::make_shared<control_t>(executor, false, conf.local_ip)) {
     if (!init_config(conf)) [[unlikely]] {
       close();
     }
@@ -1388,10 +1388,8 @@ class coro_rpc_client {
  private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      Socket &soc, request_config_t &config, uint32_t &id,
-      coro_io::period_timer &timer, Args &&...args) {
-    using R = decltype(get_return_type<func>());
-
+      Socket& soc, request_config_t& config, uint32_t& id,
+      coro_io::period_timer& timer, Args&&... args) {
     if (control_->has_closed_)
       AS_UNLIKELY {
         ELOG_ERROR << "client has been closed, please re-connect"
@@ -1438,7 +1436,7 @@ class coro_rpc_client {
       char buffer[coro_rpc_protocol::RESP_HEAD_LEN];
       auto tp = std::chrono::steady_clock::now();
       ret = co_await coro_io::async_read(socket, asio::buffer(buffer));
-      auto ec = struct_pack::deserialize_to<
+      [[maybe_unused]] auto ec = struct_pack::deserialize_to<
           struct_pack::sp_config::DISABLE_ALL_META_INFO>(
           header, std::string_view{buffer, buffer + sizeof(buffer)});
       assert(!ec);

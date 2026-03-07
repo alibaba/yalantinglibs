@@ -105,8 +105,6 @@ struct coro_rpc_protocol {
     if (ec) [[unlikely]] {
       co_return std::move(ec);
     }
-    auto i = struct_pack::get_needed_size<
-        struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
     auto ec2 = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(
         req_head,
@@ -179,8 +177,6 @@ struct coro_rpc_protocol {
     if (ec) [[unlikely]] {
       co_return std::move(ec);
     }
-    auto i = struct_pack::get_needed_size<
-        struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
     auto ec2 = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(
         req_head,
