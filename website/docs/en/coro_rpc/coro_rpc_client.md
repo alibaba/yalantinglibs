@@ -62,13 +62,58 @@ The duration can be any `std::chrono::duration` type, common examples include `s
 
 coro_rpc supports using OpenSSL to encrypt connections. After installing OpenSSL and importing yalantinglibs into your project with CMake's `find_package` or `fetch_content`, you can enable SSL support by setting the CMake option YLT_ENABLE_SSL=ON. Alternatively, you might manually add the YLT_ENABLE_SSL macro and manually link to OpenSSL.
 
-Once SSL support has been enabled, users can invoke the `init_ssl` function before establishing a connection to the server. This will create an encrypted link between the client and the server. Itâ€™s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
+Once SSL support has been enabled, users can invoke the `init_ssl` function before establishing a connection to the server. This will create an encrypted link between the client and the server. It¡¯s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
+
+For one -way SSL authentication(server authentication only),you can use the `init_ssl` function before establishing a connection:The first parameter is the base path where the SSL certificates are located, and the second parameter is the CA certificate filename for verifying the server.
+
+Server-side configuration:
 
 ```cpp
-client.init_ssl("./","server.crt");
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // Empty for one-way authentication
+ssl_conf.enable_client_verify = false;  // Disable client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
-The first string represents the base path where the SSL certificate is located, the second string represents the relative path of the SSL certificate relative to the base path.
+Mutual SSL Authentication For mutual SSL authentication(both client and server authentication),the client needs to provide its own certificate :
+
+```cpp
+    // Client-side mutual authentication
+    client.init_ssl("./",  // Base path
+                    "ca.crt",  // CA certificate for server verification
+                    "client.crt",  // Client certificate
+                    "client.key",  // Client private key
+                    "127.0.0.1"  // Server hostname for SNI
+    );
+```
+
+Server-side configuration for mutual authentication:
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA certificate for verifying clients
+ssl_conf.enable_client_verify = true;  // Enable mandatory client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**Important Notes**:
+- The `enable_client_verify` flag enables mandatory client certificate verification
+- When mutual authentication is enabled, clients must provide a valid certificate signed by the CA specified in `ca_cert_file`
+- The hostname parameter must match the Common Name (CN) in the server certificate
 
 We also support NTLS if you enable it by CMAKE OPTION `YLT_ENABLE_NTLS`.
 
@@ -165,12 +210,12 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
       .max_memory_usage = 4 * 1024 * 1024, // Max memory usage (allocation fails beyond this limit)
       .memory_usage_recorder = nullptr; // nullopt means that memory usage across different devices will be counted together. If you want the memory pool to have independent memory usage tracking, you should assign a non-null std::shared_ptr<std::atomic<std::size_t>> as the recorder.
       .idle_timeout = 5s // Buffers unused for this duration will be reclaimed
-    }
-  }); 
+  }
+  });
   // ...
 ```
 
-2. Specify the RDMA NIC to use when initializing the connection
+      2. Specify the RDMA NIC to use when initializing the connection
 ```cpp
   coro_rpc_client cli;
   cli.init_ibv({
@@ -178,23 +223,23 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
   });
 ```
 
-3. Create and use your own `ib_device_t`
+      3. Create and use your own `ib_device_t`
 ```cpp
   auto dev = coro_io::ib_device_t::create({
       .dev_name = "",  // If dev_name is empty, the first device in the device list will be used.
       .port = 1,       // Manually specify the NIC port number.
-      .use_best_gid_index = true,  // Automatically find the best GID index for this device.
+           .use_best_gid_index = true,  // Automatically find the best GID index for this device.
       .gid_index = 0,   // Manually specify the GID index; takes effect when automatic lookup is disabled or fails.
-      .buffer_pool_config = {
-        // ...
+           .buffer_pool_config = {
+               // ...
       }
   });
 ```
 
-4. Query all currently successfully registered RDMA global devices
+      4. Query all currently successfully registered RDMA global devices
 ```cpp
-  // Get all devices
-  auto devices = coro_io::g_ib_device_manager();
+      // Get all devices
+      auto devices = coro_io::g_ib_device_manager();
   for (auto &dev: devices.get_dev_list()) {
     std::cout << "name:" << dev.first;
     // dev.second is a global std::shared_ptr<ib_device_t>
@@ -208,7 +253,7 @@ Each `coro_rpc_client` is bound to a specific IO thread. By default, it selects 
 ```cpp
 auto executor=coro_io::get_global_executor();
 coro_rpc_client client(executor),client2(executor);
-// Both clients are bound to the same IO thread.
+  // Both clients are bound to the same IO thread.
 ```
 
 Each time a coroutine-based IO task is initiated (such as `connect`, `call`, `send_request`), the client internally submits the IO event to the operating system. When the IO event is completed, the coroutine is then resumed on the bound IO thread to continue execution. For example, in the following code, the task switches to the IO thread for execution after calling connect.
@@ -239,7 +284,7 @@ using namespace coro_rpc;
 using namespace async_simple::coro;
 std::string_view echo(std::string_view);
 Lazy<void> example(coro_rpc_client& client) {
-  // send request to the server 
+  // send request to the server
   Lazy<async_rpc_result<std::string_view>> handler = co_await client.send_request<echo>("Hello");
   // then wait server response
   async_rpc_result<std::string_view> result = co_await std::move(handler);
@@ -281,13 +326,13 @@ auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(
     conf.url, pool_conf);
 auto ret = co_await pool->send_request(
     [&](coro_io::client_reuse_hint, coro_rpc::coro_rpc_client& client) {
-        return client.send_request<echo>("hello");
-    });
+             return client.send_request<echo>("hello");
+           });
 if (ret.has_value()) {
-    auto result = co_await std::move(ret.value());
-    if (result.has_value()) {
+  auto result = co_await std::move(ret.value());
+  if (result.has_value()) {
         assert(result.value()=="hello"); 
-    }
+  }
 }
 ```
 

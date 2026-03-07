@@ -28,6 +28,7 @@ add_executable(coro_http_test
         test_cinatra_websocket.cpp
         test_http_parse.cpp
         test_http_client_filter.cpp
+        test_http_ssl_mutual_auth.cpp
         main.cpp
         )
 

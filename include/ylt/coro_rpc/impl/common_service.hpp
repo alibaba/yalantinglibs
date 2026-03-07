@@ -35,6 +35,10 @@ struct ssl_configure {
   std::string cert_file;  //!< relative path of certificate chain file
   std::string key_file;   //!< relative path of private key file
   std::string dh_file;    //!< relative path of tmp dh file (optional)
+  std::string ca_cert_file;  //!< relative path of CA certificate file for
+                             //!< client verification (optional)
+  bool enable_client_verify =
+      false;  //!< enable client certificate verification
 };
 #ifdef YLT_ENABLE_NTLS
 ///*!
@@ -57,7 +61,7 @@ struct ssl_configure {
  */
 enum class ntls_mode {
   tlcp_dual_cert,    //!< GB/T 38636-2020 TLCP with dual certificates (signing +
-                     //!< encryption)
+                   //!< encryption)
   tls13_single_cert  //!< RFC 8998 TLS 1.3 + GM with single certificate
 };
 
@@ -84,8 +88,8 @@ struct ssl_ntls_configure {
   // TLS 1.3 + GM single certificate configuration (RFC 8998)
   std::string gm_cert_file;  //!< relative path of single SM2 certificate file
                              //!< (for TLS 1.3 + GM)
-  std::string gm_key_file;   //!< relative path of single SM2 private key file
-                             //!< (for TLS 1.3 + GM)
+  std::string gm_key_file;  //!< relative path of single SM2 private key file
+                            //!< (for TLS 1.3 + GM)
 
   // Common NTLS configuration
   std::string
@@ -170,6 +174,46 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     }
     else {
       ELOG_INFO << "no temp dh file " << dh_file.string();
+    }
+
+    // Load CA certificate for client verification if provided
+    asio::error_code ec;
+    if (!conf.ca_cert_file.empty()) {
+      auto ca_cert_file = fs::path(conf.base_path).append(conf.ca_cert_file);
+      if (file_exists(ca_cert_file)) {
+        context.load_verify_file(ca_cert_file.string(), ec);
+        if (ec) {
+          ELOG_ERROR << "failed to load CA certificate: " << ec.message();
+          return false;
+        }
+        else {
+          ELOG_INFO << "loaded CA certificate: " << ca_cert_file.string();
+        }
+      }
+      else {
+        ELOG_ERROR << "CA certificate file not found: "
+                   << ca_cert_file.string();
+        return false;
+      }
+    }
+
+    // Set verification mode based on client verification configuration
+    if (conf.enable_client_verify) {
+      // Require client certificate and fail if not provided
+      context.set_verify_mode(
+          asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert, ec);
+      if (ec) {
+        ELOG_WARN << "failed to set verify mode: " << ec.message();
+      }
+      else {
+        ELOG_INFO << "client certificate verification enabled (mandatory)";
+      }
+    }
+    else {
+      context.set_verify_mode(asio::ssl::verify_none, ec);
+      if (ec) {
+        ELOG_WARN << "failed to set verify mode: " << ec.message();
+      }
     }
 
     return true;
@@ -401,21 +445,34 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
       if (file_exists(ca_cert_file)) {
         context.load_verify_file(ca_cert_file.string(), ec);
         if (ec) {
-          ELOG_WARN << "failed to load CA certificate: " << ec.message()
-                    << ", continuing without it";
+          ELOG_ERROR << "failed to load CA certificate: " << ec.message();
+          return false;
         }
+      }
+      else {
+        ELOG_ERROR << "CA certificate file not found: "
+                   << ca_cert_file.string();
+        return false;
       }
     }
 
     // Set verification mode
     if (conf.enable_client_verify) {
-      context.set_verify_mode(asio::ssl::verify_peer, ec);
+      // Require client certificate and fail if not provided
+      context.set_verify_mode(
+          asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert, ec);
+      if (ec) {
+        ELOG_WARN << "failed to set verify mode: " << ec.message();
+      }
+      else {
+        ELOG_INFO << "client certificate verification enabled (mandatory)";
+      }
     }
     else {
       context.set_verify_mode(asio::ssl::verify_none, ec);
-    }
-    if (ec) {
-      ELOG_WARN << "failed to set verify mode: " << ec.message();
+      if (ec) {
+        ELOG_WARN << "failed to set verify mode: " << ec.message();
+      }
     }
 
     ELOG_INFO << "NTLS server context initialized successfully";

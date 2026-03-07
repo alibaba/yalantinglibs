@@ -63,7 +63,8 @@ class coro_http_connection
     return false;
   }
   bool init_ssl(const std::string &cert_file, const std::string &key_file,
-                std::string passwd) {
+                std::string passwd, const std::string &ca_cert_file = "",
+                bool enable_client_verify = false) {
     unsigned long ssl_options = asio::ssl::context::default_workarounds |
                                 asio::ssl::context::no_sslv2 |
                                 asio::ssl::context::single_dh_use;
@@ -86,6 +87,48 @@ class coro_http_connection
       if (fs::exists(key_file, ec)) {
         ssl_ctx_->use_private_key_file(std::move(key_file),
                                        asio::ssl::context::pem);
+      }
+
+      // Load CA certificate for client verification if provided
+      if (!ca_cert_file.empty()) {
+        if (fs::exists(ca_cert_file, ec)) {
+          ssl_ctx_->load_verify_file(ca_cert_file, ec);
+          if (ec) {
+            CINATRA_LOG_ERROR
+                << "failed to load CA certificate: " << ca_cert_file
+                << ", error: " << ec.message();
+            return false;
+          }
+          else {
+            CINATRA_LOG_INFO << "loaded CA certificate: " << ca_cert_file;
+          }
+        }
+        else {
+          CINATRA_LOG_ERROR << "CA certificate file not found: "
+                            << ca_cert_file;
+          return false;
+        }
+      }
+
+      // Set verification mode based on client verification configuration
+      if (enable_client_verify) {
+        // Require client certificate and fail if not provided
+        ssl_ctx_->set_verify_mode(
+            asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert,
+            ec);
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
+        else {
+          CINATRA_LOG_INFO
+              << "client certificate verification enabled (mandatory)";
+        }
+      }
+      else {
+        ssl_ctx_->set_verify_mode(asio::ssl::verify_none, ec);
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
       }
 
       socket_wrapper_.ssl_stream() =
@@ -380,23 +423,39 @@ class coro_http_connection
           asio::error_code ec;
           ssl_ctx_->load_verify_file(ca_cert_path.string(), ec);
           if (ec) {
-            CINATRA_LOG_WARNING
+            CINATRA_LOG_ERROR
                 << "failed to load CA certificate: " << ca_cert_path.string()
                 << ", error: " << ec.message();
+            return false;
           }
+        }
+        else {
+          CINATRA_LOG_ERROR << "CA certificate file not found: "
+                            << ca_cert_path.string();
+          return false;
         }
       }
 
       // Set verification mode
       asio::error_code ec;
       if (ntls_config.enable_client_verify) {
-        ssl_ctx_->set_verify_mode(asio::ssl::verify_peer, ec);
+        // Require client certificate and fail if not provided
+        ssl_ctx_->set_verify_mode(
+            asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert,
+            ec);
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
+        else {
+          CINATRA_LOG_INFO
+              << "client certificate verification enabled (mandatory)";
+        }
       }
       else {
         ssl_ctx_->set_verify_mode(asio::ssl::verify_none, ec);
-      }
-      if (ec) {
-        CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
       }
 
       // Create SSL stream
