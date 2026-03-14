@@ -38,6 +38,8 @@
 
 #include <ylt/util/b_stacktrace.h>
 
+#include <memory>
+
 #include "easylog/appender.hpp"
 
 namespace easylog {
@@ -100,10 +102,10 @@ class logger {
             bool flush_every_time,
             std::chrono::milliseconds log_sample_interval = {},
             std::chrono::milliseconds log_sample_duartion = {}) {
-    static appender appender(filename, async, enable_console, max_file_size,
-                             max_files, flush_every_time);
+    appender_ =
+        std::make_unique<appender>(filename, async, enable_console,
+                                   max_file_size, max_files, flush_every_time);
     async_ = async;
-    appender_ = &appender;
     min_severity_ = min_severity;
     enable_console_ = enable_console;
     log_sample_interval_ = log_sample_interval;
@@ -128,7 +130,11 @@ class logger {
     appenders_.emplace_back(std::move(fn));
   }
 
-  void stop_async_log() { appender_->stop(); }
+  void stop_async_log() {
+    if (appender_) {
+      appender_->stop();
+    }
+  }
 
   // set and get
   void set_min_severity(Severity severity) { min_severity_ = severity; }
@@ -157,14 +163,13 @@ class logger {
 
  private:
   logger() {
-    static appender appender{};
-    appender.start_thread();
-    appender.enable_console(true);
+    appender_ = std::make_unique<appender>();
+    appender_->enable_console(true);
     async_ = true;
-    appender_ = &appender;
   }
 
-  logger(const logger &) = default;
+  logger(const logger &) = delete;
+  logger& operator=(const logger &) = delete;
 
   void append_record(record_t record) { appender_->write(std::move(record)); }
 
@@ -190,7 +195,7 @@ class logger {
   std::atomic<std::chrono::milliseconds> log_sample_interval_;
   std::atomic<std::chrono::milliseconds> log_sample_duration_;
   std::chrono::system_clock::time_point init_time_{};
-  appender *appender_ = nullptr;
+  std::unique_ptr<appender> appender_ = nullptr;
   std::vector<std::function<void(record_t &record)>> appenders_;
   inline static std::atomic<bool> has_destruct_ = false;
 };
