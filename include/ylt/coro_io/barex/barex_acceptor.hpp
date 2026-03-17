@@ -27,12 +27,14 @@
 #include "async_simple/coro/ConditionVariable.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/Mutex.h"
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/util/concurrentqueue.h"
 namespace coro_io {
 struct barex_context_t;
 struct barex_socket_impl_t;
 struct barex_acceptor_impl_t
     : public std::enable_shared_from_this<barex_acceptor_impl_t> {
+  coro_io::ExecutorWrapper<>* executor_;
   async_simple::coro::ConditionVariable<async_simple::coro::Mutex> cv_;
   async_simple::coro::Mutex mutex_;
   std::atomic<std::size_t> new_connection_cnt_ = 0;
@@ -43,11 +45,12 @@ struct barex_acceptor_impl_t
   ylt::detail::moodycamel::ConcurrentQueue<std::shared_ptr<barex_socket_impl_t>>
       sockets;
   barex_acceptor_impl_t(
-      uint16_t port,
+      coro_io::ExecutorWrapper<>* executor, uint16_t port,
       std::vector<std::shared_ptr<coro_io::barex_context_t>> ctxs)
-      : port_(port), ctxs_(std::move(ctxs)) {}
+      : executor_(executor), port_(port), ctxs_(std::move(ctxs)) {}
   std::error_code listen();
   async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>> accept();
+  async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>> accept_impl();
   void accept_connection(std::shared_ptr<barex_socket_impl_t> soc) {
     if (sockets.try_enqueue(std::move(soc))) {
       ++new_connection_cnt_;
@@ -60,8 +63,21 @@ struct barex_acceptor_impl_t
     bool expected = false;
     if (has_closed_.compare_exchange_strong(expected, true)) {
       ELOG_DEBUG << "acceptor closed";
-      listener_->Shutdown();
-      listener_->WaitStop();
+      accl::barex::Status result = listener_->Shutdown();
+      if (!result.IsOk()) {
+        ELOG_ERROR << "barex listener shutdown failed: " << result.ErrMsg();
+      }
+      try {
+        result = listener_->WaitStop();
+
+        if (!result.IsOk()) {
+          ELOG_ERROR << "barex listener WaitStop failed: " << result.ErrMsg();
+        }
+      } catch (const std::exception& e) {
+        ELOG_ERROR << "barex listener WaitStop failed: " << e.what();
+      } catch (...) {
+        ELOG_ERROR << "barex listener WaitStop failed";
+      }
       cv_.notify();
     }
   }

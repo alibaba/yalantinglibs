@@ -26,7 +26,8 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
                                         coro_io::get_global_barex_device());
   CHECK(ctx != nullptr);
   coro_io::barex_acceptor_t acceptor =
-      std::make_shared<coro_io::barex_acceptor_impl_t>(port, std::vector{ctx});
+      std::make_shared<coro_io::barex_acceptor_impl_t>(
+          coro_io::get_global_executor(), port, std::vector{ctx});
   auto ec = acceptor->listen();
   ELOG_INFO << "start accept over";
   coro_io::barex_socket_t soc = co_await acceptor->accept();

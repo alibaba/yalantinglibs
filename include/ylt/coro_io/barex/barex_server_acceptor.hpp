@@ -47,7 +47,7 @@ struct barex_server_acceptor : public server_acceptor_base {
       ctxs.push_back(coro_io::get_barex_context(e.get(), config_.dev));
     }
     accepter = std::make_shared<coro_io::barex_acceptor_impl_t>(
-        port_, std::move(ctxs));
+        pool_->get_executor(), port_, std::move(ctxs));
     auto err = accepter->listen();
     if (err) {
       if (err.value() == accl::barex::BAREX_ERR_TCP) {

@@ -33,6 +33,8 @@
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
 
+std::atomic<bool> stop_flag = false;
+
 struct config_t {
   std::size_t buffer_size = 256 * 1024;
   std::size_t request_size = 8 * 1024 * 1024;
@@ -80,7 +82,7 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
   ELOG_INFO << "read data ok:" << len;
   char ch = 'A';
   auto s_view = std::string_view{&ch, 1};
-  while (true) {
+  while (!stop_flag) {
     ELOG_DEBUG << "start read head from client" << &soc;
     auto [r, s] = co_await async_simple::coro::collectAll(
         coro_io::async_read(soc, std::string_view{buffer.data(), 8}),
@@ -118,14 +120,14 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   auto ctx = coro_io::get_barex_context(coro_io::get_global_executor(), dev);
   CHECK(ctx != nullptr);
   coro_io::barex_acceptor_t acceptor =
-      std::make_shared<coro_io::barex_acceptor_impl_t>(config.port,
-                                                       std::vector{ctx});
+      std::make_shared<coro_io::barex_acceptor_impl_t>(
+          coro_io::get_global_executor(), config.port, std::vector{ctx});
   auto ec = acceptor->listen();
   if (ec) [[unlikely]] {
     co_return ec;
   }
   ELOG_INFO << "tcp listening";
-  while (true) {
+  while (!stop_flag) {
     coro_io::barex_socket_t soc;
     auto ec = co_await coro_io::async_accept(acceptor, soc);
     if (ec) [[unlikely]] {
@@ -151,7 +153,7 @@ async_simple::coro::Lazy<std::error_code> echo_client(
   recv_buffer.resize(1);
   std::string_view recv_view = std::string_view{recv_buffer};
   ELOG_INFO << "start echo";
-  while (true) {
+  while (!stop_flag) {
     auto &&[r, s] = co_await async_simple::coro::collectAll(
         coro_io::async_read(soc, recv_view),
         coro_io::async_write(soc, send_view));
@@ -226,7 +228,9 @@ TEST_CASE("barex socket pressure test") {
   if (config.enable_client.size()) {
     for (int i = 0; i < config.concurrency; ++i)
       echo_connect().start([](auto &&ec) {
-        ELOG_ERROR << "connect over:" << ec.value().message();
+        if (ec.value()) {
+          ELOG_ERROR << "connect over:" << ec.value().message();
+        }
       });
   }
   std::atomic<uint64_t> *cnt_p;
@@ -242,5 +246,7 @@ TEST_CASE("barex socket pressure test") {
     std::cout << "Throughput:" << 8.0 * c / 1000'000'000
               << " Gb/s, alive connection:" << connect_cnt << std::endl;
   }
+  stop_flag = true;
+  std::this_thread::sleep_for(std::chrono::seconds{1});
   // easylog::logger<>::instance().set_min_severity(old_s);
 }

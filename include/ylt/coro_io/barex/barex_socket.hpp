@@ -174,21 +174,9 @@ class barex_socket_impl_t
     if (barex_context_ == nullptr) [[unlikely]] {
       barex_context_ = get_barex_context(executor_, config_.dev);
       if (barex_context_ == nullptr) {
-        ELOG_ERROR << "init XConnector failed, get nullptr ctx";
+        ELOG_ERROR << "init XContext failed, get nullptr ctx";
         co_return std::make_error_code(std::errc::not_connected);
       }
-    }
-    if (connector_ == nullptr) [[unlikely]] {
-      accl::barex::XConnector* connector;
-      auto result = accl::barex::XConnector::NewInstance(
-          connector, 1, accl::barex::TIMER_30S,
-          {barex_context_->context_.get()});
-      if (result) {
-        ELOG_ERROR << "init XConnector failed:" << result;
-        co_return detail::to_std_error_code(result);
-      }
-      assert(connector != nullptr);
-      connector_.reset(connector);
     }
     ELOG_DEBUG << "accl barex start connect to "
                << endpoint.address().to_string() << ":" << endpoint.port()
@@ -196,14 +184,15 @@ class barex_socket_impl_t
     auto result = co_await coro_io::async_io<
         std::pair<std::error_code, accl::barex::XChannel*>>(
         [&](auto&& cb) {
-          accl::barex::BarexResult result = connector_->Connect(
-              endpoint.address().to_string(), endpoint.port(),
-              [cb](accl::barex::XChannel* channel,
-                   accl::barex::Status s) mutable {
-                ELOG_DEBUG << "accl barex connect callback";
-                cb(std::pair<std::error_code, accl::barex::XChannel*>{
-                    detail::to_std_error_code(s), channel});
-              });
+          accl::barex::BarexResult result =
+              barex_context_->get_connector()->Connect(
+                  endpoint.address().to_string(), endpoint.port(),
+                  [cb](accl::barex::XChannel* channel,
+                       accl::barex::Status s) mutable {
+                    ELOG_DEBUG << "accl barex connect callback";
+                    cb(std::pair<std::error_code, accl::barex::XChannel*>{
+                        detail::to_std_error_code(s), channel});
+                  });
           if (result) {
             cb(std::pair<std::error_code, accl::barex::XChannel*>{
                 detail::to_std_error_code(result), nullptr});
@@ -237,15 +226,64 @@ class barex_socket_impl_t
       return;
     }
     ELOG_DEBUG << "barex socket closing, this=" << (void*)this;
-    if (channel_ && channel_->IsActive()) {
-      channel_->Close();
-      channel_->Destroy();
+    if (barex_context_) {
+      if (channel_) {
+        if (channel_->IsServerChannel()) {
+          accl::barex::Status s = accl::barex::Status::OK();
+          if (channel_->IsActive()) {
+            s = channel_->Close();
+            if (!s.IsOk()) {
+              ELOG_WARN << "barex socket closed failed, this=" << (void*)this
+                        << " error msg: " << s.ErrMsg();
+            }
+          }
+          s = channel_->Destroy();
+          if (!s.IsOk()) {
+            ELOG_WARN << "barex socket closed failed, this=" << (void*)this
+                      << " error msg: " << s.ErrMsg();
+          }
+        }
+        else {
+          auto connector = barex_context_->get_connector();
+          accl::barex::Status s = connector->CloseChannel(
+              channel_, [this, channel = channel_,
+                         connector = connector](accl::barex::Status s) {
+                if (!s.IsOk()) {
+                  ELOG_WARN
+                      << "barex socket closed failed, this=" << (void*)this
+                      << " error msg: " << s.ErrMsg();
+                }
+                if (channel_->IsActive()) {
+                  s = channel->Close();
+                  if (!s.IsOk()) {
+                    ELOG_WARN
+                        << "barex socket closed failed, this=" << (void*)this
+                        << " error msg: " << s.ErrMsg();
+                  }
+                }
+
+                s = channel->Destroy();
+                if (!s.IsOk()) {
+                  ELOG_WARN
+                      << "barex socket closed failed, this=" << (void*)this
+                      << " error msg: " << s.ErrMsg();
+                }
+
+                s = connector->CloseAndDeleteChannel(channel);
+                if (!s.IsOk()) {
+                  ELOG_WARN
+                      << "barex socket closed failed, this=" << (void*)this
+                      << " error msg: " << s.ErrMsg();
+                }
+              });
+          if (!s.IsOk()) {
+            ELOG_WARN << "barex socket closed failed, this=" << (void*)this
+                      << " error msg: " << s.ErrMsg();
+          }
+        }
+      }
     }
-    if (connector_) {
-      connector_->Shutdown();
-      connector_->WaitStop();
-      connector_ = nullptr;
-    }
+
     if (this->barex_context_) {
       barex_context_ = nullptr;
     }
@@ -453,7 +491,6 @@ class barex_socket_impl_t
   accl::barex::XChannel* channel_ = nullptr;
   // client:
   coro_io::ExecutorWrapper<>* executor_ = nullptr;
-  std::unique_ptr<accl::barex::XConnector> connector_;
   std::atomic<bool> has_closed_ = false;
   std::vector<std::span<char>> read_target_;
   std::size_t read_target_size_ = 0;
@@ -565,6 +602,14 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
 
 inline async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>>
 barex_acceptor_impl_t::accept() {
+  auto ret = co_await accept_impl();
+  if (!executor_->currentThreadInExecutor()) {
+    co_await coro_io::dispatch(executor_->get_asio_executor());
+  }
+  co_return std::move(ret);
+}
+inline async_simple::coro::Lazy<std::shared_ptr<barex_socket_impl_t>>
+barex_acceptor_impl_t::accept_impl() {
   std::shared_ptr<barex_socket_impl_t> soc;
   do {
     sockets.try_dequeue(soc);
@@ -574,7 +619,6 @@ barex_acceptor_impl_t::accept() {
     else {
       ELOG_TRACE << "waiting for new connection";
       auto lock_guard = co_await mutex_.coScopedLock();
-
       co_await cv_.wait(mutex_, [this]() {
         return new_connection_cnt_ > 0 || has_closed_;
       });

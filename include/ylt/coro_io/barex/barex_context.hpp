@@ -78,6 +78,11 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
   std::unique_ptr<asio::posix::stream_descriptor> fd_ = nullptr;
   std::weak_ptr<barex_acceptor_impl_t> acceptor_;
   std::once_flag flag;
+  std::unique_ptr<accl::barex::XConnector> connector_;
+
+  accl::barex::XConnector* get_connector() const noexcept {
+    return connector_.get();
+  }
 
   barex_context_t(std::shared_ptr<barex_device_t> dev,
                   ExecutorWrapper<>* executor)
@@ -110,6 +115,10 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
       if (auto acceptor = acceptor_.lock()) {
         acceptor->close();
       }
+      if (connector_) {
+        connector_->Shutdown();
+        connector_->WaitStop();
+      }
     });
   }
 
@@ -130,6 +139,19 @@ struct barex_context_t : std::enable_shared_from_this<barex_context_t> {
     assert(context != nullptr);
     context_.reset(context);
     result = set_channel_callback();
+    if (result) {
+      ELOG_ERROR << "set channel callback failed:" << result;
+      return result;
+    }
+    accl::barex::XConnector* connector;
+    result = accl::barex::XConnector::NewInstance(
+        connector, 1, accl::barex::TIMER_30S, {context_.get()});
+    if (result) {
+      ELOG_ERROR << "init XConnector failed:" << result;
+      return result;
+    }
+    assert(connector != nullptr);
+    connector_.reset(connector);
     return result;
   }
   void set_acceptor(barex_acceptor_impl_t* acceptor) {

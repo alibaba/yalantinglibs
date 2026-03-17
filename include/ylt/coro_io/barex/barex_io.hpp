@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ylt/coro_io/coro_io.hpp"
 #define CMAKE_INCLUDE
 #include <system_error>
 
@@ -90,9 +91,9 @@ inline std::vector<std::span<char>> make_split_buffer(
   }
   return result;
 }
-async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
-    barex_socket_t::io_type io, coro_io::barex_socket_t& barex_socket,
-    std::vector<std::span<char>> buffer, bool read_some = false) {
+inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
+async_io_impl(barex_socket_t::io_type io, coro_io::barex_socket_t& barex_socket,
+              std::vector<std::span<char>> buffer, bool read_some = false) {
   int cnt = 0;
   if (!barex_socket.get_executor().running_in_this_thread()) {
     // switch to io_thread
@@ -123,6 +124,9 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_io_impl(
     auto [ec, len] =
         co_await coro_io::async_io<std::pair<std::error_code, std::size_t>>(
             std::move(func), barex_socket);
+    if (!barex_socket.get_executor().running_in_this_thread()) {
+      co_await coro_io::dispatch(barex_socket.get_executor());
+    }
     ELOG_TRACE << "ready recv waiting, got len:" << len
                << ",ec:" << ec.message();
     io_completed_size += len;
