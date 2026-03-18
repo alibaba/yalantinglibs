@@ -148,10 +148,10 @@ async_io_impl(barex_socket_t::io_type io, coro_io::barex_socket_t& barex_socket,
         }
       }
       ++cnt;
-      ELOG_INFO << "post send, cnt:" << cnt
-                << ",this:" << (void*)barex_socket.get_impl().get();
+      ELOG_TRACE << "post send, cnt:" << cnt
+                 << ",this:" << (void*)barex_socket.get_impl().get();
       ec = barex_socket.get_impl()->post_send(e);
-      ELOG_INFO << "post send finished:" << ec.message();
+      ELOG_TRACE << "post send finished:" << ec.message();
       if (ec) {
         break;
       }

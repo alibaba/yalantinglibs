@@ -54,10 +54,15 @@ struct barex_acceptor_impl_t
   void accept_connection(std::shared_ptr<barex_socket_impl_t> soc) {
     if (sockets.try_enqueue(std::move(soc))) {
       ++new_connection_cnt_;
+      ELOG_TRACE << "port: " << port_
+                 << " notify acceptor, connection cnt: " << new_connection_cnt_;
+      cv_.notify();
     }
-    ELOG_TRACE << "port: " << port_
-               << "notify acceptor, connection cnt: " << new_connection_cnt_;
-    cv_.notify();
+    else {
+      ELOG_ERROR << "port: " << port_
+                 << " accept_connection failed: enqueue socket failed, "
+                    "connection dropped";
+    }
   }
   void close() {
     bool expected = false;

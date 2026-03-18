@@ -138,7 +138,6 @@ struct connect_controller : public accl::barex::XChannel::UserData {
   bool has_closed = false;
 };
 }  // namespace detail
-
 class barex_socket_impl_t
     : public std::enable_shared_from_this<barex_socket_impl_t>,
       public accl::barex::XChannel::UserData {
@@ -162,7 +161,6 @@ class barex_socket_impl_t
       co_return std::make_error_code(std::errc::not_connected);
     }
     co_return co_await connect(eps);
-    co_return std::error_code{};
   }
 
   template <typename EndPointSeq>
