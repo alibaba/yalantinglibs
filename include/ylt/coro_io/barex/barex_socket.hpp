@@ -239,7 +239,7 @@ class barex_socket_impl_t
         co_await coro_io::sleep_for(sleep_duration, ctx->executor_);
       }
     }
-    if (sleep_cnt > max_sleep_cnt) {
+    if (sleep_cnt >= max_sleep_cnt) {
       ELOG_WARN << "barex socket delete xchannel memory cost too much time, we "
                    "won't delete it, channel address="
                 << (void*)channel;
