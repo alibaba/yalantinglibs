@@ -218,6 +218,35 @@ class barex_socket_impl_t
 
   void cancel() noexcept { close(); }
 
+ private:
+  static async_simple::coro::Lazy<void> free_channel_memory(
+      std::shared_ptr<barex_context_t> ctx,
+      accl::barex::XChannel* channel) noexcept {
+    const int max_sleep_cnt = 100;
+    std::chrono::milliseconds sleep_duration(100);
+    int sleep_cnt = 0;
+    for (; sleep_cnt < max_sleep_cnt; sleep_cnt++) {
+      if (channel->IsDead()) {
+        accl::barex::Status s =
+            ctx->get_connector()->CloseAndDeleteChannel(channel);
+        if (!s.IsOk()) {
+          ELOG_WARN << "barex socket delete failed, channel address="
+                    << (void*)channel << " error msg: " << s.ErrMsg();
+        }
+        break;
+      }
+      else {
+        co_await coro_io::sleep_for(sleep_duration, ctx->executor_);
+      }
+    }
+    if (sleep_cnt > max_sleep_cnt) {
+      ELOG_WARN << "barex socket delete xchannel memory cost too much time, we "
+                   "won't delete it, channel address="
+                << (void*)channel;
+    }
+  }
+
+ public:
   void close() noexcept {
     bool expected = false;
     if (!has_closed_.compare_exchange_strong(expected, true)) {
@@ -267,12 +296,8 @@ class barex_socket_impl_t
                       << " error msg: " << s.ErrMsg();
                 }
 
-                s = connector->CloseAndDeleteChannel(channel);
-                if (!s.IsOk()) {
-                  ELOG_WARN
-                      << "barex socket closed failed, this=" << (void*)this
-                      << " error msg: " << s.ErrMsg();
-                }
+                free_channel_memory(barex_context_, channel).start([](auto&&) {
+                });
               });
           if (!s.IsOk()) {
             ELOG_WARN << "barex socket closed failed, this=" << (void*)this
@@ -522,7 +547,8 @@ inline barex_socket_t::barex_socket_t(std::shared_ptr<barex_socket_impl_t> impl,
                                       const config_t& config)
     : impl_(std::move(impl)) {
   impl_->get_config() = config;
-  impl_->get_config().max_buffer_cnt = std::max(config.max_buffer_cnt, std::size_t{1});
+  impl_->get_config().max_buffer_cnt =
+      std::max(config.max_buffer_cnt, std::size_t{1});
 }
 inline auto barex_socket_t::get_executor() { return impl_->get_executor(); }
 inline coro_io::ExecutorWrapper<>* barex_socket_t::get_coro_executor() {
@@ -562,7 +588,7 @@ inline accl::barex::BarexResult barex_context_t::set_channel_callback() {
                   ctrl->soc = std::move(soc);
                   if (ctrl->unhandle_datas.size()) {
                     ELOG_DEBUG << "has unrecv data, piece cnt="
-                              << ctrl->unhandle_datas.size();
+                               << ctrl->unhandle_datas.size();
                     for (auto& e : ctrl->unhandle_datas) {
                       ctrl->soc->on_recv(std::error_code{}, e.first, e.second);
                     }
@@ -645,7 +671,7 @@ inline void barex_recv_callback_t::OnRecvCall(
   ctrl->unhandle_datas.emplace_back(std::vector<char>(buf, buf + len),
                                     header.flags);
   ELOG_DEBUG << "OnRecvCall, socket not found, now piece cnt="
-            << ctrl->unhandle_datas.size();
+             << ctrl->unhandle_datas.size();
   return;
 }
 
