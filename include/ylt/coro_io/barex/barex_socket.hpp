@@ -220,23 +220,29 @@ class barex_socket_impl_t
 
  private:
   static async_simple::coro::Lazy<void> free_channel_memory(
-      std::shared_ptr<barex_context_t> ctx,
+      std::weak_ptr<barex_context_t> ctx_weak,
       accl::barex::XChannel* channel) noexcept {
     const int max_sleep_cnt = 100;
     std::chrono::milliseconds sleep_duration(100);
     int sleep_cnt = 0;
     for (; sleep_cnt < max_sleep_cnt; sleep_cnt++) {
-      if (channel->IsDead()) {
-        accl::barex::Status s =
-            ctx->get_connector()->CloseAndDeleteChannel(channel);
-        if (!s.IsOk()) {
-          ELOG_WARN << "barex socket delete failed, channel address="
-                    << (void*)channel << " error msg: " << s.ErrMsg();
+      if (auto ctx = ctx_weak.lock(); ctx) {
+        if (channel->IsDead()) {
+          accl::barex::Status s =
+              ctx->get_connector()->CloseAndDeleteChannel(channel);
+          if (!s.IsOk()) {
+            ELOG_WARN << "barex socket delete failed, channel address="
+                      << (void*)channel << " error msg: " << s.ErrMsg();
+          }
+          break;
         }
-        break;
+        else {
+          co_await coro_io::sleep_for(sleep_duration);
+        }
       }
       else {
-        co_await coro_io::sleep_for(sleep_duration, ctx->executor_);
+        // context is dead, barex socket has deleted
+        break;
       }
     }
     if (sleep_cnt >= max_sleep_cnt) {
@@ -273,30 +279,30 @@ class barex_socket_impl_t
         else {
           auto connector = barex_context_->get_connector();
           accl::barex::Status s = connector->CloseChannel(
-              channel_, [this, channel = channel_,
-                         connector = connector](accl::barex::Status s) {
+              channel_,
+              [self = (void*)this, channel = channel_, connector = connector,
+               ctx = barex_context_](accl::barex::Status s) {
                 if (!s.IsOk()) {
-                  ELOG_WARN
-                      << "barex socket closed failed, this=" << (void*)this
-                      << " error msg: " << s.ErrMsg();
+                  ELOG_INFO << "barex socket closed failed (may server close "
+                               "first), this="
+                            << self << " error msg: " << s.ErrMsg();
                 }
-                if (channel_->IsActive()) {
+                if (channel->IsActive()) {
                   s = channel->Close();
                   if (!s.IsOk()) {
-                    ELOG_WARN
-                        << "barex socket closed failed, this=" << (void*)this
-                        << " error msg: " << s.ErrMsg();
+                    ELOG_WARN << "barex socket closed failed, this=" << self
+                              << " error msg: " << s.ErrMsg();
                   }
                 }
 
                 s = channel->Destroy();
                 if (!s.IsOk()) {
                   ELOG_WARN
-                      << "barex socket closed failed, this=" << (void*)this
+                      << "barex socket closed failed, this=" << (void*)self
                       << " error msg: " << s.ErrMsg();
                 }
 
-                free_channel_memory(barex_context_, channel).start([](auto&&) {
+                free_channel_memory(ctx, channel).start([](auto&&) {
                 });
               });
           if (!s.IsOk()) {
